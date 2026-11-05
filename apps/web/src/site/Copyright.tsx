@@ -49,8 +49,8 @@ function NoticeForm({ kind }: { kind: 'notice' | 'counter' }) {
   if (reference) {
     return (
       <div role="status" className="mt-sm rounded-tile bg-card p-md">
-        <p className="m-0 text-[16px] font-extrabold">We have it.</p>
-        <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">
+        <p className="m-0 text-headline">We have it.</p>
+        <p className="mt-xs m-0 text-callout text-ink-soft">
           Your reference is <Strong>{reference}</Strong>. Keep it. A person will read your {counter ? 'counter-notice' : 'notice'} and write back to the email you gave.
         </p>
       </div>
@@ -58,37 +58,37 @@ function NoticeForm({ kind }: { kind: 'notice' | 'counter' }) {
   }
   return (
     <form onSubmit={submit} className="mt-sm rounded-card bg-card p-md" aria-label={counter ? 'Counter-notice' : 'Copyright notice'}>
-      <label className="block text-[14px] font-bold" htmlFor={id('name')}>
+      <label className="block text-subhead font-semibold" htmlFor={id('name')}>
         Your full name
       </label>
       <input id={id('name')} required value={v.name} onChange={set('name')} maxLength={120} autoComplete="name" className={FIELD} />
-      <label className="mt-sm block text-[14px] font-bold" htmlFor={id('email')}>
+      <label className="mt-sm block text-subhead font-semibold" htmlFor={id('email')}>
         Your email
       </label>
       <input id={id('email')} required type="email" value={v.email} onChange={set('email')} maxLength={200} autoComplete="email" className={FIELD} />
-      <label className="mt-sm block text-[14px] font-bold" htmlFor={id('work')}>
+      <label className="mt-sm block text-subhead font-semibold" htmlFor={id('work')}>
         {counter ? 'What was removed, and where it was shown before' : 'The work that was copied'}
       </label>
       <textarea id={id('work')} required value={v.work} onChange={set('work')} rows={3} maxLength={1000} className={FIELD} />
-      <label className="mt-sm block text-[14px] font-bold" htmlFor={id('urls')}>
+      <label className="mt-sm block text-subhead font-semibold" htmlFor={id('urls')}>
         {counter ? 'The addresses where it was shown' : 'The addresses (links) on kreators.app where it is shown'}
       </label>
       <textarea id={id('urls')} required value={v.urls} onChange={set('urls')} rows={3} maxLength={2000} className={FIELD} />
-      <label className="mt-sm block text-[14px] font-bold" htmlFor={id('statement')}>
+      <label className="mt-sm block text-subhead font-semibold" htmlFor={id('statement')}>
         {counter ? 'Your statement, with your address and phone number' : 'Your statement'}
       </label>
       <textarea id={id('statement')} value={v.statement} onChange={set('statement')} rows={4} maxLength={1000} className={FIELD} />
-      <p className="mt-xs m-0 text-[12px] font-semibold text-ink-mute">
+      <p className="mt-xs m-0 text-caption text-ink-mute">
         {counter
           ? 'Say that you believe, in good faith, that it was removed by mistake or because it was wrongly identified, that this is true under penalty of perjury, and that you accept the courts of your home country for any claim.'
           : 'Say that you believe, in good faith, that the use is not allowed by the owner, the law or a licence, that what you wrote is accurate, and, under penalty of perjury, that you own the right or may act for the owner.'}
       </p>
-      <label className="mt-sm block text-[14px] font-bold" htmlFor={id('signature')}>
+      <label className="mt-sm block text-subhead font-semibold" htmlFor={id('signature')}>
         Your signature (type your full name)
       </label>
       <input id={id('signature')} required value={v.signature} onChange={set('signature')} maxLength={120} className={FIELD} />
       {error && (
-        <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-sm m-0 text-subhead">
           {error}
         </p>
       )}
@@ -114,10 +114,10 @@ export function Copyright() {
       lede="If something here copies your work, or we took down yours by mistake."
       action={
         <>
-          <Link to="#send-notice" className={SITE_LINK}>
+          <Link to="#send-notice" className={`${SITE_LINK} text-callout`}>
             Send a notice
           </Link>
-          <Link to="#send-counter" className={SITE_LINK}>
+          <Link to="#send-counter" className={`${SITE_LINK} text-callout`}>
             Send a counter-notice
           </Link>
         </>

@@ -35,7 +35,7 @@ export function useDayType(date: string) {
 export function DayTypeSelect({ type, onPick }: { type: DayKind | null; onPick: (k: DayTypeKey | null) => void }) {
   return (
     <label className="flex shrink-0 items-center gap-xs">
-      <span className="shrink-0 text-[14px] font-bold text-ink-soft">Kind of day</span>
+      <span className="shrink-0 text-subhead text-ink-soft">Kind of day</span>
       <select value={type?.key ?? ''} onChange={(e) => onPick((e.target.value || null) as DayTypeKey | null)} className={`${SELECT_SM} min-w-0 flex-1 lg:w-[240px] lg:flex-none`}>
         <option value="">Any day</option>
         {DAY_TYPES.map((d) => (
@@ -54,12 +54,12 @@ export function DayTypeNote({ type, failed, ownSort }: { type: DayKind | null; f
   return (
     <>
       {type && lead && (
-        <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft" aria-live="polite">
+        <p className="mt-xs m-0 text-caption text-ink-soft" aria-live="polite">
           {ownSort ? `Sorted by ${ownSort}, as you chose. Pick By context to put the ${lead.name} pillar first.` : `Sorted by context. P0 stays on top. ${type.why}`}
         </p>
       )}
       {failed && (
-        <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft" role="alert">
+        <p className="mt-xs m-0 text-caption text-ink-soft" role="alert">
           Could not save that. Try again.
         </p>
       )}

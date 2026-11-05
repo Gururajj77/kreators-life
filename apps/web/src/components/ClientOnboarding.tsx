@@ -56,11 +56,11 @@ function Text({ k, draft, set, onBlur, error, type = 'text', children }: { k: Te
   const id = `ob-${k}`;
   return (
     <div className="mt-md">
-      <label htmlFor={id} className="block text-[16px] font-bold">
+      <label htmlFor={id} className="block text-headline">
         {f.label}
       </label>
       {f.hint && (
-        <span id={`${id}-h`} className="block text-[14px] font-semibold text-ink-soft">
+        <span id={`${id}-h`} className="block text-subhead text-ink-soft">
           {f.hint}
         </span>
       )}
@@ -80,7 +80,7 @@ function Text({ k, draft, set, onBlur, error, type = 'text', children }: { k: Te
         />
       )}
       {error && (
-        <p id={`${id}-e`} role="alert" className="mt-xs m-0 text-[14px] font-bold">
+        <p id={`${id}-e`} role="alert" className="mt-xs m-0 text-subhead">
           {error}
         </p>
       )}
@@ -93,8 +93,8 @@ function Question({ q, answer, onChange, onBlur, error }: { q: ContractQuestion;
   const id = `ob-q-${q.id}`;
   return (
     <>
-      {q.heading && <h3 className="mt-md mb-0 text-[18px]">{q.heading}</h3>}
-      {q.intro && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{q.intro}</p>}
+      {q.heading && <h3 className="mt-md mb-0 text-headline">{q.heading}</h3>}
+      {q.intro && <p className="mt-xs m-0 text-subhead text-ink-soft">{q.intro}</p>}
       <Answer q={q} id={id} answer={answer} onChange={onChange} onBlur={onBlur} error={error} />
     </>
   );
@@ -102,7 +102,7 @@ function Question({ q, answer, onChange, onBlur, error }: { q: ContractQuestion;
 
 const Problem = ({ text }: { text: string | null }) =>
   text ? (
-    <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+    <p role="alert" className="mt-xs m-0 text-subhead">
       {text}
     </p>
   ) : null;
@@ -113,10 +113,10 @@ function Answer({ q, id, answer, onChange, onBlur, error }: { q: ContractQuestio
     const fields = answer.fields ?? {};
     return (
       <fieldset id={id} tabIndex={-1} className="mt-sm m-0 min-w-0 border-0 p-0">
-        <legend className="text-[16px] font-bold">{q.group || q.label}</legend>
+        <legend className="text-headline">{q.group || q.label}</legend>
         {(q.fields ?? []).map((f, i) => (
           <label key={f} className="mt-sm block">
-            <span className="block text-[14px] font-bold">{f}</span>
+            <span className="block text-subhead font-semibold">{f}</span>
             <input value={fields[f] ?? ''} onChange={(e) => onChange({ ...answer, fields: { ...fields, [f]: e.target.value } })} onBlur={onBlur} maxLength={300} aria-describedby={i === 0 && error ? `${id}-e` : undefined} className={FIELD} />
           </label>
         ))}
@@ -132,8 +132,8 @@ function Answer({ q, id, answer, onChange, onBlur, error }: { q: ContractQuestio
     const shown = (answer.links ?? []).length >= min ? [...(answer.links ?? [])] : [...(answer.links ?? []), ...Array<string>(min - (answer.links ?? []).length).fill('')];
     return (
       <fieldset id={id} tabIndex={-1} className="mt-sm m-0 min-w-0 border-0 p-0">
-        <legend className="text-[16px] font-bold">{q.group || COPY.refsLabel}</legend>
-        {q.label && <span className="block text-[14px] font-semibold text-ink-soft">{q.label}</span>}
+        <legend className="text-headline">{q.group || COPY.refsLabel}</legend>
+        {q.label && <span className="block text-subhead text-ink-soft">{q.label}</span>}
         {shown.map((l, i) => (
           <input
             key={i}
@@ -169,12 +169,12 @@ function Answer({ q, id, answer, onChange, onBlur, error }: { q: ContractQuestio
   if (q.text) {
     return (
       <div className="mt-md">
-        <label htmlFor={id} className="mt-sm block text-[16px] font-bold">
+        <label htmlFor={id} className="mt-sm block text-headline">
           {q.label || q.group}
         </label>
         <textarea id={id} value={answer.text} onChange={(e) => onChange({ ...answer, text: e.target.value })} onBlur={onBlur} rows={4} maxLength={1500} aria-invalid={error ? true : undefined} className={FIELD} />
         {error && (
-          <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+          <p role="alert" className="mt-xs m-0 text-subhead">
             {error}
           </p>
         )}
@@ -187,13 +187,13 @@ function Answer({ q, id, answer, onChange, onBlur, error }: { q: ContractQuestio
   };
   return (
     <fieldset id={id} tabIndex={-1} className="mt-sm m-0 min-w-0 border-0 p-0" aria-invalid={error ? true : undefined}>
-      <legend className="text-[16px] font-bold">{q.label || q.group}</legend>
-      <span className="block text-[14px] font-semibold text-ink-soft">{q.multi ? 'Tick all that apply.' : 'Pick one.'}</span>
+      <legend className="text-headline">{q.label || q.group}</legend>
+      <span className="block text-subhead text-ink-soft">{q.multi ? 'Tick all that apply.' : 'Pick one.'}</span>
       <div className="mt-xs grid gap-xs">
         {q.options.map((opt) => {
           const on = answer.picked.includes(opt);
           return (
-            <label key={opt} className={`toy flex min-h-[48px] cursor-pointer items-center gap-sm rounded-tile border-2 px-sm text-[16px] font-semibold ${on ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
+            <label key={opt} className={`toy flex min-h-[48px] cursor-pointer items-center gap-sm rounded-tile border-2 px-sm text-callout ${on ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
               <input type={q.multi ? 'checkbox' : 'radio'} name={id} checked={on} onChange={() => toggle(opt)} onBlur={onBlur} className="size-[20px] shrink-0 accent-[var(--color-ink)]" />
               <span className="min-w-0">{opt}</span>
             </label>
@@ -202,12 +202,12 @@ function Answer({ q, id, answer, onChange, onBlur, error }: { q: ContractQuestio
       </div>
       {q.other && (
         <label className="mt-xs block">
-          <span className="block text-[14px] font-bold">{COPY.otherLabel}</span>
+          <span className="block text-subhead">{COPY.otherLabel}</span>
           <input value={answer.other} onChange={(e) => onChange({ ...answer, other: e.target.value })} onBlur={onBlur} maxLength={200} className={FIELD} />
         </label>
       )}
       {error && (
-        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-xs m-0 text-subhead">
           {error}
         </p>
       )}
@@ -300,7 +300,7 @@ export function ClientOnboarding({ token, agencyName, clientName, onDone }: { to
   if (q.isError || !draft) {
     return (
       <div role="alert" className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-        <p className="m-0 text-[16px] font-bold">{COPY.failed}</p>
+        <p className="m-0 text-headline">{COPY.failed}</p>
         <div className="mt-sm">
           <Button onClick={() => void q.refetch()}>Try again</Button>
         </div>
@@ -360,25 +360,25 @@ export function ClientOnboarding({ token, agencyName, clientName, onDone }: { to
   if (sent) {
     return (
       <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" role="status">
-        <h2 className="text-[24px]">{COPY.sent}</h2>
-        <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">{COPY.sentLede}</p>
+        <h2 className="text-title2">{COPY.sent}</h2>
+        <p className="mt-xs m-0 text-callout text-ink-soft">{COPY.sentLede}</p>
       </section>
     );
   }
 
   return (
     <section className="mt-md mx-auto max-w-[600px]" aria-labelledby="ob-step">
-      <p className="m-0 text-[14px] font-bold text-ink-soft" aria-live="polite">
+      <p className="m-0 text-subhead text-ink-soft" aria-live="polite">
         {review ? COPY.check : `Step ${step + 1} of ${ONBOARDING_STEPS.length}`}
       </p>
       <div className="mt-xs h-[6px] overflow-hidden rounded-pill bg-line" aria-hidden>
         <GlideFill share={(review ? ONBOARDING_STEPS.length : step + 1) / ONBOARDING_STEPS.length} className="h-full w-full rounded-pill bg-ink" />
       </div>
       <StepSlide at={review ? ONBOARDING_STEPS.length : step}>
-        <h2 id="ob-step" ref={top} tabIndex={-1} className="mt-md text-[26px] outline-none">
+        <h2 id="ob-step" ref={top} tabIndex={-1} className="mt-md text-title1 outline-none">
           {review ? COPY.check : s.title}
         </h2>
-        <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">{review ? COPY.checkLede : s.line}</p>
+        <p className="mt-xs m-0 text-callout text-ink-soft">{review ? COPY.checkLede : s.line}</p>
 
         {review ? (
           <Review draft={draft} questions={questions} byStep={byStep} onChange={moveTo} />
@@ -391,7 +391,7 @@ export function ClientOnboarding({ token, agencyName, clientName, onDone }: { to
                 <Text k="addressLine" draft={draft} set={set} onBlur={blur} error={errOf('addressLine')} />
                 <Text k="city" draft={draft} set={set} onBlur={blur} error={errOf('city')} />
                 <div className="mt-md">
-                  <label htmlFor="ob-state" className="block text-[16px] font-bold">
+                  <label htmlFor="ob-state" className="block text-headline">
                     State
                   </label>
                   <select id="ob-state" value={draft.state} onChange={(e) => set({ state: e.target.value })} onBlur={blur} autoComplete="address-level1" aria-invalid={errOf('state') ? true : undefined} className={FIELD}>
@@ -403,7 +403,7 @@ export function ClientOnboarding({ token, agencyName, clientName, onDone }: { to
                     ))}
                   </select>
                   {errOf('state') && (
-                    <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+                    <p role="alert" className="mt-xs m-0 text-subhead">
                       {errOf('state')}
                     </p>
                   )}
@@ -428,8 +428,8 @@ export function ClientOnboarding({ token, agencyName, clientName, onDone }: { to
               ))}
             {step === ONBOARDING_STEPS.length - 1 && !questions.some((qq) => qq.links) && (
               <fieldset id="ob-references" tabIndex={-1} className="mt-md m-0 min-w-0 border-0 p-0">
-                <legend className="text-[16px] font-bold">{COPY.refsLabel}</legend>
-                <span className="block text-[14px] font-semibold text-ink-soft">{COPY.refsHint}</span>
+                <legend className="text-headline">{COPY.refsLabel}</legend>
+                <span className="block text-subhead text-ink-soft">{COPY.refsHint}</span>
                 {refs.map((r, i) => (
                   <input key={i} value={r} onChange={(e) => setRef(i, e.target.value)} onBlur={blur} type="url" inputMode="url" placeholder="https://" aria-label={`Link ${i + 1}`} maxLength={500} className={FIELD} />
                 ))}
@@ -441,7 +441,7 @@ export function ClientOnboarding({ token, agencyName, clientName, onDone }: { to
                   </div>
                 )}
                 {errOf('references') && (
-                  <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+                  <p role="alert" className="mt-xs m-0 text-subhead">
                     {errOf('references')}
                   </p>
                 )}
@@ -452,7 +452,7 @@ export function ClientOnboarding({ token, agencyName, clientName, onDone }: { to
       </StepSlide>
 
       {sendError && (
-        <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-sm m-0 text-subhead">
           {sendError}
         </p>
       )}
@@ -460,7 +460,7 @@ export function ClientOnboarding({ token, agencyName, clientName, onDone }: { to
         <Button variant="outline" onClick={() => (review ? moveTo(ONBOARDING_STEPS.length - 1) : moveTo(step - 1))} disabled={!review && step === 0}>
           Back
         </Button>
-        <span className="min-w-0 text-[12px] font-semibold text-ink-soft" aria-live="polite">
+        <span className="min-w-0 text-caption text-ink-soft" aria-live="polite">
           {status === 'saving' ? COPY.saving : status === 'saved' ? COPY.saved : status === 'failed' ? COPY.saveFailed : ''}
         </span>
         {review ? (
@@ -471,7 +471,7 @@ export function ClientOnboarding({ token, agencyName, clientName, onDone }: { to
           <Button onClick={() => void next()}>Next</Button>
         )}
       </div>
-      <p className="mt-md m-0 text-[12px] font-semibold text-ink-mute">{`For ${clientName}${agencyName ? `, from ${agencyName}` : ''}.`}</p>
+      <p className="mt-md m-0 text-caption text-ink-mute">{`For ${clientName}${agencyName ? `, from ${agencyName}` : ''}.`}</p>
     </section>
   );
 }
@@ -496,7 +496,7 @@ function Review({ draft, questions, byStep, onChange }: { draft: Draft; question
       {groups.map((g) => (
         <div key={g.step} className="rounded-card bg-card p-md shadow-toy-soft">
           <div className="flex items-center justify-between gap-sm">
-            <h3 className="m-0 text-[18px]">{ONBOARDING_STEPS[g.step]!.title}</h3>
+            <h3 className="m-0 text-headline">{ONBOARDING_STEPS[g.step]!.title}</h3>
             <Button size="sm" variant="ghost" onClick={() => onChange(g.step)}>
               Change
             </Button>
@@ -506,9 +506,9 @@ function Review({ draft, questions, byStep, onChange }: { draft: Draft; question
               .filter((r): r is string[] => r !== null)
               .map(([k, v]) => (
                 <div key={k}>
-                  <dt className="text-[12px] font-extrabold text-ink-soft">{k}</dt>
+                  <dt className="text-caption text-ink-soft">{k}</dt>
                   {/* One block per line, so a list of links reads as separate lines (one link is never a lone word under the others). */}
-                  <dd className="m-0 whitespace-pre-wrap break-words text-[16px] font-semibold">
+                  <dd className="m-0 whitespace-pre-wrap break-words text-prose">
                     {(v ?? '').split('\n').map((ln, i) => (
                       <span key={i} className="block">
                         {ln || ' '}

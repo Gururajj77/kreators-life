@@ -23,17 +23,17 @@ const tone = (s: PlanStrength) => (s.label === 'Strong' ? 'good' : s.label === '
 function Strength({ title, s }: { title: string; s: PlanStrength }) {
   return (
     <div className="min-w-0 flex-1 rounded-tile bg-paper p-sm">
-      <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{title}</p>
+      <p className="m-0 text-eyebrow uppercase text-ink-soft">{title}</p>
       <div className="mt-xs flex items-center gap-sm">
         <Ring value={s.score / 100} size={56} stroke={7} color="var(--color-r4)" label={`${title}: plan strength ${s.score} out of 100`}>
-          <span className="font-display text-[16px] font-extrabold">{s.score}</span>
+          <span className="text-headline">{s.score}</span>
         </Ring>
         <StatusTag tone={tone(s)}>{s.label}</StatusTag>
       </div>
       <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
         {s.parts.map((p) => (
           <li key={p.name}>
-            <span className="block text-[12px] font-semibold text-ink-soft">{tie(p.name)}</span>
+            <span className="block text-caption text-ink-soft">{tie(p.name)}</span>
             <span className="mt-xs block h-[6px] overflow-hidden rounded-pill bg-line" aria-hidden="true">
               <span className="block h-full rounded-pill bg-r4" style={{ width: `${Math.round((p.score / p.max) * 100)}%` }} />
             </span>
@@ -52,8 +52,8 @@ interface Own {
   relationship: RelationshipKey;
   plan: Plan;
 }
-const chip = (on: boolean) => `toy min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`;
-const selectBase = 'block min-h-[44px] rounded-pill border-2 border-line bg-card-strong px-sm text-[14px] font-bold text-ink';
+const chip = (on: boolean) => `toy min-h-[44px] rounded-pill border-2 px-sm text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`;
+const selectBase = 'block min-h-[44px] rounded-pill border-2 border-line bg-card-strong px-sm text-subhead font-medium text-ink';
 const selectClass = `${selectBase} w-full`;
 
 /** The form for a task you pick yourself: its day, how long it takes, a time, a priority and the rest, from the same form a task uses on Daily. */
@@ -64,7 +64,7 @@ function OwnForm({ node, day, today, onAdd }: { node: Node; day: string; today: 
     <div className="mt-sm flex flex-col gap-md rounded-card bg-card p-md shadow-toy-soft">
       <TaskPlanFields plan={p} onChange={setP} today={today} />
       {problem && (
-        <p role="alert" className="m-0 text-[14px] font-bold">
+        <p role="alert" className="m-0 text-subhead">
           {problem}
         </p>
       )}
@@ -91,7 +91,7 @@ function AddOwn({ day, today, taken, onAdd }: { day: string; today: string; take
   if (chosen)
     return (
       <div>
-        <p className="m-0 flex items-center justify-between gap-sm text-[16px] font-bold">
+        <p className="m-0 flex items-center justify-between gap-sm text-headline">
           <span className="min-w-0">
             <Inert text={chosen.title} />
           </span>
@@ -100,7 +100,7 @@ function AddOwn({ day, today, taken, onAdd }: { day: string; today: string; take
           </Button>
         </p>
         {node.isPending && (
-          <p role="status" className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+          <p role="status" className="mt-xs m-0 text-caption text-ink-soft">
             {COPY.loadingTask}
           </p>
         )}
@@ -121,27 +121,27 @@ function AddOwn({ day, today, taken, onAdd }: { day: string; today: string; take
     );
   return (
     <div>
-      <label className="block text-[14px] font-bold" htmlFor="own-find">
+      <label className="block text-subhead font-semibold" htmlFor="own-find">
         {COPY.pick}
       </label>
       <input id="own-find" type="search" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={COPY.pickPlaceholder} autoComplete="off" className={`mt-xs ${selectClass}`} />
       <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0" aria-label="Your open tasks">
         {tasks.isPending && (
-          <li role="status" className="text-[12px] font-bold text-ink-soft">
+          <li role="status" className="text-caption text-ink-soft">
             {COPY.loadingTasks}
           </li>
         )}
-        {!tasks.isPending && choices.length === 0 && <li className="text-[12px] font-bold text-ink-soft">{COPY.noTasks}</li>}
+        {!tasks.isPending && choices.length === 0 && <li className="text-caption text-ink-soft">{COPY.noTasks}</li>}
         {choices.map((t) => (
           <li key={t.id} data-pillar={t.relationship}>
-            <button type="button" onClick={() => setChosen(t)} className="toy toy-flat flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile bg-paper px-sm text-left text-[14px] font-bold">
+            <button type="button" onClick={() => setChosen(t)} className="toy toy-flat flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile bg-paper px-sm text-left text-subhead">
               <span className="flex min-w-0 items-center gap-xs">
                 <span className="inline-block size-[10px] shrink-0 rounded-pill" style={{ background: RELATIONSHIP_BY_KEY[t.relationship].color }} aria-hidden="true" />
                 <span className="min-w-0">
                   <Inert text={t.title} />
                 </span>
               </span>
-              {t.dueDate && <span className="shrink-0 text-[12px] font-semibold text-ink-soft">{dayOption(t.dueDate)}</span>}
+              {t.dueDate && <span className="shrink-0 text-caption text-ink-soft">{dayOption(t.dueDate)}</span>}
             </button>
           </li>
         ))}
@@ -167,7 +167,7 @@ function Fix({ a, plan, edits, stage, onFill }: { a: PlanAttention; plan: WeekPl
       <ul className="m-0 flex list-none flex-col gap-sm p-0">
         {a.tasks.map((t) => (
           <li key={t.id}>
-            <p className="m-0 text-[14px] font-bold">
+            <p className="m-0 text-subhead font-semibold">
               <Inert text={t.title} />
             </p>
             <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label={`How long ${t.title} takes`}>
@@ -186,9 +186,9 @@ function Fix({ a, plan, edits, stage, onFill }: { a: PlanAttention; plan: WeekPl
     <ul className="m-0 flex list-none flex-col gap-sm p-0">
       {a.tasks.map((t) => (
         <li key={t.id} className="flex items-center gap-sm">
-          <p className="m-0 min-w-0 flex-1 text-[14px] font-bold">
+          <p className="m-0 min-w-0 flex-1 text-subhead">
             <Inert text={t.title} />
-            {t.estimateMin ? <span className="font-semibold text-ink-soft"> {minutesLabel2(t.estimateMin)}</span> : null}
+            {t.estimateMin ? <span className="text-ink-soft"> {minutesLabel2(t.estimateMin)}</span> : null}
           </p>
           <select value={edits[t.id]?.doDate ?? t.day ?? ''} onChange={(e) => stage(t.id, { doDate: e.target.value })} aria-label={`Day for ${t.title}`} className={`${selectBase} w-[148px] shrink-0`}>
             {!t.day && <option value="">{COPY.chooseDay}</option>}
@@ -206,7 +206,8 @@ function Fix({ a, plan, edits, stage, onFill }: { a: PlanAttention; plan: WeekPl
 
 /** The sheet's body. It is made again whenever a new plan arrives, so the ticks and days start from what the plan suggested. */
 export function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: number, failed: number) => void }) {
-  const refresh = useRefreshAll();
+  // Keep can give a task a day, a repeat or a habit pick, which decide what an Emerging card offers, so it is read again at once.
+  const refresh = useRefreshAll({ insights: true });
   const today = todayLocal();
   const [on, setOn] = useState<Record<string, boolean>>(() => Object.fromEntries(plan.suggestions.map((s) => [s.id, true])));
   const [day, setDay] = useState<Record<string, string>>(() => Object.fromEntries(plan.suggestions.map((s) => [s.id, s.day])));
@@ -261,10 +262,10 @@ export function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: 
   return (
     <div className="flex flex-col gap-md">
       <section aria-labelledby="plan-strength-heading">
-        <h3 id="plan-strength-heading" className="text-[18px]">
+        <h3 id="plan-strength-heading" className="text-headline">
           {COPY.strength}
         </h3>
-        <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{COPY.strengthLede}</p>
+        <p className="mt-xs m-0 text-caption text-ink-soft">{COPY.strengthLede}</p>
         <div className="mt-xs flex flex-col gap-xs md:flex-row">
           <Strength title={COPY.now} s={plan.strengthNow} />
           <Strength title={COPY.with} s={plan.strengthWith} />
@@ -272,7 +273,7 @@ export function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: 
       </section>
 
       <section aria-labelledby="plan-week-heading">
-        <h3 id="plan-week-heading" className="text-[18px]">
+        <h3 id="plan-week-heading" className="text-headline">
           {COPY.week}
         </h3>
         <ul className="mt-xs grid list-none grid-cols-7 gap-xs p-0 m-0">
@@ -286,22 +287,22 @@ export function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: 
                   <div className="w-full bg-r4" style={{ height: `${Math.round((extra / peak) * 100)}%` }} />
                   <div className="w-full bg-r5" style={{ height: `${Math.round((d.plannedMin / peak) * 100)}%` }} />
                 </div>
-                <p className="mt-xs m-0 text-[12px] font-extrabold">{weekday(d.date)}</p>
-                <p className="m-0 text-[12px] font-semibold text-ink-soft">{total > 0 ? minutesLabel2(total) : '0'}</p>
+                <p className="mt-xs m-0 text-caption font-semibold">{weekday(d.date)}</p>
+                <p className="m-0 text-caption text-ink-soft">{total > 0 ? minutesLabel2(total) : '0'}</p>
                 {over && <StatusTag tone="bad">{COPY.over}</StatusTag>}
               </li>
             );
           })}
         </ul>
-        <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">Blue is already planned. Green is what you would add.</p>
+        <p className="mt-xs m-0 text-caption text-ink-soft">Blue is already planned. Green is what you would add.</p>
       </section>
 
       <section aria-labelledby="plan-suggest-heading">
-        <h3 id="plan-suggest-heading" className="text-[18px]">
+        <h3 id="plan-suggest-heading" className="text-headline">
           {COPY.suggestions}
         </h3>
         {plan.suggestions.length === 0 ? (
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{COPY.allPlaced}</p>
+          <p className="mt-xs m-0 text-subhead text-ink-soft">{COPY.allPlaced}</p>
         ) : (
           <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
             {plan.suggestions.map((s: WeekPlanSuggestion) => (
@@ -312,10 +313,10 @@ export function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: 
                     <span className="inline-block size-[10px] rounded-pill" style={{ background: RELATIONSHIP_BY_KEY[s.relationship].color }} aria-hidden="true" />
                   </span>
                   <div className="min-w-0">
-                    <p className="m-0 text-[16px] font-bold leading-snug">
+                    <p className="m-0 text-headline">
                       <Inert text={s.title} />
                     </p>
-                    <p className="m-0 text-[12px] font-semibold text-ink-soft">
+                    <p className="m-0 text-caption text-ink-soft">
                       {minutesLabel2(s.estimateMin)}, {s.reason.toLowerCase()}
                     </p>
                   </div>
@@ -337,10 +338,10 @@ export function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: 
 
       {plan.attention.length > 0 && (
         <section aria-labelledby="plan-look-heading">
-          <h3 id="plan-look-heading" className="text-[18px]">
+          <h3 id="plan-look-heading" className="text-headline">
             {COPY.look}
           </h3>
-          <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{COPY.lookLede}</p>
+          <p className="mt-xs m-0 text-caption text-ink-soft">{COPY.lookLede}</p>
           <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
             {plan.attention.map((a, i) => {
               const fixable = a.tasks.length > 0 || a.kind === 'empty';
@@ -349,9 +350,9 @@ export function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: 
                 <li key={`${a.kind}${i}`} className="rounded-tile bg-paper p-sm">
                   <div className="flex items-center gap-sm">
                     <input type="checkbox" checked={done} onChange={(e) => setChecked((c) => ({ ...c, [i]: e.target.checked }))} aria-label={`${COPY.handled}: ${a.text}`} className="size-[24px] shrink-0" />
-                    <p className={`m-0 min-w-0 flex-1 text-[14px] font-semibold ${done ? 'text-ink-soft line-through' : ''}`}>{tie(a.text)}</p>
+                    <p className={`m-0 min-w-0 flex-1 text-subhead ${done ? 'text-ink-soft line-through' : ''}`}>{tie(a.text)}</p>
                     {fixable && (
-                      <button type="button" aria-expanded={openLine === i} aria-controls={`plan-fix-${i}`} onClick={() => setOpenLine(openLine === i ? null : i)} className="toy toy-flat inline-flex min-h-[44px] shrink-0 items-center gap-xs rounded-pill border border-line bg-card-strong px-sm text-[14px] font-bold">
+                      <button type="button" aria-expanded={openLine === i} aria-controls={`plan-fix-${i}`} onClick={() => setOpenLine(openLine === i ? null : i)} className="toy toy-flat inline-flex min-h-[44px] shrink-0 items-center gap-xs rounded-pill border border-line bg-card-strong px-sm text-subhead font-medium">
                         {openLine === i ? COPY.hide : COPY.fix}
                         <ToggleChevron open={openLine === i} size={14} />
                       </button>
@@ -379,22 +380,22 @@ export function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: 
       )}
 
       <section aria-labelledby="plan-own-heading">
-        <h3 id="plan-own-heading" className="text-[18px]">
+        <h3 id="plan-own-heading" className="text-headline">
           {COPY.own}
         </h3>
-        <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{COPY.ownLede}</p>
+        <p className="mt-xs m-0 text-caption text-ink-soft">{COPY.ownLede}</p>
         {own.length > 0 && (
           <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
             {own.map((o) => (
               <li key={o.id} data-pillar={o.relationship} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                 <div className="min-w-0 flex-1">
-                  <p className="m-0 flex items-center gap-xs text-[16px] font-bold leading-snug">
+                  <p className="m-0 flex items-center gap-xs text-headline">
                     <span className="inline-block size-[10px] shrink-0 rounded-pill" style={{ background: RELATIONSHIP_BY_KEY[o.relationship].color }} aria-hidden="true" />
                     <span className="min-w-0">
                       <Inert text={o.title} />
                     </span>
                   </p>
-                  <p className="m-0 text-[12px] font-semibold text-ink-soft">
+                  <p className="m-0 text-caption text-ink-soft">
                     {[o.plan.doDate ? dayOption(o.plan.doDate) : 'No day', Number(o.plan.minutes) > 0 ? minutesLabel2(Number(o.plan.minutes)) : '', o.plan.time ? o.plan.time : '', o.plan.priority !== null ? `P${o.plan.priority}` : ''].filter(Boolean).join(', ')}
                   </p>
                 </div>
@@ -420,7 +421,7 @@ export function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: 
       </section>
 
       {error && (
-        <p role="alert" className="m-0 text-[14px] font-bold">
+        <p role="alert" className="m-0 text-subhead">
           {error}
         </p>
       )}

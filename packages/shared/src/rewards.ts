@@ -135,8 +135,8 @@ export const REWARD_GROUPS: readonly { key: RewardGroup; name: string; icon: Ico
 export const REWARDS: readonly Reward[] = [
   ...CARD_GAMES.map((g): Reward => ({ key: gameRewardKey(g.key), name: g.name, kind: 'unlock', emoji: g.emoji, group: 'games', cost: g.cost, blurb: g.tagline, game: g.key })),
   { key: 'book_relationship_method', name: 'The Relationship Method', kind: 'merch', emoji: '📘', group: 'books', cost: 2000, blurb: 'The book behind the seven relationships this app is built on.', link: 'https://brandingbum.com' },
-  { key: 'book_dictionary_of_mistakes', name: 'Dictionary of Mistakes for Kreators', kind: 'merch', emoji: '📕', group: 'books', cost: 2000, blurb: 'The mistakes kreators make, so you can skip them.', link: 'https://brandingbum.com' },
-  { key: 'book_20_somethings', name: 'Dictionary of Mistakes for 20 Somethings', kind: 'merch', emoji: '📗', group: 'books', cost: 2000, blurb: 'The mistakes people in their twenties make, so you can skip them.', link: 'https://brandingbum.com' },
+  { key: 'book_dictionary_of_mistakes', name: 'Dictionary of Mistakes for Kreators', kind: 'merch', emoji: '📕', group: 'books', cost: 2000, blurb: 'Mistakes every creator makes, and how to learn from them.', link: 'https://brandingbum.com' },
+  { key: 'book_20_somethings', name: 'Dictionary of Mistakes for 20 Somethings', kind: 'merch', emoji: '📗', group: 'books', cost: 2000, blurb: 'The mistakes of your twenties, and how to make them count.', link: 'https://brandingbum.com' },
 
   { key: 'tee', name: 'Kreators tee', kind: 'merch', emoji: '👕', group: 'apparel', cost: 2500, blurb: 'The seven characters, printed big.' },
   { key: 'hoodie', name: 'Kreators hoodie', kind: 'merch', emoji: '🧥', group: 'apparel', cost: 4500, blurb: 'Warm, soft and easy to spot.' },

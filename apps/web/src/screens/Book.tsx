@@ -28,7 +28,7 @@ export function BookCover({ book, className = '' }: { book: BookInfo; className?
       {broken ? (
         <span className="flex h-full flex-col items-center justify-center gap-xs p-xs text-center text-ink">
           <Icon icon={BookOpen} size={20} />
-          <span className="text-balance text-[12px] font-bold leading-tight">{book.title}</span>
+          <span className="text-balance text-caption">{book.title}</span>
         </span>
       ) : (
         <img src={book.cover} alt={book.coverAlt} width={350} height={500} className="h-full w-full object-cover" onError={() => setBroken(true)} />
@@ -37,8 +37,8 @@ export function BookCover({ book, className = '' }: { book: BookInfo; className?
   );
 }
 
-const PRIMARY = 'toy inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink';
-const OUTLINE = 'toy toy-ink inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-md text-[16px] font-semibold text-ink';
+const PRIMARY = 'toy inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill bg-ink px-md text-headline text-on-ink';
+const OUTLINE = 'toy toy-ink inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-md text-callout text-ink';
 
 /**
  * Book: the founder's three books, reached from Home. Not a module (no switch, no How it works, so `howTo={false}`); it is a door
@@ -58,7 +58,7 @@ export function Book() {
 
       {q.isError && (
         <div className="mt-md flex flex-wrap-reverse items-center justify-between gap-sm rounded-card bg-card p-md shadow-toy-soft" role="alert">
-          <p className="m-0 min-w-0 flex-1 basis-[60%] text-[14px] font-bold">Could not check the shop and School just now.</p>
+          <p className="m-0 min-w-0 flex-1 basis-[60%] text-subhead">Could not check the shop and School just now.</p>
           <Button variant="outline" size="sm" onClick={() => q.refetch()}>
             Try again
           </Button>
@@ -87,31 +87,31 @@ function BookCard({ book: b, state, loading, schoolOn, schoolAvailable, primary 
       <div className="flex gap-md">
         <BookCover book={b} className="w-[112px] shrink-0 self-start sm:w-[160px]" />
         <div className="min-w-0 flex-1">
-          <h2 id={`${b.slug}-title`} className="m-0 text-[20px] leading-tight sm:text-[24px]">
+          <h2 id={`${b.slug}-title`} className="m-0 text-title3">
             {b.title}
           </h2>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{b.subtitle}</p>
-          <p className="mt-xs m-0 text-[14px] font-bold">By {b.author}</p>
+          <p className="mt-xs m-0 text-subhead text-ink-soft">{b.subtitle}</p>
+          <p className="mt-xs m-0 text-subhead font-semibold">By {b.author}</p>
           {/* On a laptop the back cover's opening sits beside the cover; on a phone it goes under, where the line is wider. */}
-          {opening && <p className="prose-long mt-sm m-0 hidden text-[16px] font-semibold sm:block">{opening}</p>}
+          {opening && <p className="prose-long mt-sm m-0 hidden text-prose sm:block">{opening}</p>}
           {b.tagline && (
-            <p className="mt-sm m-0 text-[16px] font-semibold">
+            <p className="mt-sm m-0 text-callout">
               <span className="text-ink-soft">On the cover: </span>
               {b.tagline}.
             </p>
           )}
         </div>
       </div>
-      {opening && <p className="prose-long mt-sm m-0 text-[16px] font-semibold sm:hidden">{opening}</p>}
+      {opening && <p className="prose-long mt-sm m-0 text-prose sm:hidden">{opening}</p>}
       {hasMore && (
         <Fold className="mt-sm" title="From the back cover">
-          <div className="prose-long px-sm pb-xs text-[16px]">
+          <div className="prose-long px-sm pb-xs text-prose">
             {rest.map((p) => (
               <p key={p} className="m-0 mt-xs first:mt-0">
                 {p}
               </p>
             ))}
-            {b.insideLead && <p className="m-0 mt-sm font-bold">{b.insideLead}</p>}
+            {b.insideLead && <p className="m-0 mt-sm font-semibold">{b.insideLead}</p>}
             {b.inside.length > 0 && (
               <ul className="m-0 mt-xs list-disc pl-md">
                 {b.inside.map((x) => (
@@ -122,7 +122,7 @@ function BookCard({ book: b, state, loading, schoolOn, schoolAvailable, primary 
               </ul>
             )}
             {b.closing && <p className="m-0 mt-sm">{b.closing}</p>}
-            {b.publisher && <p className="m-0 mt-sm text-[14px] font-bold text-ink-soft">{b.publisher}</p>}
+            {b.publisher && <p className="m-0 mt-sm text-subhead text-ink-soft">{b.publisher}</p>}
           </div>
         </Fold>
       )}
@@ -135,7 +135,7 @@ function BookCard({ book: b, state, loading, schoolOn, schoolAvailable, primary 
           </Link>
         ) : (
           !loading && (
-            <span className="inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill bg-paper px-md text-[14px] font-bold text-ink-soft">
+            <span className="inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill bg-paper px-md text-subhead font-medium text-ink-soft">
               <Icon icon={ShoppingBag} size={16} />
               Book: coming soon
             </span>
@@ -149,7 +149,7 @@ function BookCard({ book: b, state, loading, schoolOn, schoolAvailable, primary 
           </Link>
         )}
         {!course && !loading && (
-          <span className="inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill bg-paper px-md text-[14px] font-bold text-ink-soft">
+          <span className="inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill bg-paper px-md text-subhead font-medium text-ink-soft">
             <Icon icon={GraduationCap} size={16} />
             Course: coming soon
           </span>

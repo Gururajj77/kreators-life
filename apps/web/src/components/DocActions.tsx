@@ -78,7 +78,7 @@ export function ConfirmSheet({ open, onClose, title, body, action, onConfirm, bu
   return (
     <Sheet open={open} onClose={onClose} title={title}>
       <div className="grid gap-md pb-xl">
-        <p className="m-0 text-[16px] font-semibold text-ink-soft">{body}</p>
+        <p className="m-0 text-callout text-ink-soft">{body}</p>
         <div className="flex flex-wrap gap-xs">
           <button
             type="button"
@@ -87,7 +87,7 @@ export function ConfirmSheet({ open, onClose, title, body, action, onConfirm, bu
               onClose();
             }}
             disabled={busy}
-            className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-[16px] font-semibold text-on-fill disabled:opacity-50"
+            className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill disabled:opacity-50"
             style={{ '--toy-color': 'var(--deep-servant_leader)' } as CSSProperties}
           >
             {action}
@@ -189,7 +189,7 @@ function AddOnce({ gap, clientId, settings }: { gap: EmailGap; clientId?: string
       <Button size="sm" type="submit" disabled={!value.trim() || save.isPending}>
         {save.isPending ? 'Saving' : gap.where === 'client' ? 'Save to the client' : 'Save to your profile'}
       </Button>
-      {err && <p role="alert" className="m-0 w-full text-[14px] font-bold text-r1">{err}</p>}
+      {err && <p role="alert" className="m-0 w-full text-subhead text-r1">{err}</p>}
     </form>
   );
 }
@@ -219,11 +219,11 @@ export function ReadyEmail({ ctx, onCopied }: { ctx: EmailContext; onCopied?: (o
   const chosen = key ?? f.suggested;
   const mail = fillEmail(chosen, f.vars);
   const all = `Subject: ${mail.subject}\n\n${mail.body}`;
-  if (!f.ready) return <p className="m-0 text-[14px] font-semibold text-ink-soft">Writing the email from your records.</p>;
+  if (!f.ready) return <p className="m-0 text-subhead text-ink-soft">Writing the email from your records.</p>;
   return (
     <div className="grid gap-sm">
       <div className="flex flex-wrap items-center gap-xs">
-        <label htmlFor={pickId} className="text-[14px] font-bold">
+        <label htmlFor={pickId} className="text-subhead font-semibold">
           Note
         </label>
         <select id={pickId} value={chosen} onChange={(e) => setKey(e.target.value)} className={`${SELECT_SM} min-w-0 max-w-full flex-1`}>
@@ -250,7 +250,7 @@ export function ReadyEmail({ ctx, onCopied }: { ctx: EmailContext; onCopied?: (o
           Copy the email
         </Button>
         {said && (
-          <span role="status" className="text-[14px] font-bold">
+          <span role="status" className="text-subhead">
             {said}
           </span>
         )}
@@ -370,7 +370,7 @@ function EmailNote({ ctx, onChange }: { ctx: EmailContext; onChange: (n: { subje
             </optgroup>
           )}
         </select>
-        {t && <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{t.when}</p>}
+        {t && <p className="mt-xs m-0 text-caption text-ink-soft">{t.when}</p>}
         {picked && (
           <div className="mt-xs flex flex-wrap gap-xs">
             <Button size="sm" variant="outline" onClick={() => { setName(picked.name); setNaming('rename'); setMsg(''); }}>
@@ -400,7 +400,7 @@ function EmailNote({ ctx, onChange }: { ctx: EmailContext; onChange: (n: { subje
         <label htmlFor="en-body" className={LABEL}>
           The email
         </label>
-        <textarea id="en-body" rows={14} value={body} maxLength={EMAIL_NOTE_MAX} onChange={(e) => { setBody(e.target.value); setTyped(true); }} className={`${FIELD} font-medium leading-snug [text-wrap:wrap]`} />
+        <textarea id="en-body" rows={14} value={body} maxLength={EMAIL_NOTE_MAX} onChange={(e) => { setBody(e.target.value); setTyped(true); }} className={`${FIELD} leading-snug [text-wrap:wrap]`} />
         <div className="mt-xs flex flex-wrap gap-xs">
           {typed && (
             <Button size="sm" variant="ghost" onClick={() => setTyped(false)}>
@@ -426,7 +426,7 @@ function EmailNote({ ctx, onChange }: { ctx: EmailContext; onChange: (n: { subje
       {naming && (
         <div className="grid gap-xs rounded-tile bg-paper p-sm">
           <Field id="en-save-name" label={naming === 'rename' ? 'New name' : 'Name for this note'} value={name} onChange={setName} max={TEMPLATE_NAME_MAX} />
-          {naming === 'save' && sameName && <p className="m-0 text-[14px] font-semibold text-ink-soft">{`You have a note called "${sameName.name}". Saving puts these words in it.`}</p>}
+          {naming === 'save' && sameName && <p className="m-0 text-subhead text-ink-soft">{`You have a note called "${sameName.name}". Saving puts these words in it.`}</p>}
           <div className="flex flex-wrap gap-xs">
             <Button size="sm" onClick={() => keep.mutate()} disabled={!name.trim() || keep.isPending}>
               {keep.isPending ? 'Saving' : naming === 'rename' ? 'Rename it' : 'Save the note'}
@@ -438,7 +438,7 @@ function EmailNote({ ctx, onChange }: { ctx: EmailContext; onChange: (n: { subje
         </div>
       )}
       {msg && (
-        <p role="status" className="m-0 text-[14px] font-bold">
+        <p role="status" className="m-0 text-subhead">
           {msg}
         </p>
       )}
@@ -473,12 +473,12 @@ export function EmailCopySheet({ open, onClose, route, id, defaultTo, context, n
   return (
     <Sheet open={open} onClose={onClose} title="Email a copy">
       <div className="grid gap-sm pb-xl">
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">Pick a note, check the words, then send it from here with a link to the page, or copy it and send it from your own email with the PDF attached.</p>
-        {noLinkYet && <p className="m-0 rounded-tile p-sm text-[14px] font-bold" style={{ background: 'var(--tint-yellow)' }}>It has not been sent yet, so there is no link. Send it first.</p>}
+        <p className="m-0 text-subhead text-ink-soft">Pick a note, check the words, then send it from here with a link to the page, or copy it and send it from your own email with the PDF attached.</p>
+        {noLinkYet && <p className="m-0 rounded-tile p-sm text-subhead" style={{ background: 'var(--tint-yellow)' }}>It has not been sent yet, so there is no link. Send it first.</p>}
         <Field id="email-copy-to" label="Send to" type="email" value={to} onChange={setTo} max={120} placeholder="the client's email" />
         {open && <EmailNote ctx={context} onChange={onNote} />}
         {msg && (
-          <p role="status" className="m-0 text-[14px] font-bold">
+          <p role="status" className="m-0 text-subhead">
             {msg}
           </p>
         )}
@@ -502,11 +502,11 @@ const EVENT_NAME: Record<string, string> = { emailed: 'Emailed a copy to', 'emai
 export function DocLog({ type, id }: { type: DocType; id: string }) {
   const q = useAuthed(['agency', 'doc-log', type, id], () => api.agencyDocLog(type, id));
   const log = q.data?.log ?? [];
-  if (log.length === 0) return <p className="m-0 text-[14px] font-semibold text-ink-soft">Nothing yet. When you email a copy or the client approves, it is noted here.</p>;
+  if (log.length === 0) return <p className="m-0 text-subhead text-ink-soft">Nothing yet. When you email a copy or the client approves, it is noted here.</p>;
   return (
     <ul className="m-0 flex list-none flex-col gap-xs p-0">
       {log.map((l) => (
-        <li key={l.id} className="text-[14px] font-semibold">
+        <li key={l.id} className="text-subhead">
           {EVENT_NAME[l.event] ?? l.event} {l.detail} <span className="text-ink-soft">on {docDate(l.createdAt)}</span>
         </li>
       ))}

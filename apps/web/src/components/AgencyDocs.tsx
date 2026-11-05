@@ -35,9 +35,9 @@ export function PickCard({ on, onPick, name, blurb, house = false }: { on: boole
   return (
     <button type="button" role="radio" aria-checked={on} onClick={onPick} className={`toy w-full rounded-tile border-2 p-sm text-left ${on ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
       <CardHead tag={house && <StatusTag fit tone="info">House template</StatusTag>}>
-        <span className="block text-[16px] font-extrabold">{tie(name)}</span>
+        <span className="block text-headline">{tie(name)}</span>
       </CardHead>
-      <span className="mt-xs block text-[14px] font-semibold text-ink-soft">{blurb}</span>
+      <span className="mt-xs block text-subhead text-ink-soft">{blurb}</span>
     </button>
   );
 }
@@ -83,9 +83,9 @@ export function NewDocSheet({ open, onClose, clientId, retainer }: { open: boole
   return (
     <Sheet open={open} onClose={onClose} title="New document">
       <div className="grid gap-sm pb-xl">
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">Pick a place to start. Your details and the client's fill in for you, and every part can be changed and restyled.</p>
+        <p className="m-0 text-subhead text-ink-soft">Pick a place to start. Your details and the client's fill in for you, and every part can be changed and restyled.</p>
         {!clientId && (
-          <label className="block text-[14px] font-bold" htmlFor="new-doc-client">
+          <label className="block text-subhead font-semibold" htmlFor="new-doc-client">
             For which client
             <select id="new-doc-client" value={client} onChange={(e) => setClient(e.target.value)} className={FIELD}>
               <option value="">No client yet</option>
@@ -97,7 +97,7 @@ export function NewDocSheet({ open, onClose, clientId, retainer }: { open: boole
             </select>
           </label>
         )}
-        <h3 className="m-0 text-[16px]">Built in</h3>
+        <h3 className="m-0 text-headline">Built in</h3>
         <ul className="m-0 flex list-none flex-col gap-xs p-0" role="radiogroup" aria-label="Kinds of document">
           {AGENCY_DOC_KINDS.map((k) => (
             <li key={k}>
@@ -107,25 +107,25 @@ export function NewDocSheet({ open, onClose, clientId, retainer }: { open: boole
         </ul>
         {kind === 'monthly_report' && (
           <div>
-            <label htmlFor="new-doc-month" className="block text-[14px] font-bold">
+            <label htmlFor="new-doc-month" className="block text-subhead font-semibold">
               Which month
             </label>
             <input id="new-doc-month" type="month" value={month} onChange={(e) => setMonth(e.target.value)} className={FIELD} />
-            <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">The numbers come from this client's pieces and invoices. Counts and titles only: no fees, no private notes.</p>
+            <p className="mt-xs m-0 text-caption text-ink-soft">The numbers come from this client's pieces and invoices. Counts and titles only: no fees, no private notes.</p>
           </div>
         )}
         {kind === 'retainer_proposal' && (
           <div className="grid gap-xs">
             <Field id="new-doc-fee" label="Monthly fee" inputMode="decimal" value={fee} onChange={setFee} placeholder="Leave empty to fill in later" />
-            <label htmlFor="new-doc-lines" className="block text-[14px] font-bold">
+            <label htmlFor="new-doc-lines" className="block text-subhead font-semibold">
               What is delivered each month, one a line
             </label>
-            <textarea id="new-doc-lines" rows={3} value={lines} onChange={(e) => setLines(e.target.value)} maxLength={1200} className="w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+            <textarea id="new-doc-lines" rows={3} value={lines} onChange={(e) => setLines(e.target.value)} maxLength={1200} className="w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
           </div>
         )}
-        <h3 className="m-0 text-[16px]">Your templates</h3>
+        <h3 className="m-0 text-headline">Your templates</h3>
         {own.length === 0 ? (
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">None yet. Open any document and tap "Save as template".</p>
+          <p className="m-0 text-subhead text-ink-soft">None yet. Open any document and tap "Save as template".</p>
         ) : (
           <ul className="m-0 flex list-none flex-col gap-xs p-0" role="radiogroup" aria-label="Your templates">
             {own.map((t: AgencyTemplate) => (
@@ -135,9 +135,9 @@ export function NewDocSheet({ open, onClose, clientId, retainer }: { open: boole
             ))}
           </ul>
         )}
-        <h3 className="m-0 text-[16px]">House templates</h3>
+        <h3 className="m-0 text-headline">House templates</h3>
         {house.length === 0 ? (
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">No house templates yet.</p>
+          <p className="m-0 text-subhead text-ink-soft">No house templates yet.</p>
         ) : (
           <ul className="m-0 flex list-none flex-col gap-xs p-0" role="radiogroup" aria-label="House templates">
             {house.map((t) => (
@@ -147,9 +147,9 @@ export function NewDocSheet({ open, onClose, clientId, retainer }: { open: boole
             ))}
           </ul>
         )}
-        {needsClient && <p className="m-0 text-[14px] font-bold">A monthly report is for one client. Choose a client first.</p>}
+        {needsClient && <p className="m-0 text-subhead">A monthly report is for one client. Choose a client first.</p>}
         {err && (
-          <p role="alert" className="m-0 text-[14px] font-bold">
+          <p role="alert" className="m-0 text-subhead">
             {err}
           </p>
         )}
@@ -187,7 +187,7 @@ export function AgencyDocsList({ clientId, retainer }: { clientId?: string; reta
       <div className="flex flex-wrap items-end justify-between gap-sm">
         {(kind !== 'all' || pg.page > 1 || (list.data && (list.data.docs.length > 10 || list.data.page.more))) ? (
           <div className="min-w-0">
-            <label htmlFor={`adkind-${clientId ?? 'all'}`} className="block text-[14px] font-bold">
+            <label htmlFor={`adkind-${clientId ?? 'all'}`} className="block text-subhead font-semibold">
               Kind of document
             </label>
             <select
@@ -197,7 +197,7 @@ export function AgencyDocsList({ clientId, retainer }: { clientId?: string; reta
                 setKind(e.target.value);
                 pg.reset();
               }}
-              className="mt-xs min-h-[44px] w-full max-w-[320px] rounded-tile border-2 border-line bg-paper px-sm text-[16px]"
+              className="mt-xs min-h-[44px] w-full max-w-[320px] rounded-tile border-2 border-line bg-paper px-sm text-body"
             >
               <option value="all">All</option>
               {AGENCY_DOC_KINDS.map((k) => (
@@ -217,18 +217,18 @@ export function AgencyDocsList({ clientId, retainer }: { clientId?: string; reta
         )}
       </div>
       {list.isError && (
-        <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-sm m-0 text-subhead">
           Could not load the documents. Try again.
         </p>
       )}
-      {list.data && list.data.docs.length === 0 && <p className="mt-sm m-0 rounded-tile bg-card p-sm text-[14px] font-semibold text-ink-soft shadow-toy-soft">No documents here yet. Start one from a template.</p>}
+      {list.data && list.data.docs.length === 0 && <p className="mt-sm m-0 rounded-tile bg-card p-sm text-subhead text-ink-soft shadow-toy-soft">No documents here yet. Start one from a template.</p>}
       <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
         {list.data?.docs.map((d: AgencyDocListItem) => (
           <li key={d.id} className="flex items-center gap-xs rounded-tile bg-card p-sm shadow-toy-soft">
             <Link to={`/agency/docs/${d.id}`} className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-sm text-ink no-underline">
               <span className="min-w-0 flex-1">
-                <span className="block text-[16px] font-extrabold">{tie(d.title)}</span>
-                <span className="block text-[14px] font-semibold text-ink-soft">{[AGENCY_DOC_KIND_META[d.kind]?.name.trim().toLowerCase() === d.title.trim().toLowerCase() ? '' : AGENCY_DOC_KIND_META[d.kind]?.name, d.clientName || 'No client yet', d.approvedAt ? `Approved ${day(d.approvedAt)}` : d.sentAt ? `Sent ${day(d.sentAt)}` : `Changed ${day(d.updatedAt)}`].filter(Boolean).join(' · ')}</span>
+                <span className="block text-headline">{tie(d.title)}</span>
+                <span className="block text-subhead text-ink-soft">{[AGENCY_DOC_KIND_META[d.kind]?.name.trim().toLowerCase() === d.title.trim().toLowerCase() ? '' : AGENCY_DOC_KIND_META[d.kind]?.name, d.clientName || 'No client yet', d.approvedAt ? `Approved ${day(d.approvedAt)}` : d.sentAt ? `Sent ${day(d.sentAt)}` : `Changed ${day(d.updatedAt)}`].filter(Boolean).join(' · ')}</span>
               </span>
               <StatusTag tone={AGENCY_DOC_STATUS_TONE[d.status]}>{AGENCY_DOC_STATUS_NAME[d.status]}</StatusTag>
             </Link>
@@ -237,7 +237,7 @@ export function AgencyDocsList({ clientId, retainer }: { clientId?: string; reta
         ))}
       </ul>
       {rowNote && (
-        <p role="status" className="mt-xs m-0 text-[14px] font-bold">
+        <p role="status" className="mt-xs m-0 text-subhead">
           {rowNote}
         </p>
       )}
@@ -255,7 +255,7 @@ export function AgencyDocsList({ clientId, retainer }: { clientId?: string; reta
 export function ClientDocs({ clientId, retainer }: { clientId: string; retainer?: Partial<RetainerInput> }) {
   return (
     <section aria-labelledby={`client-docs-${clientId}`}>
-      <h2 id={`client-docs-${clientId}`} className="text-[24px]">
+      <h2 id={`client-docs-${clientId}`} className="text-title2">
         Documents
       </h2>
       <div className="mt-sm">

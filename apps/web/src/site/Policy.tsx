@@ -72,10 +72,15 @@ export function Policy({ kind }: { kind: Kind }) {
           </P>
           <H>What you make and sell</H>
           <P>You keep the rights to what you make. By selling through the shop you promise it is yours to sell, is not unlawful or hateful, and does not promise financial returns. Brands and creators agree usage rights on each campaign in writing before anything is produced.</P>
+          <H>Wellbeing, not medical care</H>
+          <P>Mood, sleep, stress, breathing, the Companion, journal prompts and Discover help you look at your days and how you feel. They are not medical care, a diagnosis or a treatment. If you are worried about your health, talk to a doctor or another trained person. Do not wait to get help because of something you read here.</P>
+          <H>Money tools, not advice</H>
+          <P>Finance, the tax sums in Agency and the money numbers in reviews help you keep track. They are not financial, tax or investment advice. Check with an accountant or another adviser before you rely on them.</P>
           <H>Invoices and agreements</H>
           <P>Agency lets you make invoices and agreements for your own clients. They are your documents, not ours, and you are responsible for what is in them and for the tax on them. The agreement templates are a starting point, not legal advice: have a lawyer read one before you rely on it. When a client types their name to accept, that is typed acceptance, not a certified electronic signature. We take no part of what you invoice.</P>
           <H>Acceptable use</H>
           <P>No farming points, no fake views, no scraping, no impersonation, no posting what you do not have the right to post, no harassing people and no breaking the law. If these rules are broken we may remove content, hold payouts for review, or close the account, and we tell you why. If you think we got it wrong, write to the team through Help inside the app and a person will look again.</P>
+          <P>Posts, replies, chat lines and coach notes are the views of the people who wrote them, not of kreators.app. Do not post anything meant to put down a religion, a community, a company or a person.</P>
           <H>Complaints</H>
           <P>
             For a complaint about the app, about something posted here or about your data, write first to our Grievance Officer, named on the <A to="/contact">contact page</A>. A person will look at it.
@@ -241,7 +246,8 @@ export function Policy({ kind }: { kind: Kind }) {
       {kind === 'contact' && (
         <>
           <H>The business</H>
-          <div className="mt-sm grid gap-sm md:grid-cols-2">
+          {/* Three to five facts, some optional: an odd last one takes the whole row, so none sits alone beside a hole. */}
+          <div className="mt-sm grid gap-sm md:grid-cols-2 md:[&>:last-child:nth-child(odd)]:col-span-2">
             <Fact label="Legal name" value={business?.name} unset={loading ? 'Loading.' : NOT_SET} />
             <Fact label="Registered address" value={business?.address} unset={loading ? 'Loading.' : NOT_SET} />
             <Fact label="Email" value={email} unset="" />
@@ -273,17 +279,19 @@ export function Policy({ kind }: { kind: Kind }) {
 
       {kind === 'pricing' && (
         <>
-          <div className="mt-lg grid gap-sm md:grid-cols-3">
+          {/* Two across on a tablet (three narrow cells broke "5% of each sale" and left Free a half-empty box beside the long Assistant
+              cell), with the Assistant and Brands each across the row; three across on a laptop. */}
+          <div className="mt-lg grid gap-sm md:grid-cols-2 lg:grid-cols-3">
             {[
               ['Play', 'Free', 'The daily game, your seven pillars and every app you switch on, Agency included. Free to start, free to stay.'],
               ['Sell', '5% of each sale', `Taken from each sale in the shop, with nothing up front. Refer a creator and earn ${Math.round(AFFILIATE_SHARE * 100)}% of their referred sales.`],
               ['Assistant', `From ${money(PLANS.pro.priceCents, PLAN_CURRENCY)}`, `Typing to it needs a plan: ${PLAN_PRICES}, each for ${PLAN_DAYS} days. Its tap flows stay free${PAYMENTS_LIVE ? '.' : ', and plans are not on sale yet, so nothing is charged.'}`],
               ['Brands', 'Per campaign', `Campaigns and content-reward pools are priced per brief. Write to ${email}.`],
             ].map(([name, price, blurb], i) => (
-              <div key={name} className={`rounded-card bg-card p-md shadow-toy-soft ${i === 3 ? 'md:col-span-3' : ''}`}>
+              <div key={name} className={`rounded-card bg-card p-md shadow-toy-soft ${['', '', 'md:col-span-2 lg:col-span-1', 'md:col-span-2 lg:col-span-3'][i]}`}>
                 <p className="m-0 type-eyebrow text-ink-mute">{name}</p>
-                <p className="mt-xs m-0 type-hook text-[36px]">{price}</p>
-                <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{blurb}</p>
+                <p className="mt-xs m-0 type-hook text-display-3">{price}</p>
+                <p className="mt-sm m-0 text-subhead text-ink-soft">{blurb}</p>
               </div>
             ))}
           </div>

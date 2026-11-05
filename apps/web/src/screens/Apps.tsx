@@ -26,7 +26,7 @@ export function Apps() {
         <CondensedTitle title="Apps">
           <h1 className="type-large">Apps</h1>
         </CondensedTitle>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{on} on. Open a group to see its apps and switch them.</p>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">{on} on. Open a group to see its apps and switch them.</p>
         <div className="mt-md">
           <SearchBox placeholder="Search tasks, journals, library, products, people" />
         </div>
@@ -36,7 +36,7 @@ export function Apps() {
         <AppGroups groups={groupOrder} unread={me.data?.unread ?? 0} where="apps" />
       </div>
 
-      <p className="span-all mt-lg m-0 rounded-tile bg-paper p-sm text-center text-[14px] font-semibold text-ink-soft">Rank and rewards are part of the game and live under Profile.</p>
+      <p className="span-all mt-lg m-0 rounded-tile bg-paper p-sm text-center text-subhead text-ink-soft">Rank and rewards are part of the game and live under Profile.</p>
     </Screen>
   );
 }

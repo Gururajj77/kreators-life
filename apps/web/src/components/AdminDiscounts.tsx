@@ -126,13 +126,13 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
   return (
     <section className="mt-md" aria-labelledby="discounts-heading">
       <div className="flex items-center justify-between gap-sm">
-        <h2 id="discounts-heading" className="text-[24px]">
+        <h2 id="discounts-heading" className="text-title2">
           Discount codes
         </h2>
         <Button onClick={() => setMaking(true)}>Make a code</Button>
       </div>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">A code takes a percent or an amount off a product, program, ticket, plan or top-up.</p>
-      <ul className="mt-xs m-0 flex list-disc flex-col gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+      <p className="mt-xs m-0 text-subhead text-ink-soft">A code takes a percent or an amount off a product, program, ticket, plan or top-up.</p>
+      <ul className="mt-xs m-0 flex list-disc flex-col gap-xs pl-md text-subhead text-ink-soft">
         <li>The platform pays, so the seller still gets the full price.</li>
         <li>A code’s word and worth never change. For a new deal, make a new code.</li>
       </ul>
@@ -153,7 +153,7 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
           void load({ page: 1, size: ask.size });
         }}
       >
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a code or note" aria-label="Search codes" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-[16px]" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a code or note" aria-label="Search codes" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-body" />
         <Select value={active} onChange={(e) => setActive(e.target.value)} aria-label="Status" className="w-[140px]">
           <option value="">On and off</option>
           <option value="1">On</option>
@@ -173,7 +173,7 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
       </form>
 
       {error && (
-        <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+        <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           {error}
         </p>
       )}
@@ -194,7 +194,7 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
           busy={busy}
           empty={rows === null ? 'Loading' : 'No codes yet. Make one to start.'}
           columns={[
-            { key: 'code', label: 'Code', get: (r) => r.code, render: (r) => <span className="font-mono font-bold">{r.code}</span> },
+            { key: 'code', label: 'Code', get: (r) => r.code, render: (r) => <span className="font-mono font-semibold">{r.code}</span> },
             { key: 'worth', label: 'Takes off', get: (r) => discountLabel(r) },
             { key: 'where', label: 'Works on', get: (r) => r.areas.map((a) => DISCOUNT_AREA_META[a].name).join(', ') + (r.itemId ? ` (one item)` : ''), wrap: true },
             { key: 'used', label: 'Used', get: (r) => r.redeemed, align: 'right', render: (r) => `${r.redeemed}${r.maxUses !== null ? ` of ${r.maxUses}` : ''}` },
@@ -239,12 +239,12 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
           }}
         >
           {error && (
-            <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+            <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
               {error}
             </p>
           )}
           <div>
-            <label htmlFor="dc-code" className="block text-[14px] font-bold">
+            <label htmlFor="dc-code" className="block text-subhead font-semibold">
               Code
             </label>
             <div className="flex gap-xs">
@@ -253,52 +253,52 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
                 Make one
               </Button>
             </div>
-            <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Three to {DISCOUNT_CODE_MAX} letters, numbers or dashes. Empty makes a random one of eight.</p>
+            <p className="mt-xs m-0 text-caption text-ink-soft">Three to {DISCOUNT_CODE_MAX} letters, numbers or dashes. Empty makes a random one of eight.</p>
           </div>
 
           <fieldset className="m-0 border-0 p-0">
-            <legend className="text-[14px] font-bold">What it takes off</legend>
+            <legend className="text-subhead font-semibold">What it takes off</legend>
             <div className="mt-xs flex gap-xs">
               {(['percent', 'fixed'] as const).map((k) => (
-                <button key={k} type="button" aria-pressed={form.kind === k} onClick={() => set('kind', k)} className={`toy rounded-pill border-2 px-md py-xs text-[14px] font-bold ${form.kind === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                <button key={k} type="button" aria-pressed={form.kind === k} onClick={() => set('kind', k)} className={`toy rounded-pill border-2 px-md py-xs text-subhead font-medium ${form.kind === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                   {k === 'percent' ? 'A percent' : 'A fixed amount'}
                 </button>
               ))}
             </div>
             {form.kind === 'percent' ? (
               <label className="mt-sm block">
-                <span className="block text-[14px] font-bold">Percent off (0.01 to 100)</span>
+                <span className="block text-subhead font-semibold">Percent off (0.01 to 100)</span>
                 <input inputMode="decimal" value={form.percent} onChange={(e) => set('percent', e.target.value)} className={FIELD_44} />
-                <span className="mt-xs block text-[12px] font-bold text-ink-soft">The amount off is rounded down. It works on prices in money and in points.</span>
+                <span className="mt-xs block text-caption text-ink-soft">The amount off is rounded down. It works on prices in money and in points.</span>
               </label>
             ) : (
               <div className="mt-sm grid grid-cols-[1fr_120px] gap-xs">
                 <label className="block">
-                  <span className="block text-[14px] font-bold">Amount off</span>
+                  <span className="block text-subhead font-semibold">Amount off</span>
                   <input inputMode="decimal" value={form.amount} onChange={(e) => set('amount', e.target.value)} placeholder="500" className={FIELD_44} />
                 </label>
                 <label className="block">
-                  <span className="block text-[14px] font-bold">Money</span>
+                  <span className="block text-subhead font-semibold">Money</span>
                   <Select value={form.currency} onChange={(e) => set('currency', e.target.value)} className="mt-xs">
                     <option value="INR">INR (₹)</option>
                     <option value="USD">USD ($)</option>
                   </Select>
                 </label>
-                <p className="col-span-2 m-0 text-[12px] font-bold text-ink-soft">Takes money off only. Plans and top-ups are in INR. It never takes off more than the price.</p>
+                <p className="col-span-2 m-0 text-caption text-ink-soft">Takes money off only. Plans and top-ups are in INR. It never takes off more than the price.</p>
               </div>
             )}
           </fieldset>
 
           <fieldset className="m-0 border-0 p-0">
-            <legend className="text-[14px] font-bold">Where it works</legend>
+            <legend className="text-subhead font-semibold">Where it works</legend>
             <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
               {DISCOUNT_AREAS.map((a) => (
                 <li key={a}>
                   <label className="toy flex min-h-[44px] cursor-pointer items-start gap-sm rounded-tile bg-paper p-sm">
                     <input type="checkbox" checked={form.areas.includes(a)} onChange={() => toggleArea(a)} className="mt-xs size-[20px] accent-ink" />
                     <span>
-                      <span className="block text-[14px] font-bold">{DISCOUNT_AREA_META[a].name}</span>
-                      <span className="block text-[12px] font-semibold text-ink-soft">{DISCOUNT_AREA_META[a].blurb}</span>
+                      <span className="block text-subhead font-semibold">{DISCOUNT_AREA_META[a].name}</span>
+                      <span className="block text-caption text-ink-soft">{DISCOUNT_AREA_META[a].blurb}</span>
                     </span>
                   </label>
                 </li>
@@ -306,7 +306,7 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
             </ul>
             {form.areas.length === 1 && (
               <label className="mt-sm block">
-                <span className="block text-[14px] font-bold">Only one item (optional)</span>
+                <span className="block text-subhead font-semibold">Only one item (optional)</span>
                 <input value={form.itemId} onChange={(e) => set('itemId', e.target.value)} placeholder="An id, or pro, pro_max, ultra, small, medium, large" className={FIELD_44} />
               </label>
             )}
@@ -314,28 +314,28 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
 
           <div className="grid grid-cols-2 gap-xs">
             <label className="block">
-              <span className="block text-[14px] font-bold">Times it can be used</span>
+              <span className="block text-subhead font-semibold">Times it can be used</span>
               <input inputMode="numeric" value={form.maxUses} onChange={(e) => set('maxUses', e.target.value)} placeholder="No limit" className={FIELD_44} />
             </label>
             <label className="block">
-              <span className="block text-[14px] font-bold">Times per person</span>
+              <span className="block text-subhead font-semibold">Times per person</span>
               <input inputMode="numeric" value={form.perPersonLimit} onChange={(e) => set('perPersonLimit', e.target.value)} className={FIELD_44} />
             </label>
             <label className="block">
-              <span className="block text-[14px] font-bold">First day</span>
+              <span className="block text-subhead font-semibold">First day</span>
               <input type="date" value={form.startDay} onChange={(e) => set('startDay', e.target.value)} className={FIELD_44} />
             </label>
             <label className="block">
-              <span className="block text-[14px] font-bold">Last day</span>
+              <span className="block text-subhead font-semibold">Last day</span>
               <input type="date" value={form.endDay} onChange={(e) => set('endDay', e.target.value)} className={FIELD_44} />
             </label>
           </div>
           <label className="block">
-            <span className="block text-[14px] font-bold">Only for prices from (optional)</span>
+            <span className="block text-subhead font-semibold">Only for prices from (optional)</span>
             <input inputMode="decimal" value={form.minAmount} onChange={(e) => set('minAmount', e.target.value)} placeholder="Any price" className={FIELD_44} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Note for the team</span>
+            <span className="block text-subhead font-semibold">Note for the team</span>
             <input value={form.note} onChange={(e) => set('note', e.target.value)} maxLength={200} className={FIELD_44} />
           </label>
           <Button type="submit" size="lg" full disabled={busy || form.areas.length === 0}>

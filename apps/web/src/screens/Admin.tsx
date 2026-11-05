@@ -91,7 +91,7 @@ function readKey(): string {
 
 const Label = ({ children, text }: { children: ReactNode; text: string }) => (
   <label className="block">
-    <span className="block text-[14px] font-bold">{text}</span>
+    <span className="block text-subhead">{text}</span>
     {children}
   </label>
 );
@@ -381,14 +381,14 @@ export function Admin() {
             void load();
           }}
         >
-          <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Admin key" aria-label="Admin key" autoComplete="off" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-[16px]" />
+          <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Admin key" aria-label="Admin key" autoComplete="off" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-body" />
           <Button type="submit" disabled={busy || !key}>
             {loaded ? 'Reload' : 'Open'}
           </Button>
         </form>
       )}
       {error && (
-        <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+        <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           {error}
         </p>
       )}
@@ -399,12 +399,12 @@ export function Admin() {
 
           {tab === 'people' && (
             <section className="mt-md" aria-labelledby="people-heading">
-              <h2 id="people-heading" className="text-[24px]">
+              <h2 id="people-heading" className="text-title2">
                 People
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Search the server, then sort, filter and edit the rows here.</p>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">Search the server, then sort, filter and edit the rows here.</p>
               <Fold title="How this table works" className="mt-xs">
-                <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+                <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-subhead text-ink-soft">
                   <li>Role and plan change in the row.</li>
                   <li>Tick rows to change several at once.</li>
                   <li>Tap a row for honors, points, credits and what that person sees.</li>
@@ -417,7 +417,7 @@ export function Admin() {
                   void run(() => refreshUsers({ page: 1, size: asks.users?.size ?? DEFAULT_PAGE_SIZE }));
                 }}
               >
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, email, page or id" aria-label="Search people on the server" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-[16px]" />
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, email, page or id" aria-label="Search people on the server" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-body" />
                 <Button type="submit" variant="outline" disabled={busy}>
                   Search
                 </Button>
@@ -441,8 +441,8 @@ export function Admin() {
                       get: (u) => u.displayName || 'Anonymous climber',
                       render: (u) => (
                         <>
-                          <span className="block font-bold">{u.displayName || 'Anonymous climber'}</span>
-                          {u.handle && <span className="block text-[12px] font-bold text-ink-soft">@{u.handle}</span>}
+                          <span className="block font-semibold">{u.displayName || 'Anonymous climber'}</span>
+                          {u.handle && <span className="block text-caption text-ink-soft">@{u.handle}</span>}
                         </>
                       ),
                     },
@@ -491,7 +491,7 @@ export function Admin() {
               </div>
 
               <Sheet open={deleting !== null} onClose={() => setDeleting(null)} title={`Delete ${deleting?.displayName || 'this account'}?`}>
-                <p className="m-0 text-[14px] font-semibold text-ink-soft">Their details and what they made go. Money records stay, without their name. This cannot be undone.</p>
+                <p className="m-0 text-subhead text-ink-soft">Their details and what they made go. Money records stay, without their name. This cannot be undone.</p>
                 <div className="mt-md flex flex-col gap-xs">
                   <button
                     type="button"
@@ -506,7 +506,7 @@ export function Admin() {
                         await refreshUsers(asks.users);
                       });
                     }}
-                    className="toy inline-flex min-h-[56px] items-center justify-center gap-xs rounded-pill bg-r1 px-md text-[18px] font-bold text-on-fill disabled:opacity-50"
+                    className="toy inline-flex min-h-[56px] items-center justify-center gap-xs rounded-pill bg-r1 px-md text-headline text-on-fill disabled:opacity-50"
                   >
                     Yes, delete
                   </button>
@@ -520,14 +520,14 @@ export function Admin() {
                 <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
                   <div className="flex items-start justify-between gap-sm">
                     <div className="min-w-0">
-                      <h3 className="text-[22px]">{selected.displayName || 'Anonymous climber'}</h3>
-                      <p className="mt-xs m-0 text-[12px] font-bold text-ink-mute">{selected.id}</p>
+                      <h3 className="text-title2">{selected.displayName || 'Anonymous climber'}</h3>
+                      <p className="mt-xs m-0 text-caption text-ink-mute">{selected.id}</p>
                     </div>
                     <CloseButton onClick={() => setSelected(null)} label="Close this person" />
                   </div>
 
-                  <p className="mt-md m-0 text-[14px] font-bold">Permissions</p>
-                  <p className="m-0 text-[12px] font-semibold text-ink-soft">A permission is a job someone is trusted with. Admins hold all of them but Life coach. A creator can hold Mentor and Life coach; the rest need the Staff role.</p>
+                  <p className="mt-md m-0 text-subhead font-semibold">Permissions</p>
+                  <p className="m-0 text-caption text-ink-soft">A permission is a job someone is trusted with. Admins hold all of them but Life coach. A creator can hold Mentor and Life coach; the rest need the Staff role.</p>
                   <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label="Permissions">
                     {PERMISSIONS.map((p) => {
                       const on = selected.permissions.includes(p);
@@ -538,7 +538,7 @@ export function Admin() {
                           aria-pressed={on}
                           disabled={busy || (selected.role === 'admin' && p !== 'coach')}
                           onClick={() => run(async () => applyUser((await adminApi.setPermissions(key, selected.id, on ? selected.permissions.filter((x) => x !== p) : [...selected.permissions, p])).user))}
-                          className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on || (selected.role === 'admin' && p !== 'coach') ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+                          className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${on || (selected.role === 'admin' && p !== 'coach') ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
                         >
                           {PERMISSION_NAMES[p]}
                         </button>
@@ -546,11 +546,11 @@ export function Admin() {
                     })}
                   </div>
 
-                  <p className="mt-md m-0 text-[14px] font-bold">Honors</p>
+                  <p className="mt-md m-0 text-subhead font-semibold">Honors</p>
                   <div className="mt-xs flex flex-wrap gap-xs">
-                    {selected.honors.length === 0 && <span className="text-[14px] font-semibold text-ink-soft">None yet.</span>}
+                    {selected.honors.length === 0 && <span className="text-subhead text-ink-soft">None yet.</span>}
                     {selected.honors.map((h) => (
-                      <button key={h} type="button" disabled={busy} onClick={() => run(async () => applyUser((await adminApi.revokeHonor(key, selected.id, h)).user))} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-paper px-sm text-[14px] font-bold" aria-label={`Remove ${HONOR_BY_KEY[h]?.name ?? h}`}>
+                      <button key={h} type="button" disabled={busy} onClick={() => run(async () => applyUser((await adminApi.revokeHonor(key, selected.id, h)).user))} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-paper px-sm text-subhead font-medium" aria-label={`Remove ${HONOR_BY_KEY[h]?.name ?? h}`}>
                         <AppIcon name={HONOR_BY_KEY[h]?.icon} size={16} />
                         {HONOR_BY_KEY[h]?.name ?? h}
                         <Icon icon={X} size={14} />
@@ -558,7 +558,7 @@ export function Admin() {
                     ))}
                   </div>
                   <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
-                    <select value={honor} onChange={(e) => setHonor(e.target.value)} aria-label="Honor" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]">
+                    <select value={honor} onChange={(e) => setHonor(e.target.value)} aria-label="Honor" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-body">
                       {ADMIN_HONORS.map((h) => (
                         <option key={h.key} value={h.key}>
                           {h.name}
@@ -571,29 +571,29 @@ export function Admin() {
                   </div>
                   <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional)" aria-label="Note" className={FIELD} />
 
-                  <p className="mt-md m-0 text-[14px] font-bold">Points</p>
+                  <p className="mt-md m-0 text-subhead font-semibold">Points</p>
                   <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
-                    <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Amount" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+                    <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Amount" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
                     <Button variant="outline" disabled={busy || !Number(amount)} onClick={() => run(async () => applyUser((await adminApi.addPoints(key, selected.id, Number(amount), note)).user))}>
                       Add
                     </Button>
                   </div>
 
-                  <p className="mt-md m-0 text-[14px] font-bold">XP</p>
-                  <p className="m-0 text-[12px] font-semibold text-ink-soft">Moves their level and the leaderboard. A minus takes some away, down to zero. The note and your name are kept in the audit log.</p>
+                  <p className="mt-md m-0 text-subhead font-semibold">XP</p>
+                  <p className="m-0 text-caption text-ink-soft">Moves their level and the leaderboard. A minus takes some away, down to zero. The note and your name are kept in the audit log.</p>
                   <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
-                    <input type="number" value={xpAmount} onChange={(e) => setXpAmount(e.target.value)} aria-label="XP amount" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+                    <input type="number" value={xpAmount} onChange={(e) => setXpAmount(e.target.value)} aria-label="XP amount" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
                     <Button variant="outline" disabled={busy || !Number(xpAmount)} onClick={() => run(async () => applyUser((await adminApi.addXp(key, selected.id, Number(xpAmount), note)).user))}>
                       Add
                     </Button>
                   </div>
 
-                  <p className="mt-md m-0 text-[14px] font-bold">Badges given by hand</p>
-                  <p className="m-0 text-[12px] font-semibold text-ink-soft">They count for unlocks, the profile and the leaderboard. A badge the person earned is never taken away here.</p>
+                  <p className="mt-md m-0 text-subhead font-semibold">Badges given by hand</p>
+                  <p className="m-0 text-caption text-ink-soft">They count for unlocks, the profile and the leaderboard. A badge the person earned is never taken away here.</p>
                   <div className="mt-xs flex flex-wrap gap-xs">
-                    {selected.grantedBadges.length === 0 && <span className="text-[14px] font-semibold text-ink-soft">None given.</span>}
+                    {selected.grantedBadges.length === 0 && <span className="text-subhead text-ink-soft">None given.</span>}
                     {selected.grantedBadges.map((b) => (
-                      <button key={b} type="button" disabled={busy} onClick={() => run(async () => applyUser((await adminApi.revokeBadge(key, selected.id, b)).user))} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-paper px-sm text-[14px] font-bold" aria-label={`Remove ${BADGES.find((x) => x.key === b)?.name ?? b}`}>
+                      <button key={b} type="button" disabled={busy} onClick={() => run(async () => applyUser((await adminApi.revokeBadge(key, selected.id, b)).user))} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-paper px-sm text-subhead font-medium" aria-label={`Remove ${BADGES.find((x) => x.key === b)?.name ?? b}`}>
                         <AppIcon name={BADGES.find((x) => x.key === b)?.icon} size={16} />
                         {BADGES.find((x) => x.key === b)?.name ?? b}
                         <Icon icon={X} size={14} />
@@ -601,7 +601,7 @@ export function Admin() {
                     ))}
                   </div>
                   <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
-                    <select value={badgeKey} onChange={(e) => setBadgeKey(e.target.value)} aria-label="Badge" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]">
+                    <select value={badgeKey} onChange={(e) => setBadgeKey(e.target.value)} aria-label="Badge" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-body">
                       {BADGES.map((b) => (
                         <option key={b.key} value={b.key}>
                           {b.name} ({b.family})
@@ -613,26 +613,26 @@ export function Admin() {
                     </Button>
                   </div>
 
-                  <p className="mt-md m-0 text-[14px] font-bold">Plan and credits</p>
-                  <p className="m-0 text-[12px] font-semibold text-ink-soft">
+                  <p className="mt-md m-0 text-subhead font-semibold">Plan and credits</p>
+                  <p className="m-0 text-caption text-ink-soft">
                     {planName(selected.plan)}
                     {selected.planUntil ? ` until ${selected.planUntil.slice(0, 10)}` : ''}. {formatCount(selected.planCredits)} plan credits, {formatCount(selected.extraCredits)} extra. Payments are not live, so plans start here. A new plan grants its credits fresh; extra credits stay until used.
                   </p>
                   <div className="mt-xs grid grid-cols-[1fr_auto_auto] gap-xs">
-                    <select value={plan} onChange={(e) => setPlan(e.target.value as PlanKey)} aria-label="Plan" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]">
+                    <select value={plan} onChange={(e) => setPlan(e.target.value as PlanKey)} aria-label="Plan" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-body">
                       {PLAN_KEYS.map((k) => (
                         <option key={k} value={k}>
                           {planName(k)}
                         </option>
                       ))}
                     </select>
-                    <input type="number" min={1} max={366} value={planDays} onChange={(e) => setPlanDays(e.target.value)} aria-label="Days" className="w-[96px] rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+                    <input type="number" min={1} max={366} value={planDays} onChange={(e) => setPlanDays(e.target.value)} aria-label="Days" className="w-[96px] rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
                     <Button variant="outline" disabled={busy || (plan !== 'none' && !(Number(planDays) >= 1))} onClick={() => run(async () => applyUser((await adminApi.setPlan(key, selected.id, plan, Number(planDays) || PLAN_DAYS)).user))}>
                       {plan === 'none' ? 'End plan' : 'Start'}
                     </Button>
                   </div>
                   <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
-                    <input type="number" min={1} max={MAX_CREDIT_GRANT} value={grant} onChange={(e) => setGrant(e.target.value)} aria-label="Credits to add" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+                    <input type="number" min={1} max={MAX_CREDIT_GRANT} value={grant} onChange={(e) => setGrant(e.target.value)} aria-label="Credits to add" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
                     <Button variant="outline" disabled={busy || !(Number.isInteger(Number(grant)) && Number(grant) >= 1 && Number(grant) <= MAX_CREDIT_GRANT)} onClick={() => run(async () => applyUser((await adminApi.addCredits(key, selected.id, Number(grant), grantNote)).user))}>
                       Add credits
                     </Button>
@@ -644,7 +644,7 @@ export function Admin() {
                   </Button>
                   {preview && (
                     <>
-                      <p className="mt-sm m-0 text-[12px] font-semibold text-ink-soft">Tick to allow, untick to block. Struck through means not allowed, and locked apps cannot be blocked. Reset returns an app to the usual rules.</p>
+                      <p className="mt-sm m-0 text-caption text-ink-soft">Tick to allow, untick to block. Struck through means not allowed, and locked apps cannot be blocked. Reset returns an app to the usual rules.</p>
                       <ul className="mt-xs grid list-none grid-cols-1 gap-xs p-0 m-0 sm:grid-cols-2 md:grid-cols-3">
                         {MODULES.map((m) => {
                           const a = preview.access[m.key];
@@ -668,18 +668,18 @@ export function Admin() {
                               <label className="toy toy-flat flex min-h-[44px] min-w-0 flex-1 cursor-pointer items-center gap-xs rounded-inner-sm px-xs">
                                 <input type="checkbox" checked={allowed} disabled={busy || Boolean(m.locked)} onChange={(e) => void setAccess(e.target.checked)} className="size-[20px] shrink-0" aria-label={`Allow ${m.name}`} />
                                 <span className="min-w-0">
-                                  <span className={`block truncate text-[14px] font-bold ${allowed ? '' : 'text-ink-soft line-through'}`}>
+                                  <span className={`block truncate text-subhead font-semibold ${allowed ? '' : 'text-ink-soft line-through'}`}>
                                     <span className="inline-flex items-center gap-xs align-middle">
                                       <AppIcon name={m.icon} size={16} />
                                       {m.name}
                                     </span>
                                   </span>
-                                  {a && !a.available && <span className="block text-[11px] font-semibold text-ink-soft no-underline">{a.reason === 'override' ? 'Blocked for this person' : a.reason === 'role' ? 'Needs a higher role' : a.reason === 'rollout' ? 'Not rolled out to them yet' : 'Switched off for everyone'}</span>}
-                                  {a?.available && mine.length > 0 && <span className="block text-[11px] font-semibold text-ink-soft">Allowed for this person</span>}
+                                  {a && !a.available && <span className="block text-caption2 text-ink-soft no-underline">{a.reason === 'override' ? 'Blocked for this person' : a.reason === 'role' ? 'Needs a higher role' : a.reason === 'rollout' ? 'Not rolled out to them yet' : 'Switched off for everyone'}</span>}
+                                  {a?.available && mine.length > 0 && <span className="block text-caption2 text-ink-soft">Allowed for this person</span>}
                                 </span>
                               </label>
                               {mine.length > 0 && (
-                                <button type="button" onClick={() => void reset()} disabled={busy} className="inline-flex min-h-[44px] shrink-0 items-center rounded-pill px-xs text-[12px] font-bold text-ink-soft underline underline-offset-4">
+                                <button type="button" onClick={() => void reset()} disabled={busy} className="inline-flex min-h-[44px] shrink-0 items-center rounded-pill px-xs text-caption font-medium text-ink-soft underline underline-offset-4">
                                   Reset
                                 </button>
                               )}
@@ -696,12 +696,12 @@ export function Admin() {
 
           {tab === 'flags' && (
             <section className="mt-md" aria-labelledby="flags-heading">
-              <h2 id="flags-heading" className="text-[24px]">
+              <h2 id="flags-heading" className="text-title2">
                 Feature flags
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Switch an app for everyone, a share of people, or one person. Edit any cell in place.</p>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">Switch an app for everyone, a share of people, or one person. Edit any cell in place.</p>
               <Fold title="What each switch does" className="mt-xs">
-                <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+                <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-subhead text-ink-soft">
                   <li>Off hides a module for everyone.</li>
                   <li>Rollout shows it to a steady percentage of people.</li>
                   <li>Overrides force it on or off for one person, one role or one brand, and can expire.</li>
@@ -714,7 +714,7 @@ export function Admin() {
                   label="Feature flags"
                   busy={busy}
                   columns={[
-                    { key: 'module', label: 'Module', get: (s) => MODULE_BY_KEY[s.key]?.name ?? s.key, render: (s) => <span className="inline-flex items-center gap-xs font-bold"><AppIcon name={MODULE_BY_KEY[s.key]?.icon} size={16} />{MODULE_BY_KEY[s.key]?.name ?? s.key}</span> },
+                    { key: 'module', label: 'Module', get: (s) => MODULE_BY_KEY[s.key]?.name ?? s.key, render: (s) => <span className="inline-flex items-center gap-xs font-semibold"><AppIcon name={MODULE_BY_KEY[s.key]?.icon} size={16} />{MODULE_BY_KEY[s.key]?.name ?? s.key}</span> },
                     { key: 'group', label: 'Group', get: (s) => MODULE_GROUPS[MODULE_BY_KEY[s.key]?.group ?? 'core'], filter: true, wide: true },
                     { key: 'enabled', label: 'On', get: (s) => s.enabled, filter: true, edit: { kind: 'toggle', onEdit: (s, v) => run(async () => { await adminApi.setModuleSetting(key, s.key, { enabled: Boolean(v) }); await refreshFlags(); }) } },
                     { key: 'minRole', label: 'Minimum role', get: (s) => ROLE_META[s.minRole].name, filter: true, edit: { kind: 'select', options: ROLE_OPTIONS, onEdit: (s, v) => run(async () => { await adminApi.setModuleSetting(key, s.key, { minRole: roleByName(String(v)) }); await refreshFlags(); }) } },
@@ -728,7 +728,7 @@ export function Admin() {
                   )}
                 />
               </div>
-              <h3 className="mt-md text-[18px]">Overrides</h3>
+              <h3 className="mt-md text-headline">Overrides</h3>
               <div className="mt-xs">
                 <DataTable<FlagOverride>
                   rows={overrides}
@@ -795,12 +795,12 @@ export function Admin() {
 
           {tab === 'listings' && (
             <section className="mt-md" aria-labelledby="listings-heading">
-              <h2 id="listings-heading" className="text-[24px]">
+              <h2 id="listings-heading" className="text-title2">
                 Listings
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">What the public site shows on Explore and each feature page.</p>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">What the public site shows on Explore and each feature page.</p>
               <Fold title="How listing works" className="mt-xs">
-                <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+                <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-subhead text-ink-soft">
                   <li>Create here, then publish or feature in the row.</li>
                   <li>Tick several to do it at once.</li>
                   <li>Brands make their own campaigns public from Army.</li>
@@ -825,7 +825,7 @@ export function Admin() {
                   empty="Nothing yet. Create the first listing above."
                   columns={[
                     { key: 'type', label: 'Type', get: (l) => LISTING_TYPE_META[l.type].name, filter: true, render: (l) => <span className="inline-flex items-center gap-xs"><AppIcon name={LISTING_TYPE_META[l.type].icon} size={16} /> {LISTING_TYPE_META[l.type].name}</span> },
-                    { key: 'title', label: 'Title', get: (l) => l.title, wrap: true, render: (l) => <span className="font-bold">{l.title}</span> },
+                    { key: 'title', label: 'Title', get: (l) => l.title, wrap: true, render: (l) => <span className="font-semibold">{l.title}</span> },
                     { key: 'by', label: 'By', get: (l) => l.by, filter: true, wide: true },
                     { key: 'facts', label: 'Facts', get: (l) => l.facts.map((f) => f.text).join(', '), wide: true, wrap: true },
                     { key: 'live', label: 'Live', get: (l) => l.live, filter: true, edit: { kind: 'toggle', onEdit: (l, v) => run(async () => { await adminApi.setListing(key, l.type, l.id, { live: Boolean(v) }); await refreshListings(); }) } },
@@ -833,7 +833,7 @@ export function Admin() {
                     { key: 'created', label: 'Created', get: (l) => l.createdAt.slice(0, 10), render: (l) => day(l.createdAt), wide: true },
                   ]}
                   actions={(l) => (
-                    <Link to={l.path} className="inline-flex min-h-[44px] items-center text-[14px] font-bold text-ink-soft underline-offset-4 hover:underline">
+                    <Link to={l.path} className="inline-flex min-h-[44px] items-center text-subhead text-ink-soft underline-offset-4 hover:underline">
                       Open
                     </Link>
                   )}
@@ -1060,10 +1060,10 @@ export function Admin() {
 
           {tab === 'redemptions' && (
             <section className="mt-md" aria-labelledby="redemptions-heading">
-              <h2 id="redemptions-heading" className="text-[24px]">
+              <h2 id="redemptions-heading" className="text-title2">
                 Reserved rewards
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Points are held until you mark a reward fulfilled or cancel it, which gives the points back.</p>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">Points are held until you mark a reward fulfilled or cancel it, which gives the points back.</p>
               <div className="mt-sm">
                 <DataTable<AdminRedemption>
                   rows={redemptions}
@@ -1075,7 +1075,7 @@ export function Admin() {
                   busy={busy}
                   empty="Nothing is waiting for you."
                   columns={[
-                    { key: 'person', label: 'Person', get: (r) => r.userName, render: (r) => <span className="font-bold">{r.userName}</span> },
+                    { key: 'person', label: 'Person', get: (r) => r.userName, render: (r) => <span className="font-semibold">{r.userName}</span> },
                     { key: 'reward', label: 'Reward', get: (r) => REWARD_BY_KEY[r.rewardKey]?.name ?? r.rewardKey, filter: true },
                     { key: 'points', label: 'Points', get: (r) => r.points, align: 'right' },
                     { key: 'reserved', label: 'Reserved', get: (r) => r.createdAt, render: (r) => when(r.createdAt) },
@@ -1101,10 +1101,10 @@ export function Admin() {
 
           {tab === 'orders' && (
             <section className="mt-md" aria-labelledby="orders-heading">
-              <h2 id="orders-heading" className="text-[24px]">
+              <h2 id="orders-heading" className="text-title2">
                 Orders
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Search by order, provider id, buyer, page or product. Tap a row for its timeline and a refund.</p>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">Search by order, provider id, buyer, page or product. Tap a row for its timeline and a refund.</p>
               <form
                 className="mt-sm flex flex-wrap gap-xs"
                 onSubmit={(e) => {
@@ -1112,7 +1112,7 @@ export function Admin() {
                   void searchOrders();
                 }}
               >
-                <input value={orderQ} onChange={(e) => setOrderQ(e.target.value)} placeholder="Order, payment, buyer, page" aria-label="Search orders on the server" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-[16px]" />
+                <input value={orderQ} onChange={(e) => setOrderQ(e.target.value)} placeholder="Order, payment, buyer, page" aria-label="Search orders on the server" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-body" />
                 <Select value={orderStatus} onChange={(e) => { setOrderStatus(e.target.value); void searchOrders(orderQ, e.target.value); }} aria-label="Status on the server" className="min-w-[160px]" selectClass="rounded-pill bg-card">
                   {ORDER_STATUSES.map((s) => (
                     <option key={s} value={s}>
@@ -1136,8 +1136,8 @@ export function Admin() {
                   onRowClick={(o) => void openOrder(o.id)}
                   empty="No orders match."
                   columns={[
-                    { key: 'product', label: 'Product', get: (o) => o.productTitle, wrap: true, render: (o) => <><span className="block font-bold">{o.productTitle}</span><span className="block text-[12px] font-bold text-ink-mute">#{o.id.slice(0, 8)}</span></> },
-                    { key: 'buyer', label: 'Buyer', get: (o) => `${o.buyerName} ${o.buyerEmail ?? ''}`.trim(), render: (o) => <><span className="block">{o.buyerName}</span>{o.buyerEmail && <span className="block text-[12px] font-bold text-ink-soft">{o.buyerEmail}</span>}</> },
+                    { key: 'product', label: 'Product', get: (o) => o.productTitle, wrap: true, render: (o) => <><span className="block font-semibold">{o.productTitle}</span><span className="block text-caption text-ink-mute">#{o.id.slice(0, 8)}</span></> },
+                    { key: 'buyer', label: 'Buyer', get: (o) => `${o.buyerName} ${o.buyerEmail ?? ''}`.trim(), render: (o) => <><span className="block">{o.buyerName}</span>{o.buyerEmail && <span className="block text-caption text-ink-soft">{o.buyerEmail}</span>}</> },
                     { key: 'from', label: 'From', get: (o) => (o.ownerHandle ? `@${o.ownerHandle}` : o.ownerName), filter: true, wide: true },
                     { key: 'amount', label: 'Amount', get: (o) => (o.points > 0 ? o.points : o.cents), align: 'right', render: (o) => (o.points > 0 ? `${formatCount(o.points)} pts` : money(o.cents, o.currency)) },
                     { key: 'provider', label: 'Provider', get: (o) => o.provider, filter: true, wide: true },
@@ -1149,36 +1149,36 @@ export function Admin() {
               {orderDetail && (
                 <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
                   <div className="flex items-start justify-between gap-sm">
-                    <h3 className="text-[22px]">
-                      {orderDetail.order.productTitle} <span className="text-[14px] font-bold text-ink-mute">#{orderDetail.order.id.slice(0, 8)}</span>
+                    <h3 className="text-title2">
+                      {orderDetail.order.productTitle} <span className="text-subhead text-ink-mute">#{orderDetail.order.id.slice(0, 8)}</span>
                     </h3>
                     <CloseButton onClick={() => setOrderDetail(null)} label="Close this order" />
                   </div>
-                  <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+                  <p className="mt-xs m-0 text-subhead text-ink-soft">
                     <Pill tone={statusTone(orderDetail.order.status)}>{orderDetail.order.status}</Pill> {orderDetail.order.provider}
                     {orderDetail.order.providerOrderId ? `, ${orderDetail.order.providerOrderId}` : ''}
                     {orderDetail.order.paidAt ? `, paid ${dateTime(orderDetail.order.paidAt)}` : ''}
                   </p>
-                  <p className="mt-md m-0 text-[14px] font-bold">Timeline</p>
-                  {orderDetail.timeline.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">Nothing logged for this order yet.</p>}
+                  <p className="mt-md m-0 text-subhead font-semibold">Timeline</p>
+                  {orderDetail.timeline.length === 0 && <p className="m-0 text-subhead text-ink-soft">Nothing logged for this order yet.</p>}
                   <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
                     {orderDetail.timeline.map((t) => (
-                      <li key={t.id} className="rounded-tile bg-paper px-sm py-xs text-[12px] font-bold">
+                      <li key={t.id} className="rounded-tile bg-paper px-sm py-xs text-caption">
                         <span>{t.type}</span>
-                        {t.data ? <span className="block break-words font-semibold text-ink-soft">{t.data}</span> : null}
-                        <span className="block font-semibold text-ink-mute">{dateTime(t.createdAt)}</span>
+                        {t.data ? <span className="block break-words text-ink-soft">{t.data}</span> : null}
+                        <span className="block text-ink-mute">{dateTime(t.createdAt)}</span>
                       </li>
                     ))}
                   </ul>
                   {orderDetail.webhooks.length > 0 && (
                     <>
-                      <p className="mt-md m-0 text-[14px] font-bold">Provider webhooks</p>
+                      <p className="mt-md m-0 text-subhead font-semibold">Provider webhooks</p>
                       <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
                         {orderDetail.webhooks.map((h) => (
-                          <li key={h.id} className="rounded-tile bg-paper px-sm py-xs text-[12px] font-bold">
+                          <li key={h.id} className="rounded-tile bg-paper px-sm py-xs text-caption">
                             {h.type}
-                            <span className="block font-semibold text-ink-soft">{h.processedAt ? `processed ${dateTime(h.processedAt)}` : 'not processed yet'}</span>
-                            {h.error && <span className="block font-semibold text-r1">{h.error}</span>}
+                            <span className="block text-ink-soft">{h.processedAt ? `processed ${dateTime(h.processedAt)}` : 'not processed yet'}</span>
+                            {h.error && <span className="block text-r1">{h.error}</span>}
                           </li>
                         ))}
                       </ul>
@@ -1190,7 +1190,7 @@ export function Admin() {
                         <input value={refundReason} onChange={(e) => setRefundReason(e.target.value)} className={FIELD} />
                       </Label>
                       {refundError && (
-                        <p role="alert" className="mt-xs m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+                        <p role="alert" className="mt-xs m-0 rounded-tile bg-r1/15 p-sm text-subhead">
                           {refundError}
                         </p>
                       )}
@@ -1223,14 +1223,14 @@ export function Admin() {
           {tab === 'webhooks' && (
             <section className="mt-md" aria-labelledby="hooks-heading">
               <div className="flex items-center justify-between gap-sm">
-                <h2 id="hooks-heading" className="text-[24px]">
+                <h2 id="hooks-heading" className="text-title2">
                   Webhooks
                 </h2>
                 <Button variant="outline" size="sm" disabled={busy} onClick={() => loadHooks()}>
                   Refresh
                 </Button>
               </div>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Every signed event from Meta and the payment provider, stored before it is processed. Replay runs one again.</p>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">Every signed event from Meta and the payment provider, stored before it is processed. Replay runs one again.</p>
               <div className="mt-sm">
                 <DataTable<WebhookEvent>
                   rows={hooks ?? []}
@@ -1252,7 +1252,7 @@ export function Admin() {
                       <Button variant="outline" size="sm" disabled={busy} onClick={() => run(async () => { const r = await adminApi.replayWebhook(key, h.id); setReplayOutcome((m) => ({ ...m, [h.id]: r.outcome })); })}>
                         Replay
                       </Button>
-                      {replayOutcome[h.id] && <span className="text-[12px] font-bold text-ink-soft">{replayOutcome[h.id]}</span>}
+                      {replayOutcome[h.id] && <span className="text-caption text-ink-soft">{replayOutcome[h.id]}</span>}
                     </>
                   )}
                 />
@@ -1262,13 +1262,13 @@ export function Admin() {
 
           {tab === 'kyc' && (
             <section className="mt-md" aria-labelledby="kyc-heading">
-              <h2 id="kyc-heading" className="text-[24px]">
+              <h2 id="kyc-heading" className="text-title2">
                 Payout details
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Only the last digits are stored here. Approve once the bank account and PAN match the legal name. Type a note in the row before deciding, if the person should hear why.</p>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">Only the last digits are stored here. Approve once the bank account and PAN match the legal name. Type a note in the row before deciding, if the person should hear why.</p>
               <div className="mt-sm flex flex-wrap gap-xs" role="group" aria-label="Status">
                 {(['pending', 'approved', 'rejected'] as const).map((s) => (
-                  <button key={s} type="button" aria-pressed={kycStatus === s} onClick={() => { setKycStatus(s); void loadKyc(s); }} className={`toy inline-flex min-h-[44px] items-center rounded-pill border-2 px-sm text-[14px] font-bold ${kycStatus === s ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                  <button key={s} type="button" aria-pressed={kycStatus === s} onClick={() => { setKycStatus(s); void loadKyc(s); }} className={`toy inline-flex min-h-[44px] items-center rounded-pill border-2 px-sm text-subhead font-medium ${kycStatus === s ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                     {s}
                   </button>
                 ))}
@@ -1283,7 +1283,7 @@ export function Admin() {
                   busy={busy}
                   empty={`Nothing ${kycStatus} right now.`}
                   columns={[
-                    { key: 'person', label: 'Person', get: (k) => `${k.userName} ${k.email ?? ''}`.trim(), render: (k) => <><span className="block font-bold">{k.userName}</span><span className="block text-[12px] font-bold text-ink-soft">{k.email ?? 'no email'}</span></> },
+                    { key: 'person', label: 'Person', get: (k) => `${k.userName} ${k.email ?? ''}`.trim(), render: (k) => <><span className="block font-semibold">{k.userName}</span><span className="block text-caption text-ink-soft">{k.email ?? 'no email'}</span></> },
                     { key: 'legal', label: 'Legal name', get: (k) => k.legalName },
                     { key: 'pan', label: 'PAN', get: (k) => `…${k.panLast4}`, wide: true },
                     { key: 'account', label: 'Account', get: (k) => `…${k.bankLast4} ${k.ifsc}`, wide: true },
@@ -1313,26 +1313,26 @@ export function Admin() {
           {tab === 'ops' && (
             <section className="mt-md" aria-labelledby="ops-heading">
               <div className="flex items-center justify-between gap-sm">
-                <h2 id="ops-heading" className="text-[24px]">
+                <h2 id="ops-heading" className="text-title2">
                   Funnels
                 </h2>
                 <Button variant="outline" size="sm" disabled={busy} onClick={() => loadOps()}>
                   Refresh
                 </Button>
               </div>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Counted from our own tables, nothing leaves the server. Each bar is the share of the step before it.</p>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">Counted from our own tables, nothing leaves the server. Each bar is the share of the step before it.</p>
               <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
                 {funnels?.map((f) => {
                   const top = Math.max(1, f.steps[0]?.count ?? 0);
                   return (
                     <li key={f.name} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                      <p className="m-0 text-[16px] font-bold">{f.name}</p>
+                      <p className="m-0 text-headline">{f.name}</p>
                       <ol className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
                         {f.steps.map((s, i) => {
                           const prev = i > 0 ? (f.steps[i - 1]?.count ?? 0) : null;
                           const drop = prev ? Math.round(100 - (s.count / Math.max(1, prev)) * 100) : null;
                           return (
-                            <li key={s.label} className="text-[12px] font-bold">
+                            <li key={s.label} className="text-caption">
                               <div className="flex items-baseline justify-between gap-sm">
                                 <span>{s.label}</span>
                                 <span className="text-ink-soft">
@@ -1352,8 +1352,8 @@ export function Admin() {
                 })}
               </ul>
 
-              <h2 className="mt-lg text-[24px]">Email outbox</h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Every message the app wanted to send. Skipped means no RESEND_API_KEY is set on the server, so nothing went out.</p>
+              <h2 className="mt-lg text-title2">Email outbox</h2>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">Every message the app wanted to send. Skipped means no RESEND_API_KEY is set on the server, so nothing went out.</p>
               <div className="mt-sm">
                 <DataTable<OutboxEmail>
                   rows={outbox ?? []}
@@ -1365,7 +1365,7 @@ export function Admin() {
                   empty="Nothing is queued."
                   columns={[
                     { key: 'to', label: 'To', get: (m) => m.to },
-                    { key: 'subject', label: 'Subject', get: (m) => m.subject, wrap: true, render: (m) => <span className="font-bold">{m.subject}</span> },
+                    { key: 'subject', label: 'Subject', get: (m) => m.subject, wrap: true, render: (m) => <span className="font-semibold">{m.subject}</span> },
                     { key: 'status', label: 'Status', get: (m) => m.status, filter: true, render: (m) => <Pill tone={m.status === 'sent' ? 'bg-r4 text-on-fill' : m.status === 'failed' ? 'bg-r1 text-white' : 'bg-paper text-ink-soft'}>{m.status}</Pill> },
                     { key: 'created', label: 'Created', get: (m) => m.createdAt, render: (m) => when(m.createdAt) },
                     { key: 'error', label: 'Error', get: (m) => m.error, wide: true, wrap: true },
@@ -1377,17 +1377,17 @@ export function Admin() {
 
           {tab === 'coaches' && (
             <section className="mt-md" aria-labelledby="coaches-heading">
-              <h2 id="coaches-heading" className="text-[24px]">
+              <h2 id="coaches-heading" className="text-title2">
                 Life coaches
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">A life coach works only with students who said yes, and never sees the journal.</p>
-              <ul className="mt-xs m-0 flex list-disc flex-col gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+              <p className="mt-xs m-0 text-subhead text-ink-soft">A life coach works only with students who said yes, and never sees the journal.</p>
+              <ul className="mt-xs m-0 flex list-disc flex-col gap-xs pl-md text-subhead text-ink-soft">
                 <li>A student has up to {MAX_COACHES} coaches.</li>
                 <li>Giving or taking the badge is the Life coach permission.</li>
                 <li>Every change is audited, and the person is told.</li>
               </ul>
 
-              <h3 className="mt-md text-[18px]">Asked to be a life coach</h3>
+              <h3 className="mt-md text-headline">Asked to be a life coach</h3>
               <div className="mt-sm">
                 <DataTable<AdminCoachAsk>
                   rows={coachAsks ?? []}
@@ -1399,7 +1399,7 @@ export function Admin() {
                   busy={busy}
                   empty="Nobody is waiting."
                   columns={[
-                    { key: 'name', label: 'Name', get: (r) => r.name, render: (r) => (<><span className="block font-bold">{r.name}</span>{r.handle && <span className="block text-[12px] font-bold text-ink-soft">@{r.handle}</span>}</>) },
+                    { key: 'name', label: 'Name', get: (r) => r.name, render: (r) => (<><span className="block font-semibold">{r.name}</span>{r.handle && <span className="block text-caption text-ink-soft">@{r.handle}</span>}</>) },
                     { key: 'email', label: 'Email', get: (r) => r.email ?? '', wide: true },
                     { key: 'about', label: 'Their coaching', get: (r) => r.about, wrap: true },
                     { key: 'asked', label: 'Asked', get: (r) => r.askedAt, render: (r) => day(r.askedAt) },
@@ -1411,7 +1411,7 @@ export function Admin() {
                 />
               </div>
 
-              <h3 className="mt-md text-[18px]">Life coaches</h3>
+              <h3 className="mt-md text-headline">Life coaches</h3>
               <div className="mt-sm">
                 <DataTable<(typeof coaches)[number]>
                   rows={coaches}
@@ -1423,7 +1423,7 @@ export function Admin() {
                   busy={busy}
                   empty="No life coaches yet. Make one from an ask above, or from People."
                   columns={[
-                    { key: 'name', label: 'Name', get: (r) => r.name, render: (r) => (<><span className="block font-bold">{r.name}</span>{r.handle && <span className="block text-[12px] font-bold text-ink-soft">@{r.handle}</span>}</>) },
+                    { key: 'name', label: 'Name', get: (r) => r.name, render: (r) => (<><span className="block font-semibold">{r.name}</span>{r.handle && <span className="block text-caption text-ink-soft">@{r.handle}</span>}</>) },
                     { key: 'email', label: 'Email', get: (r) => r.email ?? '', wide: true },
                     { key: 'students', label: 'Students', get: (r) => r.students, align: 'right' },
                   ]}
@@ -1431,8 +1431,8 @@ export function Admin() {
                 />
               </div>
 
-              <h3 className="mt-md text-[18px]">Link a coach and a student</h3>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Ask, and the student answers on their Profile tab. Link now only if they already agreed.</p>
+              <h3 className="mt-md text-headline">Link a coach and a student</h3>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">Ask, and the student answers on their Profile tab. Link now only if they already agreed.</p>
               <form
                 className="mt-sm grid gap-xs md:grid-cols-[1fr_1fr_auto_auto]"
                 onSubmit={(e) => {
@@ -1455,7 +1455,7 @@ export function Admin() {
                     </option>
                   ))}
                 </Select>
-                <input value={linkStudent} onChange={(e) => setLinkStudent(e.target.value)} placeholder="Student's email or @handle" aria-label="Student's email or handle" className="min-w-0 rounded-pill border-2 border-line bg-card px-md py-sm text-[16px]" />
+                <input value={linkStudent} onChange={(e) => setLinkStudent(e.target.value)} placeholder="Student's email or @handle" aria-label="Student's email or handle" className="min-w-0 rounded-pill border-2 border-line bg-card px-md py-sm text-body" />
                 <Select value={linkMode} onChange={(e) => setLinkMode(e.target.value === 'link' ? 'link' : 'ask')} aria-label="How" selectClass="rounded-pill bg-card">
                   <option value="ask">Ask the student</option>
                   <option value="link">Link now</option>
@@ -1464,9 +1464,9 @@ export function Admin() {
                   {linkMode === 'link' ? 'Link them' : 'Send the ask'}
                 </Button>
               </form>
-              {linked && <p className="mt-xs m-0 text-[14px] font-bold">{linked}</p>}
+              {linked && <p className="mt-xs m-0 text-subhead font-semibold">{linked}</p>}
 
-              <h3 className="mt-md text-[18px]">Every link</h3>
+              <h3 className="mt-md text-headline">Every link</h3>
               <div className="mt-sm flex flex-wrap gap-xs">
                 <Select
                   value={linkStatus}
@@ -1511,11 +1511,11 @@ export function Admin() {
 
           {tab === 'codes' && (
             <section className="mt-md" aria-labelledby="codes-heading">
-              <h2 id="codes-heading" className="text-[24px]">
+              <h2 id="codes-heading" className="text-title2">
                 Attendee codes
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Every Party, Run and Circles event with guests, from a week ago on, soonest first.</p>
-              <ul className="mt-xs m-0 flex list-disc flex-col gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+              <p className="mt-xs m-0 text-subhead text-ink-soft">Every Party, Run and Circles event with guests, from a week ago on, soonest first.</p>
+              <ul className="mt-xs m-0 flex list-disc flex-col gap-xs pl-md text-subhead text-ink-soft">
                 <li>Set its xp (up to {ATTENDEE_XP_MAX}) until the code opens, thirty minutes before the start.</li>
                 <li>Only its own guests can use the code, once each.</li>
                 <li>The host hears about your change, and it is audited.</li>
@@ -1534,14 +1534,14 @@ export function Admin() {
                     void loadCodes(e.target.value, { page: 1, size: asks.codes?.size ?? DEFAULT_PAGE_SIZE });
                   }}
                   aria-label="App"
-                  className="rounded-pill border-2 border-line bg-card px-md py-sm text-[16px]"
+                  className="rounded-pill border-2 border-line bg-card px-md py-sm text-body"
                 >
                   <option value="">All apps</option>
                   <option value="party">Party</option>
                   <option value="run">Run</option>
                   <option value="circles">Circles</option>
                 </select>
-                <input value={codeQ} onChange={(e) => setCodeQ(e.target.value)} placeholder="Event title" aria-label="Search events by title" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-[16px]" />
+                <input value={codeQ} onChange={(e) => setCodeQ(e.target.value)} placeholder="Event title" aria-label="Search events by title" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-body" />
                 <Button type="submit" variant="outline" disabled={busy}>
                   Search
                 </Button>
@@ -1564,8 +1564,8 @@ export function Admin() {
                       get: (r) => r.title,
                       render: (r) => (
                         <>
-                          <span className="block font-bold">{r.title}</span>
-                          <span className="block text-[12px] font-bold text-ink-soft">Host: {r.hostName}</span>
+                          <span className="block font-semibold">{r.title}</span>
+                          <span className="block text-caption text-ink-soft">Host: {r.hostName}</span>
                         </>
                       ),
                     },
@@ -1619,14 +1619,14 @@ export function Admin() {
           {tab === 'audit' && (
             <section className="mt-md" aria-labelledby="audit-heading">
               <div className="flex items-center justify-between gap-sm">
-                <h2 id="audit-heading" className="text-[24px]">
+                <h2 id="audit-heading" className="text-title2">
                   Audit log
                 </h2>
                 <Button variant="outline" size="sm" disabled={busy} onClick={() => run(refreshAudit)}>
                   Refresh
                 </Button>
               </div>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Who changed what, with the before and after. The last two hundred entries.</p>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">Who changed what, with the before and after. The last two hundred entries.</p>
               <div className="mt-sm">
                 <DataTable<AuditLog>
                   rows={logs}
@@ -1639,11 +1639,11 @@ export function Admin() {
                   columns={[
                     { key: 'when', label: 'When', get: (l) => l.createdAt, render: (l) => when(l.createdAt) },
                     { key: 'actor', label: 'Actor', get: (l) => l.actorName, filter: true },
-                    { key: 'action', label: 'Action', get: (l) => l.action, filter: true, render: (l) => <span className="font-bold">{l.action}</span> },
+                    { key: 'action', label: 'Action', get: (l) => l.action, filter: true, render: (l) => <span className="font-semibold">{l.action}</span> },
                     { key: 'resource', label: 'Resource', get: (l) => `${l.resourceType} ${l.resourceId?.slice(0, 8) ?? ''}`.trim(), filter: false },
                     // Data, not prose: one line in the mono face that scrolls inside its cell, so a JSON tail never wraps onto a line alone.
-                    { key: 'before', label: 'Before', get: (l) => l.before, wide: true, wrap: true, render: (l) => <code className="block max-w-[320px] overflow-x-auto whitespace-nowrap font-mono text-[12px]">{l.before}</code> },
-                    { key: 'after', label: 'After', get: (l) => l.after, wrap: true, render: (l) => <code className="block max-w-[320px] overflow-x-auto whitespace-nowrap font-mono text-[12px]">{l.after}</code> },
+                    { key: 'before', label: 'Before', get: (l) => l.before, wide: true, wrap: true, render: (l) => <code className="block max-w-[320px] overflow-x-auto whitespace-nowrap font-mono text-caption">{l.before}</code> },
+                    { key: 'after', label: 'After', get: (l) => l.after, wrap: true, render: (l) => <code className="block max-w-[320px] overflow-x-auto whitespace-nowrap font-mono text-caption">{l.after}</code> },
                   ]}
                 />
               </div>

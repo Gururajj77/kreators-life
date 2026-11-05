@@ -75,11 +75,11 @@ function AccessRows({ role, access, onChange, idPrefix }: { role: TeamRole; acce
         const levels = levelsFor(role, tab);
         return (
           <li key={tab} className="flex flex-wrap items-center justify-between gap-xs">
-            <span id={`${idPrefix}-${tab}`} className="min-w-[96px] text-[14px] font-bold">
+            <span id={`${idPrefix}-${tab}`} className="min-w-[96px] text-subhead font-semibold">
               {TEAM_TAB_NAME[tab]}
             </span>
             {levels.length === 1 ? (
-              <span className="inline-flex min-h-[44px] items-center gap-xs text-[14px] font-semibold text-ink-soft">
+              <span className="inline-flex min-h-[44px] items-center gap-xs text-subhead text-ink-soft">
                 <Icon icon={Lock} size={16} />
                 {COPY.locked}
               </span>
@@ -108,7 +108,7 @@ function RolePick({ value, onChange }: { value: TeamRole; onChange: (r: TeamRole
           type="button"
           aria-pressed={value === r}
           onClick={() => onChange(r)}
-          className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${value === r ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+          className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${value === r ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
         >
           {TEAM_ROLE_META[r].name}
         </button>
@@ -123,7 +123,7 @@ function Face({ name, url }: { name: string; url: string }) {
   if (url && url.startsWith('https://') && !broken)
     return <img src={url} alt="" width={44} height={44} loading="lazy" decoding="async" onError={() => setBroken(true)} className="size-[44px] shrink-0 rounded-pill bg-paper object-cover" />;
   return (
-    <span aria-hidden="true" className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper text-[16px] font-extrabold text-ink-soft">
+    <span aria-hidden="true" className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper text-headline text-ink-soft">
       {(name.trim()[0] ?? '?').toUpperCase()}
     </span>
   );
@@ -180,17 +180,17 @@ function InviteSheet({ open, onClose, onSent }: { open: boolean; onClose: () => 
         <FieldLabel label={COPY.who}>
           <input value={who} onChange={(e) => setWho(e.target.value)} maxLength={200} autoComplete="off" autoCapitalize="none" spellCheck={false} className={FIELD} placeholder="name@example.com" />
         </FieldLabel>
-        <p className="mt-sm m-0 text-[14px] font-bold">Role</p>
+        <p className="mt-sm m-0 text-subhead font-semibold">Role</p>
         <div className="mt-xs">
           <RolePick value={role} onChange={pickRole} />
         </div>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{TEAM_ROLE_META[role].blurb}</p>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">{TEAM_ROLE_META[role].blurb}</p>
         {role === 'client' && <ClientPick value={clientId} onChange={setClientId} />}
-        <p className="mt-md m-0 text-[14px] font-bold">What they can open</p>
+        <p className="mt-md m-0 text-subhead font-semibold">What they can open</p>
         <div className="mt-xs">
           <AccessRows role={role} access={access} onChange={setAccess} idPrefix="invite" />
         </div>
-        <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{COPY.friend}</p>
+        <p className="mt-sm m-0 text-subhead text-ink-soft">{COPY.friend}</p>
         {send.isError && <ErrorLine e={send.error} className="mt-xs" />}
         <div className="mt-md">
           <Button type="submit" full disabled={send.isPending || !who.trim() || (role === 'client' && !clientId)}>
@@ -217,9 +217,9 @@ function RoleSheet({ m, onClose }: { m: TeamMember | null; onClose: () => void }
   return (
     <Sheet open={m !== null} onClose={onClose} title={`Change ${m?.person.name ?? 'their'} role`}>
       <RolePick value={role} onChange={setRole} />
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{TEAM_ROLE_META[role].blurb}</p>
+      <p className="mt-xs m-0 text-subhead text-ink-soft">{TEAM_ROLE_META[role].blurb}</p>
       {role === 'client' && <ClientPick value={clientId} onChange={setClientId} />}
-      <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">What they can open goes back to this role's usual set. You can change it after.</p>
+      <p className="mt-sm m-0 text-subhead text-ink-soft">What they can open goes back to this role's usual set. You can change it after.</p>
       {save.isError && <ErrorLine e={save.error} className="mt-xs" />}
       <div className="mt-md">
         <Button full onClick={() => save.mutate()} disabled={save.isPending || role === m?.role || (role === 'client' && !clientId)}>
@@ -260,8 +260,8 @@ function MemberRow({ m, onRole, onSaid }: { m: TeamMember; onRole: (m: TeamMembe
       <div className="flex items-start gap-sm">
         <Face name={m.person.name} url={m.person.avatarUrl} />
         <div className="min-w-0 flex-1">
-          <p className="m-0 text-[16px] font-extrabold leading-snug">{m.person.name}</p>
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">{[m.person.handle ? `@${m.person.handle}` : '', m.client ? `for ${m.client.name}` : '', since].filter(Boolean).join(', ')}</p>
+          <p className="m-0 text-headline">{m.person.name}</p>
+          <p className="m-0 text-subhead text-ink-soft">{[m.person.handle ? `@${m.person.handle}` : '', m.client ? `for ${m.client.name}` : '', since].filter(Boolean).join(', ')}</p>
           <div className="mt-xs flex flex-wrap items-center gap-xs">
             <IconTag tone={ROLE_TONE[m.role]} icon={TEAM_ROLE_META[m.role].icon}>
               {TEAM_ROLE_META[m.role].name}
@@ -323,12 +323,12 @@ export function AgencyTeam({ inviting, onInviting }: { inviting: boolean; onInvi
   return (
     <Section id="team-heading" title="Team" lede={COPY.lede}>
       {said && (
-        <p role="status" className="mb-sm m-0 text-[14px] font-bold">
+        <p role="status" className="mb-sm m-0 text-subhead">
           {said}
         </p>
       )}
       {q.isError && (
-        <p role="alert" className="m-0 text-[14px] font-bold">
+        <p role="alert" className="m-0 text-subhead">
           {COPY.fail}
         </p>
       )}
@@ -341,7 +341,7 @@ export function AgencyTeam({ inviting, onInviting }: { inviting: boolean; onInvi
       )}
       {d && now.length === 0 && past.length === 0 && (
         <div className="rounded-card bg-card p-md shadow-toy-soft">
-          <p className="m-0 text-[16px] font-semibold">{COPY.empty}</p>
+          <p className="m-0 text-callout">{COPY.empty}</p>
         </div>
       )}
       {now.length > 0 && (
@@ -381,7 +381,7 @@ export function ClientMemberView({ teamId, agencyName }: { teamId: string; agenc
   const q = useAuthed(['myTeams', 'client-view', teamId], () => api.myTeamClientView(teamId));
   if (q.isError)
     return (
-      <p role="alert" className="mt-md m-0 rounded-tile bg-card p-sm text-[14px] font-bold">
+      <p role="alert" className="mt-md m-0 rounded-tile bg-card p-sm text-subhead">
         {q.error instanceof Error ? q.error.message : 'Could not load this. Try again in a moment.'}
       </p>
     );
@@ -394,7 +394,7 @@ export function ClientMemberView({ teamId, agencyName }: { teamId: string; agenc
     );
   const v = q.data.view as PortalView & { show?: PortalView['show'] };
   if (!v.show)
-    return <p className="mt-md m-0 rounded-tile bg-card p-sm text-[14px] font-semibold">{`${agencyName} has a short form for you first. Open the link they sent you to fill it in.`}</p>;
+    return <p className="mt-md m-0 rounded-tile bg-card p-sm text-subhead">{`${agencyName} has a short form for you first. Open the link they sent you to fill it in.`}</p>;
   const a = q.data.access;
   const docs = [
     ...v.contracts.map((k) => ({ key: `k-${k.token}`, href: `/k/${k.token}`, title: k.title, tone: CONTRACT_STATUS_TONE[k.status], status: CONTRACT_STATUS_NAME[k.status], line: 'Agreement' })),
@@ -413,25 +413,25 @@ export function ClientMemberView({ teamId, agencyName }: { teamId: string; agenc
             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0" aria-label="Waiting on you">
               {v.waitingOn.map((w) => (
                 <ViewCard key={w.key}>
-                  <p className="m-0 text-[16px] font-bold">{w.title}</p>
-                  {w.line && <p className="m-0 text-[14px] font-semibold text-ink-soft">{w.line}</p>}
+                  <p className="m-0 text-headline">{w.title}</p>
+                  {w.line && <p className="m-0 text-subhead text-ink-soft">{w.line}</p>}
                 </ViewCard>
               ))}
             </ul>
           )}
-          {v.month && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{v.month.planned > 0 ? `${v.month.published} of ${v.month.planned} live this month.` : `${v.month.published} live this month.`}</p>}
+          {v.month && <p className="mt-sm m-0 text-subhead text-ink-soft">{v.month.planned > 0 ? `${v.month.published} of ${v.month.planned} live this month.` : `${v.month.published} live this month.`}</p>}
         </Section>
       )}
       {a.pipeline !== 'off' && (
         <Section id="client-pieces-heading" title="Your pieces" lede="To approve or ask for a change, use the link they sent you.">
           {pieces.length === 0 && v.published.length === 0 ? (
-            <p className="m-0 rounded-tile bg-card p-sm text-[14px] font-semibold text-ink-soft">Nothing is being made right now.</p>
+            <p className="m-0 rounded-tile bg-card p-sm text-subhead text-ink-soft">Nothing is being made right now.</p>
           ) : (
             <ul className="flex list-none flex-col gap-xs p-0 m-0">
               {pieces.map((p) => (
                 <ViewCard key={p.id}>
                   <div className="flex items-start justify-between gap-sm">
-                    <p className="m-0 min-w-0 text-[16px] font-bold">{p.title}</p>
+                    <p className="m-0 min-w-0 text-headline">{p.title}</p>
                     <StatusTag tone={DELIVERABLE_STAGE_TONE[p.stage]}>{DELIVERABLE_STAGE_META[p.stage].name}</StatusTag>
                   </div>
                 </ViewCard>
@@ -439,10 +439,10 @@ export function ClientMemberView({ teamId, agencyName }: { teamId: string; agenc
               {v.published.map((p) => (
                 <ViewCard key={p.id}>
                   <div className="flex items-start justify-between gap-sm">
-                    <p className="m-0 min-w-0 text-[16px] font-bold">{p.title}</p>
+                    <p className="m-0 min-w-0 text-headline">{p.title}</p>
                     <StatusTag tone={DELIVERABLE_STAGE_TONE.published}>{DELIVERABLE_STAGE_META.published.name}</StatusTag>
                   </div>
-                  {p.publishedAt && <p className="m-0 text-[14px] font-semibold text-ink-soft">{`Live ${prettyDate(p.publishedAt.slice(0, 10))}`}</p>}
+                  {p.publishedAt && <p className="m-0 text-subhead text-ink-soft">{`Live ${prettyDate(p.publishedAt.slice(0, 10))}`}</p>}
                 </ViewCard>
               ))}
             </ul>
@@ -452,15 +452,15 @@ export function ClientMemberView({ teamId, agencyName }: { teamId: string; agenc
       {a.paperwork !== 'off' && (
         <Section id="client-paper-heading" title="Your paperwork" lede="Each one opens with the password for your page.">
           {docs.length === 0 ? (
-            <p className="m-0 rounded-tile bg-card p-sm text-[14px] font-semibold text-ink-soft">Nothing sent to you yet.</p>
+            <p className="m-0 rounded-tile bg-card p-sm text-subhead text-ink-soft">Nothing sent to you yet.</p>
           ) : (
             <ul className="flex list-none flex-col gap-xs p-0 m-0">
               {docs.map((d) => (
                 <li key={d.key}>
                   <Link to={d.href} className="toy toy-soft flex min-h-[44px] items-center gap-sm rounded-tile bg-card p-sm">
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[16px] font-bold">{d.title}</span>
-                      <span className="block text-[14px] font-semibold text-ink-soft">{d.line}</span>
+                      <span className="block text-headline">{d.title}</span>
+                      <span className="block text-subhead text-ink-soft">{d.line}</span>
                     </span>
                     <StatusTag tone={d.tone}>{d.status}</StatusTag>
                   </Link>

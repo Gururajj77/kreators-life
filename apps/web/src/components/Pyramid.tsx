@@ -128,15 +128,15 @@ export function Pyramid({ relationship, words = {}, autoplay = false, compact = 
                   </svg>
                 </span>
               )}
-              <span className="relative px-sm text-[14px] font-extrabold leading-tight text-balance">
+              <span className="relative px-sm text-subhead font-semibold text-balance">
                 {meta.label}
                 {/* Full strength, not faded: a faded white on the paler fills dropped under 4.5:1 at this size. */}
-                <span className="block text-[13px] font-bold text-balance">{text(k)}</span>
+                <span className="block text-footnote text-balance">{text(k)}</span>
               </span>
             </Tag>
           );
         })}
-        <span className="mt-xs flex items-center gap-xs text-[12px] font-bold text-ink-soft" aria-hidden="true">
+        <span className="mt-xs flex items-center gap-xs text-caption text-ink-soft" aria-hidden="true">
           <Avatar relationship={relationship} size={28} decorative still />
           {rel.character}, your {rel.role}, holds this one up.
         </span>
@@ -149,12 +149,12 @@ export function Pyramid({ relationship, words = {}, autoplay = false, compact = 
             const on = active === k;
             return (
               <li key={k} className={`flex items-start gap-sm rounded-tile p-sm transition-colors ${on ? 'bg-card shadow-toy-soft' : ''}`}>
-                <span className="flex size-[28px] shrink-0 items-center justify-center rounded-pill text-[12px] font-extrabold" style={{ background: fillVar(rel), color: ON_FILL }} aria-hidden="true">
+                <span className="flex size-[28px] shrink-0 items-center justify-center rounded-pill text-caption font-medium" style={{ background: fillVar(rel), color: ON_FILL }} aria-hidden="true">
                   {meta.rung}
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-[16px] font-bold">{meta.label}</span>
-                  <span className="block text-[14px] font-semibold text-ink-soft">{meta.explain}</span>
+                  <span className="block text-headline">{meta.label}</span>
+                  <span className="block text-subhead text-ink-soft">{meta.explain}</span>
                 </span>
               </li>
             );
@@ -162,7 +162,7 @@ export function Pyramid({ relationship, words = {}, autoplay = false, compact = 
         </ol>
       )}
 
-      <p className="mt-sm m-0 text-center text-[14px] font-semibold text-ink-soft">
+      <p className="mt-sm m-0 text-center text-subhead text-ink-soft">
         Tick the task at the point and the glow runs up to the foundation. {onSelect ? 'Tap a layer to read about it.' : 'Tap the pyramid to see it again.'}
       </p>
     </div>

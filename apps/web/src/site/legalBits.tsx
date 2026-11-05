@@ -24,17 +24,17 @@ const READ = (on: boolean) => (on ? LONG : 'text-pretty');
 
 export function H({ children, id }: { children: ReactNode; id?: string }) {
   return (
-    <h2 id={id} className="mt-lg scroll-mt-lg text-[24px]">
+    <h2 id={id} className="mt-lg scroll-mt-lg text-title2">
       {children}
     </h2>
   );
 }
 export function P({ children }: { children: ReactNode }) {
   const reading = useContext(Reading);
-  return <p className={`mt-xs m-0 ${READ(reading)} text-[16px] font-semibold leading-relaxed text-ink-soft`}>{children}</p>;
+  return <p className={`mt-xs m-0 ${READ(reading)} text-prose text-ink-soft`}>{children}</p>;
 }
 export function Strong({ children }: { children: ReactNode }) {
-  return <span className="font-extrabold text-ink">{children}</span>;
+  return <span className="font-bold text-ink">{children}</span>;
 }
 /** A link in the policy text. `hit` gives a link that stands nearly alone on its line (not inside a sentence) a 44px tall
  * tap area through an invisible ::before, so its look at rest is unchanged. */
@@ -46,14 +46,14 @@ export function A({ to, children, hit = false }: { to: string; children: ReactNo
   );
 }
 export function Mail({ address }: { address: string }) {
-  return <span className="select-all font-extrabold text-ink">{address}</span>;
+  return <span className="select-all font-bold text-ink">{address}</span>;
 }
 
 /** A plain list inside a page: one short line each. */
 export function Bullets({ items }: { items: ReactNode[] }) {
   const long = useContext(Reading) ? LONG : '';
   return (
-    <ul className={`mt-xs m-0 grid list-disc gap-xs pl-md ${long} text-[16px] font-semibold leading-relaxed text-ink-soft`}>
+    <ul className={`mt-xs m-0 grid list-disc gap-xs pl-md ${long} text-prose text-ink-soft`}>
       {items.map((it, i) => (
         <li key={i}>{it}</li>
       ))}
@@ -70,11 +70,11 @@ const keepTail = (s: string): string => {
 
 export function Grid({ head, rows, label }: { head: string[]; rows: ReactNode[][]; label: string }) {
   return (
-    <table aria-label={label} className="mt-sm block w-full border-collapse text-left text-[14px] font-semibold text-ink-soft md:table">
+    <table aria-label={label} className="mt-sm block w-full border-collapse text-left text-subhead text-ink-soft md:table">
       <thead className="hidden md:table-header-group">
         <tr>
           {head.map((h) => (
-            <th key={h} scope="col" className="border-b border-line px-sm py-xs text-[12px] font-bold uppercase tracking-wide text-ink-mute">
+            <th key={h} scope="col" className="border-b border-line px-sm py-xs text-eyebrow uppercase text-ink-mute">
               {h}
             </th>
           ))}
@@ -85,8 +85,8 @@ export function Grid({ head, rows, label }: { head: string[]; rows: ReactNode[][
           <tr key={i} className="mb-sm block rounded-tile bg-card p-sm md:mb-0 md:table-row md:rounded-none md:bg-transparent md:p-0">
             {cells.map((cell, j) => (
               <td key={j} className="block py-xs md:table-cell md:border-b md:border-line md:px-sm md:py-sm md:align-top">
-                <span className="block text-[12px] font-bold uppercase tracking-wide text-ink-mute md:hidden">{head[j]}</span>
-                <span className={j === 0 ? 'font-extrabold text-ink' : ''}>{typeof cell === 'string' ? keepTail(cell) : cell}</span>
+                <span className="block text-eyebrow uppercase text-ink-mute md:hidden">{head[j]}</span>
+                <span className={j === 0 ? 'font-bold text-ink' : ''}>{typeof cell === 'string' ? keepTail(cell) : cell}</span>
               </td>
             ))}
           </tr>
@@ -123,9 +123,9 @@ export function LegalPage({
     <SiteLayout wide={wide}>
       <header className="pt-lg">
         <p className="m-0 type-eyebrow text-ink-mute">kreators.app</p>
-        <h1 className="type-hook mt-sm text-[clamp(40px,8vw,64px)]">{tie(title)}</h1>
-        <p className="mt-xs m-0 text-[16px] font-semibold leading-relaxed text-ink-soft">{lede}</p>
-        {note && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-mute">{note}</p>}
+        <h1 className="type-hook mt-sm text-display-1">{tie(title)}</h1>
+        <p className="mt-xs m-0 text-prose text-ink-soft">{lede}</p>
+        {note && <p className="mt-xs m-0 text-subhead text-ink-mute">{note}</p>}
         {action && <div className="mt-sm flex flex-wrap gap-sm">{action}</div>}
       </header>
       <Reading.Provider value={reading}>
@@ -193,7 +193,7 @@ export function Fact({ label, value, unset, optional = false }: { label: string;
   return (
     <div className="rounded-tile bg-card p-sm">
       <p className="m-0 type-eyebrow text-ink-mute">{label}</p>
-      <p className={`mt-xs m-0 whitespace-pre-line text-[16px] font-semibold ${value ? 'text-ink' : 'text-ink-soft'}`}>{value || unset}</p>
+      <p className={`mt-xs m-0 whitespace-pre-line text-callout ${value ? 'text-ink' : 'text-ink-soft'}`}>{value || unset}</p>
     </div>
   );
 }

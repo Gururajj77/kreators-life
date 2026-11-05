@@ -68,7 +68,7 @@ export function FocusPill({ compact = false, dot = false }: { compact?: boolean;
     return (
       <Link to="/mindful" aria-label={aria.replace(/\s+/g, ' ').trim()} title={shown} className={`focus-dot toy relative flex size-[44px] items-center justify-center rounded-pill text-on-fill ${fill} ${paused ? 'is-paused' : ''}`} data-urgent={urgent && !paused ? '' : undefined}>
         {!paused && <span key={sec} className="focus-dot-ripple" aria-hidden="true" />}
-        {paused ? <Icon icon={Pause} size={16} /> : <span className="relative font-display text-[16px] font-extrabold tabular-nums">{minutes}</span>}
+        {paused ? <Icon icon={Pause} size={16} /> : <span className="relative text-headline tabular-nums">{minutes}</span>}
       </Link>
     );
   }
@@ -79,23 +79,23 @@ export function FocusPill({ compact = false, dot = false }: { compact?: boolean;
       <Link
         to="/mindful"
         aria-label={aria.replace(/\s+/g, ' ').trim()}
-        className={`focus-pill toy flex min-h-[44px] min-w-[44px] flex-1 items-center justify-center gap-xs whitespace-nowrap rounded-pill px-sm text-on-fill ${compact ? '' : 'font-display text-[16px] font-extrabold tracking-tight'}`}
+        className={`focus-pill toy flex min-h-[44px] min-w-[44px] flex-1 items-center justify-center gap-xs whitespace-nowrap rounded-pill px-sm text-on-fill ${compact ? '' : 'text-headline'}`}
       >
         <Icon icon={paused ? Pause : Clock} size={16} />
-        <span className="text-[14px] font-extrabold tabular-nums">{shown}</span>
+        <span className="text-subhead font-semibold tabular-nums">{shown}</span>
         {/* From the tablet width up, the task after the time; a phone's pill stays the time alone. */}
         {snap.taskTitle && (
-          <span className="hidden max-w-[160px] truncate text-[14px] font-bold md:inline-block" aria-hidden="true">
+          <span className="hidden max-w-[160px] truncate text-subhead font-semibold md:inline-block" aria-hidden="true">
             {snap.taskTitle}
           </span>
         )}
       </Link>
       {asking && (
         <span className="flex items-center gap-xs pr-xs" role="group" aria-label={`Stop. Keep ${kept} ${kept === 1 ? 'minute' : 'minutes'}?`}>
-          <button type="button" className="focus-pill-btn min-h-[44px] whitespace-nowrap rounded-pill px-sm text-[14px] font-extrabold text-on-fill" onClick={() => (setAsking(false), send('stopKeep'))}>
+          <button type="button" className="focus-pill-btn min-h-[44px] whitespace-nowrap rounded-pill px-sm text-subhead font-medium text-on-fill" onClick={() => (setAsking(false), send('stopKeep'))}>
             Keep {kept} min
           </button>
-          <button type="button" className="focus-pill-btn min-h-[44px] whitespace-nowrap rounded-pill px-sm text-[14px] font-extrabold text-on-fill" onClick={() => (setAsking(false), send('stopDrop'))}>
+          <button type="button" className="focus-pill-btn min-h-[44px] whitespace-nowrap rounded-pill px-sm text-subhead font-medium text-on-fill" onClick={() => (setAsking(false), send('stopDrop'))}>
             Throw away
           </button>
         </span>

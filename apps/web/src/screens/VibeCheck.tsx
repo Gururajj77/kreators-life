@@ -141,8 +141,8 @@ export function VibeCheck() {
       <CloseVibe />
         <div className="pt-xl">
           <Avatar relationship="self" size={88} />
-          <h1 className="mt-md text-[36px]">Quick vibe check</h1>
-          <p className="mt-sm text-[16px] font-semibold text-ink-soft">
+          <h1 className="mt-md text-large-title">Quick vibe check</h1>
+          <p className="mt-sm text-callout text-ink-soft">
             A few taps, no typing. Each character asks three things, then asks you to pick one thing you will not let break. The rest is built from that.
           </p>
         </div>
@@ -154,18 +154,18 @@ export function VibeCheck() {
           }}
         >
           <label className="block">
-            <span className="block text-[14px] font-bold">What should the characters call you?</span>
+            <span className="block text-subhead">What should the characters call you?</span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={40}
               placeholder="Your name or handle"
               autoComplete="nickname"
-              className="mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px]"
+              className="mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-body"
             />
           </label>
           <fieldset className="m-0 border-0 p-0">
-            <legend className="text-[14px] font-bold">What fills most of your days?</legend>
+            <legend className="text-subhead">What fills most of your days?</legend>
             <div className="mt-xs flex flex-wrap gap-xs">
               {FOCUS_OPTIONS.map((t) => (
                 <button
@@ -173,7 +173,7 @@ export function VibeCheck() {
                   type="button"
                   aria-pressed={focus === t}
                   onClick={() => setFocus(t)}
-                  className={`min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${focus === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}
+                  className={`min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${focus === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}
                 >
                   {t}
                 </button>
@@ -183,7 +183,7 @@ export function VibeCheck() {
           <Button type="submit" size="lg" full>
             Start
           </Button>
-          <p className="m-0 text-center text-[14px] font-semibold text-ink-mute">Both optional. You can change them later.</p>
+          <p className="m-0 text-center text-subhead text-ink-mute">Both optional. You can change them later.</p>
         </form>
       </Screen>
     );
@@ -243,13 +243,13 @@ function PickFloors({ chosen, onChange, onBack, onNext }: { chosen: Relationship
       <div className="pt-md">
         {/* Back on the left, Close at the top right, where Close is on every screen. */}
         <div className="flex items-center justify-between gap-xs">
-          <button type="button" onClick={onBack} className="min-h-[44px] rounded-pill px-sm py-xs text-[14px] font-bold text-ink-soft">
+          <button type="button" onClick={onBack} className="min-h-[44px] rounded-pill px-sm py-xs text-subhead font-medium text-ink-soft">
             Back
           </button>
           <CloseVibe inline />
         </div>
-        <h1 className="mt-md text-[36px]">Which relationships need work right now?</h1>
-        <p className="mt-sm text-[16px] font-semibold text-ink-soft">Pick where to start. Each pillar asks three questions, and the rest wait under Pillars.</p>
+        <h1 className="mt-md text-large-title">Which relationships need work right now?</h1>
+        <p className="mt-sm text-callout text-ink-soft">Pick where to start. Each pillar asks three questions, and the rest wait under Pillars.</p>
       </div>
       <ul className="mt-lg flex list-none flex-col gap-xs p-0 m-0 pb-2xl">
         {RELATIONSHIPS.map((r) => {
@@ -309,11 +309,11 @@ function QuestionStage({
       <div className="pt-md">
           {/* Back on the left, Close at the top right. The bar under it shows how far along you are, so no numbers. */}
           <div className="flex items-center justify-between gap-sm">
-            <button type="button" onClick={onBack} className="min-h-[44px] rounded-pill px-sm py-xs text-[14px] font-bold text-ink-soft">
+            <button type="button" onClick={onBack} className="min-h-[44px] rounded-pill px-sm py-xs text-subhead font-medium text-ink-soft">
               Back
             </button>
             <span className="flex min-w-0 items-center gap-xs">
-              <span className="truncate text-[14px] font-bold text-ink-soft">{rel.name}</span>
+              <span className="truncate text-subhead text-ink-soft">{rel.name}</span>
               <CloseVibe inline />
             </span>
           </div>
@@ -341,10 +341,10 @@ function QuestionStage({
             <div className="mt-lg flex items-end gap-sm">
               <Avatar relationship={q.relationship} size={84} mood={value === undefined ? 'neutral' : 'excited'} decorative />
               <div className="flex-1 rounded-card rounded-bl-[8px] bg-card p-md shadow-toy-soft">
-                <p className="m-0 text-[14px] font-bold" style={{ color: `var(--deep-${rel.key})` }}>
+                <p className="m-0 text-subhead font-semibold" style={{ color: `var(--deep-${rel.key})` }}>
                   {asks}
                 </p>
-                <h1 className="mt-xs text-[24px] leading-tight">{q.prompt}</h1>
+                <h1 className="mt-xs text-title2">{q.prompt}</h1>
               </div>
             </div>
 
@@ -360,7 +360,7 @@ function QuestionStage({
                       className="toy toy-soft flex w-full items-center gap-sm rounded-card border-[3px] bg-card p-md text-left"
                       style={{ borderColor: value === i ? rel.color : 'transparent' }}
                     >
-                      <span className="text-[18px] font-bold leading-tight">{o.label}</span>
+                      <span className="text-headline">{o.label}</span>
                     </button>
                   ))}
                 </div>
@@ -374,7 +374,7 @@ function QuestionStage({
                       type="button"
                       aria-pressed={value === i}
                       onClick={() => onAnswer(i)}
-                      className="toy toy-soft flex min-h-[88px] flex-col items-center justify-end gap-xs rounded-tile bg-card p-xs text-center text-[12px] font-bold leading-tight"
+                      className="toy toy-soft flex min-h-[88px] flex-col items-center justify-end gap-xs rounded-tile bg-card p-xs text-center text-caption"
                       style={value === i ? { background: rel.color, color: rel.text } : undefined}
                     >
                       <span
@@ -400,7 +400,7 @@ function QuestionStage({
               )}
             </div>
             {q.role === 'foundation' && (
-              <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">
+              <p className="mt-md m-0 text-subhead text-ink-soft">
                 This becomes the foundation of {rel.character}&rsquo;s pyramid, its first layer. The guiding principle, the value goal, the goal outcome, the project and the first tasks come from it.
               </p>
             )}
@@ -408,12 +408,12 @@ function QuestionStage({
         </AnimatePresence>
 
         {saving && (
-          <p className="mt-lg text-center text-[14px] font-bold text-ink-soft" role="status">
+          <p className="mt-lg text-center text-subhead text-ink-soft" role="status">
             Painting your rainbow
           </p>
         )}
         {error && (
-          <p role="alert" className="mt-lg rounded-tile bg-card p-sm text-[14px] font-bold">
+          <p role="alert" className="mt-lg rounded-tile bg-card p-sm text-subhead">
             {error}
           </p>
         )}
@@ -431,8 +431,8 @@ function Reveal({ result, onNext }: { result: OnboardingResponse; onNext: () => 
     <Screen tabs={false}>
       <CloseVibe />
       <div className="pt-xl">
-        <h1 className="text-[36px]">Your rainbow</h1>
-        <p className="mt-sm text-[16px] font-semibold text-ink-soft">
+        <h1 className="text-large-title">Your rainbow</h1>
+        <p className="mt-sm text-callout text-ink-soft">
           How your relationships look today. A short bar is not bad news. It is where the easy wins are.
         </p>
       </div>
@@ -444,7 +444,7 @@ function Reveal({ result, onNext }: { result: OnboardingResponse; onNext: () => 
               <li key={r.key} className="flex items-center gap-sm opacity-60">
                 <Avatar relationship={r.key} size={40} still decorative mood="sleepy" />
                 <div className="min-w-0 flex-1">
-                  <div className="flex justify-between text-[14px] font-bold">
+                  <div className="flex justify-between text-subhead font-semibold">
                     <span>{r.name}</span>
                     <span className="text-ink-soft">not asked yet</span>
                   </div>
@@ -457,7 +457,7 @@ function Reveal({ result, onNext }: { result: OnboardingResponse; onNext: () => 
             <li key={r.key} className="flex items-center gap-sm">
               <Avatar relationship={r.key} size={40} still decorative />
               <div className="min-w-0 flex-1">
-                <div className="flex justify-between text-[14px] font-bold">
+                <div className="flex justify-between text-subhead font-semibold">
                   <span>{r.name}</span>
                   <span>{score}%</span>
                 </div>
@@ -503,8 +503,8 @@ function Ladders({ result, floors: asked, onDone }: { result: OnboardingResponse
     <Screen tabs={false}>
       <CloseVibe />
       <div className="pt-xl">
-        <h1 className="text-[36px]">Built from your answers</h1>
-        <p className="mt-sm text-[16px] font-semibold text-ink-soft">
+        <h1 className="text-large-title">Built from your answers</h1>
+        <p className="mt-sm text-callout text-ink-soft">
           Each pillar took the foundation you picked and worked out the rest. Before you tick a pillar, choose the value goal and the project you want it to start with, or write your own.
         </p>
       </div>
@@ -523,25 +523,25 @@ function Ladders({ result, floors: asked, onDone }: { result: OnboardingResponse
               <div className="flex items-start gap-sm">
                 <Avatar relationship={r.key} size={56} mood={on ? 'excited' : 'neutral'} decorative />
                 <div className="min-w-0 flex-1">
-                  <p className="m-0 text-[14px] font-bold" style={{ color: `var(--deep-${r.key})` }}>
+                  <p className="m-0 text-subhead font-semibold" style={{ color: `var(--deep-${r.key})` }}>
                     {r.character}, {result.scores[r.key]}%, {l.branch === 'low' ? 'gentle start' : 'stretch tasks'}
                   </p>
-                  <h2 className="mt-xs text-[24px]">{l.pillar}</h2>
+                  <h2 className="mt-xs text-title2">{l.pillar}</h2>
                 </div>
               </div>
-              <dl className="mt-sm m-0 grid grid-cols-[auto_1fr] gap-x-sm gap-y-xs text-[14px]">
+              <dl className="mt-sm m-0 grid grid-cols-[auto_1fr] gap-x-sm gap-y-xs text-subhead">
                 {rows.map(([k, v]) => (
                   <div key={k} className="contents">
-                    <dt className="font-bold" style={{ color: `var(--deep-${r.key})` }}>
+                    <dt className="font-semibold" style={{ color: `var(--deep-${r.key})` }}>
                       {k}
                     </dt>
-                    <dd className="m-0 font-semibold">{v}</dd>
+                    <dd className="m-0">{v}</dd>
                   </div>
                 ))}
               </dl>
               <Picker label={KIND_META.value_goal.label} options={opts.valueGoals} chosen={mine.valueGoal ?? l.valueGoal} color={r.color} deep={`var(--deep-${r.key})`} onPick={(v) => pick(r.key, 'valueGoal', v)} />
               <Picker label={KIND_META.project.label} options={opts.projects} chosen={mine.project ?? l.project} color={r.color} deep={`var(--deep-${r.key})`} onPick={(v) => pick(r.key, 'project', v)} />
-              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0 text-[14px] font-semibold">
+              <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0 text-subhead">
                 {l.tasks.map((t) => (
                   <li key={t} className="flex gap-xs">
                     <span className="mt-xs size-[8px] shrink-0 rounded-pill" style={{ background: r.color }} aria-hidden="true" />
@@ -565,7 +565,7 @@ function Ladders({ result, floors: asked, onDone }: { result: OnboardingResponse
         })}
       </ol>
       {error && (
-        <p role="alert" className="mt-md rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+        <p role="alert" className="mt-md rounded-tile bg-r1/15 p-sm text-subhead">
           {error}
         </p>
       )}
@@ -619,8 +619,8 @@ function AboutYou({ onNext }: { onNext: () => void }) {
       <CloseVibe />
       <div className="pt-xl">
         <Avatar relationship="friendship" size={88} />
-        <h1 className="mt-md text-[36px]">What are you into?</h1>
-        <p className="mt-sm text-[16px] font-semibold text-ink-soft">Pick up to ten and add your city, so Circles can seat you with people who fit.</p>
+        <h1 className="mt-md text-large-title">What are you into?</h1>
+        <p className="mt-sm text-callout text-ink-soft">Pick up to ten and add your city, so Circles can seat you with people who fit.</p>
       </div>
       <form
         className="mt-lg flex flex-col gap-md"
@@ -632,20 +632,20 @@ function AboutYou({ onNext }: { onNext: () => void }) {
         <InterestPicker legend="Interests, pick two or more" value={interests} onChange={setInterests} />
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
-            <span className="block text-[14px] font-bold">City</span>
-            <input value={city} onChange={(e) => setCity(e.target.value)} maxLength={80} placeholder="Bengaluru" autoComplete="address-level2" className="mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px]" />
+            <span className="block text-subhead font-semibold">City</span>
+            <input value={city} onChange={(e) => setCity(e.target.value)} maxLength={80} placeholder="Bengaluru" autoComplete="address-level2" className="mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-body" />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Area (optional)</span>
-            <input value={area} onChange={(e) => setArea(e.target.value)} maxLength={80} placeholder="Indiranagar" className="mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px]" />
+            <span className="block text-subhead font-semibold">Area (optional)</span>
+            <input value={area} onChange={(e) => setArea(e.target.value)} maxLength={80} placeholder="Indiranagar" className="mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-body" />
           </label>
         </div>
-        <button type="button" onClick={locate} disabled={locating || coords !== null} className="toy toy-soft inline-flex min-h-[48px] items-center justify-center rounded-pill bg-card px-md text-[14px] font-bold disabled:opacity-60">
+        <button type="button" onClick={locate} disabled={locating || coords !== null} className="toy toy-soft inline-flex min-h-[48px] items-center justify-center rounded-pill bg-card px-md text-subhead font-medium disabled:opacity-60">
           {coords ? 'Position saved for nearby matching' : locating ? 'Finding you' : 'Use my position for nearby matching (optional)'}
         </button>
-        <p className="m-0 text-[12px] font-semibold text-ink-mute">Your position stays on the server and is only used to keep tables within twenty kilometres. Nobody sees it.</p>
+        <p className="m-0 text-caption text-ink-mute">Your position stays on the server and is only used to keep tables within twenty kilometres. Nobody sees it.</p>
         {save.isError && (
-          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead font-semibold">
             Could not save. Try again.
           </p>
         )}
@@ -664,12 +664,12 @@ function Picker({ label, options, chosen, color, deep, onPick }: { label: string
   const [own, setOwn] = useState(custom ? chosen : '');
   return (
     <div className="mt-sm">
-      <p className="m-0 text-[14px] font-bold" style={{ color: deep }}>
+      <p className="m-0 text-subhead font-semibold" style={{ color: deep }}>
         {label}
       </p>
       <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label={label}>
         {options.map((o) => (
-          <button key={o} type="button" aria-pressed={chosen === o} onClick={() => onPick(o)} className="toy toy-soft min-h-[44px] rounded-pill border-2 px-sm py-xs text-left text-[14px] font-bold" style={chosen === o ? { background: color, borderColor: color, color: 'var(--color-on-fill)' } : { background: 'var(--color-card)', borderColor: 'transparent' }}>
+          <button key={o} type="button" aria-pressed={chosen === o} onClick={() => onPick(o)} className="toy toy-soft min-h-[44px] rounded-pill border-2 px-sm py-xs text-left text-subhead font-medium" style={chosen === o ? { background: color, borderColor: color, color: 'var(--color-on-fill)' } : { background: 'var(--color-card)', borderColor: 'transparent' }}>
             {o}
           </button>
         ))}
@@ -684,7 +684,7 @@ function Picker({ label, options, chosen, color, deep, onPick }: { label: string
         maxLength={120}
         placeholder="Or write your own"
         aria-label={`Your own ${label.toLowerCase()}`}
-        className="mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-xs text-[14px] font-semibold"
+        className="mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-xs text-subhead"
       />
     </div>
   );
@@ -709,8 +709,8 @@ function Learn({ result, floors, onNext }: { result: OnboardingResponse; floors:
       title: KIND_META[k].label,
       body: (
         <>
-          <p className="m-0 text-[16px] font-semibold text-ink-soft">{KIND_META[k].explain}</p>
-          <p className="mt-sm m-0 rounded-tile p-sm text-[16px] font-bold" style={{ background: `var(--soft-${rel.key})` }}>
+          <p className="m-0 text-callout text-ink-soft">{KIND_META[k].explain}</p>
+          <p className="mt-sm m-0 rounded-tile p-sm text-headline" style={{ background: `var(--soft-${rel.key})` }}>
             Yours: {words[k]}
           </p>
         </>
@@ -720,13 +720,13 @@ function Learn({ result, floors, onNext }: { result: OnboardingResponse; floors:
       key: 'not',
       eyebrow: 'What this is',
       title: 'Not a to-do list',
-      body: <p className="m-0 text-[16px] font-semibold text-ink-soft">Tasks alone are easy to drop. Here each pillar is a pyramid, so every task has a base under it.</p>,
+      body: <p className="m-0 text-callout text-ink-soft">Tasks alone are easy to drop. Here each pillar is a pyramid, so every task has a base under it.</p>,
     },
     {
       key: 'rule',
       eyebrow: 'The one rule',
       title: 'It will not work unless',
-      body: <p className="m-0 text-[16px] font-semibold text-ink-soft">You tick one task a day. Tick the task at the point, and the whole pyramid gets stronger. Miss a week, and nothing moves. That is the only rule.</p>,
+      body: <p className="m-0 text-callout text-ink-soft">You tick one task a day. Tick the task at the point, and the whole pyramid gets stronger. Miss a week, and nothing moves. That is the only rule.</p>,
     },
     {
       key: 'expect',
@@ -746,8 +746,8 @@ function Learn({ result, floors, onNext }: { result: OnboardingResponse; floors:
               <span className="flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink-soft" aria-hidden="true">
                 <Icon icon={glyph} size={18} />
               </span>
-              <span className="min-w-0 text-[14px] font-semibold text-ink-soft">
-                <span className="font-bold text-ink">{name}. </span>
+              <span className="min-w-0 text-subhead text-ink-soft">
+                <span className="font-semibold text-ink">{name}. </span>
                 {line}
               </span>
             </li>
@@ -771,11 +771,11 @@ function Learn({ result, floors, onNext }: { result: OnboardingResponse; floors:
     <Screen tabs={false}>
       <CloseVibe />
       <div className="pt-xl">
-        <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide" style={{ color: `var(--deep-${rel.key})` }}>
+        <p className="m-0 text-eyebrow uppercase" style={{ color: `var(--deep-${rel.key})` }}>
           Result
         </p>
-        <h1 className="mt-xs text-[36px]">{rel.name} needs you most.</h1>
-        <p className="mt-sm text-[16px] font-semibold text-ink-soft">You scored {result.scores[weakest]}% there. Tap a layer of the pyramid, or swipe through the cards.</p>
+        <h1 className="mt-xs text-large-title">{rel.name} needs you most.</h1>
+        <p className="mt-sm text-callout text-ink-soft">You scored {result.scores[weakest]}% there. Tap a layer of the pyramid, or swipe through the cards.</p>
       </div>
 
       <section className="mt-lg rounded-card p-md" style={{ background: `var(--soft-${rel.key})` }} aria-label="Your first pyramid">
@@ -784,8 +784,8 @@ function Learn({ result, floors, onNext }: { result: OnboardingResponse; floors:
 
       <section className="mt-md" aria-live="polite">
         <div ref={card} className="rounded-card bg-card p-md shadow-toy-soft">
-          <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{slide.eyebrow}</p>
-          <h2 className="mt-xs text-[24px]">{slide.title}</h2>
+          <p className="m-0 text-eyebrow uppercase text-ink-soft">{slide.eyebrow}</p>
+          <h2 className="mt-xs text-title2">{slide.title}</h2>
           <div className="mt-sm">{slide.body}</div>
         </div>
         <div className="mt-sm flex items-center justify-between gap-sm">
@@ -807,7 +807,7 @@ function Learn({ result, floors, onNext }: { result: OnboardingResponse; floors:
             </Button>
           )}
         </div>
-        {last && <p className="mt-sm m-0 text-center text-[14px] font-semibold text-ink-soft">Next: pick what each pillar starts with.</p>}
+        {last && <p className="mt-sm m-0 text-center text-subhead text-ink-soft">Next: pick what each pillar starts with.</p>}
       </section>
     </Screen>
   );

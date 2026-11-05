@@ -29,7 +29,7 @@ export function EvolutionReveal({ now, nowName, next, nextName, charge, preparin
     <div role="img" aria-label={`${nowName} now. ${status}`} className="flex items-end justify-center gap-md">
       <div className="flex flex-col items-center gap-xs">
         <div aria-hidden="true">{now}</div>
-        <span className="text-[12px] font-extrabold">{nowName}</span>
+        <span className="text-caption font-semibold">{nowName}</span>
       </div>
       {next && (
         <>
@@ -55,7 +55,7 @@ export function EvolutionReveal({ now, nowName, next, nextName, charge, preparin
                 />
               )}
             </div>
-            <span className="text-[12px] font-extrabold">
+            <span className="text-caption font-semibold">
               {nextName} {pct}%
             </span>
           </div>

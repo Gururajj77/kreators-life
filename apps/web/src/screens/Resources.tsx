@@ -13,6 +13,11 @@ import { useAuthed, useMe, useRefreshAll, useResources } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { useParamState } from '../lib/useParamState';
 import { FIELD } from '../lib/ui';
+import { RowCard } from '../components/RowCard';
+import { Reveal } from '../components/fx/Reveal';
+import { StatusTag } from '../components/StatusTag';
+import { IconTag } from '../components/FactTag';
+import { tie } from '../lib/text';
 
 
 /** A resource's tags are free text; a pillar key among them (parent_child, guru, self...) reads as that pillar's name, and
@@ -53,9 +58,9 @@ function List() {
         }
       />
       {/* One quiet select instead of a wall of pills: the seven pillars by name, then any other topic the reads carry. The choice lives in the URL. */}
-      <label className="mt-md flex flex-wrap items-center gap-xs text-[14px] font-bold">
+      <label className="mt-md flex flex-wrap items-center gap-xs text-subhead font-semibold">
         <span>Show</span>
-        <select value={tag} onChange={(e) => setTag(e.target.value)} className="min-h-[44px] min-w-0 rounded-pill border-2 border-line bg-card-strong px-sm text-[14px] font-bold text-ink">
+        <select value={tag} onChange={(e) => setTag(e.target.value)} className="min-h-[44px] min-w-0 rounded-pill border-2 border-line bg-card-strong px-sm text-subhead font-medium text-ink">
           <option value="">Everything</option>
           <optgroup label="Pillars">
             {RELATIONSHIPS.map((r) => (
@@ -75,20 +80,39 @@ function List() {
           )}
         </select>
       </label>
-      <ul className="mt-md flex list-none flex-col gap-xs p-0 m-0">
-        {q.data?.resources.map((r) => (
-          <li key={r.id}>
-            <Link to={`/knowledge/${r.id}`} data-pillar="lover_partner" className="toy toy-soft flex items-start gap-sm rounded-tile bg-card p-sm">
-              <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-r4 text-on-fill">
-                <AppIcon name={knowledgeKindIcon(r.kind)} size={20} />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[16px] font-bold leading-snug">{r.title}</span>
-                <span className="block text-[14px] font-semibold text-ink-soft">{r.summary}</span>
-              </span>
-            </Link>
-          </li>
-        ))}
+      {/* Placed like Home's Knowledge cards (2026-11-05): the title at the top left, the kind's icon on a neutral tile at the top right,
+          the summary under the title, the topic and the kind as tags at the foot and an arrow at the bottom right. Two to a row from the
+          tablet width, one on a phone; the cards of a row are one height and rise in one after another once. */}
+      <ul className="mt-md grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
+        {q.data?.resources.map((r, i) => {
+          const kindName = r.kind === 'exercise' ? 'Exercise' : r.kind === 'video' ? 'Video' : 'Article';
+          return (
+            <Reveal as="li" key={r.id} index={i} className="flex">
+              <RowCard
+                to={`/knowledge/${r.id}`}
+                title={tie(r.title)}
+                corner={
+                  <span className="flex size-[44px] items-center justify-center rounded-inner bg-paper text-ink-soft" aria-hidden="true">
+                    <AppIcon name={knowledgeKindIcon(r.kind)} size={22} />
+                  </span>
+                }
+                facts={[
+                  ...r.tags.slice(0, 2).map((t) => (
+                    <StatusTag key={t} tone="calm" fit>
+                      {tagLabel(t)}
+                    </StatusTag>
+                  )),
+                  <IconTag key="kind" tone="neutral" icon={knowledgeKindIcon(r.kind)} fit>
+                    {kindName}
+                  </IconTag>,
+                  !r.published ? <StatusTag key="draft" tone="neutral">Draft</StatusTag> : null,
+                ]}
+              >
+                <span className="mt-xs block text-subhead text-ink-soft">{r.summary}</span>
+              </RowCard>
+            </Reveal>
+          );
+        })}
       </ul>
       <Pager page={q.data?.page} label="guides" />
       {canAuthor && <ResourceSheet resource={editing} onClose={() => setEditing(null)} onSaved={refresh} />}
@@ -115,18 +139,18 @@ function Detail({ id }: { id: string }) {
       )}
       {r && (
         <article data-reading className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-          <p className="m-0 text-[18px] font-bold">{r.summary}</p>
+          <p className="m-0 text-headline">{r.summary}</p>
           {r.body.split(/\n{2,}/).map((p, i) => (
-            <p key={i} className="prose-long mt-md m-0 text-[16px] font-semibold leading-relaxed">
+            <p key={i} className="prose-long mt-md m-0 text-prose">
               {p}
             </p>
           ))}
           {r.url && (
-            <a href={r.url} target="_blank" rel="noreferrer" className="toy mt-md inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+            <a href={r.url} target="_blank" rel="noreferrer" className="toy mt-md inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
               Open {r.kind === 'video' ? 'video' : 'link'}
             </a>
           )}
-          {r.tags.length > 0 && <p className="mt-md m-0 text-[14px] font-bold text-ink-soft">{r.tags.join(', ')}</p>}
+          {r.tags.length > 0 && <p className="mt-md m-0 text-subhead text-ink-soft">{r.tags.join(', ')}</p>}
           {me.data && me.data.user.role !== 'user' && (
             <Button variant="ghost" className="mt-md" onClick={() => setEditing(r)}>
               Edit
@@ -183,7 +207,7 @@ function ResourceSheet({ resource, onClose, onSaved }: { resource: Resource | 'n
       >
         <div className="grid grid-cols-3 gap-xs" role="group" aria-label="Kind">
           {(['article', 'exercise', 'video'] as const).map((k) => (
-            <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={`min-h-[44px] rounded-pill border-2 text-[14px] font-bold ${kind === k ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+            <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={`min-h-[44px] rounded-pill border-2 text-subhead font-medium ${kind === k ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
               <span className="inline-flex items-center justify-center gap-xs">
                 <AppIcon name={knowledgeKindIcon(k)} size={16} />
                 {k}
@@ -192,31 +216,31 @@ function ResourceSheet({ resource, onClose, onSaved }: { resource: Resource | 'n
           ))}
         </div>
         <label className="block">
-          <span className="block text-[14px] font-bold">Title</span>
+          <span className="block text-subhead font-semibold">Title</span>
           <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} required className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">One-line summary</span>
+          <span className="block text-subhead font-semibold">One-line summary</span>
           <input value={summary} onChange={(e) => setSummary(e.target.value)} maxLength={300} className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Body</span>
+          <span className="block text-subhead font-semibold">Body</span>
           <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={8} className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Link or video URL</span>
+          <span className="block text-subhead font-semibold">Link or video URL</span>
           <input value={url} onChange={(e) => setUrl(e.target.value)} className={FIELD} placeholder="Optional" />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Tags, comma separated</span>
+          <span className="block text-subhead font-semibold">Tags, comma separated</span>
           <input value={tags} onChange={(e) => setTags(e.target.value)} className={FIELD} placeholder="stress, sleep" />
         </label>
-        <label className="flex items-center gap-sm text-[14px] font-bold">
+        <label className="flex items-center gap-sm text-subhead font-semibold">
           <input type="checkbox" checked={published} onChange={(e) => setPublished(e.target.checked)} className="size-[20px] accent-ink" />
           Published
         </label>
         {save.isError && (
-          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {save.error instanceof Error ? save.error.message : 'Could not save.'}
           </p>
         )}

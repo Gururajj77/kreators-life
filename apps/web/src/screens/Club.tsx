@@ -55,7 +55,7 @@ export function Club() {
 
       {q.isError && (
         <div className="mt-md rounded-card bg-card p-md shadow-toy-soft flex flex-wrap-reverse items-center justify-between gap-sm" role="alert">
-          <p className="m-0 font-bold min-w-0 flex-1 basis-[60%]">Could not load the Club.</p>
+          <p className="m-0 font-semibold min-w-0 flex-1 basis-[60%]">Could not load the Club.</p>
           <Button variant="outline" onClick={() => q.refetch()}>
             Try again
           </Button>
@@ -63,14 +63,14 @@ export function Club() {
       )}
 
       <section className="mt-lg" aria-labelledby="benefits-heading">
-        <h2 id="benefits-heading" className="text-[24px]">
+        <h2 id="benefits-heading" className="text-title2">
           What members get
         </h2>
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {CLUB_BENEFITS.map((b) => (
             <li key={b.key} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <p className="m-0 text-[16px] font-bold">{b.name}</p>
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">{b.blurb}</p>
+              <p className="m-0 text-headline">{b.name}</p>
+              <p className="m-0 text-subhead text-ink-soft">{b.blurb}</p>
             </li>
           ))}
         </ul>
@@ -78,17 +78,17 @@ export function Club() {
 
       {d && (
         <section className="mt-lg" aria-labelledby="mine-heading">
-          <h2 id="mine-heading" className="text-[24px]">
+          <h2 id="mine-heading" className="text-title2">
             Your membership
           </h2>
           {mine && (
             <div className="mt-sm rounded-card p-md" style={{ background: STATUS_COPY[mine.status].tint }}>
-              <p className="m-0 text-[18px] font-extrabold">{STATUS_COPY[mine.status].title}</p>
-              <p className="mt-xs m-0 text-[14px] font-semibold">{STATUS_COPY[mine.status].blurb}</p>
-              {mine.decisionNote && <p className="mt-xs m-0 text-[14px] font-semibold">Note from the reviewer: {mine.decisionNote}</p>}
-              {mine.endsAt && (mine.status === 'approved' || mine.status === 'active') && <p className="mt-xs m-0 text-[14px] font-semibold">Runs until {longDate(mine.endsAt)}.</p>}
+              <p className="m-0 text-headline">{STATUS_COPY[mine.status].title}</p>
+              <p className="mt-xs m-0 text-subhead">{STATUS_COPY[mine.status].blurb}</p>
+              {mine.decisionNote && <p className="mt-xs m-0 text-subhead">Note from the reviewer: {mine.decisionNote}</p>}
+              {mine.endsAt && (mine.status === 'approved' || mine.status === 'active') && <p className="mt-xs m-0 text-subhead">Runs until {longDate(mine.endsAt)}.</p>}
               {(mine.status === 'approved' || mine.status === 'active') && (
-                <p className="mt-xs m-0 text-[14px] font-semibold">{mine.managerName ? `Your manager: ${mine.managerName}. Write to the team under Help to reach them.` : 'A manager on staff will be named for you soon.'}</p>
+                <p className="mt-xs m-0 text-subhead">{mine.managerName ? `Your manager: ${mine.managerName}. Write to the team under Help to reach them.` : 'A manager on staff will be named for you soon.'}</p>
               )}
             </div>
           )}
@@ -101,10 +101,10 @@ export function Club() {
               }}
             >
               <label className="block">
-                <span className="block text-[14px] font-bold">Why the Club, and what you are working on</span>
+                <span className="block text-subhead">Why the Club, and what you are working on</span>
                 <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} rows={5} placeholder="Link to your best work if you like." className={FIELD} />
               </label>
-              <p className="m-0 text-[12px] font-bold text-ink-soft">Reviewers see your profile, portfolio and this note. Never your journal or wellbeing.</p>
+              <p className="m-0 text-caption text-ink-soft">Reviewers see your profile, portfolio and this note. Never your journal or wellbeing.</p>
               <ErrorLine e={apply.isError ? apply.error : null} />
               <Button type="submit" size="lg" full disabled={apply.isPending}>
                 {mine ? 'Apply again' : 'Apply to join'}
@@ -133,17 +133,17 @@ function ReviewQueue({ queue, staff, page, onChange }: { queue: Membership[]; st
     <li key={m.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
       <CardHead
         tag={
-          <span title={m.status} className="max-w-full truncate rounded-pill px-xs text-[12px] font-extrabold leading-[20px]" style={{ background: STATUS_COPY[m.status].tint }}>
+          <span title={m.status} className="max-w-full truncate rounded-pill px-xs text-caption font-medium leading-[20px]" style={{ background: STATUS_COPY[m.status].tint }}>
             {m.status}
           </span>
         }
       >
-        <p className="m-0 text-[16px] font-bold">{m.userName}</p>
+        <p className="m-0 text-headline">{m.userName}</p>
       </CardHead>
-      <p className="m-0 text-[14px] font-semibold text-ink-soft">Applied {longDate(m.createdAt)}</p>
-      {m.note && <p className="mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold">{m.note}</p>}
+      <p className="m-0 text-subhead text-ink-soft">Applied {longDate(m.createdAt)}</p>
+      {m.note && <p className="mt-xs m-0 whitespace-pre-wrap text-subhead">{m.note}</p>}
       <label className="mt-sm block">
-        <span className="block text-[12px] font-bold">Note to them</span>
+        <span className="block text-caption">Note to them</span>
         <input value={notes[m.id] ?? ''} onChange={(e) => setNotes((n) => ({ ...n, [m.id]: e.target.value }))} maxLength={1000} className={FIELD} />
       </label>
       <div className="mt-sm flex flex-wrap gap-xs">
@@ -170,7 +170,7 @@ function ReviewQueue({ queue, staff, page, onChange }: { queue: Membership[]; st
       </div>
       {(m.status === 'approved' || m.status === 'active') && (
         <label className="mt-sm block">
-          <span className="block text-[12px] font-bold">Named manager</span>
+          <span className="block text-caption">Named manager</span>
           <select value={m.managerId ?? ''} onChange={(e) => setManager.mutate({ id: m.id, managerId: e.target.value || null })} disabled={setManager.isPending} className={FIELD}>
             <option value="">Nobody yet</option>
             {staff.map((s) => (
@@ -185,11 +185,11 @@ function ReviewQueue({ queue, staff, page, onChange }: { queue: Membership[]; st
   );
   return (
     <section className="mt-lg" aria-labelledby="queue-heading">
-      <h2 id="queue-heading" className="text-[24px]">
+      <h2 id="queue-heading" className="text-title2">
         Review queue
       </h2>
       <label className="mt-sm block">
-        <span className="block text-[14px] font-bold">Approvals run for</span>
+        <span className="block text-subhead font-semibold">Approvals run for</span>
         <select value={months} onChange={(e) => setMonths(e.target.value)} className={FIELD}>
           {['3', '6', '12', '24'].map((m) => (
             <option key={m} value={m}>
@@ -200,11 +200,11 @@ function ReviewQueue({ queue, staff, page, onChange }: { queue: Membership[]; st
       </label>
       <ErrorLine e={decide.isError ? decide.error : null} />
       <ErrorLine e={setManager.isError ? setManager.error : null} />
-      {applied.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No new applications.</p>}
+      {applied.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">No new applications.</p>}
       <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">{applied.map(row)}</ul>
       {others.length > 0 && (
         <>
-          <h3 className="mt-md text-[18px]">Members and past decisions</h3>
+          <h3 className="mt-md text-headline">Members and past decisions</h3>
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">{others.map(row)}</ul>
         </>
       )}

@@ -105,14 +105,14 @@ function Overlay({ c }: { c: Celebration }) {
           transition={{ type: 'spring', stiffness: 380, damping: 28 }}
         >
           <div className="flex items-baseline justify-between gap-sm">
-            <span className="font-display text-[24px] font-extrabold">{c.title}</span>
+            <span className="text-title2">{c.title}</span>
             <span className="flex shrink-0 gap-xs">
               {c.totalXp > 0 && (
-                <span className="rounded-pill px-sm py-xs text-[14px] font-extrabold text-ink-fixed" style={{ background: c.color }}>
+                <span className="rounded-pill px-sm py-xs text-subhead font-medium text-ink-fixed" style={{ background: c.color }}>
                   +{c.totalXp} xp
                 </span>
               )}
-              {c.points > 0 && <span className="rounded-pill bg-paper px-sm py-xs text-[14px] font-extrabold text-ink">+{c.points} points</span>}
+              {c.points > 0 && <span className="rounded-pill bg-paper px-sm py-xs text-subhead font-medium text-ink">+{c.points} points</span>}
             </span>
           </div>
           {climb.length > 0 && (
@@ -120,16 +120,16 @@ function Overlay({ c }: { c: Celebration }) {
               {climb.map((e, i) => (
                 <motion.li
                   key={e.id}
-                  className="flex items-center justify-between gap-sm text-[14px]"
+                  className="flex items-center justify-between gap-sm text-subhead"
                   initial={{ opacity: 0, y: reduce ? 0 : 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: reduce ? 0 : 0.25 + i * 0.22 }}
                 >
                   <span className="truncate">
-                    <span className="font-bold">{KIND_META[e.kind].label}</span>
+                    <span className="font-semibold">{KIND_META[e.kind].label}</span>
                     <span className="text-on-ink/70"> {e.title}</span>
                   </span>
-                  <span className="shrink-0 font-extrabold" style={{ color: c.color }}>
+                  <span className="shrink-0 font-bold" style={{ color: c.color }}>
                     +{e.amount}
                   </span>
                 </motion.li>
@@ -137,14 +137,14 @@ function Overlay({ c }: { c: Celebration }) {
             </ul>
           )}
           {c.projectCleared && (
-            <p className="mt-sm rounded-tile bg-on-ink/10 px-sm py-xs text-[14px] font-bold m-0">Project cleared: {c.projectCleared.title}</p>
+            <p className="mt-sm rounded-tile bg-on-ink/10 px-sm py-xs text-subhead font-semibold m-0">Project cleared: {c.projectCleared.title}</p>
           )}
           {c.newBadges.length > 0 && (
             <ul className="mt-sm flex list-none flex-wrap gap-xs p-0 m-0">
               {c.newBadges.map((k) => {
                 const b = BADGES.find((x) => x.key === k);
                 return (
-                  <li key={k} className="flex items-center gap-xs rounded-pill bg-on-ink py-xs pl-xs pr-sm text-[14px] font-bold text-ink">
+                  <li key={k} className="flex items-center gap-xs rounded-pill bg-on-ink py-xs pl-xs pr-sm text-subhead font-medium text-ink">
                     <BadgeMedal k={k} size="sm" shine decorative />
                     <span>New badge: {b?.name ?? k}</span>
                   </li>

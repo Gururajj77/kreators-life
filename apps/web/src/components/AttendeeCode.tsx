@@ -28,7 +28,7 @@ const clock = (iso: string) => new Date(iso).toLocaleString(LOCALE, { weekday: '
 function Problem({ text }: { text: string | null }) {
   if (!text) return null;
   return (
-    <p role="alert" className="m-0 mt-xs rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+    <p role="alert" className="m-0 mt-xs rounded-tile bg-r1/15 p-sm text-subhead">
       {text}
     </p>
   );
@@ -45,18 +45,18 @@ export function AttendeeFields({ xp, onXp, code, onCode, one = 'guest', many = '
   const problem = attendeeProblem(xp, code);
   return (
     <fieldset className="m-0 border-0 p-0">
-      <legend className="text-[14px] font-bold">Xp for each {one}, optional</legend>
-      <p className="m-0 text-[12px] font-semibold text-ink-soft">
+      <legend className="text-subhead font-semibold">Xp for each {one}, optional</legend>
+      <p className="m-0 text-caption text-ink-soft">
         Up to {ATTENDEE_XP_MAX}. It is fixed thirty minutes before the start, when the code opens. You show the code at the event, and only your {many} can use it, once each.
       </p>
-      {note && <p className="m-0 mt-xs text-[12px] font-semibold text-ink-soft">{note}</p>}
+      {note && <p className="m-0 mt-xs text-caption text-ink-soft">{note}</p>}
       <div className="mt-xs grid grid-cols-2 gap-xs">
         <label className="block">
-          <span className="block text-[12px] font-bold text-ink-soft">Xp</span>
+          <span className="block text-caption text-ink-soft">Xp</span>
           <input type="number" inputMode="numeric" min={1} max={ATTENDEE_XP_MAX} value={xp} onChange={(e) => onXp(e.target.value)} placeholder="None" className={`mt-xs ${FIELD_SOLID}`} />
         </label>
         <label className="block">
-          <span className="block text-[12px] font-bold text-ink-soft">Your own code</span>
+          <span className="block text-caption text-ink-soft">Your own code</span>
           <input value={code} onChange={(e) => onCode(normalizeCode(e.target.value))} minLength={ATTENDEE_CODE_MIN} maxLength={ATTENDEE_CODE_MAX} placeholder="Random" autoCapitalize="characters" className={`mt-xs ${FIELD_SOLID} uppercase placeholder:normal-case`} />
         </label>
       </div>
@@ -96,23 +96,23 @@ export function HostCodeCard({ value, startsAt, onSave, guests = 'guests', child
     if (locked)
       return (
         <div className="rounded-card bg-card p-md shadow-toy-soft">
-          <p className="m-0 text-[16px] font-extrabold">Attendee code</p>
-          <p className="m-0 mt-xs text-[14px] font-semibold text-ink-soft">The xp is set up to thirty minutes before the start, and this event got none.</p>
+          <p className="m-0 text-headline">Attendee code</p>
+          <p className="m-0 mt-xs text-subhead text-ink-soft">The xp is set up to thirty minutes before the start, and this event got none.</p>
         </div>
       );
     return (
       <div className="rounded-card bg-card p-md shadow-toy-soft">
-        <p className="m-0 text-[16px] font-extrabold">Give your {guests} xp</p>
-        <p className="m-0 mt-xs text-[14px] font-semibold text-ink-soft">
+        <p className="m-0 text-headline">Give your {guests} xp</p>
+        <p className="m-0 mt-xs text-subhead text-ink-soft">
           Set it now, up to {ATTENDEE_XP_MAX}. It is fixed thirty minutes before the start, when the code opens. You show the code at the event, and only your {guests} can use it, once each.
         </p>
         <div className="mt-sm grid grid-cols-2 gap-xs">
           <label className="block">
-            <span className="block text-[12px] font-bold text-ink-soft">Xp each</span>
+            <span className="block text-caption text-ink-soft">Xp each</span>
             <input type="number" inputMode="numeric" min={1} max={ATTENDEE_XP_MAX} value={xp} onChange={(e) => setXp(e.target.value)} className={`mt-xs ${FIELD_SOLID}`} />
           </label>
           <label className="block">
-            <span className="block text-[12px] font-bold text-ink-soft">Your own code</span>
+            <span className="block text-caption text-ink-soft">Your own code</span>
             <input value={own} onChange={(e) => setOwn(normalizeCode(e.target.value))} maxLength={ATTENDEE_CODE_MAX} placeholder="Random" autoCapitalize="characters" className={`mt-xs ${FIELD_SOLID} uppercase placeholder:normal-case`} />
           </label>
         </div>
@@ -126,15 +126,15 @@ export function HostCodeCard({ value, startsAt, onSave, guests = 'guests', child
   return (
     <div className="rounded-card bg-card p-md shadow-toy-soft">
       <div className="flex items-center justify-between gap-sm">
-        <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">Attendee code</p>
-        <p className="m-0 shrink-0 rounded-pill bg-paper px-sm py-xs text-[14px] font-extrabold">+{value.xp} xp each</p>
+        <p className="m-0 text-eyebrow uppercase text-ink-soft">Attendee code</p>
+        <p className="m-0 shrink-0 rounded-pill bg-paper px-sm py-xs text-subhead font-medium">+{value.xp} xp each</p>
       </div>
       {/* The code has the full width to itself, so a twelve-letter word fits on a phone without breaking. */}
-      <p className="m-0 mt-xs font-display text-[28px] font-extrabold leading-tight tracking-wide [overflow-wrap:anywhere]">{value.code}</p>
-      <p className="m-0 mt-sm text-[14px] font-bold">
+      <p className="m-0 mt-xs text-title1 type-figure [overflow-wrap:anywhere]">{value.code}</p>
+      <p className="m-0 mt-sm text-subhead font-semibold">
         {value.claims} of {value.guests} {guests} claimed it
       </p>
-      <p className="m-0 mt-xs text-[12px] font-semibold text-ink-soft">
+      <p className="m-0 mt-xs text-caption text-ink-soft">
         Show it at the event. It works from {clock(value.opensAt)} to {clock(value.closesAt)}.
       </p>
       {children}
@@ -147,7 +147,7 @@ export function HostCodeCard({ value, startsAt, onSave, guests = 'guests', child
           Set xp
         </Button>
       </div>
-      {locked && <p className="m-0 mt-xs text-[12px] font-semibold text-ink-soft">The xp is fixed: the code is open.</p>}
+      {locked && <p className="m-0 mt-xs text-caption text-ink-soft">The xp is fixed: the code is open.</p>}
       <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
         <input value={own} onChange={(e) => setOwn(normalizeCode(e.target.value))} maxLength={ATTENDEE_CODE_MAX} placeholder="Your own code" aria-label="Your own code" autoCapitalize="characters" disabled={busy} className={`${FIELD_SOLID} uppercase placeholder:normal-case`} />
         <Button variant="outline" disabled={busy || own.length < ATTENDEE_CODE_MIN} onClick={() => void save({ code: own })}>
@@ -190,15 +190,15 @@ export function ClaimCard({ view, onClaim }: { view: AttendeeCodeView; onClaim: 
   return (
     <div className="rounded-card bg-card p-md shadow-toy-soft">
       <div className="flex items-center justify-between gap-sm">
-        <p className="m-0 text-[16px] font-extrabold">{view.claimed ? 'You got the xp for coming' : 'Got the code?'}</p>
-        <p className="m-0 inline-flex shrink-0 items-center gap-xs rounded-pill bg-paper px-sm py-xs text-[14px] font-extrabold">{view.claimed ? <Icon icon={Check} size={14} strokeWidth={3} label="claimed" /> : '+'}{view.xp} xp</p>
+        <p className="m-0 text-headline">{view.claimed ? 'You got the xp for coming' : 'Got the code?'}</p>
+        <p className="m-0 inline-flex shrink-0 items-center gap-xs rounded-pill bg-paper px-sm py-xs text-subhead font-medium">{view.claimed ? <Icon icon={Check} size={14} strokeWidth={3} label="claimed" /> : '+'}{view.xp} xp</p>
       </div>
       {view.claimed ? (
-        <p className="m-0 mt-xs text-[14px] font-semibold text-ink-soft">It is in your xp. A code counts once per person.</p>
+        <p className="m-0 mt-xs text-subhead text-ink-soft">It is in your xp. A code counts once per person.</p>
       ) : state === 'early' ? (
-        <p className="m-0 mt-xs text-[14px] font-semibold text-ink-soft">The host shows a code at the event. It works from {clock(view.opensAt)}.</p>
+        <p className="m-0 mt-xs text-subhead text-ink-soft">The host shows a code at the event. It works from {clock(view.opensAt)}.</p>
       ) : state === 'closed' ? (
-        <p className="m-0 mt-xs text-[14px] font-semibold text-ink-soft">The code closed at {clock(view.closesAt)}.</p>
+        <p className="m-0 mt-xs text-subhead text-ink-soft">The code closed at {clock(view.closesAt)}.</p>
       ) : (
         <form
           className="mt-sm grid grid-cols-[1fr_auto] gap-xs"
@@ -213,7 +213,7 @@ export function ClaimCard({ view, onClaim }: { view: AttendeeCodeView; onClaim: 
           </Button>
         </form>
       )}
-      {!view.claimed && state === 'open' && <p className="m-0 mt-xs text-[12px] font-semibold text-ink-soft">It works until {clock(view.closesAt)}.</p>}
+      {!view.claimed && state === 'open' && <p className="m-0 mt-xs text-caption text-ink-soft">It works until {clock(view.closesAt)}.</p>}
       <Problem text={problem} />
       {!view.claimed && <Nudge className="mt-xs" text={`For guests on the list, once each, up to ${ATTENDEE_CLAIMS_PER_DAY} events in 24 hours.`} />}
     </div>

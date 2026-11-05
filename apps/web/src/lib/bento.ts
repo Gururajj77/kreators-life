@@ -46,5 +46,3 @@ export const BENTO_SIZE = {
   tall: 'bento-h2',
   small: '',
 } as const;
-
-export type BentoSize = keyof typeof BENTO_SIZE;

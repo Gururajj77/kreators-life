@@ -14,7 +14,7 @@ import { api } from '../lib/api';
 import { useAuthed, useWellbeing } from '../lib/queries';
 import { AppIcon } from '../components/AppIcon';
 import { Icon } from '../components/Icon';
-import { ChevronRight } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
 import { EmergenceSlot } from '../components/EmergenceSlot';
 
 /** Five areas of a life on one screen, each part opening the place where you act on it. */
@@ -29,18 +29,19 @@ export function Life() {
     <Screen>
       <header className="pt-lg">
         <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Life</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Physical, financial, mental, emotional and spiritual, scored from what you already log. Tap any part to go where you act on it. Only you see this.</p>
+        <h1 className="text-large-title">Life</h1>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">Physical, financial, mental, emotional and spiritual, scored from what you already log. Tap any part to go where you act on it. Only you see this.</p>
         {d && (
           <Hero color="var(--color-r4)" deep="var(--deep-lover_partner)" className="mt-md" character="lover_partner" mood={d.overall >= 60 ? "excited" : d.overall >= 40 ? "happy" : "sleepy"}>
-            <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide opacity-90">Life score</p>
-            <div className="mt-xs flex items-center gap-md">
+            <p className="m-0 text-eyebrow uppercase opacity-90">Life score</p>
+            {/* A phone stacks the word and its line under the gauge, so they keep the card's width instead of a sliver beside it. */}
+            <div className="mt-xs flex flex-col items-start gap-xs sm:flex-row sm:items-center sm:gap-md">
               <Gauge value={d.overall / 100} size={128} stroke={14} color="var(--color-on-fill)" track="rgba(255,255,255,0.3)" label={`Overall ${d.overall} of 100`}>
-                <span className="font-display text-[40px] font-extrabold">{d.overall}</span>
+                <span className="text-figure-lg type-figure">{d.overall}</span>
               </Gauge>
               <div className="min-w-0">
-                <p className="m-0 font-display text-[28px] font-extrabold leading-tight">{d.label}</p>
-                <p className="prose-long mt-xs m-0 text-[14px] font-semibold opacity-90">The average of the five areas. Parts with nothing logged do not count against{'\u00a0'}you.</p>
+                <p className="m-0 text-title1">{d.label}</p>
+                <p className="prose-long mt-xs m-0 text-prose opacity-90">The average of the five areas. Parts with nothing logged do not count against{'\u00a0'}you.</p>
               </div>
             </div>
           </Hero>
@@ -50,30 +51,30 @@ export function Life() {
       {d && (
         <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-label="The five areas this week">
           <div className="flex items-baseline justify-between gap-sm">
-            <p className="m-0 text-[14px] font-bold">The five areas, this week</p>
-            <p className="m-0 text-[12px] font-bold text-ink-soft">
+            <p className="m-0 text-headline">The five areas, this week</p>
+            <p className="m-0 text-caption text-ink-soft">
               <span className="inline-block size-[10px] rounded-pill bg-r2" aria-hidden="true" /> down on last week
             </p>
           </div>
           <div className="mt-sm">
             <PillBars allLabels values={d.areas.map((a) => a.score)} max={100} labels={d.areas.map((a) => LIFE_AREAS[a.key].name)} colors={d.areas.map((a) => (Math.round(a.trend) < 0 ? 'var(--color-r2)' : RELATIONSHIP_BY_KEY[LIFE_AREAS[a.key].relationship].color))} color="var(--color-r4)" label="Score per area" height={120} />
           </div>
-          <p className="mt-sm m-0 text-[12px] font-bold text-ink-soft">
+          <p className="mt-sm m-0 text-caption text-ink-soft">
             {d.areas.filter((a) => Math.round(a.trend) !== 0).map((a) => `${LIFE_AREAS[a.key].name} ${Math.round(a.trend) > 0 ? 'up' : 'down'} ${Math.abs(Math.round(a.trend))}`).join(', ') || 'Same as last week so far.'}
           </p>
         </section>
       )}
 
       {q.isError && (
-        <p role="alert" className="span-all mt-md m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+        <p role="alert" className="span-all mt-md m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           Could not load your dashboard. Try again in a moment.
         </p>
       )}
 
       {wb.data && (
         <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-label="Sleep, calm and mood this week">
-          <p className="m-0 text-[14px] font-bold">This week, day by day</p>
-          <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Sleep, calm and mood as scores out of a hundred. The physical, mental and emotional areas are built from these.</p>
+          <p className="m-0 text-headline">This week, day by day</p>
+          <p className="mt-xs m-0 text-caption text-ink-soft">Sleep, calm and mood as scores out of a hundred. The physical, mental and emotional areas are built from these.</p>
           <div className="mt-sm">
             <MultiLine
               series={[
@@ -99,10 +100,10 @@ export function Life() {
       ))}
 
       <section className="mt-lg" id="move" aria-labelledby="move-heading">
-        <h2 id="move-heading" className="text-[24px]">
+        <h2 id="move-heading" className="text-title2">
           Log movement
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">A walk, a run, a class. Minutes count toward the physical area, a hundred and fifty a week for full marks.</p>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">A walk, a run, a class. Minutes count toward the physical area, a hundred and fifty a week for full marks.</p>
         <form
           className="mt-sm flex gap-xs"
           onSubmit={(e) => {
@@ -110,7 +111,7 @@ export function Life() {
             move.mutate();
           }}
         >
-          <input type="number" min={1} max={600} value={minutes} onChange={(e) => setMinutes(e.target.value)} aria-label="Minutes" className="w-[120px] rounded-pill border-2 border-line bg-card px-md py-sm text-[16px]" />
+          <input type="number" min={1} max={600} value={minutes} onChange={(e) => setMinutes(e.target.value)} aria-label="Minutes" className="w-[120px] rounded-pill border-2 border-line bg-card px-md py-sm text-body" />
           <Button type="submit" disabled={move.isPending}>
             {move.isSuccess ? 'Logged' : 'Add minutes'}
           </Button>
@@ -129,16 +130,16 @@ function AreaCard({ area }: { area: LifeArea }) {
       <div data-pillar={rel.key} className="rounded-card p-md" style={{ background: `var(--soft-${rel.key})` }}>
         <div className="flex items-center gap-sm">
           <Ring value={area.score / 100} size={72} stroke={8} color={rel.color} track="color-mix(in oklab, var(--color-ink) 14%, transparent)" label={`${meta.name} ${area.score} of 100`}>
-            <span className="font-display text-[20px] font-extrabold">{area.score}</span>
+            <span className="text-title3 type-figure">{area.score}</span>
           </Ring>
           <div className="min-w-0 flex-1">
-            <h2 id={`area-${area.key}`} className="m-0 flex items-center gap-xs text-[24px]">
+            <h2 id={`area-${area.key}`} className="m-0 flex items-center gap-xs text-title2">
               <AppIcon name={meta.icon} size={24} />
               {meta.name}
             </h2>
-            <p className="m-0 text-[14px] font-semibold text-ink-soft">{meta.blurb}</p>
+            <p className="m-0 text-subhead text-ink-soft">{meta.blurb}</p>
             {trend !== 0 && (
-              <p className="m-0 text-[12px] font-extrabold" style={{ color: `var(--deep-${rel.key})` }}>
+              <p className="m-0 text-caption font-semibold" style={{ color: `var(--deep-${rel.key})` }}>
                 {trend > 0 ? `up ${trend}` : `down ${Math.abs(trend)}`} on last week
               </p>
             )}
@@ -150,21 +151,21 @@ function AreaCard({ area }: { area: LifeArea }) {
             <li key={p.label}>
               <Link to={p.path} className="group toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm" title={p.hint}>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[16px] font-bold">{p.label}</span>
-                  <span className="block text-[14px] font-semibold text-ink-soft">{p.value}</span>
+                  <span className="block text-headline">{p.label}</span>
+                  <span className="block text-subhead text-ink-soft">{p.value}</span>
                 </span>
                 <span className="w-[96px] shrink-0">
-                  <span className="block text-right text-[12px] font-extrabold text-ink-soft">{p.score === null ? 'no data' : p.score}</span>
+                  <span className="block text-right text-caption text-ink-soft">{p.score === null ? 'no data' : p.score}</span>
                   <span className="mt-xs block h-[6px] overflow-hidden rounded-pill bg-line" aria-hidden="true">
                     <span className="block h-full rounded-pill" style={{ width: `${p.score ?? 0}%`, background: rel.color }} />
                   </span>
                 </span>
-                <Icon icon={ChevronRight} size={18} strokeWidth={3} className="transition-transform motion-safe:group-hover:translate-x-xs shrink-0 text-ink-mute" />
+                <Icon icon={ArrowUpRight} size={18} strokeWidth={3} className="transition-transform motion-safe:group-hover:translate-x-xs motion-safe:group-hover:-translate-y-xs shrink-0 text-ink-mute" />
               </Link>
             </li>
           ))}
         </ul>
-        <Link to={meta.path} className="mt-sm inline-flex min-h-[44px] items-center text-[14px] font-bold underline-offset-4 hover:underline" style={{ color: `var(--deep-${rel.key})` }}>
+        <Link to={meta.path} className="mt-sm inline-flex min-h-[44px] items-center text-subhead font-semibold underline-offset-4 hover:underline" style={{ color: `var(--deep-${rel.key})` }}>
           Open {meta.name.toLowerCase()} tools
         </Link>
       </div>

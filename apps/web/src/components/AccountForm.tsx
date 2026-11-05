@@ -41,35 +41,35 @@ export function AccountForm({ initialName, onSend }: { initialName: string; onSe
   const badBirth = v.birthDate ? birthDateProblem(v.birthDate) : null;
   const ready = v.email.includes('@') && v.password.length > 0 && !weak && v.confirm === v.password && v.phone.length > 0 && !badPhone && v.birthDate.length > 0 && !badBirth && agree;
   const set = (k: keyof typeof v) => (e: { target: { value: string } }) => setV({ ...v, [k]: e.target.value });
-  const hint = (t: string | null) => (t ? <span className="mt-xs block text-[12px] font-bold text-ink-soft">{t}</span> : null);
+  const hint = (t: string | null) => (t ? <span className="mt-xs block text-caption text-ink-soft">{t}</span> : null);
   return (
     <div className="rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="grid gap-xs md:grid-cols-2">
         <label className="block">
-          <span className="block text-[14px] font-bold">What should we call you?</span>
+          <span className="block text-subhead font-semibold">What should we call you?</span>
           <input value={v.name} onChange={set('name')} maxLength={40} autoComplete="nickname" className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Email</span>
+          <span className="block text-subhead font-semibold">Email</span>
           <input type="email" value={v.email} onChange={set('email')} autoComplete="email" maxLength={254} className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Password</span>
+          <span className="block text-subhead font-semibold">Password</span>
           <PasswordField value={v.password} onChange={set('password')} what="password" />
           {hint(weak ?? 'Eight characters or more. Not your email, not one from the usual guess lists.')}
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Password, once more</span>
+          <span className="block text-subhead font-semibold">Password, once more</span>
           <PasswordField value={v.confirm} onChange={set('confirm')} what="password" />
           {hint(mismatch ? 'The two do not match yet.' : null)}
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Phone</span>
+          <span className="block text-subhead font-semibold">Phone</span>
           <input type="tel" value={v.phone} onChange={set('phone')} autoComplete="tel" maxLength={24} placeholder="+91 98765 43210" className={FIELD} />
           {hint(badPhone ?? PHONE_HINT)}
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Date of birth</span>
+          <span className="block text-subhead font-semibold">Date of birth</span>
           <input type="date" value={v.birthDate} onChange={set('birthDate')} autoComplete="bday" max={todayLocal()} className={FIELD} />
           {hint(badBirth ?? 'Eighteen or over. Never shown to anyone.')}
         </label>
@@ -90,7 +90,7 @@ export function SignInCard({ initialName, onSend }: { initialName: string; onSen
   const mismatch = v.confirm.length > 0 && v.confirm !== v.password;
   const ready = v.email.includes('@') && v.password.length > 0 && !weak && v.confirm === v.password;
   const set = (k: keyof typeof v) => (e: { target: { value: string } }) => setV({ ...v, [k]: e.target.value });
-  const hint = (t: string | null) => (t ? <span className="mt-xs block text-[12px] font-bold text-ink-soft">{t}</span> : null);
+  const hint = (t: string | null) => (t ? <span className="mt-xs block text-caption text-ink-soft">{t}</span> : null);
   return (
     <form
       className="rounded-tile bg-card p-sm shadow-toy-soft"
@@ -101,20 +101,20 @@ export function SignInCard({ initialName, onSend }: { initialName: string; onSen
     >
       <div className="grid gap-xs md:grid-cols-2">
         <label className="block">
-          <span className="block text-[14px] font-bold">Your name</span>
+          <span className="block text-subhead font-semibold">Your name</span>
           <input value={v.name} onChange={set('name')} maxLength={40} autoComplete="nickname" className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Email</span>
+          <span className="block text-subhead font-semibold">Email</span>
           <input type="email" value={v.email} onChange={set('email')} autoComplete="email" maxLength={254} className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Password</span>
+          <span className="block text-subhead font-semibold">Password</span>
           <PasswordField value={v.password} onChange={set('password')} what="password" />
           {hint(weak ?? 'Eight or more letters, numbers or signs.')}
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Password again</span>
+          <span className="block text-subhead font-semibold">Password again</span>
           <PasswordField value={v.confirm} onChange={set('confirm')} what="password" />
           {hint(mismatch ? 'These two do not match yet.' : null)}
         </label>
@@ -131,7 +131,7 @@ export function PrivateCard({ onSend }: { onSend: (value: Record<string, string>
   const badBirth = v.birthDate ? birthDateProblem(v.birthDate) : null;
   const ready = v.phone.length > 0 && !badPhone && v.birthDate.length > 0 && !badBirth && agree;
   const set = (k: keyof typeof v) => (e: { target: { value: string } }) => setV({ ...v, [k]: e.target.value });
-  const hint = (t: string | null) => (t ? <span className="mt-xs block text-[12px] font-bold text-ink-soft">{t}</span> : null);
+  const hint = (t: string | null) => (t ? <span className="mt-xs block text-caption text-ink-soft">{t}</span> : null);
   return (
     <form
       className="rounded-tile bg-card p-sm shadow-toy-soft"
@@ -142,12 +142,12 @@ export function PrivateCard({ onSend }: { onSend: (value: Record<string, string>
     >
       <div className="grid gap-xs md:grid-cols-2">
         <label className="block">
-          <span className="block text-[14px] font-bold">Phone</span>
+          <span className="block text-subhead font-semibold">Phone</span>
           <input type="tel" value={v.phone} onChange={set('phone')} autoComplete="tel" maxLength={24} placeholder="+91 98765 43210" className={FIELD} />
           {hint(badPhone ?? PHONE_HINT)}
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Date of birth</span>
+          <span className="block text-subhead font-semibold">Date of birth</span>
           <input type="date" value={v.birthDate} onChange={set('birthDate')} autoComplete="bday" max={todayLocal()} className={FIELD} />
           {hint(badBirth)}
         </label>

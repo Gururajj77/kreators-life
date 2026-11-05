@@ -35,7 +35,7 @@ export function Tip({ text, children, className = '' }: { text: string; children
         {children}
       </button>
       {open && (
-        <span id={id} role="tooltip" className="tip-card absolute bottom-full left-0 z-30 mb-xs block w-[min(280px,80vw)] rounded-tile border border-line p-sm text-left text-[14px] font-semibold normal-case shadow-toy-soft">
+        <span id={id} role="tooltip" className="tip-card absolute bottom-full left-0 z-30 mb-xs block w-[min(280px,80vw)] rounded-tile border border-line p-sm text-left text-subhead normal-case shadow-toy-soft">
           {text}
         </span>
       )}

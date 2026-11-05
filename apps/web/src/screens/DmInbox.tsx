@@ -18,10 +18,10 @@ export function DmInbox() {
       <AppCover back={{ to: '/shop', label: 'Shop' }} title="Priority DMs" lede="Paid questions. Each one has a promised answer date; the buyer sees your reply in their purchases." />
 
       <section className="mt-md" aria-labelledby="open-heading">
-        <h2 id="open-heading" className="text-[24px]">
+        <h2 id="open-heading" className="text-title2">
           Waiting, {open.length}
         </h2>
-        {q.data && open.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing waiting. Sell a Priority DM product to get questions here.</p>}
+        {q.data && open.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">Nothing waiting. Sell a Priority DM product to get questions here.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {open.map((r) => (
             <OpenRequest key={r.id} r={r} onDone={() => void q.refetch()} />
@@ -31,15 +31,15 @@ export function DmInbox() {
 
       {closed.length > 0 && (
         <section className="mt-lg" aria-labelledby="done-heading">
-          <h2 id="done-heading" className="text-[24px]">
+          <h2 id="done-heading" className="text-title2">
             Answered
           </h2>
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {closed.map((r) => (
               <li key={r.id}>
                 <Fold title={`${r.buyerName}, ${r.productTitle}`} hint={`${r.status}${r.answeredAt ? ` ${longDate(r.answeredAt)}` : ''}`}>
-                  <p className="mt-sm m-0 whitespace-pre-wrap text-[14px] font-semibold">{r.question}</p>
-                  {r.answer && <p className="mt-sm m-0 whitespace-pre-wrap rounded-tile bg-paper p-sm text-[14px] font-semibold">{r.answer}</p>}
+                  <p className="mt-sm m-0 whitespace-pre-wrap text-subhead">{r.question}</p>
+                  {r.answer && <p className="mt-sm m-0 whitespace-pre-wrap rounded-tile bg-paper p-sm text-subhead">{r.answer}</p>}
                 </Fold>
               </li>
             ))}
@@ -56,13 +56,13 @@ function OpenRequest({ r, onDone }: { r: DmRequest; onDone: () => void }) {
   const overdue = new Date(r.dueAt).getTime() < Date.now();
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <p className="m-0 text-[16px] font-bold">
+      <p className="m-0 text-headline">
         {r.buyerName}, {r.productTitle}
       </p>
-      <p className={`m-0 text-[14px] font-bold ${overdue ? 'text-r1' : 'text-ink-soft'}`}>
+      <p className={`m-0 text-subhead ${overdue ? 'text-r1' : 'text-ink-soft'}`}>
         {overdue ? 'Overdue, promised by' : 'Answer by'} {longDate(r.dueAt)}. Asked {longDate(r.createdAt)}.
       </p>
-      <p className="mt-sm m-0 whitespace-pre-wrap rounded-tile bg-paper p-sm text-[16px] font-semibold">{r.question}</p>
+      <p className="mt-sm m-0 whitespace-pre-wrap rounded-tile bg-paper p-sm text-prose">{r.question}</p>
       <form
         className="mt-sm flex flex-col gap-sm"
         onSubmit={(e) => {
@@ -71,11 +71,11 @@ function OpenRequest({ r, onDone }: { r: DmRequest; onDone: () => void }) {
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Your answer</span>
-          <textarea value={answer} onChange={(e) => setAnswer(e.target.value)} rows={4} maxLength={4000} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+          <span className="block text-subhead font-semibold">Your answer</span>
+          <textarea value={answer} onChange={(e) => setAnswer(e.target.value)} rows={4} maxLength={4000} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
         </label>
         {send.isError && (
-          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {send.error instanceof Error ? send.error.message : 'Could not send.'}
           </p>
         )}

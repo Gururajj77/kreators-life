@@ -1,5 +1,5 @@
 import { createElement } from 'react';
-import { ArrowRight } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
 import { Icon } from '../components/Icon';
 
 /**
@@ -19,26 +19,28 @@ import { Icon } from '../components/Icon';
 const PILL = 'inline-flex items-center justify-center gap-xs rounded-pill text-center';
 
 /** The one main action: solid ink with the sweep of light. */
-export const SITE_PRIMARY = `toy fx-shimmer btn-primary ${PILL} min-h-[56px] bg-ink px-lg text-[18px] font-bold text-on-ink`;
+export const SITE_PRIMARY = `toy fx-shimmer btn-primary ${PILL} min-h-[56px] bg-ink px-lg text-headline text-on-ink`;
 /** The main action on an ink band: the card colour with ink text, so it still reads as the one solid thing there. */
-export const SITE_PRIMARY_ON_INK = `toy fx-shimmer ${PILL} min-h-[56px] bg-card px-lg text-[18px] font-bold text-ink`;
+export const SITE_PRIMARY_ON_INK = `toy fx-shimmer ${PILL} min-h-[56px] bg-card px-lg text-headline text-ink`;
+/** The main action on the fractal glass bands (`FractalGlass`, deep navy in both themes): white with the fixed slate ink, so it is the one bright thing there in either theme. */
+export const SITE_PRIMARY_ON_GLASS = `toy fx-shimmer ${PILL} min-h-[56px] bg-on-fill px-lg text-headline text-ink-fixed`;
 /** The header's door into the app: the primary look at the header's height. */
-export const SITE_PRIMARY_SM = `toy btn-primary ${PILL} min-h-[44px] bg-ink px-md text-[16px] font-bold text-on-ink`;
+export const SITE_PRIMARY_SM = `toy btn-primary ${PILL} min-h-[44px] bg-ink px-md text-callout font-semibold text-on-ink`;
 
 /** No fill at rest: only the edge says "button" (the hover tints it). */
-const OUTLINE = `toy toy-ink btn-outline ${PILL} border border-ink/40 bg-transparent font-semibold text-ink`;
+const OUTLINE = `toy toy-ink btn-outline ${PILL} border border-ink/40 bg-transparent text-ink`;
 /** Every other action button. Put `<SiteArrow />` after the words when it opens another page. */
-export const SITE_SECONDARY = `${OUTLINE} min-h-[48px] px-md text-[16px]`;
+export const SITE_SECONDARY = `${OUTLINE} min-h-[48px] px-md text-callout font-semibold`;
 /** The secondary look at a chip's size (app and pillar pills). Without padding: add `px-sm`, or `pl-xs pr-md` beside an avatar. */
-export const SITE_CHIP_BASE = `${OUTLINE} min-h-[44px] text-[14px]`;
+export const SITE_CHIP_BASE = `${OUTLINE} min-h-[44px] text-subhead font-semibold`;
 export const SITE_CHIP = `${SITE_CHIP_BASE} px-sm`;
 
 /** The arrow a secondary button wears when it goes somewhere: the one sign, besides its edge, that it is a control. */
 export function SiteArrow() {
-  return createElement(Icon, { icon: ArrowRight, size: 18 });
+  return createElement(Icon, { icon: ArrowUpRight, size: 18 });
 }
 
 /** A jump: underlined words with a 44px tap height. */
-export const SITE_LINK = 'inline-flex min-h-[44px] items-center gap-xs font-bold underline underline-offset-4 hover:text-ink-soft';
+export const SITE_LINK = 'inline-flex min-h-[44px] items-center gap-xs font-medium underline underline-offset-4 hover:text-ink-soft';
 /** A jump inside a sentence. */
-export const SITE_LINK_INLINE = 'font-bold underline underline-offset-4 hover:text-ink-soft';
+export const SITE_LINK_INLINE = 'font-medium underline underline-offset-4 hover:text-ink-soft';

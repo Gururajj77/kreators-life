@@ -3,7 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import gsap from 'gsap';
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { ArrowDown, ArrowUp, ChevronRight, RotateCcw } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpRight, RotateCcw } from 'lucide-react';
 import { api } from '../lib/api';
 import { useKept } from '../lib/kept';
 import { useAppPrefs, useModules, useSaveAppPrefs, type ModuleView } from '../lib/modules';
@@ -63,7 +63,7 @@ export function AppGroups({ groups, unread = 0, fits, open, where }: { groups: r
     <div className="flex flex-col gap-sm">
       {editing && (
         <div className="flex items-center justify-between gap-sm">
-          <p className="m-0 min-w-0 text-[14px] font-semibold text-ink-soft">{arrange ? 'Drag a handle or use the arrows. Apps stay in their group.' : 'Pick how each group starts, and the order of its apps.'}</p>
+          <p className="m-0 min-w-0 text-subhead text-ink-soft">{arrange ? 'Drag a handle or use the arrows. Apps stay in their group.' : 'Pick how each group starts, and the order of its apps.'}</p>
           <Button variant="outline" size="sm" aria-pressed={arrange} onClick={() => setArrange((a) => !a)} className="shrink-0">
             {arrange ? 'Done' : 'Arrange apps'}
           </Button>
@@ -177,14 +177,14 @@ function Group({ group, list, unread, fits, busy, failed, scope, startOpen, onTo
       >
         <Avatar relationship={rel.key} size={44} decorative still mood={on > 0 ? 'happy' : 'sleepy'} />
         <span className="min-w-0 flex-1">
-          <span id={`${id}-h`} className="block font-display text-[18px] font-extrabold leading-tight">
+          <span id={`${id}-h`} className="block text-title3 type-figure">
             {MODULE_GROUPS[group]}
           </span>
-          <span className="block text-[13px] font-bold" style={{ color: `var(--deep-${rel.key})` }}>
+          <span className="block text-footnote" style={{ color: `var(--deep-${rel.key})` }}>
             {MODULE_GROUP_BLURB[group]}
           </span>
         </span>
-        <span className="shrink-0 rounded-pill bg-card-strong px-sm text-[12px] font-extrabold leading-[26px]" style={{ color: `var(--deep-${rel.key})` }}>
+        <span className="shrink-0 rounded-pill bg-card-strong px-sm text-caption font-medium leading-[26px]" style={{ color: `var(--deep-${rel.key})` }}>
           {on} of {list.length} on
         </span>
         <ToggleChevron open={open} size={20} className="text-ink-soft" />
@@ -216,15 +216,15 @@ function Row({ m, color, tint, unread, why, busy, failed, onToggle }: { m: Modul
         <AppIcon name={m.icon} size={22} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className={`flex items-center gap-xs text-[16px] font-bold leading-tight ${m.on ? '' : 'text-ink-soft'}`}>
+        <span className={`flex items-center gap-xs text-headline ${m.on ? '' : 'text-ink-soft'}`}>
           {m.name}
-          {unread > 0 && m.on && <span className="rounded-pill bg-r1 px-xs text-[11px] font-extrabold leading-[18px] text-on-fill">{unread}</span>}
-          {m.on && <Icon icon={ChevronRight} size={16} className="text-ink-mute" />}
+          {unread > 0 && m.on && <span className="rounded-pill bg-r1 px-xs text-caption2 font-semibold leading-[18px] text-on-fill">{unread}</span>}
+          {m.on && <Icon icon={ArrowUpRight} size={16} className="text-ink-mute" />}
         </span>
-        <span className="mt-[2px] block text-[13px] font-semibold leading-snug text-ink-soft">{tie(m.blurb)}</span>
-        {why && <span className="mt-[2px] block text-[12px] font-bold text-ink-mute">Fits you: {why}</span>}
+        <span className="mt-[2px] block text-footnote text-ink-soft">{tie(m.blurb)}</span>
+        {why && <span className="mt-[2px] block text-caption text-ink-mute">Fits you: {why}</span>}
         {failed && (
-          <span role="alert" className="mt-[2px] block text-[12px] font-bold text-r1">
+          <span role="alert" className="mt-[2px] block text-caption text-r1">
             Could not switch it. Try again.
           </span>
         )}
@@ -268,7 +268,7 @@ function ArrangeRow({ m, index, count, color, handle, onMove }: { m: ModuleView;
       <span className={`flex size-[32px] shrink-0 items-center justify-center ${m.on ? 'text-ink' : 'text-ink-mute'}`}>
         <AppIcon name={m.icon} size={20} />
       </span>
-      <span className={`min-w-0 flex-1 text-[16px] font-bold leading-tight ${m.on ? '' : 'text-ink-soft'}`}>{m.name}</span>
+      <span className={`min-w-0 flex-1 text-headline ${m.on ? '' : 'text-ink-soft'}`}>{m.name}</span>
       <button type="button" aria-label={`Move ${m.name} up`} disabled={index === 0} onClick={() => onMove(index, index - 1)} className={arrow}>
         <Icon icon={ArrowUp} size={18} />
       </button>

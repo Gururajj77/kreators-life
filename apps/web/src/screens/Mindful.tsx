@@ -41,8 +41,8 @@ export function Mindful() {
     <Screen>
       <header className="pt-lg">
         <BackLink to="/wellbeing">Wellbeing</BackLink>
-        <h1 className="text-[30px]">Mindfulness</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Breathe with the circle, or work in focus sessions with breaks.</p>
+        <h1 className="text-large-title">Mindfulness</h1>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">Breathe with the circle, or work in focus sessions with breaks.</p>
       </header>
 
       {wb.data && (
@@ -61,7 +61,7 @@ export function Mindful() {
       <PeriodPanel id="mindful-period" parts={['wellbeing']} />
       <EmergenceSlot app="mindful" max={2} />
       <section className="mt-lg" aria-labelledby="thirty-heading">
-        <h2 id="thirty-heading" className="text-[24px]">
+        <h2 id="thirty-heading" className="text-title2">
           Last 30 days
         </h2>
         <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
@@ -76,18 +76,18 @@ export function Mindful() {
       </section>
 
       <section className="mt-lg" aria-labelledby="how-heading">
-        <h2 id="how-heading" className="text-[24px]">
+        <h2 id="how-heading" className="text-title2">
           How you breathe
         </h2>
         <div className="mt-sm flex items-center gap-md rounded-card bg-card p-md shadow-toy-soft">
           <Donut segments={buckets.map((b) => ({ value: b.value, color: b.color, label: b.label }))} size={132} stroke={20} label="Minutes by session length, last thirty days">
             <span className="flex flex-col items-center leading-none">
-              <span className="font-display text-[24px] font-extrabold">{monthTotal}</span>
-              <span className="mt-xs text-[12px] font-bold text-ink-soft">min</span>
+              <span className="text-title2 type-figure">{monthTotal}</span>
+              <span className="mt-xs text-caption text-ink-soft">min</span>
             </span>
           </Donut>
           <div className="min-w-0 flex-1">
-            <p className="m-0 text-[14px] font-bold">By session length, last thirty days</p>
+            <p className="m-0 text-subhead">By session length, last thirty days</p>
             <div className="mt-xs">
               <Legend items={buckets.map((b) => ({ color: b.color, label: b.label, text: `${b.value} min` }))} />
             </div>
@@ -96,10 +96,10 @@ export function Mindful() {
       </section>
 
       <section className="mt-lg" aria-labelledby="hist-heading">
-        <h2 id="hist-heading" className="text-[24px]">
+        <h2 id="hist-heading" className="text-title2">
           Sessions
         </h2>
-        {logs.data && logs.data.logs.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">No sessions yet. Pick a length above and start. Even one minute counts.</p>}
+        {logs.data && logs.data.logs.length === 0 && <p className="mt-xs m-0 text-subhead text-ink-soft">No sessions yet. Pick a length above and start. Even one minute counts.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {logs.data?.logs.map((l) => (
             <li key={l.id} className={`flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft`}>
@@ -107,10 +107,10 @@ export function Mindful() {
                 <Icon icon={Wind} size={18} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[16px] font-bold">
+                <span className="block text-headline">
                   {l.value} {l.value === 1 ? 'minute' : 'minutes'}
                 </span>
-                <span className="block text-[14px] font-semibold text-ink-soft">{when(l.createdAt)}</span>
+                <span className="block text-subhead text-ink-soft">{when(l.createdAt)}</span>
               </span>
               <button
                 type="button"
@@ -126,14 +126,14 @@ export function Mindful() {
         </ul>
         <Sheet open={toDelete !== null} onClose={() => setToDelete(null)} title="Delete this session?">
           <div className="grid gap-md pb-xl">
-            <p className="m-0 text-[16px] font-semibold text-ink-soft">{toDelete?.label}. Its minutes come off your totals and charts. This cannot be undone.</p>
-            {remove.isError && <p className="m-0 text-[14px] font-bold text-r1">That did not work. Try again.</p>}
+            <p className="m-0 text-callout text-ink-soft">{toDelete?.label}. Its minutes come off your totals and charts. This cannot be undone.</p>
+            {remove.isError && <p className="m-0 text-subhead text-r1">That did not work. Try again.</p>}
             <div className="flex flex-wrap gap-xs">
               <button
                 type="button"
                 disabled={remove.isPending}
                 onClick={() => toDelete && remove.mutate(toDelete.id)}
-                className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-[16px] font-semibold text-on-fill disabled:opacity-50"
+                className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill disabled:opacity-50"
               >
                 Yes, delete it
               </button>

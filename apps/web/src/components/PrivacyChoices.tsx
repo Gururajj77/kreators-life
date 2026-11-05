@@ -36,8 +36,8 @@ export function PrivacyChoices() {
                   className="mt-xs size-[24px] shrink-0"
                 />
                 <span>
-                  <span className="block text-[16px] font-bold">{p.name}</span>
-                  <span className="block text-[12px] font-semibold text-ink-soft">{off ? 'Your browser sent Global Privacy Control, so this stays off.' : p.line}</span>
+                  <span className="block text-headline">{p.name}</span>
+                  <span className="block text-caption text-ink-soft">{off ? 'Your browser sent Global Privacy Control, so this stays off.' : p.line}</span>
                 </span>
               </label>
             </li>
@@ -45,17 +45,17 @@ export function PrivacyChoices() {
         })}
       </ul>
       {save.isError && (
-        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-xs m-0 text-subhead">
           That did not save. Try again.
         </p>
       )}
-      <p className="mt-sm m-0 text-[12px] font-semibold text-ink-soft">
+      <p className="mt-sm m-0 text-caption text-ink-soft">
         {d && !d.needsAcceptance ? `You agreed to the terms of use and privacy policy (version ${LEGAL_VERSION}) on ${when(d.acceptedAt.terms) ?? 'an earlier day'}. ` : ''}Read the{' '}
-        <Link to="/terms" className="font-extrabold underline underline-offset-4">
+        <Link to="/terms" className="font-medium underline underline-offset-4">
           terms
         </Link>{' '}
         and the{' '}
-        <Link to="/privacy" className="font-extrabold underline underline-offset-4">
+        <Link to="/privacy" className="font-medium underline underline-offset-4">
           privacy policy
         </Link>
         . Your data, export and delete are under Account.

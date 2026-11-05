@@ -6,7 +6,7 @@ export function FieldLabel({ label, hint, children, className = '' }: { label: R
   return (
     <label className={`block ${className}`}>
       <span className={LABEL}>{label}</span>
-      {hint && <span className="block text-[12px] font-semibold text-ink-soft">{hint}</span>}
+      {hint && <span className="block text-caption text-ink-soft">{hint}</span>}
       {children}
     </label>
   );

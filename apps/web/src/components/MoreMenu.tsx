@@ -92,11 +92,11 @@ export function MoreMenu({
                   setOpen(false);
                   it.onSelect();
                 }}
-                className={`toy toy-soft flex min-h-[48px] w-full items-center gap-sm rounded-tile px-sm text-left text-[16px] font-bold disabled:opacity-50 ${it.destructive ? 'text-r1' : 'text-ink'}`}
+                className={`toy toy-soft flex min-h-[48px] w-full items-center gap-sm rounded-tile px-sm text-left text-body disabled:opacity-50 ${it.destructive ? 'text-r1' : 'text-ink'}`}
               >
                 {it.icon && <Icon icon={it.icon} size={20} />}
                 <span className="min-w-0 flex-1">{it.confirm && armed === it.key ? it.confirm : it.label}</span>
-                {it.hint && <span className="shrink-0 text-[14px] font-semibold text-ink-mute">{it.hint}</span>}
+                {it.hint && <span className="shrink-0 text-subhead text-ink-mute">{it.hint}</span>}
               </button>
             </li>
           ))}

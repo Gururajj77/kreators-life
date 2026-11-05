@@ -181,29 +181,29 @@ export function ProductPage() {
       <header className="pt-lg">
         <BackLink to={p?.ownerHandle ? `/u/${p.ownerHandle}` : token ? '/apps' : '/'}>{p?.ownerName ?? 'Back'}</BackLink>
       </header>
-      {q.isError && <p className="mt-md font-bold">That product is not available.</p>}
+      {q.isError && <p className="mt-md font-semibold">That product is not available.</p>}
       {p && meta && (
         <>
           <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
             <span className="text-[48px]" aria-hidden="true">
               {productHasOwnCover(p.kind, p.cover) ? p.cover : <AppIcon name={meta.icon} size={48} />}
             </span>
-            <p className="mt-sm m-0 text-[14px] font-bold text-ink-soft">
+            <p className="mt-sm m-0 text-subhead text-ink-soft">
               {meta.name} by {p.ownerName}
               {p.rating ? `, rated ${p.rating} by buyers` : ''}
             </p>
-            <h1 className="text-[30px]">{p.title}</h1>
+            <h1 className="text-large-title">{p.title}</h1>
             <div className="mt-xs flex flex-wrap items-center gap-xs">
               <TrustBadge trust={d.seller.trust} size="sm" />
-              <span className="text-[12px] font-bold text-ink-soft">The seller's trust, from what they earned here.</span>
+              <span className="text-caption text-ink-soft">The seller's trust, from what they earned here.</span>
             </div>
             {(d.unlock.minPoints > 0 || d.unlock.minXp > 0 || d.unlock.badge) && (
-              <p className={`mt-sm m-0 rounded-tile px-sm py-xs text-[14px] font-bold ${d.unlock.ok ? 'bg-paper text-ink-soft' : 'bg-r1/15'}`}>
+              <p className={`mt-sm m-0 rounded-tile px-sm py-xs text-subhead font-semibold ${d.unlock.ok ? 'bg-paper text-ink-soft' : 'bg-r1/15'}`}>
                 {d.unlock.ok ? `For people who earned it. ${unlockAt(d.unlock)}. You have it.` : `${unlockAt(d.unlock)}. ${d.unlock.why}`}
               </p>
             )}
-            {p.description && <p className="mt-sm m-0 whitespace-pre-wrap text-[16px] font-semibold leading-relaxed">{p.description}</p>}
-            <ul className="mt-md flex list-none flex-col gap-xs p-0 m-0 text-[14px] font-bold">
+            {p.description && <p className="mt-sm m-0 whitespace-pre-wrap text-prose">{p.description}</p>}
+            <ul className="mt-md flex list-none flex-col gap-xs p-0 m-0 text-subhead font-semibold">
               {p.kind === 'course' && <li>{d.lessonCount} lessons{p.certificate ? ', with a certificate at the end' : ''}</li>}
               {p.kind === 'event' && p.startsAt && <li>{dateTime(p.startsAt)}</li>}
               {p.kind === 'event' && p.capacity && (
@@ -225,42 +225,42 @@ export function ProductPage() {
           <MediaSection type="product" id={p.id} />
 
           {d.owned ? (
-            <Link to={`/library/${p.id}`} className="toy mt-md flex min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-[18px] font-bold text-on-ink">
+            <Link to={`/library/${p.id}`} className="toy mt-md flex min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
               Open in my purchases
             </Link>
           ) : !token ? (
-            <Link to={`/signin?next=${encodeURIComponent(`${loc.pathname}${loc.search}`)}`} className="toy mt-md flex min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-[18px] font-bold text-on-ink">
+            <Link to={`/signin?next=${encodeURIComponent(`${loc.pathname}${loc.search}`)}`} className="toy mt-md flex min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
               Join to {meta.buy.toLowerCase()}
             </Link>
           ) : (
             <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="buy-heading">
-              <h2 id="buy-heading" className="text-[24px]">
+              <h2 id="buy-heading" className="text-title2">
                 {replayForSale ? 'This event has happened' : meta.buy}
               </h2>
-              {replayForSale && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">The recording is for sale. Ticket holders already have it in their purchases.</p>}
+              {replayForSale && <p className="mt-xs m-0 text-subhead text-ink-soft">The recording is for sale. Ticket holders already have it in their purchases.</p>}
               {p.pwyw && !replayForSale && (
                 <label className="mt-sm block">
-                  <span className="block text-[14px] font-bold">What you want to pay, in points</span>
+                  <span className="block text-subhead">What you want to pay, in points</span>
                   <input type="number" min={p.pricePoints} value={offer} onChange={(e) => setOffer(e.target.value)} placeholder={String(p.pricePoints)} className={FIELD} />
-                  <span className="mt-xs block text-[12px] font-bold text-ink-soft">At least {formatCount(p.pricePoints)}.</span>
+                  <span className="mt-xs block text-caption text-ink-soft">At least {formatCount(p.pricePoints)}.</span>
                 </label>
               )}
               {p.kind === 'dm' && (
                 <label className="mt-sm block">
-                  <span className="block text-[14px] font-bold">Your question</span>
+                  <span className="block text-subhead font-semibold">Your question</span>
                   <textarea value={question} onChange={(e) => setQuestion(e.target.value)} rows={4} maxLength={2000} required className={FIELD} placeholder="Be specific. You get one written answer." />
                 </label>
               )}
               {needsIntake &&
                 p.intake.map((qn, i) => (
                   <label key={i} className="mt-sm block">
-                    <span className="block text-[14px] font-bold">{qn}</span>
+                    <span className="block text-subhead font-semibold">{qn}</span>
                     <input value={intake[i] ?? ''} onChange={(e) => setIntake((list) => p.intake.map((_, j) => (j === i ? e.target.value : (list[j] ?? ''))))} maxLength={500} required className={FIELD} />
                   </label>
                 ))}
               {!replayForSale && (
                 <label className="mt-sm block">
-                  <span className="block text-[14px] font-bold">Creator coupon</span>
+                  <span className="block text-subhead font-semibold">Creator coupon</span>
                   <input value={coupon} onChange={(e) => setCoupon(e.target.value.toUpperCase())} placeholder="Optional" className={FIELD} />
                 </label>
               )}
@@ -276,12 +276,12 @@ export function ProductPage() {
                 />
               )}
               {buy.isError && (
-                <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+                <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
                   {buy.error instanceof Error ? buy.error.message : 'Could not complete that.'}
                 </p>
               )}
               {message && (
-                <p role="status" className="mt-sm m-0 rounded-tile bg-paper p-sm text-[14px] font-bold">
+                <p role="status" className="mt-sm m-0 rounded-tile bg-paper p-sm text-subhead">
                   {message}
                   {pendingOrder ? '…' : ''}
                 </p>
@@ -297,13 +297,13 @@ export function ProductPage() {
                   {buyLabel(meta.buy)}
                 </Button>
               ) : null}
-              {(ways.points || replayForSale) && <p className="mt-xs m-0 text-center text-[12px] font-bold text-ink-soft">You have {formatCount(points)} points.</p>}
+              {(ways.points || replayForSale) && <p className="mt-xs m-0 text-center text-caption text-ink-soft">You have {formatCount(points)} points.</p>}
               {ways.money && !replayForSale && d.unlock.ok && (
                 <>
                   <Button variant={ways.points ? 'outline' : 'primary'} full size={ways.points ? 'md' : 'lg'} className={ways.points ? 'mt-sm' : 'mt-md'} onClick={() => buy.mutate({ pay: 'money' })} disabled={busy || !ready || !d.unlock.ok}>
                     {live ? `Pay ${moneyLabel}` : `Record a money order (test), ${moneyLabel}`}
                   </Button>
-                  <p className="mt-xs m-0 text-center text-[12px] font-bold text-ink-soft">
+                  <p className="mt-xs m-0 text-center text-caption text-ink-soft">
                     {live ? 'UPI, cards and netbanking through Razorpay. Your purchase unlocks once the bank confirms.' : `Money checkout is not live yet, so this only records a test order and charges nothing.${ways.points ? ' Points work today.' : ''}`}
                   </p>
                 </>
@@ -313,14 +313,14 @@ export function ProductPage() {
 
           {p.faq && p.faq.length > 0 && (
             <section className="mt-lg" aria-labelledby="faq-heading">
-              <h2 id="faq-heading" className="text-[24px]">
+              <h2 id="faq-heading" className="text-title2">
                 Questions people ask
               </h2>
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                 {p.faq.map((f) => (
                   <li key={f.q}>
                     <Fold title={f.q}>
-                      <p className="m-0 whitespace-pre-wrap px-sm text-[14px] font-semibold text-ink-soft">{f.a}</p>
+                      <p className="m-0 whitespace-pre-wrap px-sm text-subhead text-ink-soft">{f.a}</p>
                     </Fold>
                   </li>
                 ))}
@@ -330,16 +330,16 @@ export function ProductPage() {
 
           {d.testimonials.length > 0 && (
             <section className="mt-lg" aria-labelledby="rev-heading">
-              <h2 id="rev-heading" className="text-[24px]">
+              <h2 id="rev-heading" className="text-title2">
                 Reviews
               </h2>
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                 {d.testimonials.map((t) => (
                   <li key={t.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                    <p className="m-0 text-[14px] font-bold">
+                    <p className="m-0 text-subhead font-semibold">
                       <Stars n={t.rating} /> {t.authorName}
                     </p>
-                    <p className="mt-xs m-0 text-[16px] font-semibold">{t.body}</p>
+                    <p className="mt-xs m-0 text-callout">{t.body}</p>
                   </li>
                 ))}
               </ul>

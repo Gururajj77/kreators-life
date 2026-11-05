@@ -90,7 +90,7 @@ const tagChoice = (k: string): ChatChoice => ({ value: k, label: IDENTITY_BY_KEY
 
 function Check({ on }: { on: boolean }) {
   return (
-    <span aria-hidden="true" className={`flex size-[24px] shrink-0 items-center justify-center rounded-pill border-2 text-[12px] font-extrabold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line'}`}>
+    <span aria-hidden="true" className={`flex size-[24px] shrink-0 items-center justify-center rounded-pill border-2 text-[12px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line'}`}>
       {on ? <Icon icon={CheckGlyph} size={14} strokeWidth={3} /> : null}
     </span>
   );
@@ -106,7 +106,7 @@ function Tags({ keys }: { keys: string[] }) {
   return (
     <ul className="fill-row-all m-0 flex list-none flex-wrap gap-xs p-0" aria-label="What I picked up">
       {keys.map((k) => (
-        <li key={k} className="inline-flex items-center gap-xs rounded-pill bg-card px-sm py-xs text-[14px] font-bold shadow-toy-soft">
+        <li key={k} className="inline-flex items-center gap-xs rounded-pill bg-card px-sm py-xs text-subhead font-medium shadow-toy-soft">
           <AppIcon name={tag(k).icon} size={16} className="text-ink-soft" />
           {tag(k).label}
         </li>
@@ -136,10 +136,10 @@ function MatchList({ answers, available, onSend }: { answers: SetupAnswers; avai
         >
           <AppIcon name={mod.icon} size={22} className="text-ink-soft" />
           <span className="min-w-0 flex-1">
-            <span className="block text-[16px] font-bold">{mod.name}</span>
-            <span className="block text-[14px] font-semibold leading-snug text-ink-soft">{SETUP_APP_LINES[a.key] ?? mod.blurb}</span>
+            <span className="block text-headline">{mod.name}</span>
+            <span className="block text-subhead text-ink-soft">{SETUP_APP_LINES[a.key] ?? mod.blurb}</span>
             {why && (
-              <span className="mt-xs block text-[12px] font-bold" style={{ color: `var(--deep-${MODULE_GROUP_ACCENT[mod.group]})` }}>
+              <span className="mt-xs block text-caption" style={{ color: `var(--deep-${MODULE_GROUP_ACCENT[mod.group]})` }}>
                 {a.why}
               </span>
             )}
@@ -156,23 +156,23 @@ function MatchList({ answers, available, onSend }: { answers: SetupAnswers; avai
       </ul>
       {more && m.more.length > 0 && (
         <>
-          <p className="mt-sm m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">Could fit too</p>
+          <p className="mt-sm m-0 text-eyebrow uppercase text-ink-soft">Could fit too</p>
           <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">{m.more.map(row)}</ul>
         </>
       )}
       <div className="mt-xs flex flex-wrap gap-md">
-        <button type="button" aria-expanded={why} onClick={() => setWhy(!why)} className="inline-flex min-h-[44px] items-center gap-xs text-[14px] font-bold underline underline-offset-4">
+        <button type="button" aria-expanded={why} onClick={() => setWhy(!why)} className="inline-flex min-h-[44px] items-center gap-xs text-subhead underline underline-offset-4">
           {why ? 'Hide the reasons' : 'Why these apps?'}
           <ToggleChevron open={why} size={14} />
         </button>
         {!more && m.more.length > 0 && (
-          <button type="button" onClick={() => setMore(true)} className="inline-flex min-h-[44px] items-center text-[14px] font-bold underline underline-offset-4">
+          <button type="button" onClick={() => setMore(true)} className="inline-flex min-h-[44px] items-center text-subhead font-semibold underline underline-offset-4">
             Show {m.more.length} more
           </button>
         )}
       </div>
       <ChatActions next={on.length === 1 ? 'Switch on 1 app' : `Switch on ${on.length} apps`} ready={on.length > 0} onNext={() => onSend({ apps: JSON.stringify(on) }, `Switch on ${listed(on.map((k) => MODULE_BY_KEY[k]!.name))}`)} />
-      <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+      <p className="mt-xs m-0 text-caption text-ink-soft">
         Everything else stays off for now. You can change it anytime.{adds.length > 0 ? ` I'll also add ${listed(adds)} to your profile.` : ''}
       </p>
     </div>
@@ -599,7 +599,7 @@ export function SetupChat() {
     if (!ask) return null;
     if (ask.kind === 'wait') {
       return (
-        <p role="status" className="m-0 text-[14px] font-bold text-ink-soft">
+        <p role="status" className="m-0 text-subhead text-ink-soft">
           {ask.text}
         </p>
       );

@@ -20,7 +20,7 @@ export function ToolsLine({ tools }: { tools: { reach: boolean; writer: 'claude'
   const research = tools.reach ? 'Research runs through Agent Reach: web, YouTube, X, Instagram and Reddit.' : 'Research reads plain pages and YouTube for now. Connect Agent Reach for X, Reddit, transcripts and profiles.';
   const writer = tools.writer === 'claude' ? 'Claude writes the pieces.' : tools.writer === 'workers-ai' ? 'A small model writes the pieces.' : 'No writing model is connected, so pieces come back as research digests.';
   return (
-    <p className="m-0 text-[12px] font-bold text-ink-soft">
+    <p className="m-0 text-caption text-ink-soft">
       {research} {writer}
     </p>
   );
@@ -50,15 +50,15 @@ export function Content() {
 
       <section className="mt-lg" aria-labelledby="brands-heading">
         <div className="flex items-center justify-between gap-sm">
-          <h2 id="brands-heading" className="text-[24px]">
+          <h2 id="brands-heading" className="text-title2">
             Brand folders
           </h2>
           <Button onClick={() => setMaking(true)} disabled={Boolean(d && d.brands.length >= MAX_BRANDS)}>
             New brand
           </Button>
         </div>
-        {q.isError && <p className="mt-sm m-0 font-bold">{errorText(q.error, 'Could not load.')}</p>}
-        {d && d.brands.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No folders yet. Make one for your own brand, or for a client.</p>}
+        {q.isError && <p className="mt-sm m-0 font-semibold">{errorText(q.error, 'Could not load.')}</p>}
+        {d && d.brands.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">No folders yet. Make one for your own brand, or for a client.</p>}
         <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
           {d?.brands.map((b) => (
             <li key={b.id}>
@@ -71,7 +71,7 @@ export function Content() {
       </section>
 
       <section className="mt-lg" aria-labelledby="results-heading">
-        <h2 id="results-heading" className="text-[24px]">
+        <h2 id="results-heading" className="text-title2">
           Results
         </h2>
         <Link to="/shop/content/results" className="toy toy-soft mt-sm flex items-center gap-sm rounded-tile bg-card p-sm text-ink">
@@ -79,8 +79,8 @@ export function Content() {
             <Icon icon={TrendingUp} size={24} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[16px] font-bold">Posts and tracked links</span>
-            <span className="block text-[14px] font-semibold text-ink-soft">Which post made money: clicks, sales and revenue per piece of content.</span>
+            <span className="block text-headline">Posts and tracked links</span>
+            <span className="block text-subhead text-ink-soft">Which post made money: clicks, sales and revenue per piece of content.</span>
           </span>
         </Link>
       </section>
@@ -97,9 +97,9 @@ function BrandCard({ b }: { b: Brand }) {
         <Icon icon={Folder} size={24} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[16px] font-bold">{b.name}</span>
-        <span className="block text-[14px] font-semibold text-ink-soft">{b.niche || 'No niche yet'}</span>
-        <span className="mt-xs block text-[12px] font-bold text-ink-mute">
+        <span className="block text-balance text-headline [overflow-wrap:anywhere]">{b.name}</span>
+        <span className="block text-subhead text-ink-soft">{b.niche || 'No niche yet'}</span>
+        <span className="mt-xs block text-caption text-ink-mute">
           {b.sources} {b.sources === 1 ? 'link' : 'links'}, {b.runs} {b.runs === 1 ? 'run' : 'runs'}, {b.pieces} {b.pieces === 1 ? 'piece' : 'pieces'}
         </span>
       </span>
@@ -133,23 +133,23 @@ export function NewBrandSheet({ open, onClose, onMade }: { open: boolean; onClos
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Brand</span>
+          <span className="block text-subhead font-semibold">Brand</span>
           <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Niche</span>
+          <span className="block text-subhead font-semibold">Niche</span>
           <input value={niche} onChange={(e) => setNiche(e.target.value)} maxLength={120} placeholder="Street food in Bengaluru, phone videography, running shoes" className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">What it is</span>
+          <span className="block text-subhead font-semibold">What it is</span>
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} maxLength={2000} placeholder="What the brand sells, who buys it, what it wants from content." className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">How it sounds</span>
+          <span className="block text-subhead font-semibold">How it sounds</span>
           <textarea value={voice} onChange={(e) => setVoice(e.target.value)} rows={2} maxLength={1000} placeholder="Warm and direct. Jokes allowed. Never says 'game-changer'." className={FIELD} />
         </label>
         {make.isError && (
-          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {errorText(make.error, 'Could not make the folder.')}
           </p>
         )}

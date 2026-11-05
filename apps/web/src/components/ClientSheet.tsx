@@ -68,10 +68,10 @@ const whole = (v: string): number => {
 function Chips<T extends string>({ label, options, value, name, onChange }: { label: string; options: readonly T[]; value: T; name: (v: T) => string; onChange: (v: T) => void }) {
   return (
     <div className="mt-sm">
-      <p className="m-0 text-[14px] font-bold">{label}</p>
+      <p className="m-0 text-subhead font-semibold">{label}</p>
       <div role="radiogroup" aria-label={label} className="mt-xs flex flex-wrap gap-xs">
         {options.map((o) => (
-          <button key={o} type="button" role="radio" aria-checked={value === o} onClick={() => onChange(o)} className={`toy min-h-[44px] rounded-pill border-2 px-md text-[14px] font-bold ${value === o ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+          <button key={o} type="button" role="radio" aria-checked={value === o} onClick={() => onChange(o)} className={`toy min-h-[44px] rounded-pill border-2 px-md text-subhead font-medium ${value === o ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
             {name(o)}
           </button>
         ))}
@@ -241,12 +241,12 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
       </div>
 
       <div className="mt-sm">
-        <p className="m-0 text-[14px] font-bold">Channels you make for</p>
+        <p className="m-0 text-subhead font-semibold">Channels you make for</p>
         <div className="mt-xs flex flex-wrap gap-xs">
           {[...AGENCY_CHANNELS, ...channels.filter((c) => !(AGENCY_CHANNELS as readonly string[]).includes(c))].map((c) => {
             const on = channels.some((x) => x.toLowerCase() === c.toLowerCase());
             return (
-              <button key={c} type="button" aria-pressed={on} onClick={() => setChannels(on ? channels.filter((x) => x.toLowerCase() !== c.toLowerCase()) : [...channels, c])} className={`toy min-h-[44px] rounded-pill border-2 px-md text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+              <button key={c} type="button" aria-pressed={on} onClick={() => setChannels(on ? channels.filter((x) => x.toLowerCase() !== c.toLowerCase()) : [...channels, c])} className={`toy min-h-[44px] rounded-pill border-2 px-md text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                 {c}
               </button>
             );
@@ -266,7 +266,7 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
             maxLength={30}
             placeholder="Another channel"
             aria-label="Another channel"
-            className="min-h-[44px] min-w-0 flex-1 rounded-pill border-2 border-line bg-paper px-sm text-[16px]"
+            className="min-h-[44px] min-w-0 flex-1 rounded-pill border-2 border-line bg-paper px-sm text-body"
           />
           <Button
             variant="outline"
@@ -284,7 +284,7 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
       <div className="grid gap-sm md:grid-cols-2">
         <FieldLabel className="mt-sm" label={`Retainer a month, in ${currency}`} hint={COPY.money}>
           <input inputMode="decimal" value={retainer} onChange={(e) => setRetainer(e.target.value)} aria-invalid={badRetainer || undefined} className={FIELD} />
-          {badRetainer && <p role="alert" className="mt-xs m-0 text-[14px] font-bold">Type the amount as a number, like 4000 or 4,000.50.</p>}
+          {badRetainer && <p role="alert" className="mt-xs m-0 text-subhead">Type the amount as a number, like 4000 or 4,000.50.</p>}
         </FieldLabel>
         <FieldLabel className="mt-sm" label="Deliverables a month">
           <input inputMode="numeric" value={pieces} onChange={(e) => setPieces(e.target.value)} className={FIELD} />
@@ -312,7 +312,7 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
         </FieldLabel>
         <FieldLabel className="mt-sm" label="PIN code, optional">
           <input value={addr.pin} onChange={(e) => setAddrPart({ pin: e.target.value.replace(/\D/g, '').slice(0, 6) })} inputMode="numeric" maxLength={6} placeholder="560038" aria-invalid={badPin ? true : undefined} className={FIELD} />
-          {badPin && <span className="mt-xs block text-[12px] font-semibold text-ink-soft">{badPin}</span>}
+          {badPin && <span className="mt-xs block text-caption text-ink-soft">{badPin}</span>}
         </FieldLabel>
       </div>
 
@@ -341,12 +341,12 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
           </FieldLabel>
         </div>
         <div className="mt-sm">
-          <p className="m-0 text-[14px] font-bold">Other tax numbers</p>
+          <p className="m-0 text-subhead font-semibold">Other tax numbers</p>
           {billing.taxIds.map((t, i) =>
             t.label === GST_LABEL ? null : (
               <div key={i} className="mt-xs flex gap-xs">
-                <input value={t.label} onChange={(e) => setId(i, { label: e.target.value })} maxLength={20} placeholder="PAN" aria-label="Tax number name" className="min-h-[44px] w-[28%] rounded-tile border-2 border-line bg-paper px-sm text-[16px]" />
-                <input value={t.value} onChange={(e) => setId(i, { value: e.target.value })} maxLength={40} placeholder="The number" aria-label="Tax number" className="min-h-[44px] min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm text-[16px]" />
+                <input value={t.label} onChange={(e) => setId(i, { label: e.target.value })} maxLength={20} placeholder="PAN" aria-label="Tax number name" className="min-h-[44px] w-[28%] rounded-tile border-2 border-line bg-paper px-sm text-body" />
+                <input value={t.value} onChange={(e) => setId(i, { value: e.target.value })} maxLength={40} placeholder="The number" aria-label="Tax number" className="min-h-[44px] min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm text-body" />
                 <Button variant="outline" size="sm" onClick={() => setBilling({ ...billing, taxIds: billing.taxIds.filter((_, j) => j !== i) })} aria-label="Remove this number">
                   Remove
                 </Button>
@@ -384,8 +384,8 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
 
       {client && (
         <>
-          <h3 className="mt-md text-[18px]">Served through Army</h3>
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">{campaigns.length === 0 && !detail.isPending ? COPY.armyNone : COPY.army}</p>
+          <h3 className="mt-md text-headline">Served through Army</h3>
+          <p className="m-0 text-subhead text-ink-soft">{campaigns.length === 0 && !detail.isPending ? COPY.armyNone : COPY.army}</p>
           {campaigns.length > 0 && (
             <>
               <FieldLabel className="mt-sm" label="Campaign">
@@ -402,14 +402,14 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
                 <Button variant="outline" size="sm" disabled={!campaignId || campaignId !== (client.campaignId ?? '') || importIt.isPending} onClick={() => importIt.mutate()}>
                   Add its deliverables
                 </Button>
-                {campaignId && campaignId !== (client.campaignId ?? '') && <span className="text-[12px] font-bold text-ink-soft">{COPY.armySave}</span>}
+                {campaignId && campaignId !== (client.campaignId ?? '') && <span className="text-caption text-ink-soft">{COPY.armySave}</span>}
                 {imported !== null && (
-                  <span role="status" className="text-[14px] font-bold">
+                  <span role="status" className="text-subhead">
                     {imported === 0 ? 'Nothing new to add.' : `Added ${imported} ${imported === 1 ? 'deliverable' : 'deliverables'}.`}
                   </span>
                 )}
                 {importIt.isError && (
-                  <span role="alert" className="text-[14px] font-bold">
+                  <span role="alert" className="text-subhead">
                     That did not work. Try again.
                   </span>
                 )}
@@ -420,7 +420,7 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
       )}
 
       {(save.isError || remove.isError) && (
-        <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-sm m-0 text-subhead">
           {!client && save.error instanceof Error && save.error.message ? sentence(save.error.message) : COPY.saveFail}
         </p>
       )}
@@ -437,7 +437,7 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
               <Button variant="ghost" onClick={() => setConfirm(false)}>
                 Keep it
               </Button>
-              <p className="m-0 basis-full text-[14px] font-semibold text-ink-soft">{COPY.removeAsk}</p>
+              <p className="m-0 basis-full text-subhead text-ink-soft">{COPY.removeAsk}</p>
             </>
           ) : (
             <Button variant="outline" onClick={() => setConfirm(true)}>
@@ -469,7 +469,7 @@ function Invite({ name, contactName, token, password, profile, onClose }: { name
   const linkCopy = useCopy();
   return (
     <div className="pb-xl">
-      <p className="m-0 text-[16px] font-bold">{`${name} is added. Their page is ready.`}</p>
+      <p className="m-0 text-headline">{`${name} is added. Their page is ready.`}</p>
       <pre className="legal-text mt-sm" tabIndex={0} aria-label="The email to send, ready to paste">
         {`Subject: ${mail.subject}\n\n${mail.body}`}
       </pre>
@@ -481,7 +481,7 @@ function Invite({ name, contactName, token, password, profile, onClose }: { name
           Copy link
         </Button>
         {(note.said || linkCopy.said) && (
-          <span role="status" className="text-[14px] font-bold">
+          <span role="status" className="text-subhead">
             {note.said || linkCopy.said}
           </span>
         )}

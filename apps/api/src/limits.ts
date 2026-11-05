@@ -66,6 +66,11 @@ export const LIMITS = {
   discover: { max: 30, windowSec: 3600 },
   /** Saving the timer settings, which happens as a person taps a stepper or a switch. */
   prefs: { max: 240, windowSec: 3600 },
+  /**
+   * Reading Emerging (GET /insights), per person. Every screen shares one cached answer per device day (2026-11-05), so a person asks a
+   * few times an hour; each ask rebuilds weeks of rows, so a script looping on it is held to this.
+   */
+  insights: { max: 120, windowSec: 3600 },
   /** Everyday Agency work: moving a deliverable, a note, a time entry. */
   agency: { max: 600, windowSec: 3600 },
   /** Asking someone to join your Agency team: an inbox note and maybe a friend request go out, so twenty a day. */
@@ -115,7 +120,8 @@ const CHANNEL_DOORS: Door[] = (['community', 'bond'] as const).flatMap((app): Do
 
 /** Which doors each limit guards: the method and the path under /api. Patterns follow Hono's. */
 export const ROUTE_LIMITS: readonly {
-  method: 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+  /** GET only for a read heavy enough to need one (Emerging). */
+  method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   path: string;
   limit: LimitName;
   /** Count the address instead of the person. */
@@ -177,6 +183,7 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/me/calendar', limit: 'prefs' },
   { method: 'PUT', path: '/session/away', limit: 'prefs' },
   { method: 'PUT', path: '/today/day-type', limit: 'prefs' },
+  { method: 'GET', path: '/insights', limit: 'insights' },
   { method: 'POST', path: '/discover/more/:kind/submit', limit: 'discover' },
   { method: 'POST', path: '/public/client-error', limit: 'clientError' },
   { method: 'POST', path: '/public/vitals', limit: 'vitals' },

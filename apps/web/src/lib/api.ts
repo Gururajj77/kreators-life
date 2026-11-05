@@ -15,7 +15,7 @@ import type { FeedFilter, FeedSort, SocialAward, TrustScore } from '@kreators/sh
 import type { ListingDetail, MarketResponse, PreownedListing, PreownedMessage, PreownedOffer, StoreItem, StoreKit } from '@kreators/shared';
 import type { PeriodKind, Review, ReviewCalendarResponse, ReviewSummary, ReviewTemplate, ReviewsResponse } from '@kreators/shared';
 import type { NotToDo, NotToDoStatus } from '@kreators/shared';
-import type { InsightApp, InsightsResponse } from '@kreators/shared';
+import type { InsightsResponse } from '@kreators/shared';
 import type { SetupMatch } from '@kreators/shared';
 import type { CardGamePlay, CardGamesResponse, DiscoverAnswers, DiscoverResult, FocusMode, FocusResponse, FocusRoundRow, FocusTask, FocusView, LogsResponse } from '@kreators/shared';
 import type { DailyBrief, GettingStarted, InboxShow, InboxTab, ReactionKind } from '@kreators/shared';
@@ -373,7 +373,8 @@ export const api = {
   // daily
   today: (date: string) => request<TodayResponse>(`/today?date=${date}`),
   /** Emerging: patterns from the person's own rows. `app` asks for the cards one place shows; `rel` for a pillar page. */
-  insights: (day: string, app?: InsightApp, rel?: RelationshipKey) => request<InsightsResponse>(`/insights?day=${day}${app ? `&app=${app}` : ''}${rel ? `&rel=${rel}` : ''}`),
+  /** Emerging: the person's whole list for their day; each place picks its share on the device (`insightsForPlace`). */
+  insights: (day: string) => request<InsightsResponse>(`/insights?day=${day}`),
   todayMonth: (month: string, day: string) => request<TodayMonthResponse>(`/today/month?month=${month}&day=${day}`),
   home: (date: string, hour: number) => request<HomeResponse>(`/home?date=${date}&hour=${hour}`),
   checkin: (date: string) => post<CheckinResponse>('/today/checkin', { date }),

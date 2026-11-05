@@ -48,11 +48,11 @@ export function HouseTemplateSheet({ open, onClose, kind, fromId, defaultName, b
   return (
     <Sheet open={open} onClose={onClose} title="Save as house template">
       <div className="grid gap-sm pb-xl">
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">A house template shows to everyone who uses Agency, in the same list as the built-in ones. They cannot change it; they copy it into their own documents and can restyle their copy. It never keeps who this was made for.</p>
+        <p className="m-0 text-subhead text-ink-soft">A house template shows to everyone who uses Agency, in the same list as the built-in ones. They cannot change it; they copy it into their own documents and can restyle their copy. It never keeps who this was made for.</p>
         <Field id="house-name" label="Template name" value={name} onChange={setName} max={TEMPLATE_NAME_MAX} />
         <Toggle on={include} onChange={setInclude} label="Include my business details" hint="Your name, address, bank, tax numbers, logo and footer. Leave this off so each person's own details fill in." />
         {msg && (
-          <p role="status" className="m-0 text-[14px] font-bold">
+          <p role="status" className="m-0 text-subhead">
             {msg}
           </p>
         )}

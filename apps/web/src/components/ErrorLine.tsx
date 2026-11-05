@@ -13,7 +13,7 @@ export function errorText(e: unknown, fallback = 'That did not work. Check your 
 export function ErrorLine({ e, warning = false, className = '' }: { e: unknown; warning?: boolean; className?: string }) {
   if (!e) return null;
   return (
-    <p role={warning ? 'status' : 'alert'} className={`m-0 flex items-start gap-xs rounded-tile p-sm text-[14px] font-bold ${warning ? 'bg-r3/30' : 'bg-r1/15'} ${className}`}>
+    <p role={warning ? 'status' : 'alert'} className={`m-0 flex items-start gap-xs rounded-tile p-sm text-subhead ${warning ? 'bg-r3/30' : 'bg-r1/15'} ${className}`}>
       <span className="flex min-h-[20px] items-center">
         <AnimatedIcon name={warning ? 'alertTriangle' : 'alertCircle'} size={16} interaction="hover-loop" playWhen playOnShow />
       </span>

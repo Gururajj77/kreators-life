@@ -23,17 +23,17 @@ export function Forgot() {
     <Screen tabs={false}>
       <div className="pt-xl">
         <Avatar relationship="friendship" size={72} />
-        <h1 className="mt-md text-[30px]">Forgot your password?</h1>
-        <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">Type your email and we will send you a link to choose a new password.</p>
+        <h1 className="mt-md text-large-title">Forgot your password?</h1>
+        <p className="mt-xs m-0 text-callout text-ink-soft">Type your email and we will send you a link to choose a new password.</p>
       </div>
       {send.isSuccess ? (
         <div className="mt-lg rounded-card bg-card p-md shadow-toy-soft" role="status">
           <Icon icon={MailCheck} size={32} />
-          <h2 className="mt-xs text-[24px]">Check your mail</h2>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-            If <span className="font-bold text-ink">{email}</span> has an account, a reset link is on its way. It works once, for {send.data.minutes} minutes.
+          <h2 className="mt-xs text-title2">Check your mail</h2>
+          <p className="mt-xs m-0 text-subhead text-ink-soft">
+            If <span className="font-semibold text-ink">{email}</span> has an account, a reset link is on its way. It works once, for {send.data.minutes} minutes.
           </p>
-          <Link to="/signin" className="toy mt-md inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+          <Link to="/signin" className="toy mt-md inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
             Back to sign in
           </Link>
         </div>
@@ -47,18 +47,18 @@ export function Forgot() {
           }}
         >
           <label className="block">
-            <span className="block text-[14px] font-bold">Email</span>
+            <span className="block text-subhead font-semibold">Email</span>
             <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" maxLength={254} className={FIELD_CARD} />
           </label>
           {send.isError && (
-            <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+            <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
               {send.error instanceof Error ? send.error.message : 'That did not work. Check your connection and try again.'}
             </p>
           )}
           <Button type="submit" size="lg" full disabled={send.isPending || !email}>
             {send.isPending ? 'Sending' : 'Email me a reset link'}
           </Button>
-          <p className="m-0 text-center text-[14px] font-semibold">
+          <p className="m-0 text-center text-subhead">
             <Link to="/signin" className="inline-flex min-h-[44px] min-w-[44px] items-center underline underline-offset-4">
               Back to sign in
             </Link>
@@ -93,8 +93,8 @@ export function ResetPassword() {
     <Screen tabs={false}>
       <div className="pt-xl">
         <Avatar relationship="friendship" size={72} mood={token ? 'happy' : 'sleepy'} />
-        <h1 className="mt-md text-[30px]">{token ? 'Choose a new password' : 'That link did not work'}</h1>
-        <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">{token ? 'Every other device is signed out once it is saved.' : 'It may have expired, or it was already used. Links work once, for thirty minutes.'}</p>
+        <h1 className="mt-md text-large-title">{token ? 'Choose a new password' : 'That link did not work'}</h1>
+        <p className="mt-xs m-0 text-callout text-ink-soft">{token ? 'Every other device is signed out once it is saved.' : 'It may have expired, or it was already used. Links work once, for thirty minutes.'}</p>
       </div>
       {token ? (
         <form
@@ -108,7 +108,7 @@ export function ResetPassword() {
           <PasswordField label="New password" value={password} onChange={setPassword} autoComplete="new-password" hint={weak ?? 'Eight characters or more. Not your email, not one from the usual guess lists.'} />
           <PasswordField label="Password, once more" value={confirm} onChange={setConfirm} autoComplete="new-password" hint={mismatch ? 'The two do not match yet.' : undefined} />
           {reset.isError && (
-            <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+            <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
               {reset.error instanceof Error ? reset.error.message.charAt(0).toUpperCase() + reset.error.message.slice(1) : 'That did not work. Check your connection and try again.'}
             </p>
           )}
@@ -117,7 +117,7 @@ export function ResetPassword() {
           </Button>
         </form>
       ) : (
-        <Link to="/forgot" className="toy mt-md inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+        <Link to="/forgot" className="toy mt-md inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
           Ask for a new one
         </Link>
       )}

@@ -57,13 +57,13 @@ export function Rewards() {
     <Screen>
       <header className="pt-lg">
         <BackLink to="/you">Profile</BackLink>
-        <h1 className="text-[30px]">Rewards</h1>
+        <h1 className="text-large-title">Rewards</h1>
       </header>
 
       {q.isPending && <SkeletonList className="mt-md" count={4} lines={2} label="Opening the shop" />}
       {q.isError && (
         <div className="mt-md rounded-card bg-card p-md shadow-toy-soft flex flex-wrap-reverse items-center justify-between gap-sm" role="alert">
-          <p className="m-0 font-bold min-w-0 flex-1 basis-[60%]">Could not load rewards.</p>
+          <p className="m-0 font-semibold min-w-0 flex-1 basis-[60%]">Could not load rewards.</p>
           <Button variant="outline" onClick={() => q.refetch()}>
             Try again
           </Button>
@@ -73,22 +73,22 @@ export function Rewards() {
       {data && (
         <>
           <section className="mt-md rounded-card bg-ink p-md text-on-ink shadow-toy" aria-labelledby="balance-heading">
-            <h2 id="balance-heading" className="text-[14px] font-bold text-on-ink/70" style={{ fontFamily: 'var(--font-body)' }}>
+            <h2 id="balance-heading" className="text-subhead text-on-ink/70">
               Your balance
             </h2>
-            <p className="m-0 font-display text-[36px] font-extrabold leading-none">
-              <RollNumber value={data.points} /> <span className="text-[18px]">points</span>
+            <p className="m-0 text-large-title type-figure leading-none">
+              <RollNumber value={data.points} /> <span className="text-headline">points</span>
             </p>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-on-ink/80">
+            <p className="mt-xs m-0 text-subhead text-on-ink/80">
               Check in daily for {POINTS.checkin}. Every {POINTS.streakBonusEvery}th day in a row pays {POINTS.streakBonus} extra.
             </p>
           </section>
           <Nudge className="mt-sm" text="A like on your post pays 1 point, and a new follower 2." />
-          <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">
+          <p className="mt-md m-0 text-subhead text-ink-soft">
             Gear is a reservation until the first drop ships, and cancelling gives the points back. A card game opens at once, for good.
           </p>
           {error && (
-            <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+            <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-subhead">
               {error}
             </p>
           )}
@@ -96,7 +96,7 @@ export function Rewards() {
           {/* What this person already reserved or unlocked comes before the catalogue, so it is not thousands of pixels down on a phone. */}
           {(data.redemptions.length > 0 || rp.page > 1) && (
             <section className="mt-lg" aria-labelledby="mine-heading">
-              <h2 id="mine-heading" className="text-[24px]">
+              <h2 id="mine-heading" className="text-title2">
                 Your reservations
               </h2>
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -105,8 +105,8 @@ export function Rewards() {
                   return (
                     <li key={x.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                       <span className="min-w-0 flex-1">
-                        <span className="block text-balance text-[16px] font-bold">{tie(r?.name ?? x.rewardKey)}</span>
-                        <span className="block text-[14px] font-semibold text-ink-soft">
+                        <span className="block text-balance text-headline">{tie(r?.name ?? x.rewardKey)}</span>
+                        <span className="block text-subhead text-ink-soft">
                           {formatCount(x.points)} points, {r?.kind === 'unlock' ? 'unlocked' : x.status}
                           {/* A game's row already says unlocked; its stored note is the same word, so it is not said twice. */}
                           {x.note && r?.kind !== 'unlock' ? `. ${x.note}` : ''}
@@ -126,7 +126,7 @@ export function Rewards() {
           )}
 
           <section className="mt-lg" aria-labelledby="catalog-heading">
-            <h2 id="catalog-heading" className="text-[24px]">
+            <h2 id="catalog-heading" className="text-title2">
               Catalog
             </h2>
             {REWARD_GROUPS.map((g) => {
@@ -134,13 +134,13 @@ export function Rewards() {
               if (list.length === 0) return null;
               return (
                 <div key={g.key} id={g.key} className="mt-md">
-                  <h3 className="text-[18px]">
+                  <h3 className="text-headline">
                     <span className="inline-flex items-center gap-xs">
                       <AppIcon name={g.icon} size={20} />
                       {g.name}
                     </span>
                   </h3>
-                  <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{g.blurb}</p>
+                  <p className="mt-xs m-0 text-subhead text-ink-soft">{g.blurb}</p>
                   <ul className={g.key === 'games' ? 'mt-sm grid list-none grid-cols-1 gap-sm p-0 m-0 lg:grid-cols-3' : 'mt-sm flex list-none flex-col gap-xs p-0 m-0'}>
                     {list.map((r) => {
                       const can = data.points >= r.cost;
@@ -157,20 +157,20 @@ export function Rewards() {
                             {r.emoji}
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block text-balance text-[16px] font-bold">{tie(r.name)}</span>
+                            <span className="block text-balance text-headline">{tie(r.name)}</span>
                             {/* On a phone the name, the price and what is still to go are enough; the line about the item shows from the `md` width up (`useWide`). */}
-                            <span className="block text-[14px] font-semibold text-ink-soft">
+                            <span className="block text-subhead text-ink-soft">
                               {wide && `${r.blurb} `}
                               {can ? '' : `${formatCount(r.cost - data.points)} more points to go.`}
                             </span>
                             {r.link && (
-                              <a href={r.link} target="_blank" rel="noreferrer" className="text-[14px] font-bold underline underline-offset-4">
+                              <a href={r.link} target="_blank" rel="noreferrer" className="text-subhead font-semibold underline underline-offset-4">
                                 Read more
                               </a>
                             )}
                           </span>
                           {r.game && data.games.includes(r.game) ? (
-                            <Link to={`/cards/${r.game}`} className={`toy inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-pill bg-card-strong px-md text-[14px] font-semibold text-ink ${tile ? 'w-full' : ''}`}>
+                            <Link to={`/cards/${r.game}`} className={`toy inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-pill bg-card-strong px-md text-subhead text-ink ${tile ? 'w-full' : ''}`}>
                               Play
                             </Link>
                           ) : r.game && gamesQ.data?.games.find((x) => x.key === r.game && !x.unlock.ok) ? (

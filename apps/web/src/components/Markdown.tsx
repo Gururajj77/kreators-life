@@ -38,7 +38,7 @@ export function Markdown({ text, className = '' }: { text: string; className?: s
     if (line.startsWith('### ')) {
       const k = key();
       out.push(
-        <h4 key={k} className="mt-md text-[16px] font-extrabold">
+        <h4 key={k} className="mt-md text-headline">
           {inline(line.slice(4), k)}
         </h4>,
       );
@@ -48,7 +48,7 @@ export function Markdown({ text, className = '' }: { text: string; className?: s
     if (line.startsWith('## ')) {
       const k = key();
       out.push(
-        <h3 key={k} className="mt-md text-[18px]">
+        <h3 key={k} className="mt-md text-title3">
           {inline(line.slice(3), k)}
         </h3>,
       );
@@ -61,8 +61,8 @@ export function Markdown({ text, className = '' }: { text: string; className?: s
       out.push(
         <ul key={k} className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {items.map((it, j) => (
-            <li key={j} className="flex gap-xs text-[14px] font-semibold leading-relaxed">
-              <span aria-hidden="true" className="shrink-0 font-extrabold">
+            <li key={j} className="flex gap-xs text-prose">
+              <span aria-hidden="true" className="shrink-0 font-bold">
                 •
               </span>
               <span>{inline(it.slice(2), `${k}-${j}`)}</span>
@@ -78,8 +78,8 @@ export function Markdown({ text, className = '' }: { text: string; className?: s
       out.push(
         <ol key={k} className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {items.map((it, j) => (
-            <li key={j} className="flex gap-xs text-[14px] font-semibold leading-relaxed">
-              <span className="flex size-[24px] shrink-0 items-center justify-center rounded-pill bg-ink text-[12px] font-extrabold text-on-ink" aria-hidden="true">
+            <li key={j} className="flex gap-xs text-prose">
+              <span className="flex size-[24px] shrink-0 items-center justify-center rounded-pill bg-ink text-caption font-medium text-on-ink" aria-hidden="true">
                 {j + 1}
               </span>
               <span>{inline(it.replace(/^\d+\. /, ''), `${k}-${j}`)}</span>
@@ -94,7 +94,7 @@ export function Markdown({ text, className = '' }: { text: string; className?: s
       const k = key();
       const tone = calloutTone(quote[0] ?? '');
       out.push(
-        <aside key={k} className={`tip-card ${tone} mt-sm rounded-tile border border-line p-sm text-[14px] font-semibold leading-relaxed`}>
+        <aside key={k} className={`tip-card ${tone} mt-sm rounded-tile border border-line p-sm text-prose`}>
           {inline(quote.join(' '), k)}
         </aside>,
       );
@@ -103,7 +103,7 @@ export function Markdown({ text, className = '' }: { text: string; className?: s
     const para = take((l) => Boolean(l.trim()) && !/^(#{2,3} |[-*] |\d+\. |> )/.test(l));
     const k = key();
     out.push(
-      <p key={k} className="mt-sm m-0 text-[14px] font-semibold leading-relaxed">
+      <p key={k} className="mt-sm m-0 text-prose">
         {inline(para.join(' '), k)}
       </p>,
     );

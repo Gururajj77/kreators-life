@@ -26,11 +26,11 @@ export function ProfileCard({ onSend, full = false }: { onSend: (value: Record<s
     <div className="rounded-tile bg-card p-sm shadow-toy-soft">
       <InterestPicker legend="What are you into? Pick up to ten" value={interests} onChange={setInterests} />
       <label className="mt-sm block">
-        <span className="block text-[14px] font-bold">Your city</span>
+        <span className="block text-subhead font-semibold">Your city</span>
         <input value={city} onChange={(e) => setCity(e.target.value)} maxLength={80} placeholder="Bengaluru" autoComplete="address-level2" className={FIELD} />
       </label>
       <label className="mt-sm block">
-        <span className="block text-[14px] font-bold">A line about you, if you like</span>
+        <span className="block text-subhead">A line about you, if you like</span>
         <textarea value={bio} onChange={(e) => setBio(e.target.value)} maxLength={200} rows={2} placeholder="I make short films and love long walks." className={`${FIELD} resize-none`} />
       </label>
       <ChatActions

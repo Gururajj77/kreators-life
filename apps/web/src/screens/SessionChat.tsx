@@ -217,10 +217,10 @@ function FrameCard() {
         <li key={r.key} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
           <Avatar relationship={r.key} size={36} decorative still />
           <span className="min-w-0 flex-1">
-            <span className="block text-[16px] font-bold">
-              {r.name} <span className="font-semibold text-ink-soft">· {r.character}</span>
+            <span className="block text-headline">
+              {r.name} <span className="text-ink-soft">· {r.character}</span>
             </span>
-            <span className="block text-[14px] font-semibold text-ink-soft">{coversLine(r)}</span>
+            <span className="block text-subhead text-ink-soft">{coversLine(r)}</span>
           </span>
         </li>
       ))}
@@ -232,7 +232,7 @@ function FrameCard() {
 function MapPicture() {
   return (
     <Fold title="See the whole map">
-      <p className="m-0 mb-xs text-[14px] text-ink-soft">From Shame at the bottom to Full Consciousness at the top.</p>
+      <p className="m-0 mb-xs text-subhead text-ink-soft">From Shame at the bottom to Full Consciousness at the top.</p>
       <ConsciousnessMap />
     </Fold>
   );
@@ -244,7 +244,7 @@ function OwnAnswerCard({ foundation, onSend }: { foundation: boolean; onSend: Se
   return (
     <div className="rounded-tile bg-card p-sm shadow-toy-soft">
       <label className="block">
-        <span className="block text-[14px] font-bold">{foundation ? 'Your foundation' : 'Your answer'}</span>
+        <span className="block text-subhead font-semibold">{foundation ? 'Your foundation' : 'Your answer'}</span>
         <input value={text} onChange={(e) => setText(e.target.value)} maxLength={120} placeholder={foundation ? 'Like: Sunday lunch with family, every week' : 'In a few words'} className={FIELD} />
       </label>
       <ChatActions full skip="Go back" onSkip={() => onSend({ back: '1' }, 'Go back to the choices')} next="Use my words" ready={text.trim().length > 1} onNext={() => onSend({ text: text.trim() }, text.trim())} />
@@ -360,8 +360,8 @@ function MapForm({ initial, initialAway, onSend }: { initial: Partial<Record<Rel
         <div className="flex items-center gap-sm">
           <Avatar relationship={r.key} size={40} decorative still />
           <span className="min-w-0 flex-1">
-            <span className="block text-[18px] font-bold">{r.name}</span>
-            <span className="block text-[14px] font-semibold text-ink-soft">{coversLine(r)}</span>
+            <span className="block text-headline">{r.name}</span>
+            <span className="block text-subhead text-ink-soft">{coversLine(r)}</span>
           </span>
         </div>
         {isOptionalPillar(r.key) && (
@@ -370,14 +370,14 @@ function MapForm({ initial, initialAway, onSend }: { initial: Partial<Record<Rel
           </div>
         )}
         {isAway ? (
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Set aside for now. It sits at Neutrality, stays out of your focus and gets no pyramid. You can turn it back on from your life map under Pillars.</p>
+          <p className="mt-xs m-0 text-subhead text-ink-soft">Set aside for now. It sits at Neutrality, stays out of your focus and gets no pyramid. You can turn it back on from your life map under Pillars.</p>
         ) : (
           <>
-            <p className="mt-sm m-0 text-[14px] font-bold">Pick all that you feel here, on good days and on bad ones.</p>
+            <p className="mt-sm m-0 text-subhead">Pick all that you feel here, on good days and on bad ones.</p>
             {[...MAP_BANDS].reverse().map((b) => (
               <div key={b} className="mt-sm">
-                <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{MAP_BAND_META[b].name}</p>
-                <p className="m-0 text-[12px] font-semibold text-ink-soft">{BAND_STATEMENTS[r.key][b]}</p>
+                <p className="m-0 text-eyebrow uppercase text-ink-soft">{MAP_BAND_META[b].name}</p>
+                <p className="m-0 text-caption text-ink-soft">{BAND_STATEMENTS[r.key][b]}</p>
                 <ul className="fx-inset mt-xs">
                   {MAP_LEVELS.filter((l) => l.band === b)
                     .slice()
@@ -391,8 +391,8 @@ function MapForm({ initial, initialAway, onSend }: { initial: Partial<Record<Rel
                               {on && <Icon icon={Check} size={16} strokeWidth={3} />}
                             </span>
                             <span className="min-w-0 flex-1">
-                              <span className="block text-[16px] font-bold">{l.name}</span>
-                              <span className="block text-[14px] font-semibold text-ink-soft">“{l.sounds}”</span>
+                              <span className="block text-headline">{l.name}</span>
+                              <span className="block text-subhead text-ink-soft">“{l.sounds}”</span>
                             </span>
                           </button>
                         </li>
@@ -402,7 +402,7 @@ function MapForm({ initial, initialAway, onSend }: { initial: Partial<Record<Rel
               </div>
             ))}
             <Fold className="mt-sm" title="Say it in your own words">
-              <p className="m-0 mb-xs text-[14px] text-ink-soft">I read your words and suggest feelings. You choose which to tick. Read my words is free and stays on this page.</p>
+              <p className="m-0 mb-xs text-subhead text-ink-soft">I read your words and suggest feelings. You choose which to tick. Read my words is free and stays on this page.</p>
               <label className="block">
                 <span className="sr-only">How {r.name.toLowerCase()} feels for you</span>
                 <textarea value={words} onChange={(e) => setWords(e.target.value)} rows={2} maxLength={600} placeholder="Like: I get scared to call, but I keep trying" className={FIELD} />
@@ -426,20 +426,20 @@ function MapForm({ initial, initialAway, onSend }: { initial: Partial<Record<Rel
                   </Button>
                 )}
               </div>
-              {canAi && <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">Read with AI sends your words to {aiModel!.name}. Uses a few credits. The model keeps nothing.</p>}
+              {canAi && <p className="mt-xs m-0 text-caption text-ink-soft">Read with AI sends your words to {aiModel!.name}. Uses a few credits. The model keeps nothing.</p>}
               {aiNote && (
-                <p className="mt-xs m-0 text-[14px] font-semibold" role="alert">
+                <p className="mt-xs m-0 text-subhead" role="alert">
                   {aiNote}
                 </p>
               )}
               {suggested && (
                 <div className="mt-xs" role="status">
                   {suggested.length === 0 ? (
-                    <p className="m-0 text-[14px] font-semibold text-ink-soft">I could not find a feeling in that. Try words like scared, fine or grateful, or tick the list above.</p>
+                    <p className="m-0 text-subhead text-ink-soft">I could not find a feeling in that. Try words like scared, fine or grateful, or tick the list above.</p>
                   ) : (
                     <>
-                      <p className="m-0 text-[14px] font-semibold">That sounds like {listOf(suggested.map((v) => levelName(v)))}. Is that right?</p>
-                      {readBy && <p className="m-0 text-[12px] font-semibold text-ink-soft">Read with AI by {readBy}.</p>}
+                      <p className="m-0 text-subhead">That sounds like {listOf(suggested.map((v) => levelName(v)))}. Is that right?</p>
+                      {readBy && <p className="m-0 text-caption text-ink-soft">Read with AI by {readBy}.</p>}
                       <div className="mt-xs flex flex-wrap gap-xs">
                         <Button
                           type="button"
@@ -460,7 +460,7 @@ function MapForm({ initial, initialAway, onSend }: { initial: Partial<Record<Rel
               )}
             </Fold>
             {placed && (
-              <p className="mt-sm m-0 rounded-tile bg-paper p-sm text-[14px] font-bold" role="status">
+              <p className="mt-sm m-0 rounded-tile bg-paper p-sm text-subhead" role="status">
                 {placed.core === placed.floor ? `You usually sit at ${levelName(placed.core)}.` : `You usually sit at ${levelName(placed.core)}, and drop to ${levelName(placed.floor)} under stress.`}
               </p>
             )}
@@ -484,7 +484,7 @@ function EvidenceForm({ keys, onSend }: { keys: RelationshipKey[]; onSend: Send 
         {keys.map((k) => (
           <li key={k} className="rounded-tile bg-card p-sm shadow-toy-soft">
             <label className="block">
-              <span className="flex items-center gap-xs text-[14px] font-bold">
+              <span className="flex items-center gap-xs text-subhead">
                 <Avatar relationship={k} size={24} decorative still />
                 {RELATIONSHIP_BY_KEY[k].name}: one thing from last week that shows it
               </span>
@@ -493,7 +493,7 @@ function EvidenceForm({ keys, onSend }: { keys: RelationshipKey[]; onSend: Send 
           </li>
         ))}
       </ul>
-      <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Leave one empty and that pillar is held at Acceptance until there is something to show.</p>
+      <p className="mt-xs m-0 text-caption text-ink-soft">Leave one empty and that pillar is held at Acceptance until there is something to show.</p>
       <ChatActions full next="Send" onNext={() => onSend(v, keys.map((k) => `${RELATIONSHIP_BY_KEY[k].name}: ${v[k]?.trim() ? v[k] : 'nothing yet'}`).join('. '))} />
     </div>
   );
@@ -512,7 +512,7 @@ function WayForm({ onSend }: { onSend: Send }) {
     setOwn('');
   };
   const pillarSelect = (value: RelationshipKey, onChange: (k: RelationshipKey) => void, label: string) => (
-    <label className="block text-[12px] font-bold text-ink-soft">
+    <label className="block text-caption text-ink-soft">
       {label}
       <select value={value} onChange={(e) => onChange(e.target.value as RelationshipKey)} className={FIELD}>
         {RELATIONSHIPS.map((r) => (
@@ -526,7 +526,7 @@ function WayForm({ onSend }: { onSend: Send }) {
   const kept = ins.filter((i) => i.text.trim());
   return (
     <div>
-      <p className="m-0 text-[14px] font-bold">Fears. What shows up when you are about to act?</p>
+      <p className="m-0 text-subhead">Fears. What shows up when you are about to act?</p>
       <div className="mt-xs flex flex-wrap gap-xs">
         {FEAR_OPTIONS.map((f) => (
           <button key={f} type="button" aria-pressed={has(f)} className={chip(has(f))} onClick={() => toggle(f)}>
@@ -535,7 +535,7 @@ function WayForm({ onSend }: { onSend: Send }) {
         ))}
       </div>
       <div className="mt-xs flex gap-xs">
-        <input value={own} onChange={(e) => setOwn(e.target.value)} maxLength={120} placeholder="Or your own words" className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOwn(); } }} />
+        <input value={own} onChange={(e) => setOwn(e.target.value)} maxLength={120} placeholder="Or your own words" className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOwn(); } }} />
         <Button type="button" variant="outline" onClick={addOwn} disabled={!own.trim()}>
           Add
         </Button>
@@ -544,10 +544,10 @@ function WayForm({ onSend }: { onSend: Send }) {
         <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
           {fears.map((f, i) => (
             <li key={f.text} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <p className="m-0 text-[14px] font-bold">{f.text}</p>
+              <p className="m-0 text-subhead">{f.text}</p>
               <div className="grid gap-xs md:grid-cols-2">
                 {pillarSelect(f.relationship, (k) => setFears(fears.map((x, j) => (j === i ? { ...x, relationship: k } : x))), 'Pulls down')}
-                <label className="block text-[12px] font-bold text-ink-soft">
+                <label className="block text-caption text-ink-soft">
                   Drives your decisions?
                   <select value={f.drives} onChange={(e) => setFears(fears.map((x, j) => (j === i ? { ...x, drives: e.target.value as Drives } : x)))} className={FIELD}>
                     {DRIVES.map((d) => (
@@ -562,15 +562,15 @@ function WayForm({ onSend }: { onSend: Send }) {
           ))}
         </ul>
       )}
-      <p className="mt-md m-0 text-[14px] font-bold">Insecurities. What do you worry people see?</p>
-      <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">Common ones: being awkward around people, looks, little experience with relationships, overthinking. Leave it empty if nothing comes.</p>
+      <p className="mt-md m-0 text-subhead">Insecurities. What do you worry people see?</p>
+      <p className="mt-xs m-0 text-caption text-ink-soft">Common ones: being awkward around people, looks, little experience with relationships, overthinking. Leave it empty if nothing comes.</p>
       <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
         {ins.map((it, i) => (
           <li key={i} className="rounded-tile bg-card p-sm shadow-toy-soft">
-            <input value={it.text} onChange={(e) => setIns(ins.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))} maxLength={120} placeholder="In a few words" className="w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+            <input value={it.text} onChange={(e) => setIns(ins.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))} maxLength={120} placeholder="In a few words" className="w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
             {it.text.trim() && (
               <div className="grid gap-xs md:grid-cols-2">
-                <label className="block text-[12px] font-bold text-ink-soft">
+                <label className="block text-caption text-ink-soft">
                   How heavy does it feel?
                   <span className="mt-xs flex flex-wrap gap-xs" role="group" aria-label="How heavy it feels">
                     {INSECURITY_WEIGHTS.map((w) => (
@@ -587,7 +587,7 @@ function WayForm({ onSend }: { onSend: Send }) {
         ))}
       </ul>
       {ins.length < MAX_INSECURITIES && kept.length === ins.length && (
-        <button type="button" onClick={() => setIns([...ins, { text: '', weight: 5, relationship: 'self' }])} className="mt-xs text-[14px] font-bold text-ink-soft underline underline-offset-4">
+        <button type="button" onClick={() => setIns([...ins, { text: '', weight: 5, relationship: 'self' }])} className="mt-xs text-subhead text-ink-soft underline underline-offset-4">
           Add one more
         </button>
       )}
@@ -620,11 +620,11 @@ function ScoreForm({ away, onSend }: { away: RelationshipKey[]; onSend: Send }) 
   const [v, setV] = useState<Record<string, number>>(Object.fromEntries(keys.map((k) => [k, 3])));
   const group = (title: string, ks: readonly string[], color: string, pillar: RelationshipKey) => (
     <div data-pillar={pillar}>
-      <h3 className="text-[16px]">{title}</h3>
+      <h3 className="text-headline">{title}</h3>
       <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
         {ks.map((k) => (
           <li key={k} className="rounded-tile bg-card p-sm shadow-toy-soft">
-            <p className="m-0 flex items-baseline justify-between gap-sm text-[14px] font-bold">
+            <p className="m-0 flex items-baseline justify-between gap-sm text-subhead">
               <span>{labels[k]}</span>
               <span className="shrink-0 text-ink-soft">{STAR_WORDS[(v[k] ?? 3) - 1]}</span>
             </p>
@@ -651,7 +651,7 @@ function DayForm({ initial, onSend }: { initial: RealDay; onSend: Send }) {
   const [d, setD] = useState<RealDay>(initial);
   const t = (key: keyof RealDay, label: string) => (
     <label key={key} className="block">
-      <span className="block text-[14px] font-bold">{label}</span>
+      <span className="block text-subhead font-semibold">{label}</span>
       <input type="time" value={d[key]} onChange={(e) => setD({ ...d, [key]: e.target.value })} className={FIELD} />
     </label>
   );
@@ -665,11 +665,11 @@ function DayForm({ initial, onSend }: { initial: RealDay; onSend: Send }) {
       </div>
       <div className="mt-xs grid gap-xs md:grid-cols-2">
         <label className="block">
-          <span className="block text-[14px] font-bold">Gym or movement, if any</span>
+          <span className="block text-subhead font-semibold">Gym or movement, if any</span>
           <input type="time" value={d.gym} onChange={(e) => setD({ ...d, gym: e.target.value })} className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">The last hour before sleep is usually</span>
+          <span className="block text-subhead">The last hour before sleep is usually</span>
           <input value={d.evening} onChange={(e) => setD({ ...d, evening: e.target.value })} maxLength={200} placeholder="Scrolling, a show, work mail" className={FIELD} />
         </label>
       </div>
@@ -694,20 +694,20 @@ function RoutineCard({ data }: { data: Data }) {
       <ol className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
         {blocks.map((b) => (
           <li key={b.key} className="rounded-tile bg-card p-sm shadow-toy-soft">
-            <p className="m-0 flex items-center justify-between text-[16px] font-bold">
+            <p className="m-0 flex items-center justify-between text-headline">
               <span>{b.name}</span>
-              <span className="text-[12px] text-ink-soft">
+              <span className="text-caption text-ink-soft">
                 {b.start} to {b.end}
               </span>
             </p>
             {b.steps.length > 0 && (
-              <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0 text-[14px] font-semibold">
+              <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0 text-subhead">
                 {b.steps.map((s) => (
                   <li key={s}>• {s}</li>
                 ))}
               </ul>
             )}
-            <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{b.note}</p>
+            <p className="mt-xs m-0 text-caption text-ink-soft">{b.note}</p>
           </li>
         ))}
       </ol>
@@ -719,14 +719,14 @@ function PracticesForm({ focus, onSend }: { focus: RelationshipKey[]; onSend: Se
   const [p, setP] = useState<Practices>({ mantra: 'none', ownMantra: '', breathing: 'box', affirmation: affirmationFor(focus), reading: '' });
   const option = (m: (typeof MANTRAS)[number]) => (
     <button type="button" aria-pressed={p.mantra === m.key} onClick={() => setP({ ...p, mantra: m.key })} className={`${card(p.mantra === m.key)} h-full`}>
-      <span className="block text-[16px] font-bold">{m.name}</span>
-      <span className="block text-[14px] font-semibold text-ink-soft">{m.blurb}</span>
+      <span className="block text-headline">{m.name}</span>
+      <span className="block text-subhead text-ink-soft">{m.blurb}</span>
     </button>
   );
   const own = p.mantra === 'own';
   return (
     <div>
-      <p className="m-0 text-[14px] font-bold">Mantra, five to ten minutes</p>
+      <p className="m-0 text-subhead font-semibold">Mantra, five to ten minutes</p>
       <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
         {MANTRAS.filter((m) => m.key !== 'own' && m.key !== 'none').map((m) => (
           <li key={m.key}>{option(m)}</li>
@@ -740,11 +740,11 @@ function PracticesForm({ focus, onSend }: { focus: RelationshipKey[]; onSend: Se
       </ul>
       {own && (
         <label className="mt-xs block">
-          <span className="block text-[14px] font-bold">Your mantra</span>
+          <span className="block text-subhead font-semibold">Your mantra</span>
           <input value={p.ownMantra ?? ''} onChange={(e) => setP({ ...p, ownMantra: e.target.value })} maxLength={OWN_MANTRA_MAX} placeholder="The words you want to repeat" className={FIELD} />
         </label>
       )}
-      <p className="mt-md m-0 text-[14px] font-bold">Breathing, three rounds</p>
+      <p className="mt-md m-0 text-subhead font-semibold">Breathing, three rounds</p>
       <div className="mt-xs flex flex-wrap gap-xs">
         {BREATHING.map((b) => (
           <button key={b.key} type="button" aria-pressed={p.breathing === b.key} className={chip(p.breathing === b.key)} onClick={() => setP({ ...p, breathing: b.key })} title={b.blurb}>
@@ -752,13 +752,13 @@ function PracticesForm({ focus, onSend }: { focus: RelationshipKey[]; onSend: Se
           </button>
         ))}
       </div>
-      <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{BREATHING.find((b) => b.key === p.breathing)?.blurb}</p>
+      <p className="mt-xs m-0 text-caption text-ink-soft">{BREATHING.find((b) => b.key === p.breathing)?.blurb}</p>
       <label className="mt-md block">
-        <span className="block text-[14px] font-bold">Your line, on waking and before sleep</span>
+        <span className="block text-subhead">Your line, on waking and before sleep</span>
         <textarea value={p.affirmation} onChange={(e) => setP({ ...p, affirmation: e.target.value })} rows={2} maxLength={240} className={FIELD} />
       </label>
       <label className="mt-xs block">
-        <span className="block text-[14px] font-bold">One page a morning, from</span>
+        <span className="block text-subhead font-semibold">One page a morning, from</span>
         <input value={p.reading} onChange={(e) => setP({ ...p, reading: e.target.value })} maxLength={120} placeholder="A book, a scripture, a long essay" className={FIELD} />
       </label>
       <ChatActions
@@ -776,7 +776,7 @@ function ContractForm({ initial, placeholder, onSend }: { initial: Data['contrac
   const [call, setCall] = useState(false);
   return (
     <div>
-      <p className="m-0 text-[14px] font-bold">Days a week, at least</p>
+      <p className="m-0 text-subhead font-semibold">Days a week, at least</p>
       <div className="mt-xs flex flex-wrap gap-xs">
         {[3, 4, 5, 6, 7].map((n) => (
           <button key={n} type="button" aria-pressed={c.minDays === n} className={chip(c.minDays === n)} onClick={() => setC({ ...c, minDays: n })}>
@@ -785,24 +785,24 @@ function ContractForm({ initial, placeholder, onSend }: { initial: Data['contrac
         ))}
       </div>
       <label className="mt-md block">
-        <span className="block text-[14px] font-bold">Daily check-in time</span>
+        <span className="block text-subhead font-semibold">Daily check-in time</span>
         <input type="time" value={c.checkinTime} onChange={(e) => setC({ ...c, checkinTime: e.target.value })} className={FIELD} />
-        <span className="mt-xs block text-[12px] font-bold text-ink-soft">A reminder lands in your inbox at this time on any day you have not checked in.</span>
+        <span className="mt-xs block text-caption text-ink-soft">A reminder lands in your inbox at this time on any day you have not checked in.</span>
       </label>
-      <p className="mt-md m-0 text-[14px] font-bold">When a week falls short</p>
+      <p className="mt-md m-0 text-subhead font-semibold">When a week falls short</p>
       <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
         {PENALTIES.map((p) => (
           <li key={p.key}>
             <button type="button" aria-pressed={c.penalty === p.key} onClick={() => setC({ ...c, penalty: p.key })} className={card(c.penalty === p.key)}>
-              <span className="block text-[16px] font-bold">{p.name}</span>
-              <span className="block text-[14px] font-semibold text-ink-soft">{p.blurb}</span>
+              <span className="block text-headline">{p.name}</span>
+              <span className="block text-subhead text-ink-soft">{p.blurb}</span>
             </button>
           </li>
         ))}
       </ul>
-      <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">Weekly check on Sunday night, five minutes. Monthly review in thirty days. The app keeps both dates.</p>
+      <p className="mt-md m-0 text-subhead text-ink-soft">Weekly check on Sunday night, five minutes. Monthly review in thirty days. The app keeps both dates.</p>
       <label className="mt-xs block">
-        <span className="block text-[14px] font-bold">Type your name to sign</span>
+        <span className="block text-subhead font-semibold">Type your name to sign</span>
         <input value={c.signedName} onChange={(e) => setC({ ...c, signedName: e.target.value })} maxLength={80} placeholder={placeholder} className={FIELD} />
       </label>
       {/* The live call, once and optional: a line in the plan rather than a step of its own. */}
@@ -822,7 +822,7 @@ function PicksForm({ focus, result, own: ownWords = {}, onSend }: { focus: Relat
     const cur = v[k]?.[f] ?? '';
     const isOwn = own[`${k}.${f}`] || (cur !== '' && !list.includes(cur));
     return (
-      <label className="block text-[12px] font-bold text-ink-soft">
+      <label className="block text-caption text-ink-soft">
         {f === 'valueGoal' ? KIND_META.value_goal.label : KIND_META.project.label}
         <select value={isOwn ? '__own' : cur} onChange={(e) => { if (e.target.value === '__own') { setOwn({ ...own, [`${k}.${f}`]: true }); setV({ ...v, [k]: { ...v[k], [f]: '' } }); } else { setOwn({ ...own, [`${k}.${f}`]: false }); setV({ ...v, [k]: { ...v[k], [f]: e.target.value } }); } }} className={FIELD}>
           {list.map((o) => (
@@ -848,10 +848,10 @@ function PicksForm({ focus, result, own: ownWords = {}, onSend }: { focus: Relat
               <div className="flex items-start gap-sm">
                 <Avatar relationship={k} size={44} decorative still />
                 <div className="min-w-0 flex-1">
-                  <p className="m-0 text-[14px] font-bold" style={{ color: `var(--deep-${k})` }}>
+                  <p className="m-0 text-subhead font-semibold" style={{ color: `var(--deep-${k})` }}>
                     {who(k)}, {result.scores[k]}%, {l.branch === 'low' ? 'gentle start' : 'stretch tasks'}
                   </p>
-                  <p className="mt-xs m-0 text-[14px] font-semibold">
+                  <p className="mt-xs m-0 text-subhead">
                     {KIND_META.pillar.label}: {ownWords[k]?.pillar || l.pillar}. {KIND_META.principle.label}: {l.principle}. {KIND_META.outcome.label}: {l.outcome}.
                   </p>
                 </div>
@@ -878,7 +878,7 @@ function PyramidsCard({ focus, result, picks }: { focus: RelationshipKey[]; resu
         const words: Partial<Record<NodeKind, string>> = { pillar: picks[k]?.pillar || l.pillar, principle: l.principle, value_goal: picks[k]?.valueGoal || l.valueGoal, outcome: l.outcome, project: picks[k]?.project || l.project, task: l.tasks[0] ?? 'Your first task' };
         return (
           <div key={k} className="rounded-card bg-card p-md shadow-toy-soft">
-            <p className="m-0 flex items-center gap-xs text-[14px] font-bold" style={{ color: `var(--deep-${k})` }}>
+            <p className="m-0 flex items-center gap-xs text-subhead font-semibold" style={{ color: `var(--deep-${k})` }}>
               <Avatar relationship={k} size={24} decorative still />
               {RELATIONSHIP_BY_KEY[k].name}
             </p>
@@ -897,14 +897,14 @@ function NextStepsCard({ order, focus }: { order: { key: RelationshipKey; why: s
     <ol className="m-0 flex list-none flex-col gap-xs p-0">
       {order.map((o, i) => (
         <li key={o.key} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-          <span className="w-[24px] shrink-0 text-center font-display text-[16px] font-extrabold text-ink-soft">{i + 1}</span>
+          <span className="w-[24px] shrink-0 text-center text-headline text-ink-soft">{i + 1}</span>
           <Avatar relationship={o.key} size={32} decorative still />
           <span className="min-w-0 flex-1">
-            <span className="block text-[14px] font-bold">
+            <span className="block text-subhead font-semibold">
               {RELATIONSHIP_BY_KEY[o.key].name}
-              {focus.includes(o.key) ? <span className="ml-xs rounded-pill bg-ink px-xs text-[11px] font-extrabold uppercase tracking-wide text-on-ink">month one</span> : null}
+              {focus.includes(o.key) ? <span className="ml-xs rounded-pill bg-ink px-xs text-caption2 uppercase text-on-ink">month one</span> : null}
             </span>
-            <span className="block text-[12px] font-semibold text-ink-soft">{o.why}</span>
+            <span className="block text-caption text-ink-soft">{o.why}</span>
           </span>
         </li>
       ))}
@@ -1418,7 +1418,7 @@ export function SessionChat() {
     if (!ask) return null;
     if (ask.kind === 'wait') {
       return (
-        <p role="status" className="m-0 text-[14px] font-bold text-ink-soft">
+        <p role="status" className="m-0 text-subhead text-ink-soft">
           {ask.text}
         </p>
       );
@@ -1465,8 +1465,8 @@ export function SessionChat() {
         composer={{ placeholder: 'Ask about any word', onSend: askAbout, disabled: Boolean(typing) || chat.stage.part === 'account' }}
       />
       <Sheet open={callOpen} onClose={() => setCallOpen(false)} title="Book a live call">
-        <p className="m-0 text-[16px] font-semibold text-ink-soft">A live strategy call with the coach is {money(LIVE_CALL_CENTS, PLAN_CURRENCY)}. Booking opens once payments are connected. Until then, write to the team under Help and we will set a time by hand.</p>
-        <Link to="/help" className="toy mt-md inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink">
+        <p className="m-0 text-callout text-ink-soft">A live strategy call with the coach is {money(LIVE_CALL_CENTS, PLAN_CURRENCY)}. Booking opens once payments are connected. Until then, write to the team under Help and we will set a time by hand.</p>
+        <Link to="/help" className="toy mt-md inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md text-headline text-on-ink">
           Write to the team
         </Link>
       </Sheet>

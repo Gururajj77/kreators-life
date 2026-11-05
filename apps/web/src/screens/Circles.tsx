@@ -70,13 +70,13 @@ export function Circles() {
           ) : undefined
         }
       >
-        <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-[12px] font-bold text-ink-soft">
+        <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-caption text-ink-soft">
           <li>Everyone has an alias and keeps it.</li>
           <li>Red if you are single, white if you are committed.</li>
           <li>The chat opens a day before you meet.</li>
         </ul>
         {d && !ready && (
-          <p className="mt-sm m-0 rounded-tile bg-r3 p-sm text-[14px] font-bold text-ink-fixed">
+          <p className="mt-sm m-0 rounded-tile bg-r3 p-sm text-subhead text-ink-fixed">
             To join a circle, pick at least two interests and your city under{' '}
             <Link to="/profile" className="underline underline-offset-4">
               Profile
@@ -85,7 +85,7 @@ export function Circles() {
           </p>
         )}
         {d && ready && (
-          <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">
+          <p className="mt-sm m-0 text-subhead text-ink-soft">
             Matching on {d.interests.slice(0, 4).join(', ')} in {d.area ? `${d.area}, ` : ''}
             {d.city}
             {d.hasLocation ? ', within twenty kilometres of you' : ''}.
@@ -95,12 +95,12 @@ export function Circles() {
 
       {d && d.hosting.length > 0 && (
         <section className="mt-lg" aria-labelledby="hosting-heading">
-          <h2 id="hosting-heading" className="text-[24px]">
+          <h2 id="hosting-heading" className="text-title2">
             Circles you run
           </h2>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Every city, until each code closes. Set the tables and the attendee code here.</p>
+          <p className="mt-xs m-0 text-subhead text-ink-soft">Every city, until each code closes. Set the tables and the attendee code here.</p>
           {codeError && (
-            <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+            <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
               The circle is open, but its xp was not set: {codeError} Set it on its card.
             </p>
           )}
@@ -125,7 +125,7 @@ export function Circles() {
 
       {d && d.groups.length > 0 && (
         <section className="mt-lg" aria-labelledby="tables-heading">
-          <h2 id="tables-heading" className="text-[24px]">
+          <h2 id="tables-heading" className="text-title2">
             Your tables
           </h2>
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -138,10 +138,10 @@ export function Circles() {
                     ))}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[16px] font-bold">
+                    <span className="block text-balance text-headline [overflow-wrap:anywhere]">
                       {g.eventTitle}, {g.name}
                     </span>
-                    <span className="block text-[14px] font-semibold text-ink-soft">
+                    <span className="block text-subhead text-ink-soft">
                       {when(g.startsAt)}, {g.members.length} people. {g.chatOpen ? 'Chat is open.' : `Chat opens ${when(g.chatOpensAt)}.`}
                     </span>
                   </span>
@@ -153,21 +153,21 @@ export function Circles() {
       )}
 
       <section className="mt-lg" aria-labelledby="events-heading">
-        <h2 id="events-heading" className="text-[24px]">
+        <h2 id="events-heading" className="text-title2">
           Upcoming{d?.city ? ` in ${d.city}` : ''}
         </h2>
-        {d && d.events.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">No circles here yet. The team opens them city by city; check Explore for other cities.</p>}
+        {d && d.events.length === 0 && <p className="mt-xs m-0 text-subhead text-ink-soft">No circles here yet. The team opens them city by city; check Explore for other cities.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {d?.events.map((e) => (
             <EventCard key={e.id} e={e} ready={ready} busy={join.isPending || leave.isPending} onJoin={() => setJoining(e)} onLeave={() => leave.mutate(e.id)} />
           ))}
         </ul>
         {join.isError && (
-          <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {join.error instanceof Error ? join.error.message : 'Could not join.'}
           </p>
         )}
-        <p className="mt-sm m-0 text-[12px] font-semibold text-ink-mute">
+        <p className="mt-sm m-0 text-caption text-ink-mute">
           Your interests: {me.data?.user.interests.length ? me.data.user.interests.join(', ') : 'none yet'}. Pairs that gel include {INTERESTS[0]} with {INTERESTS[9]}, Writing with Video, Yoga with Meditation.
         </p>
       </section>
@@ -191,7 +191,7 @@ function JoinSheet({ event, onClose, busy, error, onJoin }: { event: CircleEvent
   return (
     <Sheet open={Boolean(event)} onClose={onClose} title="How will you show up?">
       {event && (
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">
+        <p className="m-0 text-subhead text-ink-soft">
           {event.title}, {when(event.startsAt)}. The table reads itself by colour, so nobody has to ask: red means single, white means committed. Your answer stays with you; others only see what you wear.
         </p>
       )}
@@ -207,10 +207,10 @@ function JoinSheet({ event, onClose, busy, error, onJoin }: { event: CircleEvent
                   {on && <Icon icon={Check} size={18} strokeWidth={3.5} color={k === 'single' ? 'var(--color-on-ink)' : 'var(--color-ink-fixed)'} />}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[16px] font-bold">
+                  <span className="block text-headline">
                     {m.name}, wear {m.wear}
                   </span>
-                  <span className="block text-[14px] font-semibold text-ink-soft">{m.blurb}</span>
+                  <span className="block text-subhead text-ink-soft">{m.blurb}</span>
                 </span>
               </label>
             </li>
@@ -218,7 +218,7 @@ function JoinSheet({ event, onClose, busy, error, onJoin }: { event: CircleEvent
         })}
       </ul>
       {error && (
-        <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+        <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           {error}
         </p>
       )}
@@ -236,11 +236,11 @@ function HostCard({ e, busy, onMatch, onCode }: { e: CircleEvent; busy: boolean;
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="flex items-start justify-between gap-sm">
         <div className="min-w-0">
-          <p className="m-0 text-[16px] font-bold">{e.title}</p>
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">
+          <p className="m-0 text-headline">{e.title}</p>
+          <p className="m-0 text-subhead text-ink-soft">
             {when(e.startsAt)}, {[e.area, e.city].filter(Boolean).join(', ')}. {e.signups} signed up{seated !== undefined ? `, ${seated} seated` : ''}.
           </p>
-          {e.repeat === 'weekly' && <p className="m-0 text-[12px] font-extrabold text-ink-mute">{weekly(e.startsAt)}</p>}
+          {e.repeat === 'weekly' && <p className="m-0 text-caption text-ink-mute">{weekly(e.startsAt)}</p>}
         </div>
         <StatusTag tone={e.status === 'matched' ? 'good' : 'info'}>{e.status === 'matched' ? 'tables set' : 'signups'}</StatusTag>
       </div>
@@ -264,24 +264,24 @@ function EventCard({ e, ready, busy, onJoin, onLeave }: { e: CircleEvent; ready:
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="flex items-start justify-between gap-sm">
         <div className="min-w-0">
-          <p className="m-0 text-[16px] font-bold">{e.title}</p>
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">
+          <p className="m-0 text-headline">{e.title}</p>
+          <p className="m-0 text-subhead text-ink-soft">
             {when(e.startsAt)}, {[e.area, e.city].filter(Boolean).join(', ')}. Tables of {e.groupSize}. {e.signups} signed up.
           </p>
-          {e.repeat === 'weekly' && <p className="m-0 text-[12px] font-extrabold text-ink-mute">{weekly(e.startsAt)}. The next one opens once this week&rsquo;s tables are set.</p>}
-          {e.venueHint && <p className="m-0 text-[14px] font-semibold text-ink-soft">{e.venueHint}</p>}
-          {e.attendeeXp ? <p className="m-0 mt-xs text-[12px] font-extrabold text-ink-soft">+{e.attendeeXp} xp for the people seated, with the code at the meetup</p> : null}
+          {e.repeat === 'weekly' && <p className="m-0 text-caption text-ink-mute">{weekly(e.startsAt)}. The next one opens once this week&rsquo;s tables are set.</p>}
+          {e.venueHint && <p className="m-0 text-subhead text-ink-soft">{e.venueHint}</p>}
+          {e.attendeeXp ? <p className="m-0 mt-xs text-caption text-ink-soft">+{e.attendeeXp} xp for the people seated, with the code at the meetup</p> : null}
         </div>
         <StatusTag tone={e.status === 'matched' ? 'good' : open ? 'warn' : 'neutral'}>{e.status === 'matched' ? 'tables set' : open ? `closes in ${countdown(new Date(closes).toISOString(), now)}` : 'closed'}</StatusTag>
       </div>
       <div className="mt-xs flex flex-wrap gap-xs">
         {e.myGroupId ? (
-          <Link to={`/circles/${e.myGroupId}`} className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+          <Link to={`/circles/${e.myGroupId}`} className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
             Your table
           </Link>
         ) : e.joined ? (
           <>
-            <span className="inline-flex min-h-[48px] items-center text-[14px] font-bold">You are in{e.myStatus ? `, wearing ${CIRCLE_STATUS_META[e.myStatus].wear}` : ''}. Tables are set two days before.</span>
+            <span className="inline-flex min-h-[48px] items-center text-subhead">You are in{e.myStatus ? `, wearing ${CIRCLE_STATUS_META[e.myStatus].wear}` : ''}. Tables are set two days before.</span>
             {open && (
               <Button variant="ghost" onClick={onLeave} disabled={busy}>
                 Leave
@@ -332,35 +332,35 @@ function CreateSheet({ open, onClose, onDone }: { open: boolean; onClose: () => 
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Title</span>
+          <span className="block text-subhead font-semibold">Title</span>
           <input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={120} placeholder="Wednesday creators table" className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
-            <span className="block text-[14px] font-bold">City</span>
+            <span className="block text-subhead font-semibold">City</span>
             <input value={city} onChange={(e) => setCity(e.target.value)} required maxLength={80} className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Area (optional)</span>
+            <span className="block text-subhead font-semibold">Area (optional)</span>
             <input value={area} onChange={(e) => setArea(e.target.value)} maxLength={80} className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Starts</span>
+            <span className="block text-subhead font-semibold">Starts</span>
             <input type="datetime-local" required value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">People per table</span>
+            <span className="block text-subhead font-semibold">People per table</span>
             <input type="number" min={3} max={8} value={groupSize} onChange={(e) => setGroupSize(e.target.value)} className={FIELD} />
           </label>
         </div>
         <label className="block">
-          <span className="block text-[14px] font-bold">Venue hint</span>
+          <span className="block text-subhead font-semibold">Venue hint</span>
           <input value={venueHint} onChange={(e) => setVenueHint(e.target.value)} maxLength={200} placeholder="A cafe near the metro; each table picks the exact one" className={FIELD} />
         </label>
         <Toggle on={repeat} onChange={setRepeat} label="Every week at this time. The next one opens on its own once tables are set." />
         <AttendeeFields xp={attendeeXp} onXp={setAttendeeXp} code={attendeeCode} onCode={setAttendeeCode} one="person seated" many="people seated" note={repeat ? 'Each week’s circle keeps this xp, with a new random code.' : undefined} />
         {create.isError && (
-          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {create.error instanceof Error ? create.error.message : 'Could not open it.'}
           </p>
         )}
@@ -420,7 +420,7 @@ export function CircleGroup() {
   if (q.isError)
     return (
       <Screen>
-        <p className="pt-lg font-bold">That table is not yours.</p>
+        <p className="pt-lg font-semibold">That table is not yours.</p>
       </Screen>
     );
   if (!g) return null;
@@ -434,32 +434,32 @@ export function CircleGroup() {
         title={g.name}
         lede={
           <>
-            You are <span className="font-extrabold text-ink">{g.myAlias}</span> here. {g.chatOpen ? 'The chat is open.' : `The chat opens in ${countdown(g.chatOpensAt, now)}, a day before you meet.`}
+            You are <span className="font-bold text-ink">{g.myAlias}</span> here. {g.chatOpen ? 'The chat is open.' : `The chat opens in ${countdown(g.chatOpensAt, now)}, a day before you meet.`}
           </>
         }
       />
 
       <section className="mt-md rounded-card p-md" style={{ background: 'var(--tint-yellow)' }} aria-labelledby="show-heading">
-        <h2 id="show-heading" className="text-[18px]">
+        <h2 id="show-heading" className="text-title3">
           How to show up
         </h2>
-        <dl className="mt-xs m-0 grid grid-cols-[auto_1fr] gap-x-sm gap-y-xs text-[14px]">
-          <dt className="font-extrabold">When</dt>
-          <dd className="m-0 font-semibold">
+        <dl className="mt-xs m-0 grid grid-cols-[auto_1fr] gap-x-sm gap-y-xs text-subhead">
+          <dt className="font-bold">When</dt>
+          <dd className="m-0">
             {when(g.startsAt)}
             {g.repeat === 'weekly' ? `, and ${weekly(g.startsAt).toLowerCase()}` : ''}
           </dd>
-          <dt className="font-extrabold">Where</dt>
-          <dd className="m-0 font-semibold">{g.venue || `${[g.area, g.city].filter(Boolean).join(', ')}. The exact place gets agreed in the chat.`}</dd>
-          <dt className="font-extrabold">Wear</dt>
-          <dd className="m-0 font-semibold">{dressCodeFor(g.myStatus)}</dd>
-          <dt className="font-extrabold">Say</dt>
-          <dd className="m-0 font-semibold">Ask for the table under your alias, {g.myAlias}. Aliases only, before and after.</dd>
+          <dt className="font-bold">Where</dt>
+          <dd className="m-0">{g.venue || `${[g.area, g.city].filter(Boolean).join(', ')}. The exact place gets agreed in the chat.`}</dd>
+          <dt className="font-bold">Wear</dt>
+          <dd className="m-0">{dressCodeFor(g.myStatus)}</dd>
+          <dt className="font-bold">Say</dt>
+          <dd className="m-0">Ask for the table under your alias, {g.myAlias}. Aliases only, before and after.</dd>
         </dl>
       </section>
 
       <section className="mt-md" aria-labelledby="who-heading">
-        <h2 id="who-heading" className="text-[18px]">
+        <h2 id="who-heading" className="text-title2">
           At the table
         </h2>
         <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
@@ -467,23 +467,23 @@ export function CircleGroup() {
             <li key={m.alias} data-pillar={m.character} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
               <Avatar relationship={m.character} size={40} decorative still />
               <span className="min-w-0 flex-1">
-                <span className="block text-[16px] font-bold">
+                <span className="block text-headline">
                   {m.alias}
                   {m.isMe ? ' (you)' : ''}
                 </span>
-                <span className="block truncate text-[14px] font-semibold text-ink-soft">{m.interests.join(', ') || 'interests hidden'}</span>
+                <span className="block text-balance text-subhead text-ink-soft">{m.interests.join(', ') || 'interests hidden'}</span>
               </span>
               {!m.isMe && (
-                <button type="button" onClick={() => chat.mutate(m.alias)} disabled={chat.isPending} className="toy toy-soft inline-flex min-h-[44px] shrink-0 items-center rounded-pill bg-paper px-sm text-[14px] font-extrabold">
+                <button type="button" onClick={() => chat.mutate(m.alias)} disabled={chat.isPending} className="toy toy-soft inline-flex min-h-[44px] shrink-0 items-center rounded-pill bg-paper px-sm text-subhead font-medium">
                   Chat
                 </button>
               )}
             </li>
           ))}
         </ul>
-        <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Chat opens an anonymous one-to-one under Bond. Both of you keep an alias there too.</p>
+        <p className="mt-xs m-0 text-caption text-ink-soft">Chat opens an anonymous one-to-one under Bond. Both of you keep an alias there too.</p>
         {chat.isError && (
-          <p role="alert" className="mt-xs m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="mt-xs m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {chat.error instanceof Error ? chat.error.message : 'Could not open a chat.'}
           </p>
         )}
@@ -491,22 +491,22 @@ export function CircleGroup() {
 
       <section className="mt-md rounded-tile bg-card p-sm shadow-toy-soft" aria-labelledby="plan-heading">
         <div className="flex items-center justify-between gap-sm">
-          <h2 id="plan-heading" className="m-0 text-[18px]">
+          <h2 id="plan-heading" className="m-0 text-title3">
             The plan
           </h2>
           <Button variant="ghost" onClick={() => setPlanning(true)}>
             Edit
           </Button>
         </div>
-        <p className="mt-xs m-0 text-[16px] font-bold">{g.venue || 'Where: not decided yet'}</p>
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">{g.plan || 'Agree on the exact time and table in the chat, then write it here so everyone sees it.'}</p>
+        <p className="mt-xs m-0 text-headline">{g.venue || 'Where: not decided yet'}</p>
+        <p className="m-0 text-subhead text-ink-soft">{g.plan || 'Agree on the exact time and table in the chat, then write it here so everyone sees it.'}</p>
       </section>
 
       <MediaSection type="circle" id={g.eventId} title="Pictures and videos from this circle" />
 
       {q.data?.attendee && (
         <section className="mt-md" aria-labelledby="code-heading">
-          <h2 id="code-heading" className="text-[18px]">
+          <h2 id="code-heading" className="text-title2">
             Attendee code
           </h2>
           <ClaimCard
@@ -521,22 +521,22 @@ export function CircleGroup() {
       )}
 
       <section className="mt-md" aria-labelledby="chat-heading">
-        <h2 id="chat-heading" className="text-[18px]">
+        <h2 id="chat-heading" className="text-title2">
           Chat
         </h2>
         {!g.chatOpen && (
           <div className="mt-xs rounded-card border-2 border-dashed border-line p-md text-center">
-            <p className="m-0 text-[16px] font-bold">Opens in {countdown(g.chatOpensAt, now)}</p>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{now > new Date(g.chatClosesAt).getTime() ? 'This chat has closed.' : 'Everyone gets the same day to plan, so nobody is waiting on strangers for a week.'}</p>
+            <p className="m-0 text-headline">Opens in {countdown(g.chatOpensAt, now)}</p>
+            <p className="mt-xs m-0 text-subhead text-ink-soft">{now > new Date(g.chatClosesAt).getTime() ? 'This chat has closed.' : 'Everyone gets the same day to plan, so nobody is waiting on strangers for a week.'}</p>
           </div>
         )}
         {g.chatOpen && (
           <>
             <div className="mt-xs flex max-h-[420px] flex-col gap-xs overflow-y-auto rounded-card bg-paper p-sm">
-              {g.messages.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">Nobody has said anything yet. Suggest a place and a time.</p>}
+              {g.messages.length === 0 && <p className="m-0 text-subhead text-ink-soft">Nobody has said anything yet. Suggest a place and a time.</p>}
               {g.messages.map((m) => (
-                <div key={m.id} className={`max-w-[85%] rounded-card p-sm text-[14px] font-semibold leading-snug ${m.mine ? 'self-end rounded-br-[8px] bg-ink text-on-ink' : 'self-start rounded-bl-[8px] bg-card shadow-toy-soft'}`}>
-                  {!m.mine && <span className="block text-[12px] font-extrabold text-ink-mute">{m.alias}</span>}
+                <div key={m.id} className={`max-w-[85%] rounded-card p-sm text-subhead ${m.mine ? 'self-end rounded-br-[8px] bg-ink text-on-ink' : 'self-start rounded-bl-[8px] bg-card shadow-toy-soft'}`}>
+                  {!m.mine && <span className="block text-caption text-ink-mute">{m.alias}</span>}
                   <Inert text={m.body} />
                 </div>
               ))}
@@ -549,17 +549,17 @@ export function CircleGroup() {
                 if (text.trim()) say.mutate();
               }}
             >
-              <input value={text} onChange={(e) => setText(e.target.value)} maxLength={1000} placeholder={`Say something as ${g.myAlias}`} aria-label="Message" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-[16px]" />
+              <input value={text} onChange={(e) => setText(e.target.value)} maxLength={1000} placeholder={`Say something as ${g.myAlias}`} aria-label="Message" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-body" />
               <Button type="submit" disabled={say.isPending || !text.trim()}>
                 Send
               </Button>
             </form>
             {say.isError && (
-              <p role="alert" className="mt-xs m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+              <p role="alert" className="mt-xs m-0 rounded-tile bg-r1/15 p-sm text-subhead">
                 {say.error instanceof Error ? say.error.message : 'Could not send.'}
               </p>
             )}
-            <p className="mt-md m-0 text-[12px] font-bold text-ink-soft">Everyone here stays {me ? `an alias, like ${me.alias}` : 'an alias'}. There is no reveal.</p>
+            <p className="mt-md m-0 text-caption text-ink-soft">Everyone here stays {me ? `an alias, like ${me.alias}` : 'an alias'}. There is no reveal.</p>
           </>
         )}
       </section>
@@ -573,11 +573,11 @@ export function CircleGroup() {
           }}
         >
           <label className="block">
-            <span className="block text-[14px] font-bold">Where</span>
+            <span className="block text-subhead font-semibold">Where</span>
             <input value={venue} onChange={(e) => setVenue(e.target.value)} maxLength={200} className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Details</span>
+            <span className="block text-subhead font-semibold">Details</span>
             <textarea value={plan} onChange={(e) => setPlan(e.target.value)} maxLength={500} rows={3} placeholder="7 pm, ask for the table under the alias Quiet Ember" className={FIELD} />
           </label>
           <Button type="submit" size="lg" full disabled={savePlan.isPending}>

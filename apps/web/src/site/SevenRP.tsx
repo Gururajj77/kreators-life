@@ -14,6 +14,8 @@ import { useParamState } from '../lib/useParamState';
 import { featuresForLifeArea, featuresForRelationship } from './content';
 import { SiteLayout, useAppEntry } from './SiteLayout';
 import { AppIcon } from '../components/AppIcon';
+import { Icon } from '../components/Icon';
+import { ArrowUpRight } from 'lucide-react';
 import { TabRow } from '../components/TabRow';
 import { BookCover } from './Books';
 import { SITE_PRIMARY_ON_INK } from './buttons';
@@ -96,9 +98,12 @@ const SHOWN = 6;
 function AppTile({ m }: { m: AppModule }) {
   return (
     <li>
-      <Link to={`/features/${m.key}`} className="toy toy-soft flex min-h-[56px] items-center gap-xs rounded-inner-sm bg-card-strong px-sm text-[14px] font-bold">
+      {/* The mark at the left, the name, and from the tablet width an arrow at the right end that nudges on hover (a phone tile has no room
+          for it beside "Leaderboard"): every tile has the same things in the same places. */}
+      <Link to={`/features/${m.key}`} className="group toy toy-soft flex min-h-[56px] items-center gap-xs rounded-inner-sm bg-card-strong px-sm text-subhead font-semibold">
         <AppIcon name={m.icon} size={20} className="text-ink-soft" />
         <span className="min-w-0 flex-1">{m.name}</span>
+        <Icon icon={ArrowUpRight} size={16} className="read-arrow hidden shrink-0 text-ink-mute sm:block" />
       </Link>
     </li>
   );
@@ -106,7 +111,8 @@ function AppTile({ m }: { m: AppModule }) {
 
 function AppGrid({ items }: { items: AppModule[] }) {
   return (
-    <ul className="m-0 grid list-none grid-cols-2 gap-xs p-0 sm:grid-cols-3">
+    // Two across on a phone and beside the tablet's list (three cut "Leaderboard" there), three where the panel has the room.
+    <ul className="m-0 grid list-none grid-cols-2 gap-xs p-0 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3">
       {items.map((m) => (
         <AppTile key={m.key} m={m} />
       ))}
@@ -158,7 +164,7 @@ function Explorer({ picks, value, onPick, label }: { picks: Choice[]; value: str
         }))}
         value={current.key}
         onChange={onPick}
-        pillClass={() => 'toy inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-card-strong px-sm text-[14px] font-bold aria-pressed:bg-ink aria-pressed:text-on-ink'}
+        pillClass={() => 'toy inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-card-strong px-sm text-subhead font-medium aria-pressed:bg-ink aria-pressed:text-on-ink'}
       />
       <ul className="m-0 hidden list-none flex-col gap-xs rounded-card bg-card p-xs shadow-toy-soft md:flex" role="group" aria-label={label}>
         {picks.map((p) => {
@@ -180,8 +186,8 @@ function Explorer({ picks, value, onPick, label }: { picks: Choice[]; value: str
               >
                 <Avatar relationship={p.relationship.key} size={32} decorative />
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[16px] font-bold leading-tight">{p.name}</span>
-                  <span className="block text-[12px] font-semibold text-ink-mute">{p.short}</span>
+                  <span className="block text-headline">{p.name}</span>
+                  <span className="block text-caption text-ink-mute">{p.short}</span>
                 </span>
               </button>
             </li>
@@ -201,14 +207,14 @@ function Explorer({ picks, value, onPick, label }: { picks: Choice[]; value: str
           <Avatar relationship={r.key} size={96} mood="excited" />
           <div className="min-w-0">
             <p className="m-0 type-eyebrow text-ink-mute">{current.eyebrow}</p>
-            <h2 className="type-hook mt-xs m-0 text-[clamp(28px,5vw,44px)]">{current.headline}</h2>
+            <h2 className="type-hook mt-xs m-0 text-display-2">{current.headline}</h2>
           </div>
         </div>
-        {current.quote && <p className="mt-md m-0 text-balance text-[18px] font-bold leading-snug">“{current.quote}”</p>}
-        <p className="mt-sm m-0 text-balance text-[16px] font-semibold text-ink-soft">{current.line}</p>
+        {current.quote && <p className="mt-md m-0 text-balance text-headline">“{current.quote}”</p>}
+        <p className="mt-sm m-0 text-balance text-callout text-ink-soft">{current.line}</p>
         {current.features.length > 0 && (
           <div className="mt-md">
-            <h3 className="m-0 text-[14px] font-extrabold" style={{ color: `var(--deep-${r.key})` }}>
+            <h3 className="m-0 text-subhead font-semibold" style={{ color: `var(--deep-${r.key})` }}>
               {current.features.length} {current.features.length === 1 ? 'app' : 'apps'} for this {current.isArea ? 'area' : 'pillar'}
             </h3>
             <div className="mt-xs">
@@ -286,11 +292,11 @@ export function SevenRP() {
       <section className="grid gap-lg pt-lg md:grid-cols-2 md:items-center md:pt-xl">
         <div>
           <p className="m-0 type-eyebrow text-ink-mute">7RP: the seven relationships</p>
-          <h1 className="type-hook mt-sm text-[clamp(40px,9vw,80px)]">
+          <h1 className="type-hook mt-sm text-display-1">
             <TextReveal parts={[{ text: 'Seven relationships' }, { text: 'make a life', em: true }]} />
           </h1>
-          <p className="mt-md m-0 max-w-[520px] text-balance text-[18px] font-semibold leading-snug text-ink-soft">
-            Each relationship is a pillar with its own guide. Pick one to see the apps that serve it.
+          <p className="mt-md m-0 max-w-[520px] text-balance text-headline text-ink-soft">
+            Life comes down to one thing: to relate and be related. Each relationship is a pillar with its own guide. Pick one to see the apps that serve it.
           </p>
           <Segmented
             className="mt-md"
@@ -317,30 +323,32 @@ export function SevenRP() {
         <section className="mt-xl" aria-labelledby="seven-book">
           <Link
             to="/features/books#the-relationship-method"
-            className="toy toy-soft flex items-center gap-md rounded-card bg-card p-sm shadow-toy-soft md:p-md"
+            className="group toy toy-soft flex items-center gap-md rounded-card bg-card p-sm shadow-toy-soft md:p-md"
           >
             <span className="block w-[72px] shrink-0 md:w-[96px]">
               <BookCover book={BOOK_BY_SLUG['the-relationship-method']} />
             </span>
-            <span className="min-w-0">
+            <span className="min-w-0 flex-1">
               <span className="block type-eyebrow text-ink-mute">The book</span>
-              <span id="seven-book" className="mt-xs block text-[20px] font-extrabold leading-tight text-balance">
+              <span id="seven-book" className="mt-xs block text-title3 text-balance">
                 {BOOK_BY_SLUG['the-relationship-method'].title}
               </span>
-              <span className="mt-xs block text-[14px] font-semibold text-ink-soft text-balance">
+              <span className="mt-xs block text-subhead text-ink-soft text-balance">
                 The book behind the seven relationships this app is built on, by {BOOK_BY_SLUG['the-relationship-method'].author}.
               </span>
             </span>
+            {/* The arrow at the bottom right says the card opens the book's page. */}
+            <Icon icon={ArrowUpRight} size={20} className="read-arrow shrink-0 self-end text-ink-mute" />
           </Link>
         </section>
       )}
 
       <section className="mt-2xl text-center">
         <motion.div {...rise} className="rounded-card bg-ink p-lg text-on-ink">
-          <h2 className="type-hook text-[clamp(32px,6vw,56px)] text-on-ink [&_em]:text-on-ink/70!">
+          <h2 className="type-hook text-display-2 text-on-ink [&_em]:text-on-ink/70!">
             Find out where <em>yours stand</em>
           </h2>
-          <p className="mt-xs m-0 text-balance text-[16px] font-semibold text-on-ink/80">A short chat places all seven, then builds a pillar for the ones that need you most.</p>
+          <p className="mt-xs m-0 text-balance text-callout text-on-ink/80">A short chat places all seven, then builds a pillar for the ones that need you most.</p>
           <Link
             to={entry === '/home' ? '/home' : '/start'}
             className={`${SITE_PRIMARY_ON_INK} mt-md`}

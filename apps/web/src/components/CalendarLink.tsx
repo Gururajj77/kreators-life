@@ -55,23 +55,23 @@ export function CalendarLink() {
 
   return (
     <section className="mt-lg" aria-labelledby="calendar-heading">
-      <h2 id="calendar-heading" className="text-[24px]">
+      <h2 id="calendar-heading" className="text-title2">
         Calendar
       </h2>
-      <p className="mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">{COPY.lede}</p>
+      <p className="mt-xs m-0 text-balance text-subhead text-ink-soft">{COPY.lede}</p>
       <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
         <Toggle on={on} onChange={(v) => save.mutate({ on: v })} label={COPY.switch} hint={COPY.switchHint} disabled={q.isPending || save.isPending} />
         {(save.isError || q.isError) && (
-          <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+          <p role="alert" className="mt-sm m-0 text-subhead">
             {COPY.failed}
           </p>
         )}
         {on && url && (
           <div className="mt-sm">
-            <label className="block text-[14px] font-bold" htmlFor="calendar-url">
+            <label className="block text-subhead font-semibold" htmlFor="calendar-url">
               Your private link
             </label>
-            <input id="calendar-url" readOnly value={url} onFocus={(e) => e.currentTarget.select()} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[14px]" />
+            <input id="calendar-url" readOnly value={url} onFocus={(e) => e.currentTarget.select()} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-subhead" />
             <div className="mt-xs flex flex-wrap items-center gap-xs">
               <Button size="sm" onClick={copy}>
                 {copied ? 'Copied' : 'Copy link'}
@@ -90,13 +90,13 @@ export function CalendarLink() {
               </Button>
             </div>
             {sure && (
-              <p role="status" className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+              <p role="status" className="mt-xs m-0 text-caption text-ink-soft">
                 {COPY.freshAsk}
               </p>
             )}
-            <p className="mt-sm m-0 text-[12px] font-bold text-ink-soft">{COPY.secret}</p>
+            <p className="mt-sm m-0 text-caption text-ink-soft">{COPY.secret}</p>
             <Fold className="mt-sm" title="How to add it">
-              <ul className="m-0 flex list-none flex-col gap-xs p-sm text-[14px] font-semibold text-ink-soft">
+              <ul className="m-0 flex list-none flex-col gap-xs p-sm text-subhead text-ink-soft">
                 <li>{COPY.google}</li>
                 <li>{COPY.apple}</li>
                 <li>{COPY.outlook}</li>
@@ -104,9 +104,9 @@ export function CalendarLink() {
             </Fold>
           </div>
         )}
-        <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{COPY.never}</p>
+        <p className="mt-sm m-0 text-subhead text-ink-soft">{COPY.never}</p>
         <Fold className="mt-xs" title="What it shows">
-          <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+          <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-subhead text-ink-soft">
             <li>{COPY.inside}</li>
             <li>{COPY.oneWay}</li>
             <li>{COPY.updates}</li>

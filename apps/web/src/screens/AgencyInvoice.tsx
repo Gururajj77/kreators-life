@@ -303,7 +303,7 @@ export function AgencyInvoice() {
               {note === 'Saved' && undo && !save.isPending && (
                 <button
                   type="button"
-                  className="font-bold text-ink underline"
+                  className="font-semibold text-ink underline"
                   onClick={() => {
                     const back = undo;
                     setUndo(null);
@@ -347,7 +347,7 @@ export function AgencyInvoice() {
       </div>
 
       <Sheet open={panel === 'show'} onClose={() => setPanel(null)} title="What the client sees">
-        <p className="mt-0 mb-sm text-[14px] font-semibold text-ink-soft">What is off is never sent to your client.</p>
+        <p className="mt-0 mb-sm text-subhead text-ink-soft">What is off is never sent to your client.</p>
         <ShowSwitches value={draft.doc.show} onChange={(show) => setDoc({ show })} />
         <div className="mt-md pb-xl">
           <Button onClick={() => setPanel(null)}>Done</Button>
@@ -361,14 +361,14 @@ export function AgencyInvoice() {
       </Sheet>
 
       <Sheet open={panel === 'activity'} onClose={() => setPanel(null)} title="Comments">
-        {clientComments.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">No comments yet.</p>}
+        {clientComments.length === 0 && <p className="m-0 text-subhead text-ink-soft">No comments yet.</p>}
         <ul className="m-0 flex list-none flex-col gap-xs p-0">
           {clientComments.map((c) => (
             <li key={c.id} className={`rounded-tile p-sm ${c.author === 'client' ? 'bg-paper' : 'bg-card-strong'}`}>
-              <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
+              <p className="m-0 text-eyebrow uppercase text-ink-soft">
                 {c.author === 'client' ? 'Client' : 'You'}, {docDate(c.createdAt)}
               </p>
-              <p className="m-0 whitespace-pre-wrap text-[14px] font-semibold">
+              <p className="m-0 whitespace-pre-wrap text-subhead">
                 <Inert text={c.body} />
               </p>
             </li>
@@ -383,7 +383,7 @@ export function AgencyInvoice() {
             Send reply
           </Button>
         </div>
-        <h3 className="mt-md mb-xs text-[16px]">Activity</h3>
+        <h3 className="mt-md mb-xs text-headline">Activity</h3>
         <DocLog type="invoice" id={inv.id} />
         <div className="mt-md pb-xl">
           <Button onClick={() => setPanel(null)}>Done</Button>
@@ -402,8 +402,8 @@ export function AgencyInvoice() {
             <div role="group" aria-label="Design" className="mt-xs grid gap-xs md:grid-cols-2">
               {INVOICE_DESIGNS.map((d) => (
                 <button key={d} type="button" aria-pressed={draft.doc.design === d} onClick={() => setDoc({ design: d })} className={`toy rounded-tile border-2 p-sm text-left ${draft.doc.design === d ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
-                  <span className="block text-[16px] font-extrabold">{INVOICE_DESIGN_META[d].name}</span>
-                  <span className="mt-xs block text-[14px] font-semibold text-ink-soft">{INVOICE_DESIGN_META[d].blurb}</span>
+                  <span className="block text-headline">{INVOICE_DESIGN_META[d].name}</span>
+                  <span className="mt-xs block text-subhead text-ink-soft">{INVOICE_DESIGN_META[d].blurb}</span>
                 </button>
               ))}
             </div>
@@ -454,16 +454,16 @@ function DuplicateSheet({ open, onClose, inv }: { open: boolean; onClose: () => 
   return (
     <Sheet open={open} onClose={onClose} title="Duplicate this invoice">
       <div className="grid gap-sm pb-xl">
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">The copy is a draft with the same lines, design and details.</p>
+        <p className="m-0 text-subhead text-ink-soft">The copy is a draft with the same lines, design and details.</p>
         <Field id="dup-issue" label="Date for the copy" type="date" value={issue} onChange={setIssue} />
-        <p className="m-0 text-[14px] font-semibold">
+        <p className="m-0 text-subhead">
           Number: {nextHint(inv.number) || 'the next free one'}
           <br />
           {gap !== null && issue ? `Due by ${invoiceDate(addDays(issue, gap))}, the same ${gap} days after it.` : 'No due date on the original.'}
         </p>
         <Toggle on={bump} onChange={setBump} label="Move months in the lines on" hint="A line like “Retainer, 2026-09” becomes the new month." />
         {err && (
-          <p role="alert" className="m-0 text-[14px] font-bold">
+          <p role="alert" className="m-0 text-subhead">
             {err}
           </p>
         )}
@@ -505,11 +505,11 @@ function TemplateSheet({ open, onClose, inv, dirty, saveFirst }: { open: boolean
   return (
     <Sheet open={open} onClose={onClose} title="Save as a template">
       <div className="grid gap-sm pb-xl">
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">A template keeps the look, who it is from, the bank, GST, TDS and the lines. It never keeps who it is billed to. Start a new invoice from it any time.</p>
+        <p className="m-0 text-subhead text-ink-soft">A template keeps the look, who it is from, the bank, GST, TDS and the lines. It never keeps who it is billed to. Start a new invoice from it any time.</p>
         <Field id="tpl-name" label="Template name" value={name} onChange={setName} max={60} />
-        {same && <p className="m-0 text-[14px] font-bold">You already have a template with this name. Saving will replace what it holds.</p>}
+        {same && <p className="m-0 text-subhead">You already have a template with this name. Saving will replace what it holds.</p>}
         {msg && (
-          <p role="status" className="m-0 text-[14px] font-bold">
+          <p role="status" className="m-0 text-subhead">
             {msg}
           </p>
         )}

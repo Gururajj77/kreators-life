@@ -57,10 +57,10 @@ export function StageBar({ stage, line = true, lineText }: { stage: AgencyStageK
       {line && (
         <div>
           <p className="m-0 type-eyebrow text-ink-mute">{`Step ${progress.index + 1} of ${progress.total}`}</p>
-          <h2 id={`${id}-h`} className="mt-xs text-[24px]">
+          <h2 id={`${id}-h`} className="mt-xs text-title2">
             {now.name}
           </h2>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{lineText ?? now.line}</p>
+          <p className="mt-xs m-0 text-subhead text-ink-soft">{lineText ?? now.line}</p>
         </div>
       )}
       {!line && (
@@ -79,7 +79,7 @@ export function StageBar({ stage, line = true, lineText }: { stage: AgencyStageK
                 {!last && <span aria-hidden="true" className="absolute left-1/2 top-[17px] h-[3px] w-full rounded-pill" style={{ background: done ? 'var(--color-r4)' : 'var(--color-line)' }} />}
                 <span
                   {...(cur ? { 'data-now': '' } : {})}
-                  className={`relative z-10 grid size-[36px] place-items-center rounded-pill text-[14px] font-extrabold ${cur ? 'bg-ink text-on-ink' : done ? 'bg-r4 text-on-fill' : 'border-2 border-line bg-card text-ink-soft'}`}
+                  className={`relative z-10 grid size-[36px] place-items-center rounded-pill text-[14px] font-bold ${cur ? 'bg-ink text-on-ink' : done ? 'bg-r4 text-on-fill' : 'border-2 border-line bg-card text-ink-soft'}`}
                 >
                   {done ? (
                     <Icon icon={Check} size={16} strokeWidth={3} />
@@ -87,8 +87,8 @@ export function StageBar({ stage, line = true, lineText }: { stage: AgencyStageK
                     i + 1
                   )}
                 </span>
-                <span className={`mt-xs block text-[12px] leading-snug ${cur ? 'font-extrabold text-ink' : 'font-bold text-ink-soft'}`}>{s.name}</span>
-                <span className="mt-xs block text-[12px] font-semibold text-ink-mute">
+                <span className={`mt-xs block text-caption ${cur ? 'font-semibold text-ink' : 'text-ink-soft'}`}>{s.name}</span>
+                <span className="mt-xs block text-caption text-ink-mute">
                   {cur ? 'Now' : done ? 'Done' : i === progress.index + 1 ? 'Next' : ''}
                   <span className="sr-only">{cur ? ', you are here' : done ? ', done' : ', still to come'}</span>
                 </span>

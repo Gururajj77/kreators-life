@@ -377,7 +377,7 @@ export function FillDetailsSheet({ open, onClose, doc, noun = 'agreement', clien
             if (!locked && !blocked && !busy) void save();
           }}
         >
-          <p role="status" className="m-0 text-balance text-[14px] font-bold">
+          <p role="status" className="m-0 text-balance text-subhead">
             {rows.length === 0
               ? `This ${thing} has no blanks to fill in.`
               : missing
@@ -386,17 +386,17 @@ export function FillDetailsSheet({ open, onClose, doc, noun = 'agreement', clien
           </p>
           {record && (
             <div className="grid gap-sm rounded-tile bg-paper p-sm">
-              <p className="m-0 text-balance text-[14px] font-semibold">{record.why}</p>
+              <p className="m-0 text-balance text-subhead">{record.why}</p>
               {record.revise}
             </div>
           )}
           {groups.map(({ g, rows: rs }) => (
             <section key={g} aria-labelledby={`fill-${g}`} className="grid gap-sm">
               <div>
-                <h3 id={`fill-${g}`} className="m-0 text-[16px] font-extrabold">
+                <h3 id={`fill-${g}`} className="m-0 text-headline">
                   {GROUP_NAME[g] || `This ${thing} only`}
                 </h3>
-                <p className="m-0 text-balance text-[14px] font-semibold text-ink-soft">{where(g, rs)}</p>
+                <p className="m-0 text-balance text-subhead text-ink-soft">{where(g, rs)}</p>
               </div>
               {rs.map((r) => (
                 <FillRow key={r.id} row={r} value={val(r)} problem={problems[r.id] ?? null} onChange={(v) => setVals((s) => ({ ...s, [r.id]: v }))} />
@@ -405,11 +405,11 @@ export function FillDetailsSheet({ open, onClose, doc, noun = 'agreement', clien
           ))}
           {hasPackages &&
             (onSettings ? (
-              <p className="m-0 text-balance text-[14px] font-semibold text-ink-soft">Your packages and prices are in the table on the agreement paper.</p>
+              <p className="m-0 text-balance text-subhead text-ink-soft">Your packages and prices are in the table on the agreement paper.</p>
             ) : (
               <div>
-                <p className="m-0 text-balance text-[14px] font-semibold text-ink-soft">{`Prices are in the table on the ${thing}. Every new one starts from your packages.`}</p>
-                <Link to="/agency?tab=settings" className="inline-flex min-h-[44px] items-center text-[14px] font-bold text-ink underline underline-offset-2">
+                <p className="m-0 text-balance text-subhead text-ink-soft">{`Prices are in the table on the ${thing}. Every new one starts from your packages.`}</p>
+                <Link to="/agency?tab=settings" className="inline-flex min-h-[44px] items-center text-subhead text-ink underline underline-offset-2">
                   Change your packages in Agency settings
                 </Link>
               </div>
@@ -450,7 +450,7 @@ function FillRow({ row, value, problem, onChange }: { row: Row; value: string; p
         <label htmlFor={id} className={LABEL}>
           {row.label}
         </label>
-        {row.optional ? <span className="text-[12px] font-semibold text-ink-soft">Optional</span> : empty ? <StatusTag tone="warn">Not filled yet</StatusTag> : null}
+        {row.optional ? <span className="text-caption text-ink-soft">Optional</span> : empty ? <StatusTag tone="warn">Not filled yet</StatusTag> : null}
       </div>
       {row.kind === 'long' ? (
         <textarea {...common} rows={3} maxLength={row.id === 'pastClients' ? 600 : 300} />
@@ -464,7 +464,7 @@ function FillRow({ row, value, problem, onChange }: { row: Row; value: string; p
         />
       )}
       {(row.hint || problem) && (
-        <span id={hint} className={`mt-xs block text-[12px] ${problem ? 'font-bold text-ink' : 'font-semibold text-ink-soft'}`}>
+        <span id={hint} className={`mt-xs block text-caption ${problem ? 'font-semibold text-ink' : 'text-ink-soft'}`}>
           {problem ?? row.hint}
         </span>
       )}

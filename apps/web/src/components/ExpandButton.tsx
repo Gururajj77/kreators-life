@@ -8,7 +8,7 @@ import { Icon } from './Icon';
  */
 export function ExpandButton({ icon, label, onClick, disabled = false }: { icon: LucideIcon; label: string; onClick: () => void; disabled?: boolean }) {
   return (
-    <button type="button" onClick={onClick} disabled={disabled} aria-label={label} title={label} className="expand-btn toy toy-soft inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-pill border-2 border-line bg-card px-xs text-[14px] font-bold text-ink disabled:opacity-50">
+    <button type="button" onClick={onClick} disabled={disabled} aria-label={label} title={label} className="expand-btn toy toy-soft inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-pill border-2 border-line bg-card px-xs text-subhead font-medium text-ink disabled:opacity-50">
       <Icon icon={icon} size={20} />
       <span className="expand-btn-words" aria-hidden="true">
         {label}

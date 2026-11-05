@@ -19,7 +19,7 @@ import { TabRow } from '../components/TabRow';
 
 const slug = (name: string) => name.toLowerCase().replace(/[^a-z]+/g, '-');
 /** The jump pills at the top of Help and over its words: as many as fit, the rest behind More, never cut at the edge. */
-const JUMP_PILL = () => 'toy toy-flat inline-flex min-h-[44px] items-center rounded-pill bg-card px-md text-[14px] font-bold';
+const JUMP_PILL = () => 'toy toy-flat inline-flex min-h-[44px] items-center rounded-pill bg-card px-md text-subhead font-medium';
 const PAGE_PARTS = [
   { key: 'earning', label: 'How you earn' },
   { key: 'words', label: 'Words we use' },
@@ -42,22 +42,22 @@ function Ticket({ t, agent, onChange }: { t: SupportTicket; agent: boolean; onCh
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
       <CardHead
         tag={
-          <span title={t.status} className="max-w-full truncate rounded-pill px-xs text-[12px] font-extrabold leading-[20px]" style={{ background: STATUS_TINT[t.status] }}>
+          <span title={t.status} className="max-w-full truncate rounded-pill px-xs text-caption font-medium leading-[20px]" style={{ background: STATUS_TINT[t.status] }}>
             {t.status}
           </span>
         }
       >
-        <p className="m-0 text-[16px] font-bold">{t.subject}</p>
+        <p className="m-0 text-headline">{t.subject}</p>
       </CardHead>
-      <p className="m-0 text-[14px] font-semibold text-ink-soft">
+      <p className="m-0 text-subhead text-ink-soft">
         {agent ? `${t.userName}, ` : ''}
         {longDate(t.createdAt)}
       </p>
-      <p className="mt-xs m-0 whitespace-pre-wrap text-[16px] font-semibold leading-relaxed">{t.body}</p>
+      <p className="mt-xs m-0 whitespace-pre-wrap text-prose">{t.body}</p>
       {t.reply && (
         <div className="mt-sm rounded-tile bg-paper p-sm">
-          <p className="m-0 text-[12px] font-bold text-ink-soft">{t.repliedByName || 'The team'} replied</p>
-          <p className="mt-xs m-0 whitespace-pre-wrap text-[16px] font-semibold leading-relaxed">{t.reply}</p>
+          <p className="m-0 text-caption text-ink-soft">{t.repliedByName || 'The team'} replied</p>
+          <p className="mt-xs m-0 whitespace-pre-wrap text-prose">{t.reply}</p>
         </div>
       )}
       {agent && t.status !== 'closed' && (
@@ -69,12 +69,12 @@ function Ticket({ t, agent, onChange }: { t: SupportTicket; agent: boolean; onCh
           }}
         >
           <label className="block">
-            <span className="block text-[12px] font-bold">Reply</span>
+            <span className="block text-caption">Reply</span>
             <textarea value={reply} onChange={(e) => setReply(e.target.value)} maxLength={4000} rows={3} className={FIELD} />
           </label>
           <div className="flex flex-wrap items-end gap-xs">
             <label className="block">
-              <span className="block text-[12px] font-bold">Then mark it</span>
+              <span className="block text-caption">Then mark it</span>
               <select value={status} onChange={(e) => setStatus(e.target.value as SupportTicket['status'])} className={FIELD}>
                 <option value="answered">answered</option>
                 <option value="closed">closed</option>
@@ -124,7 +124,7 @@ export function Help() {
         lede={
           <>
             <p className="m-0">Answers to the usual questions, and a line to the team.</p>
-            <p className="mt-xs m-0 text-[12px] font-bold">In danger? Call your local emergency number. In India, Tele-MANAS is 14416.</p>
+            <p className="mt-xs m-0 text-caption">In danger? Call your local emergency number or go to the nearest hospital. In India, Tele-MANAS is 14416.</p>
           </>
         }
       >
@@ -134,21 +134,21 @@ export function Help() {
       </AppCover>
 
       <section className="mt-lg" id="earning" aria-labelledby="earning-heading">
-        <h2 id="earning-heading" className="text-[24px]">
+        <h2 id="earning-heading" className="text-title2">
           How you earn
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Xp is progress, points are to spend, and badges are proof. Showing up is the whole trick.</p>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">Xp is progress, points are to spend, and badges are proof. Showing up is the whole trick.</p>
         {earningGuide().map((g) => (
           <Fold key={g.title} className="mt-sm" title={g.title} hint={String(g.lines.length)}>
           <div className="rounded-card bg-card p-md shadow-toy-soft">
             <ul className="flex list-none flex-col p-0 m-0">
               {g.lines.map((l) => (
-                <li key={l.what} className="flex items-baseline justify-between gap-sm border-t border-line py-xs text-[14px]">
+                <li key={l.what} className="flex items-baseline justify-between gap-sm border-t border-line py-xs text-subhead">
                   <span className="min-w-0 flex-1">
-                    <span className="block font-bold">{l.what}</span>
-                    <span className="block font-semibold text-ink-soft">{l.how}</span>
+                    <span className="block font-semibold">{l.what}</span>
+                    <span className="block text-ink-soft">{l.how}</span>
                   </span>
-                  <span className="shrink-0 font-extrabold">{l.pays}</span>
+                  <span className="shrink-0 font-bold">{l.pays}</span>
                 </li>
               ))}
             </ul>
@@ -158,10 +158,10 @@ export function Help() {
       </section>
 
       <section className="mt-lg" id="words" aria-labelledby="words-heading">
-        <h2 id="words-heading" className="text-[24px]">
+        <h2 id="words-heading" className="text-title2">
           Words we use
         </h2>
-        <p className="prose-long mt-xs m-0 text-[14px] font-semibold text-ink-soft">Every word the app made up, in plain ones. The "How it works" section at the bottom of each app shows the ones it leans on.</p>
+        <p className="prose-long mt-xs m-0 text-prose text-ink-soft">Every word the app made up, in plain ones. The "How it works" section at the bottom of each app shows the ones it leans on.</p>
         <div className="mt-sm">
           <nav aria-label="Word categories">
             <TabRow
@@ -192,9 +192,9 @@ export function Help() {
               >
                 <ul className="flex list-none flex-col gap-xs p-0 m-0">
                   {g.terms.map(([term, meaning]) => (
-                    <li key={term} className="prose-long rounded-tile bg-card p-sm text-[14px] shadow-toy-soft">
-                      <span className="font-bold">{term}</span>
-                      <span className="font-semibold text-ink-soft"> {meaning}</span>
+                    <li key={term} className="prose-long rounded-tile bg-card p-sm text-prose shadow-toy-soft">
+                      <span className="font-semibold">{term}</span>
+                      <span className="text-ink-soft"> {meaning}</span>
                     </li>
                   ))}
                 </ul>
@@ -205,26 +205,26 @@ export function Help() {
       </section>
 
       <section className="mt-lg" id="faq" aria-labelledby="faq-heading">
-        <h2 id="faq-heading" className="text-[24px]">
+        <h2 id="faq-heading" className="text-title2">
           Common questions
         </h2>
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {HELP_FAQ.map((f) => (
             <li key={f.q}>
               <Fold title={f.q}>
-                <p className="prose-long m-0 px-sm pb-sm text-[16px] font-semibold leading-relaxed text-ink-soft">{f.a}</p>
+                <p className="prose-long m-0 px-sm pb-sm text-prose text-ink-soft">{f.a}</p>
               </Fold>
             </li>
           ))}
         </ul>
-        <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">
+        <p className="mt-sm m-0 text-subhead text-ink-soft">
           Switch parts of the app on or off under{' '}
           <Link to="/you#features" className="underline underline-offset-4">
             Profile, Features
           </Link>
           .
         </p>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+        <p className="mt-xs m-0 text-subhead text-ink-soft">
           Patterns in what you already log, like a task you keep doing, are on{' '}
           <Link to="/insights" className="underline underline-offset-4">
             Emerging
@@ -234,11 +234,11 @@ export function Help() {
       </section>
 
       <section className="mt-lg" id="write" aria-labelledby="write-heading">
-        <h2 id="write-heading" className="text-[24px]">
+        <h2 id="write-heading" className="text-title2">
           Write to the team
         </h2>
         {sent && (
-          <p role="status" className="mt-xs m-0 rounded-tile p-sm text-[14px] font-bold" style={{ background: 'var(--tint-green)' }}>
+          <p role="status" className="mt-xs m-0 rounded-tile p-sm text-subhead" style={{ background: 'var(--tint-green)' }}>
             Got it. A reply lands in your Inbox and below.
           </p>
         )}
@@ -250,11 +250,11 @@ export function Help() {
           }}
         >
           <label className="block">
-            <span className="block text-[14px] font-bold">Subject</span>
+            <span className="block text-subhead font-semibold">Subject</span>
             <input value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={120} required className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">What happened</span>
+            <span className="block text-subhead font-semibold">What happened</span>
             <textarea value={body} onChange={(e) => setBody(e.target.value)} maxLength={4000} rows={4} required className={FIELD} />
           </label>
           <ErrorLine e={open.isError ? open.error : null} />
@@ -266,7 +266,7 @@ export function Help() {
 
       {d && (d.tickets.length > 0 || tp.page > 1) && (
         <section className="mt-lg" aria-labelledby="mine-heading">
-          <h2 id="mine-heading" className="text-[24px]">
+          <h2 id="mine-heading" className="text-title2">
             Your messages
           </h2>
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -280,10 +280,10 @@ export function Help() {
 
       {d?.agent && (
         <section className="mt-lg" aria-labelledby="queue-heading">
-          <h2 id="queue-heading" className="text-[24px]">
+          <h2 id="queue-heading" className="text-title2">
             Open tickets
           </h2>
-          {d.queue.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Nothing waiting. Nice.</p>}
+          {d.queue.length === 0 && <p className="mt-xs m-0 text-subhead text-ink-soft">Nothing waiting. Nice.</p>}
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {d.queue.map((t) => (
               <Ticket key={t.id} t={t} agent onChange={() => q.refetch()} />

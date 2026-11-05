@@ -80,7 +80,7 @@ export function Finance() {
       </AppCover>
 
       {q.isError && (
-        <p role="alert" className="span-all mt-md m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+        <p role="alert" className="span-all mt-md m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           Could not load your numbers. Try again in a moment.
         </p>
       )}
@@ -91,13 +91,13 @@ export function Finance() {
           <EmergenceSlot app="finance" max={2} />
           <section className="mt-lg" aria-labelledby="month-heading">
             <div className="flex items-center justify-between gap-xs">
-              <button type="button" onClick={() => { setMonth(shiftMonth(month, -1)); txPage.reset(); }} aria-label="Previous month" className="toy toy-soft flex size-[44px] items-center justify-center rounded-pill bg-card text-[18px] font-extrabold">
+              <button type="button" onClick={() => { setMonth(shiftMonth(month, -1)); txPage.reset(); }} aria-label="Previous month" className="toy toy-soft flex size-[44px] items-center justify-center rounded-pill bg-card text-headline">
                 ‹
               </button>
-              <h2 id="month-heading" className="m-0 text-[24px]">
+              <h2 id="month-heading" className="m-0 text-title2">
                 {monthName(month)}
               </h2>
-              <button type="button" onClick={() => { setMonth(shiftMonth(month, 1)); txPage.reset(); }} disabled={month >= thisMonth} aria-label="Next month" className="toy toy-soft flex size-[44px] items-center justify-center rounded-pill bg-card text-[18px] font-extrabold disabled:opacity-40">
+              <button type="button" onClick={() => { setMonth(shiftMonth(month, 1)); txPage.reset(); }} disabled={month >= thisMonth} aria-label="Next month" className="toy toy-soft flex size-[44px] items-center justify-center rounded-pill bg-card text-headline disabled:opacity-40">
                 ›
               </button>
             </div>
@@ -112,13 +112,13 @@ export function Finance() {
           </section>
 
           <section className="mt-lg" aria-labelledby="owed-heading">
-            <h2 id="owed-heading" className="text-[24px]">
+            <h2 id="owed-heading" className="text-title2">
               Owed
             </h2>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+            <p className="mt-xs m-0 text-subhead text-ink-soft">
               {d.owedToMeCents > 0 || d.iOweCents > 0 ? (
                 <>
-                  <span className="font-extrabold text-ink">{money(d.owedToMeCents, d.currency)}</span> coming to you, <span className="font-extrabold text-ink">{money(d.iOweCents, d.currency)}</span> to pay out.
+                  <span className="font-bold text-ink">{money(d.owedToMeCents, d.currency)}</span> coming to you, <span className="font-bold text-ink">{money(d.iOweCents, d.currency)}</span> to pay out.
                 </>
               ) : (
                 d.owedToYou.length > 0 ? 'Your sent invoices are below. Add anything else someone owes you, or you owe, and settle it when the money moves.' : 'Nothing outstanding. Add what someone owes you, or what you owe someone, and settle it when the money moves.'
@@ -160,10 +160,10 @@ export function Finance() {
           </section>
 
           <section className="mt-lg" aria-labelledby="goals-heading">
-            <h2 id="goals-heading" className="text-[24px]">
+            <h2 id="goals-heading" className="text-title2">
               Goals
             </h2>
-            {d.goals.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">A saving goal fills as you put money aside. An earning goal fills from income by itself.</p>}
+            {d.goals.length === 0 && <p className="mt-xs m-0 text-subhead text-ink-soft">A saving goal fills as you put money aside. An earning goal fills from income by itself.</p>}
             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
               {d.goals.map((g) => (
                 <GoalRow key={g.id} goal={g} currency={d.currency} onChange={refetch} />
@@ -172,10 +172,10 @@ export function Finance() {
           </section>
 
           <section className="mt-lg" aria-labelledby="recurring-heading">
-            <h2 id="recurring-heading" className="text-[24px]">
+            <h2 id="recurring-heading" className="text-title2">
               Repeats monthly
             </h2>
-            {d.recurring.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Subscriptions, rent, a retainer. Posted on the day you pick, every month.</p>}
+            {d.recurring.length === 0 && <p className="mt-xs m-0 text-subhead text-ink-soft">Subscriptions, rent, a retainer. Posted on the day you pick, every month.</p>}
             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
               {d.recurring.map((r) => (
                 <RecurringRow key={r.id} r={r} currency={d.currency} onChange={refetch} />
@@ -185,7 +185,7 @@ export function Finance() {
 
           {d.byCategory.length > 0 && (
             <section className="mt-lg" aria-labelledby="cats-heading">
-              <h2 id="cats-heading" className="text-[24px]">
+              <h2 id="cats-heading" className="text-title2">
                 By category
               </h2>
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -194,10 +194,10 @@ export function Finance() {
                   return (
                     <li key={`${c.kind}-${c.category}`} className="rounded-tile bg-card p-sm shadow-toy-soft">
                       <div className="flex items-baseline justify-between gap-sm">
-                        <p className="m-0 text-[16px] font-bold">
-                          {c.category} <span className="text-[12px] font-extrabold uppercase text-ink-mute">{c.kind === 'income' ? 'in' : 'out'}</span>
+                        <p className="m-0 text-headline">
+                          {c.category} <span className="text-eyebrow uppercase text-ink-mute">{c.kind === 'income' ? 'in' : 'out'}</span>
                         </p>
-                        <p className="m-0 text-[16px] font-extrabold">{money(c.cents, d.currency)}</p>
+                        <p className="m-0 text-headline">{money(c.cents, d.currency)}</p>
                       </div>
                       <div className="mt-xs h-[8px] overflow-hidden rounded-pill bg-line" aria-hidden="true">
                         <div className={`h-full rounded-pill ${c.kind === 'income' ? 'bg-r4' : 'bg-r2'}`} style={{ width: `${Math.round((c.cents / Math.max(1, total)) * 100)}%` }} />
@@ -211,22 +211,22 @@ export function Finance() {
 
           <section className="mt-lg" aria-labelledby="budgets-heading">
             <div className="flex items-center justify-between gap-sm">
-              <h2 id="budgets-heading" className="text-[24px]">
+              <h2 id="budgets-heading" className="text-title2">
                 Budgets
               </h2>
               <Button variant="ghost" onClick={() => setSheet('budgets')}>
                 {d.budgets.length ? 'Edit' : 'Set budgets'}
               </Button>
             </div>
-            {d.budgets.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">A monthly ceiling per expense category. The bar fills as you spend.</p>}
+            {d.budgets.length === 0 && <p className="mt-xs m-0 text-subhead text-ink-soft">A monthly ceiling per expense category. The bar fills as you spend.</p>}
             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
               {d.budgets.map((b) => {
                 const pct = Math.round((b.spentCents / Math.max(1, b.monthlyCents)) * 100);
                 return (
                   <li key={b.category} className="rounded-tile bg-card p-sm shadow-toy-soft">
                     <div className="flex items-baseline justify-between gap-sm">
-                      <p className="m-0 text-[16px] font-bold">{b.category}</p>
-                      <p className={`m-0 text-[14px] font-extrabold ${pct > 100 ? 'text-r1' : 'text-ink-soft'}`}>
+                      <p className="m-0 text-headline">{b.category}</p>
+                      <p className={`m-0 text-subhead ${pct > 100 ? 'text-r1' : 'text-ink-soft'}`}>
                         {money(b.spentCents, d.currency)} of {money(b.monthlyCents, d.currency)}
                       </p>
                     </div>
@@ -240,12 +240,12 @@ export function Finance() {
           </section>
 
           <section className="mt-lg" aria-labelledby="tx-heading">
-            <h2 id="tx-heading" className="text-[24px]">
+            <h2 id="tx-heading" className="text-title2">
               Entries, {monthName(month)}
             </h2>
-            {d.transactions.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Nothing logged this month yet.</p>}
+            {d.transactions.length === 0 && <p className="mt-xs m-0 text-subhead text-ink-soft">Nothing logged this month yet.</p>}
             {d.transactions.some((t) => t.currency && t.currency !== d.currency) && (
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">The totals count only {d.currency}. Entries in another currency are listed here and not added in.</p>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">The totals count only {d.currency}. Entries in another currency are listed here and not added in.</p>
             )}
             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
               {d.transactions.map((t) => (
@@ -269,8 +269,8 @@ export function Finance() {
 function Stat({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
     <div className="rounded-tile p-sm" style={{ background: tone }}>
-      <p className="m-0 truncate font-display text-[22px] font-extrabold leading-none">{value}</p>
-      <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{label}</p>
+      <p className="m-0 truncate text-title2 type-figure leading-none">{value}</p>
+      <p className="mt-xs m-0 text-caption text-ink-soft">{label}</p>
     </div>
   );
 }
@@ -297,7 +297,7 @@ function MonthBars({ months, currency }: { months: FinanceSummary['months']; cur
         label="Income and expenses by month"
       />
       {last && (
-        <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+        <p className="mt-xs m-0 text-caption text-ink-soft">
           {shortMonth(last.month)}: {money(last.incomeCents, currency)} in, {money(last.expenseCents, currency)} out.
         </p>
       )}
@@ -315,20 +315,20 @@ function TxRow({ t, currency, onChange }: { t: FinanceTransaction; currency: str
   return (
     <li className={`rounded-tile bg-card p-sm shadow-toy-soft`}>
       <div className="flex items-center gap-sm">
-        <span className={`flex size-[40px] shrink-0 items-center justify-center rounded-pill text-[16px] font-extrabold ${t.kind === 'income' ? 'bg-r4 text-on-fill' : 'bg-r2 text-on-fill'}`} aria-hidden="true">
+        <span className={`flex size-[40px] shrink-0 items-center justify-center rounded-pill text-headline ${t.kind === 'income' ? 'bg-r4 text-on-fill' : 'bg-r2 text-on-fill'}`} aria-hidden="true">
           {sign}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[16px] font-bold"> {t.category}
-            {t.counterparty ? <span className="font-semibold text-ink-soft"> {t.kind === 'income' ? 'from' : 'to'} {t.counterparty}</span> : ''}
+          <span className="block truncate text-headline"> {t.category}
+            {t.counterparty ? <span className="text-ink-soft"> {t.kind === 'income' ? 'from' : 'to'} {t.counterparty}</span> : ''}
           </span>
-          <span className="block truncate text-[14px] font-semibold text-ink-soft">
+          <span className="block truncate text-subhead text-ink-soft">
             {day(t.date)}
             {t.note ? `, ${t.note}` : ''}
             {t.source === 'invoice' ? ', from an invoice' : t.source === 'due' ? ', settled a due' : t.source === 'recurring' ? ', monthly' : ''}
           </span>
         </span>
-        <span className="shrink-0 text-[16px] font-extrabold">{money(t.kind === 'income' ? t.amountCents : -t.amountCents, t.currency || currency)}</span>
+        <span className="shrink-0 text-headline">{money(t.kind === 'income' ? t.amountCents : -t.amountCents, t.currency || currency)}</span>
         {t.source === 'manual' && (
           <button type="button" onClick={() => del.mutate()} disabled={del.isPending} aria-label="Remove" className="toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink-soft">
             ×
@@ -338,11 +338,11 @@ function TxRow({ t, currency, onChange }: { t: FinanceTransaction; currency: str
       {t.splits.length > 0 && (
         <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0 pl-xl">
           {t.splits.map((s, i) => (
-            <li key={`${s.name}-${i}`} className="flex items-center justify-between gap-xs text-[14px] font-semibold text-ink-soft">
+            <li key={`${s.name}-${i}`} className="flex items-center justify-between gap-xs text-subhead text-ink-soft">
               <span>
                 {s.name}’s share {money(s.cents, t.currency || currency)}
               </span>
-              <button type="button" onClick={() => paySplit.mutate(i)} disabled={paySplit.isPending} className={`toy toy-soft min-h-[44px] rounded-pill px-sm text-[12px] font-extrabold ${s.status === 'paid' ? 'bg-r4 text-on-fill' : 'bg-paper'}`}>
+              <button type="button" onClick={() => paySplit.mutate(i)} disabled={paySplit.isPending} className={`toy toy-soft min-h-[44px] rounded-pill px-sm text-caption font-medium ${s.status === 'paid' ? 'bg-r4 text-on-fill' : 'bg-paper'}`}>
                 {s.status === 'paid' ? 'Paid' : 'Mark paid'}
               </button>
             </li>
@@ -361,17 +361,17 @@ function DueRow({ due, currency, onChange }: { due: FinanceDue; currency: string
     <li className={`rounded-tile bg-card p-sm shadow-toy-soft ${due.status === 'settled' ? 'opacity-70' : ''}`}>
       <div className="flex items-center gap-sm">
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[16px] font-bold">
+          <span className="block truncate text-headline">
             {due.direction === 'owed' ? `${due.counterparty} owes you` : `You owe ${due.counterparty}`}
           </span>
-          <span className={`block text-[14px] font-semibold ${overdue ? 'text-r1' : 'text-ink-soft'}`}>
+          <span className={`block text-subhead ${overdue ? 'text-r1' : 'text-ink-soft'}`}>
             {due.dueDate ? `${overdue ? 'was due' : 'due'} ${day(due.dueDate)}` : 'no date'}
             {due.recurring === 'monthly' ? ', every month' : ''}
             {due.note ? `, ${due.note}` : ''}
             {due.settledAt ? `, settled ${shortDate(due.settledAt)}` : ''}
           </span>
         </span>
-        <span className="shrink-0 text-[16px] font-extrabold">{money(due.amountCents, due.currency || currency)}</span>
+        <span className="shrink-0 text-headline">{money(due.amountCents, due.currency || currency)}</span>
       </div>
       {due.status === 'open' && (
         <div className="mt-xs flex gap-xs">
@@ -420,17 +420,17 @@ function GoalRow({ goal, currency, onChange }: { goal: FinanceGoal; currency: st
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="flex items-baseline justify-between gap-sm">
-        <p className="m-0 text-[16px] font-bold">
-          {goal.title} <span className="text-[12px] font-extrabold uppercase text-ink-mute">{goal.kind === 'earn' ? 'earn' : 'save'}</span>
+        <p className="m-0 text-headline">
+          {goal.title} <span className="text-eyebrow uppercase text-ink-mute">{goal.kind === 'earn' ? 'earn' : 'save'}</span>
         </p>
-        <p className="m-0 text-[14px] font-extrabold text-ink-soft">
+        <p className="m-0 text-subhead text-ink-soft">
           {money(goal.progressCents, currency)} of {money(goal.targetCents, currency)}
         </p>
       </div>
       <div className="mt-xs h-[8px] overflow-hidden rounded-pill bg-line" aria-hidden="true">
         <div className={`h-full rounded-pill ${pct >= 100 ? 'bg-r4' : 'bg-r6'}`} style={{ width: `${pct}%` }} />
       </div>
-      <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+      <p className="mt-xs m-0 text-caption text-ink-soft">
         {pct}%{goal.deadline ? `, by ${day(goal.deadline)}` : ''}
         {goal.kind === 'earn' ? `, counting income since ${day(goal.startDate)}` : ''}
       </p>
@@ -443,7 +443,7 @@ function GoalRow({ goal, currency, onChange }: { goal: FinanceGoal; currency: st
               if (toCents(amount) !== 0) add.mutate();
             }}
           >
-            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Put aside" aria-label="Amount to put aside" className="w-[140px] rounded-pill border-2 border-line bg-paper px-sm py-xs text-[14px]" />
+            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Put aside" aria-label="Amount to put aside" className="w-[140px] rounded-pill border-2 border-line bg-paper px-sm py-xs text-subhead" />
             <Button variant="outline" type="submit" disabled={add.isPending || toCents(amount) === 0}>
               Add
             </Button>
@@ -460,10 +460,10 @@ function GoalRow({ goal, currency, onChange }: { goal: FinanceGoal; currency: st
 function CategoryChips({ cats, value, onChange }: { cats: readonly string[]; value: string; onChange: (c: string) => void }) {
   return (
     <fieldset className="m-0 border-0 p-0">
-      <legend className="text-[14px] font-bold">Category</legend>
+      <legend className="text-subhead font-semibold">Category</legend>
       <div className="mt-xs flex flex-wrap gap-xs">
         {cats.map((c) => (
-          <button key={c} type="button" aria-pressed={value === c} onClick={() => onChange(c)} className={`min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${value === c ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+          <button key={c} type="button" aria-pressed={value === c} onClick={() => onChange(c)} className={`min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${value === c ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
             {c}
           </button>
         ))}
@@ -505,33 +505,33 @@ function AddSheet({ kind, onClose, onDone }: { kind: 'income' | 'expense' | null
       >
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
-            <span className="block text-[14px] font-bold">Amount</span>
+            <span className="block text-subhead font-semibold">Amount</span>
             <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" autoFocus required className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">{kind === 'expense' ? 'To whom' : 'From whom'}</span>
+            <span className="block text-subhead font-semibold">{kind === 'expense' ? 'To whom' : 'From whom'}</span>
             <input value={counterparty} onChange={(e) => setCounterparty(e.target.value)} maxLength={80} placeholder={kind === 'expense' ? 'Editor, landlord, a tool' : 'A brand, a client'} className={FIELD} />
           </label>
         </div>
         <CategoryChips cats={cats} value={cat} onChange={setCategory} />
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
-            <span className="block text-[14px] font-bold">Date</span>
+            <span className="block text-subhead font-semibold">Date</span>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Note</span>
+            <span className="block text-subhead font-semibold">Note</span>
             <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} className={FIELD} />
           </label>
         </div>
         <fieldset className="m-0 border-0 p-0">
-          <legend className="text-[14px] font-bold">Splits (optional)</legend>
-          <p className="m-0 text-[12px] font-semibold text-ink-soft">Shares that belong to others, like an editor’s cut. Each stays owed until you mark it paid.</p>
+          <legend className="text-subhead font-semibold">Splits (optional)</legend>
+          <p className="m-0 text-caption text-ink-soft">Shares that belong to others, like an editor’s cut. Each stays owed until you mark it paid.</p>
           <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
             {splits.map((s, i) => (
               <li key={i} className="grid grid-cols-[1fr_120px_44px] gap-xs">
-                <input aria-label="Name" value={s.name} onChange={(e) => setSplits(splits.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} placeholder="Who" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
-                <input aria-label="Share" inputMode="decimal" value={s.amount} onChange={(e) => setSplits(splits.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))} placeholder="0.00" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+                <input aria-label="Name" value={s.name} onChange={(e) => setSplits(splits.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} placeholder="Who" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+                <input aria-label="Share" inputMode="decimal" value={s.amount} onChange={(e) => setSplits(splits.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))} placeholder="0.00" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
                 <button type="button" onClick={() => setSplits(splits.filter((_, j) => j !== i))} aria-label="Remove split" className="toy toy-soft rounded-tile bg-paper text-ink-soft">
                   ×
                 </button>
@@ -542,13 +542,13 @@ function AddSheet({ kind, onClose, onDone }: { kind: 'income' | 'expense' | null
             Add a split
           </Button>
           {splitTotal > toCents(amount) && toCents(amount) > 0 && (
-            <p role="alert" className="m-0 text-[14px] font-bold text-r1">
+            <p role="alert" className="m-0 text-subhead text-r1">
               Splits add up to more than the amount.
             </p>
           )}
         </fieldset>
         {add.isError && (
-          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {add.error instanceof Error ? add.error.message : 'Could not save it.'}
           </p>
         )}
@@ -596,35 +596,35 @@ function DueSheet({ open, onClose, onDone }: { open: boolean; onClose: () => voi
               ['owe', 'I owe someone'],
             ] as const
           ).map(([k, label]) => (
-            <button key={k} type="button" aria-pressed={direction === k} onClick={() => { setDirection(k); setCategory(''); }} className={`toy min-h-[48px] rounded-pill border-2 text-[14px] font-bold ${direction === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={k} type="button" aria-pressed={direction === k} onClick={() => { setDirection(k); setCategory(''); }} className={`toy min-h-[48px] rounded-pill border-2 text-subhead font-medium ${direction === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {label}
             </button>
           ))}
         </div>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
-            <span className="block text-[14px] font-bold">Who</span>
+            <span className="block text-subhead font-semibold">Who</span>
             <input value={counterparty} onChange={(e) => setCounterparty(e.target.value)} required maxLength={80} autoFocus className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Amount</span>
+            <span className="block text-subhead font-semibold">Amount</span>
             <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" required className={FIELD} />
           </label>
         </div>
         <CategoryChips cats={cats} value={cat} onChange={setCategory} />
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
-            <span className="block text-[14px] font-bold">Due by</span>
+            <span className="block text-subhead font-semibold">Due by</span>
             <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Note</span>
+            <span className="block text-subhead font-semibold">Note</span>
             <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} className={FIELD} />
           </label>
         </div>
         <Toggle on={recurring} onChange={setRecurring} label="Every month" hint="When you settle it, next month’s comes up by itself." />
         {add.isError && (
-          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {add.error instanceof Error ? add.error.message : 'Could not save it.'}
           </p>
         )}
@@ -671,33 +671,33 @@ function RecurringSheet({ open, onClose, onDone }: { open: boolean; onClose: () 
               ['income', 'Comes in'],
             ] as const
           ).map(([k, label]) => (
-            <button key={k} type="button" aria-pressed={kind === k} onClick={() => { setKind(k); setCategory(''); }} className={`toy min-h-[48px] rounded-pill border-2 text-[14px] font-bold ${kind === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={k} type="button" aria-pressed={kind === k} onClick={() => { setKind(k); setCategory(''); }} className={`toy min-h-[48px] rounded-pill border-2 text-subhead font-medium ${kind === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {label}
             </button>
           ))}
         </div>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
-            <span className="block text-[14px] font-bold">Amount</span>
+            <span className="block text-subhead font-semibold">Amount</span>
             <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" required autoFocus className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Day of the month</span>
+            <span className="block text-subhead font-semibold">Day of the month</span>
             <input type="number" min={1} max={28} value={dayOfMonth} onChange={(e) => setDayOfMonth(e.target.value)} className={FIELD} />
           </label>
         </div>
         <CategoryChips cats={cats} value={cat} onChange={setCategory} />
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
-            <span className="block text-[14px] font-bold">{kind === 'expense' ? 'To whom' : 'From whom'}</span>
+            <span className="block text-subhead font-semibold">{kind === 'expense' ? 'To whom' : 'From whom'}</span>
             <input value={counterparty} onChange={(e) => setCounterparty(e.target.value)} maxLength={80} className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Note</span>
+            <span className="block text-subhead font-semibold">Note</span>
             <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} className={FIELD} />
           </label>
         </div>
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">Posted to your entries on that day each month, starting with the next one.</p>
+        <p className="m-0 text-subhead text-ink-soft">Posted to your entries on that day each month, starting with the next one.</p>
         <Button type="submit" size="lg" full disabled={add.isPending || toCents(amount) <= 0}>
           Save
         </Button>
@@ -730,7 +730,7 @@ function GoalSheet({ open, onClose, onDone }: { open: boolean; onClose: () => vo
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">What for</span>
+          <span className="block text-subhead font-semibold">What for</span>
           <input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={120} autoFocus placeholder="A new camera, three months of rent" className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs" role="group" aria-label="Kind">
@@ -740,19 +740,19 @@ function GoalSheet({ open, onClose, onDone }: { open: boolean; onClose: () => vo
               ['earn', 'Earn'],
             ] as const
           ).map(([k, label]) => (
-            <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={`toy min-h-[48px] rounded-pill border-2 text-[14px] font-bold ${kind === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={`toy min-h-[48px] rounded-pill border-2 text-subhead font-medium ${kind === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {label}
             </button>
           ))}
         </div>
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">{kind === 'save' ? 'You add what you put aside; the bar fills as you do.' : 'Income from today until the deadline counts toward it by itself.'}</p>
+        <p className="m-0 text-subhead text-ink-soft">{kind === 'save' ? 'You add what you put aside; the bar fills as you do.' : 'Income from today until the deadline counts toward it by itself.'}</p>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
-            <span className="block text-[14px] font-bold">Target</span>
+            <span className="block text-subhead font-semibold">Target</span>
             <input inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="0.00" required className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">By (optional)</span>
+            <span className="block text-subhead font-semibold">By (optional)</span>
             <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} className={FIELD} />
           </label>
         </div>
@@ -784,8 +784,8 @@ function BudgetSheet({ open, summary, onClose, onDone }: { open: boolean; summar
       >
         {EXPENSE_CATEGORIES.map((c) => (
           <label key={c} className="grid grid-cols-[1fr_120px] items-center gap-xs">
-            <span className="text-[14px] font-bold">{c}</span>
-            <input inputMode="decimal" value={values[c] ?? ''} onChange={(e) => setValues({ ...values, [c]: e.target.value })} placeholder="0" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+            <span className="text-subhead font-semibold">{c}</span>
+            <input inputMode="decimal" value={values[c] ?? ''} onChange={(e) => setValues({ ...values, [c]: e.target.value })} placeholder="0" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
           </label>
         ))}
         <Button type="submit" size="lg" full disabled={save.isPending}>
@@ -811,13 +811,13 @@ function CategoryDonut({ byCategory, currency }: { byCategory: FinanceSummary['b
     <div className="mt-sm flex items-center gap-md rounded-tile bg-card p-sm shadow-toy-soft">
       <Donut segments={slices} size={132} stroke={20} label={`Money ${kind} by category this month`}>
         <span className="flex flex-col items-center leading-none">
-          <span className="font-display text-[18px] font-extrabold">{money(total, currency)}</span>
-          <span className="mt-xs text-[12px] font-bold text-ink-soft">{kind}</span>
+          <span className="text-title3 type-figure">{money(total, currency)}</span>
+          <span className="mt-xs text-caption text-ink-soft">{kind}</span>
         </span>
       </Donut>
       <div className="min-w-0 flex-1">
-        <p className="m-0 text-[14px] font-bold">{kind === 'out' ? 'Where it went' : 'Where it came from'}</p>
-        <div className="mt-xs">{slices.length > 0 ? <Legend items={slices.map((c) => ({ color: c.color, label: c.label, text: money(c.value, currency) }))} /> : <p className="m-0 text-[14px] font-semibold text-ink-soft">Nothing this month yet.</p>}</div>
+        <p className="m-0 text-subhead font-semibold">{kind === 'out' ? 'Where it went' : 'Where it came from'}</p>
+        <div className="mt-xs">{slices.length > 0 ? <Legend items={slices.map((c) => ({ color: c.color, label: c.label, text: money(c.value, currency) }))} /> : <p className="m-0 text-subhead text-ink-soft">Nothing this month yet.</p>}</div>
       </div>
     </div>
   );

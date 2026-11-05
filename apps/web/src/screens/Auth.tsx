@@ -19,14 +19,14 @@ export function PasswordField({ label, value, onChange, autoComplete, hint }: { 
   const [shown, setShown] = useState(false);
   return (
     <label className="block">
-      <span className="block text-[14px] font-bold">{label}</span>
+      <span className="block text-subhead font-semibold">{label}</span>
       <span className="relative block">
         <input type={shown ? 'text' : 'password'} required value={value} onChange={(e) => onChange(e.target.value)} autoComplete={autoComplete} maxLength={128} className={`${FIELD_CARD} pr-xl`} />
         <button type="button" onClick={() => setShown((s) => !s)} aria-pressed={shown} aria-label="Show password" title={shown ? 'Hide password' : 'Show password'} className="absolute top-1/2 right-xs inline-flex size-[44px] -translate-y-1/2 items-center justify-center rounded-pill text-ink-soft hover:text-ink">
           <AnimatedIcon name="visibility" size={20} active={shown} interaction="click-toggle" />
         </button>
       </span>
-      {hint && <span className="mt-xs block text-[12px] font-bold text-ink-soft">{hint}</span>}
+      {hint && <span className="mt-xs block text-caption text-ink-soft">{hint}</span>}
     </label>
   );
 }
@@ -46,12 +46,12 @@ function SignedOutNote() {
   });
   if (!shown) return null;
   return (
-    <p role="status" className="mt-md m-0 flex items-start justify-between gap-sm rounded-tile bg-card p-sm text-[14px] font-semibold shadow-toy-soft">
+    <p role="status" className="mt-md m-0 flex items-start justify-between gap-sm rounded-tile bg-card p-sm text-subhead shadow-toy-soft">
       <span>You were signed out here because your account was signed in on {MAX_DEVICES} other devices. An account can be signed in on {MAX_DEVICES} at a time, and the oldest one gives way. Sign in again to carry on.</span>
       <button
         type="button"
         aria-label="Dismiss"
-        className="min-h-[44px] min-w-[44px] shrink-0 text-[18px] font-bold text-ink-soft hover:text-ink"
+        className="min-h-[44px] min-w-[44px] shrink-0 text-headline text-ink-soft hover:text-ink"
         onClick={() => {
           try {
             localStorage.removeItem('kreators.signedOutNote');
@@ -109,7 +109,7 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
       <div className="pt-xl">
         <Avatar relationship="friendship" size={72} />
         <h1 className="type-large mt-md">{mode === 'signup' ? 'Create your account' : 'Welcome back'}</h1>
-        <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">
+        <p className="mt-xs m-0 text-callout text-ink-soft">
           {mode === 'signup' ? (hasSession ? 'Everything on this phone comes with you. Add an email so it survives a new phone.' : `An email, a password, a phone number and your date of birth. You need to be ${MIN_AGE} or older.`) : 'Sign in to pick up where you left off.'}
         </p>
       </div>
@@ -124,33 +124,33 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
       >
         {mode === 'signup' && (
           <label className="block">
-            <span className="block text-[14px] font-bold">Name</span>
+            <span className="block text-subhead font-semibold">Name</span>
             <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} autoComplete="nickname" className={FIELD_CARD} />
           </label>
         )}
         <label className="block">
-          <span className="block text-[14px] font-bold">Email</span>
+          <span className="block text-subhead font-semibold">Email</span>
           <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" maxLength={254} className={FIELD_CARD} />
         </label>
         <PasswordField label="Password" value={password} onChange={setPassword} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} hint={mode === 'signup' ? (weak ?? 'Eight characters or more. Not your email, not one from the usual guess lists.') : undefined} />
         {mode === 'signup' && <PasswordField label="Password, once more" value={confirm} onChange={setConfirm} autoComplete="new-password" hint={mismatch ? 'The two do not match yet.' : undefined} />}
         {mode === 'signup' && (
           <label className="block">
-            <span className="block text-[14px] font-bold">Phone</span>
+            <span className="block text-subhead font-semibold">Phone</span>
             <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" maxLength={24} placeholder="+91 98765 43210" className={FIELD_CARD} />
-            <span className="mt-xs block text-[12px] font-bold text-ink-soft">{phoneBad ?? `${PHONE_HINT} We ask so everyone here is real. Never shown to anyone.`}</span>
+            <span className="mt-xs block text-caption text-ink-soft">{phoneBad ?? `${PHONE_HINT} We ask so everyone here is real. Never shown to anyone.`}</span>
           </label>
         )}
         {mode === 'signup' && (
           <label className="block">
-            <span className="block text-[14px] font-bold">Date of birth</span>
+            <span className="block text-subhead font-semibold">Date of birth</span>
             <input type="date" required value={birthDate} onChange={(e) => setBirthDate(e.target.value)} autoComplete="bday" max={todayLocal()} className={FIELD_CARD} />
-            <span className="mt-xs block text-[12px] font-bold text-ink-soft">{ageBad ?? `We ask so everyone here is ${MIN_AGE} or older. Nobody else sees it.`}</span>
+            <span className="mt-xs block text-caption text-ink-soft">{ageBad ?? `We ask so everyone here is ${MIN_AGE} or older. Nobody else sees it.`}</span>
           </label>
         )}
         {mode === 'signup' && <TermsBox checked={agree} onChange={setAgree} />}
         {go.isError && (
-          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {go.error instanceof Error ? go.error.message : 'That did not work. Check your connection and try again.'}
           </p>
         )}
@@ -159,13 +159,13 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
         </Button>
       </form>
       {mode === 'signin' && (
-        <p className="mt-sm m-0 text-center text-[14px] font-semibold">
+        <p className="mt-sm m-0 text-center text-subhead">
           <Link to="/forgot" className="inline-flex min-h-[44px] min-w-[44px] items-center underline underline-offset-4">
             Forgot your password?
           </Link>
         </p>
       )}
-      <p className="mt-md m-0 text-center text-[14px] font-semibold text-ink-soft">
+      <p className="mt-md m-0 text-center text-subhead text-ink-soft">
         {mode === 'signup' ? (
           <>
             Already have one?{' '}
@@ -182,7 +182,7 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
           </>
         )}
       </p>
-      <p className="mt-sm m-0 text-center text-[14px] font-semibold">
+      <p className="mt-sm m-0 text-center text-subhead">
         <Link to={hasSession ? (next ?? '/home') : '/start'} className="inline-flex min-h-[44px] min-w-[44px] items-center underline underline-offset-4">
           {hasSession ? 'Back to the app' : 'Continue without an account'}
         </Link>

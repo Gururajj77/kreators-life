@@ -60,10 +60,10 @@ export function ReviewCalendar({ today, onOpenPeriod }: { today: string; onOpenP
     <li key={s.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="flex items-start justify-between gap-sm">
         <div className="min-w-0">
-          <p className="m-0 text-[16px] font-extrabold">
+          <p className="m-0 text-headline">
             <Inert text={nameOf(s)} />
           </p>
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">{tie(`${s.nextOn ? prettyDate(s.nextOn) : 'No day left'} at ${timeText(s.time)}, ${s.label.toLowerCase()}`)}</p>
+          <p className="m-0 text-subhead text-ink-soft">{tie(`${s.nextOn ? prettyDate(s.nextOn) : 'No day left'} at ${timeText(s.time)}, ${s.label.toLowerCase()}`)}</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => setForm({ existing: s, day: s.anchor })}>
           Edit
@@ -77,23 +77,23 @@ export function ReviewCalendar({ today, onOpenPeriod }: { today: string; onOpenP
 
   return (
     <section className="mt-lg" aria-labelledby="rcal-heading">
-      <h2 id="rcal-heading" className="text-[24px]">
+      <h2 id="rcal-heading" className="text-title2">
         Review calendar
       </h2>
-      <p className="mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">{COPY.lede}</p>
+      <p className="mt-xs m-0 text-balance text-subhead text-ink-soft">{COPY.lede}</p>
       <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
         <CalendarGrid month={month} marks={marks} label="Review calendar" today={today} selected={picked} onPick={(day) => setPicked(day)} onMonth={setMonth} />
-        <p className="mt-sm m-0 text-[12px] font-semibold text-ink-soft">{COPY.legend}</p>
+        <p className="mt-sm m-0 text-caption text-ink-soft">{COPY.legend}</p>
       </div>
       {q.isError && (
-        <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-sm m-0 text-subhead">
           The calendar did not load. Try again in a moment.
         </p>
       )}
 
-      <h3 className="mt-md text-[16px]">Coming up</h3>
+      <h3 className="mt-md text-headline">Coming up</h3>
       {coming.length === 0 ? (
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{COPY.empty}</p>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">{COPY.empty}</p>
       ) : (
         <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">{coming.map(row)}</ul>
       )}
@@ -147,16 +147,16 @@ function DaySheet({ day, data, schedules, onClose, onAdd, onEdit, onOpen, onChan
   return (
     <Sheet open={day !== null} onClose={onClose} title={day ? prettyDate(day) : ''}>
       <div className="flex flex-col gap-sm pb-xl">
-        {scheduled.length === 0 && written.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">Nothing on this day yet.</p>}
+        {scheduled.length === 0 && written.length === 0 && <p className="m-0 text-subhead text-ink-soft">Nothing on this day yet.</p>}
         {scheduled.map((s) => {
           const full = schedules.find((x) => x.id === s.id);
           const series = Boolean(full?.repeat);
           return (
             <div key={s.id} className="rounded-tile bg-paper p-sm">
-              <p className="m-0 text-[16px] font-extrabold">
+              <p className="m-0 text-headline">
                 <Inert text={nameOf(s)} />
               </p>
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">{`Reminder at ${timeText(s.time)}${full ? `, ${full.label.toLowerCase()}` : ''}`}</p>
+              <p className="m-0 text-subhead text-ink-soft">{`Reminder at ${timeText(s.time)}${full ? `, ${full.label.toLowerCase()}` : ''}`}</p>
               <div className="mt-xs flex flex-wrap gap-xs">
                 {full && (
                   <Button variant="outline" size="sm" onClick={() => onEdit(full)}>
@@ -174,7 +174,7 @@ function DaySheet({ day, data, schedules, onClose, onAdd, onEdit, onOpen, onChan
           <div key={`${w.kind}-${w.start}`} className="flex items-center justify-between gap-sm rounded-tile bg-paper p-sm">
             <div className="min-w-0">
               <StatusTag tone="good">Written</StatusTag>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{tie(`${PERIOD_META[w.kind].name} for ${prettyDate(w.start)} to ${prettyDate(w.end)}`)}</p>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">{tie(`${PERIOD_META[w.kind].name} for ${prettyDate(w.start)} to ${prettyDate(w.end)}`)}</p>
             </div>
             <Button size="sm" onClick={() => onOpen({ kind: w.kind, start: w.start, end: w.end })}>
               Open it
@@ -182,7 +182,7 @@ function DaySheet({ day, data, schedules, onClose, onAdd, onEdit, onOpen, onChan
           </div>
         ))}
         {remove.isError && (
-          <p role="alert" className="m-0 text-[14px] font-bold">
+          <p role="alert" className="m-0 text-subhead">
             That did not work. Try again.
           </p>
         )}
@@ -242,10 +242,10 @@ function ScheduleForm({ state, today, onClose, onSaved }: { state: FormState | n
         }}
       >
         <div>
-          <span className="block text-[14px] font-bold">Which review</span>
+          <span className="block text-subhead font-semibold">Which review</span>
           <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label="Which review">
             {PERIOD_KINDS.map((k) => (
-              <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={`toy min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold ${kind === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+              <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={`toy min-h-[44px] rounded-pill border-2 px-sm text-subhead font-medium ${kind === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                 {PERIOD_META[k].short}
               </button>
             ))}
@@ -253,27 +253,27 @@ function ScheduleForm({ state, today, onClose, onSaved }: { state: FormState | n
         </div>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
-            <span className="block text-[14px] font-bold">First day</span>
+            <span className="block text-subhead font-semibold">First day</span>
             <input type="date" required value={day} onChange={(e) => setDay(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Time</span>
+            <span className="block text-subhead font-semibold">Time</span>
             <input type="time" required value={time} onChange={(e) => setTime(e.target.value)} className={FIELD} />
           </label>
         </div>
         <RepeatPicker value={repeat} anchor={day} onChange={setRepeat} onAnchor={setDay} />
         <label className="block">
-          <span className="block text-[14px] font-bold">Name (optional)</span>
+          <span className="block text-subhead font-semibold">Name (optional)</span>
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={REVIEW_SCHEDULE_NAME_MAX} placeholder="Sunday look back" className={FIELD} />
         </label>
-        <p className="m-0 text-[12px] font-semibold text-ink-soft">{COPY.note}</p>
+        <p className="m-0 text-caption text-ink-soft">{COPY.note}</p>
         {problem && (
-          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {problem}
           </p>
         )}
         {(save.isError || remove.isError) && (
-          <p role="alert" className="m-0 text-[14px] font-bold">
+          <p role="alert" className="m-0 text-subhead">
             {((save.error ?? remove.error) as Error | null)?.message || 'That did not save. Try again.'}
           </p>
         )}

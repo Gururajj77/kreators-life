@@ -1,5 +1,5 @@
 import { ASSISTANT_MODEL_BY_ID, formatCount, messagesFor, money, PLAN_CURRENCY, PLANS, type AssistantPaywall } from '@kreators/shared';
-import { ArrowRight, WandSparkles } from 'lucide-react';
+import { ArrowUpRight, WandSparkles } from 'lucide-react';
 import { Link } from 'react-router';
 import { Icon } from './Icon';
 import { Markdown } from './Markdown';
@@ -28,8 +28,8 @@ export function answeredBy(model: string): string {
 export function ModelReply({ text, model }: { text: string; model: string }) {
   return (
     <div>
-      <Markdown text={text} className="text-[16px] font-semibold leading-relaxed" />
-      <p className="m-0 mt-xs text-[12px] font-bold text-ink-mute">Answered by {answeredBy(model)}</p>
+      <Markdown text={text} className="text-prose" />
+      <p className="m-0 mt-xs text-caption text-ink-mute">Answered by {answeredBy(model)}</p>
     </div>
   );
 }
@@ -40,10 +40,10 @@ export function PlanCard({ reason }: { reason: AssistantPaywall }) {
     <Link to="/plans" className="toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm text-ink shadow-toy-soft">
       <Icon icon={WandSparkles} size={22} />
       <span className="min-w-0 flex-1">
-        <span className="block text-[14px] font-bold">{p.title}</span>
-        <span className="block text-[12px] font-semibold text-ink-soft">{p.line}</span>
+        <span className="block text-subhead font-semibold">{p.title}</span>
+        <span className="block text-caption text-ink-soft">{p.line}</span>
       </span>
-      <Icon icon={ArrowRight} size={18} />
+      <Icon icon={ArrowUpRight} size={18} />
     </Link>
   );
 }

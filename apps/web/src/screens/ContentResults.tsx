@@ -14,7 +14,7 @@ import { FIELD } from '../lib/ui';
 import { copyPlain } from '../lib/clipboard';
 import { StatTile } from '../components/Charts';
 
-const chip = (on: boolean) => `min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`;
+const chip = (on: boolean) => `min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`;
 
 
 
@@ -46,7 +46,7 @@ export function ContentResults() {
 
       <section className="mt-lg" aria-labelledby="posts-heading">
         <div className="flex items-center justify-between gap-sm">
-          <h2 id="posts-heading" className="text-[24px]">
+          <h2 id="posts-heading" className="text-title2">
             Posts
           </h2>
           <Button onClick={() => setAdding(true)}>Add a post</Button>
@@ -64,7 +64,7 @@ export function ContentResults() {
             </button>
           ))}
         </div>
-        {d && d.items.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No posts yet. Add the link to a Reel, post or video and you get a tracked link for it.</p>}
+        {d && d.items.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">No posts yet. Add the link to a Reel, post or video and you get a tracked link for it.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {d?.items.map((item) => (
             <ContentCard key={item.id} item={item} onChange={() => void Promise.all([content.refetch(), links.refetch()])} />
@@ -75,12 +75,12 @@ export function ContentResults() {
 
       <section className="mt-lg" aria-labelledby="links-heading">
         <div className="flex items-center justify-between gap-sm">
-          <h2 id="links-heading" className="text-[24px]">
+          <h2 id="links-heading" className="text-title2">
             Tracked links
           </h2>
           <Button variant="outline" onClick={() => setLinking(true)}>New link</Button>
         </div>
-        {links.data && links.data.links.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing yet. A link can open your page or one product.</p>}
+        {links.data && links.data.links.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">Nothing yet. A link can open your page or one product.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {links.data?.links.map((l) => (
             <LinkCard key={l.id} link={l} goBase={goBase} onChange={() => void links.refetch()} />
@@ -113,15 +113,15 @@ export function ContentResults() {
 }
 
 /** The pale red outline a delete wears (the Sign out button's look), never solid until the sheet asks. */
-const DELETE_BTN = 'toy inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-[16px] font-bold text-r1 hover:bg-r1/10 disabled:opacity-50';
+const DELETE_BTN = 'toy inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-headline text-r1 hover:bg-r1/10 disabled:opacity-50';
 
 /** Asks before a delete, the Mindful session pattern: a red "Yes, delete it" and a quiet "Keep it". */
 function ConfirmDelete({ open, title, body, pending, failed, onYes, onClose }: { open: boolean; title: string; body: string; pending: boolean; failed: boolean; onYes: () => void; onClose: () => void }) {
   return (
     <Sheet open={open} onClose={onClose} title={title}>
       <div className="grid gap-md pb-xl">
-        <p className="m-0 text-[16px] font-semibold text-ink-soft">{body}</p>
-        {failed && <p role="alert" className="m-0 text-[14px] font-bold text-r1">That did not work. Try again.</p>}
+        <p className="m-0 text-callout text-ink-soft">{body}</p>
+        {failed && <p role="alert" className="m-0 text-subhead text-r1">That did not work. Try again.</p>}
         <div className="flex flex-wrap gap-xs">
           <button type="button" disabled={pending} onClick={onYes} className={DELETE_BTN}>
             Yes, delete it
@@ -152,14 +152,14 @@ function ContentCard({ item, onChange }: { item: ContentItem; onChange: () => vo
   const platform = SOCIAL_PLATFORM_META[item.platform]?.name ?? 'Other';
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <p className="m-0 text-[12px] font-bold text-ink-soft">
+      <p className="m-0 text-caption text-ink-soft">
         {platform}, {item.kind}
         {item.syncedAt ? `, numbers from ${dateTime(item.syncedAt)}` : ', numbers not read yet'}
       </p>
-      <a href={item.url} target="_blank" rel="noreferrer" className="mt-xs flex min-h-[44px] items-center text-[16px] font-bold underline-offset-4 hover:underline">
+      <a href={item.url} target="_blank" rel="noreferrer" className="mt-xs flex min-h-[44px] items-center text-headline underline-offset-4 hover:underline">
         <span className="min-w-0 break-words">{item.caption || item.url}</span>
       </a>
-      <dl className="mt-sm grid grid-cols-3 gap-xs m-0 text-[14px]">
+      <dl className="mt-sm grid grid-cols-3 gap-xs m-0 text-subhead">
         {(
           [
             ['views', item.views],
@@ -173,17 +173,17 @@ function ContentCard({ item, onChange }: { item: ContentItem; onChange: () => vo
           ] as [string, string | number][]
         ).map(([k, v]) => (
           <div key={k} className="rounded-tile bg-paper p-xs">
-            <dt className="text-[12px] font-bold text-ink-soft">{k}</dt>
-            <dd className="m-0 font-display text-[16px] font-extrabold">{v}</dd>
+            <dt className="text-caption text-ink-soft">{k}</dt>
+            <dd className="m-0 text-headline">{v}</dd>
           </div>
         ))}
       </dl>
       {refresh.isError && (
-        <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+        <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           {errorText(refresh.error, 'Could not read the numbers.')}
         </p>
       )}
-      {refresh.isSuccess && !typing && <p className="mt-sm m-0 text-[14px] font-bold">{refresh.data.why}</p>}
+      {refresh.isSuccess && !typing && <p className="mt-sm m-0 text-subhead">{refresh.data.why}</p>}
       {typing ? (
         <form
           className="mt-sm flex flex-wrap items-end gap-xs"
@@ -193,15 +193,15 @@ function ContentCard({ item, onChange }: { item: ContentItem; onChange: () => vo
           }}
         >
           <label className="block w-[96px]">
-            <span className="block text-[12px] font-bold">Views</span>
+            <span className="block text-caption">Views</span>
             <input type="number" min={0} value={views} onChange={(e) => setViews(e.target.value)} className={FIELD} />
           </label>
           <label className="block w-[96px]">
-            <span className="block text-[12px] font-bold">Likes</span>
+            <span className="block text-caption">Likes</span>
             <input type="number" min={0} value={likes} onChange={(e) => setLikes(e.target.value)} className={FIELD} />
           </label>
           <label className="block w-[96px]">
-            <span className="block text-[12px] font-bold">Comments</span>
+            <span className="block text-caption">Comments</span>
             <input type="number" min={0} value={comments} onChange={(e) => setComments(e.target.value)} className={FIELD} />
           </label>
           <Button type="submit" disabled={refresh.isPending}>
@@ -251,9 +251,9 @@ function LinkCard({ link, goBase, onChange }: { link: TrackedLink; goBase: strin
   };
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <p className="m-0 text-[16px] font-bold">{link.label || `Link ${link.code}`}</p>
-      <p className="mt-xs m-0 break-all text-[14px] font-semibold">{url}</p>
-      <p className="m-0 text-[14px] font-semibold text-ink-soft">
+      <p className="m-0 text-headline">{link.label || `Link ${link.code}`}</p>
+      <p className="mt-xs m-0 break-all text-subhead">{url}</p>
+      <p className="m-0 text-subhead text-ink-soft">
         Opens {link.productTitle ?? 'your page'}, from {link.sourceType}. {link.clicks} clicks, {link.checkouts} checkouts, {link.sales} sales, {link.revenuePoints} points.
       </p>
       <div className="mt-sm flex flex-wrap gap-xs fill-row">
@@ -270,9 +270,9 @@ function LinkCard({ link, goBase, onChange }: { link: TrackedLink; goBase: strin
       <ConfirmDelete open={deleting} title="Delete this link?" body="The link stops working. Sales already credited stay. This cannot be undone." pending={remove.isPending} failed={remove.isError} onYes={() => remove.mutate()} onClose={() => setDeleting(false)} />
       <Sheet open={qrOpen} onClose={() => setQrOpen(false)} title={link.label || `Link ${link.code}`}>
         <div className="flex flex-col items-center gap-sm text-center">
-          {qr ? <img src={qr} width={160} height={160} alt={`QR code for ${url}`} className="rounded-tile bg-white p-xs" /> : qrError ? <p className="m-0 text-[14px] font-bold">{qrError}</p> : <p className="m-0 text-[14px] font-semibold text-ink-soft">Drawing the code</p>}
-          <p className="m-0 break-all text-[14px] font-semibold">{url}</p>
-          <p className="m-0 text-[12px] font-semibold text-ink-soft">Put it on a slide, a poster or a video end card. Every scan is credited to this link.</p>
+          {qr ? <img src={qr} width={160} height={160} alt={`QR code for ${url}`} className="rounded-tile bg-white p-xs" /> : qrError ? <p className="m-0 text-subhead">{qrError}</p> : <p className="m-0 text-subhead text-ink-soft">Drawing the code</p>}
+          <p className="m-0 break-all text-subhead">{url}</p>
+          <p className="m-0 text-caption text-ink-soft">Put it on a slide, a poster or a video end card. Every scan is credited to this link.</p>
           <Button variant="outline" onClick={() => void copy()}>
             {copied ? 'Copied' : 'Copy link'}
           </Button>
@@ -307,16 +307,16 @@ function AddPostSheet({ open, onClose, products, onDone }: { open: boolean; onCl
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Public link to the post</span>
+          <span className="block text-subhead font-semibold">Public link to the post</span>
           <input autoFocus value={url} onChange={(e) => setUrl(e.target.value)} required placeholder="https://" className={FIELD} />
-          <span className="mt-xs block text-[12px] font-bold text-ink-soft">YouTube numbers are read automatically. For Instagram, TikTok and others, type the views yourself.</span>
+          <span className="mt-xs block text-caption text-ink-soft">YouTube numbers are read automatically. For Instagram, TikTok and others, type the views yourself.</span>
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Caption or a short name</span>
+          <span className="block text-subhead font-semibold">Caption or a short name</span>
           <input value={caption} onChange={(e) => setCaption(e.target.value)} maxLength={300} className={FIELD} />
         </label>
         <fieldset className="m-0 border-0 p-0">
-          <legend className="text-[14px] font-bold">Kind</legend>
+          <legend className="text-subhead font-semibold">Kind</legend>
           <div className="mt-xs flex flex-wrap gap-xs">
             {CONTENT_KINDS.map((k) => (
               <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={chip(kind === k)}>
@@ -326,7 +326,7 @@ function AddPostSheet({ open, onClose, products, onDone }: { open: boolean; onCl
           </div>
         </fieldset>
         <label className="block">
-          <span className="block text-[14px] font-bold">Tracked link opens</span>
+          <span className="block text-subhead font-semibold">Tracked link opens</span>
           <select value={productId} onChange={(e) => setProductId(e.target.value)} className={FIELD}>
             <option value="">Your page</option>
             {products.map((p) => (
@@ -337,11 +337,11 @@ function AddPostSheet({ open, onClose, products, onDone }: { open: boolean; onCl
           </select>
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Views so far, if the platform cannot be read</span>
+          <span className="block text-subhead">Views so far, if the platform cannot be read</span>
           <input type="number" min={0} value={views} onChange={(e) => setViews(e.target.value)} className={FIELD} placeholder="Optional" />
         </label>
         {add.isError && (
-          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {errorText(add.error, 'Could not add it.')}
           </p>
         )}
@@ -375,11 +375,11 @@ function NewLinkSheet({ open, onClose, products, items, onDone }: { open: boolea
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Label</span>
+          <span className="block text-subhead font-semibold">Label</span>
           <input autoFocus value={label} onChange={(e) => setLabel(e.target.value)} maxLength={80} placeholder="Bio link, newsletter footer" className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Opens</span>
+          <span className="block text-subhead font-semibold">Opens</span>
           <select value={productId} onChange={(e) => setProductId(e.target.value)} className={FIELD}>
             <option value="">Your page</option>
             {products.map((p) => (
@@ -390,7 +390,7 @@ function NewLinkSheet({ open, onClose, products, items, onDone }: { open: boolea
           </select>
         </label>
         <fieldset className="m-0 border-0 p-0">
-          <legend className="text-[14px] font-bold">Where it will be shared</legend>
+          <legend className="text-subhead font-semibold">Where it will be shared</legend>
           <div className="mt-xs flex flex-wrap gap-xs">
             {LINK_SOURCES.map((s) => (
               <button key={s} type="button" aria-pressed={sourceType === s} onClick={() => setSourceType(s)} className={chip(sourceType === s)}>
@@ -401,7 +401,7 @@ function NewLinkSheet({ open, onClose, products, items, onDone }: { open: boolea
         </fieldset>
         {items.length > 0 && (
           <label className="block">
-            <span className="block text-[14px] font-bold">Tie it to a post</span>
+            <span className="block text-subhead font-semibold">Tie it to a post</span>
             <select value={contentItemId} onChange={(e) => setContentItemId(e.target.value)} className={FIELD}>
               <option value="">None</option>
               {items.map((i) => (
@@ -413,7 +413,7 @@ function NewLinkSheet({ open, onClose, products, items, onDone }: { open: boolea
           </label>
         )}
         {create.isError && (
-          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {errorText(create.error, 'Could not create it.')}
           </p>
         )}

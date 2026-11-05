@@ -17,8 +17,8 @@ import { StatusTag } from '../components/StatusTag';
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <p className="m-0 font-display text-[24px] font-extrabold leading-none">{typeof value === 'number' ? formatCount(value) : value}</p>
-      <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{label}</p>
+      <p className="m-0 text-title2 type-figure leading-none">{typeof value === 'number' ? formatCount(value) : value}</p>
+      <p className="mt-xs m-0 text-caption text-ink-soft">{label}</p>
     </div>
   );
 }
@@ -69,7 +69,7 @@ export function Customers() {
 
       <section className="mt-md" aria-labelledby="cust-heading">
         <div className="flex items-center justify-between gap-sm">
-          <h2 id="cust-heading" className="text-[24px]">
+          <h2 id="cust-heading" className="text-title2">
             People
           </h2>
           <Button variant="outline" onClick={() => void downloadCsv()} disabled={!customers.data || customers.data.customers.length === 0}>
@@ -77,15 +77,15 @@ export function Customers() {
           </Button>
         </div>
         {csvError && (
-          <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {csvError}
           </p>
         )}
-        {customers.data && customers.data.customers.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No buyers yet. They appear here after someone buys one of your products.</p>}
+        {customers.data && customers.data.customers.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">No buyers yet. They appear here after someone buys one of your products.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {customers.data?.customers.map((c) => (
             <li key={c.userId} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <p className="m-0 text-[16px] font-bold">
+              <p className="m-0 text-headline">
                 {c.handle ? (
                   <Link to={`/u/${c.handle}`} className="underline underline-offset-4">
                     {c.name}
@@ -93,9 +93,9 @@ export function Customers() {
                 ) : (
                   c.name
                 )}
-                {c.email && <span className="font-semibold text-ink-soft"> {c.email}</span>}
+                {c.email && <span className="text-ink-soft"> {c.email}</span>}
               </p>
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">
+              <p className="m-0 text-subhead text-ink-soft">
                 {formatCount(c.orders)} {c.orders === 1 ? 'order' : 'orders'}, {formatCount(c.points)} points{c.cents > 0 ? `, ${money(c.cents)}${live ? '' : ' test'}` : ''}. First {longDate(c.firstAt)}, last {longDate(c.lastAt)}. Came from {c.source}.
               </p>
             </li>
@@ -105,10 +105,10 @@ export function Customers() {
       </section>
 
       <section className="mt-lg" aria-labelledby="pay-heading">
-        <h2 id="pay-heading" className="text-[24px]">
+        <h2 id="pay-heading" className="text-title2">
           Payouts
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+        <p className="mt-xs m-0 text-subhead text-ink-soft">
           Payments: <StatusTag tone={live ? 'good' : 'warn'}>{live ? 'live' : 'test mode'}</StatusTag>. Points move the moment someone buys.{' '}
           {live ? 'Money is collected by the provider and paid out to the account below once it is approved.' : 'Money stays in test mode until a payment provider is connected.'} The platform keeps {p ? (p.feeBps / 100).toFixed(p.feeBps % 100 === 0 ? 0 : 2) : '…'}% of each sale.
         </p>
@@ -125,14 +125,14 @@ export function Customers() {
             <Stat label={live ? 'money' : 'test money'} value={money(p.testCents)} />
           </div>
         )}
-        {p && p.rows.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No sales yet. Each sale is listed here with its fee.</p>}
+        {p && p.rows.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">No sales yet. Each sale is listed here with its fee.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {p?.rows.map((r) => (
             <li key={r.orderId} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <p className="m-0 text-[16px] font-bold">
+              <p className="m-0 text-headline">
                 {r.buyerName}, {r.productTitle}
               </p>
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">
+              <p className="m-0 text-subhead text-ink-soft">
                 {formatCount(r.points)} points, fee {formatCount(r.fee)}, affiliate {formatCount(r.affiliate)}, net {formatCount(r.net)}. {r.status}, {longDate(r.createdAt)}.
               </p>
               {r.status !== 'refunded' && r.status !== 'pending' && r.status !== 'failed' && r.status !== 'expired' && (
@@ -154,15 +154,15 @@ export function Customers() {
             refund.mutate();
           }}
         >
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">
+          <p className="m-0 text-subhead text-ink-soft">
             {refunding?.title}: the buyer gets every point back, your share and any affiliate share come back out, and any booking or open question is cancelled. Money goes back through the provider.
           </p>
           <label className="block">
-            <span className="block text-[14px] font-bold">Reason, shown to no one but you</span>
+            <span className="block text-subhead">Reason, shown to no one but you</span>
             <input autoFocus value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} className={FIELD} />
           </label>
           {refund.isError && (
-            <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+            <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
               {errorText(refund.error, 'Could not refund.')}
             </p>
           )}
@@ -202,18 +202,18 @@ function KycSection({ kyc, onChange }: { kyc: KycProfile | null; onChange: () =>
   return (
     <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="kyc-heading">
       <div className="flex flex-wrap items-center justify-between gap-xs">
-        <h3 id="kyc-heading" className="text-[18px]">
+        <h3 id="kyc-heading" className="text-headline">
           Payout details
         </h3>
-        <span className={`rounded-pill px-xs text-[12px] font-extrabold leading-[20px] ${pill.cls}`}>{pill.label}</span>
+        <span className={`rounded-pill px-xs text-caption font-medium leading-[20px] ${pill.cls}`}>{pill.label}</span>
       </div>
       {kyc && status !== 'none' && (
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+        <p className="mt-xs m-0 text-subhead text-ink-soft">
           {kyc.legalName}, PAN ending {kyc.panLast4}, account ending {kyc.bankLast4}, {kyc.ifsc}.{kyc.submittedAt ? ` Sent ${longDate(kyc.submittedAt)}.` : ''}
           {kyc.note ? ` Note from the team: ${kyc.note}` : ''}
         </p>
       )}
-      <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">Payouts in money need these approved by the team. We keep only the last four digits of your PAN and account; card details never come to us.</p>
+      <p className="mt-xs m-0 text-caption text-ink-soft">Payouts in money need these approved by the team. We keep only the last four digits of your PAN and account; card details never come to us.</p>
       {open && (
         <form
           className="mt-sm flex flex-col gap-md"
@@ -223,34 +223,34 @@ function KycSection({ kyc, onChange }: { kyc: KycProfile | null; onChange: () =>
           }}
         >
           <label className="block">
-            <span className="block text-[14px] font-bold">Legal name, as on your PAN</span>
+            <span className="block text-subhead">Legal name, as on your PAN</span>
             <input value={legalName} onChange={(e) => setLegalName(e.target.value)} required maxLength={120} className={FIELD} />
           </label>
           <div className="grid grid-cols-2 gap-xs">
             <label className="block">
-              <span className="block text-[14px] font-bold">PAN</span>
+              <span className="block text-subhead font-semibold">PAN</span>
               <input value={pan} onChange={(e) => setPan(e.target.value.toUpperCase())} required maxLength={10} placeholder="ABCDE1234F" className={FIELD} />
             </label>
             <label className="block">
-              <span className="block text-[14px] font-bold">IFSC</span>
+              <span className="block text-subhead font-semibold">IFSC</span>
               <input value={ifsc} onChange={(e) => setIfsc(e.target.value.toUpperCase())} required maxLength={11} placeholder="HDFC0001234" className={FIELD} />
             </label>
           </div>
           <label className="block">
-            <span className="block text-[14px] font-bold">Bank account number</span>
+            <span className="block text-subhead font-semibold">Bank account number</span>
             <input value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} required maxLength={34} inputMode="numeric" className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Address</span>
+            <span className="block text-subhead font-semibold">Address</span>
             <input value={line} onChange={(e) => setLine(e.target.value)} required maxLength={200} placeholder="Flat, building, street" autoComplete="street-address" className={FIELD} />
           </label>
           <div className="grid grid-cols-1 gap-xs sm:grid-cols-3">
             <label className="block">
-              <span className="block text-[14px] font-bold">City</span>
+              <span className="block text-subhead font-semibold">City</span>
               <input value={city} onChange={(e) => setCity(e.target.value)} required maxLength={60} autoComplete="address-level2" className={FIELD} />
             </label>
             <label className="block">
-              <span className="block text-[14px] font-bold">State</span>
+              <span className="block text-subhead font-semibold">State</span>
               <select value={state} onChange={(e) => setState(e.target.value)} required autoComplete="address-level1" className={FIELD}>
                 <option value="">Pick one</option>
                 {INDIAN_STATES.map((st) => (
@@ -261,13 +261,13 @@ function KycSection({ kyc, onChange }: { kyc: KycProfile | null; onChange: () =>
               </select>
             </label>
             <label className="block">
-              <span className="block text-[14px] font-bold">PIN code</span>
+              <span className="block text-subhead font-semibold">PIN code</span>
               <input value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} required inputMode="numeric" maxLength={6} placeholder="560038" autoComplete="postal-code" aria-invalid={pinWrong ? true : undefined} className={FIELD} />
-              {pinWrong && <span className="mt-xs block text-[12px] font-semibold text-ink-soft">{pinWrong}</span>}
+              {pinWrong && <span className="mt-xs block text-caption text-ink-soft">{pinWrong}</span>}
             </label>
           </div>
           {submit.isError && (
-            <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+            <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
               {errorText(submit.error, 'Could not send that.')}
             </p>
           )}

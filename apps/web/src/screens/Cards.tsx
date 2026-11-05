@@ -26,23 +26,23 @@ import { tie } from '../lib/text';
 const countLine = (g: CardGameCard) => `${g.decks.length === 1 ? '1 deck' : `${formatCount(g.decks.length)} decks`}, ${formatCount(g.total)} cards`;
 
 /**
- * The cover of a game, its colour as a gradient: in `tags`, whether it is yours or what it costs at the top left, and its size (decks
- * and cards) at the top right; then its name and line; at the foot its guide at the bottom left and `cta` at the bottom right, when the whole
- * cover is the link.
+ * The cover of a game, its colour as a gradient, laid out the way the founder set it (2026-11-04): Yours or Locked at the top left and its
+ * size in decks and cards at the top right (never cut: it keeps its width and the tags wrap first), its name and line under them, its
+ * guide at the bottom left and `cta` at the bottom right: Play when the whole cover is the link, the price on a game that is not yours yet.
  */
-export function GameCover({ game, tags, cta, className = '' }: { game: CardGameCard; tags?: ReactNode; cta?: ReactNode; className?: string }) {
+export function GameCover({ game, state, cta, className = '' }: { game: CardGameCard; state?: ReactNode; cta?: ReactNode; className?: string }) {
   const rel = RELATIONSHIP_BY_KEY[game.accent];
   return (
     <div className={`relative flex flex-col overflow-hidden rounded-card p-md text-on-fill ${className}`} style={{ background: `linear-gradient(135deg, ${fillVar(rel)}, color-mix(in oklab, ${fillVar(rel)} 72%, var(--fill-shade)))` } as CSSProperties}>
       <HeroBlobs seed={game.key} />
-      <div className="relative flex items-start justify-between gap-xs">
-        {tags ? <span className="flex shrink-0 flex-wrap gap-xs">{tags}</span> : <span />}
-        <span className="min-w-0 pt-[4px] text-right text-[12px] font-bold opacity-90">{countLine(game)}</span>
+      <div className="relative flex items-start justify-between gap-sm">
+        <span className="flex min-w-0 flex-wrap gap-xs">{state}</span>
+        <span className="shrink-0 whitespace-nowrap text-caption opacity-90">{countLine(game)}</span>
       </div>
-      <h2 className="relative mt-sm text-balance text-[22px] leading-[1.2]">{tie(game.name)}</h2>
-      <p className="relative mt-xs m-0 text-balance text-[14px] font-semibold">{game.tagline}</p>
+      <h2 className="relative mt-sm text-balance text-title3">{tie(game.name)}</h2>
+      <p className="relative mt-xs m-0 text-balance text-subhead">{game.tagline}</p>
       <div className="relative mt-auto flex items-end justify-between gap-sm pt-sm">
-        <span className="shrink-0" aria-hidden="true">
+        <span aria-hidden="true">
           <Avatar relationship={game.accent} size={56} decorative />
         </span>
         {cta}
@@ -57,16 +57,17 @@ export function GameCover({ game, tags, cta, className = '' }: { game: CardGameC
  */
 export function GameTile({ game: g, index, busy, onUnlock }: { game: CardGameCard; index?: number; busy: boolean; onUnlock: (g: CardGameCard) => void }) {
   return (
-    <SpotlightCard as="li" index={index} data-pillar={g.accent} className="flex flex-col gap-xs rounded-card">
+    // Two rows of the grid (a subgrid): the covers in a row line up, and so do the Unlock or Locked blocks under them.
+    <SpotlightCard as="li" index={index} data-pillar={g.accent} className="row-span-2 grid grid-rows-subgrid gap-xs rounded-card">
       {g.unlocked ? (
         // The whole cover opens the game; the Play pill only shows that it does.
-        <Link to={`/cards/${g.key}`} aria-label={`Play ${g.name}`} className="toy flex flex-1 rounded-card">
+        <Link to={`/cards/${g.key}`} aria-label={`Play ${g.name}`} className="toy row-span-2 flex rounded-card">
           <GameCover
             game={g}
             className="flex-1"
-            tags={<StatusTag tone="good">Yours</StatusTag>}
+            state={<StatusTag tone="good">Yours</StatusTag>}
             cta={
-              <span aria-hidden="true" className="game-play inline-flex min-h-[36px] shrink-0 items-center gap-xs rounded-pill bg-card-strong px-md text-[14px] font-semibold text-ink">
+              <span aria-hidden="true" className="game-play inline-flex min-h-[36px] shrink-0 items-center gap-xs rounded-pill bg-card-strong px-md text-subhead text-ink">
                 Play
                 <Icon icon={Play} size={16} className="game-play-icon" />
               </span>
@@ -78,16 +79,14 @@ export function GameTile({ game: g, index, busy, onUnlock }: { game: CardGameCar
           <GameCover
             game={g}
             className="flex-1"
-            tags={
-              <>
-                {!g.unlock.ok && (
-                  <IconTag tone="neutral" icon="Lock">
-                    Locked
-                  </IconTag>
-                )}
-                <FactTag kind="price">{`${formatCount(g.cost)} points`}</FactTag>
-              </>
+            state={
+              !g.unlock.ok && (
+                <IconTag tone="neutral" icon="Lock">
+                  Locked
+                </IconTag>
+              )
             }
+            cta={<FactTag kind="price">{`${formatCount(g.cost)} points`}</FactTag>}
           />
           {g.unlock.ok ? (
             <Button variant="outline" disabled={busy} aria-label={`Unlock ${g.name} for ${formatCount(g.cost)} points`} onClick={() => onUnlock(g)}>
@@ -126,8 +125,8 @@ export function Cards() {
           plain header like Life, never a cover card as well. */}
       <header className="pt-lg">
         <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Games</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Unlock a game once with points, then play it for good.</p>
+        <h1 className="text-large-title">Games</h1>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">Unlock a game once with points, then play it for good.</p>
       </header>
 
       {q.isPending && (
@@ -142,14 +141,14 @@ export function Cards() {
       )}
       {q.isError && (
         <div className="mt-md rounded-card bg-card p-md shadow-toy-soft flex flex-wrap-reverse items-center justify-between gap-sm" role="alert">
-          <p className="m-0 font-bold min-w-0 flex-1 basis-[60%]">Could not load the games.</p>
+          <p className="m-0 font-semibold min-w-0 flex-1 basis-[60%]">Could not load the games.</p>
           <Button variant="outline" onClick={() => q.refetch()}>
             Try again
           </Button>
         </div>
       )}
       {error && (
-        <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+        <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           {error}
         </p>
       )}
@@ -162,7 +161,7 @@ export function Cards() {
               <HeroNumber value={mine.length} unit={`of ${data.games.length}`} label="games yours" />
             </div>
           </Hero>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+          <p className="mt-xs m-0 text-subhead text-ink-soft">
             <Link to="/rewards#games" className="inline-flex min-h-[44px] items-center underline underline-offset-4">
               See them in Rewards
             </Link>

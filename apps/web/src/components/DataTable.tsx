@@ -79,7 +79,7 @@ function compare(a: CellValue, b: CellValue): number {
 export function Select({ className = '', selectClass = '', children, ...rest }: SelectHTMLAttributes<HTMLSelectElement> & { selectClass?: string }) {
   return (
     <span className={`block ${className}`}>
-      <select {...rest} className={`min-h-[44px] w-full border-2 border-line pl-sm text-[14px] font-bold ${selectClass}`}>
+      <select {...rest} className={`min-h-[44px] w-full border-2 border-line pl-sm text-subhead font-medium ${selectClass}`}>
         {children}
       </select>
     </span>
@@ -203,12 +203,12 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
       {(search || Object.keys(options).length > 0) && (
         // fill-row-all: every item grows to fill its line, so a filter or the count never stands alone on the last one (the lone-pill rule).
         <div className="fill-row-all flex flex-wrap items-center gap-sm">
-          {search && <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter this list" aria-label={`Filter ${label}`} autoComplete="off" className="min-h-[44px] min-w-[240px] flex-1 rounded-pill border-2 border-line bg-card px-md text-[14px] font-semibold" />}
+          {search && <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter this list" aria-label={`Filter ${label}`} autoComplete="off" className="min-h-[44px] min-w-[240px] flex-1 rounded-pill border-2 border-line bg-card px-md text-subhead" />}
           {columns
             .filter((c) => c.filter)
             .map((c) => (
               <label key={c.key} className="flex min-w-[min(100%,220px)] max-w-full flex-1 items-center gap-xs">
-                <span className="shrink-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{c.label}</span>
+                <span className="shrink-0 text-eyebrow uppercase text-ink-soft">{c.label}</span>
                 <Select value={filters[c.key] ?? ''} aria-label={`Filter by ${c.label}`} onChange={(e) => setFilters((f) => ({ ...f, [c.key]: e.target.value }))} className="min-w-0 flex-1 sm:min-w-[140px]" selectClass="rounded-pill bg-card">
                   <option value="">All</option>
                   {(options[c.key] ?? []).map((o) => (
@@ -219,14 +219,14 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
                 </Select>
               </label>
             ))}
-          <span className="shrink-0 whitespace-nowrap text-right text-[14px] font-bold text-ink-soft">
+          <span className="shrink-0 whitespace-nowrap text-right text-subhead text-ink-soft">
             {visible.length} of {rows.length}
           </span>
         </div>
       )}
       {selectable && pickedRows.length > 0 && (
         <div className="mt-sm flex flex-wrap items-center gap-sm rounded-tile bg-paper p-md" role="region" aria-label="Selected rows">
-          <span className="text-[14px] font-bold">
+          <span className="text-subhead font-semibold">
             {pickedRows.length} {pickedRows.length === 1 ? 'row' : 'rows'} ticked
           </span>
           {bulk.map((b) => (
@@ -254,7 +254,7 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
               {columns.map((c) => {
                 const active = sort?.key === c.key;
                 return (
-                  <th key={c.key} scope="col" aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'} className={`whitespace-nowrap px-md py-sm text-[12px] font-extrabold uppercase tracking-wide text-ink-soft ${c.align === 'right' ? 'text-right' : ''} ${c.wide ? 'hidden md:table-cell' : ''}`}>
+                  <th key={c.key} scope="col" aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'} className={`whitespace-nowrap px-md py-sm text-eyebrow uppercase text-ink-soft ${c.align === 'right' ? 'text-right' : ''} ${c.wide ? 'hidden md:table-cell' : ''}`}>
                     {c.sortable === false ? (
                       c.label
                     ) : (
@@ -267,7 +267,7 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
                 );
               })}
               {actions && (
-                <th scope="col" className="whitespace-nowrap px-md py-sm text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
+                <th scope="col" className="whitespace-nowrap px-md py-sm text-eyebrow uppercase text-ink-soft">
                   <span className="sr-only">Actions</span>
                 </th>
               )}
@@ -276,7 +276,7 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
           <tbody>
             {page.length === 0 && (
               <tr>
-                <td colSpan={cols} className="px-md py-lg text-[14px] font-semibold text-ink-soft">
+                <td colSpan={cols} className="px-md py-lg text-subhead text-ink-soft">
                   {rows.length === 0 ? empty : 'Nothing matches. Clear the filters to see every row.'}
                 </td>
               </tr>
@@ -319,7 +319,7 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
                     </td>
                   )}
                   {columns.map((c) => (
-                    <td key={c.key} onClick={c.edit ? (e) => e.stopPropagation() : undefined} className={`px-md py-sm text-[14px] font-semibold leading-snug ${c.wrap ? 'min-w-[120px] max-w-[320px]' : 'whitespace-nowrap'} ${c.align === 'right' ? 'text-right' : ''} ${c.wide ? 'hidden md:table-cell' : ''}`}>
+                    <td key={c.key} onClick={c.edit ? (e) => e.stopPropagation() : undefined} className={`px-md py-sm text-subhead ${c.wrap ? 'min-w-[120px] max-w-[320px]' : 'whitespace-nowrap'} ${c.align === 'right' ? 'text-right' : ''} ${c.wide ? 'hidden md:table-cell' : ''}`}>
                       {cell(c, r)}
                     </td>
                   ))}
@@ -337,7 +337,7 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
       {serverPage && onPage && <PagerBar page={serverPage} onPage={onPage} label={label} />}
       {!serverPage && visible.length > shown && (
         <div className="mt-sm flex items-center justify-between gap-sm">
-          <span className="text-[12px] font-bold text-ink-soft">
+          <span className="text-caption text-ink-soft">
             Showing {page.length} of {visible.length}
           </span>
           <Button variant="outline" size="sm" onClick={() => setShown((n) => n + pageSize)}>

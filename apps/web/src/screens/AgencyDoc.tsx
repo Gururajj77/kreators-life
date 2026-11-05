@@ -220,7 +220,7 @@ export function AgencyDoc() {
       <ClientSheet open={open === 'client'} onClose={close} value={clientId} onChange={(v) => setState((s) => (s ? { ...s, clientId: v } : s))} clients={pick} />
       <Sheet open={open === 'can'} onClose={close} title="Client permissions">
         <Toggle on={doc.show.comments} onChange={(on) => edit((x) => ({ ...x, show: { ...x.show, comments: on } }))} label="Write comments" hint="They can ask for a change at their link." />
-        <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Once it is sent, they can always read it, approve it and download it.</p>
+        <p className="mt-sm m-0 text-subhead text-ink-soft">Once it is sent, they can always read it, approve it and download it.</p>
         <div className="mt-md pb-xl">
           <Button onClick={close}>Done</Button>
         </div>

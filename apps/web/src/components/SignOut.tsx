@@ -40,21 +40,21 @@ export function SignOut({ compact = false, iconOnly = false, className = '' }: {
         disabled={signout.isPending}
         aria-label={iconOnly ? 'Sign out' : undefined}
         title={iconOnly ? 'Sign out' : undefined}
-        className={`toy inline-flex items-center justify-center gap-xs rounded-pill border-2 border-r1/40 bg-transparent font-bold text-r1 hover:bg-r1/10 disabled:opacity-50 ${iconOnly ? 'size-[44px]' : compact ? 'min-h-[44px] px-sm text-[14px]' : 'min-h-[48px] px-md text-[16px]'} ${className}`}
+        className={`toy inline-flex items-center justify-center gap-xs rounded-pill border-2 border-r1/40 bg-transparent font-semibold text-r1 hover:bg-r1/10 disabled:opacity-50 ${iconOnly ? 'size-[44px]' : compact ? 'min-h-[44px] px-sm text-subhead' : 'min-h-[48px] px-md text-callout'} ${className}`}
         style={{ '--toy-color': 'var(--color-r1)' } as CSSProperties}
       >
         <DoorIcon size={compact || iconOnly ? 18 : 18} />
         {!iconOnly && (signout.isPending ? 'Signing out' : 'Sign out')}
       </button>
       <Sheet open={asking} onClose={() => setAsking(false)} title={deviceOnly ? 'Only on this device so far' : 'Sign out?'}>
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">
+        <p className="m-0 text-subhead text-ink-soft">
           {deviceOnly
             ? 'This account has no email yet. Sign out now and nothing can get back to your pillars, xp and streak. Add an email first and they come with you anywhere.'
             : 'You can sign back in any time with your email and password. Chats open on this device are cleared.'}
         </p>
         <div className="mt-md flex flex-col gap-xs">
           {deviceOnly && (
-            <Link to="/onboarding" className="toy inline-flex min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink" onClick={() => setAsking(false)}>
+            <Link to="/onboarding" className="toy inline-flex min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink" onClick={() => setAsking(false)}>
               Add an email first
             </Link>
           )}
@@ -62,7 +62,7 @@ export function SignOut({ compact = false, iconOnly = false, className = '' }: {
             type="button"
             onClick={() => signout.mutate()}
             disabled={signout.isPending}
-            className="toy inline-flex min-h-[56px] items-center justify-center gap-xs rounded-pill bg-r1 px-md text-[18px] font-bold text-on-fill disabled:opacity-50"
+            className="toy inline-flex min-h-[56px] items-center justify-center gap-xs rounded-pill bg-r1 px-md text-headline text-on-fill disabled:opacity-50"
             style={{ '--toy-color': 'var(--deep-servant_leader)' } as CSSProperties}
           >
             <DoorIcon />
@@ -73,7 +73,7 @@ export function SignOut({ compact = false, iconOnly = false, className = '' }: {
           </Button>
         </div>
         {signout.isError && (
-          <p role="alert" className="mt-sm m-0 text-[14px] font-bold text-ink-soft">
+          <p role="alert" className="mt-sm m-0 text-subhead text-ink-soft">
             That did not go through. Check your connection and try again.
           </p>
         )}

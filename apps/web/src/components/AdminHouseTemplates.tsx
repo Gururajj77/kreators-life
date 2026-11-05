@@ -78,12 +78,12 @@ export function AdminHouseTemplates({ adminKey }: { adminKey: string }) {
 
   return (
     <section className="mt-md" aria-labelledby="house-templates-heading">
-      <h2 id="house-templates-heading" className="text-[24px]">
+      <h2 id="house-templates-heading" className="text-title2">
         Agency house templates
       </h2>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Starting points every Agency user can copy.</p>
+      <p className="mt-xs m-0 text-subhead text-ink-soft">Starting points every Agency user can copy.</p>
       {error && (
-        <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+        <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           {error}
         </p>
       )}
@@ -108,7 +108,7 @@ export function AdminHouseTemplates({ adminKey }: { adminKey: string }) {
               get: (r) => r.name,
               wrap: true,
               render: (r) => (
-                <button type="button" className="min-h-[44px] text-left text-[16px] font-bold underline underline-offset-2" onClick={() => openTpl(r.id)}>
+                <button type="button" className="min-h-[44px] text-left text-headline underline underline-offset-2" onClick={() => openTpl(r.id)}>
                   {r.name}
                 </button>
               ),
@@ -177,7 +177,7 @@ function HouseTemplatePaper({ adminKey, id, onBack }: { adminKey: string; id: st
     return (
       <section className="mt-md">
         <BackLink to="/admin?tab=agencyhouse">House templates</BackLink>
-        <p role={error ? 'alert' : 'status'} className="mt-sm m-0 text-[16px] font-semibold text-ink-soft">
+        <p role={error ? 'alert' : 'status'} className="mt-sm m-0 text-callout text-ink-soft">
           {error ?? 'Opening the template'}
         </p>
       </section>
@@ -189,10 +189,10 @@ function HouseTemplatePaper({ adminKey, id, onBack }: { adminKey: string; id: st
   return (
     <section className="mt-md" aria-labelledby="house-paper-heading">
       <header className="no-print">
-        <button type="button" onClick={onBack} className="min-h-[44px] text-[14px] font-bold text-ink-soft underline underline-offset-2">
+        <button type="button" onClick={onBack} className="min-h-[44px] text-subhead text-ink-soft underline underline-offset-2">
           House templates
         </button>
-        <h2 id="house-paper-heading" className="text-[30px]">
+        <h2 id="house-paper-heading" className="text-large-title">
           {meta.name}
         </h2>
         <div className="mt-xs flex flex-wrap items-center gap-sm">
@@ -210,7 +210,7 @@ function HouseTemplatePaper({ adminKey, id, onBack }: { adminKey: string; id: st
           />
         </div>
         {error && (
-          <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {error}
           </p>
         )}
@@ -230,7 +230,7 @@ function HouseTemplatePaper({ adminKey, id, onBack }: { adminKey: string; id: st
         )}
       </div>
       <Sheet open={rename !== null} onClose={() => setRename(null)} title="Rename">
-        <label className="block text-[14px] font-bold" htmlFor="house-name">
+        <label className="block text-subhead font-semibold" htmlFor="house-name">
           Name
         </label>
         <input id="house-name" value={rename ?? ''} maxLength={60} onChange={(e) => setRename(e.target.value)} className={FIELD} />

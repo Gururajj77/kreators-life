@@ -46,7 +46,7 @@ function Mine() {
     <Screen>
       <AppCover back={{ to: '/apps', label: 'Apps' }} title="My purchases" lede="Courses, downloads, memberships, tickets, sessions, bundles, posts and answers you own." />
       {d && d.products.length === 0 && (
-        <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">
+        <p className="mt-md m-0 text-subhead text-ink-soft">
           Nothing yet. Find creators under{' '}
           <Link to="/search" className="underline underline-offset-4">
             Search
@@ -66,8 +66,8 @@ function Mine() {
                 {productHasOwnCover(p.kind, p.cover) ? p.cover : <AppIcon name={PRODUCT_KIND_META[p.kind].icon} size={22} />}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[16px] font-bold">{p.title}</span>
-                <span className="block text-[14px] font-semibold text-ink-soft">
+                <span className="block text-balance text-headline [overflow-wrap:anywhere]">{p.title}</span>
+                <span className="block text-subhead text-ink-soft">
                   {PRODUCT_KIND_META[p.kind].name} by {p.ownerName}
                   {p.kind === 'membership' && (() => {
                     const o = latestOrder(d.orders, p.id);
@@ -83,20 +83,20 @@ function Mine() {
       <Pager page={d?.page} label="purchases" />
       {d && d.bookings.length > 0 && (
         <section className="mt-lg" aria-labelledby="bk-heading">
-          <h2 id="bk-heading" className="text-[24px]">
+          <h2 id="bk-heading" className="text-title2">
             My sessions
           </h2>
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {d.bookings.map((b) => (
               <li key={b.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <p className="m-0 text-[16px] font-bold">
+                <p className="m-0 text-headline">
                   {b.productTitle} with {b.ownerName}
                 </p>
-                <p className="m-0 text-[14px] font-semibold text-ink-soft">
+                <p className="m-0 text-subhead text-ink-soft">
                   {dateTime(b.startsAt)} in your zone, {b.status}
                 </p>
                 {b.meetingUrl && b.status === 'confirmed' && (
-                  <a href={b.meetingUrl} target="_blank" rel="noreferrer" className="toy mt-sm inline-flex min-h-[44px] items-center rounded-pill bg-ink px-md text-[14px] font-bold text-on-ink">
+                  <a href={b.meetingUrl} target="_blank" rel="noreferrer" className="toy mt-sm inline-flex min-h-[44px] items-center rounded-pill bg-ink px-md text-subhead font-semibold text-on-ink">
                     Join
                   </a>
                 )}
@@ -120,17 +120,17 @@ function Mine() {
       )}
       {dms.data && dms.data.requests.length > 0 && (
         <section className="mt-lg" aria-labelledby="dm-heading">
-          <h2 id="dm-heading" className="text-[24px]">
+          <h2 id="dm-heading" className="text-title2">
             My questions
           </h2>
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {dms.data.requests.map((r) => (
               <li key={r.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <p className="m-0 text-[14px] font-bold text-ink-soft">
+                <p className="m-0 text-subhead text-ink-soft">
                   To {r.ownerName}, {r.productTitle}. {r.status === 'open' ? `Answer promised by ${longDate(r.dueAt)}` : r.status === 'answered' ? `Answered ${longDate(r.answeredAt ?? r.createdAt)}` : 'Refunded'}.
                 </p>
-                <p className="mt-xs m-0 whitespace-pre-wrap text-[16px] font-semibold">{r.question}</p>
-                {r.answer && <p className="mt-sm m-0 whitespace-pre-wrap rounded-tile bg-paper p-sm text-[16px] font-semibold">{r.answer}</p>}
+                <p className="mt-xs m-0 whitespace-pre-wrap text-prose">{r.question}</p>
+                {r.answer && <p className="mt-sm m-0 whitespace-pre-wrap rounded-tile bg-paper p-sm text-prose">{r.answer}</p>}
               </li>
             ))}
           </ul>
@@ -138,17 +138,17 @@ function Mine() {
       )}
       {certs.data && certs.data.certificates.length > 0 && (
         <section className="mt-lg" aria-labelledby="cert-heading">
-          <h2 id="cert-heading" className="text-[24px]">
+          <h2 id="cert-heading" className="text-title2">
             Certificates
           </h2>
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {certs.data.certificates.map((c) => (
               <li key={c.code} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <p className="m-0 text-[16px] font-bold">{c.productTitle}</p>
-                <p className="m-0 text-[14px] font-semibold text-ink-soft">
+                <p className="m-0 text-headline">{c.productTitle}</p>
+                <p className="m-0 text-subhead text-ink-soft">
                   By {c.ownerName}, issued {longDate(c.issuedAt)}. Code {c.code}.
                 </p>
-                <Link to={`/c/${c.code}`} className="mt-xs inline-flex min-h-[44px] items-center font-bold underline underline-offset-4">
+                <Link to={`/c/${c.code}`} className="mt-xs inline-flex min-h-[44px] items-center font-semibold underline underline-offset-4">
                   Open the certificate page
                 </Link>
               </li>
@@ -175,15 +175,15 @@ function RescheduleSheet({ booking, onClose, onDone }: { booking: Booking | null
     <Sheet open={booking !== null} onClose={onClose} title="Pick a new time">
       {booking && (
         <div className="flex flex-col gap-md">
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">
+          <p className="m-0 text-subhead text-ink-soft">
             {booking.productTitle} with {booking.ownerName}, now {dateTime(booking.startsAt)}. Moving it asks {booking.ownerName} to confirm again. Not possible within two hours of the start.
           </p>
           <label className="block">
-            <span className="block text-[14px] font-bold">Day</span>
+            <span className="block text-subhead font-semibold">Day</span>
             <input type="date" value={date} min={todayLocal()} onChange={(e) => setDate(e.target.value)} className={FIELD} />
           </label>
-          {slots.data && <p className="m-0 text-[12px] font-bold text-ink-soft">Times shown in your zone; the host is in {slots.data.zone}.</p>}
-          {slots.data && slots.data.slots.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">No free slots that day. Try another.</p>}
+          {slots.data && <p className="m-0 text-caption text-ink-soft">Times shown in your zone; the host is in {slots.data.zone}.</p>}
+          {slots.data && slots.data.slots.length === 0 && <p className="m-0 text-subhead text-ink-soft">No free slots that day. Try another.</p>}
           <div className="grid grid-cols-3 gap-xs">
             {slots.data?.slots.map((s) => (
               <Button key={s} variant="outline" onClick={() => move.mutate(s)} disabled={move.isPending}>
@@ -192,7 +192,7 @@ function RescheduleSheet({ booking, onClose, onDone }: { booking: Booking | null
             ))}
           </div>
           {move.isError && (
-            <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+            <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
               {errorText(move.error, 'Could not move it.')}
             </p>
           )}
@@ -237,45 +237,45 @@ function Owned({ id }: { id: string }) {
       {q.isError && lapsed && myOrder && (
         <div className="mt-md flex flex-wrap-reverse items-center justify-between gap-sm rounded-card bg-card p-md shadow-toy-soft">
           <div className="min-w-0 flex-1 basis-[60%]">
-            <p className="m-0 text-[16px] font-bold">Your membership ended on {day(myOrder.expiresAt ?? myOrder.createdAt)}.</p>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Renew to open the members feed again. Nothing you posted is lost.</p>
+            <p className="m-0 text-headline">Your membership ended on {day(myOrder.expiresAt ?? myOrder.createdAt)}.</p>
+            <p className="mt-xs m-0 text-subhead text-ink-soft">Renew to open the members feed again. Nothing you posted is lost.</p>
           </div>
-          <Link to={`/p/${id}`} className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+          <Link to={`/p/${id}`} className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
             Renew
           </Link>
         </div>
       )}
-      {q.isError && !(lapsed && myOrder) && <p className="mt-md font-bold">{errorText(q.error, 'Not available.')}</p>}
+      {q.isError && !(lapsed && myOrder) && <p className="mt-md font-semibold">{errorText(q.error, 'Not available.')}</p>}
       {p && (
         <>
           {p.kind === 'digital' && p.url && (
-            <a href={p.url} target="_blank" rel="noreferrer" className="toy mt-md flex min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-[18px] font-bold text-on-ink">
+            <a href={p.url} target="_blank" rel="noreferrer" className="toy mt-md flex min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
               Open your download
             </a>
           )}
           {p.kind === 'digital' && !p.url && (
             <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-              <p className="m-0 text-[16px] font-bold">{p.ownerName} has not added the file yet.</p>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">You will see it here when they do. Questions about it go through Help.</p>
-              <Link to="/help" className="mt-xs inline-flex min-h-[44px] items-center text-[14px] font-bold underline underline-offset-4">
+              <p className="m-0 text-headline">{p.ownerName} has not added the file yet.</p>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">You will see it here when they do. Questions about it go through Help.</p>
+              <Link to="/help" className="mt-xs inline-flex min-h-[44px] items-center text-subhead font-semibold underline underline-offset-4">
                 Open Help
               </Link>
             </div>
           )}
           {p.kind === 'payment' && (
             <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-              <p className="m-0 text-[16px] font-bold">Thank you. {p.ownerName} has your payment.</p>
-              {p.description && <p className="mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold text-ink-soft">{p.description}</p>}
+              <p className="m-0 text-headline">Thank you. {p.ownerName} has your payment.</p>
+              {p.description && <p className="mt-xs m-0 whitespace-pre-wrap text-subhead text-ink-soft">{p.description}</p>}
             </div>
           )}
           {p.kind === 'locked' && (
             <article className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-              <p className="m-0 whitespace-pre-wrap text-[16px] font-semibold leading-relaxed">{p.lockedBody || 'The creator has not written this post yet.'}</p>
+              <p className="m-0 whitespace-pre-wrap text-prose">{p.lockedBody || 'The creator has not written this post yet.'}</p>
             </article>
           )}
           {p.kind === 'bundle' && (
             <section className="mt-md" aria-labelledby="bundle-heading">
-              <h2 id="bundle-heading" className="text-[24px]">
+              <h2 id="bundle-heading" className="text-title2">
                 What is inside
               </h2>
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -286,19 +286,19 @@ function Owned({ id }: { id: string }) {
                         {productHasOwnCover(x.kind, x.cover) ? x.cover : <AppIcon name={PRODUCT_KIND_META[x.kind].icon} size={22} />}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[16px] font-bold">{x.title}</span>
-                        <span className="block text-[14px] font-semibold text-ink-soft">{PRODUCT_KIND_META[x.kind].name}</span>
+                        <span className="block text-balance text-headline [overflow-wrap:anywhere]">{x.title}</span>
+                        <span className="block text-subhead text-ink-soft">{PRODUCT_KIND_META[x.kind].name}</span>
                       </span>
                     </Link>
                   </li>
                 ))}
               </ul>
-              {bundled.length < p.bundleIds.length && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">The rest appears here once it loads.</p>}
+              {bundled.length < p.bundleIds.length && <p className="mt-xs m-0 text-subhead text-ink-soft">The rest appears here once it loads.</p>}
             </section>
           )}
           {p.kind === 'dm' && (
             <section className="mt-md" aria-labelledby="ask-heading">
-              <h2 id="ask-heading" className="text-[24px]">
+              <h2 id="ask-heading" className="text-title2">
                 Your questions
               </h2>
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -306,9 +306,9 @@ function Owned({ id }: { id: string }) {
                   .filter((r) => r.productId === p.id)
                   .map((r) => (
                     <li key={r.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                      <p className="m-0 text-[14px] font-bold text-ink-soft">{r.status === 'open' ? `Answer promised by ${longDate(r.dueAt)}` : r.status === 'answered' ? `Answered ${longDate(r.answeredAt ?? r.createdAt)}` : 'Refunded'}</p>
-                      <p className="mt-xs m-0 whitespace-pre-wrap text-[16px] font-semibold">{r.question}</p>
-                      {r.answer && <p className="mt-sm m-0 whitespace-pre-wrap rounded-tile bg-paper p-sm text-[16px] font-semibold">{r.answer}</p>}
+                      <p className="m-0 text-subhead text-ink-soft">{r.status === 'open' ? `Answer promised by ${longDate(r.dueAt)}` : r.status === 'answered' ? `Answered ${longDate(r.answeredAt ?? r.createdAt)}` : 'Refunded'}</p>
+                      <p className="mt-xs m-0 whitespace-pre-wrap text-prose">{r.question}</p>
+                      {r.answer && <p className="mt-sm m-0 whitespace-pre-wrap rounded-tile bg-paper p-sm text-prose">{r.answer}</p>}
                     </li>
                   ))}
               </ul>
@@ -316,16 +316,16 @@ function Owned({ id }: { id: string }) {
           )}
           {p.kind === 'event' && (
             <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-              <p className="m-0 text-[16px] font-bold">{p.startsAt ? dateTime(p.startsAt) : 'Date to be announced'}</p>
+              <p className="m-0 text-headline">{p.startsAt ? dateTime(p.startsAt) : 'Date to be announced'}</p>
               {p.meetingUrl ? (
-                <a href={p.meetingUrl} target="_blank" rel="noreferrer" className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+                <a href={p.meetingUrl} target="_blank" rel="noreferrer" className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
                   Join the event
                 </a>
               ) : (
-                <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">The joining link appears here once the host adds it.</p>
+                <p className="mt-xs m-0 text-subhead text-ink-soft">The joining link appears here once the host adds it.</p>
               )}
               {p.replayUrl && (
-                <a href={p.replayUrl} target="_blank" rel="noreferrer" className="toy toy-ink mt-sm ml-xs inline-flex min-h-[48px] items-center rounded-pill border-2 border-ink bg-card px-md font-bold">
+                <a href={p.replayUrl} target="_blank" rel="noreferrer" className="toy toy-ink mt-sm ml-xs inline-flex min-h-[48px] items-center rounded-pill border-2 border-ink bg-card px-md font-semibold">
                   Watch the recording
                 </a>
               )}
@@ -335,22 +335,22 @@ function Owned({ id }: { id: string }) {
             <>
               {lapsed ? (
                 <div className="mt-md flex flex-wrap-reverse items-center justify-between gap-sm rounded-card bg-card p-md shadow-toy-soft">
-                  <p className="m-0 min-w-0 flex-1 basis-[60%] text-[16px] font-bold">Your membership ended on {day(myOrder?.expiresAt ?? '')}.</p>
-                  <Link to={`/p/${p.id}`} className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+                  <p className="m-0 min-w-0 flex-1 basis-[60%] text-headline">Your membership ended on {day(myOrder?.expiresAt ?? '')}.</p>
+                  <Link to={`/p/${p.id}`} className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
                     Renew
                   </Link>
                 </div>
               ) : (
-                <Link to={`/community?product=${p.id}`} className="toy mt-md flex min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-[18px] font-bold text-on-ink">
+                <Link to={`/community?product=${p.id}`} className="toy mt-md flex min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
                   Open the members feed
                 </Link>
               )}
-              {myOrder?.expiresAt && !lapsed && <p className="mt-xs m-0 text-center text-[14px] font-bold text-ink-soft">Member until {day(myOrder.expiresAt)}.</p>}
+              {myOrder?.expiresAt && !lapsed && <p className="mt-xs m-0 text-center text-subhead text-ink-soft">Member until {day(myOrder.expiresAt)}.</p>}
             </>
           )}
           {p.kind === 'course' && (
             <section className="mt-md" aria-labelledby="lessons-heading">
-              <h2 id="lessons-heading" className="text-[24px]">
+              <h2 id="lessons-heading" className="text-title2">
                 Lessons, {finished} of {lessons.length} done
               </h2>
               <ol className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -374,26 +374,26 @@ function Owned({ id }: { id: string }) {
                         ) : undefined
                       }
                     />
-                    {l.unlocked && l.body && l.body.length > 160 && <p className="mt-xs m-0 whitespace-pre-wrap rounded-tile bg-paper p-sm text-[14px] font-semibold">{l.body}</p>}
+                    {l.unlocked && l.body && l.body.length > 160 && <p className="mt-xs m-0 whitespace-pre-wrap rounded-tile bg-paper p-sm text-subhead">{l.body}</p>}
                     {l.unlocked && l.quiz.length > 0 && <Quiz lesson={l} onDone={() => q.refetch()} />}
                   </li>
                 ))}
               </ol>
               {p.certificate && (
                 <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-                  <h3 className="text-[18px]">Certificate</h3>
+                  <h3 className="text-headline">Certificate</h3>
                   {q.data?.certificateCode ? (
-                    <p className="mt-xs m-0 text-[14px] font-semibold">
+                    <p className="mt-xs m-0 text-subhead">
                       Yours. Code {q.data.certificateCode}.{' '}
-                      <Link to={`/c/${q.data.certificateCode}`} className="font-bold underline underline-offset-4">
+                      <Link to={`/c/${q.data.certificateCode}`} className="font-semibold underline underline-offset-4">
                         Open the certificate page
                       </Link>
                     </p>
                   ) : (
                     <>
-                      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{allDone ? 'Every lesson is done. Claim it.' : 'Finish every lesson and pass every gated quiz, then claim it here.'}</p>
+                      <p className="mt-xs m-0 text-subhead text-ink-soft">{allDone ? 'Every lesson is done. Claim it.' : 'Finish every lesson and pass every gated quiz, then claim it here.'}</p>
                       {claim.isError && (
-                        <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+                        <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
                           {errorText(claim.error, 'Not yet.')}
                         </p>
                       )}
@@ -408,25 +408,25 @@ function Owned({ id }: { id: string }) {
           )}
           {p.kind === 'session' && (
             <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="book-heading">
-              <h2 id="book-heading" className="text-[24px]">
+              <h2 id="book-heading" className="text-title2">
                 Book a time
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+              <p className="mt-xs m-0 text-subhead text-ink-soft">
                 {p.durationMin} minutes. {p.ownerName} confirms it and adds the meeting link.
                 {slots.data ? ` Times shown in your zone; the host is in ${slots.data.zone}.` : ''}
               </p>
               {p.intake.map((qn, i) => (
                 <label key={i} className="mt-sm block">
-                  <span className="block text-[14px] font-bold">{qn}</span>
+                  <span className="block text-subhead font-semibold">{qn}</span>
                   <input value={intake[i] ?? ''} onChange={(e) => setIntake((list) => p.intake.map((_, j) => (j === i ? e.target.value : (list[j] ?? ''))))} maxLength={500} className={FIELD} />
                 </label>
               ))}
               <label className="mt-sm block">
-                <span className="block text-[14px] font-bold">Day</span>
+                <span className="block text-subhead font-semibold">Day</span>
                 <input type="date" value={date} min={todayLocal()} onChange={(e) => setDate(e.target.value)} className={FIELD} />
               </label>
-              {slots.data && slots.data.slots.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No free slots that day. Try another.</p>}
-              {!intakeReady && <p className="mt-sm m-0 text-[14px] font-bold text-ink-soft">Answer the questions above, then pick a time.</p>}
+              {slots.data && slots.data.slots.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">No free slots that day. Try another.</p>}
+              {!intakeReady && <p className="mt-sm m-0 text-subhead text-ink-soft">Answer the questions above, then pick a time.</p>}
               <div className="mt-sm grid grid-cols-3 gap-xs">
                 {slots.data?.slots.map((s) => (
                   <Button key={s} variant="outline" onClick={() => book.mutate(s)} disabled={book.isPending || !intakeReady}>
@@ -434,9 +434,9 @@ function Owned({ id }: { id: string }) {
                   </Button>
                 ))}
               </div>
-              {book.isSuccess && <p className="mt-sm m-0 text-[14px] font-bold">Requested. You will hear back in your inbox.</p>}
+              {book.isSuccess && <p className="mt-sm m-0 text-subhead">Requested. You will hear back in your inbox.</p>}
               {book.isError && (
-                <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+                <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
                   {errorText(book.error, 'Could not book.')}
                 </p>
               )}
@@ -444,11 +444,11 @@ function Owned({ id }: { id: string }) {
           )}
 
           <section className="mt-lg rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="review-heading">
-            <h2 id="review-heading" className="text-[24px]">
+            <h2 id="review-heading" className="text-title2">
               Leave a review
             </h2>
             {review.isSuccess ? (
-              <p className="mt-xs m-0 text-[14px] font-bold">Thanks. {p.ownerName} will see it.</p>
+              <p className="mt-xs m-0 text-subhead font-semibold">Thanks. {p.ownerName} will see it.</p>
             ) : (
               <form
                 className="mt-sm flex flex-col gap-md"
@@ -464,8 +464,8 @@ function Owned({ id }: { id: string }) {
                     </button>
                   ))}
                 </div>
-                <textarea value={reviewText} onChange={(e) => setReviewText(e.target.value)} rows={3} maxLength={600} aria-label="Your review" placeholder="A few honest words" className="w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
-                {review.isError && <p className="m-0 text-[14px] font-bold">{errorText(review.error, 'Could not send.')}</p>}
+                <textarea value={reviewText} onChange={(e) => setReviewText(e.target.value)} rows={3} maxLength={600} aria-label="Your review" placeholder="A few honest words" className="w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+                {review.isError && <p className="m-0 text-subhead">{errorText(review.error, 'Could not send.')}</p>}
                 <Button type="submit" full disabled={review.isPending || !reviewText.trim()}>
                   Send review
                 </Button>
@@ -486,7 +486,7 @@ function Quiz({ lesson, onDone }: { lesson: Lesson; onDone: () => void }) {
   const filled = lesson.quiz.every((_, i) => (answers[i] ?? -1) >= 0);
   return (
     <div className="mt-xs rounded-tile bg-paper p-sm">
-      <p className="m-0 text-[14px] font-bold">
+      <p className="m-0 text-subhead font-semibold">
         Quiz, {lesson.quiz.length} {lesson.quiz.length === 1 ? 'question' : 'questions'}
         {lesson.passScore > 0 ? `, pass at ${lesson.passScore}%` : ''}.
         {typeof lesson.quizScore === 'number' ? ` Your best: ${lesson.quizScore}%${lesson.quizPassed ? ', passed' : ''}.` : ''}
@@ -505,7 +505,7 @@ function Quiz({ lesson, onDone }: { lesson: Lesson; onDone: () => void }) {
         >
           {lesson.quiz.map((qn, i) => (
             <fieldset key={i} className="m-0 border-0 p-0">
-              <legend className="text-[14px] font-bold">
+              <legend className="text-subhead font-semibold">
                 {i + 1}. {qn.q}
               </legend>
               <div className="mt-xs flex flex-col gap-xs">
@@ -513,10 +513,10 @@ function Quiz({ lesson, onDone }: { lesson: Lesson; onDone: () => void }) {
                   const chosen = answers[i] === k;
                   const correct = result ? result.correct[i] === k : null;
                   return (
-                    <label key={k} className={`flex min-h-[44px] items-center gap-sm rounded-tile border-2 px-sm py-xs text-[14px] font-bold ${correct === true ? 'border-r4' : correct === false && chosen ? 'border-r1' : chosen ? 'border-ink' : 'border-line'} bg-card`}>
+                    <label key={k} className={`flex min-h-[44px] items-center gap-sm rounded-tile border-2 px-sm py-xs text-subhead font-semibold ${correct === true ? 'border-r4' : correct === false && chosen ? 'border-r1' : chosen ? 'border-ink' : 'border-line'} bg-card`}>
                       <input type="radio" name={`quiz-${lesson.id}-${i}`} checked={chosen} disabled={Boolean(result)} onChange={() => setAnswers((a) => lesson.quiz.map((_, j) => (j === i ? k : (a[j] ?? -1))))} className="size-[20px] accent-ink" />
                       {o}
-                      {correct === true && <span className="ml-auto text-[12px] font-extrabold">right</span>}
+                      {correct === true && <span className="ml-auto text-caption font-semibold">right</span>}
                     </label>
                   );
                 })}
@@ -524,12 +524,12 @@ function Quiz({ lesson, onDone }: { lesson: Lesson; onDone: () => void }) {
             </fieldset>
           ))}
           {submit.isError && (
-            <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+            <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
               {errorText(submit.error, 'Could not check that.')}
             </p>
           )}
           {result ? (
-            <p className="m-0 text-[16px] font-bold">
+            <p className="m-0 text-headline">
               {result.right} of {result.total} right, {result.score}%. {result.passed ? 'Passed.' : 'Not passed yet.'}
             </p>
           ) : (

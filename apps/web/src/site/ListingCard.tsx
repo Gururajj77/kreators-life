@@ -45,10 +45,10 @@ export function ListingCard({ listing, showFeature = true }: { listing: Listing;
         }
       >
         <p className="m-0 type-eyebrow text-ink-mute">{meta.name}</p>
-        <h3 className="m-0 text-[18px] font-extrabold leading-tight">{listing.title}</h3>
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">{listing.by}</p>
+        <h3 className="m-0 text-headline">{listing.title}</h3>
+        <p className="m-0 text-subhead text-ink-soft">{listing.by}</p>
       </CardHead>
-      {listing.blurb && <p className="mt-sm m-0 text-[14px] font-semibold leading-snug text-ink-soft">{cardBlurb(listing.blurb)}</p>}
+      {listing.blurb && <p className="mt-sm m-0 text-subhead text-ink-soft">{cardBlurb(listing.blurb)}</p>}
       {listing.facts.length > 0 && (
         // A card is a preview: the first three facts, wrapping onto a second line when they must, never a row that
         // scrolls sideways inside the card. The page itself lists every fact.
@@ -66,7 +66,7 @@ export function ListingCard({ listing, showFeature = true }: { listing: Listing;
           at the laptop's 309px card, which lifted that card's facts out of line with its row. */}
       <div className={`${listing.facts.length > 0 ? 'mt-md' : 'mt-auto pt-md'} flex flex-wrap items-end justify-between gap-y-xs`}>
         {showFeature && module ? (
-          <Link to={`/features/${module.key}`} className={`${SITE_LINK} text-[14px]`}>
+          <Link to={`/features/${module.key}`} className={`${SITE_LINK} text-subhead`}>
             About {module.name}
           </Link>
         ) : (

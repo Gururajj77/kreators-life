@@ -74,14 +74,14 @@ export function Inbox() {
       />
 
       <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="rem-heading">
-        <h2 id="rem-heading" className="text-[18px]">
+        <h2 id="rem-heading" className="text-title3">
           Daily reminder
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+        <p className="mt-xs m-0 text-subhead text-ink-soft">
           {me.data?.user.reminderTime ? `Set for ${me.data.user.reminderTime} in ${me.data.user.timezone}. A nudge lands here at that time on any day you have not checked in yet.` : 'Off. Pick a time, and a nudge lands here then on any day you have not checked in yet.'}
         </p>
         <div className="mt-sm flex gap-xs">
-          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} aria-label="Reminder time" className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} aria-label="Reminder time" className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
           <Button onClick={() => saveTime.mutate(time || null)} disabled={saveTime.isPending || time === (me.data?.user.reminderTime ?? '')}>
             {saveTime.isPending ? 'Saving' : !time && me.data?.user.reminderTime ? 'Turn off' : 'Save'}
           </Button>
@@ -89,7 +89,7 @@ export function Inbox() {
       </section>
 
       <section className="mt-lg" aria-labelledby="list-heading">
-        <h2 id="list-heading" className="text-[18px]">
+        <h2 id="list-heading" className="text-title2">
           What happened
         </h2>
         <TabRow
@@ -101,7 +101,7 @@ export function Inbox() {
         />
         <div className="mt-xs flex flex-wrap items-center gap-xs" role="group" aria-label="Show">
           {SHOWS.map(([k, label]) => (
-            <button key={k} type="button" aria-pressed={show === k} onClick={() => setShow(k)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-[12px] font-extrabold ${show === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={k} type="button" aria-pressed={show === k} onClick={() => setShow(k)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${show === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {label}
             </button>
           ))}
@@ -118,7 +118,7 @@ export function Inbox() {
           )}
         </div>
         {q.isPending && <SkeletonList className="mt-sm" count={4} lines={2} label="Loading your inbox" />}
-        {!q.isPending && list.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{show === 'archived' ? 'Nothing archived here.' : show === 'unread' ? 'All caught up.' : tab === 'agency' ? 'Nothing from your clients yet. Approvals, change asks, months made and invoices due land here.' : 'Nothing yet. This is where replies, orders, bookings and team notes land.'}</p>}
+        {!q.isPending && list.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">{show === 'archived' ? 'Nothing archived here.' : show === 'unread' ? 'All caught up.' : tab === 'agency' ? 'Nothing from your clients yet. Approvals, change asks, months made and invoices due land here.' : 'Nothing yet. This is where replies, orders, bookings and team notes land.'}</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {list.map((n) => {
             const inner = (
@@ -127,9 +127,9 @@ export function Inbox() {
                   <Icon icon={iconFor(n.kind)} size={18} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className={`block text-[16px] ${n.readAt ? 'font-semibold' : 'font-extrabold'}`}>{n.title}</span>
-                  {n.body && <span className="block text-[14px] font-semibold text-ink-soft"><Inert text={n.body} /></span>}
-                  <span className="block text-[12px] font-bold text-ink-mute">{new Date(n.createdAt).toLocaleString(LOCALE, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                  <span className={`block ${n.readAt ? 'text-body' : 'text-headline'}`}>{n.title}</span>
+                  {n.body && <span className="block text-subhead text-ink-soft"><Inert text={n.body} /></span>}
+                  <span className="block text-caption text-ink-mute">{new Date(n.createdAt).toLocaleString(LOCALE, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
                 </span>
                 {!n.readAt && <span className="size-[10px] shrink-0 rounded-pill bg-r1" aria-label="Unread" />}
               </>
@@ -159,7 +159,7 @@ export function Inbox() {
                   className="toy toy-soft flex w-[48px] shrink-0 flex-col items-center justify-center gap-xs rounded-tile bg-card text-ink-soft hover:text-ink"
                 >
                   {n.archivedAt ? <Icon icon={ArchiveRestore} size={20} /> : <AnimatedIcon name="archive" size={20} />}
-                  {n.archivedAt && <span className="text-[12px] font-extrabold">Restore</span>}
+                  {n.archivedAt && <span className="text-caption font-semibold">Restore</span>}
                 </button>
                 {n.archivedAt && (
                   <button
@@ -170,7 +170,7 @@ export function Inbox() {
                     className="toy toy-soft flex w-[48px] shrink-0 flex-col items-center justify-center gap-xs rounded-tile border-2 border-r1/40 bg-card text-r1 hover:bg-r1/10"
                   >
                     <AnimatedIcon name="trash" size={20} />
-                    <span className="text-[12px] font-extrabold">Delete</span>
+                    <span className="text-caption font-semibold">Delete</span>
                   </button>
                 )}
               </li>
@@ -179,13 +179,13 @@ export function Inbox() {
         </ul>
         <Pager page={q.data?.page} label="notifications" />
         <Sheet open={toDelete !== null} onClose={() => setToDelete(null)} title={toDelete === 'all' ? 'Delete everything archived?' : 'Delete this note for good?'}>
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">{toDelete === 'all' ? 'Every archived note in this tab is removed and cannot be brought back.' : 'It is removed and cannot be brought back. Restore it instead if you might want it.'}</p>
+          <p className="m-0 text-subhead text-ink-soft">{toDelete === 'all' ? 'Every archived note in this tab is removed and cannot be brought back.' : 'It is removed and cannot be brought back. Restore it instead if you might want it.'}</p>
           <div className="mt-md flex flex-col gap-xs">
             <button
               type="button"
               onClick={() => toDelete && remove.mutate(toDelete)}
               disabled={remove.isPending}
-              className="toy inline-flex min-h-[56px] items-center justify-center rounded-pill bg-r1 px-md text-[18px] font-bold text-on-fill disabled:opacity-50"
+              className="toy inline-flex min-h-[56px] items-center justify-center rounded-pill bg-r1 px-md text-headline text-on-fill disabled:opacity-50"
               style={{ '--toy-color': 'var(--deep-servant_leader)' } as CSSProperties}
             >
               {remove.isPending ? 'Deleting' : 'Yes, delete for good'}

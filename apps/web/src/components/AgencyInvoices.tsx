@@ -23,7 +23,7 @@ import { useView, ViewToggle } from './ViewToggle';
 const PER_STEP = 25;
 
 /** A select in a filter row; the right padding keeps the words clear of its arrow. */
-export const FILTER_SELECT = 'min-h-[44px] max-w-full rounded-pill border-2 border-line bg-card pl-sm pr-xl text-[14px] font-bold text-ink';
+export const FILTER_SELECT = 'min-h-[44px] max-w-full rounded-pill border-2 border-line bg-card pl-sm pr-xl text-subhead font-medium text-ink';
 
 /** Placeholder rows while a list or a board of paper loads. */
 export function PaperLoading({ label }: { label: string }) {
@@ -72,13 +72,13 @@ export function PaperRowMenu({ path, name, getText, onNote, onRestore }: { path:
 function Card({ inv }: { inv: Invoice }) {
   return (
     <Link to={`/agency/invoices/${inv.id}`} className="block text-ink no-underline">
-      <span className="block text-[16px] font-extrabold">{inv.number}</span>
+      <span className="block text-headline">{inv.number}</span>
       {inv.revisedAt && (
         <span className="mt-xs flex">
           <StatusTag tone="warn">Revised</StatusTag>
         </span>
       )}
-      <span className="mt-xs block text-[12px] font-bold text-ink-soft">
+      <span className="mt-xs block text-caption text-ink-soft">
         <Inert text={inv.clientName} />, {money(inv.totalCents, inv.currency)}
       </span>
     </Link>
@@ -138,7 +138,7 @@ export function AgencyInvoices({ clientId, adding: outside, onAdding }: { client
         {!onAdding && edit && <Button onClick={() => setAdding(true)}>New invoice</Button>}
       </div>
       {msg && (
-        <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-sm m-0 text-subhead">
           {msg}
         </p>
       )}
@@ -146,7 +146,7 @@ export function AgencyInvoices({ clientId, adding: outside, onAdding }: { client
       {view === 'board' && (
         <div className="mt-sm">
           {board.isError && (
-            <p role="alert" className="m-0 text-[14px] font-bold">
+            <p role="alert" className="m-0 text-subhead">
               Could not load the invoices. Try again.
             </p>
           )}
@@ -196,19 +196,19 @@ export function AgencyInvoices({ clientId, adding: outside, onAdding }: { client
             </div>
           )}
           {list.isError && (
-            <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+            <p role="alert" className="mt-sm m-0 text-subhead">
               Could not load the invoices. Try again.
             </p>
           )}
-          {list.data && list.data.invoices.length === 0 && <p className="mt-sm m-0 rounded-tile bg-card p-sm text-[14px] font-semibold text-ink-soft">No invoices here yet.</p>}
+          {list.data && list.data.invoices.length === 0 && <p className="mt-sm m-0 rounded-tile bg-card p-sm text-subhead text-ink-soft">No invoices here yet.</p>}
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {list.data?.invoices.map((inv) => (
               <li key={inv.id} className="rounded-tile bg-card shadow-toy-soft">
                 <div className="flex items-center gap-xs pr-xs">
                   <Link to={`/agency/invoices/${inv.id}`} className="toy flex min-w-0 flex-1 flex-wrap items-center gap-sm rounded-tile p-sm text-ink no-underline">
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[16px] font-extrabold">{inv.number}</span>
-                      <span className="block text-[14px] font-semibold text-ink-soft">
+                      <span className="block text-headline">{inv.number}</span>
+                      <span className="block text-subhead text-ink-soft">
                         <Inert text={inv.clientName} />, {shortDate(inv.issueDate)}
                         {inv.dueDate ? `, due ${shortDate(inv.dueDate)}` : ''}
                       </span>
@@ -217,7 +217,7 @@ export function AgencyInvoices({ clientId, adding: outside, onAdding }: { client
                       {inv.revisedAt && <StatusTag tone="warn">Revised</StatusTag>}
                       <StatusTag tone={INVOICE_STATUS_TONE[inv.status]}>{INVOICE_STATUS_NAME[inv.status]}</StatusTag>
                     </span>
-                    <span className="font-display text-[20px] font-extrabold">{money(inv.totalCents, inv.currency)}</span>
+                    <span className="text-title3 type-figure">{money(inv.totalCents, inv.currency)}</span>
                   </Link>
                   <PaperRowMenu
                     path={`/agency/invoices/${inv.id}`}
@@ -231,7 +231,7 @@ export function AgencyInvoices({ clientId, adding: outside, onAdding }: { client
                   />
                 </div>
                 {rowNote?.id === inv.id && (
-                  <p role="status" className="m-0 px-sm pb-sm text-[12px] font-bold">
+                  <p role="status" className="m-0 px-sm pb-sm text-caption">
                     {rowNote.text}
                   </p>
                 )}
@@ -275,10 +275,10 @@ function NewInvoice({ open, clientId, onClose, onMade }: { open: boolean; client
       <div className="grid gap-sm pb-xl">
         {!clientId && (
           <div>
-            <label htmlFor="new-inv-client" className="block text-[14px] font-bold">
+            <label htmlFor="new-inv-client" className="block text-subhead font-semibold">
               Client
             </label>
-            <select id="new-inv-client" value={pick} onChange={(e) => setPick(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]">
+            <select id="new-inv-client" value={pick} onChange={(e) => setPick(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body">
               <option value="">Choose a client</option>
               {clients.data?.clients.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -286,53 +286,53 @@ function NewInvoice({ open, clientId, onClose, onMade }: { open: boolean; client
                 </option>
               ))}
             </select>
-            {clients.data && clients.data.clients.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Add a client first, then make an invoice for them.</p>}
+            {clients.data && clients.data.clients.length === 0 && <p className="mt-xs m-0 text-subhead text-ink-soft">Add a client first, then make an invoice for them.</p>}
           </div>
         )}
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">Pick a starting point. Every one starts from your business details, and you set the amounts in the designer.</p>
+        <p className="m-0 text-subhead text-ink-soft">Pick a starting point. Every one starts from your business details, and you set the amounts in the designer.</p>
         <div role="group" aria-label="Starting points" className="grid gap-xs md:grid-cols-2">
           <button type="button" disabled={!id || make.isPending} onClick={() => make.mutate({})} className={card}>
-            <span className="block text-[16px] font-extrabold">Blank</span>
-            <span className="mt-xs block text-[14px] font-semibold text-ink-soft">One line, from your profile.</span>
+            <span className="block text-headline">Blank</span>
+            <span className="mt-xs block text-subhead text-ink-soft">One line, from your profile.</span>
           </button>
           {INVOICE_STARTERS.map((t) => (
             <button key={t.key} type="button" disabled={!id || make.isPending} onClick={() => make.mutate({ starter: t.key })} className={card}>
-              <span className="block text-[16px] font-extrabold">{t.name}</span>
-              <span className="mt-xs block text-[14px] font-semibold text-ink-soft">{t.blurb}</span>
+              <span className="block text-headline">{t.name}</span>
+              <span className="mt-xs block text-subhead text-ink-soft">{t.blurb}</span>
             </button>
           ))}
         </div>
-        <h3 className="m-0 mt-xs text-[16px] font-extrabold">Your templates</h3>
-        {mine.data && mine.data.templates.filter((t) => t.scope === 'own').length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">None yet. Open any invoice and tap Save as template to keep it as a starting point.</p>}
+        <h3 className="m-0 mt-xs text-headline">Your templates</h3>
+        {mine.data && mine.data.templates.filter((t) => t.scope === 'own').length === 0 && <p className="m-0 text-subhead text-ink-soft">None yet. Open any invoice and tap Save as template to keep it as a starting point.</p>}
         <div role="group" aria-label="Your templates" className="grid gap-xs md:grid-cols-2">
           {(mine.data?.templates ?? []).filter((t) => t.scope === 'own').map((t) => (
             <button key={t.id} type="button" disabled={!id || make.isPending} onClick={() => make.mutate({ templateId: t.id })} className={card}>
-              <span className="block text-[16px] font-extrabold">{t.name}</span>
-              <span className="mt-xs block text-[14px] font-semibold text-ink-soft">{t.summary}</span>
+              <span className="block text-headline">{t.name}</span>
+              <span className="mt-xs block text-subhead text-ink-soft">{t.summary}</span>
             </button>
           ))}
         </div>
-        <h3 className="m-0 text-[16px] font-extrabold">House templates</h3>
-        {mine.data && mine.data.templates.filter((t) => t.scope === 'house').length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">No house templates yet.</p>}
+        <h3 className="m-0 text-headline">House templates</h3>
+        {mine.data && mine.data.templates.filter((t) => t.scope === 'house').length === 0 && <p className="m-0 text-subhead text-ink-soft">No house templates yet.</p>}
         <div role="group" aria-label="House templates" className="grid gap-xs md:grid-cols-2">
           {(mine.data?.templates ?? []).filter((t) => t.scope === 'house').map((t) => (
             <button key={t.id} type="button" disabled={!id || make.isPending} onClick={() => make.mutate({ houseId: t.id })} className={card}>
-              <span className="flex flex-wrap items-center gap-xs text-[16px] font-extrabold">
+              <span className="flex flex-wrap items-center gap-xs text-headline">
                 {t.name}
                 <StatusTag tone="info">House template</StatusTag>
               </span>
-              <span className="mt-xs block text-[14px] font-semibold text-ink-soft">{t.summary}</span>
+              <span className="mt-xs block text-subhead text-ink-soft">{t.summary}</span>
             </button>
           ))}
         </div>
-        {!id && !clientId && <p className="m-0 text-[14px] font-bold">Choose a client first.</p>}
+        {!id && !clientId && <p className="m-0 text-subhead font-semibold">Choose a client first.</p>}
         {make.isPending && (
-          <p role="status" className="m-0 text-[14px] font-bold">
+          <p role="status" className="m-0 text-subhead font-semibold">
             Making it
           </p>
         )}
         {err && (
-          <p role="alert" className="m-0 text-[14px] font-bold">
+          <p role="alert" className="m-0 text-subhead">
             {err}
           </p>
         )}
@@ -374,13 +374,13 @@ export function InvoiceTemplates() {
   const list = (q.data?.templates ?? []).filter((t) => t.scope === 'own');
   return (
     <div className="rounded-tile bg-card p-sm">
-      <p className="m-0 text-[14px] font-semibold text-ink-soft">Open any invoice and tap Save as template to keep it here. A template keeps the look, the bank, the tax and the lines, never who it was for.</p>
+      <p className="m-0 text-subhead text-ink-soft">Open any invoice and tap Save as template to keep it here. A template keeps the look, the bank, the tax and the lines, never who it was for.</p>
       {q.isError && (
-        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-xs m-0 text-subhead">
           Could not load your templates. Try again.
         </p>
       )}
-      {q.data && list.length === 0 && <p className="mt-xs m-0 text-[14px] font-bold">You have none yet.</p>}
+      {q.data && list.length === 0 && <p className="mt-xs m-0 text-subhead font-semibold">You have none yet.</p>}
       <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
         {list.map((t) => (
           <li key={t.id} className="rounded-tile bg-paper p-sm">
@@ -399,8 +399,8 @@ export function InvoiceTemplates() {
             ) : (
               <div className="flex flex-wrap items-center justify-between gap-sm">
                 <div className="min-w-0">
-                  <p className="m-0 text-[16px] font-extrabold">{t.name}</p>
-                  <p className="m-0 text-[14px] font-semibold text-ink-soft">{t.summary}</p>
+                  <p className="m-0 text-headline">{t.name}</p>
+                  <p className="m-0 text-subhead text-ink-soft">{t.summary}</p>
                 </div>
                 <div className="flex gap-xs">
                   <Button
@@ -424,7 +424,7 @@ export function InvoiceTemplates() {
         ))}
       </ul>
       {msg && (
-        <p role="status" className="mt-xs m-0 text-[14px] font-bold">
+        <p role="status" className="mt-xs m-0 text-subhead">
           {msg}
         </p>
       )}

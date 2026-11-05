@@ -27,6 +27,8 @@ import { StatusTag } from '../components/StatusTag';
 import { CardHead } from '../components/CardHead';
 import { FactTag, IconTag } from '../components/FactTag';
 import { useSeedOnce } from '../lib/useSeed';
+import { RowCard } from '../components/RowCard';
+import { Reveal } from '../components/fx/Reveal';
 import { ToggleChevron } from '../components/ToggleMark';
 
 const day = (iso: string) => new Date(iso).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' });
@@ -48,7 +50,7 @@ function AskSheet({ ask, onClose }: { ask: { title: string; body: string; action
   return (
     <Sheet open={ask !== null} onClose={onClose} title={ask?.title ?? ''}>
       <div className="grid gap-md pb-xl">
-        <p className="m-0 text-[16px] font-semibold text-ink-soft">{ask?.body}</p>
+        <p className="m-0 text-callout text-ink-soft">{ask?.body}</p>
         <div className="flex flex-wrap gap-xs">
           <button
             type="button"
@@ -56,7 +58,7 @@ function AskSheet({ ask, onClose }: { ask: { title: string; body: string; action
               ask?.run();
               onClose();
             }}
-            className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-[16px] font-semibold text-on-fill"
+            className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill"
           >
             {ask?.action}
           </button>
@@ -73,7 +75,7 @@ function Choice<T extends string>({ options, value, onChange, label }: { options
   return (
     <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label={label}>
       {options.map((o) => (
-        <button key={o.key} type="button" aria-pressed={value === o.key} onClick={() => onChange(o.key)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${value === o.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+        <button key={o.key} type="button" aria-pressed={value === o.key} onClick={() => onChange(o.key)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${value === o.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
           {o.label}
         </button>
       ))}
@@ -83,9 +85,9 @@ function Choice<T extends string>({ options, value, onChange, label }: { options
 
 function Giveaway({ giveaway, brand, count }: { giveaway: string; brand?: string; count?: number }) {
   return (
-    <span className="inline-flex max-w-full items-center gap-xs rounded-pill px-sm text-[12px] font-extrabold leading-[24px]" style={pill('yellow')}>
-      <Icon icon={Gift} size={14} />
-      <span className="truncate">
+    <span className="inline-flex max-w-full items-center gap-xs rounded-inner px-sm text-caption font-medium leading-[24px]" style={pill('yellow')}>
+      <Icon icon={Gift} size={14} className="shrink-0" />
+      <span className="min-w-0 text-balance">
         {count && count > 0 ? `${count} × ` : ''}
         {giveaway}
         {brand ? `, from ${brand}` : ''}
@@ -94,34 +96,28 @@ function Giveaway({ giveaway, brand, count }: { giveaway: string; brand?: string
   );
 }
 
-function ClubCard({ k }: { k: RunClub }) {
+function ClubCard({ k, index = 0 }: { k: RunClub; index?: number }) {
+  // The footprints and the name at the top left, the person's place in the club in the corner of every card (You host, Member or
+  // Open), the city, the pace, the runners and the next run as tags at the foot, and the arrow at the bottom right.
   return (
-    <li>
-      <Link to={`/run/clubs/${k.id}`} data-pillar={REL.key} className="toy toy-soft flex items-start gap-sm rounded-tile bg-card p-sm">
-        <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill text-[22px]" style={{ background: `var(--soft-${REL.key})` }} aria-hidden="true">
-          <Icon icon={Footprints} size={22} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <CardHead
-            tag={k.host ? (
-              <StatusTag tone={TINT_TONE['green']} fit>
-                You host
-              </StatusTag>
-            ) : k.mine ? (
-              <StatusTag tone={TINT_TONE['green']} fit>
-                Member
-              </StatusTag>
-            ) : null}
-          >
-            <span className="block text-[16px] font-bold">{k.name}</span>
-          </CardHead>
-          <span className="block text-[14px] font-semibold text-ink-soft">
-            {k.city}, {RUN_PACE_META[k.pace].name.toLowerCase()}, {k.members} {k.members === 1 ? 'runner' : 'runners'}
+    <Reveal as="li" index={index} className="flex">
+      <RowCard
+        to={`/run/clubs/${k.id}`}
+        lead={
+          <span className="flex size-[44px] items-center justify-center rounded-pill" style={{ background: `var(--soft-${REL.key})` }} aria-hidden="true">
+            <Icon icon={Footprints} size={22} />
           </span>
-          <span className="block text-[14px] font-semibold text-ink-soft">{k.nextRunAt ? `Next run ${eventTime(k.nextRunAt)}` : k.meets || 'No run on the calendar yet'}</span>
-        </span>
-      </Link>
-    </li>
+        }
+        title={k.name}
+        corner={<StatusTag tone={k.host || k.mine ? TINT_TONE['green'] : 'neutral'} fit>{k.host ? 'You host' : k.mine ? 'Member' : 'Open'}</StatusTag>}
+        facts={[
+          <FactTag key="city" kind="place">{k.city}</FactTag>,
+          <FactTag key="pace" kind="category">{RUN_PACE_META[k.pace].name}</FactTag>,
+          <FactTag key="runners" kind="availability">{`${k.members} ${k.members === 1 ? 'runner' : 'runners'}`}</FactTag>,
+          <FactTag key="next" kind="when">{k.nextRunAt ? `Next run ${eventTime(k.nextRunAt)}` : k.meets || 'No run on the calendar yet'}</FactTag>,
+        ]}
+      />
+    </Reveal>
   );
 }
 
@@ -132,26 +128,24 @@ function stateLine(r: RunItem): string {
   return 'Closed';
 }
 
-function UpcomingRow({ r }: { r: RunItem }) {
+function UpcomingRow({ r, index = 0 }: { r: RunItem; index?: number }) {
+  // The run at the top left, how many are in at the top right of every row, the day, distance, meeting point, the code's state and
+  // any giveaway as tags at the foot, and the arrow at the bottom right.
   return (
-    <li>
-      <Link to={`/run/clubs/${r.clubId}`} className="toy toy-soft flex items-start gap-sm rounded-tile bg-card p-sm">
-        <span className="min-w-0 flex-1">
-          <span className="block text-[16px] font-bold">{r.title}</span>
-          <span className="block text-[14px] font-semibold text-ink-soft">
-            {eventTime(r.startsAt)}, {kmLabel(r.metres)}
-            {r.meetingPoint ? `, ${r.meetingPoint}` : ''}
-          </span>
-          <span className="block text-[14px] font-semibold text-ink-soft">{stateLine(r)}</span>
-          {r.collab && (
-            <span className="mt-xs block">
-              <Giveaway giveaway={r.collab.giveaway} brand={r.collab.brand} />
-            </span>
-          )}
-        </span>
-        <span className="shrink-0 text-[14px] font-extrabold">{r.entries} in</span>
-      </Link>
-    </li>
+    <Reveal as="li" index={index} className="flex">
+      <RowCard
+        to={`/run/clubs/${r.clubId}`}
+        title={r.title}
+        corner={<StatusTag tone="neutral">{`${r.entries} in`}</StatusTag>}
+        facts={[
+          <FactTag key="when" kind="when">{eventTime(r.startsAt)}</FactTag>,
+          <FactTag key="km" kind="category">{kmLabel(r.metres)}</FactTag>,
+          r.meetingPoint ? <FactTag key="where" kind="place">{r.meetingPoint}</FactTag> : null,
+          <FactTag key="state" kind="status">{stateLine(r)}</FactTag>,
+          r.collab ? <Giveaway key="gift" giveaway={r.collab.giveaway} brand={r.collab.brand} /> : null,
+        ]}
+      />
+    </Reveal>
   );
 }
 
@@ -174,7 +168,7 @@ export function Run() {
       <div className="mt-md flex flex-wrap items-center justify-between gap-sm">
         <div className="grid w-full grid-cols-2 gap-xs sm:flex sm:w-auto sm:min-w-0 sm:flex-wrap" role="group" aria-label="Sections">
           {TABS.map((t) => (
-            <button key={t.key} type="button" aria-pressed={tab === t.key} onClick={() => setTab(t.key)} className={`toy inline-flex min-h-[44px] items-center justify-center rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${tab === t.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={t.key} type="button" aria-pressed={tab === t.key} onClick={() => setTab(t.key)} className={`toy inline-flex min-h-[44px] items-center justify-center rounded-pill border-2 px-sm py-xs text-subhead font-medium ${tab === t.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {t.label}
               {t.key === 'collabs' && d && d.collabsOpen > 0 ? ` · ${d.collabsOpen}` : ''}
               {t.key === 'talk' && tab !== 'talk' && <Dot n={unread} />}
@@ -188,13 +182,13 @@ export function Run() {
       <Nudge className="mt-sm" text={`A run pays its host’s xp (up to ${ATTENDEE_XP_MAX}) and ${RUN_REWARD.points} points. Minutes count as movement.`} />
 
       {q.isPending && (
-        <p className="mt-md text-[14px] font-bold text-ink-soft" role="status">
+        <p className="mt-md text-subhead text-ink-soft" role="status">
           Finding clubs
         </p>
       )}
       {q.isError && (
         <div className="mt-md rounded-card bg-card p-md shadow-toy-soft flex flex-wrap-reverse items-center justify-between gap-sm" role="alert">
-          <p className="m-0 font-bold min-w-0 flex-1 basis-[60%]">Could not load Kreators Run.</p>
+          <p className="m-0 font-semibold min-w-0 flex-1 basis-[60%]">Could not load Kreators Run.</p>
           <Button variant="outline" onClick={() => q.refetch()}>
             Try again
           </Button>
@@ -217,12 +211,12 @@ function ClubsTab({ d }: { d: RunResponse }) {
     <>
       {d.upcoming.length > 0 && (
         <section className="mt-lg" aria-labelledby="run-upcoming">
-          <h2 id="run-upcoming" className="text-[24px]">
+          <h2 id="run-upcoming" className="text-title2">
             Coming up
           </h2>
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-            {d.upcoming.map((r) => (
-              <UpcomingRow key={r.id} r={r} />
+            {d.upcoming.map((r, i) => (
+              <UpcomingRow key={r.id} r={r} index={i} />
             ))}
           </ul>
         </section>
@@ -230,25 +224,25 @@ function ClubsTab({ d }: { d: RunResponse }) {
 
       {d.mine.length > 0 && (
         <section className="mt-lg" aria-labelledby="run-mine">
-          <h2 id="run-mine" className="text-[24px]">
+          <h2 id="run-mine" className="text-title2">
             Your clubs
           </h2>
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-            {d.mine.map((k) => (
-              <ClubCard key={k.id} k={k} />
+            {d.mine.map((k, i) => (
+              <ClubCard key={k.id} k={k} index={i} />
             ))}
           </ul>
         </section>
       )}
 
       <section className="mt-lg" aria-labelledby="run-clubs">
-        <h2 id="run-clubs" className="text-[24px]">
+        <h2 id="run-clubs" className="text-title2">
           {d.mine.length > 0 ? 'Other clubs' : 'Clubs'}
         </h2>
-        {others.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">No other clubs yet. Start the first one in your city.</p>}
+        {others.length === 0 && <p className="mt-xs m-0 text-subhead text-ink-soft">No other clubs yet. Start the first one in your city.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-          {others.map((k) => (
-            <ClubCard key={k.id} k={k} />
+          {others.map((k, i) => (
+            <ClubCard key={k.id} k={k} index={i} />
           ))}
         </ul>
         <Pager page={d.page} label="clubs" />
@@ -267,7 +261,7 @@ function TrackingTab({ t }: { t: RunTracking }) {
     <>
       <Hero color={REL.color} deep={`var(--deep-${REL.key})`} className="mt-md" character="friendship" characterSize={64} mood={t.monthRuns > 0 ? 'excited' : 'happy'}>
         <HeroNumber value={km(t.monthMetres)} unit="km" label={t.monthRuns === 0 ? 'No runs logged this month yet' : `${t.monthRuns} ${t.monthRuns === 1 ? 'run' : 'runs'} this month`} />
-        <p className="mt-sm m-0 text-[14px] font-bold opacity-85">{t.weekStreak > 0 ? `${t.weekStreak} ${t.weekStreak === 1 ? 'week' : 'weeks'} in a row with a run.` : 'Log a run this week to start a weekly streak.'}</p>
+        <p className="mt-sm m-0 text-subhead font-semibold opacity-85">{t.weekStreak > 0 ? `${t.weekStreak} ${t.weekStreak === 1 ? 'week' : 'weeks'} in a row with a run.` : 'Log a run this week to start a weekly streak.'}</p>
       </Hero>
 
       <div className="mt-md grid grid-cols-2 gap-xs md:grid-cols-4">
@@ -278,7 +272,7 @@ function TrackingTab({ t }: { t: RunTracking }) {
       </div>
 
       <section className="mt-lg rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="run-line">
-        <h2 id="run-line" className="text-[18px]">
+        <h2 id="run-line" className="text-title3">
           Last thirty days
         </h2>
         <div className="mt-sm">
@@ -287,7 +281,7 @@ function TrackingTab({ t }: { t: RunTracking }) {
       </section>
 
       <section className="mt-lg" aria-labelledby="run-badges">
-        <h2 id="run-badges" className="text-[24px]">
+        <h2 id="run-badges" className="text-title2">
           Run badges
         </h2>
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -303,8 +297,8 @@ function TrackingTab({ t }: { t: RunTracking }) {
               <li key={key} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                 <BadgeMedal k={key} earned={earned} size="sm" decorative />
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[16px] font-bold">{b.name}</span>
-                  <span className="block text-[14px] font-semibold text-ink-soft">{earned ? 'Earned' : need.runs > 0 ? `${t.runs} of ${need.runs} runs` : `${kmLabel(t.metres)} of ${kmLabel(need.metres)}`}</span>
+                  <span className="block text-headline">{b.name}</span>
+                  <span className="block text-subhead text-ink-soft">{earned ? 'Earned' : need.runs > 0 ? `${t.runs} of ${need.runs} runs` : `${kmLabel(t.metres)} of ${kmLabel(need.metres)}`}</span>
                   <span className="mt-xs block h-[8px] overflow-hidden rounded-pill bg-line" aria-hidden="true">
                     <span className="block h-full rounded-pill" style={{ width: `${Math.round(pct * 100)}%`, background: REL.color }} />
                   </span>
@@ -322,46 +316,46 @@ function CollabCard({ k, myClubs, onApply, onChange }: { k: RunCollab; myClubs: 
   const close = useMutation({ mutationFn: () => api.setRunCollab(k.id, 'closed'), onSuccess: onChange });
   const appliedWith = new Set(k.mine.map((a) => a.clubId));
   const canApply = k.status === 'open' && myClubs.some((c) => !appliedWith.has(c.id));
+  // The brand and the title at the top left, Open or Closed in the corner, the brief under them, the giveaway, the dates and the
+  // counts lined up at the foot, and the actions at the bottom right.
   return (
-    <li className="rounded-card bg-card p-md shadow-toy-soft">
-      <p className="m-0 text-[14px] font-bold text-ink-soft">
-        {k.brand}
-        {k.city ? `, ${k.city}` : ''}
-        {k.status === 'closed' ? ', closed' : ''}
-      </p>
-      <h3 className="m-0 text-[20px]">{k.title}</h3>
-      <p className="mt-sm m-0">
-        <Giveaway giveaway={k.giveaway} count={k.giveawayCount} />
-      </p>
-      {k.brief && <p className="mt-sm m-0 whitespace-pre-wrap text-[14px] font-semibold">{k.brief}</p>}
+    <li className="flex h-full flex-col rounded-card bg-card p-md shadow-toy-soft">
+      <CardHead tag={<StatusTag tone={k.status === 'open' ? 'good' : 'neutral'}>{k.status === 'open' ? 'Open' : 'Closed'}</StatusTag>}>
+        <p className="m-0 text-subhead text-ink-soft">
+          {k.brand}
+          {k.city ? `, ${k.city}` : ''}
+        </p>
+        <h3 className="m-0 text-balance text-title3">{k.title}</h3>
+      </CardHead>
+      {k.brief && <p className="mt-sm m-0 whitespace-pre-wrap text-subhead">{k.brief}</p>}
       {k.asks && (
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+        <p className="mt-xs m-0 text-subhead text-ink-soft">
           <span className="text-ink">The brand asks: </span>
           {k.asks}
         </p>
       )}
-      <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
-        {day(k.startsAt)} to {day(k.endsAt)}. {k.applications} {k.applications === 1 ? 'club applied' : 'clubs applied'}, {k.accepted} accepted.
-      </p>
-      {k.mine.length > 0 && (
-        <ul className="mt-sm flex list-none flex-wrap gap-xs p-0 m-0">
+      <div className="mt-auto flex pt-sm">
+        <span className="fill-row-all flex min-w-0 flex-wrap gap-xs">
+          <Giveaway giveaway={k.giveaway} count={k.giveawayCount} />
+          <FactTag kind="when">{`${day(k.startsAt)} to ${day(k.endsAt)}`}</FactTag>
+          <FactTag kind="availability">{`${k.applications} ${k.applications === 1 ? 'club applied' : 'clubs applied'}, ${k.accepted} accepted`}</FactTag>
           {k.mine.map((a) => (
-            <li key={a.id} className="flex">
-              <StatusTag tone={TINT_TONE[a.status === 'accepted' ? 'green' : a.status === 'declined' ? 'red' : 'purple']}>
-              {a.status === 'accepted' ? 'Accepted' : a.status === 'declined' ? 'Not this time' : 'Applied'}: {a.clubName}
+            <StatusTag key={a.id} tone={TINT_TONE[a.status === 'accepted' ? 'green' : a.status === 'declined' ? 'red' : 'purple']}>
+              {`${a.status === 'accepted' ? 'Accepted' : a.status === 'declined' ? 'Not this time' : 'Applied'}: ${a.clubName}`}
             </StatusTag>
-            </li>
           ))}
-        </ul>
-      )}
-      <div className="mt-sm flex flex-wrap gap-xs">
-        {canApply && <Button variant="outline" onClick={onApply}>Apply with a club</Button>}
-        {k.poster && k.status === 'open' && (
-          <Button variant="outline" onClick={() => close.mutate()} disabled={close.isPending}>
-            Close collab
-          </Button>
-        )}
+        </span>
       </div>
+      {(canApply || (k.poster && k.status === 'open')) && (
+        <div className="mt-sm flex flex-wrap justify-end gap-xs">
+          {k.poster && k.status === 'open' && (
+            <Button variant="outline" onClick={() => close.mutate()} disabled={close.isPending}>
+              Close collab
+            </Button>
+          )}
+          {canApply && <Button variant="outline" onClick={onApply}>Apply with a club</Button>}
+        </div>
+      )}
       <ErrorLine e={close.isError ? close.error : null} />
     </li>
   );
@@ -371,13 +365,13 @@ function ApplicationRow({ a, onChange }: { a: RunCollabApplication & { collabTit
   const decide = useMutation({ mutationFn: (status: 'accepted' | 'declined') => api.decideRunCollab(a.collabId, a.id, status), onSuccess: onChange });
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <p className="m-0 text-[16px] font-bold">
+      <p className="m-0 text-headline">
         <Link to={`/run/clubs/${a.clubId}`} className="underline underline-offset-4">
           {a.clubName}
         </Link>{' '}
-        <span className="text-[14px] font-semibold text-ink-soft">by {a.hostName}, for {a.collabTitle}</span>
+        <span className="text-subhead text-ink-soft">by {a.hostName}, for {a.collabTitle}</span>
       </p>
-      {a.note && <p className="mt-xs m-0 text-[14px] font-semibold">{a.note}</p>}
+      {a.note && <p className="mt-xs m-0 text-subhead">{a.note}</p>}
       <div className="mt-sm flex flex-wrap items-center gap-xs">
         {a.status === 'applied' ? (
           <>
@@ -408,18 +402,18 @@ function CollabsTab() {
   const d = q.data;
   return (
     <>
-      <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Brands post a giveaway for runners. A host applies, and it shows on the run.</p>
+      <p className="mt-sm m-0 text-subhead text-ink-soft">Brands post a giveaway for runners. A host applies, and it shows on the run.</p>
       {d?.canPost && (
         <Button variant="outline" className="mt-md" onClick={() => setPosting(true)}>
           Post a collab
         </Button>
       )}
       {q.isPending && (
-        <p className="mt-md text-[14px] font-bold text-ink-soft" role="status">
+        <p className="mt-md text-subhead text-ink-soft" role="status">
           Finding collabs
         </p>
       )}
-      {d && d.collabs.length === 0 && <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">No open collabs right now. They land here when a brand posts one.</p>}
+      {d && d.collabs.length === 0 && <p className="mt-md m-0 text-subhead text-ink-soft">No open collabs right now. They land here when a brand posts one.</p>}
       <ul className="mt-md flex list-none flex-col gap-sm p-0 m-0">
         {d?.collabs.map((k) => (
           <CollabCard key={k.id} k={k} myClubs={d.myClubs} onApply={() => setApplying(k)} onChange={() => q.refetch()} />
@@ -428,7 +422,7 @@ function CollabsTab() {
       <Pager page={d?.page} prefix="c" label="collabs" />
       {d && d.applications.length > 0 && (
         <section className="mt-lg" aria-labelledby="run-apps">
-          <h2 id="run-apps" className="text-[24px]">
+          <h2 id="run-apps" className="text-title2">
             Clubs that applied
           </h2>
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -475,28 +469,28 @@ function StartClubSheet({ open, onClose }: { open: boolean; onClose: () => void 
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Name</span>
+          <span className="block text-subhead font-semibold">Name</span>
           <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">City</span>
+          <span className="block text-subhead font-semibold">City</span>
           <input value={city} onChange={(e) => setCity(e.target.value)} maxLength={80} required className={FIELD} />
         </label>
         <fieldset className="m-0 border-0 p-0">
-          <legend className="text-[14px] font-bold">Pace</legend>
+          <legend className="text-subhead font-semibold">Pace</legend>
           <Choice label="Pace" options={RUN_PACES.map((p) => ({ key: p, label: RUN_PACE_META[p].name }))} value={pace} onChange={setPace} />
-          <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{RUN_PACE_META[pace].blurb}</p>
+          <p className="mt-xs m-0 text-caption text-ink-soft">{RUN_PACE_META[pace].blurb}</p>
         </fieldset>
         <label className="block">
-          <span className="block text-[14px] font-bold">When and where you usually meet</span>
+          <span className="block text-subhead">When and where you usually meet</span>
           <input value={meets} onChange={(e) => setMeets(e.target.value)} maxLength={200} placeholder="Sundays 6am, Cubbon Park gate" className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">About the club</span>
+          <span className="block text-subhead font-semibold">About the club</span>
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} rows={3} className={FIELD} />
         </label>
         <fieldset className="m-0 border-0 p-0">
-          <legend className="text-[14px] font-bold">Who can find it</legend>
+          <legend className="text-subhead font-semibold">Who can find it</legend>
           <Choice
             label="Who can find it"
             options={[
@@ -551,7 +545,7 @@ function PostCollabSheet({ open, onClose, onDone }: { open: boolean; onClose: ()
       >
         {orgs.length > 0 && (
           <label className="block">
-            <span className="block text-[14px] font-bold">Brand</span>
+            <span className="block text-subhead font-semibold">Brand</span>
             <select value={organizationId} onChange={(e) => setOrganizationId(e.target.value)} className={FIELD}>
               {orgs.map((o) => (
                 <option key={o.id} value={o.id}>
@@ -564,43 +558,43 @@ function PostCollabSheet({ open, onClose, onDone }: { open: boolean; onClose: ()
         )}
         {!organizationId && (
           <label className="block">
-            <span className="block text-[14px] font-bold">Brand name</span>
+            <span className="block text-subhead font-semibold">Brand name</span>
             <input value={brandName} onChange={(e) => setBrandName(e.target.value)} maxLength={80} className={FIELD} />
           </label>
         )}
         <label className="block">
-          <span className="block text-[14px] font-bold">Title</span>
+          <span className="block text-subhead font-semibold">Title</span>
           <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required placeholder="Sunday long run with Stride shoes" className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">What runners can win</span>
+          <span className="block text-subhead font-semibold">What runners can win</span>
           <input value={giveaway} onChange={(e) => setGiveaway(e.target.value)} maxLength={300} required placeholder="A pair of shoes for the first twenty at the line" className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
-            <span className="block text-[14px] font-bold">How many</span>
+            <span className="block text-subhead font-semibold">How many</span>
             <input type="number" min={0} value={giveawayCount} onChange={(e) => setGiveawayCount(e.target.value)} placeholder="Not counted" className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">City</span>
+            <span className="block text-subhead font-semibold">City</span>
             <input value={city} onChange={(e) => setCity(e.target.value)} maxLength={80} placeholder="Anywhere" className={FIELD} />
           </label>
         </div>
         <label className="block">
-          <span className="block text-[14px] font-bold">What the brand gives</span>
+          <span className="block text-subhead font-semibold">What the brand gives</span>
           <textarea value={brief} onChange={(e) => setBrief(e.target.value)} maxLength={3000} rows={3} className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">What the brand asks</span>
+          <span className="block text-subhead font-semibold">What the brand asks</span>
           <textarea value={asks} onChange={(e) => setAsks(e.target.value)} maxLength={1000} rows={2} placeholder="A photo at the start line, tagged" className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
-            <span className="block text-[14px] font-bold">Open from</span>
+            <span className="block text-subhead font-semibold">Open from</span>
             <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Until</span>
+            <span className="block text-subhead font-semibold">Until</span>
             <input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} required className={FIELD} />
           </label>
         </div>
@@ -642,13 +636,13 @@ function ApplySheet({ collab, clubs, onClose, onDone }: { collab: RunCollab | nu
           </p>
           {open.length > 1 && (
             <fieldset className="m-0 border-0 p-0">
-              <legend className="text-[14px] font-bold">Which club</legend>
+              <legend className="text-subhead font-semibold">Which club</legend>
               <Choice label="Which club" options={open.map((c) => ({ key: c.id, label: c.name }))} value={chosen} onChange={setClubId} />
             </fieldset>
           )}
-          {open.length === 1 && <p className="m-0 text-[14px] font-bold">Applying with {open[0]?.name}.</p>}
+          {open.length === 1 && <p className="m-0 text-subhead font-semibold">Applying with {open[0]?.name}.</p>}
           <label className="block">
-            <span className="block text-[14px] font-bold">A note for the brand</span>
+            <span className="block text-subhead font-semibold">A note for the brand</span>
             <textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} rows={3} placeholder="How many run with you, where, and when" className={FIELD} />
           </label>
           <ErrorLine e={apply.isError ? apply.error : null} />
@@ -666,7 +660,7 @@ function RunCodeEditor({ r, onRecode, busy }: { r: RunItem; onRecode: (change: {
   const [xp, setXp] = useState(String(r.xp));
   const [own, setOwn] = useState('');
   const started = attendeeXpLocked(r.startsAt, useNow());
-  const box = 'w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
+  const box = 'w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-callout';
   return (
     <div className="mt-sm flex flex-col gap-xs">
       <div className="grid grid-cols-[1fr_auto] gap-xs">
@@ -675,7 +669,7 @@ function RunCodeEditor({ r, onRecode, busy }: { r: RunItem; onRecode: (change: {
           Set xp
         </Button>
       </div>
-      {started && <p className="m-0 text-[12px] font-semibold text-ink-soft">The xp is fixed: the code is open.</p>}
+      {started && <p className="m-0 text-caption text-ink-soft">The xp is fixed: the code is open.</p>}
       <div className="grid grid-cols-[1fr_auto] gap-xs">
         <input value={own} onChange={(e) => setOwn(normalizeCode(e.target.value))} maxLength={ATTENDEE_CODE_MAX} placeholder="Your own code" aria-label="Your own code" autoCapitalize="characters" disabled={busy} className={`${box} uppercase placeholder:normal-case`} />
         <Button
@@ -699,10 +693,10 @@ function RunTalk({ runId }: { runId: string }) {
   return (
     <li className="list-none">
       <span className="flex flex-wrap items-center gap-xs">
-        <Link to={`/run?tab=talk&run=${runId}`} className="inline-flex min-h-[44px] items-center px-xs text-[14px] font-bold underline underline-offset-4 hover:text-ink-soft">
+        <Link to={`/run?tab=talk&run=${runId}`} className="inline-flex min-h-[44px] items-center px-xs text-subhead font-semibold underline underline-offset-4 hover:text-ink-soft">
           Open the discussion
         </Link>
-        <button type="button" aria-expanded={open} aria-controls={`run-people-${runId}`} onClick={() => setOpen((v) => !v)} className="toy toy-flat inline-flex min-h-[44px] items-center gap-xs rounded-pill px-md text-[14px] font-bold underline underline-offset-4">
+        <button type="button" aria-expanded={open} aria-controls={`run-people-${runId}`} onClick={() => setOpen((v) => !v)} className="toy toy-flat inline-flex min-h-[44px] items-center gap-xs rounded-pill px-md text-subhead font-medium underline underline-offset-4">
           {open ? 'Hide photos and people' : 'Photos and people'}
           <ToggleChevron open={open} />
         </button>
@@ -719,14 +713,15 @@ function RunTalk({ runId }: { runId: string }) {
 function RunCard({ r, host, member, onLog, onRecode, onStatus, busy }: { r: RunItem; host: boolean; member: boolean; onLog: () => void; onRecode: (change?: { xp?: number; code?: string }) => void; onStatus: (s: 'cancelled' | 'done') => void; busy: boolean }) {
   return (
     <li className="rounded-card bg-card p-md shadow-toy-soft">
-      <p className="m-0 text-[16px] font-bold">{r.title}</p>
-      <p className="m-0 text-[14px] font-semibold text-ink-soft">
+      {/* The run at the top left and how many logged it in the corner of every run, like the Coming up rows. */}
+      <CardHead tag={<StatusTag tone="neutral">{`${r.entries} logged`}</StatusTag>}>
+        <p className="m-0 text-balance text-headline">{r.title}</p>
+      </CardHead>
+      <p className="m-0 text-subhead text-ink-soft">
         {eventTime(r.startsAt)} to {new Date(r.endsAt).toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' })}, {kmLabel(r.metres)}
         {r.meetingPoint ? `, ${r.meetingPoint}` : ''}
       </p>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-        {r.entries} {r.entries === 1 ? 'runner logged' : 'runners logged'}. {stateLine(r)}.
-      </p>
+      <p className="mt-xs m-0 text-subhead text-ink-soft">{stateLine(r)}.</p>
       {r.collab && (
         <p className="mt-sm m-0">
           <Giveaway giveaway={r.collab.giveaway} brand={r.collab.brand} />
@@ -735,11 +730,11 @@ function RunCard({ r, host, member, onLog, onRecode, onStatus, busy }: { r: RunI
       {host && r.code && (
         <div className="mt-sm rounded-tile p-sm" style={pill('green')}>
           <div className="flex items-start justify-between gap-sm">
-            <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">Start code</p>
-            <p className="m-0 shrink-0 rounded-pill bg-card px-sm py-xs text-[14px] font-extrabold">+{r.xp} xp each</p>
+            <p className="m-0 text-eyebrow uppercase text-ink-soft">Start code</p>
+            <p className="m-0 shrink-0 rounded-pill bg-card px-sm py-xs text-subhead font-medium">+{r.xp} xp each</p>
           </div>
-          <p className="m-0 font-display text-[40px] font-extrabold leading-none tracking-[0.2em] break-all">{r.code}</p>
-          <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Show this at the start line, from thirty minutes before to three hours after. Once per runner, and you never log your own run.</p>
+          <p className="m-0 text-figure-lg type-figure leading-none tracking-[0.2em] break-all">{r.code}</p>
+          <p className="mt-xs m-0 text-caption text-ink-soft">Show this at the start line, from thirty minutes before to three hours after. Once per runner, and you never log your own run.</p>
           <RunCodeEditor r={r} onRecode={onRecode} busy={busy} />
         </div>
       )}
@@ -793,18 +788,18 @@ function EntrySheet({ run, onClose, onDone }: { run: RunItem | null; onClose: ()
             if (code.length >= ATTENDEE_CODE_MIN) log.mutate();
           }}
         >
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">{run.title}. The host shows the start code at the line.</p>
+          <p className="m-0 text-subhead text-ink-soft">{run.title}. The host shows the start code at the line.</p>
           <label className="block">
-            <span className="block text-[14px] font-bold">Start code</span>
-            <input autoFocus value={code} onChange={(e) => setCode(normalizeCode(e.target.value))} maxLength={ATTENDEE_CODE_MAX} autoCapitalize="characters" autoComplete="off" spellCheck={false} required className={`${FIELD} font-display text-[28px] font-extrabold tracking-[0.2em]`} />
+            <span className="block text-subhead font-semibold">Start code</span>
+            <input autoFocus value={code} onChange={(e) => setCode(normalizeCode(e.target.value))} maxLength={ATTENDEE_CODE_MAX} autoCapitalize="characters" autoComplete="off" spellCheck={false} required className={`${FIELD} text-title1 tracking-[0.2em]`} />
           </label>
           <div className="grid grid-cols-2 gap-xs">
             <label className="block">
-              <span className="block text-[14px] font-bold">Kilometres</span>
+              <span className="block text-subhead font-semibold">Kilometres</span>
               <input type="number" min={0} max={100} step={0.1} value={km} onChange={(e) => setKm(e.target.value)} placeholder={String(planned)} className={FIELD} />
             </label>
             <label className="block">
-              <span className="block text-[14px] font-bold">Minutes</span>
+              <span className="block text-subhead font-semibold">Minutes</span>
               <input type="number" min={0} max={600} value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder="Optional" className={FIELD} />
             </label>
           </div>
@@ -857,32 +852,32 @@ function AddRunSheet({ open, clubId, collabs, onClose, onDone }: { open: boolean
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Title</span>
+          <span className="block text-subhead font-semibold">Title</span>
           <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Sunday long run" className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
-            <span className="block text-[14px] font-bold">Starts</span>
+            <span className="block text-subhead font-semibold">Starts</span>
             <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Minutes</span>
+            <span className="block text-subhead font-semibold">Minutes</span>
             <input type="number" min={10} max={1440} value={minutes} onChange={(e) => setMinutes(e.target.value)} className={FIELD} />
           </label>
         </div>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
-            <span className="block text-[14px] font-bold">Kilometres</span>
+            <span className="block text-subhead font-semibold">Kilometres</span>
             <input type="number" min={0.1} max={100} step={0.1} value={km} onChange={(e) => setKm(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Meeting point</span>
+            <span className="block text-subhead font-semibold">Meeting point</span>
             <input value={meetingPoint} onChange={(e) => setMeetingPoint(e.target.value)} maxLength={200} className={FIELD} />
           </label>
         </div>
         {collabs.length > 0 && (
           <label className="block">
-            <span className="block text-[14px] font-bold">Brand collab</span>
+            <span className="block text-subhead font-semibold">Brand collab</span>
             <select value={collabId} onChange={(e) => setCollabId(e.target.value)} className={FIELD}>
               <option value="">None</option>
               {collabs.map((c) => (
@@ -895,17 +890,17 @@ function AddRunSheet({ open, clubId, collabs, onClose, onDone }: { open: boolean
         )}
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
-            <span className="block text-[14px] font-bold">Xp for each runner</span>
+            <span className="block text-subhead font-semibold">Xp for each runner</span>
             <input type="number" inputMode="numeric" min={1} max={ATTENDEE_XP_MAX} value={xp} onChange={(e) => setXp(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Your own code</span>
+            <span className="block text-subhead font-semibold">Your own code</span>
             <input value={own} onChange={(e) => setOwn(normalizeCode(e.target.value))} maxLength={ATTENDEE_CODE_MAX} placeholder="Random" autoCapitalize="characters" className={`${FIELD} uppercase placeholder:normal-case`} />
           </label>
         </div>
-        <p className="m-0 text-[12px] font-bold text-ink-soft">Up to {ATTENDEE_XP_MAX} xp, fixed thirty minutes before the start, when the code opens. You get a start code (six letters, or your own word) that only you see. Members log the run by entering it at the line.</p>
+        <p className="m-0 text-caption text-ink-soft">Up to {ATTENDEE_XP_MAX} xp, fixed thirty minutes before the start, when the code opens. You get a start code (six letters, or your own word) that only you see. Members log the run by entering it at the line.</p>
         {late && (
-          <p role="status" className="m-0 rounded-tile bg-r3/30 p-sm text-[14px] font-bold">
+          <p role="status" className="m-0 rounded-tile bg-r3/30 p-sm text-subhead">
             {late}
           </p>
         )}
@@ -970,7 +965,7 @@ export function RunClubPage() {
         lede={
           k.meets || k.description ? (
             <>
-              {k.meets && <p className="m-0 text-[16px] font-semibold text-ink">{k.meets}</p>}
+              {k.meets && <p className="m-0 text-callout text-ink">{k.meets}</p>}
               {k.description && <p className="mt-xs m-0 whitespace-pre-wrap">{k.description}</p>}
             </>
           ) : undefined
@@ -1019,10 +1014,10 @@ export function RunClubPage() {
       </AppCover>
 
       <section className="mt-lg" aria-labelledby="club-runs">
-        <h2 id="club-runs" className="text-[24px]">
+        <h2 id="club-runs" className="text-title2">
           Next runs
         </h2>
-        {d.runs.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{k.host ? 'No run on the calendar. Add one and you get its start code.' : 'No run on the calendar yet. The host adds them here.'}</p>}
+        {d.runs.length === 0 && <p className="mt-xs m-0 text-subhead text-ink-soft">{k.host ? 'No run on the calendar. Add one and you get its start code.' : 'No run on the calendar yet. The host adds them here.'}</p>}
         <ErrorLine e={recode.isError ? recode.error : setRun.isError ? setRun.error : null} />
         <ul className="mt-sm flex list-none flex-col gap-sm p-0 m-0">
           {d.runs.map((r) => (
@@ -1037,20 +1032,20 @@ export function RunClubPage() {
 
       {(d.collabs.length > 0 || d.collabPage.page > 1) && (
         <section className="mt-lg" aria-labelledby="club-collabs">
-          <h2 id="club-collabs" className="text-[24px]">
+          <h2 id="club-collabs" className="text-title2">
             Brand collabs
           </h2>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">What runners can win at the next collab run.</p>
+          <p className="mt-xs m-0 text-subhead text-ink-soft">What runners can win at the next collab run.</p>
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {d.collabs.map((c) => (
               <li key={c.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <p className="m-0 text-[16px] font-bold">
-                  {c.title} <span className="text-[14px] font-semibold text-ink-soft">by {c.brand}</span>
+                <p className="m-0 text-headline">
+                  {c.title} <span className="text-subhead text-ink-soft">by {c.brand}</span>
                 </p>
                 <p className="mt-xs m-0">
                   <Giveaway giveaway={c.giveaway} count={c.giveawayCount} />
                 </p>
-                {c.asks && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">The brand asks: {c.asks}</p>}
+                {c.asks && <p className="mt-xs m-0 text-subhead text-ink-soft">The brand asks: {c.asks}</p>}
               </li>
             ))}
           </ul>
@@ -1059,11 +1054,11 @@ export function RunClubPage() {
       )}
 
       <section className="mt-lg rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="club-board">
-        <h2 id="club-board" className="text-[18px]">
+        <h2 id="club-board" className="text-title3">
           This month
         </h2>
         {d.board.length === 0 ? (
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Nobody has logged a run this month yet.</p>
+          <p className="mt-xs m-0 text-subhead text-ink-soft">Nobody has logged a run this month yet.</p>
         ) : (
           <div className="mt-sm">
             <HBars label="Kilometres this month per runner" rows={d.board.map((b) => ({ key: b.userId, label: b.name, value: b.metres / maxMetres, text: kmLabel(b.metres), color: REL.color }))} />
@@ -1073,17 +1068,17 @@ export function RunClubPage() {
 
       {k.host && d.entries.length > 0 && (
         <section className="mt-lg" aria-labelledby="club-entries">
-          <h2 id="club-entries" className="text-[24px]">
+          <h2 id="club-entries" className="text-title2">
             Entries
           </h2>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Every entry logged with a start code. Void one that should not be there and its points come back out.</p>
+          <p className="mt-xs m-0 text-subhead text-ink-soft">Every entry logged with a start code. Void one that should not be there and its points come back out.</p>
           <ErrorLine e={voidEntry.isError ? voidEntry.error : null} />
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {d.entries.map((e) => (
               <li key={e.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[16px] font-bold">{e.name}</span>
-                  <span className="block text-[14px] font-semibold text-ink-soft">
+                  <span className="block text-headline">{e.name}</span>
+                  <span className="block text-subhead text-ink-soft">
                     {eventTime(e.loggedAt)}, {kmLabel(e.metres)}
                     {e.minutes > 0 ? `, ${e.minutes} min` : ''}
                     {e.status === 'void' ? ', voided' : ''}
@@ -1103,14 +1098,14 @@ export function RunClubPage() {
 
       {(d.past.length > 0 || d.pastPage.page > 1) && (
         <section className="mt-lg" aria-labelledby="club-past">
-          <h2 id="club-past" className="text-[24px]">
+          <h2 id="club-past" className="text-title2">
             Past runs
           </h2>
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {d.past.map((r) => (
               <li key={r.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <span className="block text-[16px] font-bold">{r.title}</span>
-                <span className="block text-[14px] font-semibold text-ink-soft">
+                <span className="block text-headline">{r.title}</span>
+                <span className="block text-subhead text-ink-soft">
                   {eventTime(r.startsAt)}, {kmLabel(r.metres)}, {r.entries} {r.entries === 1 ? 'runner' : 'runners'}
                   {r.status !== 'published' ? `, ${r.status}` : ''}
                   {r.mine ? `, you ran ${kmLabel(r.mine.metres)}` : ''}

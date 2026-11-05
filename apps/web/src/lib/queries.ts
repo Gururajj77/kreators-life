@@ -58,8 +58,24 @@ export const useCommunity = (category?: string, product?: string, all = false, s
 export const useStudio = () => useAuthed(['studio'], api.studio);
 export const useLibrary = (pq = '') => useAuthed(['library', pq], () => api.library(pq));
 
-/** After anything that changes XP, refresh every screen's data. */
-export function useRefreshAll() {
+/**
+ * After anything that changes XP, refresh every screen's data. Emerging is the exception (2026-11-05): it rebuilds weeks of rows, so a
+ * plain tick only marks it stale and it is read again the next time a screen with it opens. A write that changes what an Emerging card
+ * offers (a task's repeat, habit, title, day or place, a new task, a not to do item added or removed) passes `{ insights: true }`, or
+ * calls `useRefreshInsights`, so the card on screen is read again at once and never offers what was just done.
+ */
+export function useRefreshAll(opts: { insights?: boolean } = {}) {
   const qc = useQueryClient();
-  return () => qc.invalidateQueries();
+  const insights = opts.insights === true;
+  return () =>
+    Promise.all([
+      qc.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'insights' }),
+      qc.invalidateQueries({ queryKey: ['insights'], refetchType: insights ? 'active' : 'none' }),
+    ]).then(() => undefined);
+}
+
+/** Read Emerging again now (the active screens only), for a write that changes what its cards offer. */
+export function useRefreshInsights() {
+  const qc = useQueryClient();
+  return () => qc.invalidateQueries({ queryKey: ['insights'] });
 }

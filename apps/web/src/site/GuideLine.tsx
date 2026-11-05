@@ -46,7 +46,7 @@ export function GuideLine({
       <div className={`guide-who row-start-1 flex justify-center ${right ? 'col-start-2' : 'col-start-1'}`}>
         <Avatar relationship={host} size={size} mood={mood} decorative className="h-auto max-w-[var(--av-sm)] sm:max-w-none" />
       </div>
-      <figcaption className={`guide-who row-start-2 self-start text-center text-[12px] leading-tight font-bold text-ink-mute ${right ? 'col-start-2' : 'col-start-1'}`}>{characterTitle(host)}</figcaption>
+      <figcaption className={`guide-who row-start-2 self-start text-center text-caption font-medium text-ink-mute ${right ? 'col-start-2' : 'col-start-1'}`}>{characterTitle(host)}</figcaption>
       <blockquote
         className={`guide-blob relative row-start-1 m-0 max-w-[560px] px-md py-sm text-balance sm:px-lg sm:py-md ${right ? 'col-start-1 justify-self-end' : 'col-start-2 justify-self-start'}`}
         style={{ color: tone }}

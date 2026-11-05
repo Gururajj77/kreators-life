@@ -127,10 +127,10 @@ export function CheckRow({
             )}
           </span>
           <span className="min-w-0 flex-1">
-            <span className={`block text-[16px] font-bold leading-snug ${checked && strike ? 'text-ink-mute line-through' : ''}`}>{title}</span>
+            <span className={`block text-body ${checked && strike ? 'text-ink-mute line-through' : ''}`}>{title}</span>
             {(subtitle || badge) && (
               <span className="flex flex-wrap items-center gap-x-xs">
-                {subtitle && <span className="text-[14px] font-semibold text-ink-soft">{subtitle}</span>}
+                {subtitle && <span className="text-subhead text-ink-soft">{subtitle}</span>}
                 {badge}
               </span>
             )}
@@ -154,7 +154,7 @@ export function CheckRow({
         {aside}
       </div>
       {note && (
-        <p id={`${id}-note`} role="status" className="mt-xs m-0 rounded-tile bg-paper px-sm py-xs text-[14px] font-bold">
+        <p id={`${id}-note`} role="status" className="mt-xs m-0 rounded-tile bg-paper px-sm py-xs text-subhead">
           {note}
         </p>
       )}

@@ -14,22 +14,6 @@ const TONE: Record<string, { fill: string; flower: 'lotus' | 'violet' | 'poppy' 
 const ORDER = ['the-relationship-method', 'dictionary-of-mistakes-for-20s', 'dictionary-of-mistakes-for-creators'] as const;
 
 /**
- * A book drawn in 3D: the front cover on a slight turn, its spine and a block of pages showing at the side. A mouse or the keyboard
- * turns it toward you and lifts it; on a touch screen and under reduced motion it stands still at its rest angle. CSS transforms only.
- */
-export function Book3D({ book, eager = false }: { book: Book; eager?: boolean }) {
-  return (
-    <span className="book3d" aria-hidden="false">
-      <span className="book3d-body">
-        <img src={book.cover} alt={book.coverAlt} width={893} height={1263} loading={eager ? 'eager' : 'lazy'} decoding="async" className="book3d-cover" />
-        <span className="book3d-pages" aria-hidden="true" />
-        <span className="book3d-sheen" aria-hidden="true" />
-      </span>
-    </span>
-  );
-}
-
-/**
  * The founder's three books as one shelf: The Relationship Method large on the left, and on the right the 20s book above the Creators
  * book, each a card of its own in a bento grid (like Home's metrics). Each opens `href(book)`. On a phone the large one takes the top
  * row and the two sit side by side under it.
@@ -48,7 +32,7 @@ export function BookShelf({ href, caption = true, className = '' }: { href: (b: 
           <span className="book3d-sheen" aria-hidden="true" />
         </span>
         {caption && (
-          <span className={`relative flex flex-1 items-center justify-center px-sm py-sm text-balance text-center font-extrabold leading-tight tracking-tight ${size === 'big' ? 'text-[16px] sm:text-[20px]' : 'text-[14px] sm:text-[15px]'}`}>
+          <span className={`relative flex flex-1 items-center justify-center px-sm py-sm text-balance text-center ${size === 'big' ? 'text-headline sm:text-title3' : 'text-subhead font-semibold'}`}>
             <HeroBlobs seed={b.slug} kind={TONE[b.slug]?.flower} opacity={0.12} />
             <span className="relative">{b.title}</span>
           </span>

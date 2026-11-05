@@ -15,7 +15,7 @@ interface Licences {
   packages: Pkg[];
 }
 
-const FONTS = ['Geist', 'Inter', 'Geist Mono', 'Caveat'];
+const FONTS = 'Google Sans Flex, and Caveat for a guide’s handwritten line';
 /** The licence's name for the row, without a web address some packages put in it (the full text, address and all, is inside the fold). */
 const licenceName = (raw: string): string => raw.replace(/[:\s]*https?:\/\/\S+/g, '').trim() || 'no licence named';
 
@@ -51,13 +51,13 @@ export function Licences() {
                   // The name and its version and licence on two lines that can wrap: a long name or a long licence never widens a phone.
                   <>
                     <span className="block break-all">{p.name}</span>
-                    <span className="block text-[14px] font-semibold text-ink-soft">{`${p.version} · ${licenceName(p.license)}`}</span>
+                    <span className="block text-subhead text-ink-soft">{`${p.version} · ${licenceName(p.license)}`}</span>
                   </>
                 }
               >
                 <div className="rounded-tile bg-card p-sm">
-                  {p.repository && <p className="m-0 break-all text-[12px] font-semibold text-ink-mute">{p.repository}</p>}
-                  {p.text ? <pre className="mt-xs m-0 max-h-[320px] overflow-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-ink-soft">{p.text}</pre> : <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">This package does not ship a licence file. Its licence is named above.</p>}
+                  {p.repository && <p className="m-0 break-all text-caption text-ink-mute">{p.repository}</p>}
+                  {p.text ? <pre className="mt-xs m-0 max-h-[320px] overflow-auto whitespace-pre-wrap break-words font-mono text-caption leading-relaxed text-ink-soft">{p.text}</pre> : <p className="mt-xs m-0 text-subhead text-ink-soft">This package does not ship a licence file. Its licence is named above.</p>}
                 </div>
               </Fold>
             ))}
@@ -66,7 +66,7 @@ export function Licences() {
       )}
       <H>Fonts</H>
       <P>
-        The type is {FONTS.join(', ')}. Each is under the SIL Open Font License, version 1.1. That licence covers the font files only, not the rest of the app. The fonts are free to use, copy and share, but not to sell on their own. The full text is on openfontlicense.org, the home of the licence.
+        The type is {FONTS}, both under the SIL Open Font License, version 1.1. That licence covers the font files only, not the rest of the app. The fonts are free to use, copy and share, but not to sell on their own. The full text is on openfontlicense.org, the home of the licence.
       </P>
       <H>Animation</H>
       <P>The animation library GSAP is used under its free standard licence (gsap.com/standard-license), which lets anyone use it at no cost.</P>

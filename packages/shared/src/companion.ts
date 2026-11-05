@@ -14,7 +14,7 @@ export const CRISIS_RE = /\b(suicid\w*|kill(ing)? myself|end it all|self[- ]harm
 
 /** What the Companion says when CRISIS_RE matches. It never goes through a model. */
 export const CRISIS_LINE =
-  'I am really glad you told me, and I want you to talk to a person right now. If you are in immediate danger, call your local emergency number. In India you can call Tele-MANAS on 14416 at any hour. I will still be here after.';
+  'I am really glad you told me, and I want you to talk to a person right now. If you are in immediate danger, call your local emergency number or go to the nearest hospital. In India you can call Tele-MANAS on 14416 at any hour. Tell a friend or someone in your family too. I will still be here after.';
 
 /** The free answers: Workers AI on our own host, or the rules. */
 export type CompanionBuiltIn = 'workers-ai' | 'local';

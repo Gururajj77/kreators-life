@@ -25,7 +25,7 @@ export function ConfirmSpend({
   return (
     <Sheet open={open} onClose={onClose} title={title}>
       <div className="grid gap-md pb-xl">
-        <p className="m-0 text-[16px] font-semibold text-ink-soft">{body}</p>
+        <p className="m-0 text-callout text-ink-soft">{body}</p>
         <div className="flex flex-wrap gap-xs">
           <Button
             disabled={busy}

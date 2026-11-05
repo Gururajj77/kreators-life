@@ -1,8 +1,7 @@
-import { MODULE_BY_KEY, PERMISSION_META, ROLE_META, type Permission } from '@kreators/shared';
-import { longDate } from '../lib/date';
+import { formatCount, MODULE_BY_KEY, PERMISSION_META, ROLE_META, type Permission } from '@kreators/shared';
+import { longDate, shortDay } from '../lib/date';
 import { AppIcon } from '../components/AppIcon';
 import { useState } from 'react';
-import { Link } from 'react-router';
 import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
@@ -11,7 +10,10 @@ import { useDebounced } from '../lib/useDebounced';
 import { Pager, usePage } from '../components/Pager';
 import { tie } from '../lib/text';
 import { StatusTag } from '../components/StatusTag';
-import { CardHead } from '../components/CardHead';
+import { RowCard } from '../components/RowCard';
+import { Reveal } from '../components/fx/Reveal';
+import { CountUp } from '../components/fx/CountUp';
+import { FactTag, IconTag } from '../components/FactTag';
 
 /** Each permission's queue tile: where it opens and what is waiting. Its icon is the permission's own, from `PERMISSION_META` in shared. */
 const PERMISSION_TILES: Record<Permission, { name: string; blurb: string; to: string; queue?: (q: Queues) => number }> = {
@@ -51,42 +53,45 @@ export function Manage() {
 
       {o && (
         <section className="mt-md" aria-labelledby="queues-heading">
-          <h2 id="queues-heading" className="text-[24px]">
+          <h2 id="queues-heading" className="text-title2">
             Your queues
           </h2>
-          {o.permissions.length === 0 && role !== 'admin' && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">No staff permissions yet. An admin grants them under Admin, People.</p>}
-          <ul className="mt-sm grid list-none grid-cols-2 gap-xs p-0 m-0">
-            {/* An admin holds every permission but Life coach, which the server lists only when given. */}
-            {(role === 'admin' ? (Object.keys(PERMISSION_TILES) as Permission[]).filter((p) => p !== 'coach' || o.permissions.includes('coach')) : o.permissions).map((p) => {
-              const m = PERMISSION_TILES[p];
-              const n = m.queue ? m.queue(o.queues) : 0;
-              return (
-                <li key={p}>
-                  <Link to={m.to} className="toy toy-soft relative flex min-h-[112px] flex-col justify-end rounded-tile bg-card p-sm">
-                    <AppIcon name={PERMISSION_META[p].icon} size={22} className="text-ink-soft" />
-                    <span className="mt-xs block text-[16px] font-bold leading-tight">{m.name}</span>
-                    <span className="block text-[14px] font-semibold leading-snug text-ink-soft">{tie(m.blurb)}</span>
-                    {n > 0 && <span className="absolute top-sm right-sm rounded-pill bg-r1 px-xs text-[12px] font-extrabold leading-[20px] text-white">{n}</span>}
-                  </Link>
-                </li>
-              );
-            })}
-            <li>
-              <Link to="/knowledge" className="toy toy-soft flex min-h-[112px] flex-col justify-end rounded-tile bg-card p-sm">
-                <AppIcon name={MODULE_BY_KEY.knowledge?.icon} size={22} className="text-ink-soft" />
-                <span className="mt-xs block text-[16px] font-bold leading-tight">Knowledge</span>
-                <span className="block text-[14px] font-semibold leading-snug text-ink-soft">Write and publish articles</span>
-              </Link>
-            </li>
-            {role === 'admin' && (
-              <li>
-                <Link to="/admin" className="toy toy-soft flex min-h-[112px] flex-col justify-end rounded-tile bg-card p-sm">
-                  <AppIcon name={MODULE_BY_KEY.admin?.icon} size={22} className="text-ink-soft" />
-                  <span className="mt-xs block text-[16px] font-bold leading-tight">Admin</span>
-                  <span className="block text-[14px] font-semibold leading-snug text-ink-soft">People, flags, listings, audit</span>
-                </Link>
-              </li>
-            )}
+          {o.permissions.length === 0 && role !== 'admin' && <p className="mt-xs m-0 text-subhead text-ink-soft">No staff permissions yet. An admin grants them under Admin, People.</p>}
+          {/* A queue tile is placed like every card (2026-11-05): the name and its line at the top left, the permission's icon on a neutral
+              tile at the top right, what is waiting at the foot of every tile (a neutral word when nothing is, or when the area keeps no
+              queue) and an arrow at the bottom right. One to a row on a phone, so no line is squeezed; two from the small tablet up. */}
+          <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 sm:grid-cols-2">
+            {[
+              // An admin holds every permission but Life coach, which the server lists only when given.
+              ...(role === 'admin' ? (Object.keys(PERMISSION_TILES) as Permission[]).filter((p) => p !== 'coach' || o.permissions.includes('coach')) : o.permissions).map((p) => {
+                const m = PERMISSION_TILES[p];
+                return { key: p, name: m.name, blurb: m.blurb, to: m.to, icon: PERMISSION_META[p].icon, waiting: m.queue ? m.queue(o.queues) : null };
+              }),
+              { key: 'knowledge', name: 'Knowledge', blurb: 'Write and publish articles', to: '/knowledge', icon: MODULE_BY_KEY.knowledge?.icon, waiting: null },
+              ...(role === 'admin' ? [{ key: 'admin', name: 'Admin', blurb: 'People, flags, listings, audit', to: '/admin', icon: MODULE_BY_KEY.admin?.icon, waiting: null }] : []),
+            ].map((t, i) => (
+              <Reveal as="li" key={t.key} index={i} className="flex">
+                <RowCard
+                  to={t.to}
+                  title={t.name}
+                  sub={tie(t.blurb)}
+                  corner={
+                    <span className="flex size-[44px] items-center justify-center rounded-inner bg-paper text-ink-soft" aria-hidden="true">
+                      <AppIcon name={t.icon} size={22} />
+                    </span>
+                  }
+                  facts={
+                    t.waiting === null ? (
+                      <StatusTag tone="neutral">No queue</StatusTag>
+                    ) : t.waiting > 0 ? (
+                      <StatusTag tone="bad">{`${formatCount(t.waiting)} waiting`}</StatusTag>
+                    ) : (
+                      <StatusTag tone="good">Nothing waiting</StatusTag>
+                    )
+                  }
+                />
+              </Reveal>
+            ))}
           </ul>
         </section>
       )}
@@ -102,31 +107,39 @@ export function Manage() {
             ['hidden posts', o.hiddenPosts],
           ].map(([label, value]) => (
             <div key={String(label)} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <p className="m-0 font-display text-[24px] font-extrabold leading-none">{value}</p>
-              <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{label}</p>
+              <p className="m-0 text-title2 type-figure leading-none">
+                <CountUp value={Number(value)} format={formatCount} className="tabular-nums" />
+              </p>
+              <p className="mt-xs m-0 text-caption text-ink-soft">{label}</p>
             </div>
           ))}
         </section>
       )}
 
       <section className="mt-lg" aria-labelledby="members-heading">
-        <h2 id="members-heading" className="text-[24px]">
+        <h2 id="members-heading" className="text-title2">
           Members
         </h2>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name, page or email" aria-label="Search members" className="mt-sm w-full rounded-pill border-2 border-line bg-card px-md py-sm text-[16px]" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name, page or email" aria-label="Search members" className="mt-sm w-full rounded-pill border-2 border-line bg-card px-md py-sm text-body" />
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {members.data?.members.map((m) => (
-            <li key={m.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <CardHead tag={m.role !== 'user' && <StatusTag tone="calm" fit>{ROLE_META[m.role].name}</StatusTag>}>
-                <p className="m-0 text-[16px] font-bold [overflow-wrap:anywhere]">
-                  {m.name}
-                  {m.handle ? <span className="font-semibold text-ink-soft"> @{m.handle}</span> : ''}
-                </p>
-              </CardHead>
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                {m.xp} xp, streak {m.streak}, joined {longDate(m.createdAt)}
-                {m.lastCheckin ? `, last check-in ${m.lastCheckin}` : ', never checked in'}
-              </p>
+            <li key={m.id} className="flex">
+              {/* The name at the top left, the role in the corner of every row (Creator too), the numbers as tags at the foot. */}
+              <RowCard
+                title={
+                  <span className="[overflow-wrap:anywhere]">
+                    {m.name}
+                    {m.handle ? <span className="text-ink-soft"> @{m.handle}</span> : ''}
+                  </span>
+                }
+                corner={<StatusTag tone={m.role === 'user' ? 'neutral' : 'calm'} fit>{ROLE_META[m.role].name}</StatusTag>}
+                facts={[
+                  <IconTag key="xp" tone="calm" icon="Zap">{`${formatCount(m.xp)} xp`}</IconTag>,
+                  <IconTag key="streak" tone="warm" icon="Flame">{`Streak ${m.streak}`}</IconTag>,
+                  <FactTag key="joined" kind="when">{`Joined ${longDate(m.createdAt)}`}</FactTag>,
+                  <FactTag key="last" kind="status">{m.lastCheckin ? `Last check-in ${shortDay(m.lastCheckin)}` : 'Never checked in'}</FactTag>,
+                ]}
+              />
             </li>
           ))}
         </ul>

@@ -1,20 +1,25 @@
 import { Suspense, type ComponentProps } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { InsightApp, RelationshipKey } from '@kreators/shared';
+import { insightsForPlace, type InsightApp, type InsightsResponse, type RelationshipKey } from '@kreators/shared';
 import { api } from '../lib/api';
 import { useSession } from '../lib/store';
 import { todayLocal } from '../lib/date';
 import { lazyNamed } from '../lib/lazy';
 
-/** The Emerging query every place shares, keyed by app, pillar and the device's day. Any write that refreshes everything refreshes it. */
+/**
+ * The one Emerging query (2026-11-05): keyed by the device's day only, so Home, Daily, Pillars, each pillar page and every app screen
+ * share one answer, the person's whole list, and each picks its own share with `insightsForPlace` (the same rule the server used per
+ * place). An ordinary write marks it stale without refetching it (`useRefreshAll`); the Make it a habit and not to do sheets refetch it.
+ */
 export function useInsights(app: InsightApp, rel?: RelationshipKey | null) {
   const token = useSession((s) => s.token);
   const day = todayLocal();
   return useQuery({
-    queryKey: ['insights', app, rel ?? '', day],
-    queryFn: () => api.insights(day, app, rel ?? undefined),
+    queryKey: ['insights', day],
+    queryFn: () => api.insights(day),
     enabled: Boolean(token),
     staleTime: 5 * 60 * 1000,
+    select: (d: InsightsResponse): InsightsResponse => ({ day: d.day, insights: insightsForPlace(d.insights, app, rel ?? null) }),
   });
 }
 

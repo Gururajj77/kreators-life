@@ -50,12 +50,12 @@ export function DocStyleSheet({ open, onClose, value, onChange, disabled = false
   return (
     <Sheet open={open} onClose={onClose} title={title}>
       <fieldset disabled={disabled} className="m-0 grid gap-sm border-0 p-0 pb-xl">
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">How this document looks on paper and as a PDF. The preview changes as you choose.</p>
+        <p className="m-0 text-subhead text-ink-soft">How this document looks on paper and as a PDF. The preview changes as you choose.</p>
         {before}
         <div>
           <span className={LABEL}>Layout</span>
           <Chips label="Layout" options={opts('layout', DOC_LAYOUTS)} value={s.layout ?? 'legal'} onChange={(v) => set({ layout: v as DocStyle['layout'] })} />
-          <p className="mt-xs m-0 text-[12px] font-semibold text-ink-mute">Typed is plain type with headings as you typed them, like a typed agreement.</p>
+          <p className="mt-xs m-0 text-caption text-ink-mute">Typed is plain type with headings as you typed them, like a typed agreement.</p>
         </div>
         <Toggle on={s.letterhead} onChange={(on) => set({ letterhead: on })} label="Letterhead" hint="Your business name and address at the top of the first page." />
         {s.letterhead && (
@@ -63,7 +63,7 @@ export function DocStyleSheet({ open, onClose, value, onChange, disabled = false
             <span className={LABEL}>Logo</span>
             <div className="mt-xs flex flex-wrap items-center gap-xs">
               {s.logo && <img src={`/api/public/media/${s.logo}`} alt="Your logo" className="max-h-[48px] max-w-[120px] object-contain" />}
-              <label className="toy toy-soft inline-flex min-h-[44px] cursor-pointer items-center rounded-pill border-2 border-line bg-card px-md text-[14px] font-bold">
+              <label className="toy toy-soft inline-flex min-h-[44px] cursor-pointer items-center rounded-pill border-2 border-line bg-card px-md text-subhead font-semibold">
                 {busy ? 'Uploading' : s.logo ? 'Change the logo' : 'Add a logo'}
                 <input type="file" accept="image/png,image/jpeg,image/webp,image/avif" className="sr-only" disabled={busy} onChange={(e) => void upload(e.target.files?.[0])} />
               </label>
@@ -73,7 +73,7 @@ export function DocStyleSheet({ open, onClose, value, onChange, disabled = false
                 </Button>
               )}
             </div>
-            <p className="mt-xs m-0 text-[12px] font-semibold text-ink-mute">Without a logo the letterhead is text only.</p>
+            <p className="mt-xs m-0 text-caption text-ink-mute">Without a logo the letterhead is text only.</p>
           </div>
         )}
         <div>
@@ -106,9 +106,9 @@ export function DocStyleSheet({ open, onClose, value, onChange, disabled = false
           <span className={LABEL}>Signature blocks</span>
           <Chips label="Signature blocks" options={opts('signLayout', DOC_SIGN_LAYOUTS)} value={s.signLayout} onChange={(v) => set({ signLayout: v as DocStyle['signLayout'] })} />
         </div>
-        <p className="m-0 text-[12px] font-semibold text-ink-mute">The running title and page numbers appear in Chrome and Edge. Other browsers print the page without them.</p>
+        <p className="m-0 text-caption text-ink-mute">The running title and page numbers appear in Chrome and Edge. Other browsers print the page without them.</p>
         {msg && (
-          <p role="status" className="m-0 text-[14px] font-bold">
+          <p role="status" className="m-0 text-subhead">
             {msg}
           </p>
         )}

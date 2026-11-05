@@ -319,12 +319,30 @@ export function taskKey(title: string): string {
 export function sameTask(a: string, b: string): boolean {
   if (!a || !b) return false;
   if (a === b) return true;
-  const A = new Set(a.split('|'));
-  const B = new Set(b.split('|'));
-  const both = [...A].filter((w) => B.has(w));
-  const union = new Set([...A, ...B]).size;
-  return both.length / union >= 0.67 && both.some((w) => w.length >= 4);
+  return sameWords(new Set(a.split('|')), new Set(b.split('|')));
 }
+
+/** `sameTask` on word sets already made, so a loop over many keys splits each key once. */
+function sameWords(A: ReadonlySet<string>, B: ReadonlySet<string>): boolean {
+  let both = 0;
+  let long = false;
+  for (const w of A) {
+    if (!B.has(w)) continue;
+    both += 1;
+    if (w.length >= 4) long = true;
+  }
+  const union = A.size + B.size - both;
+  return both / union >= 0.67 && long;
+}
+
+/** A key with its word set, made once. */
+interface KeyWords {
+  key: string;
+  words: ReadonlySet<string>;
+}
+const keyWordsOf = (key: string): KeyWords => ({ key, words: new Set(key.split('|')) });
+/** `sameTask` for two keys whose word sets are made. */
+const sameKey = (a: KeyWords, b: KeyWords): boolean => Boolean(a.key) && Boolean(b.key) && (a.key === b.key || sameWords(a.words, b.words));
 
 /** How often a task done on these local days could come back: daily, on weekdays, or weekly on its usual days. Every 1, no end. */
 export function suggestRepeat(localDays: readonly string[], today: string): Repeat {
@@ -460,6 +478,16 @@ interface Ctx {
   ticksByDay: Map<string, number>;
   activeDays: Set<string>;
   wb: (kind: string) => Map<string, number>;
+  /** Every ticked task read once: its local stamp and its key (2026-11-05: each was worked out again per signal). */
+  stamped: StampedTick[];
+  /** Open tasks by pillar, each with its key, in the order they came. */
+  openByRel: (rel: RelationshipKey) => { o: InsightOpenTaskFact; k: KeyWords }[];
+}
+
+interface StampedTick {
+  t: InsightTaskFact;
+  at: { day: string; minutes: number; weekday: number } | null;
+  key: string;
 }
 
 interface TickCluster {
@@ -472,11 +500,9 @@ interface TickCluster {
  * Ticks between two local days grouped into the tasks they name: by pillar and exact key first, then keys that name the same
  * thing are joined, biggest first, so the answer never depends on order.
  */
-function clusterTicks(f: InsightFacts, from: string, to: string, withRepeats: boolean): TickCluster[] {
-  const recent = f.done
-    .filter((t) => withRepeats || !t.repeats)
-    .map((t) => ({ t, at: localStamp(t.completedAt, f.zone), key: taskKey(t.title) }))
-    .filter((x): x is { t: InsightTaskFact; at: { day: string; minutes: number; weekday: number }; key: string } => x.at !== null && x.key !== '' && x.at.day >= from && x.at.day <= to)
+function clusterTicks(stamped: readonly StampedTick[], from: string, to: string, withRepeats: boolean): TickCluster[] {
+  const recent = stamped
+    .filter((x): x is { t: InsightTaskFact; at: { day: string; minutes: number; weekday: number }; key: string } => (withRepeats || !x.t.repeats) && x.at !== null && x.key !== '' && x.at.day >= from && x.at.day <= to)
     .sort((a, b) => (a.t.completedAt < b.t.completedAt ? -1 : a.t.completedAt > b.t.completedAt ? 1 : a.t.id < b.t.id ? -1 : 1));
   const exact = new Map<string, TickCluster>();
   for (const x of recent) {
@@ -485,12 +511,13 @@ function clusterTicks(f: InsightFacts, from: string, to: string, withRepeats: bo
     cl.ticks.push({ day: x.at.day, minutes: x.at.minutes, title: x.t.title.trim(), parentId: x.t.parentId, at: x.t.completedAt, repeats: x.t.repeats, habit: x.t.habit ?? null });
     exact.set(id, cl);
   }
-  const clusters: TickCluster[] = [];
+  const clusters: (TickCluster & { words: KeyWords })[] = [];
   const ordered = [...exact.values()].sort((a, b) => b.ticks.length - a.ticks.length || (a.rel + a.key < b.rel + b.key ? -1 : 1));
   for (const cl of ordered) {
-    const into = clusters.find((k) => k.rel === cl.rel && sameTask(k.key, cl.key));
+    const words = keyWordsOf(cl.key);
+    const into = clusters.find((k) => k.rel === cl.rel && sameKey(k.words, words));
     if (into) into.ticks.push(...cl.ticks);
-    else clusters.push({ rel: cl.rel, key: cl.key, ticks: [...cl.ticks] });
+    else clusters.push({ rel: cl.rel, key: cl.key, ticks: [...cl.ticks], words });
   }
   for (const cl of clusters) cl.ticks.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
   return clusters;
@@ -520,12 +547,13 @@ function habits(c: Ctx): Insight[] {
   const { f } = c;
   const apps: InsightApp[] = ['today', 'tower', 'pillar', 'home', 'insights'];
   const from = addDays(f.today, -(HABIT_WINDOW_DAYS - 1));
-  const clusters = clusterTicks(f, from, f.today, false);
+  const clusters = clusterTicks(c.stamped, from, f.today, false);
   const found: Insight[] = [];
   for (const cl of clusters) {
     const days = [...new Set(cl.ticks.map((t) => t.day))].sort();
     if (cl.ticks.length < HABIT_MIN_TICKS || days.length < HABIT_MIN_TICKS) continue;
-    const mates = f.open.filter((o) => o.relationship === cl.rel && sameTask(cl.key, taskKey(o.title)));
+    const words = keyWordsOf(cl.key);
+    const mates = c.openByRel(cl.rel).filter((x) => sameKey(words, x.k)).map((x) => x.o);
     if (mates.some((o) => o.repeats)) continue;
     const habit = suggestionFor(f, cl, mates);
     const { repeat, time } = habit;
@@ -566,7 +594,8 @@ function habits(c: Ctx): Insight[] {
   return found.slice(0, MAX_HABITS);
 }
 
-function pillarBalance(c: Ctx): Insight[] {
+/** The overall balance line, and a line of its own for each pillar in `pillarRels` (a pillar page shows its own). */
+function pillarBalance(c: Ctx, pillarRels: readonly RelationshipKey[]): Insight[] {
   const { f } = c;
   const apps: InsightApp[] = ['home', 'tower', 'life', 'reviews', 'insights'];
   const reads: InsightPart[] = ['xp', 'tasks'];
@@ -617,23 +646,24 @@ function pillarBalance(c: Ctx): Insight[] {
     need: null,
     strength,
   });
-  if (f.rel && RELATIONSHIP_BY_KEY[f.rel]) {
-    const r = byRel.get(f.rel);
+  for (const rel of pillarRels) {
+    if (!RELATIONSHIP_BY_KEY[rel]) continue;
+    const r = byRel.get(rel);
     out.push({
       key: 'pillar-balance',
-      id: `pillar-balance:${f.rel}`,
+      id: `pillar-balance:${rel}`,
       state: 'ready',
       apps: ['pillar'],
       reads,
       private: false,
-      relationship: f.rel,
-      headline: `${share(f.rel)}%`,
-      text: `${pillarName(f.rel)}: ${plural(Math.max(0, r?.ticks ?? 0), 'tick')} and ${formatCount(Math.max(0, r?.xp ?? 0))} xp in 30 days, ${share(f.rel)}% of the total.`,
+      relationship: rel,
+      headline: `${share(rel)}%`,
+      text: `${pillarName(rel)}: ${plural(Math.max(0, r?.ticks ?? 0), 'tick')} and ${formatCount(Math.max(0, r?.xp ?? 0))} xp in 30 days, ${share(rel)}% of the total.`,
       basis: `From ${plural(totalTicks, 'tick')} and ${formatCount(totalXp)} xp in 30 days.`,
-      chart: { kind: 'share', parts, mark: f.rel },
+      chart: { kind: 'share', parts, mark: rel },
       action: null,
       need: null,
-      strength: share(f.rel) < 10 ? 50 : 30,
+      strength: share(rel) < 10 ? 50 : 30,
     });
   }
   return out;
@@ -1409,19 +1439,29 @@ function habitTies(c: Ctx): Insight[] {
   const { f } = c;
   const to = c.yesterday;
   const candidates: TieCandidate[] = [];
-  const onList = (key: string) => f.notToDoItems.some((i) => sameTask(taskKey(i.title), key));
+  const listKeys = f.notToDoItems.map((i) => keyWordsOf(taskKey(i.title)));
+  const onList = (key: string) => {
+    const words = keyWordsOf(key);
+    return listKeys.some((k) => sameKey(k, words));
+  };
   const listRoom = f.notToDoItems.length < MAX_NOT_TO_DO;
   // Tasks: every group ticked on at least 3 days in 8 weeks, repeating or not, the most days first. A task the person counts as a
   // habit is one from its first tick, and comes first.
-  const habitOf = (cl: TickCluster, mates: InsightOpenTaskFact[]): boolean | null => {
-    const set = mates.find((o) => o.habit === true || o.habit === false);
-    if (set) return set.habit ?? null;
+  // The person's own pick on an open task in the group wins (the first such task, in the order they came), then the newest tick's.
+  // Only open tasks that carry a pick are looked at here; the whole group of mates is found for the twelve kept below.
+  const habitOf = (cl: TickCluster): boolean | null => {
+    const words = keyWordsOf(cl.key);
+    const set = c.openByRel(cl.rel).find((x) => (x.o.habit === true || x.o.habit === false) && sameKey(words, x.k));
+    if (set) return set.o.habit ?? null;
     for (let k = cl.ticks.length - 1; k >= 0; k -= 1) if (cl.ticks[k]!.habit !== null) return cl.ticks[k]!.habit;
     return null;
   };
-  const matesOf = (cl: TickCluster) => f.open.filter((o) => o.relationship === cl.rel && sameTask(cl.key, taskKey(o.title)));
-  const clusters = clusterTicks(f, c.pairFrom, to, true)
-    .map((cl) => ({ cl, days: [...new Set(cl.ticks.map((t) => t.day))].sort(), habit: habitOf(cl, matesOf(cl)) }))
+  const matesOf = (cl: TickCluster) => {
+    const words = keyWordsOf(cl.key);
+    return c.openByRel(cl.rel).filter((x) => sameKey(words, x.k)).map((x) => x.o);
+  };
+  const clusters = clusterTicks(c.stamped, c.pairFrom, to, true)
+    .map((cl) => ({ cl, days: [...new Set(cl.ticks.map((t) => t.day))].sort(), habit: habitOf(cl) }))
     .filter((x) => x.days.length >= (x.habit === true ? 1 : HABIT_MIN_TICKS))
     .sort((a, b) => Number(b.habit === true) - Number(a.habit === true) || b.days.length - a.days.length || (a.cl.rel + a.cl.key < b.cl.rel + b.cl.key ? -1 : 1))
     .slice(0, 12);
@@ -1468,7 +1508,8 @@ function habitTies(c: Ctx): Insight[] {
       habit: null,
     });
   }
-  const all = candidates.map((cand) => tieInsight(c, cand, tieSignals(c, cand.kind))).filter((x): x is Insight => x !== null);
+  const signals = { task: tieSignals(c, 'task'), notToDo: tieSignals(c, 'notToDo') };
+  const all = candidates.map((cand) => tieInsight(c, cand, signals[cand.kind])).filter((x): x is Insight => x !== null);
   const ready = all.filter((i) => i.state === 'ready').sort((a, b) => b.strength - a.strength || (a.id < b.id ? -1 : 1)).slice(0, MAX_HABIT_TIES);
   const wait = all.filter((i) => i.state === 'watching').slice(0, MAX_HABIT_TIES_WATCHING);
   if (!ready.length && !wait.length) {
@@ -1486,16 +1527,45 @@ const KEY_ORDER: InsightKey[] = ['habit', 'habit-tie', 'pillar-balance', 'best-h
  * watching in a fixed order. Pure: the same facts give the same answer.
  */
 export function insightsFor(f: InsightFacts): Insight[] {
+  return computeInsights(f, f.rel ? [f.rel] : []);
+}
+
+/**
+ * Everything at once (2026-11-05), for the one GET /insights every place shares: the whole list with each of the seven pillars'
+ * own balance line, so a pillar page needs no request of its own. Each place picks its share with `insightsForPlace`.
+ */
+export function insightsForEvery(f: InsightFacts): Insight[] {
+  return computeInsights({ ...f, rel: null }, RELATIONSHIPS.map((r) => r.key));
+}
+
+/** A pillar page's own balance line (`pillar-balance:<pillar>`), which only that pillar page shows. */
+export const isPillarLine = (i: Pick<Insight, 'id'>): boolean => i.id.startsWith('pillar-balance:');
+
+/**
+ * What one place shows from `insightsForEvery`'s list: the same as `insightsForApp` on a list made for that place alone. /insights
+ * (or none) is everything but the pillar pages' own lines.
+ */
+export function insightsForPlace(list: readonly Insight[], app: InsightApp | null, rel: RelationshipKey | null = null): Insight[] {
+  if (!app || app === 'insights') return list.filter((i) => !isPillarLine(i));
+  return insightsForApp(list, app, rel);
+}
+
+function computeInsights(f: InsightFacts, pillarRels: readonly RelationshipKey[]): Insight[] {
   const apps = new Set(f.apps);
   const on = (k: string) => apps.has(k);
   const yesterday = addDays(f.today, -1);
   const pairFrom = addDays(f.today, -PAIR_WINDOW_DAYS);
-  const ticks = f.done
-    .map((t) => {
-      const s = localStamp(t.completedAt, f.zone);
-      return s ? { day: s.day, minutes: s.minutes, relationship: t.relationship } : null;
-    })
-    .filter((x): x is { day: string; minutes: number; relationship: RelationshipKey } => x !== null);
+  // Each tick is read in the person's zone and keyed once, here, for every signal below.
+  const stamped: StampedTick[] = f.done.map((t) => ({ t, at: localStamp(t.completedAt, f.zone), key: taskKey(t.title) }));
+  const ticks = stamped.flatMap((x) => (x.at ? [{ day: x.at.day, minutes: x.at.minutes, relationship: x.t.relationship }] : []));
+  const openCache = new Map<RelationshipKey, { o: InsightOpenTaskFact; k: KeyWords }[]>();
+  const openByRel = (rel: RelationshipKey) => {
+    const hit = openCache.get(rel);
+    if (hit) return hit;
+    const list = f.open.filter((o) => o.relationship === rel).map((o) => ({ o, k: keyWordsOf(taskKey(o.title)) }));
+    openCache.set(rel, list);
+    return list;
+  };
   const ticksByDay = new Map<string, number>();
   for (const t of ticks) ticksByDay.set(t.day, (ticksByDay.get(t.day) ?? 0) + 1);
   const wbCache = new Map<string, Map<string, number>>();
@@ -1526,7 +1596,7 @@ export function insightsFor(f: InsightFacts): Insight[] {
     ...f.routine.map((r) => r.day),
     ...f.dayTypes.map((r) => r.day),
   ]);
-  const c: Ctx = { f, on, yesterday, pairFrom, ticks, ticksByDay, activeDays, wb };
+  const c: Ctx = { f, on, yesterday, pairFrom, ticks, ticksByDay, activeDays, wb, stamped, openByRel };
   // A task that is a good or bad habit is said once, on that card (which offers Make it a habit when it fits).
   const ties = habitTies(c);
   const tiedTasks = ties.filter((t) => t.state === 'ready' && t.tie?.kind === 'task');
@@ -1534,7 +1604,7 @@ export function insightsFor(f: InsightFacts): Insight[] {
   const all: (Insight | null)[] = [
     ...plainHabits,
     ...ties,
-    ...pillarBalance(c),
+    ...pillarBalance(c, pillarRels),
     bestHours(c),
     streakWeekday(c),
     on('sleep') && on('mood') ? sleepMood(c) : null,

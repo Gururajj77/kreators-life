@@ -106,10 +106,10 @@ export function JournalPrompt({ onWrite }: { onWrite: (start: { title: string; b
 
   return (
     <section className="mt-lg" aria-labelledby="prompt-heading">
-      <h2 id="prompt-heading" className="text-[24px]">
+      <h2 id="prompt-heading" className="text-title2">
         Not sure what to write?
       </h2>
-      <p className="mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">{JOURNAL_PROMPT_COUNT} prompts, each with why it helps and what to expect. Which ones you see stays on this device.</p>
+      <p className="mt-xs m-0 text-balance text-subhead text-ink-soft">{JOURNAL_PROMPT_COUNT} prompts, each with why it helps and what to expect. Which ones you see stays on this device.</p>
 
       {/* The category picks one of many, so it is a dropdown at the left of Prompt me: one line from the tablet width, a line each on a phone. */}
       <div className="mt-sm flex flex-col gap-xs md:flex-row md:items-center md:justify-between">
@@ -126,16 +126,16 @@ export function JournalPrompt({ onWrite }: { onWrite: (start: { title: string; b
         <div ref={cardRef} data-pillar={cat.accent} className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
           <div aria-live="polite" aria-atomic="true">
             <div className="flex flex-wrap items-center gap-xs">
-              <span className="rounded-pill px-sm py-xs text-[12px] font-extrabold" style={{ background: accentOf(prompt.category), color: ON_FILL }}>
+              <span className="rounded-pill px-sm py-xs text-caption font-medium" style={{ background: accentOf(prompt.category), color: ON_FILL }}>
                 {cat.name}
               </span>
-              <span className="text-[12px] font-bold text-ink-soft">
+              <span className="text-caption text-ink-soft">
                 {cat.tradition}. About {prompt.minutes} minutes
               </span>
             </div>
-            <p className="mt-sm m-0 text-balance text-[22px] font-bold leading-snug">{prompt.text}</p>
+            <p className="mt-sm m-0 text-balance text-title2">{prompt.text}</p>
             {prompt.steps && (
-              <ol className="mt-sm m-0 flex list-decimal flex-col gap-xs pl-md text-[16px] font-semibold">
+              <ol className="mt-sm m-0 flex list-decimal flex-col gap-xs pl-md text-callout">
                 {prompt.steps.map((s) => (
                   <li key={s}>{s}</li>
                 ))}
@@ -146,12 +146,12 @@ export function JournalPrompt({ onWrite }: { onWrite: (start: { title: string; b
           <div className="mt-md flex flex-col gap-xs">
             <Fold title="Why this prompt">
               <div className="prose-long rounded-tile bg-paper p-sm">
-                <p className="m-0 text-[16px] font-semibold leading-relaxed">{prompt.why}</p>
-                <p className="mt-xs m-0 text-[14px] font-semibold leading-relaxed text-ink-soft">How to write it: {cat.howTo}</p>
+                <p className="m-0 text-prose">{prompt.why}</p>
+                <p className="mt-xs m-0 text-prose text-ink-soft">How to write it: {cat.howTo}</p>
               </div>
             </Fold>
             <Fold title="What to expect">
-              <p className="prose-long m-0 rounded-tile bg-paper p-sm text-[16px] font-semibold leading-relaxed">{prompt.expect}</p>
+              <p className="prose-long m-0 rounded-tile bg-paper p-sm text-prose">{prompt.expect}</p>
             </Fold>
           </div>
 
@@ -161,16 +161,16 @@ export function JournalPrompt({ onWrite }: { onWrite: (start: { title: string; b
               Another prompt
             </Button>
           </div>
-          <p className="mt-sm m-0 text-[12px] font-semibold text-ink-soft">
+          <p className="mt-sm m-0 text-caption text-ink-soft">
             {round.shown} of {round.size} seen{kept.category === 'all' ? '' : ` in ${promptCategory(kept.category)?.name ?? 'this category'}`}. None comes back until you have seen them all.
           </p>
         </div>
       ) : (
-        <p className="mt-sm m-0 rounded-tile bg-card p-sm text-balance text-[14px] font-semibold text-ink-soft shadow-toy-soft">Tap Prompt me for a question to write about. Pick a category first if you like.</p>
+        <p className="mt-sm m-0 rounded-tile bg-card p-sm text-balance text-subhead text-ink-soft shadow-toy-soft">Tap Prompt me for a question to write about. Pick a category first if you like.</p>
       )}
 
-      <p className="mt-sm m-0 text-balance text-[12px] font-semibold text-ink-soft">{JOURNAL_PROMPT_CREDIT}</p>
-      <p className="mt-xs m-0 text-balance text-[12px] font-semibold text-ink-soft">{JOURNAL_PROMPT_SAFETY}</p>
+      <p className="mt-sm m-0 text-balance text-caption text-ink-soft">{JOURNAL_PROMPT_CREDIT}</p>
+      <p className="mt-xs m-0 text-balance text-caption text-ink-soft">{JOURNAL_PROMPT_SAFETY}</p>
     </section>
   );
 }

@@ -57,7 +57,7 @@ export function AskSheet({ ask, onClose }: { ask: Ask | null; onClose: () => voi
   return (
     <Sheet open={ask !== null} onClose={onClose} title={ask?.title ?? ''}>
       <div className="grid gap-md pb-xl">
-        <p className="m-0 text-[16px] font-semibold text-ink-soft">{ask?.body}</p>
+        <p className="m-0 text-callout text-ink-soft">{ask?.body}</p>
         <div className="flex flex-wrap gap-xs">
           <button
             type="button"
@@ -65,7 +65,7 @@ export function AskSheet({ ask, onClose }: { ask: Ask | null; onClose: () => voi
               ask?.run();
               onClose();
             }}
-            className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-[16px] font-semibold text-on-fill"
+            className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill"
           >
             {ask?.action}
           </button>
@@ -90,7 +90,7 @@ export function useChannelsUnread(scope: ChannelScope): number {
 export function Dot({ n }: { n: number }) {
   if (n <= 0) return null;
   return (
-    <span className="ml-xs inline-flex min-w-[24px] items-center justify-center rounded-pill bg-r1 px-xs text-[12px] font-extrabold leading-[20px] text-on-fill">
+    <span className="ml-xs inline-flex min-w-[24px] items-center justify-center rounded-pill bg-r1 px-xs text-caption font-medium leading-[20px] text-on-fill">
       {unreadLabel(n)}
       <span className="sr-only"> unread</span>
     </span>
@@ -111,7 +111,7 @@ export function ChannelTabs() {
         ]}
         value={tab}
         onChange={setTab}
-        pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+        pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
       />
     </div>
   );
@@ -145,11 +145,11 @@ function ChannelList({ scope, onOpen }: { scope: ChannelScope; onOpen: (id: stri
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-sm">
-        {scope === 'community' ? <p className="m-0 min-w-0 flex-1 text-[14px] font-semibold text-ink-soft">Rooms for one topic each. Join one to write in it. You can write under your name or a made-up one.</p> : <span className="flex-1" aria-hidden="true" />}
+        {scope === 'community' ? <p className="m-0 min-w-0 flex-1 text-subhead text-ink-soft">Rooms for one topic each. Join one to write in it. You can write under your name or a made-up one.</p> : <span className="flex-1" aria-hidden="true" />}
         {q.data?.canCreate && <Button variant="outline" onClick={() => setMaking(true)}>New channel</Button>}
       </div>
       {isGuide && (
-        <label className="mt-sm flex min-h-[44px] cursor-pointer items-center gap-xs text-[14px] font-bold text-ink-soft">
+        <label className="mt-sm flex min-h-[44px] cursor-pointer items-center gap-xs text-subhead text-ink-soft">
           <input type="checkbox" checked={closed} onChange={(e) => setClosed(e.target.checked)} className="size-[18px] accent-ink" />
           Show closed channels
         </label>
@@ -158,7 +158,7 @@ function ChannelList({ scope, onOpen }: { scope: ChannelScope; onOpen: (id: stri
       {q.isPending && <SkeletonList className="mt-md" count={3} lines={2} label="Loading channels" />}
       {q.data && list.length === 0 && (
         <div className="mt-md rounded-card border-2 border-dashed border-line p-md">
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">
+          <p className="m-0 text-subhead text-ink-soft">
             {scope === 'community' ? (q.data.canCreate ? 'No channels yet. Open the first one for a topic.' : 'No channels yet. Guides open them, and they will show up here.') : 'No channels yet. Make one and ask your friends in.'}
           </p>
         </div>
@@ -169,12 +169,12 @@ function ChannelList({ scope, onOpen }: { scope: ChannelScope; onOpen: (id: stri
             <div className="flex items-center gap-sm">
               <button type="button" onClick={() => onOpen(c.id)} className="toy toy-soft min-w-0 flex-1 rounded-tile bg-paper p-sm text-left text-ink">
                 <span className="flex items-center gap-xs">
-                  <span className="truncate text-[16px] font-bold"># {c.name}</span>
+                  <span className="min-w-0 text-balance text-headline [overflow-wrap:anywhere]"># {c.name}</span>
                   <Dot n={c.unread} />
                   {c.archived && <StatusTag tone="neutral">Closed</StatusTag>}
                 </span>
-                {c.topic && <span className="block text-[14px] font-semibold text-ink-soft">{c.topic}</span>}
-                <span className="block text-[12px] font-bold text-ink-soft">
+                {c.topic && <span className="block text-subhead text-ink-soft">{c.topic}</span>}
+                <span className="block text-caption text-ink-soft">
                   {c.members} {c.members === 1 ? 'person' : 'people'}
                   {c.lastLineAt ? `, last line ${when(c.lastLineAt)}` : ', no lines yet'}
                   {c.joined ? ', you are in' : ''}
@@ -228,14 +228,14 @@ function NewChannelSheet({ scope, open, onClose, onMade }: { scope: ChannelScope
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Name</span>
+          <span className="block text-subhead font-semibold">Name</span>
           <input autoFocus value={name} maxLength={MAX_CHANNEL_NAME} onChange={(e) => setName(e.target.value)} placeholder={scope === 'community' ? 'Morning pages' : 'Weekend plans'} className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">What it is for (optional)</span>
+          <span className="block text-subhead font-semibold">What it is for (optional)</span>
           <input value={topic} maxLength={MAX_CHANNEL_TOPIC} onChange={(e) => setTopic(e.target.value)} placeholder="One line so people know what to say here" className={FIELD} />
         </label>
-        <p className="m-0 text-[12px] font-bold text-ink-soft">{scope === 'community' ? 'Anyone in Community can join and read. A guide can close it later.' : `Only people you ask in can see it. You can ask up to ${MAX_CHANNEL_MEMBERS - 1} friends.`}</p>
+        <p className="m-0 text-caption text-ink-soft">{scope === 'community' ? 'Anyone in Community can join and read. A guide can close it later.' : `Only people you ask in can see it. You can ask up to ${MAX_CHANNEL_MEMBERS - 1} friends.`}</p>
         <ErrorLine e={make.isError ? make.error : null} className="mt-xs" />
         <Button type="submit" size="lg" full disabled={make.isPending || !name.trim()}>
           Make the channel
@@ -428,7 +428,7 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
         <Button variant="outline" size="sm" onClick={onBack}>
           All channels
         </Button>
-        <p className="mt-md m-0 font-bold">That channel is not available to you. It may have closed, or you may have been taken out.</p>
+        <p className="mt-md m-0 font-semibold">That channel is not available to you. It may have closed, or you may have been taken out.</p>
       </div>
     );
 
@@ -465,9 +465,9 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
       </div>
       {ch ? (
         <header className="mt-sm">
-          <h3 className="text-[24px]"># {ch.name}</h3>
-          {ch.topic && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{ch.topic}</p>}
-          <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+          <h3 className="text-title2"># {ch.name}</h3>
+          {ch.topic && <p className="mt-xs m-0 text-subhead text-ink-soft">{ch.topic}</p>}
+          <p className="mt-xs m-0 text-caption text-ink-soft">
             {ch.members} {ch.members === 1 ? 'person' : 'people'}
             {ch.archived ? ', closed' : ''}
           </p>
@@ -478,9 +478,9 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
       {scope === 'bond' && members.length > 0 && (
         <ul className="mt-sm flex list-none flex-wrap gap-xs p-0 m-0" aria-label="People in this channel">
           {members.map((m) => (
-            <li key={m.userId} className="flex items-center gap-xs rounded-pill bg-card py-xs pl-sm pr-xs text-[14px] font-bold shadow-toy-soft">
+            <li key={m.userId} className="flex items-center gap-xs rounded-pill bg-card py-xs pl-sm pr-xs text-subhead font-medium shadow-toy-soft">
               {m.name}
-              {m.owner && <span className="text-[11px] font-extrabold text-ink-soft">owner</span>}
+              {m.owner && <span className="text-caption2 text-ink-soft">owner</span>}
               {ch?.owner && !m.owner && (
                 <button type="button" aria-label={`Take ${m.name} out`} disabled={removeMember.isPending} onClick={() => setAsk({ title: `Take ${m.name} out?`, body: `${m.name} leaves ${ch.name} and can no longer read or write in it.`, action: 'Yes, take them out', run: () => removeMember.mutate(m.userId) })} className="toy toy-soft flex size-[44px] items-center justify-center rounded-pill bg-paper">
                   <Icon icon={X} size={14} />
@@ -492,7 +492,7 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
       )}
       {ch?.invited && (
         <div className="mt-sm rounded-tile p-sm" style={{ background: 'var(--tint-yellow)' }}>
-          <p className="m-0 text-[16px] font-bold">You were asked into this channel.</p>
+          <p className="m-0 text-headline">You were asked into this channel.</p>
           <div className="mt-xs flex gap-xs">
             <Button variant="outline" disabled={join.isPending} onClick={() => join.mutate()}>
               Say yes
@@ -545,23 +545,23 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
                   <SkeletonList count={3} lines={1} label="Loading lines" />
                 </li>
               )}
-              {status === 'ready' && lines.length === 0 && <li className="text-[14px] font-semibold text-ink-soft">Nothing here yet. Say the first thing.</li>}
+              {status === 'ready' && lines.length === 0 && <li className="text-subhead text-ink-soft">Nothing here yet. Say the first thing.</li>}
               {lines.map((l) => (
-                <li key={l.id} data-fresh={fresh.current.has(l.seq) ? '' : undefined} className={`rounded-tile p-sm text-[14px] ${l.mine ? 'bg-ink text-on-ink' : 'bg-card shadow-toy-soft'}`}>
+                <li key={l.id} data-fresh={fresh.current.has(l.seq) ? '' : undefined} className={`rounded-tile p-sm text-subhead ${l.mine ? 'bg-ink text-on-ink' : 'bg-card shadow-toy-soft'}`}>
                   {l.replyTo && (
-                    <span className={`mb-xs block truncate rounded-inner-sm px-xs text-[12px] font-bold ${l.mine ? 'bg-on-ink/15' : 'bg-paper text-ink-soft'}`}>
+                    <span className={`mb-xs block truncate rounded-inner-sm px-xs text-caption ${l.mine ? 'bg-on-ink/15' : 'bg-paper text-ink-soft'}`}>
                       {l.replyTo.name}: <Inert text={l.replyTo.body} />
                     </span>
                   )}
                   <span className="flex flex-wrap items-baseline justify-between gap-xs">
-                    <span className="font-extrabold">
+                    <span className="font-bold">
                       {l.mine ? 'You' : l.name}
-                      {l.anonymous && <span className={`ml-xs rounded-pill px-xs text-[11px] leading-[18px] ${l.mine ? 'bg-on-ink/15' : 'bg-line text-ink-soft'}`}>{l.mine ? `Anonymous as ${l.name}` : 'Anonymous'}</span>}
+                      {l.anonymous && <span className={`ml-xs rounded-pill px-xs text-caption2 leading-[18px] ${l.mine ? 'bg-on-ink/15' : 'bg-line text-ink-soft'}`}>{l.mine ? `Anonymous as ${l.name}` : 'Anonymous'}</span>}
                       {l.rank && RANK_WORD[l.rank] && <IconTag className="ml-xs" tone="warn" icon="Shield">{RANK_WORD[l.rank]}</IconTag>}
                     </span>
-                    <span className={`text-[12px] font-bold ${l.mine ? 'text-on-ink/70' : 'text-ink-soft'}`}>{when(l.createdAt)}</span>
+                    <span className={`text-caption ${l.mine ? 'text-on-ink/70' : 'text-ink-soft'}`}>{when(l.createdAt)}</span>
                   </span>
-                  <span className="block whitespace-pre-wrap font-semibold">
+                  <span className="block whitespace-pre-wrap">
                     <Inert text={l.body} />
                   </span>
                   <LineActions
@@ -588,7 +588,7 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
           </div>
           <ErrorLine e={unsay.isError ? unsay.error : report.isError ? report.error : block.isError ? block.error : mute.isError ? mute.error : null} className="mt-xs" />
           {report.isSuccess && (
-            <p role="status" className="mt-xs m-0 text-[14px] font-bold text-ink-soft">
+            <p role="status" className="mt-xs m-0 text-subhead text-ink-soft">
               Thanks. The team has it.
             </p>
           )}
@@ -597,7 +597,7 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
             <div className="mt-sm rounded-tile bg-card p-sm shadow-toy-soft">
               {/* Text left, Join right; on a narrow phone Join wraps above the line. The error sits under both. */}
               <div className="flex flex-wrap-reverse items-center justify-between gap-sm">
-                <p className="m-0 min-w-0 flex-1 basis-[60%] text-[14px] font-semibold text-ink-soft">You can read this channel. Join it to write, and to see a dot when there is something new.</p>
+                <p className="m-0 min-w-0 flex-1 basis-[60%] text-subhead text-ink-soft">You can read this channel. Join it to write, and to see a dot when there is something new.</p>
                 <Button disabled={join.isPending} onClick={() => join.mutate()}>
                   Join {ch?.name}
                 </Button>
@@ -605,11 +605,11 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
               <ErrorLine e={join.isError ? join.error : null} className="mt-xs" />
             </div>
           )}
-          {ch?.archived && <p className="mt-sm m-0 text-[14px] font-bold text-ink-soft">This channel is closed. You can still read it.</p>}
+          {ch?.archived && <p className="mt-sm m-0 text-subhead text-ink-soft">This channel is closed. You can still read it.</p>}
           {writable && (
             <div className="mt-sm">
               {reply && (
-                <p className="mb-xs m-0 flex items-center justify-between gap-xs rounded-tile bg-paper p-xs text-[12px] font-bold text-ink-soft">
+                <p className="mb-xs m-0 flex items-center justify-between gap-xs rounded-tile bg-paper p-xs text-caption text-ink-soft">
                   <span className="min-w-0 truncate">
                     Replying to {reply.mine ? 'yourself' : reply.name}: <Inert text={reply.body} />
                   </span>
@@ -621,9 +621,9 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
               {scope === 'community' && <AnonToggle on={anonymous} onChange={setAnonymous} className="mb-xs" />}
               <ChatComposer placeholder={`Write in ${ch?.name ?? 'the channel'}`} maxLength={MAX_CHANNEL_MESSAGE} disabled={say.isPending} onSend={(t) => say.mutate(t)} />
               {failed && (
-                <div role="alert" className="mt-xs rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+                <div role="alert" className="mt-xs rounded-tile bg-r1/15 p-sm text-subhead">
                   <p className="m-0">That line did not send: {errorText(say.error, 'That did not work. Try again.')}</p>
-                  <p className="mt-xs m-0 break-words font-semibold text-ink-soft">{failed}</p>
+                  <p className="mt-xs m-0 break-words text-ink-soft">{failed}</p>
                   <Button size="sm" className="mt-xs" disabled={say.isPending} onClick={() => say.mutate(failed)}>
                     Try again
                   </Button>
@@ -665,7 +665,7 @@ export function LineActions({
 }) {
   const [more, setMore] = useState(false);
   const tone = line.mine ? 'text-on-ink/80' : 'text-ink-soft';
-  const btn = `inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-[12px] font-bold underline underline-offset-4 ${tone}`;
+  const btn = `inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-caption underline underline-offset-4 ${tone}`;
   return (
     <span className="mt-xs flex flex-wrap items-center gap-sm">
       {canWrite && (
@@ -723,11 +723,11 @@ function EditChannelSheet({ scope, channel, open, onClose, onSaved }: { scope: C
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Name</span>
+          <span className="block text-subhead font-semibold">Name</span>
           <input value={name} maxLength={MAX_CHANNEL_NAME} onChange={(e) => setName(e.target.value)} className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">What it is for</span>
+          <span className="block text-subhead font-semibold">What it is for</span>
           <input value={topic} maxLength={MAX_CHANNEL_TOPIC} onChange={(e) => setTopic(e.target.value)} className={FIELD} />
         </label>
         <ErrorLine e={save.isError ? save.error : null} className="mt-xs" />
@@ -753,17 +753,17 @@ function InviteSheet({ channel, open, onClose, onAsked, seats }: { channel: Chan
   const friends = (fr.data?.friends ?? []).filter((f) => f.status === 'friends');
   return (
     <Sheet open={open} onClose={onClose} title={`Ask friends into ${channel.name}`}>
-      <p className="m-0 text-[14px] font-semibold text-ink-soft">
+      <p className="m-0 text-subhead text-ink-soft">
         Up to {MAX_CHANNEL_MEMBERS} people, counting the ones you ask. Right now {seats} {seats === 1 ? 'is' : 'are'} in. Only friends can be asked, and they see your name.
       </p>
       {fr.isPending && <SkeletonList className="mt-md" count={2} lines={1} label="Loading friends" />}
-      {fr.data && friends.length === 0 && <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">No friends to ask yet. Add some under Bond first.</p>}
+      {fr.data && friends.length === 0 && <p className="mt-md m-0 text-subhead text-ink-soft">No friends to ask yet. Add some under Bond first.</p>}
       <ul className="mt-md flex list-none flex-col gap-xs p-0 m-0">
         {friends.map((f) => (
           <li key={f.userId} className="flex items-center justify-between gap-sm rounded-tile bg-paper p-sm">
-            <span className="min-w-0 truncate text-[16px] font-bold">
+            <span className="min-w-0 text-balance text-headline [overflow-wrap:anywhere]">
               {f.name}
-              {f.handle ? <span className="font-semibold text-ink-soft"> @{f.handle}</span> : ''}
+              {f.handle ? <span className="text-ink-soft"> @{f.handle}</span> : ''}
             </span>
             <Button size="sm" variant="outline" disabled={ask.isPending || asked.has(f.userId)} onClick={() => ask.mutate(f.userId)}>
               {asked.has(f.userId) ? 'Asked' : 'Ask'}

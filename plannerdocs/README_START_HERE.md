@@ -1,9 +1,9 @@
 # kreators.app planner docs: start here
 
-**Last updated:** 2026-11-01
+**Last updated:** 2026-11-05
 
 **Product:** kreators.app. The identifiers keep their old name: the Worker and database `kreators-life`, the `@kreators/*` packages, storage keys and the repo.
-**Version:** 0.5, reconciled with the app on 1 November 2026, including that day's bug sweep, water-trigger change and legal, security and performance pass (v0.1 was the pre-build blueprint; 0.2 the audit; 0.3 on 26 October after the gaps it found were closed; 0.4 after the week that added Agency, planning, scheduled reviews and the redesign).
+**Version:** 0.6, reconciled with the app on 5 November 2026 (v0.1 was the pre-build blueprint; 0.2 the audit; 0.3 on 26 October after the gaps it found were closed; 0.4 after the week that added Agency, planning, scheduled reviews and the redesign; 0.5 on 1 November after that day's bug sweep and the legal, security and performance pass).
 **Status:** these docs describe the app as built. When a doc and the code disagree, the doc is wrong unless it records a rule the app broke; those are listed under "Known gaps" at the end of each doc.
 
 Where the truth lives:
@@ -12,22 +12,35 @@ Where the truth lives:
 - `docs/DECISIONS.md` is the dated history: one line per decision that changed the plan.
 - `docs/security/` is the security pack: `SECURITY_REPORT.md` (the owner's 27 checks plus 7 bonus checks, each with status and evidence, the open items and the owner's own steps), `SECURITY_MAP.md` (what each route and secret guards), `SECURITY_RUNBOOK.md` (where to look, what each alert means, first actions), `SECRETS.md` (every secret and how to rotate it) and `RESTORE.md` (D1 Time Travel and the restore drill). `docs/performance.md` is the 31-item performance list with the budgets, the sizes before and after, and the query-count table.
 - `10_Legal_Policies.pdf`, `11_App_Performance.pdf` and `12_App_Security.pdf` sit in this folder as the owner's own files. They are not specs and are not edited here.
-- `docs/whop-study.md` and `docs/superfocus-study.md` are the two studies of other products: what was taken, where it went, and what was left out and why. `docs/copy-brief.md` is the one brief for the public site's words.
+- `docs/launch-checklist.md` is the legal launch checklist, worked from `10_Legal_Policies.pdf`, with what is still open.
+- `docs/whop-study.md` and `docs/superfocus-study.md` are the two studies of other products: what was taken, where it went, and what was left out and why. `docs/copy-brief.md` is the one brief for the public site's words. `docs/swiftui-rules.md` is a checklist of 37 rules, translated from a SwiftUI skill into web terms. It sits under CLAUDE.md and never restyles anything.
 - `apps/web/src/lib/buildMap.ts` is the map of what is built and where things live, shown under Operations, Observability.
-- The code: `packages/shared/src/index.ts` (the domain model), `apps/api/src` (the Worker), `apps/web/src` (the app and the public site), `apps/api/migrations` (the schema).
+- The code: `packages/shared/src` (the domain model; `index.ts` is only a barrel over one file per domain), `apps/api/src` (the Worker), `apps/web/src` (the app and the public site), `apps/api/migrations` (the schema).
 
 ## What kreators.app is
 
 Seven relationships as a daily game, with a creator super app around it.
 
-- **The game.** Seven *pillars* (Servant leader, Friendship, Parent and child, Lover and partner, With yourself, With the guru, With the divine), each a *pyramid* of six layers built from a short vibe check: foundation, guiding principle, value goal, goal outcome, project, task. *Daily* is three boxes a day (check in, the small act, one task) plus a *not to do* list, and a *Plan my week* that suggests a day for each task that has none. Xp fills levels and pillars; points are spendable; badges are earned by the app's own count; honors are given by the team or unlocked by time; a character and an identity evolve with xp and days.
-- **The super app.** Forty-six modules in six groups: Essentials (Home, Daily, Pillars, Search, Leaderboard, Inbox, Help, Assistant), Contribution (School, Work, Army, Win, Agency), Creation (Public page, Shop, Store, Audience, Content, Auto-DM, Finance, My purchases, Knowledge, Tools, TV, Fund), Connection (Games, Party, Kreators Run, Community, Club, Bond, Circles), Reflection (Discover, Life, Wellbeing, Mood, Sleep, Stress, Mindful minutes, Journal, Reviews, Companion, Coaching) and Operations (Manage, Admin, Observability, team only). Only School, Work, Army, Journal, Life, Shop and Public page start on, beside the essentials.
-- **The public site** at `/`: the story, `/features`, `/7rp`, Explore, certificates, policy pages, a public page per creator at `/u/<handle>` that works like a link-in-bio, and the links a creator sends: `/i/<token>` for an invoice, `/k/<token>` for an agreement and `/a/<token>` for a client's dashboard.
-- **Agency** for a content agency or a freelance creator: a dashboard per client, a deliverables pipeline as a list or a board, time, an invoice designer and calculator, agreements from templates, and a client link where the owner chooses what the client sees.
+- **The game.** Seven *pillars* (Servitude, Friends, Family, Love, Yourself, Teachers, Faith), each a *pyramid* of six layers built from a short vibe check: foundation, guiding principle, value goal, goal outcome, project, task. *Daily* is three boxes a day (check in, the small act, one task) plus a *not to do* list, a Habits list, a kind of day, a month calendar and a *Plan my week* that suggests a day for each task that has none. Xp fills levels and pillars; points are spendable. Badges are 59 medals in ten families, earned by the app's own count. Honors are given by the team or unlocked by time. A character and an identity evolve with xp and days.
+- **Emerging.** Patterns read across a person's own apps, by rules and with no model. A task done again and again can show as a good or a bad habit, set against mood, sleep and stress on days with it and without. Nothing is stored, and a line never says one thing causes another.
+- **The super app.** Forty-six modules (counted from `MODULES` in shared `modules.ts`) in six groups, always in this order: Contribution (School, Work, Army, Win, Agency), Reflection (Discover, Life, Wellbeing, Mood, Sleep, Stress, Mindfulness, Journal, Reviews, Companion, Coaching), Connection (Games, Party, Kreators Run, Community, Club, Bond, Circles), Creation (Public page, Shop, Store, Audience, Content, Auto-DM, Finance, My purchases, Knowledge, Tools, TV, Fund), Essentials (Home, Daily, Pillars, Search, Leaderboard, Inbox, Help, Assistant) and Operations (Manage, Admin, Observability, team only). Only School, Work, Army, Journal, Life, Shop and Public page start on, beside the essentials. Each person picks which groups start open and the order of the apps inside a group.
+- **The public site** at `/`: the story, `/features`, `/7rp`, the founder's three books at `/features/books`, Explore, certificates, policy pages, a public page per creator at `/u/<handle>` that works like a link-in-bio, and the links an Agency owner sends: `/i/<token>` for an invoice, `/k/<token>` for an agreement, `/d/<token>` for another document, `/a/<token>` for a client's page and `/t/<token>` for the client's own team.
+- **Agency** for a content agency or a freelance creator: a dashboard per client, a deliverables pipeline as a list or a board, time, an invoice designer and calculator, agreements and documents edited in place on the paper that prints, and a stage bar from first contact to a running retainer. Each client gets a link behind a password the owner sets, a short onboarding form, and a second team link that never shows money or paperwork. The owner can add a team and give each member Off, View or Edit per tab.
 
-## State of the project (1 November 2026)
+## State of the project (5 November 2026)
 
-Everything described in 01 to 09 is built and tested locally: 60 migrations, 46 modules, 209 shared test cases and 910 smoke checks (the figures are date-stamped and change every slice). The work up to this date is committed; whether it has been deployed is not recorded in the repo. 09 §6 lists the migrations to apply before a deploy (0052 to 0060) and the order (migrate first, then deploy; the deploy adds a second cron trigger for water), the Worker variables to set (`PUBLIC_URL`, `BUSINESS_*`, `DMCA_*`) and the checks to make on the live site. On 1 November a bug sweep fixed what it proved; what it only reported is listed as open items, awaiting a decision, in 08 §13 and 07 Known gaps. The same day three launch checklists were worked through: legal and privacy (terms boxes, three privacy choices that start off, retention, policy pages; 07 §17 and 08 §14), security (an enforcing content security policy, no CORS, blocked paths, alerts; `docs/security/`, 08 §14) and performance (pages loaded on demand, the first download down from 2,488 kB to 417 kB for the entry, 22 new indexes; `docs/performance.md`). What is not built is listed under "Known gaps" at the end of each doc: no report button, no email or phone verification, no payments for plans and top-ups yet (`PAYMENTS_LIVE` is false), no staging step, no CI, no second factor, alerts only in the inbox, and the restore drill not yet done. What only the owner can do (rotate keys, two-factor, spending caps, mail records, the Worker variables) is at the end of 08 §14.
+Everything described in 01 to 09 is built and tested locally: 83 migrations (0001 to 0083), 46 modules, 553 shared test cases and 1,609 smoke checks. These figures are date-stamped and change every slice. The work up to the "first launch" and "mini edit" commits, early on 5 November, is committed; it carries migrations up to 0082. The rest of 5 November is not committed yet: 269 changed or deleted files and 8 new ones. Whether any of it has been deployed is not recorded in the repo.
+
+These new files are not yet tracked by git, and must be added before a deploy:
+- `apps/web/public/fonts/google-sans-flex-latin.woff2` and `google-sans-flex-latin-ext.woff2`.
+- `apps/web/src/components/fx/FractalGlass.tsx`.
+- `apps/web/src/components/RowCard.tsx`.
+- `packages/shared/src/insights.golden.test.ts`, `insights.golden.fixtures.ts` and the three files in `packages/shared/src/__golden__/` (`insights-heavy.json`, `insights-light.json`, `insights-zoned.json`).
+- `apps/api/migrations/0083_agency_due_index.sql`.
+
+The old font files (Geist, Geist Mono, Inter) are deleted in the working tree; that deletion must be committed too. 09 §6 gives the deploy order (migrate first, then deploy; the deploy has a second cron trigger for water), the Worker variables to set (`PUBLIC_URL`, `BUSINESS_*`, `DMCA_*`) and the checks to make on the live site. `LEGAL_VERSION` is now 2026-11-05, so every account sees the one-time terms notice again.
+
+The three launch checklists of 1 November still stand: legal and privacy (07 §17 and 08 §14), security (`docs/security/`, 08 §14) and performance (`docs/performance.md`). The performance budget holds: the entry is 467 kB of 480, the first download 1,454 kB of 1,500, and the shared chunk 395 kB of 400. What is not built is listed under "Known gaps" at the end of each doc. The main ones: no report button on posts and replies (a line in a chat channel or a run discussion can be reported, and becomes a help ticket), no email or phone verification, no payments for plans and top-ups yet (`PAYMENTS_LIVE` is false), no staging step, no CI, no second factor, alerts only in the inbox, and the restore drill not yet done. What only the owner can do (rotate keys, two-factor, spending caps, mail records, the Worker variables) is at the end of 08 §14.
 
 ## How the v0.1 blueprint turned out
 
@@ -36,15 +49,15 @@ Everything described in 01 to 09 is built and tested locally: 60 migrations, 46 
 | Four engines first: Army, School, Work, Party | All four are built. They are four of forty-six modules; School, Work and Army start on, Party starts off. |
 | Thirteen composable roles | Three roles (Creator, Staff, Admin), nine staff permissions (Life coach is given on purpose, never held by an admin by default), and organizations for brands. See 01 §8. |
 | Flags named `module.army`, `feature.*`, `ops.*` | Flags are the bare module keys (`army`, `store`) in `module_settings`, with overrides, a minimum role and a rollout percentage. Each person also has their own on/off per app. See 05. |
-| Phases 0 to 6 over months | Built between 23 October and 1 November 2026, in the order DECISIONS.md records. |
-| AI companion only after review | Companion is built with its boundaries written in (not a therapist, crisis line), off by default, with an optional Workers AI binding. See 08 §5. A second AI door exists, the assistant, which acts as the person with the same limits as a tap, is paid in credits and reads the journal only on request through a model that keeps nothing. See 07 §13 and 08 §7. |
+| Phases 0 to 6 over months | Built between 23 October and 5 November 2026, in the order DECISIONS.md records. |
+| AI companion only after review | Companion is built with its boundaries written in (not a therapist, not for emergencies, crisis line), off by default. With a plan it answers through the assistant's model layer and only reads; without one, the built-in companion answers free. Crisis words are checked before any model call. See 08 §5. A second AI door exists, the assistant, which acts as the person with the same limits as a tap, is paid in credits and reads the journal only on request through a model that keeps nothing. See 07 §13 and 08 §7. |
 | Parked: stored-value currency, random video chat, celebrity shout-outs, meme library, house or cafe, native apps, clinical claims | Still parked. Points are the only in-app unit and are not money. |
 | Standalone URL shortener parked | Tracked links exist at `/go/<code>` as part of Content, not as a product. |
 | Shop as affiliate bundles before inventory | Shop sells a creator's own products (points or money through Razorpay). The Store adds partner links and creator-to-creator pre-owned gear; kreators.app never holds goods or money. |
 
 ## What was added after v0.1
 
-Not planned in v0.1 and now built: Discover (quizzes, add-ons, Human design, numerology); Coaching (life coaches, with links the student controls); the assistant, plans and credits; Agency; Mindful minutes with focus sessions and sounds; scheduled reviews, business metrics and a private calendar link; tasks with dates, repeat and priority; a leaderboard; card games and a rewards catalog; and the setup chat and the strategy session. Two studies (Whop and Superfocus) decided which ideas to take and which to leave.
+Not planned in v0.1 and now built: Discover (quizzes, add-ons, Human design, numerology); Coaching (life coaches, with links the student controls); the assistant, plans and credits; Agency, with its lifecycle, client passwords, onboarding, retainers, a Team tab and a team link; Mindfulness with breathing, focus sessions and sounds; scheduled reviews, business metrics and a private calendar link; tasks with dates, repeat, priority and a habit tag; Emerging, with good and bad habits; a month calendar and a kind of day on Daily; journal prompts; badges as medals; chat channels in Community and Bond, and discussions in Run; discount codes; a leaderboard; card games and a rewards catalog; the founder's three books, as School courses and a Book page; and the setup chat and the strategy session. Two studies (Whop and Superfocus) decided which ideas to take and which to leave.
 
 ## How to use this pack
 
@@ -58,23 +71,23 @@ Not planned in v0.1 and now built: Discover (quizzes, add-ons, Human design, num
 - **One app, not one giant file.** Holds. One route file per module, each module's own tables, one shared domain model.
 - **Modules independently enabled, hidden and permission-checked.** Holds. The server refuses the API of a module that is not available to the person (05).
 - **Hiding a feature is not authorization.** Holds. Roles, permissions, ownership and module flags are all checked on the server.
-- **The 10 TB collection and 25,000 books.** Nothing is ingested. Knowledge is curated resources seeded by migration 0005. The books idea in `shubham.md` must pass the rights review in 08 §6 first.
+- **The 10 TB collection and 25,000 books.** Nothing is ingested. Knowledge is curated resources seeded by migration 0005. The books idea in `shubham.md` must pass the rights review in 08 §6 first. The founder's own three books are a separate case: his words, as School courses (migration 0078) and a Book page.
 - **Never trained on what people write.** The terms and the privacy page say so; the assistant and the writing tool get only what the job needs, and the journal reaches only a model that keeps nothing. See 08 §7 and §14.
-- **The Companion is not a therapist.** Holds in the module blurb, the screen, the system prompt and Help.
+- **The Companion is not a therapist.** Holds in the module blurb, the screen, the system prompt and Help. The public footer also says the app cannot help in an emergency, and names Tele-MANAS (14416) for India.
 - **No stored-value "Kreators Cash".** Holds. The terms page says points are not money and cannot be cashed out.
-- **Follower count is not the measure.** Holds. Trust scores use only what was earned here; Rank sorts by xp, streak or badges and never by followers.
+- **Follower count is not the measure.** Holds. Trust scores use only what was earned here; the leaderboard ranks by xp, this month, streak or badges and never by followers.
 - **Do not build every concept in the first release.** Not followed: nearly everything was built. The mitigation is defaults and flags: seven apps on (School, Work, Army, Journal, Life, Shop, Public page), the rest off until a person switches them on or the setup chat does, and every module behind a server-resolved flag an admin can turn off.
 
 ## Open assumptions
 
 - First segment: aspiring and early-stage creators, college students. Unchanged and still unvalidated.
-- School wedge: the two seeded programs teach editing and AI-assisted editing with ChatCut. The vox-pop program from v0.1 is not built.
+- School wedge: the two seeded programs teach editing and AI-assisted editing with ChatCut. Three more are the founder's books (migration 0078). The vox-pop program from v0.1 is not built.
 - India first: INR is the default currency, Razorpay the provider, Tele-MANAS the crisis line, PAN and IFSC in KYC, GST and TDS in the invoice calculator, PIN codes and Indian states in addresses, en-IN dates and lakh and crore grouping, Asia/Kolkata as the default zone, a bare phone number read as +91, and the DPDP Act first on the privacy page. Plans, top-ups and the live call are priced in rupees (Pro ₹1,499, Pro Max ₹12,499, Ultra ₹49,999; top-ups ₹899, ₹2,299, ₹4,499; the call ₹10,000). Open to all: someone abroad changes their currency and zone under Profile.
 - A responsive web app installed as a PWA. No native app, so no blocking of other apps and no two-way calendar sync (see `docs/superfocus-study.md`).
 - Agency is for content agencies and freelance creators, not agencies in general. Agreements are a starting point and not legal advice, and a typed name is not a certified e-signature.
 - Sign-up asks for a phone number and a date of birth. The minimum age is 18 and the server refuses anyone younger.
 
-## What changed since this was written (2026-11-01)
+## What changed since this was written (2026-11-05)
 
 Since 26 October 2026: the pack's figures were brought up to date (46 modules in six groups, nine permissions, 57 migrations); a state-of-the-project paragraph and a list of what was added after v0.1 were added; the reading order now includes the two studies and the copy brief; the Known-gaps rule gained a dated "What changed" section in each doc; and the notes on constraints now name the apps that start on and what a web app cannot do.
 
@@ -85,3 +98,20 @@ Since 26 October 2026: the pack's figures were brought up to date (46 modules in
 ## 2026-11-03
 
 The overhaul of 2026-11-03 is described where it belongs: icons (lucide through `Icon` and `AppIcon`, 44 animated icons, `MoreMenu`, segmented controls, 44px targets) in 06, the new indexes, the email templates and the server-only Discover keys in 04, and the Agency, search, brief, assistant and calendar additions in 02. The same day's interface pass (the Apple HIG rules translated to the app: one primary button per screen, segmented controls, 44px targets, folded detail, emoji turned into lucide icons) is in 06; the new Agency screens (four tabs and a gear, the client page in segments, Share and More on the documents, the Move button on boards), the onboarding chips and the confirm sheet for spending points are in 02; migrations 0062 to 0068 are in 04's index. `docs/launch-checklist.md` is the legal launch checklist worked from `10_Legal_Policies.pdf`, with what is still open (the business details as Worker variables, processor agreements, the DMCA agent).
+
+## 2026-11-04
+
+Waves 8 to 21 changed names, layout and a few rules; each is in DECISIONS.md and in the doc it belongs to. The names: the servant_leader pillar is Servitude, the app Mindful minutes is Mindfulness (mindful minutes stays the measure), and the games are DateFlow and 7RP Challenge. Keys are unchanged. Shared's one big `index.ts` became a barrel over one file per domain. App groups start open as each person picks, and the apps inside a group keep their order (migration 0074). Agency gained a Team tab (0076) and a team link (0081). Daily gained a kind of day (0077) and a habit tag on tasks (0082). The founder's books became School courses (0078). The Companion runs on the assistant's model layer (0079), and Run gained discussions (0080). Emerging, with good and bad habits, reads patterns across a person's apps. The five areas of life have one order: physical, financial, mental, emotional, spiritual.
+
+## 2026-11-05
+
+The pack is version 0.6. The figures are now 83 migrations (0001 to 0083), 46 modules, 553 shared test cases and 1,609 smoke checks. What changed in the app, and where it is described:
+- **Type.** One family, Google Sans Flex, self-hosted, with Apple's text styles as one scale and four weights (400, 480, 550, 600). Geist, Geist Mono and Inter are gone. Caveat stays for a guide's handwritten line on the public site. Only the two wordmarks are rounded. See 06.
+- **Public site.** The last call to action and the Features close are fractal glass (`FractalGlass`), which replaced `GradientStripes`. The footer follows the founder's FyndFlow footer and ends with an emergency line. Every link shows the 45-degree arrow. Copy from FyndFlow was taken only where it is true of the app. See 06 and 02.
+- **Terms.** Two new sections ("Wellbeing, not medical care" and "Money tools, not advice") and a line under Acceptable use. `LEGAL_VERSION` is 2026-11-05. See 07 and 08.
+- **Emerging.** One `GET /insights` a day for every screen, a new limit (`insights`, 120 an hour), migration 0083 for the agency-load read, and golden tests that pin the output. See 02, 03, 04 and 05.
+- **Delete and export.** Deleting an account now also deletes its `analytics_events` and `page_events` rows, and the export carries the person's `analytics_events` as `productEvents`. See 04 and 08.
+- **New sections.** 05 gained §5b (Agency team members) and §12 (app groups and a person's app prefs), 07 gained §18 (discount codes) and 08 gained §15 (the changes from 2 to 5 November).
+- **Cards and forms.** `RowCard` is the one list card on the work and social screens. Agreements and documents gained Fill in the details. The team link needs a password. Inline toggles show their state with a turning chevron or a cross. See 02 and 06.
+- **Cleanup.** Removed as unused: `Marquee`, `GradientStripes`, `Ornament`, `flowerShape`, `Book3D`, `PillChain`, `SummaryCard`, `docStyleSummary`, the `BentoSize` type and old smoke screenshots. `legal.ts` loads as its own chunk, `shared-legal`.
+

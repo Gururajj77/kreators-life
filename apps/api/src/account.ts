@@ -11,6 +11,9 @@ export async function deleteAccount(db: D1Database, userId: string): Promise<voi
     db.prepare('DELETE FROM email_outbox WHERE user_id = ? OR to_email = (SELECT email FROM users WHERE id = ?)').bind(userId, userId),
     db.prepare("UPDATE users SET display_name = 'Deleted member', email = NULL, phone = '', birth_date = '', password_hash = NULL, password_salt = NULL, handle = NULL, bio = '', avatar_url = '', socials_json = '{}', skills = '[]', categories = '[]', goals = '[]', interests = '[]', identities = '[]', intake_json = '{}', city = '', area = '', lat = NULL, lng = NULL, location = '', reminder_time = NULL, open_to_intros = 0, permissions = '[]', friend_code = NULL, leaderboard_opt_in = 0, app_prefs_json = NULL WHERE id = ?").bind(userId),
     db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId),
+    // Events about the person go with them: what they did in the app (funnel counts) and the views and taps on their public page.
+    db.prepare('DELETE FROM analytics_events WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM page_events WHERE owner_id = ?').bind(userId),
     db.prepare('DELETE FROM session_evictions WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM subtasks WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM nodes WHERE user_id = ?').bind(userId),

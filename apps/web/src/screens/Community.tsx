@@ -47,11 +47,11 @@ function Reactions({ counts, mine, onPick, busy }: { counts: ReactionCounts; min
   return (
     <span className="flex flex-wrap items-center gap-xs">
       {shown.map((k) => (
-        <button key={k} type="button" aria-pressed={mine === k} disabled={busy} onClick={() => onPick(k)} aria-label={`${REACTION_META[k].name}, ${counts[k]}`} className={`toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill px-sm text-[14px] font-bold ${mine === k ? 'bg-r1/15' : 'bg-paper'}`}>
+        <button key={k} type="button" aria-pressed={mine === k} disabled={busy} onClick={() => onPick(k)} aria-label={`${REACTION_META[k].name}, ${counts[k]}`} className={`toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill px-sm text-subhead font-medium ${mine === k ? 'bg-r1/15' : 'bg-paper'}`}>
           <ReactionGlyph kind={k} size={16} picked={mine === k} /> {counts[k]}
         </button>
       ))}
-      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-paper px-sm text-[14px] font-bold">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-paper px-sm text-subhead font-medium">
         {mine ? 'Change' : 'React'}
         <ToggleChevron open={open} size={14} />
       </button>
@@ -91,15 +91,15 @@ function MutedList() {
   if (pg.page === 1 && list.length === 0) return null;
   return (
     <section className="mt-lg" aria-labelledby="muted-heading">
-      <h2 id="muted-heading" className="text-[24px]">
+      <h2 id="muted-heading" className="text-title2">
         Muted members
       </h2>
       <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
         {list.map((m) => (
           <li key={m.userId} className="flex items-center justify-between gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
             <span className="min-w-0">
-              <span className="block truncate text-[16px] font-bold">{m.name}</span>
-              <span className="block text-[12px] font-bold text-ink-soft">Muted by {m.by}{m.reason ? `: ${m.reason}` : ''}</span>
+              <span className="block text-balance text-headline [overflow-wrap:anywhere]">{m.name}</span>
+              <span className="block text-caption text-ink-soft">Muted by {m.by}{m.reason ? `: ${m.reason}` : ''}</span>
             </span>
             <Button variant="outline" size="sm" onClick={() => unmute.mutate(m.userId)} disabled={unmute.isPending}>
               Lift
@@ -107,7 +107,7 @@ function MutedList() {
           </li>
         ))}
       </ul>
-      {unmute.isError && <p role="alert" className="mt-xs m-0 text-[14px] font-bold">{unmute.error instanceof Error ? unmute.error.message : 'That did not work.'}</p>}
+      {unmute.isError && <p role="alert" className="mt-xs m-0 text-subhead">{unmute.error instanceof Error ? unmute.error.message : 'That did not work.'}</p>}
       <Pager page={q.data?.page} prefix="muted" label="muted members" />
     </section>
   );
@@ -122,7 +122,7 @@ function HeldPosts() {
   const posts = q.data?.posts ?? [];
   return (
     <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="held-heading">
-      <h2 id="held-heading" className="text-[18px]">
+      <h2 id="held-heading" className="text-title3">
         For guides
       </h2>
       <div className="mt-xs">
@@ -132,10 +132,10 @@ function HeldPosts() {
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {posts.map((p) => (
             <li key={p.id} className="rounded-tile bg-paper p-sm">
-              <p className="m-0 text-[12px] font-bold text-ink-soft">
+              <p className="m-0 text-caption text-ink-soft">
                 {p.authorName}, {p.category}
               </p>
-              <p className="mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold"><Inert text={p.body} /></p>
+              <p className="mt-xs m-0 whitespace-pre-wrap text-subhead"><Inert text={p.body} /></p>
               <Button size="sm" className="mt-xs" disabled={approve.isPending} onClick={() => approve.mutate(p.id)}>
                 Say okay
               </Button>
@@ -143,7 +143,7 @@ function HeldPosts() {
           ))}
         </ul>
       )}
-      {q.data && posts.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">No first posts waiting.</p>}
+      {q.data && posts.length === 0 && <p className="mt-xs m-0 text-subhead text-ink-soft">No first posts waiting.</p>}
       <Pager page={q.data?.page} prefix="held" label="waiting posts" />
     </section>
   );
@@ -214,9 +214,9 @@ function CommunityFeed() {
         lede={product ? 'A members-only feed for this membership.' : 'A place of warmth. Everyone is heard, and guides keep it kind.'}
         actions={<Button onClick={() => setWriting(true)}>Write a post</Button>}
       >
-        <p className="m-0 text-[12px] font-bold text-ink-soft">Type @ and a page name to tell someone.</p>
+        <p className="m-0 text-caption text-ink-soft">Type @ and a page name to tell someone.</p>
         <Fold className="mt-xs" title="How posts pay">
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">
+          <p className="m-0 text-subhead text-ink-soft">
             A post pays {SOCIAL_REWARDS.post.xp} xp, up to {SOCIAL_REWARDS.post.perDay} a day. A reply pays {SOCIAL_REWARDS.reply.xp}, a like you give pays {SOCIAL_REWARDS.like.xp}. A like on your post pays you a point, a new follower {SOCIAL_REWARDS.follower.points}. Follow a post to hear about new replies. Guides pin up to {MAX_PINNED} posts in each category.
           </p>
         </Fold>
@@ -232,66 +232,66 @@ function CommunityFeed() {
       </div>
       {isMod && !product && <HeldPosts />}
       {notice && (
-        <p role="status" className="mt-sm m-0 rounded-tile bg-r3/30 p-sm text-[14px] font-bold">
+        <p role="status" className="mt-sm m-0 rounded-tile bg-r3/30 p-sm text-subhead">
           {notice}
         </p>
       )}
       {q.data?.muted && (
-        <p role="status" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+        <p role="status" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           You are muted in Community for now. You can read, but not post or reply. A guide or admin can lift it.
         </p>
       )}
       {(failed ?? modFailed) && (
-        <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+        <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           {(failed ?? modFailed) instanceof Error ? ((failed ?? modFailed) as Error).message : 'That did not work.'}
         </p>
       )}
       {isMod && (
-        <label className="mt-sm flex min-h-[44px] cursor-pointer items-center gap-xs text-[14px] font-bold text-ink-soft">
+        <label className="mt-sm flex min-h-[44px] cursor-pointer items-center gap-xs text-subhead text-ink-soft">
           <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} className="size-[18px] accent-ink" />
           Show hidden posts
         </label>
       )}
-      {q.isError && <p className="mt-md font-bold">{q.error instanceof Error ? q.error.message : 'Could not load.'}</p>}
+      {q.isError && <p className="mt-md font-semibold">{q.error instanceof Error ? q.error.message : 'Could not load.'}</p>}
       {q.isPending && <SkeletonList className="mt-md" count={3} lines={3} label="Loading posts" />}
-      {posts.length === 0 && q.data && <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">{filter === 'following' ? 'Nobody you follow has posted yet. Follow people from their posts.' : filter === 'mine' ? 'You have not posted yet.' : 'No posts here yet. Start the conversation.'}</p>}
+      {posts.length === 0 && q.data && <p className="mt-md m-0 text-subhead text-ink-soft">{filter === 'following' ? 'Nobody you follow has posted yet. Follow people from their posts.' : filter === 'mine' ? 'You have not posted yet.' : 'No posts here yet. Start the conversation.'}</p>}
       <ul className="mt-md flex list-none flex-col gap-sm p-0 m-0">
         {posts.map((p) => (
           <li key={p.id} data-pillar="friendship" className={`rounded-card bg-card p-md shadow-toy-soft ${p.hidden || p.held ? 'opacity-60' : ''}`}>
-            {(p.pinned || p.held) && <p className="m-0 mb-xs text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{p.held ? 'Waiting for a guide’s okay. Only you see it for now.' : 'Pinned by a guide'}</p>}
+            {(p.pinned || p.held) && <p className="m-0 mb-xs text-eyebrow uppercase text-ink-soft">{p.held ? 'Waiting for a guide’s okay. Only you see it for now.' : 'Pinned by a guide'}</p>}
             <div className="flex items-center gap-sm">
-              <span className="flex size-[40px] items-center justify-center rounded-pill bg-r2 font-display text-[16px] font-extrabold text-on-fill" aria-hidden="true">
+              <span className="flex size-[40px] items-center justify-center rounded-pill bg-r2 text-headline text-on-fill" aria-hidden="true">
                 {p.anonymous ? '?' : p.authorName.slice(0, 1).toUpperCase()}
               </span>
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-xs">
                   {p.anonymous ? (
-                    <span className="truncate text-[16px] font-bold">{p.authorName}</span>
+                    <span className="min-w-0 text-balance text-subhead font-semibold [overflow-wrap:anywhere]">{p.authorName}</span>
                   ) : (
-                    <Link to={p.authorHandle ? `/u/${p.authorHandle}` : `/people/${p.authorId}`} className="inline-flex min-h-[44px] min-w-0 items-center truncate text-[16px] font-bold">
+                    <Link to={p.authorHandle ? `/u/${p.authorHandle}` : `/people/${p.authorId}`} className="inline-flex min-h-[44px] min-w-0 items-center text-subhead font-semibold [overflow-wrap:anywhere]">
                       {p.authorName}
                     </Link>
                   )}
                   {p.anonymous && <IconTag tone="neutral" icon="UserRound">{p.mine ? 'Anonymous, you' : 'Anonymous'}</IconTag>}
                   {p.authorPro && <IconTag tone="deep" icon="Crown">Pro</IconTag>}
                 </span>
-                <span className="block text-[12px] font-bold text-ink-soft">
+                <span className="block text-caption text-ink-soft">
                   {p.category}, {new Date(p.createdAt).toLocaleDateString(LOCALE, { month: 'short', day: 'numeric' })}
                   {p.authorFollowers > 0 ? ` · ${p.authorFollowers} ${p.authorFollowers === 1 ? 'follower' : 'followers'}` : ''}
                   {p.hidden ? ', hidden' : ''}
                 </span>
               </span>
               {!p.mine && !p.anonymous && (
-                <button type="button" aria-pressed={p.authorFollowing} onClick={() => follow.mutate(p.authorId)} disabled={follow.isPending} className={`toy shrink-0 min-h-[44px] rounded-pill border-2 px-sm py-xs text-[12px] font-extrabold ${p.authorFollowing ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                <button type="button" aria-pressed={p.authorFollowing} onClick={() => follow.mutate(p.authorId)} disabled={follow.isPending} className={`toy shrink-0 min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${p.authorFollowing ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                   {p.authorFollowing ? 'Following' : 'Follow'}
                 </button>
               )}
             </div>
-            <p className="mt-sm m-0 whitespace-pre-wrap text-[16px] font-semibold leading-relaxed"><Inert text={p.body} /></p>
+            <p className="mt-sm m-0 whitespace-pre-wrap text-prose"><Inert text={p.body} /></p>
             <div className="mt-sm flex flex-wrap items-center gap-xs">
               {!p.held && <Reactions counts={p.reactions} mine={p.myReaction} busy={like.isPending} onPick={(kind) => like.mutate({ id: p.id, kind })} />}
               {!p.held && (
-                <button type="button" onClick={() => setOpen(p)} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-paper px-sm text-[14px] font-bold">
+                <button type="button" onClick={() => setOpen(p)} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-paper px-sm text-subhead font-medium">
                   <Icon icon={MessageCircle} size={16} /> {p.replies}
                 </button>
               )}
@@ -345,22 +345,22 @@ function PostSheet({ open, product, onClose, onSaved }: { open: boolean; product
         }}
       >
         <fieldset className="m-0 border-0 p-0">
-          <legend className="text-[14px] font-bold">Pick a category</legend>
+          <legend className="text-subhead font-semibold">Pick a category</legend>
           <div className="mt-xs grid grid-cols-3 gap-xs">
             {POST_CATEGORIES.map((c) => (
-              <button key={c} type="button" aria-pressed={category === c} onClick={() => setCategory(c)} className={`min-h-[44px] rounded-tile border-2 text-[12px] font-bold ${category === c ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+              <button key={c} type="button" aria-pressed={category === c} onClick={() => setCategory(c)} className={`min-h-[44px] rounded-tile border-2 text-caption ${category === c ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
                 {c}
               </button>
             ))}
           </div>
         </fieldset>
         <label className="block">
-          <span className="block text-[14px] font-bold">Your post</span>
-          <textarea autoFocus value={body} onChange={(e) => setBody(e.target.value)} maxLength={2000} rows={5} placeholder="What is on your mind?" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+          <span className="block text-subhead font-semibold">Your post</span>
+          <textarea autoFocus value={body} onChange={(e) => setBody(e.target.value)} maxLength={2000} rows={5} placeholder="What is on your mind?" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
         </label>
         <AnonToggle on={anonymous} onChange={setAnonymous} />
         {save.isError && (
-          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {save.error instanceof Error ? save.error.message : 'Could not post.'}
           </p>
         )}
@@ -411,8 +411,8 @@ function RepliesSheet({ post, onClose, onSaved, onAsk }: { post: CommunityPost |
     <Sheet open={post !== null} onClose={onClose} title={post ? `${post.replies} ${post.replies === 1 ? 'reply' : 'replies'}` : ''}>
       {post && (
         <>
-          <p className="m-0 rounded-tile bg-paper p-sm text-[14px] font-semibold">
-            <span className="block text-[12px] font-extrabold text-ink-soft">{post.authorName}{post.anonymous ? ' (anonymous)' : ''}</span>
+          <p className="m-0 rounded-tile bg-paper p-sm text-subhead">
+            <span className="block text-caption text-ink-soft">{post.authorName}{post.anonymous ? ' (anonymous)' : ''}</span>
             <Inert text={post.body} />
           </p>
           <ul className="mt-md flex list-none flex-col gap-xs p-0 m-0">
@@ -420,12 +420,12 @@ function RepliesSheet({ post, onClose, onSaved, onAsk }: { post: CommunityPost |
               const kids = kidsOf(r.id, r.depth);
               return (
                 <li key={r.id} style={{ marginLeft: `calc(var(--spacing-md) * ${r.depth})` }} className={`rounded-tile bg-card p-sm shadow-toy-soft ${r.depth > 0 ? 'border-l-4 border-line' : ''}`}>
-                  <p className="m-0 text-[14px] font-bold">
+                  <p className="m-0 text-subhead font-semibold">
                     {r.authorName}
                     {r.anonymous && <IconTag className="ml-xs" tone="neutral" icon="UserRound">{r.mine ? 'Anonymous, you' : 'Anonymous'}</IconTag>}{' '}
-                    <span className="font-semibold text-ink-soft">{new Date(r.createdAt).toLocaleDateString(LOCALE, { month: 'short', day: 'numeric' })}</span>
+                    <span className="text-ink-soft">{new Date(r.createdAt).toLocaleDateString(LOCALE, { month: 'short', day: 'numeric' })}</span>
                   </p>
-                  <p className="mt-xs m-0 text-[16px] font-semibold"><Inert text={r.body} /></p>
+                  <p className="mt-xs m-0 text-callout"><Inert text={r.body} /></p>
                   <div className="mt-xs flex flex-wrap items-center gap-xs">
                     <Reactions counts={r.reactions} mine={r.myReaction} busy={react.isPending} onPick={(kind) => react.mutate({ id: r.id, kind })} />
                     <Button variant="ghost" size="sm" onClick={() => setTo(r)}>
@@ -456,7 +456,7 @@ function RepliesSheet({ post, onClose, onSaved, onAsk }: { post: CommunityPost |
             }}
           >
             {to && (
-              <p className="m-0 flex items-center justify-between gap-xs rounded-tile bg-paper p-xs text-[12px] font-bold text-ink-soft">
+              <p className="m-0 flex items-center justify-between gap-xs rounded-tile bg-paper p-xs text-caption text-ink-soft">
                 <span className="min-w-0 truncate">Replying to {to.authorName}: <Inert text={to.body} /></span>
                 <Button variant="ghost" size="sm" onClick={() => setTo(null)}>
                   Cancel
@@ -464,13 +464,13 @@ function RepliesSheet({ post, onClose, onSaved, onAsk }: { post: CommunityPost |
               </p>
             )}
             <div className="flex gap-xs">
-              <input value={text} onChange={(e) => setText(e.target.value)} maxLength={1000} placeholder={to ? 'Write your answer' : 'Write a reply'} aria-label="Reply" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-paper px-md py-sm text-[16px]" />
+              <input value={text} onChange={(e) => setText(e.target.value)} maxLength={1000} placeholder={to ? 'Write your answer' : 'Write a reply'} aria-label="Reply" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-paper px-md py-sm text-body" />
               <Button type="submit" disabled={send.isPending || !text.trim()}>
                 Send
               </Button>
             </div>
             <AnonToggle on={anonymous} onChange={setAnonymous} />
-            {send.isError && <p role="alert" className="m-0 text-[14px] font-bold">{send.error instanceof Error ? send.error.message : 'That did not send.'}</p>}
+            {send.isError && <p role="alert" className="m-0 text-subhead">{send.error instanceof Error ? send.error.message : 'That did not send.'}</p>}
           </form>
         </>
       )}

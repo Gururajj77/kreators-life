@@ -15,10 +15,10 @@ export function InterestPicker({ value, onChange, legend = 'Interests', hint }: 
   };
   return (
     <fieldset className="m-0 border-0 p-0">
-      <legend className="text-[14px] font-bold">{legend}</legend>
+      <legend className="text-subhead font-semibold">{legend}</legend>
       <div className="mt-xs flex items-start justify-between gap-sm">
-        {hint ? <p className="m-0 text-[12px] font-bold text-ink-soft">{hint}</p> : <span />}
-        <span className={`shrink-0 rounded-pill px-sm text-[12px] font-extrabold leading-[28px] ${full ? 'bg-ink text-on-ink' : 'bg-paper text-ink-soft'}`} aria-live="polite">
+        {hint ? <p className="m-0 text-caption text-ink-soft">{hint}</p> : <span />}
+        <span className={`shrink-0 rounded-pill px-sm text-caption font-medium leading-[28px] ${full ? 'bg-ink text-on-ink' : 'bg-paper text-ink-soft'}`} aria-live="polite">
           {value.length} of {MAX_INTERESTS} on
         </span>
       </div>
@@ -33,7 +33,7 @@ export function InterestPicker({ value, onChange, legend = 'Interests', hint }: 
                 {g.options.map((o) => {
                   const picked = value.includes(o);
                   return (
-                    <button key={o} type="button" aria-pressed={picked} disabled={full && !picked} onClick={() => toggle(o)} className={`toy min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold disabled:opacity-50 ${picked ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                    <button key={o} type="button" aria-pressed={picked} disabled={full && !picked} onClick={() => toggle(o)} className={`toy min-h-[44px] rounded-pill border-2 px-sm text-subhead font-medium disabled:opacity-50 ${picked ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                       {o}
                     </button>
                   );

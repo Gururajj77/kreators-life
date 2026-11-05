@@ -4,59 +4,19 @@
    visitor on page load. Each family is one variable file per subset: latin first for the common case, latin-ext for the rest. Inter's
    currency signs (the rupee among them) sit in their own small file, so a page with a price does not pull the whole latin-ext file. */
 @font-face {
-  font-family: 'Geist';
+  font-family: 'Google Sans Flex';
   font-style: normal;
-  font-weight: 400 800;
+  font-weight: 300 800;
   font-display: swap;
-  src: url('/fonts/geist-latin-ext.woff2') format('woff2');
+  src: url('/fonts/google-sans-flex-latin-ext.woff2') format('woff2');
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: 'Geist';
+  font-family: 'Google Sans Flex';
   font-style: normal;
-  font-weight: 400 800;
+  font-weight: 300 800;
   font-display: swap;
-  src: url('/fonts/geist-latin.woff2') format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 400 800;
-  font-display: swap;
-  src: url('/fonts/inter-latin-ext.woff2') format('woff2');
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+2113, U+2C60-2C7F, U+A720-A7FF;
-}
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 400 800;
-  font-display: swap;
-  src: url('/fonts/inter-currency.woff2') format('woff2');
-  unicode-range: U+20A0-20AB, U+20AD-20C4;
-}
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 400 800;
-  font-display: swap;
-  src: url('/fonts/inter-latin.woff2') format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'Geist Mono';
-  font-style: normal;
-  font-weight: 400 700;
-  font-display: swap;
-  src: url('/fonts/geist-mono-latin-ext.woff2') format('woff2');
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
-}
-@font-face {
-  font-family: 'Geist Mono';
-  font-style: normal;
-  font-weight: 400 700;
-  font-display: swap;
-  src: url('/fonts/geist-mono-latin.woff2') format('woff2');
+  src: url('/fonts/google-sans-flex-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
@@ -113,22 +73,129 @@
   --color-scale-green: #24b25c;
   --color-scale-lime: #a8cf3a;
 
-  /* Three faces, each with one job, and no serif (2026-11-04, after focal.inc and umbrel.com): Geist for headlines, the public
-     site's hooks and the wordmark; Inter for reading and every control; Geist Mono for eyebrows and numbers, where every figure
-     takes the same width. */
-  --font-display: 'Geist', 'Inter', system-ui, sans-serif;
-  --font-body: 'Inter', system-ui, sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
-  /* Inter sets heavier than the old face, so the two heaviest class weights step down here, once, instead of in every screen. */
-  --font-weight-extrabold: 700;
-  --font-weight-bold: 650;
+  /* One family for everything (2026-11-05, the founder's pick: Google Sans Flex only, for a calm, modern, a little futuristic look),
+     plain everywhere; only the two wordmarks are rounded (see "Roundness" at the end). The three tokens stay so each role can be
+     tuned apart: eyebrows set it in capitals with tracking, and figures (`--font-mono`, `.type-figure`) take tabular numbers, so every
+     figure is the same width. */
+  --font-display: 'Google Sans Flex', system-ui, sans-serif;
+  --font-body: 'Google Sans Flex', system-ui, sans-serif;
+  --font-mono: 'Google Sans Flex', system-ui, sans-serif;
+  /* Weights (2026-11-05, Apple's app typography in Flex): regular for reading and every secondary line, medium for tiny chrome,
+     semibold for the one line that names a row or card, labels and buttons, bold for titles and numbers to 34px. Nothing is
+     heavier than 600; extrabold is kept only as an alias so a missed class can never shout. Flex equivalents of SF measured from
+     the font files: Medium 480, Semibold 555, Bold 640; we sit at or just under them. */
+  --font-weight-medium: 480;
+  --font-weight-semibold: 550;
+  --font-weight-bold: 600;
+  --font-weight-extrabold: 600;
+
+  /* The text styles (Apple iOS "Large" Dynamic Type, px = pt, in rem so the browser's font size applies; SwiftUI rule 25).
+     Each utility (`text-body`, `text-title2`...) sets size, leading, tracking and weight together; a `leading-*`, `tracking-*` or
+     `font-*` class on the same element still overrides its part, which is how emphasis works (`text-subhead font-semibold`).
+     Tracking is Flex's own: tight on large sizes (umbrel's Google Sans curve), zero at body, open on small text. */
+  --text-large-title: 2.125rem;                /* 34 */
+  --text-large-title--line-height: 2.5625rem;  /* 41 */
+  --text-large-title--letter-spacing: -0.016em;
+  --text-large-title--font-weight: 600;
+
+  --text-title1: 1.75rem;                      /* 28 */
+  --text-title1--line-height: 2.125rem;        /* 34 */
+  --text-title1--letter-spacing: -0.014em;
+  --text-title1--font-weight: 600;
+
+  --text-title2: 1.375rem;                     /* 22 */
+  --text-title2--line-height: 1.75rem;         /* 28 */
+  --text-title2--letter-spacing: -0.012em;
+  --text-title2--font-weight: 600;
+
+  --text-title3: 1.25rem;                      /* 20 */
+  --text-title3--line-height: 1.5625rem;       /* 25 */
+  --text-title3--letter-spacing: -0.008em;
+  --text-title3--font-weight: 550;
+
+  --text-headline: 1.0625rem;                  /* 17 */
+  --text-headline--line-height: 1.375rem;      /* 22 */
+  --text-headline--letter-spacing: -0.004em;
+  --text-headline--font-weight: 550;
+
+  --text-body: 1.0625rem;                      /* 17 */
+  --text-body--line-height: 1.375rem;          /* 22 */
+  --text-body--letter-spacing: 0em;
+  --text-body--font-weight: 400;
+
+  --text-callout: 1rem;                        /* 16 */
+  --text-callout--line-height: 1.3125rem;      /* 21 */
+  --text-callout--letter-spacing: 0em;
+  --text-callout--font-weight: 400;
+
+  --text-prose: 1rem;                          /* 16, Callout with Apple's loose leading for 3+ lines */
+  --text-prose--line-height: 1.5rem;           /* 24 */
+  --text-prose--letter-spacing: 0.002em;
+  --text-prose--font-weight: 400;
+
+  --text-subhead: 0.9375rem;                   /* 15 */
+  --text-subhead--line-height: 1.25rem;        /* 20 */
+  --text-subhead--letter-spacing: 0.004em;
+  --text-subhead--font-weight: 400;
+
+  --text-footnote: 0.8125rem;                  /* 13 */
+  --text-footnote--line-height: 1.125rem;      /* 18 */
+  --text-footnote--letter-spacing: 0.01em;
+  --text-footnote--font-weight: 400;
+
+  --text-caption: 0.75rem;                     /* 12 */
+  --text-caption--line-height: 1rem;           /* 16 */
+  --text-caption--letter-spacing: 0.014em;
+  --text-caption--font-weight: 400;
+
+  --text-caption2: 0.6875rem;                  /* 11, the floor (HIG minimum) */
+  --text-caption2--line-height: 0.8125rem;     /* 13 */
+  --text-caption2--letter-spacing: 0.02em;
+  --text-caption2--font-weight: 480;
+
+  --text-eyebrow: 0.75rem;                     /* 12, used with `uppercase` */
+  --text-eyebrow--line-height: 1rem;
+  --text-eyebrow--letter-spacing: 0.06em;
+  --text-eyebrow--font-weight: 550;
+
+  /* Numbers at display size. The stem is thick enough at 40px and up, so they step down to 500 (umbrel, Apple Weather). */
+  --text-figure-lg: 2.5rem;                    /* 40 */
+  --text-figure-lg--line-height: 1;
+  --text-figure-lg--letter-spacing: -0.02em;
+  --text-figure-lg--font-weight: 500;
+
+  --text-figure-hero: 4rem;                    /* 64, HeroNumber */
+  --text-figure-hero--line-height: 1;
+  --text-figure-hero--letter-spacing: -0.024em;
+  --text-figure-hero--font-weight: 500;
+
+  /* The public site (poster type) and its lede. Phone values here; the md and lg steps follow the @theme block. */
+  --text-display-1: 2.5rem;                    /* 40 → 52 → 64 */
+  --text-display-1--line-height: 1.05;
+  --text-display-1--letter-spacing: -0.02em;
+  --text-display-1--font-weight: 500;
+
+  --text-display-2: 2rem;                      /* 32 → 40 → 48 */
+  --text-display-2--line-height: 1.1;
+  --text-display-2--letter-spacing: -0.02em;
+  --text-display-2--font-weight: 500;
+
+  --text-display-3: 1.75rem;                   /* 28 → 34 → 40 */
+  --text-display-3--line-height: 1.15;
+  --text-display-3--letter-spacing: -0.018em;
+  --text-display-3--font-weight: 500;
+
+  --text-lede: 1.125rem;                       /* 18 → 18 → 20 */
+  --text-lede--line-height: 1.625rem;          /* 26 */
+  --text-lede--letter-spacing: -0.006em;
+  --text-lede--font-weight: 400;
 
   /* Leading (baseline to baseline) and tracking. Big type sits tight, small type breathes. */
   --leading-hook: 1.02;
   --leading-heading: 1.12;
   --leading-body: 1.55;
   --tracking-hook: -0.04em;
-  --tracking-heading: -0.025em;
+  --tracking-heading: -0.014em;
   --tracking-eyebrow: 0.06em;
 
   --radius-card: 32px;
@@ -143,6 +210,24 @@
      The edge and the two shade stops live on :root so dark mode can turn them up. */
   --shadow-toy: 0 0 0 1px var(--edge), inset 0 1px 0 var(--glass-hi), 0 8px 16px var(--shade-2);
   --shadow-toy-soft: 0 0 0 1px var(--edge), inset 0 1px 0 var(--glass-hi), 0 2px 4px var(--shade-1), 0 10px 24px -8px var(--shade-2);
+}
+
+/* The laptop step for the public site's display sizes and its lede. The same queries as the md and lg variants, so a phone on its
+   side keeps phone sizes. The app's own roles have no laptop step (iPadOS keeps the iPhone table). */
+@media (width >= 48rem) and (height >= 30rem) {
+  :root {
+    --text-display-1: 3.25rem; --text-display-1--letter-spacing: -0.022em;  /* 52 */
+    --text-display-2: 2.5rem;                                               /* 40 */
+    --text-display-3: 2.125rem;                                             /* 34 */
+  }
+}
+@media (width >= 64rem) and (height >= 30rem) {
+  :root {
+    --text-display-1: 4rem; --text-display-1--letter-spacing: -0.024em;    /* 64 */
+    --text-display-2: 3rem; --text-display-2--letter-spacing: -0.02em;      /* 48 */
+    --text-display-3: 2.5rem;                                               /* 40 */
+    --text-lede: 1.25rem; --text-lede--line-height: 1.75rem;                /* 20/28 */
+  }
 }
 
 /* Light: the kit's light mode. */
@@ -344,10 +429,16 @@
        extend past the first screen) never meets a mismatched flat colour where the gradient wash should still be. */
     background: linear-gradient(165deg, var(--page-base-a), var(--page-base-b));
     -webkit-tap-highlight-color: transparent;
-    font-size: 16px;
-    /* Kerning on everywhere: the pairs the font designer fixed (AV, To, Ty) stay fixed. */
+    /* 100%, not 16px: the text styles are in rem, so they follow the person's own browser text size (the web's Dynamic Type,
+       SwiftUI rule 25). On default settings this is the same 16px. */
+    font-size: 100%;
+    /* Kerning on everywhere: the pairs the font designer fixed (AV, To, Ty) stay fixed. The common and contextual ligatures are
+       the defaults, said out loud. No font-feature-settings here: it is low level, inherits and would fight tabular-nums. */
     font-kerning: normal;
-    text-rendering: optimizeLegibility;
+    font-variant-ligatures: common-ligatures contextual;
+    /* auto, not optimizeLegibility: browsers already kern and ligate with font-kerning set, and optimizeLegibility is slow on long
+       lists. Large type turns it back on below (the optical tweak by size). */
+    text-rendering: auto;
     /* No lone last word anywhere. The setting is inherited, so every card, list line and short paragraph shares its words evenly over its lines
        (a browser balances up to about six lines and leaves longer text alone). */
     text-wrap: balance;
@@ -400,16 +491,19 @@
   summary {
     text-wrap: balance;
   }
+  /* The fallback for a heading with no text style class; a role utility (text-title2 and the rest) wins, since utilities sit in a
+     later layer. */
   h1,
   h2,
   h3 {
     font-family: var(--font-display);
     letter-spacing: var(--tracking-heading);
     line-height: var(--leading-heading);
-    font-weight: 600;
+    font-weight: var(--font-weight-bold);
   }
   h3 {
     letter-spacing: -0.01em;
+    font-weight: var(--font-weight-semibold);
   }
   p,
   li,
@@ -802,16 +896,16 @@ details[open] > summary {
    The hook is read from across the room, the context draws you closer, the details are read at arm's length.
    Everything is set left, never justified. */
 .type-hook {
+  /* Size, weight (500), leading and tracking come from the text-display-1, -2 or -3 utility every hook carries; an unlayered rule
+     here would beat it, so this class keeps only the family and the balance. */
   font-family: var(--font-display);
-  font-weight: 500;
-  line-height: var(--leading-hook);
-  letter-spacing: var(--tracking-hook);
   text-wrap: balance;
 }
-/* A word inside a hook that carries the weight: the same face, upright and one step lighter, so the line has one focal point. */
+/* A word inside a hook that carries the weight: the same face, upright, at regular (Apple never goes under Regular), so the line has
+   one focal point. */
 .type-hook em {
   font-style: normal;
-  font-weight: 400;
+  font-weight: var(--font-weight-normal);
   /* The quiet half of a headline, in large type only: the second half steps back so the first is read first. */
   color: var(--color-ink-mute);
 }
@@ -824,27 +918,56 @@ details[open] > summary {
 .text-on-fill .type-hook em {
   color: color-mix(in oklab, currentColor 70%, transparent);
 }
+/* The context line under a hook: paired with text-lede (or text-callout), which carries its size, weight and leading. */
 .type-context {
-  font-family: var(--font-body);
-  font-weight: 500;
-  line-height: 1.35;
-  letter-spacing: -0.011em;
   text-wrap: pretty;
 }
 .type-eyebrow {
   font-family: var(--font-mono);
-  font-weight: 500;
-  font-size: 12px;
-  line-height: 1.4;
-  letter-spacing: var(--tracking-eyebrow);
+  font-size: var(--text-eyebrow);
+  line-height: var(--text-eyebrow--line-height);
+  letter-spacing: var(--text-eyebrow--letter-spacing);
+  font-weight: var(--text-eyebrow--font-weight);
   text-transform: uppercase;
 }
+/* Figures: tabular numbers in the figure face, used with a text style (text-title1 type-figure); size and weight come from it. */
 .type-figure {
   font-family: var(--font-mono);
-  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-  line-height: 1;
+}
+/* The optical tweak by size: Flex in our subset has no opsz axis, so large type gets its optical care from its tracking, its weight
+   stepping down to 500 at display size, and the browser's fuller kerning and ligature pass here, where it pays (not on long lists). */
+.text-large-title,
+.text-title1,
+.text-display-1,
+.text-display-2,
+.text-display-3,
+.text-figure-lg,
+.text-figure-hero,
+.type-hook {
+  text-rendering: optimizeLegibility;
+}
+/* Light text on a dark fill blooms with macOS's default smoothing and reads bolder, so dark surfaces take grayscale smoothing, the
+   way Apple's own pages do. It does nothing on Windows, Linux or iOS; light mode is unchanged. */
+:root[data-theme='dark'],
+.night-card,
+.bg-ink,
+.bg-r1,
+.bg-r2,
+.bg-r3,
+.bg-r4,
+.bg-r5,
+.bg-r6,
+.bg-r7,
+.mf-panel {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }
 /* Long reading: a measure of about sixty-five characters. */
 .type-measure {
@@ -1114,11 +1237,6 @@ input[type='radio'] {
 }
 
 
-/* A badge not earned yet: the picture fades, the words stay at full strength so they can be read. */
-.badge-locked > :first-child {
-  opacity: 0.5;
-}
-
 /* Month calendar on Daily: the printable month. Hidden on screen. Print this month gives the body `printing-month`, and then only this sheet
    is on the page: black on white, square corners, no glass or gradients, on a landscape page of its own (a named page, so other prints keep theirs). */
 .month-print-sheet {
@@ -1299,55 +1417,6 @@ input[type='radio'] {
   }
 }
 
-/* Marquee: the track holds the items twice and slides half its width, then starts over without a jump. */
-.fx-marquee {
-  overflow: hidden;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
-}
-.fx-marquee-track {
-  display: flex;
-  width: max-content;
-}
-.fx-marquee-set {
-  display: flex;
-  flex-shrink: 0;
-  gap: var(--spacing-xs);
-  padding: 0 var(--spacing-xs) 0 0;
-  margin: 0;
-  list-style: none;
-}
-@media (prefers-reduced-motion: no-preference) {
-  .fx-marquee-track {
-    animation: fx-marquee var(--fx-dur, 90s) linear infinite;
-    animation-play-state: paused;
-  }
-  .fx-marquee[data-reverse] .fx-marquee-track {
-    animation-direction: reverse;
-  }
-  .fx-marquee[data-run='true'] .fx-marquee-track {
-    animation-play-state: running;
-  }
-  .fx-marquee:hover .fx-marquee-track,
-  .fx-marquee:focus-within .fx-marquee-track {
-    animation-play-state: paused;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .fx-marquee {
-    overflow-x: auto;
-  }
-  .fx-marquee-copy {
-    display: none;
-  }
-}
-@keyframes fx-marquee {
-  to {
-    transform: translate3d(-50%, 0, 0);
-  }
-}
-
-
 /* Particle burst: confetti dots in a fixed layer, removed when done. */
 .fx-burst {
   position: fixed;
@@ -1477,21 +1546,16 @@ input[type='radio'] {
   --fill-2: color-mix(in oklab, var(--ink) 6%, transparent);
   --separator: var(--line);
   --tint: var(--color-r6); /* the app's accent: a screen sets it to its relationship colour */
-  /* Type scale in rem, so text follows the browser's font size. */
-  --text-large-title: 2.125rem;
-  --text-title: 1.5rem;
-  --text-headline: 1.0625rem;
-  --text-body: 1rem;
-  --text-footnote: 0.8125rem;
-  --text-caption: 0.75rem;
+  /* The type scale lives in @theme (the text styles, 2026-11-05). */
   /* The specular edge and the soft glow inside a glass material. */
   --spec: linear-gradient(180deg, color-mix(in oklab, var(--glass-hi) 70%, transparent), transparent 3.5rem);
   --glow-in: inset 0 1px 0 var(--glass-hi), inset 0 0 0 1px color-mix(in oklab, var(--glass-hi) 22%, transparent);
 }
 .type-large {
   font-size: var(--text-large-title);
-  line-height: 1.1;
-  letter-spacing: -0.02em;
+  line-height: var(--text-large-title--line-height);
+  letter-spacing: var(--text-large-title--letter-spacing);
+  font-weight: var(--text-large-title--font-weight);
 }
 
 /* A press: a quick squeeze to 97% while held, a spring back on release. Buttons squeeze more than cards and rows. */
@@ -1604,7 +1668,9 @@ input[type='radio'] {
   padding: 0 var(--spacing-md);
   border-radius: var(--radius-pill);
   font-size: var(--text-footnote);
-  font-weight: 700;
+  line-height: var(--text-footnote--line-height);
+  letter-spacing: var(--text-footnote--letter-spacing);
+  font-weight: var(--font-weight-medium);
   color: var(--label-2);
   white-space: nowrap;
   transition: color 160ms ease;
@@ -1693,7 +1759,8 @@ input[type='radio'] {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--text-headline);
-  font-weight: 800;
+  letter-spacing: var(--text-headline--letter-spacing);
+  font-weight: var(--text-headline--font-weight);
   line-height: 1.6;
   color: var(--label);
 }
@@ -1813,6 +1880,17 @@ ol.grid > li > .toy:only-child {
    margin boxes (Chrome and Edge 131 and up; `@page` is written by the component), no screen chrome, no glass, gradients or shadows.
    The print block may use plain black and white and a few calm rule colours: that is the one place raw colour values are allowed.
    ========================================================================================================== */
+/* Paper keeps its own weights (the 2026-11-05 type pass does not touch paper): its Tailwind classes resolve to these. */
+.legal-root,
+.legal-invoice,
+.legal-doc,
+.print-doc,
+.month-print-sheet {
+  --font-weight-medium: 420;
+  --font-weight-semibold: 440;
+  --font-weight-bold: 540;
+  --font-weight-extrabold: 620;
+}
 .legal-root {
   --doc-font: Georgia, 'Times New Roman', Times, serif;
   --doc-fs: 16px;
@@ -2145,14 +2223,14 @@ select.inv-edit { appearance: none; cursor: pointer; }
   transform: translateX(-50%);
   font-family: var(--font-display);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
   line-height: 1;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
   color: var(--rp-label);
 }
 .rp-tick[data-on] .rp-label {
-  font-weight: 800;
+  font-weight: var(--font-weight-bold);
   color: var(--rp-accent-text);
 }
 .rp-marker {
@@ -2221,8 +2299,9 @@ select.inv-edit { appearance: none; cursor: pointer; }
   min-width: 44px;
   min-height: 44px;
   padding: 0 var(--spacing-xs);
-  font-size: 14px;
-  font-weight: 700;
+  font-size: var(--text-subhead);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--text-subhead--letter-spacing);
   color: var(--mf-dim);
   transition: color 160ms ease;
 }
@@ -2240,8 +2319,9 @@ select.inv-edit { appearance: none; cursor: pointer; }
   min-height: 44px;
   padding: 0 var(--spacing-md);
   border-radius: var(--radius-pill);
-  font-size: 16px;
-  font-weight: 800;
+  font-size: var(--text-headline);
+  font-weight: var(--text-headline--font-weight);
+  letter-spacing: var(--text-headline--letter-spacing);
   color: var(--color-ink-fixed);
   background-color: var(--color-r2);
   background-image: linear-gradient(140deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 55%, rgba(30, 30, 60, 0.1));
@@ -2269,7 +2349,8 @@ select.inv-edit { appearance: none; cursor: pointer; }
   min-width: 5.4ch;
   font-family: var(--font-display);
   font-size: 44px;
-  font-weight: 600;
+  font-weight: var(--text-figure-lg--font-weight);
+  letter-spacing: -0.02em;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   color: var(--mf-a-text);
@@ -2317,9 +2398,10 @@ select.inv-edit { appearance: none; cursor: pointer; }
 }
 .mf-set-label {
   display: block;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.3;
+  font-size: var(--text-footnote);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--text-footnote--line-height);
+  letter-spacing: var(--text-footnote--letter-spacing);
   color: var(--mf-dim);
 }
 .mf-set-chip {
@@ -2334,8 +2416,9 @@ select.inv-edit { appearance: none; cursor: pointer; }
   border-radius: var(--radius-pill);
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(255, 255, 255, 0.08);
-  font-size: 16px;
-  font-weight: 800;
+  font-size: var(--text-body);
+  font-weight: var(--font-weight-normal);
+  letter-spacing: var(--text-body--letter-spacing);
   color: var(--mf-a-text);
 }
 .mf-pop {
@@ -2381,22 +2464,25 @@ select.inv-edit { appearance: none; cursor: pointer; }
   padding: 0 var(--spacing-sm);
   border-radius: var(--radius-inner);
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: var(--text-subhead);
+  font-weight: var(--font-weight-normal);
+  letter-spacing: var(--text-subhead--letter-spacing);
 }
 .mf-opt[data-active] {
   background: var(--fill-2);
 }
 .mf-opt[aria-selected='true'] {
-  font-weight: 800;
+  font-weight: var(--font-weight-semibold);
 }
 .mf-opt[aria-selected='true']::after {
   content: '\2713';
 }
 .mf-line {
   margin: var(--spacing-sm) 0 0;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--text-footnote);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--text-footnote--line-height);
+  letter-spacing: var(--text-footnote--letter-spacing);
   color: var(--mf-dim);
 }
 .mf-actions {
@@ -2421,8 +2507,9 @@ select.inv-edit { appearance: none; cursor: pointer; }
   border-radius: var(--radius-pill);
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(255, 255, 255, 0.1);
-  font-size: 14px;
-  font-weight: 700;
+  font-size: var(--text-subhead);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--text-subhead--letter-spacing);
   color: #ffffff;
 }
 .mf-mini[aria-pressed='true'] {
@@ -2442,7 +2529,7 @@ select.inv-edit { appearance: none; cursor: pointer; }
 }
 .mf-nudge-label {
   font-size: 12px;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
   color: var(--mf-dim);
 }
 .mf-status {
@@ -2496,7 +2583,7 @@ select.inv-edit { appearance: none; cursor: pointer; }
 }
 .mf-plus {
   font-size: 12px;
-  font-weight: 800;
+  font-weight: var(--font-weight-bold);
   color: var(--mf-dim);
 }
 .mf-long {
@@ -2569,7 +2656,7 @@ select.inv-edit { appearance: none; cursor: pointer; }
   color: var(--color-ink);
   box-shadow: 0 0 0 1px var(--line);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
@@ -2615,12 +2702,10 @@ select.inv-edit { appearance: none; cursor: pointer; }
   }
   .mf-tabs > button {
     padding: 0 var(--spacing-xs);
-    font-size: 13px;
   }
   .mf-start {
     min-width: 72px;
     padding: 0 var(--spacing-sm);
-    font-size: 15px;
   }
 }
 
@@ -3124,7 +3209,7 @@ select.inv-edit { appearance: none; cursor: pointer; }
 }
 .breath-word {
   font-size: 13px;
-  font-weight: 800;
+  font-weight: var(--font-weight-bold);
   line-height: 1.1;
 }
 .breath-soft {
@@ -3134,7 +3219,7 @@ select.inv-edit { appearance: none; cursor: pointer; }
 .breath-count {
   font-family: var(--font-display);
   font-size: 24px;
-  font-weight: 600;
+  font-weight: var(--font-weight-bold);
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
@@ -3325,94 +3410,6 @@ select.inv-edit { appearance: none; cursor: pointer; }
     will-change: auto;
   }
   .water-crest {
-    display: none;
-  }
-}
-
-/* GradientStripes (components/fx/GradientStripes.tsx): light sliced into stripes. One horizon glow from the theme's indigo, sky
-   and green (plus the page's first glow) rising from the foot of the card, cut into upright stripes. Each stripe shows its own
-   slice of the one gradient (the fill is 1/n of the band wide, so a background n times as wide, positioned at i/(n-1), lines up),
-   with a rounded shade darker at its edges, and a 1px inset either side leaves a 2px seam of card between stripes. The band sits
-   in the lower 55% (a little less on the ink card) and fades out towards the top, so text above stays on calm colour. Only
-   transform moves (GSAP); the grain is a still SVG noise at 4%, hidden with reduced transparency or more contrast. */
-.fx-stripes {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  border-radius: inherit;
-  pointer-events: none;
-}
-.fx-stripes-band {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 55%;
-  display: flex;
-  -webkit-mask-image: linear-gradient(to top, black 0%, black 25%, transparent 85%);
-  mask-image: linear-gradient(to top, black 0%, black 25%, transparent 85%);
-}
-.fx-stripes[data-tone='ink'] .fx-stripes-band {
-  height: 48%;
-  opacity: 0.9;
-}
-/* A phone's words wrap over more of the card, so the band stays lower there. */
-@media (max-width: 767px) {
-  .fx-stripes-band {
-    height: 42%;
-  }
-  .fx-stripes[data-tone='ink'] .fx-stripes-band {
-    height: 38%;
-  }
-}
-.fx-stripe {
-  position: relative;
-  flex: 1 1 0;
-  min-width: 0;
-  height: 100%;
-}
-.fx-stripe-fill {
-  position: absolute;
-  top: 6%;
-  left: 1px;
-  right: 1px;
-  height: 140%;
-  border-radius: 10px 10px 0 0;
-  background-image:
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--fill-shade) 34%, transparent),
-      transparent 32%,
-      color-mix(in srgb, var(--color-on-fill) 16%, transparent) 50%,
-      transparent 68%,
-      color-mix(in srgb, var(--fill-shade) 34%, transparent)
-    ),
-    linear-gradient(90deg, var(--color-r6), var(--color-r5) 42%, var(--color-r4) 74%, var(--glow-1));
-  background-size:
-    100% 100%,
-    calc(var(--fx-stripes-n) * 100%) 100%;
-  background-position:
-    0 0,
-    calc(var(--i) / (var(--fx-stripes-n) - 1) * 100%) 0;
-  background-repeat: no-repeat;
-  will-change: transform;
-}
-.fx-stripes::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  opacity: 0.04;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23g)'/%3E%3C/svg%3E");
-  background-size: 160px 160px;
-}
-@media (prefers-reduced-motion: reduce) {
-  .fx-stripe-fill {
-    will-change: auto;
-  }
-}
-@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
-  .fx-stripes::after {
     display: none;
   }
 }
@@ -3789,7 +3786,7 @@ html.kanban-drag.kanban-no * {
 .act-frame,
 .act-days {
   font-size: 11px;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
   line-height: 12px;
   color: var(--label-2);
 }
@@ -3894,7 +3891,7 @@ html.kanban-drag.kanban-no * {
   background: var(--card-strong);
   color: var(--label);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
@@ -4222,54 +4219,8 @@ li.sort-lifted {
   }
 }
 
-/* Book3D and BookShelf (components/BookShelf.tsx): a book on a slight turn with its pages showing at the side; a mouse or the
-   keyboard turns it toward you and lifts it, then it settles back. Transform and opacity only; still on touch and under reduced motion. */
-.book3d {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  align-items: center;
-  justify-content: center;
-  container-type: size;
-  perspective: 900px;
-  padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-xs) var(--spacing-xs);
-}
-/* Sized to fit the cell both ways: as wide as the cell allows, or as tall, whichever is smaller, always in the cover's own ratio, so a
-   cover is never stretched or cut. */
-.book3d-body {
-  position: relative;
-  display: block;
-  width: min(100cqw, 100cqh * 893 / 1263);
-  aspect-ratio: 893 / 1263;
-  transform-style: preserve-3d;
-  transform: rotateY(-18deg) rotateX(2deg);
-  transform-origin: 30% 50%;
-  transition: transform 520ms var(--ease-open);
-  filter: drop-shadow(10px 14px 14px color-mix(in oklab, var(--color-shadow) 45%, transparent));
-}
-.book3d-cover {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 3px 8px 8px 3px;
-  transform: translateZ(10px);
-  backface-visibility: hidden;
-  background: var(--color-paper);
-}
-/* The block of pages: a strip of paper lines on the right edge, turned to face the side. */
-.book3d-pages {
-  position: absolute;
-  top: 2%;
-  bottom: 2%;
-  right: 0;
-  width: 20px;
-  transform-origin: right center;
-  transform: translateX(10px) rotateY(90deg) translateX(10px);
-  background: repeating-linear-gradient(90deg, #f6f2e8 0 1px, #e3ddd0 1px 2px);
-  border-radius: 0 2px 2px 0;
-}
+/* BookShelf (components/BookShelf.tsx): a mouse or the keyboard lights the cover, then it settles back. Transform and opacity only;
+   still on touch and under reduced motion. */
 /* A soft light that slides over the cover as it turns. */
 .book3d-sheen {
   position: absolute;
@@ -4284,21 +4235,12 @@ li.sort-lifted {
   pointer-events: none;
 }
 @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
-  .book3d-link:hover .book3d-body {
-    transform: rotateY(-4deg) rotateX(0deg) translateY(-6px) scale(1.03);
-  }
   .book3d-link:hover .book3d-sheen {
     opacity: 1;
     background-position: 0 0;
   }
 }
-@media (prefers-reduced-motion: no-preference) {
-  .book3d-link:focus-visible .book3d-body {
-    transform: rotateY(-4deg) translateY(-6px) scale(1.03);
-  }
-}
 @media (prefers-reduced-motion: reduce) {
-  .book3d-body,
   .book3d-sheen {
     transition: none;
   }
@@ -4379,8 +4321,6 @@ li.sort-lifted {
   justify-content: flex-start;
 }
 
-/* GuideLine (site/GuideLine.tsx): the guide's line written by hand (Caveat, self-hosted), inside a drawn blob; on a wide screen the guide
-   stands in the page's margin, outside the reading column. */
 @font-face {
   font-family: 'Caveat';
   font-style: normal;
@@ -4389,6 +4329,8 @@ li.sort-lifted {
   src: url('/fonts/caveat-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
+/* GuideLine (site/GuideLine.tsx): the guide's line handwritten in Caveat (self-hosted; the one face kept beside Google Sans Flex), inside a drawn blob; on a wide screen the guide
+   stands in the page's margin, outside the reading column. */
 .guide-hand {
   font-family: 'Caveat', var(--font-display);
   font-size: 1.75rem;
@@ -4459,8 +4401,9 @@ li.sort-lifted {
   }
 }
 .mf-time-cap {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--text-caption);
+  font-weight: var(--font-weight-normal);
+  letter-spacing: var(--text-caption--letter-spacing);
   color: var(--mf-dim);
 }
 .mf-pace .mf-time {
@@ -4637,3 +4580,214 @@ li.sort-lifted {
     transition: none;
   }
 }
+
+/* Home's Knowledge cards (2026-11-05): the arrow at a read's foot nudges toward it on hover or keyboard focus; still under reduced motion.
+   A link's arrow is the 45-degree ArrowUpRight, so the nudge goes up and right with it; a card that is a button (it opens a sheet,
+   not a page) keeps its right arrow and its sideways nudge. */
+.read-arrow {
+  transition: transform 260ms var(--ease-spring);
+}
+@media (prefers-reduced-motion: no-preference) {
+  @media (hover: hover) and (pointer: fine) {
+    .group:hover .read-arrow {
+      transform: translate(2px, -2px);
+    }
+    button.group:hover .read-arrow {
+      transform: translateX(3px);
+    }
+  }
+  .group:focus-visible .read-arrow {
+    transform: translate(2px, -2px);
+  }
+  button.group:focus-visible .read-arrow {
+    transform: translateX(3px);
+  }
+}
+
+/* FractalGlass (components/fx/FractalGlass.tsx): fluted "fractal" glass, the founder's pick (2026-11-05, from the Framer fractal glass
+   component and the stock examples he sent). Deep navy, one glow of electric blue, violet and a white-lavender core rising from the top
+   right, seen through narrow upright ribs (--fg-rib, 18px; 14px on a phone): each rib has a dark edge and a bright streak, laid over the
+   glow in overlay so the streaks only light up where the colour is, plus thin white lines masked to the glow. Only transform moves: the
+   glow drifts sideways under the fixed ribs (--fg-drift) and leans toward a mouse (--fg-px). A scrim from the left keeps the words on
+   dark navy (white text 4.5:1 or better; sampled from shots, since the contrast probe cannot see these layers). The same in both
+   themes, like the Home header. Reduced transparency or more contrast: the solid navy alone. */
+:root {
+  --fx-glass-base: #080a1f;
+  --fx-glass-blue: #2f4dff;
+  --fx-glass-sky: #2a8cff;
+  --fx-glass-violet: #7a4dff;
+  --fx-glass-core: #d9d4ff;
+  --fg-rib: 18px;
+}
+@media (max-width: 767px) {
+  :root {
+    --fg-rib: 14px;
+  }
+}
+/* The card that holds the glass carries the navy too, so its words have the right background before the glass paints and to a probe. */
+.fx-fglass-host {
+  background-color: var(--fx-glass-base);
+}
+.fx-fglass {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  background: var(--fx-glass-base);
+  isolation: isolate;
+}
+.fx-fglass-field {
+  position: absolute;
+  inset: -10% -18%;
+  background:
+    radial-gradient(12% 46% at 80% 0%, var(--fx-glass-core) 0%, transparent 100%),
+    radial-gradient(20% 70% at 90% 12%, color-mix(in srgb, var(--fx-glass-violet) 90%, transparent) 0%, transparent 100%),
+    radial-gradient(26% 90% at 74% 34%, var(--fx-glass-blue) 0%, transparent 100%),
+    radial-gradient(20% 80% at 98% 72%, color-mix(in srgb, var(--fx-glass-sky) 80%, transparent) 0%, transparent 100%),
+    radial-gradient(40% 60% at 48% 104%, color-mix(in srgb, var(--fx-glass-blue) 50%, transparent) 0%, transparent 100%),
+    var(--fx-glass-base);
+  transform: translate3d(calc(var(--fg-drift, 0) * 1% + var(--fg-px, 0) * 1px), 0, 0);
+  will-change: transform;
+}
+/* The ribs: a dark edge, a soft rise, a bright streak just right of centre, then the edge again. Overlay deepens the dark and lights
+   the bright only where the glow is, which is what makes the streaks fade into the navy the way fluted glass does. */
+.fx-fglass-ribs {
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: overlay;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.7) 0,
+    rgba(0, 0, 0, 0.25) calc(var(--fg-rib) * 0.22),
+    rgba(255, 255, 255, 0) calc(var(--fg-rib) * 0.5),
+    rgba(255, 255, 255, 0.55) calc(var(--fg-rib) * 0.74),
+    rgba(255, 255, 255, 0.12) calc(var(--fg-rib) * 0.9),
+    rgba(0, 0, 0, 0.7) var(--fg-rib)
+  );
+}
+/* A thin highlight on each rib's crest, only inside the glow. */
+.fx-fglass-shine {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(90deg, transparent 0, transparent calc(var(--fg-rib) * 0.72), rgba(255, 255, 255, 0.22) calc(var(--fg-rib) * 0.74), transparent calc(var(--fg-rib) * 0.8), transparent var(--fg-rib));
+  -webkit-mask-image: radial-gradient(60% 90% at 74% 10%, black, transparent 75%);
+  mask-image: radial-gradient(60% 90% at 74% 10%, black, transparent 75%);
+}
+.fx-fglass-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--fx-glass-base) 82%, transparent) 0%,
+    color-mix(in srgb, var(--fx-glass-base) 62%, transparent) 36%,
+    transparent 66%
+  );
+}
+/* Up to a laptop the words run most of the card's width, so the scrim comes down from the top instead. */
+@media (max-width: 1023px) {
+  .fx-fglass-scrim {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--fx-glass-base) 72%, transparent) 0%, color-mix(in srgb, var(--fx-glass-base) 45%, transparent) 55%, transparent 85%);
+  }
+}
+.fx-fglass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--matte-grain);
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-fglass-field {
+    will-change: auto;
+  }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .fx-fglass-field,
+  .fx-fglass-ribs,
+  .fx-fglass-shine,
+  .fx-fglass-scrim,
+  .fx-fglass::after {
+    display: none;
+  }
+}
+
+/* The public footer (site/SiteLayout.tsx, 2026-11-05): glass over the page's wash with a faint dusk-to-ground tint, and at its foot the
+   wordmark as wide as the footer, its letters filled with the pillar colours and cut into upright ribs like fluted glass, fading into
+   the ground band. The wordmark is CSS content (aria-hidden), so no probe or screen reader reads it as text. */
+.site-footer {
+  background-color: var(--card);
+  background-image: linear-gradient(180deg, color-mix(in oklab, var(--color-r6) 8%, transparent), color-mix(in oklab, var(--color-r5) 6%, transparent) 40%, color-mix(in oklab, var(--color-r4) 8%, transparent) 75%, color-mix(in oklab, var(--color-earth) 12%, transparent));
+  box-shadow: var(--shadow-toy-soft);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+}
+.site-footer-mark {
+  position: relative;
+  height: calc(clamp(64px, 15.5vw, 236px) * 0.62);
+  overflow: hidden;
+  margin-top: var(--spacing-lg);
+  pointer-events: none;
+  user-select: none;
+}
+.site-footer-mark::before {
+  content: 'kreators.app';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(64px, 15.5vw, 236px);
+  line-height: 0.8;
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+  color: transparent;
+  background-image:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.22) 0, rgba(0, 0, 0, 0) 4px, rgba(255, 255, 255, 0.5) 10px, rgba(255, 255, 255, 0) 13px, rgba(0, 0, 0, 0.22) 14px),
+    linear-gradient(90deg, var(--color-r1), var(--color-r2), var(--color-r3), var(--color-r4), var(--color-r5), var(--color-r6), var(--color-r7));
+  -webkit-background-clip: text;
+  background-clip: text;
+  opacity: 0.32;
+  -webkit-mask-image: linear-gradient(180deg, black 30%, transparent 100%);
+  mask-image: linear-gradient(180deg, black 30%, transparent 100%);
+}
+:root[data-theme='dark'] .site-footer-mark::before {
+  opacity: 0.42;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .site-footer-mark::before {
+    opacity: 0.42;
+  }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .site-footer {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background-color: var(--card-strong);
+  }
+}
+
+/* Roundness (Google Sans Flex's ROND axis, 0 to 100) on two things only, the founder's pick (2026-11-05): the kreators.app wordmark
+   at the top (BrandMark) and the big fluted wordmark in the public footer. Everything else is the plain face (ROND 0, the default). */
+.brand-mark-face {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-variation-settings: 'ROND' 100;
+}
+.site-footer-mark::before {
+  font-variation-settings: 'ROND' 100;
+}
+
+/* With one family, what was monospace keeps its job through tabular figures: numbers line up in columns and clocks do not jitter. */
+.font-mono,
+.type-eyebrow {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Strong words in what the app writes (lessons, assistant replies, help) are one step up, semibold, never the browser's jump to 700
+   (emphasis is one step, 2026-11-05); printed paper keeps its own. */
+:where(strong, b):not(.legal-doc *, .print-doc *) {
+  font-weight: var(--font-weight-semibold);
+}
+

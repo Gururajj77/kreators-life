@@ -60,10 +60,10 @@ export function AppCover({ back, topStart, topEnd, heading, cover, eyebrow, titl
           {topEnd && <div className="ml-auto">{topEnd}</div>}
         </div>
         <div className="app-cover-foot">
-          {eyebrow && <p className="app-cover-eyebrow m-0 text-[14px] font-bold text-ink-soft">{eyebrow}</p>}
+          {eyebrow && <p className="app-cover-eyebrow m-0 text-footnote text-ink-soft">{eyebrow}</p>}
           {heading ?? (
             <CondensedTitle className="app-cover-title" title={text}>
-              <h1 className="type-large">{title}</h1>
+              <h1 className="text-large-title">{title}</h1>
             </CondensedTitle>
           )}
           {(lede || actions) && (
@@ -73,7 +73,7 @@ export function AppCover({ back, topStart, topEnd, heading, cover, eyebrow, titl
                   {actions}
                 </div>
               )}
-              {lede && <div className="app-cover-lede text-[14px] font-semibold text-ink-soft">{lede}</div>}
+              {lede && <div className="app-cover-lede text-subhead text-ink-soft">{lede}</div>}
             </div>
           )}
         </div>

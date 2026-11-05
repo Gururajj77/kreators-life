@@ -10,6 +10,10 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { useMe, useWellbeing } from '../lib/queries';
 import { EmergenceSlot } from '../components/EmergenceSlot';
+import { ArrowUpRight } from 'lucide-react';
+import { CardHead } from '../components/CardHead';
+import { Icon } from '../components/Icon';
+import '../components/fx/spotlight';
 
 /** The four trackers; each wears its app's own icon from the registry. */
 const ROWS: { kind: LogKind; name: string; path: string; color: string; pillar: 'parent_child' | 'guru' | 'friendship' | 'lover_partner'; tint: string; max: number; format: (v: number | null) => string }[] = [
@@ -45,18 +49,19 @@ export function Wellbeing() {
     <Screen>
       <header className="pt-lg">
         <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Wellbeing</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">One score from your mood, sleep, stress, mindful minutes and streak. Tap a row to log today.</p>
+        <h1 className="text-large-title">Wellbeing</h1>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">One score from your mood, sleep, stress, mindful minutes and streak. Tap a row to log today.</p>
         {d && (
           <Hero color="var(--color-r4)" deep="var(--deep-lover_partner)" className="mt-md" character="lover_partner" mood={d.score >= 60 ? 'excited' : d.score >= 40 ? 'happy' : 'sleepy'}>
-            <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide opacity-90">Wellbeing score</p>
-            <div className="mt-xs flex items-center gap-md">
+            <p className="m-0 text-eyebrow uppercase opacity-90">Wellbeing score</p>
+            {/* A phone stacks the word and its line under the gauge, so they keep the card's width instead of a sliver beside it. */}
+            <div className="mt-xs flex flex-col items-start gap-xs sm:flex-row sm:items-center sm:gap-md">
               <Gauge value={d.score / 100} size={128} stroke={14} color="var(--color-on-fill)" track="rgba(255,255,255,0.3)" label={`Wellbeing ${d.score} of 100`}>
-                <span className="font-display text-[40px] font-extrabold">{d.score}</span>
+                <span className="text-figure-lg type-figure">{d.score}</span>
               </Gauge>
               <div className="min-w-0">
-                <p className="m-0 font-display text-[28px] font-extrabold leading-tight">{d.label}</p>
-                <p className="mt-xs m-0 text-[14px] font-semibold opacity-90">Scored over the last seven days. Logging every day keeps it{'\u00a0'}honest.</p>
+                <p className="m-0 text-title1">{d.label}</p>
+                <p className="mt-xs m-0 text-subhead opacity-90">Scored over the last seven days. Logging every day keeps it{'\u00a0'}honest.</p>
               </div>
             </div>
           </Hero>
@@ -70,12 +75,12 @@ export function Wellbeing() {
           <section className="mt-md flex items-center gap-md rounded-card bg-card p-md shadow-toy-soft" aria-label="What makes the score">
             <Donut segments={makeup.map((m) => ({ value: Math.round(m.value), color: m.color, label: m.label }))} size={132} stroke={20} label="What makes the score">
               <span className="flex flex-col items-center leading-none">
-                <span className="font-display text-[24px] font-extrabold">{d.score}</span>
-                <span className="mt-xs text-[12px] font-bold text-ink-soft">of 100</span>
+                <span className="text-title2 type-figure">{d.score}</span>
+                <span className="mt-xs text-caption text-ink-soft">of 100</span>
               </span>
             </Donut>
             <div className="min-w-0 flex-1">
-              <p className="m-0 text-[14px] font-bold">What makes it</p>
+              <p className="m-0 text-headline">What makes it</p>
               <div className="mt-xs">
                 <Legend items={makeup.map((m) => ({ color: m.color, label: m.label, text: `${Math.round(m.value)}` }))} />
               </div>
@@ -83,7 +88,7 @@ export function Wellbeing() {
           </section>
 
           <section className="mt-md rounded-tile bg-card p-sm shadow-toy-soft" aria-label="Mood this week">
-            <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">Mood history</p>
+            <p className="m-0 text-eyebrow uppercase text-ink-soft">Mood history</p>
             <div className="mt-xs">
               <EmojiRow
                 items={d.week.map((w) => {
@@ -109,8 +114,8 @@ export function Wellbeing() {
                       </span>
                     )}
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[16px] font-bold">{r.name}</span>
-                      <span className="block text-[14px] font-semibold text-ink-soft">{r.format(p?.latest ?? null)}</span>
+                      <span className="block text-headline">{r.name}</span>
+                      <span className="block text-subhead text-ink-soft">{r.format(p?.latest ?? null)}</span>
                     </span>
                     <Sparkline values={series} max={r.max} color={r.color} width={96} height={40} />
                   </Link>
@@ -118,17 +123,29 @@ export function Wellbeing() {
               );
             })}
           </ul>
+          {/* Two doors, placed by the card rule: the name at the top left, the app's icon in the top right corner, the line at the foot on
+              the left and an arrow at the bottom right that nudges on hover. */}
           <div className="mt-md grid grid-cols-2 gap-xs">
-            <Link to="/journal" className="toy toy-soft rounded-tile bg-card p-sm">
-              <AppIcon name={MODULE_BY_KEY.journal?.icon} size={22} className="text-ink-soft" />
-              <span className="block text-[16px] font-bold">Journal</span>
-              <span className="block text-[14px] font-semibold text-ink-soft">Write it down</span>
-            </Link>
-            <Link to="/companion" className="toy toy-soft rounded-tile bg-card p-sm">
-              <AppIcon name={MODULE_BY_KEY.companion?.icon} size={22} className="text-ink-soft" />
-              <span className="block text-[16px] font-bold">Companion</span>
-              <span className="block text-[14px] font-semibold text-ink-soft">Talk it through</span>
-            </Link>
+            {[
+              { to: '/journal', name: 'Journal', line: 'Write it down', icon: MODULE_BY_KEY.journal?.icon },
+              { to: '/companion', name: 'Companion', line: 'Talk it through', icon: MODULE_BY_KEY.companion?.icon },
+            ].map((t) => (
+              <Link key={t.to} to={t.to} className="fx-spot toy toy-soft group flex min-h-[112px] flex-col rounded-tile bg-card p-sm text-ink">
+                <CardHead
+                  tag={
+                    <span className="flex size-[44px] items-center justify-center rounded-inner bg-paper text-ink-soft" aria-hidden="true">
+                      <AppIcon name={t.icon} size={22} />
+                    </span>
+                  }
+                >
+                  <span className="block text-headline">{t.name}</span>
+                </CardHead>
+                <span className="mt-auto flex items-end justify-between gap-xs pt-sm">
+                  <span className="min-w-0 text-subhead text-ink-soft">{t.line}</span>
+                  <Icon icon={ArrowUpRight} size={16} className="read-arrow mb-[2px] shrink-0 text-ink-mute" />
+                </span>
+              </Link>
+            ))}
           </div>
         </>
       )}

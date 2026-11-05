@@ -116,7 +116,7 @@ export function TabRow<K extends string>({
   // When some tabs are behind All, the shown ones share the free width, so the row reaches All with no gap.
   const fill = hidden.length > 0 ? 'flex-1 justify-center text-center' : '';
   const pill = (on: boolean, disabled = false, wrap = false) =>
-    `${wrap ? 'min-w-[44px] whitespace-normal text-balance' : 'shrink-0 whitespace-nowrap'} ${pillClass ? pillClass(on, disabled) : `toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}`;
+    `${wrap ? 'min-w-[44px] whitespace-normal text-balance' : 'shrink-0 whitespace-nowrap'} ${pillClass ? pillClass(on, disabled) : `toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}`;
 
   /** A link picked from the All list: the list closes first (it holds the page still), then the section is brought into view. */
   const jump = (k: K) => {
@@ -157,7 +157,7 @@ export function TabRow<K extends string>({
     <div className={`relative min-w-0 ${className}`}>
       <div ref={row} role="group" aria-label={label} className={`flex min-w-0 items-center gap-xs ${align === 'end' ? 'justify-end' : ''}`}>
         {lead && (
-          <span ref={leadRef} className="shrink-0 text-[14px] font-bold text-ink-soft">
+          <span ref={leadRef} className="shrink-0 text-subhead text-ink-soft">
             {lead}
           </span>
         )}
@@ -188,7 +188,7 @@ export function TabRow<K extends string>({
           {items.map((i) => (
             <li key={i.key}>
               {i.disabled ? (
-                <span title={i.title} className="flex min-h-[48px] w-full items-center rounded-tile bg-line px-sm text-left text-[16px] font-bold text-ink-soft line-through">
+                <span title={i.title} className="flex min-h-[48px] w-full items-center rounded-tile bg-line px-sm text-left text-body text-ink-soft line-through">
                   {i.name ?? i.label}
                 </span>
               ) : href ? (
@@ -199,7 +199,7 @@ export function TabRow<K extends string>({
                     e.preventDefault();
                     jump(i.key);
                   }}
-                  className="toy toy-flat flex min-h-[48px] w-full items-center rounded-tile bg-paper px-sm text-left text-[16px] font-bold aria-[current=true]:bg-ink aria-[current=true]:text-on-ink"
+                  className="toy toy-flat flex min-h-[48px] w-full items-center rounded-tile bg-paper px-sm text-left text-body aria-[current=true]:bg-ink aria-[current=true]:text-on-ink"
                 >
                   {i.name ?? i.label}
                 </a>
@@ -211,7 +211,7 @@ export function TabRow<K extends string>({
                     onChange?.(i.key);
                     setOpen(false);
                   }}
-                  className="toy toy-flat flex min-h-[48px] w-full items-center rounded-tile bg-paper px-sm text-left text-[16px] font-bold aria-pressed:bg-ink aria-pressed:text-on-ink"
+                  className="toy toy-flat flex min-h-[48px] w-full items-center rounded-tile bg-paper px-sm text-left text-body aria-pressed:bg-ink aria-pressed:text-on-ink"
                 >
                   {i.name ?? i.label}
                 </button>

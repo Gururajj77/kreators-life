@@ -92,7 +92,7 @@ export function Insights() {
               <>
                 <Segmented label="Show habits" value={habitFilter} onChange={(v) => setHabits(v)} options={HABIT_FILTERS} className="mt-md" />
                 <div className="mt-md">
-                  {tiesShown.length > 0 ? <InsightGrid list={tiesShown} onHide={hide} /> : <p className="m-0 text-[14px] font-semibold text-ink-soft">{habitFilter === 'good' ? 'No good habits yet.' : 'No bad habits yet.'}</p>}
+                  {tiesShown.length > 0 ? <InsightGrid list={tiesShown} onHide={hide} /> : <p className="m-0 text-subhead text-ink-soft">{habitFilter === 'good' ? 'No good habits yet.' : 'No bad habits yet.'}</p>}
                 </div>
               </>
             )}
@@ -102,8 +102,8 @@ export function Insights() {
               <ul className="m-0 flex list-none flex-col gap-xs p-0">
                 {watching.map((i) => (
                   <li key={i.id} className="rounded-tile bg-card p-sm">
-                    <p className="m-0 text-[16px] font-bold">{i.text}</p>
-                    {i.need && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{i.need}</p>}
+                    <p className="m-0 text-headline">{i.text}</p>
+                    {i.need && <p className="mt-xs m-0 text-subhead text-ink-soft">{i.need}</p>}
                   </li>
                 ))}
               </ul>

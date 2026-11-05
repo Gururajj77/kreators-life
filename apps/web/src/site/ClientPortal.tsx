@@ -91,17 +91,17 @@ function Card({ children, id }: { children: React.ReactNode; id?: string }) {
 function Heading({ id, title, lede }: { id: string; title: string; lede?: string }) {
   return (
     <>
-      <h2 id={id} className="text-[24px]">
+      <h2 id={id} className="text-title2">
         {title}
       </h2>
-      {lede && <p className="mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">{lede}</p>}
+      {lede && <p className="mt-xs m-0 text-balance text-subhead text-ink-soft">{lede}</p>}
     </>
   );
 }
 
 
 /** An outline-button look for a real link (a link is an `<a>`, never a button inside one), 44px tall like every target. */
-const linkButton = 'toy toy-ink inline-flex min-h-[44px] items-center justify-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-sm text-[14px] font-semibold leading-none text-ink hover:border-ink';
+const linkButton = 'toy toy-ink inline-flex min-h-[44px] items-center justify-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-sm text-subhead leading-none text-ink hover:border-ink';
 
 /**
  * What a client can do with one piece. A piece waiting on them (`waiting`) has one main action, Approve, with "Ask for a change"
@@ -163,8 +163,8 @@ function PieceActions({ doors, id, stage, changes, waiting = false, onDone }: { 
   if (!(waiting && can.canApprove) && !canChange && !can.canComment) return null;
   return (
     <div className="mt-sm no-print">
-      {canChange && (waiting || mode === 'change' || mode === 'paid') && <p className="m-0 text-[14px] font-bold text-ink-soft">{left > 0 ? changesLabel(changes.used, changes.allowed) : doors.paidChange ? COPY.noneLeft : (doors.noneLeft ?? COPY.noneLeft)}</p>}
-      <div className="mt-xs flex flex-wrap items-center gap-xs">
+      {canChange && (waiting || mode === 'change' || mode === 'paid') && <p className="m-0 text-subhead font-semibold text-ink-soft">{left > 0 ? changesLabel(changes.used, changes.allowed) : doors.paidChange ? COPY.noneLeft : (doors.noneLeft ?? COPY.noneLeft)}</p>}
+      <div className="fill-row mt-xs flex flex-wrap items-center gap-xs">
         {waiting && can.canApprove && stage === 'review' && (
           <Button size="sm" onClick={() => send('approve')} disabled={busy}>
             Approve
@@ -193,13 +193,13 @@ function PieceActions({ doors, id, stage, changes, waiting = false, onDone }: { 
         <div className="mt-sm">
           {(mode === 'change' || mode === 'paid') && (
             <>
-              <label className="mt-xs block text-[14px] font-bold" htmlFor={`where-${id}`}>
+              <label className="mt-xs block text-subhead font-semibold" htmlFor={`where-${id}`}>
                 Where, if it helps (a time in the video, a line, a slide)
               </label>
               <input id={`where-${id}`} value={where} onChange={(e) => setWhere(e.target.value)} maxLength={60} placeholder="0:42" className={FIELD} />
             </>
           )}
-          <label className="mt-xs block text-[14px] font-bold" htmlFor={`note-${id}`}>
+          <label className="mt-xs block text-subhead font-semibold" htmlFor={`note-${id}`}>
             {mode === 'comment' ? 'Your comment' : 'What should change?'}
           </label>
           <textarea id={`note-${id}`} value={note} onChange={(e) => setNote(e.target.value)} rows={3} maxLength={500} className={FIELD} />
@@ -211,12 +211,12 @@ function PieceActions({ doors, id, stage, changes, waiting = false, onDone }: { 
         </div>
       )}
       {sentLine && (
-        <p role="status" className="mt-xs m-0 text-[14px] font-bold">
+        <p role="status" className="mt-xs m-0 text-subhead">
           {sentLine}
         </p>
       )}
       {error && (
-        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-xs m-0 text-subhead">
           {error}
         </p>
       )}
@@ -265,7 +265,7 @@ function ActionLink({ href, className, children }: { href: string; className: st
   );
 }
 
-const primaryLink = 'toy inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill bg-ink px-md text-[16px] font-semibold text-on-ink';
+const primaryLink = 'toy inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill bg-ink px-md text-callout text-on-ink';
 
 /**
  * "Your next step": the one thing to do now as the one solid button, with the other to-dos quieter under it. With nothing waiting it
@@ -283,15 +283,15 @@ function NextStep({ view, todo }: { view: PortalView; todo: PortalView['waitingO
   const rest = sorted.filter((w) => w !== first);
   return (
     <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="next-heading" data-next-step>
-      <h2 id="next-heading" className="text-[24px]">
+      <h2 id="next-heading" className="text-title2">
         Your next step
       </h2>
       {first ? (
         <>
-          <p className="mt-xs m-0 text-[18px] font-extrabold">
+          <p className="mt-xs m-0 text-headline">
             <Inert text={first.title} />
           </p>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{first.line}</p>
+          <p className="mt-xs m-0 text-subhead text-ink-soft">{first.line}</p>
           {first.href && (
             <div className="mt-sm no-print">
               <ActionLink href={first.href} className={primaryLink}>
@@ -302,21 +302,23 @@ function NextStep({ view, todo }: { view: PortalView; todo: PortalView['waitingO
         </>
       ) : (
         <>
-          <p className="mt-xs m-0 text-[18px] font-extrabold">{COPY.nothingWaiting}</p>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{fill(words.next, view.agencyName)}</p>
+          <p className="mt-xs m-0 text-headline">{COPY.nothingWaiting}</p>
+          <p className="mt-xs m-0 text-subhead text-ink-soft">{fill(words.next, view.agencyName)}</p>
         </>
       )}
       {rest.length > 0 && (
         <>
-          <h3 className="mt-md text-[16px]">Also waiting on you</h3>
+          <h3 className="mt-md text-headline">Also waiting on you</h3>
           <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
             {rest.map((w) => (
-              <li key={w.key} className="flex flex-wrap items-center gap-sm rounded-inner bg-paper p-sm">
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[16px] font-bold">
+              // The words keep at least 60% of the row; when the button does not fit beside them it drops to the bottom right
+              // (it used to squeeze "One piece to review" into a narrow column on a phone).
+              <li key={w.key} className="flex flex-wrap items-center justify-end gap-sm rounded-inner bg-paper p-sm">
+                <span className="min-w-[60%] flex-1">
+                  <span className="block text-headline">
                     <Inert text={w.title} />
                   </span>
-                  <span className="block text-[14px] font-semibold text-ink-soft">{w.line}</span>
+                  <span className="block text-subhead text-ink-soft">{w.line}</span>
                 </span>
                 {w.href && (
                   <span className="no-print shrink-0">
@@ -347,8 +349,8 @@ function StageWords({ view }: { view: PortalView }) {
     <dl className="mt-sm grid gap-xs m-0 sm:grid-cols-3">
       {rows.map(([k, v]) => (
         <div key={k} className="rounded-tile bg-card p-sm shadow-toy-soft">
-          <dt className="text-[12px] font-extrabold text-ink-soft">{k}</dt>
-          <dd className="m-0 text-[14px] font-semibold">{v}</dd>
+          <dt className="text-caption font-semibold text-ink-soft">{k}</dt>
+          <dd className="m-0 text-subhead">{v}</dd>
         </div>
       ))}
     </dl>
@@ -385,10 +387,10 @@ function Retainer({ token, view, onDone }: { token: string; view: PortalView; on
   const lengthWord = (n: number) => `${n} ${n === 1 ? 'month' : 'months'}`;
   const details = (o: PortalRetainer['options'][number]) => (
     <>
-      <span className="block font-display text-[22px] font-extrabold leading-tight">{lengthWord(o.months)}</span>
-      <span className="mt-xs block text-[16px] font-bold">{`${money(o.monthlyCents, r.currency)} a month`}</span>
-      <span className="block text-[14px] font-semibold text-ink-soft">{o.discountBps > 0 ? `${pct(o.discountBps)} off the monthly fee` : 'No discount'}</span>
-      <span className="block text-[14px] font-semibold text-ink-soft">{`${money(o.totalCents, r.currency)} in all`}</span>
+      <span className="block text-title2">{lengthWord(o.months)}</span>
+      <span className="mt-xs block text-headline">{`${money(o.monthlyCents, r.currency)} a month`}</span>
+      <span className="block text-subhead text-ink-soft">{o.discountBps > 0 ? `${pct(o.discountBps)} off the monthly fee` : 'No discount'}</span>
+      <span className="block text-subhead text-ink-soft">{`${money(o.totalCents, r.currency)} in all`}</span>
     </>
   );
   return (
@@ -408,7 +410,7 @@ function Retainer({ token, view, onDone }: { token: string; view: PortalView; on
                 <label key={o.months} className={`toy block cursor-pointer rounded-tile border-2 p-sm has-[input:focus-visible]:outline-[3px] has-[input:focus-visible]:outline-offset-2 has-[input:focus-visible]:outline-ink ${picked ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
                   <input type="radio" name="retainer-length" value={o.months} checked={picked} onChange={() => setMonths(o.months)} className="sr-only" />
                   {details(o)}
-                  <span className={`mt-xs block text-[12px] font-extrabold ${picked ? '' : 'invisible'}`} aria-hidden={!picked}>
+                  <span className={`mt-xs block text-caption font-semibold ${picked ? '' : 'invisible'}`} aria-hidden={!picked}>
                     Your pick
                   </span>
                 </label>
@@ -428,10 +430,10 @@ function Retainer({ token, view, onDone }: { token: string; view: PortalView; on
         </fieldset>
       ) : (
         <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft" role={r.status === 'chosen' ? 'status' : undefined}>
-          {chosen ? details(chosen) : <span className="block text-[16px] font-bold">{r.chosenMonths ? lengthWord(r.chosenMonths) : ''}</span>}
+          {chosen ? details(chosen) : <span className="block text-headline">{r.chosenMonths ? lengthWord(r.chosenMonths) : ''}</span>}
           {r.status === 'chosen' && (
             <>
-              <p className="mt-sm m-0 text-[16px] font-bold">{`You chose ${r.chosenMonths ? lengthWord(r.chosenMonths) : 'a length'}. ${agency} will confirm it.`}</p>
+              <p className="mt-sm m-0 text-headline">{`You chose ${r.chosenMonths ? lengthWord(r.chosenMonths) : 'a length'}. ${agency} will confirm it.`}</p>
               {r.options.length > 1 && (
                 <div className="mt-sm no-print">
                   <Button variant="outline" size="sm" onClick={() => { setMonths(r.chosenMonths); setChanging(true); }}>
@@ -443,12 +445,12 @@ function Retainer({ token, view, onDone }: { token: string; view: PortalView; on
           )}
         </div>
       )}
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+      <p className="mt-xs m-0 text-subhead text-ink-soft">
         {`${r.piecesPerMonth} ${r.piecesPerMonth === 1 ? 'piece' : 'pieces'} a month, and ${r.revisionsPerPiece} ${r.revisionsPerPiece === 1 ? 'change' : 'changes'} included in each.`}
         {r.status === 'active' && r.startDay ? ` Started ${dot(r.startDay)}.` : ''}
       </p>
       {error && (
-        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-xs m-0 text-subhead">
           {error}
         </p>
       )}
@@ -473,7 +475,7 @@ function PieceSections({ view: v, doors, nothingWaiting, onDone, team = false }:
         <section className="mt-lg" aria-labelledby="waiting-heading">
           <Heading id="waiting-heading" title="Pieces to review" lede={v.waiting.length > 0 ? (doors.can.canApprove ? COPY.waitingLede : COPY.waitingViewOnly) : undefined} />
           {v.waiting.length === 0 ? (
-            <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">
+            <p className="mt-sm m-0 text-subhead text-ink-soft">
               {nothingWaiting}
             </p>
           ) : (
@@ -483,12 +485,12 @@ function PieceSections({ view: v, doors, nothingWaiting, onDone, team = false }:
                 return (
                   <Card key={w.id}>
                     <div className="flex items-start justify-between gap-sm">
-                      <p className="m-0 min-w-0 text-[16px] font-extrabold">
+                      <p className="m-0 min-w-0 text-headline">
                         <Inert text={w.title} />
                       </p>
                       <StatusTag tone={DELIVERABLE_STAGE_TONE.review}>{DELIVERABLE_STAGE_META.review.name}</StatusTag>
                     </div>
-                    <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{meta}</p>
+                    <p className="mt-xs m-0 text-subhead text-ink-soft">{meta}</p>
                     {safe(w.link) && (
                       <p className="mt-sm m-0 no-print">
                         <a href={w.link} target="_blank" rel="noopener noreferrer" className={linkButton}>
@@ -499,8 +501,8 @@ function PieceSections({ view: v, doors, nothingWaiting, onDone, team = false }:
                     {w.thread.length > 0 && (
                       <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0" aria-label="Notes">
                         {w.thread.map((t, i) => (
-                          <li key={`${t.createdAt}-${i}`} className={`rounded-tile p-sm text-[14px] font-semibold ${t.author === 'client' ? 'bg-paper' : 'bg-card-strong'}`}>
-                            <span className="block text-[12px] font-extrabold text-ink-soft">{`${t.author === 'client' ? (t.team ? 'Your team' : team ? v.clientName : 'You') : v.agencyName}${t.kind === 'change' || t.kind === 'paid_change' ? `, ${NOTE_KIND_NAME[t.kind].toLowerCase()}` : ''}`}</span>
+                          <li key={`${t.createdAt}-${i}`} className={`rounded-tile p-sm text-subhead ${t.author === 'client' ? 'bg-paper' : 'bg-card-strong'}`}>
+                            <span className="block text-caption font-semibold text-ink-soft">{`${t.author === 'client' ? (t.team ? 'Your team' : team ? v.clientName : 'You') : v.agencyName}${t.kind === 'change' || t.kind === 'paid_change' ? `, ${NOTE_KIND_NAME[t.kind].toLowerCase()}` : ''}`}</span>
                             <span className="whitespace-pre-wrap">
                               <Inert text={t.body} />
                             </span>
@@ -521,8 +523,8 @@ function PieceSections({ view: v, doors, nothingWaiting, onDone, team = false }:
         <section className="mt-lg" aria-labelledby="month-heading">
           <Heading id="month-heading" title="This month so far" />
           <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
-            <p className="m-0 font-display text-[28px] font-extrabold leading-none">{v.month.planned > 0 ? `${v.month.published} of ${v.month.planned}` : String(v.month.published)}</p>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{v.month.planned > 0 ? 'deliverables live against the plan' : 'deliverables live'}</p>
+            <p className="m-0 text-title1 type-figure leading-none">{v.month.planned > 0 ? `${v.month.published} of ${v.month.planned}` : String(v.month.published)}</p>
+            <p className="mt-xs m-0 text-subhead text-ink-soft">{v.month.planned > 0 ? 'deliverables live against the plan' : 'deliverables live'}</p>
             {v.month.planned > 0 && (
               <div className="mt-sm h-[8px] overflow-hidden rounded-pill bg-line" role="img" aria-label={`${v.month.published} of ${v.month.planned} live`}>
                 <div className="h-full rounded-pill" style={{ width: `${Math.min(100, Math.round((v.month.published / v.month.planned) * 100))}%`, background: 'var(--color-r4)' }} />
@@ -536,17 +538,17 @@ function PieceSections({ view: v, doors, nothingWaiting, onDone, team = false }:
         <section className="mt-lg" aria-labelledby="coming-heading">
           <Heading id="coming-heading" title="Coming up" lede={COPY.comingLede} />
           {v.coming.length === 0 ? (
-            <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing is being made right now. New pieces show up here once work on them starts.</p>
+            <p className="mt-sm m-0 text-subhead text-ink-soft">Nothing is being made right now. New pieces show up here once work on them starts.</p>
           ) : (
             <ul className="mt-sm flex flex-col gap-xs p-0 m-0">
               {v.coming.map((c) => (
                 <Card key={c.id}>
                   <div className="flex items-start justify-between gap-sm">
                     <div className="min-w-0">
-                      <p className="m-0 text-[16px] font-bold">
+                      <p className="m-0 text-headline">
                         <Inert text={c.title} />
                       </p>
-                      <p className="m-0 text-[14px] font-semibold text-ink-soft">{[DELIVERABLE_KIND_NAME[c.kind], c.platform, c.publishDate ? `goes live ${dot(c.publishDate)}` : ''].filter(Boolean).join(', ')}</p>
+                      <p className="m-0 text-subhead text-ink-soft">{[DELIVERABLE_KIND_NAME[c.kind], c.platform, c.publishDate ? `goes live ${dot(c.publishDate)}` : ''].filter(Boolean).join(', ')}</p>
                     </div>
                     <StatusTag tone={DELIVERABLE_STAGE_TONE[c.stage]}>{DELIVERABLE_STAGE_META[c.stage].name}</StatusTag>
                   </div>
@@ -562,15 +564,15 @@ function PieceSections({ view: v, doors, nothingWaiting, onDone, team = false }:
         <section className="mt-lg" aria-labelledby="published-heading">
           <Heading id="published-heading" title="Published" lede={COPY.publishedLede} />
           {v.published.length === 0 ? (
-            <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing has gone live yet. Each piece shows up here on the day it goes live.</p>
+            <p className="mt-sm m-0 text-subhead text-ink-soft">Nothing has gone live yet. Each piece shows up here on the day it goes live.</p>
           ) : (
             <ul className="mt-sm flex flex-col gap-xs p-0 m-0">
               {v.published.map((p) => (
                 <Card key={p.id}>
-                  <p className="m-0 text-[16px] font-bold">
+                  <p className="m-0 text-headline">
                     <Inert text={p.title} />
                   </p>
-                  <p className="m-0 text-[14px] font-semibold text-ink-soft">{[DELIVERABLE_KIND_NAME[p.kind], p.platform, p.publishedAt ? dot(p.publishedAt) : ''].filter(Boolean).join(', ')}</p>
+                  <p className="m-0 text-subhead text-ink-soft">{[DELIVERABLE_KIND_NAME[p.kind], p.platform, p.publishedAt ? dot(p.publishedAt) : ''].filter(Boolean).join(', ')}</p>
                   {safe(p.link) && (
                     <p className="mt-sm m-0 no-print">
                       <a href={p.link} target="_blank" rel="noopener noreferrer" className={linkButton}>
@@ -593,8 +595,8 @@ function PieceSections({ view: v, doors, nothingWaiting, onDone, team = false }:
             {v.channels.map((ch) => (
               <Card key={ch.channel}>
                 <div className="flex items-baseline justify-between gap-sm">
-                  <span className="min-w-0 text-[16px] font-bold">{ch.channel}</span>
-                  <span className="shrink-0 text-[14px] font-bold text-ink-soft">{`${ch.published} live this month, ${ch.open} open`}</span>
+                  <span className="min-w-0 text-headline">{ch.channel}</span>
+                  <span className="shrink-0 text-subhead font-semibold text-ink-soft">{`${ch.published} live this month, ${ch.open} open`}</span>
                 </div>
               </Card>
             ))}
@@ -683,8 +685,8 @@ export function ClientPortal() {
           <>
             <header>
               <AgencyMark name={v.agencyName} logo={v.agencyLogo} />
-              <h1 className="mt-md text-[30px]">{`Hello, ${v.clientName}`}</h1>
-              <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">A short form first. Then your page opens.</p>
+              <h1 className="mt-md text-large-title">{`Hello, ${v.clientName}`}</h1>
+              <p className="mt-xs m-0 text-callout text-ink-soft">A short form first. Then your page opens.</p>
             </header>
             <ClientOnboarding token={token} agencyName={v.agencyName} clientName={v.clientName} onDone={() => void qc.invalidateQueries({ queryKey: ['agency', 'portal', token] })} />
             <PasswordAsk kind="agency" token={token} agencyName={v.agencyName} />
@@ -695,10 +697,10 @@ export function ClientPortal() {
             <header>
               <AgencyMark name={v.agencyName} logo={v.agencyLogo} />
               <h1 className="mt-md text-[30px]">{`Hello, ${v.clientName}`}</h1>
-              <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">Where your work stands, and what to do next.</p>
+              <p className="mt-xs m-0 text-callout text-ink-soft">Where your work stands, and what to do next.</p>
             </header>
             {said && (
-              <p role="status" className="mt-md m-0 rounded-tile p-sm text-[14px] font-bold" style={{ background: 'var(--tint-green)' }}>
+              <p role="status" className="mt-md m-0 rounded-tile p-sm text-subhead font-semibold" style={{ background: 'var(--tint-green)' }}>
                 {said}
               </p>
             )}
@@ -726,7 +728,7 @@ export function ClientPortal() {
                       </a>
                     </p>
                   )}
-                  <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Bring your brand guide and three to five videos that show the feel you want.</p>
+                  <p className="mt-xs m-0 text-subhead text-ink-soft">Bring your brand guide and three to five videos that show the feel you want.</p>
                 </div>
               </section>
             )}
@@ -737,8 +739,8 @@ export function ClientPortal() {
                 <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                   {v.trial.rules.map((r) => (
                     <Card key={r.key}>
-                      <p className="m-0 text-[14px] font-semibold">{r.text}</p>
-                      <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{r.source}</p>
+                      <p className="m-0 text-subhead font-semibold">{r.text}</p>
+                      <p className="mt-xs m-0 text-caption text-ink-soft">{r.source}</p>
                     </Card>
                   ))}
                 </ul>
@@ -749,7 +751,7 @@ export function ClientPortal() {
               <section className="mt-lg" aria-labelledby="pilot-heading">
                 <Heading id="pilot-heading" title="Pilot month" />
                 <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
-                  <p className="m-0 text-[16px] font-bold">{[v.pilot.start ? `Starts ${dot(v.pilot.start)}` : '', v.pilot.end ? `ends ${dot(v.pilot.end)}` : ''].filter(Boolean).join(', ')}</p>
+                  <p className="m-0 text-headline">{[v.pilot.start ? `Starts ${dot(v.pilot.start)}` : '', v.pilot.end ? `ends ${dot(v.pilot.end)}` : ''].filter(Boolean).join(', ')}</p>
                 </div>
               </section>
             )}
@@ -768,7 +770,7 @@ export function ClientPortal() {
                 <Heading id="hours-heading" title="Hours" />
                 <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
                   <p className="m-0 font-display text-[28px] font-extrabold leading-none">{minutesLabel2(v.hours.usedMinutes)}</p>
-                  <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{v.hours.includedMinutes > 0 ? `worked this month, of ${minutesLabel2(v.hours.includedMinutes)} included` : 'worked this month'}</p>
+                  <p className="mt-xs m-0 text-subhead text-ink-soft">{v.hours.includedMinutes > 0 ? `worked this month, of ${minutesLabel2(v.hours.includedMinutes)} included` : 'worked this month'}</p>
                   {v.hours.includedMinutes > 0 && (
                     <div className="mt-sm h-[8px] overflow-hidden rounded-pill bg-line" role="img" aria-label={`${minutesLabel2(v.hours.usedMinutes)} of ${minutesLabel2(v.hours.includedMinutes)}`}>
                       <div className="h-full rounded-pill" style={{ width: `${Math.min(100, Math.round((v.hours.usedMinutes / v.hours.includedMinutes) * 100))}%`, background: 'var(--color-r5)' }} />
@@ -782,7 +784,7 @@ export function ClientPortal() {
               <section className="mt-lg" aria-labelledby="docs-heading">
                 <Heading id="docs-heading" title="Your documents" />
                 {docs.length === 0 ? (
-                  <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{COPY.docsEmpty}</p>
+                  <p className="mt-sm m-0 text-subhead text-ink-soft">{COPY.docsEmpty}</p>
                 ) : (
                   <ul className="mt-sm flex flex-col gap-xs p-0 m-0">
                     {docs.map((d) => (
@@ -790,10 +792,10 @@ export function ClientPortal() {
                         <div className="flex flex-wrap items-center justify-between gap-sm">
                           <Link to={d.href} className="flex min-h-[44px] min-w-0 flex-[1_1_220px] items-center gap-xs text-ink">
                             <span className="min-w-0">
-                              <span className="block text-[16px] font-bold">
+                              <span className="block text-headline">
                                 <Inert text={d.title} />
                               </span>
-                              {d.line !== d.title && <span className="block text-[14px] font-semibold text-ink-soft">{d.line}</span>}
+                              {d.line !== d.title && <span className="block text-subhead text-ink-soft">{d.line}</span>}
                             </span>
                           </Link>
                           <span className="flex shrink-0 items-center gap-xs">
@@ -891,12 +893,12 @@ export function TeamPortal() {
             <header>
               <AgencyMark name={v.agencyName} logo={v.agencyLogo} />
               <h1 className="mt-md text-[30px]">{`Hello, ${v.clientName} team`}</h1>
-              <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">Where the work stands.</p>
-              <p className="mt-sm m-0 rounded-tile bg-paper p-sm text-[14px] font-bold">Team view: paperwork and payments are not shown here.</p>
-              {v.show.canApprove && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{`What you approve or send back is recorded as from ${v.clientName}'s team.`}</p>}
+              <p className="mt-xs m-0 text-callout text-ink-soft">Where the work stands.</p>
+              <p className="mt-sm m-0 rounded-tile bg-paper p-sm text-subhead">Team view: paperwork and payments are not shown here.</p>
+              {v.show.canApprove && <p className="mt-xs m-0 text-subhead text-ink-soft">{`What you approve or send back is recorded as from ${v.clientName}'s team.`}</p>}
             </header>
             {said && (
-              <p role="status" className="mt-md m-0 rounded-tile p-sm text-[14px] font-bold" style={{ background: 'var(--tint-green)' }}>
+              <p role="status" className="mt-md m-0 rounded-tile p-sm text-subhead font-semibold" style={{ background: 'var(--tint-green)' }}>
                 {said}
               </p>
             )}
@@ -909,7 +911,7 @@ export function TeamPortal() {
                 onDone={done}
               />
             ) : (
-              <p className="mt-lg m-0 text-[16px] font-semibold text-ink-soft">Nothing is shared on this link yet.</p>
+              <p className="mt-lg m-0 text-callout text-ink-soft">Nothing is shared on this link yet.</p>
             )}
             <div className="mt-xl no-print flex flex-wrap items-center gap-sm">
               <Button variant="outline" size="sm" onClick={() => printAs(fileTitle('Team view', v.clientName))}>

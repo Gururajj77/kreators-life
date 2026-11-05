@@ -11,10 +11,10 @@ export function QuoteOfTheDay({ date }: { date: string }) {
     <aside className="span-all relative mt-md" aria-label="Line of the day">
       <span className="tip-card absolute -top-[6px] left-lg block size-[12px] rotate-45 border-t border-l border-line" aria-hidden="true" />
       <figure className="tip-card relative m-0 rounded-tile border border-line p-sm shadow-toy-soft">
-        <figcaption className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">Line of the day</figcaption>
+        <figcaption className="m-0 text-eyebrow uppercase text-ink-soft">Line of the day</figcaption>
         <blockquote className="m-0 mt-xs">
-          <p className="m-0 text-balance text-[16px] font-semibold leading-snug">“{line.text}”</p>
-          {line.by && <footer className="mt-xs text-[14px] font-bold text-ink-soft">{line.by}</footer>}
+          <p className="m-0 text-balance text-callout">“{line.text}”</p>
+          {line.by && <footer className="mt-xs text-subhead text-ink-soft">{line.by}</footer>}
         </blockquote>
       </figure>
     </aside>

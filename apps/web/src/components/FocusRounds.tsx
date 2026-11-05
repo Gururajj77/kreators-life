@@ -167,10 +167,10 @@ function TaskPicker({ value, onPick, enabled, hint = 'The task is saved with eac
         type="button"
         aria-pressed={value === id}
         onClick={() => onPick(id, id ? title : null)}
-        className={`toy flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile border-2 px-sm py-xs text-left text-[16px] font-bold ${value === id ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+        className={`toy flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile border-2 px-sm py-xs text-left text-headline ${value === id ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
       >
         <span className="min-w-0 truncate">{title}</span>
-        {sub && <span className="shrink-0 text-[12px] font-semibold opacity-80">{sub}</span>}
+        {sub && <span className="shrink-0 text-caption opacity-80">{sub}</span>}
       </button>
     </li>
   );
@@ -182,20 +182,20 @@ function TaskPicker({ value, onPick, enabled, hint = 'The task is saved with eac
       </ul>
       {(recent.data?.tasks.length ?? 0) > 0 && (
         <>
-          <p className="mt-sm m-0 text-[14px] font-extrabold">Recent</p>
+          <p className="mt-sm m-0 text-subhead font-semibold">Recent</p>
           <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0" aria-label="Tasks you focused on lately">
             {recent.data!.tasks.map((t) => row(t.id, t.title, sub(t)))}
           </ul>
         </>
       )}
       <label className="mt-sm block">
-        <span className="block text-[14px] font-bold">Find a task</span>
+        <span className="block text-subhead font-semibold">Find a task</span>
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} className={FIELD} placeholder="Type part of its name" aria-describedby="focus-find-hint" />
       </label>
       <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0" aria-label={dq ? `Tasks matching ${dq}` : 'Your next open tasks'}>
         {results.map((t) => row(t.id, t.title, sub(t)))}
       </ul>
-      <p id="focus-find-hint" className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">
+      <p id="focus-find-hint" className="mt-xs m-0 text-caption text-ink-soft">
         {found.data && results.length === 0 ? (dq ? 'No open task by that name.' : 'No open tasks yet. Add one in Pillars and it shows up here.') : hint}
       </p>
     </div>
@@ -263,11 +263,11 @@ function SessionEditor({ edit, onClose, enabled, owner, logFocus }: { edit: Focu
           </button>
         </div>
       )}
-      <p className="mt-sm m-0 text-[14px] font-bold">
+      <p className="mt-sm m-0 text-subhead font-semibold">
         Length: {minutes} {minutes === 1 ? 'minute' : 'minutes'}
       </p>
       <RulerPicker label="Session length" min={1} max={max} step={1} labelEvery={30} majorStep={5} value={minutes} onChange={setMinutes} valueText={(v) => `${v} ${v === 1 ? 'minute' : 'minutes'}`} format={(v) => String(v)} />
-      <p className="mt-sm m-0 text-[14px] font-bold">Task: {title ?? 'No task'}</p>
+      <p className="mt-sm m-0 text-subhead font-semibold">Task: {title ?? 'No task'}</p>
       <div className="mt-xs">
         <TaskPicker
           value={nodeId}
@@ -279,9 +279,9 @@ function SessionEditor({ edit, onClose, enabled, owner, logFocus }: { edit: Focu
           }}
         />
       </div>
-      {!fresh && edit.mindful && <p className="mt-sm m-0 text-[12px] font-semibold text-ink-soft">It also counted as mindful minutes. Those change with it.</p>}
+      {!fresh && edit.mindful && <p className="mt-sm m-0 text-caption text-ink-soft">It also counted as mindful minutes. Those change with it.</p>}
       {error && (
-        <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-sm m-0 text-subhead">
           {error}
         </p>
       )}
@@ -1105,10 +1105,10 @@ export function FocusRounds({
           bottom of that line. On a narrow phone they wrap under it, at the right. */}
       <div className="flex flex-wrap items-end justify-between gap-sm">
         <div className="min-w-0 flex-[1_1_220px]">
-          <h2 id="focus-heading" className="text-[24px]">
+          <h2 id="focus-heading" className="text-title2">
             Breathe and focus
           </h2>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+          <p className="mt-xs m-0 text-subhead text-ink-soft">
             Breathe with the circle, or work in sessions with breaks. Today: {plural(todayRounds.length, 'session')}, {todayMinutes} min of focus.
           </p>
         </div>
@@ -1354,7 +1354,7 @@ export function FocusRounds({
             <div className="mf-rate" role="group" aria-label="How focused you were">
               {rate.mode === 'rated' ? (
                 <div className="flex items-center justify-between gap-sm">
-                  <p className="m-0 text-[14px] font-bold" role="status">
+                  <p className="m-0 text-subhead font-semibold" role="status">
                     Rated {focusQualityName(rate.value)}
                   </p>
                   <button type="button" className="mf-mini toy min-w-[44px]" onClick={() => setRate({ ...rate, mode: 'ask' })}>
@@ -1363,7 +1363,7 @@ export function FocusRounds({
                 </div>
               ) : (
                 <>
-                  <p className="m-0 text-[14px] font-extrabold">How focused were you?</p>
+                  <p className="m-0 text-subhead font-semibold">How focused were you?</p>
                   <div className="mt-xs flex flex-wrap gap-xs">
                     {FOCUS_QUALITY.map((q) => (
                       <button key={q.value} type="button" disabled={!rate.id} onClick={() => rateIt(q.value)} aria-pressed={rate.value === q.value} className="mf-mini toy min-w-[44px]">
@@ -1375,7 +1375,7 @@ export function FocusRounds({
                     </button>
                   </div>
                   {rate.failed && (
-                    <p role="alert" className="mt-xs m-0 text-[12px] font-bold">
+                    <p role="alert" className="mt-xs m-0 text-caption">
                       That did not save. Try again.
                     </p>
                   )}
@@ -1391,10 +1391,10 @@ export function FocusRounds({
       <div className="mt-md" hidden={covering} role="group" aria-labelledby="focus-today-heading">
         <div className="flex flex-wrap items-end justify-between gap-sm">
           <div className="min-w-0 flex-[1_1_220px]">
-            <h3 id="focus-today-heading" className="text-[18px]">
+            <h3 id="focus-today-heading" className="text-headline">
               Today
             </h3>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft" data-focus-goal={goal ?? undefined}>
+            <p className="mt-xs m-0 text-subhead text-ink-soft" data-focus-goal={goal ?? undefined}>
               {goal ? `${todayMinutes} of ${goal} minutes today${todayMinutes >= goal ? '. Goal met.' : '.'}` : `${plural(todayRounds.length, 'session')}, ${todayMinutes} min of focus.`}
             </p>
           </div>
@@ -1403,11 +1403,11 @@ export function FocusRounds({
           </Button>
         </div>
         {today.isError && (
-          <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+          <p role="alert" className="mt-sm m-0 text-subhead">
             Could not load today's sessions. Try again in a moment.
           </p>
         )}
-        {today.data && todayRounds.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No sessions yet today. A finished one shows up here.</p>}
+        {today.data && todayRounds.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">No sessions yet today. A finished one shows up here.</p>}
         {todayRounds.length > 0 && (
           <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0" aria-label="Today's sessions">
             {todayRounds.map((r) => (
@@ -1419,10 +1419,10 @@ export function FocusRounds({
                   aria-label={`${clockTime(r.createdAt)}, ${r.minutes} minutes, ${r.title || 'no task'}${r.quality ? `, ${focusQualityName(r.quality)}` : ''}. Change or delete it.`}
                   className="toy toy-soft flex min-h-[44px] min-w-0 flex-1 items-center gap-sm rounded-tile bg-card px-sm py-xs text-left shadow-toy-soft"
                 >
-                  <span className="min-w-[64px] shrink-0 text-[14px] font-extrabold tabular-nums">{clockTime(r.createdAt)}</span>
+                  <span className="min-w-[64px] shrink-0 text-subhead font-semibold tabular-nums">{clockTime(r.createdAt)}</span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[16px] font-bold">{r.title || 'No task'}</span>
-                    <span className="block text-[12px] font-semibold text-ink-soft">
+                    <span className="block truncate text-headline">{r.title || 'No task'}</span>
+                    <span className="block text-caption text-ink-soft">
                       {r.minutes} min{r.mode ? `, ${MODE_NAME[r.mode]}` : ''}
                       {r.quality ? `, ${focusQualityName(r.quality)}` : ''}
                     </span>
@@ -1443,7 +1443,7 @@ export function FocusRounds({
       </p>
 
       <Sheet open={stopAsk !== null} onClose={() => setStopAsk(null)} title="Stop here?">
-        <p className="m-0 text-[16px] font-semibold">
+        <p className="m-0 text-callout">
           {stopAsk ? `You focused for ${plural(stopAsk.minutes, 'minute')}. Keep it, or throw it away?` : ''}
         </p>
         <div className="mt-md grid grid-cols-2 gap-xs">
@@ -1454,11 +1454,11 @@ export function FocusRounds({
             Throw it away
           </Button>
         </div>
-        <p className="mt-sm m-0 text-[12px] font-semibold text-ink-soft">Close this to carry on. The clock waits, paused.</p>
+        <p className="mt-sm m-0 text-caption text-ink-soft">Close this to carry on. The clock waits, paused.</p>
       </Sheet>
 
       <Sheet open={stopwatch.away !== null} onClose={stopwatch.keepAll} title="You were away a while">
-        <p className="m-0 text-[16px] font-semibold">The stopwatch kept running while this tab was out of sight. How much counts?</p>
+        <p className="m-0 text-callout">The stopwatch kept running while this tab was out of sight. How much counts?</p>
         <div className="mt-md grid grid-cols-1 gap-xs sm:grid-cols-2">
           <Button variant="outline" onClick={stopwatch.keepAll}>
             Keep all {spanShort(stopwatch.away?.allMs ?? 0)}
@@ -1470,7 +1470,7 @@ export function FocusRounds({
       </Sheet>
 
       <Sheet open={sheet === 'keys'} onClose={() => setSheet(null)} title="Keyboard shortcuts">
-        <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-md gap-y-xs text-[16px]">
+        <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-md gap-y-xs text-callout">
           {[
             ['Space', 'Start or pause'],
             ['S', 'Stop'],
@@ -1478,12 +1478,12 @@ export function FocusRounds({
             ['?', 'Show this list'],
           ].map(([k, what]) => (
             <div key={k} className="contents">
-              <dt className="font-mono font-bold">{k}</dt>
-              <dd className="m-0 font-semibold">{what}</dd>
+              <dt className="font-mono font-semibold">{k}</dt>
+              <dd className="m-0">{what}</dd>
             </div>
           ))}
         </dl>
-        <p className="mt-sm m-0 text-[12px] font-semibold text-ink-soft">They work on this page, and never while you type in a box.</p>
+        <p className="mt-sm m-0 text-caption text-ink-soft">They work on this page, and never while you type in a box.</p>
         <Button className="mt-md" full onClick={() => setSheet(null)}>
           Done
         </Button>
@@ -1494,7 +1494,7 @@ export function FocusRounds({
       </Sheet>
 
       <Sheet open={sheet === 'task'} onClose={() => setSheet(null)} title="Focus on a task">
-        <p className="m-0 text-[14px] font-bold">Working on: {picked?.title ?? 'No task'}</p>
+        <p className="m-0 text-subhead font-semibold">Working on: {picked?.title ?? 'No task'}</p>
         <div className="mt-xs">
           <TaskPicker
             value={taskId}
@@ -1518,7 +1518,7 @@ export function FocusRounds({
       </Sheet>
 
       <Sheet open={sheet === 'settings'} onClose={() => setSheet(null)} title="Timer settings">
-        <p className="m-0 text-[14px] font-extrabold">Your plan</p>
+        <p className="m-0 text-subhead font-semibold">Your plan</p>
         <TabRow
           className="mt-xs"
           label="Plans to start from"
@@ -1528,9 +1528,9 @@ export function FocusRounds({
             const p = FOCUS_PRESETS.find((x) => x.name === name);
             if (p) save({ ...settings, ...p });
           }}
-          pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+          pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-sm text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
         />
-        <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{planLine(settings)}</p>
+        <p className="mt-xs m-0 text-caption text-ink-soft">{planLine(settings)}</p>
         <div className="mt-sm flex flex-col gap-xs text-left">
           <Toggle compact on={settings.logFocus} onChange={(v) => save({ ...settings, logFocus: v })} label="Count finished focus sessions as mindful minutes" />
           <Toggle compact on={settings.logBreaks} onChange={(v) => save({ ...settings, logBreaks: v })} label="Count finished breaks as mindful minutes" />
@@ -1540,9 +1540,9 @@ export function FocusRounds({
           <Toggle compact on={settings.goalMinutes !== null} onChange={(v) => save({ ...settings, goalMinutes: v ? (settings.goalMinutes ?? 60) : null })} label="A daily focus goal" />
           {settings.goalMinutes !== null && (
             <>
-              <p className="mt-xs m-0 text-[14px] font-bold">{settings.goalMinutes} minutes a day</p>
+              <p className="mt-xs m-0 text-subhead font-semibold">{settings.goalMinutes} minutes a day</p>
               <RulerPicker label="Daily focus goal" min={15} max={480} step={15} labelEvery={60} majorStep={60} value={settings.goalMinutes} onChange={(v) => save({ ...settings, goalMinutes: v })} valueText={(v) => `${v} minutes a day`} format={(v) => (v % 60 === 0 ? `${v / 60}h` : String(v))} />
-              <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">It shows under the timer. No streak, nothing to lose.</p>
+              <p className="mt-xs m-0 text-caption text-ink-soft">It shows under the timer. No streak, nothing to lose.</p>
             </>
           )}
         </div>
@@ -1551,7 +1551,7 @@ export function FocusRounds({
           {settings.reminderTime !== null && (
             <>
               <label className="mt-xs block">
-                <span className="block text-[14px] font-bold">At</span>
+                <span className="block text-subhead font-semibold">At</span>
                 <input type="time" value={settings.reminderTime} onChange={(e) => /^\d\d:\d\d$/.test(e.target.value) && save({ ...settings, reminderTime: e.target.value })} className={FIELD} />
               </label>
               <div className="mt-sm grid grid-cols-7 gap-xs" role="group" aria-label="On these days">
@@ -1564,7 +1564,7 @@ export function FocusRounds({
                       aria-pressed={onDay}
                       aria-label={d.long}
                       onClick={() => save({ ...settings, reminderDays: onDay ? settings.reminderDays.filter((n) => n !== d.n) : [...settings.reminderDays, d.n].sort((a, b) => a - b) })}
-                      className={`toy min-h-[44px] min-w-0 rounded-pill border-2 px-xs text-[14px] font-bold ${onDay ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+                      className={`toy min-h-[44px] min-w-0 rounded-pill border-2 px-xs text-subhead font-medium ${onDay ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
                     >
                       <span className="sm:hidden">{d.short}</span>
                       <span className="hidden sm:inline">{d.long}</span>
@@ -1572,7 +1572,7 @@ export function FocusRounds({
                   );
                 })}
               </div>
-              <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">One inbox note on those days, in your time zone. It skips a day you already focused.</p>
+              <p className="mt-xs m-0 text-caption text-ink-soft">One inbox note on those days, in your time zone. It skips a day you already focused.</p>
             </>
           )}
         </div>

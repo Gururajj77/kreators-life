@@ -13,8 +13,8 @@ export function PagerBar({ page, onPage, label = 'rows' }: { page: Page | undefi
   return (
     <div className="mt-sm flex flex-wrap items-center justify-between gap-sm" role="navigation" aria-label={`Pages of ${label}`}>
       <label className="flex items-center gap-xs">
-        <span className="text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">Rows</span>
-        <select value={page.size} onChange={(e) => onPage(1, pageSizeOf(e.target.value))} aria-label="Rows per page" className="min-h-[44px] rounded-pill border-2 border-line bg-card pl-sm text-[14px] font-bold">
+        <span className="text-eyebrow uppercase text-ink-soft">Rows</span>
+        <select value={page.size} onChange={(e) => onPage(1, pageSizeOf(e.target.value))} aria-label="Rows per page" className="min-h-[44px] rounded-pill border-2 border-line bg-card pl-sm text-subhead font-medium">
           {PAGE_SIZES.map((n) => (
             <option key={n} value={n}>
               {n}
@@ -26,7 +26,7 @@ export function PagerBar({ page, onPage, label = 'rows' }: { page: Page | undefi
         <Button variant="outline" size="sm" disabled={page.page <= 1} onClick={() => onPage(page.page - 1, page.size)}>
           Previous
         </Button>
-        <span className="text-[14px] font-bold text-ink-soft">Page {page.page}</span>
+        <span className="text-subhead text-ink-soft">Page {page.page}</span>
         <Button variant="outline" size="sm" disabled={!page.more} onClick={() => onPage(page.page + 1, page.size)}>
           Next
         </Button>

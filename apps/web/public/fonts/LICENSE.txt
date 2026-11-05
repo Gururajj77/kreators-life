@@ -1,15 +1,12 @@
 Fonts served from this folder
 
-Geist           Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font)
-Geist Mono      Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font)
-Inter           Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)
-Caveat          Copyright 2014 The Caveat Project Authors (https://github.com/googlefonts/caveat)
+Google Sans Flex  Copyright 2015 The Google Sans Flex Authors (https://github.com/googlefonts/googlesans-flex)
+Caveat            Copyright 2014 The Caveat Project Authors (https://github.com/googlefonts/caveat)
 
-All four families are licensed under the SIL Open Font License, Version 1.1.
+Both are licensed under the SIL Open Font License, Version 1.1.
 This license is available with a FAQ at https://openfontlicense.org
 
-The files are the woff2 subsets (latin and latin-ext) that Google Fonts serves for each family,
-saved here so that no request goes to a third party when a page loads. inter-currency.woff2 is
-the currency signs (the rupee among them) cut from Inter's latin-ext file with pyftsubset, so a
-page with a price loads 8 kB instead of the whole latin-ext file; no glyph is changed.
-The full license text is at https://openfontlicense.org/open-font-license-official-text/
+The files are the woff2 subsets (latin and latin-ext) that Google Fonts serves for each family (Caveat: latin only, for a guide's handwritten line),
+saved here so that no request goes to a third party when a page loads. They keep two of the
+family's axes, weight (300 to 800) and roundness (ROND), which holds the latin file near 72 kB;
+no glyph is changed. The full license text is at https://openfontlicense.org/open-font-license-official-text/

@@ -26,13 +26,13 @@ export function LockedButton({ unlock, full = true, className = '' }: { unlock: 
         aria-label={`Locked. ${at}.`}
         className="flex min-h-[48px] w-full cursor-not-allowed flex-col items-center justify-center gap-xs rounded-pill border-2 border-dashed border-line bg-paper px-md py-xs text-ink-soft"
       >
-        <span className="flex items-center gap-xs text-[14px] font-extrabold">
+        <span className="flex items-center gap-xs text-subhead font-semibold">
           <Padlock />
           Locked
         </span>
-        {at && <span className="text-center text-[12px] font-bold leading-snug">{at}</span>}
+        {at && <span className="text-center text-caption">{at}</span>}
       </button>
-      {unlock.why && <p className="m-0 text-center text-[12px] font-semibold text-ink-mute">{unlock.why}</p>}
+      {unlock.why && <p className="m-0 text-center text-caption text-ink-mute">{unlock.why}</p>}
     </div>
   );
 }

@@ -45,14 +45,14 @@ export function TeamInvites({ only, compact = false, className = '' }: { only?: 
     },
   });
   const waiting = (q.data?.teams ?? []).filter((t) => t.status === 'invited' && (!only || t.id === only));
-  if (waiting.length === 0) return said ? <p role="status" className={`m-0 text-[14px] font-semibold text-ink-soft ${className}`}>{said}</p> : null;
+  if (waiting.length === 0) return said ? <p role="status" className={`m-0 text-subhead text-ink-soft ${className}`}>{said}</p> : null;
   return (
     <div className={className}>
       <ul className="flex list-none flex-col gap-xs p-0 m-0" aria-label="Team invites">
         {waiting.map((t) => (
           <li key={t.id} className={compact ? '' : 'rounded-card bg-card p-md shadow-toy-soft'}>
-            {!compact && <p className="m-0 text-[16px] font-extrabold">{inviteLine(t)}</p>}
-            {!compact && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{t.role === 'client' ? (t.clientName ? `You would see the work for ${t.clientName}, read only.` : 'You would see your own work, read only.') : TEAM_ROLE_META[t.role].blurb}</p>}
+            {!compact && <p className="m-0 text-headline">{inviteLine(t)}</p>}
+            {!compact && <p className="mt-xs m-0 text-subhead text-ink-soft">{t.role === 'client' ? (t.clientName ? `You would see the work for ${t.clientName}, read only.` : 'You would see your own work, read only.') : TEAM_ROLE_META[t.role].blurb}</p>}
             <div className={`${compact ? '' : 'mt-sm '}flex flex-wrap gap-xs`}>
               <Button variant="outline" size="sm" onClick={() => answer.mutate({ t, yes: true })} disabled={answer.isPending} aria-label={`Accept: ${inviteLine(t)}`}>
                 Accept
@@ -65,7 +65,7 @@ export function TeamInvites({ only, compact = false, className = '' }: { only?: 
         ))}
       </ul>
       {answer.isError && <ErrorLine e={answer.error} className="mt-xs" />}
-      {said && <p role="status" className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{said}</p>}
+      {said && <p role="status" className="mt-xs m-0 text-subhead text-ink-soft">{said}</p>}
     </div>
   );
 }

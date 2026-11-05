@@ -25,12 +25,12 @@ function GaugeStars({ value, label, color }: { value: number | null; label: stri
   return (
     <div className="flex flex-col items-center gap-xs rounded-tile bg-card p-sm shadow-toy-soft">
       <Ring value={stars === null ? 0 : stars / 5} size={64} stroke={7} color={color} label={`${label}, ${stars ?? 'not rated'} of 5 stars`}>
-        <span className="inline-flex items-center gap-[2px] font-display text-[16px] font-extrabold">
+        <span className="inline-flex items-center gap-[2px] text-headline">
           {stars ?? '–'}
           <Icon icon={Star} size={14} filled color={color} />
         </span>
       </Ring>
-      <span className="text-[12px] font-bold text-ink-soft">{label}</span>
+      <span className="text-caption text-ink-soft">{label}</span>
     </div>
   );
 }
@@ -68,16 +68,16 @@ export function LifeMapPanel() {
   const when = new Date(a.createdAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
   return (
     <section id="life-map" className="mt-lg scroll-mt-[64px]" aria-labelledby="life-map-heading">
-      <h2 id="life-map-heading" className="text-[24px]">
+      <h2 id="life-map-heading" className="text-title2">
         Your life map
       </h2>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{`From your strategy session on ${when}. Health lives inside Yourself; work, money and time live inside Servitude.`}</p>
+      <p className="mt-xs m-0 text-subhead text-ink-soft">{`From your strategy session on ${when}. Health lives inside Yourself; work, money and time live inside Servitude.`}</p>
       <div className="mt-sm flex flex-wrap gap-xs">
-        <Link to="/session?fresh=1" className="toy inline-flex min-h-[44px] items-center rounded-pill bg-card px-sm text-[14px] font-bold shadow-toy-soft">
+        <Link to="/session?fresh=1" className="toy inline-flex min-h-[44px] items-center rounded-pill bg-card px-sm text-subhead font-semibold shadow-toy-soft">
           Run the session again
         </Link>
         {unbuilt.length > 0 && (
-          <Link to={`/vibe-check?floors=${unbuilt.join(',')}`} className="toy inline-flex min-h-[44px] items-center rounded-pill bg-ink px-sm text-[14px] font-bold text-on-ink">
+          <Link to={`/vibe-check?floors=${unbuilt.join(',')}`} className="toy inline-flex min-h-[44px] items-center rounded-pill bg-ink px-sm text-subhead font-semibold text-on-ink">
             Build the pillars for your focus
           </Link>
         )}
@@ -87,7 +87,7 @@ export function LifeMapPanel() {
         <ul className="m-0 flex list-none flex-wrap gap-xs p-0">
           {focus.map((k) => (
             <li key={k} data-pillar={k}>
-              <Link to={`/realm/${k}`} className="toy flex min-h-[44px] items-center gap-xs rounded-pill px-sm text-[14px] font-bold" style={{ background: RELATIONSHIP_BY_KEY[k].color, color: RELATIONSHIP_BY_KEY[k].text }}>
+              <Link to={`/realm/${k}`} className="toy flex min-h-[44px] items-center gap-xs rounded-pill px-sm text-subhead font-medium" style={{ background: RELATIONSHIP_BY_KEY[k].color, color: RELATIONSHIP_BY_KEY[k].text }}>
                 <Avatar relationship={k} size={24} decorative still />
                 {RELATIONSHIP_BY_KEY[k].name}
               </Link>
@@ -109,12 +109,12 @@ export function LifeMapPanel() {
           ))}
         </ul>
         {setAway.isError && (
-          <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+          <p role="alert" className="mt-xs m-0 text-subhead">
             {setAway.error instanceof Error ? setAway.error.message : 'That did not save. Try again.'}
           </p>
         )}
         <Fold title="What setting aside does" className="mt-sm">
-          <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+          <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-subhead text-ink-soft">
             <li>Love, teachers and faith can be set aside.</li>
             <li>A pillar set aside sits at Neutrality, stays out of your focus and gets no pyramid.</li>
             <li>Turn it back on here any time.</li>
@@ -151,8 +151,8 @@ export function LifeMapPanel() {
             {a.fears.map((f) => (
               <li key={f.text} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                 <Avatar relationship={f.relationship} size={24} decorative still />
-                <span className="min-w-0 flex-1 text-[14px] font-bold">{f.text}</span>
-                <span className="text-[12px] font-bold text-ink-soft">{f.drives === 'yes' ? 'drives decisions' : f.drives === 'sometimes' ? 'sometimes drives them' : 'does not drive them'}</span>
+                <span className="min-w-0 flex-1 text-subhead">{f.text}</span>
+                <span className="text-caption text-ink-soft">{f.drives === 'yes' ? 'drives decisions' : f.drives === 'sometimes' ? 'sometimes drives them' : 'does not drive them'}</span>
               </li>
             ))}
           </ul>
@@ -162,8 +162,8 @@ export function LifeMapPanel() {
             {a.insecurities.map((it, i) => (
               <li key={`${it.text}-${i}`} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                 <Avatar relationship={it.relationship} size={24} decorative still />
-                <span className="min-w-0 flex-1 text-[14px] font-bold">{it.text}</span>
-                <span className="shrink-0 text-[12px] font-bold text-ink-soft">weighs {weightWord(it.weight).toLowerCase()}</span>
+                <span className="min-w-0 flex-1 text-subhead">{it.text}</span>
+                <span className="shrink-0 text-caption text-ink-soft">weighs {weightWord(it.weight).toLowerCase()}</span>
               </li>
             ))}
           </ul>
@@ -172,7 +172,7 @@ export function LifeMapPanel() {
 
       {d.routine && (
         <Section id="routine-heading" title="Your routine" lede="Built from your day. You can change any of it.">
-          <ul className="mb-sm m-0 flex list-none flex-wrap gap-x-md gap-y-xs p-0 text-[14px] font-bold">
+          <ul className="mb-sm m-0 flex list-none flex-wrap gap-x-md gap-y-xs p-0 text-subhead">
             <li>Up at {a.realDay.wake}</li>
             <li>Lights out {a.realDay.sleep}</li>
             <li>
@@ -180,13 +180,13 @@ export function LifeMapPanel() {
             </li>
           </ul>
           <RoutinePanel general={d.routine.general} exceptional={d.routine.exceptional} date={date} />
-          <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0 text-[14px] font-semibold">
+          <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0 text-subhead">
             <li>Mantra: {mantraLine(d.routine.practices)}.</li>
             <li>Breathing: {BREATHING.find((b) => b.key === d.routine?.practices.breathing)?.name ?? 'box'}.</li>
             {d.routine.practices.affirmation && <li>Your line: “{d.routine.practices.affirmation}”</li>}
             {d.routine.practices.reading && <li>One page a morning from {d.routine.practices.reading}.</li>}
           </ul>
-          <p className="mt-sm m-0 text-[12px] font-bold text-ink-soft">
+          <p className="mt-sm m-0 text-caption text-ink-soft">
             The morning steps are on <Link to="/today" className="underline underline-offset-4">Daily</Link> as tick rows. Wake-up moves thirty minutes earlier for every week you keep the deal.
           </p>
         </Section>
@@ -194,7 +194,7 @@ export function LifeMapPanel() {
 
       {d.contract && (
         <Section id="contract-heading" title="The contract" lede={`Signed ${d.contract.signedName} on ${new Date(d.contract.signedAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' })}.`}>
-          <ul className="m-0 flex list-none flex-col gap-xs p-0 text-[14px] font-semibold">
+          <ul className="m-0 flex list-none flex-col gap-xs p-0 text-subhead">
             <li>At least {d.contract.minDays} days a week. This week: {d.week.done} of 7 done.</li>
             <li>Check-in at {d.contract.checkinTime}; a reminder lands in your inbox on any day you have not.</li>
             <li>A short week: {PENALTIES.find((p) => p.key === d.contract?.penalty)?.name.toLowerCase() ?? 'the streak breaks'}.</li>

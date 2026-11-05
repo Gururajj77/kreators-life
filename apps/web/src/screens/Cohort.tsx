@@ -14,7 +14,7 @@ import { MediaSection, useMediaMenuItem } from '../components/MediaSection';
 import { IconButton } from '../components/IconButton';
 import { IconTag } from '../components/FactTag';
 import { Icon } from '../components/Icon';
-import { ExternalLink, ImagePlus } from 'lucide-react';
+import { ArrowUpRight, ImagePlus } from 'lucide-react';
 import { MediaTile } from '../components/Media';
 import { api, errorText } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
@@ -35,7 +35,7 @@ const isLive = (s: CohortSession) => {
 
 function Progress({ p }: { p: Enrollment['progress'] }) {
   return (
-    <span className="block text-[14px] font-semibold text-ink-soft">
+    <span className="block text-subhead text-ink-soft">
       {p.assignmentsApproved} of {p.assignmentsTotal} assignments approved, {p.sessionsAttended} of {p.sessionsTotal} sessions attended
     </span>
   );
@@ -63,7 +63,7 @@ export function Cohort() {
         <header className="pt-lg">
           <BackLink to="/school">School</BackLink>
         </header>
-        <p className="mt-md font-bold">{errorText(q.error, 'You are not in this cohort.')}</p>
+        <p className="mt-md font-semibold">{errorText(q.error, 'You are not in this cohort.')}</p>
       </Screen>
     );
   }
@@ -89,7 +89,7 @@ export function Cohort() {
       >
         {d.myProgress && (
           <div className="rounded-tile bg-card p-sm shadow-toy-soft">
-            <p className="m-0 text-[16px] font-bold">{d.myStatus === 'completed' ? 'Completed. Well done.' : 'Your progress'}</p>
+            <p className="m-0 text-headline">{d.myStatus === 'completed' ? 'Completed. Well done.' : 'Your progress'}</p>
             <Progress p={d.myProgress} />
           </div>
         )}
@@ -100,10 +100,10 @@ export function Cohort() {
 
 
       <section className="mt-lg" aria-labelledby="lessons-heading">
-        <h2 id="lessons-heading" className="text-[24px]">
+        <h2 id="lessons-heading" className="text-title2">
           Lessons
         </h2>
-        {d.items.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Lessons appear here as the program adds them.</p>}
+        {d.items.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">Lessons appear here as the program adds them.</p>}
         <ol className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {d.items.map((item, i) => (
             <LessonCard key={item.id} item={item} n={i + 1} open={openLesson === item.id} onToggle={() => setOpenLesson(openLesson === item.id ? null : item.id)} />
@@ -112,10 +112,10 @@ export function Cohort() {
       </section>
 
       <section className="mt-lg" aria-labelledby="assignments-heading">
-        <h2 id="assignments-heading" className="text-[24px]">
+        <h2 id="assignments-heading" className="text-title2">
           Assignments
         </h2>
-        {d.assignments.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No assignments yet.</p>}
+        {d.assignments.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">No assignments yet.</p>}
         <ul className="mt-sm flex list-none flex-col gap-sm p-0 m-0">
           {d.assignments.map((a) => (
             <li key={a.id}>
@@ -127,27 +127,28 @@ export function Cohort() {
 
       <section className="mt-lg" aria-labelledby="sessions-heading">
         <div className="flex items-center justify-between gap-sm">
-          <h2 id="sessions-heading" className="text-[24px]">
+          <h2 id="sessions-heading" className="text-title2">
             Live sessions
           </h2>
           {d.manager && <Button onClick={() => setScheduling(true)}>Schedule</Button>}
         </div>
-        {d.sessions.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No sessions scheduled yet.</p>}
+        {d.sessions.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">No sessions scheduled yet.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {d.sessions.map((s) => (
             <li key={s.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
               <div className="flex items-start justify-between gap-sm">
                 <div className="min-w-0">
-                  <p className="m-0 truncate text-[16px] font-bold">{s.title}</p>
-                  <p className="m-0 text-[14px] font-semibold text-ink-soft">
+                  <p className="m-0 text-balance text-headline [overflow-wrap:anywhere]">{s.title}</p>
+                  <p className="m-0 text-subhead text-ink-soft">
                     {fmtWhen(s.startsAt)} to {new Date(s.endsAt).toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
-                {s.attended && <StatusTag tone="good">You were here</StatusTag>}
+                {/* A mark on every session in the same corner: here, live now, coming up or over. */}
+                {s.attended ? <StatusTag tone="good">You were here</StatusTag> : isLive(s) ? <StatusTag tone="info">Live now</StatusTag> : new Date(s.startsAt).getTime() > Date.now() ? <StatusTag tone="calm">Coming up</StatusTag> : <StatusTag tone="neutral">Over</StatusTag>}
               </div>
-              <div className="mt-sm flex flex-wrap gap-xs">
+              <div className="mt-sm flex flex-wrap justify-end gap-xs">
                 {s.onlineUrl && (
-                  <a href={s.onlineUrl} target="_blank" rel="noreferrer" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+                  <a href={s.onlineUrl} target="_blank" rel="noreferrer" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
                     Join
                   </a>
                 )}
@@ -157,7 +158,7 @@ export function Cohort() {
                   </Button>
                 )}
               </div>
-              {!s.attended && d.myStatus === 'enrolled' && !isLive(s) && new Date(s.startsAt).getTime() > Date.now() && <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Check-in opens fifteen minutes before it starts.</p>}
+              {!s.attended && d.myStatus === 'enrolled' && !isLive(s) && new Date(s.startsAt).getTime() > Date.now() && <p className="mt-xs m-0 text-caption text-ink-soft">Check-in opens fifteen minutes before it starts.</p>}
               {d.manager && s.attendance && (
                 <Fold className="mt-sm" title={`Attendance, ${s.attendance.length} of ${d.enrollments.length}`}>
                   <ul className="flex list-none flex-col gap-xs p-0 m-0">
@@ -165,9 +166,9 @@ export function Cohort() {
                       const here = s.attendance?.some((a) => a.userId === e.learnerId);
                       return (
                         <li key={e.id} className="flex items-center gap-sm rounded-tile bg-paper p-sm">
-                          <span className="flex-1 text-[14px] font-bold">{e.learnerName}</span>
+                          <span className="flex-1 text-subhead font-semibold">{e.learnerName}</span>
                           {here ? (
-                            <span className="text-[14px] font-bold text-ink-soft">Present</span>
+                            <span className="text-subhead text-ink-soft">Present</span>
                           ) : (
                             <Button variant="ghost" onClick={() => attend.mutate({ sid: s.id, userId: e.learnerId })} disabled={attend.isPending}>
                               Mark present
@@ -189,19 +190,19 @@ export function Cohort() {
 
       {canRun && (
         <section className="mt-lg" aria-labelledby="learners-heading">
-          <h2 id="learners-heading" className="text-[24px]">
+          <h2 id="learners-heading" className="text-title2">
             Learners, {d.enrollments.length}
           </h2>
-          {d.enrollments.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No one has enrolled yet.</p>}
+          {d.enrollments.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">No one has enrolled yet.</p>}
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {d.enrollments.map((e) => (
               <li key={e.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
                 <div className="flex items-center justify-between gap-sm">
-                  <p className="m-0 text-[16px] font-bold">{e.learnerName}</p>
+                  <p className="m-0 text-headline">{e.learnerName}</p>
                   <StatusTag tone={e.status === 'completed' ? 'good' : 'warn'}>{e.status}</StatusTag>
                 </div>
                 <Progress p={e.progress} />
-                <p className="m-0 text-[12px] font-bold text-ink-soft">
+                <p className="m-0 text-caption text-ink-soft">
                   Joined {fmtDate(e.enrolledAt)}, {e.paymentStatus}
                 </p>
                 {d.manager && e.status === 'enrolled' && (
@@ -257,10 +258,10 @@ function LessonCard({ item, n, open, onToggle }: { item: LearningItem; n: number
   return (
     <li className="rounded-tile bg-card shadow-toy-soft">
       <button type="button" aria-expanded={open} onClick={onToggle} className="toy toy-flat flex min-h-[56px] w-full items-start gap-sm rounded-tile p-sm text-left focus-visible:outline-offset-0">
-        <span className="flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-paper text-[14px] font-extrabold" aria-hidden="true">
+        <span className="flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-paper text-subhead font-medium" aria-hidden="true">
           {n}
         </span>
-        <span className="min-w-0 flex-1 pt-[4px] text-[16px] leading-snug font-bold text-balance">{item.moduleTitle}</span>
+        <span className="min-w-0 flex-1 pt-[4px] text-headline text-balance">{item.moduleTitle}</span>
         <span className="flex shrink-0 items-center gap-xs pt-[2px]">
           <IconTag tone="calm" icon={tag.icon}>{tag.word}</IconTag>
           <ToggleChevron open={open} size={20} className="text-ink-soft" />
@@ -274,23 +275,23 @@ function LessonCard({ item, n, open, onToggle }: { item: LearningItem; n: number
             </div>
           )}
           <MediaSection type="lesson" id={item.id} title="Lesson pictures and videos" trigger={null} open={editing} onOpenChange={setEditing} />
-          {item.body ? <Markdown text={item.body} className="prose-long" /> : !item.contentRef && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing written here yet.</p>}
+          {item.body ? <Markdown text={item.body} className="prose-long" /> : !item.contentRef && <p className="mt-sm m-0 text-subhead text-ink-soft">Nothing written here yet.</p>}
           {/* The ways in, at the foot of the open lesson once it is read (the source link takes the width on every screen and the round button sits at its right). The
               helper line belongs to the source link (it says what that link opens), so it sits centred under that link as its caption. */}
           {source ? (
             <div className="mt-md flex items-start justify-end gap-xs">
               <div className="flex min-w-0 flex-1 flex-col items-center">
-                <a href={source} target="_blank" rel="noreferrer" className="toy toy-soft inline-flex min-h-[44px] w-full items-center justify-center gap-xs rounded-pill border border-line bg-card-strong px-md text-[14px] font-bold">
+                <a href={source} target="_blank" rel="noreferrer" className="toy toy-soft inline-flex min-h-[44px] w-full items-center justify-center gap-xs rounded-pill border border-line bg-card-strong px-md text-subhead font-semibold">
                   {item.contentType === 'video' ? 'Watch' : source.startsWith('/resources/') ? 'Skill file' : 'Open'}
-                  <Icon icon={ExternalLink} size={16} />
+                  <Icon icon={ArrowUpRight} size={16} />
                 </a>
-                <p className="mt-xs m-0 text-center text-[12px] font-semibold text-balance text-ink-soft">{KIND_TIP[item.contentType] ?? 'A step in this program.'}</p>
+                <p className="mt-xs m-0 text-center text-caption text-balance text-ink-soft">{KIND_TIP[item.contentType] ?? 'A step in this program.'}</p>
               </div>
               {media && <IconButton icon={ImagePlus} label={media.label} onClick={media.onSelect} opens />}
             </div>
           ) : (
             <div className="mt-md flex items-start justify-between gap-sm">
-              <p className="m-0 min-w-0 text-[14px] font-semibold text-ink-soft">{KIND_TIP[item.contentType] ?? 'A step in this program.'}</p>
+              <p className="m-0 min-w-0 text-subhead text-ink-soft">{KIND_TIP[item.contentType] ?? 'A step in this program.'}</p>
               {media && <IconButton icon={ImagePlus} label={media.label} onClick={media.onSelect} opens />}
             </div>
           )}
@@ -311,22 +312,22 @@ function AssignmentCard({ a, cohortId, mine, all, canRun, enrolled, onChange }: 
     <div className="rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="flex items-start justify-between gap-sm">
         <div className="min-w-0">
-          <p className="m-0 truncate text-[16px] font-bold">{a.title}</p>
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">Due {a.dueDays} days in</p>
+          <p className="m-0 text-balance text-headline [overflow-wrap:anywhere]">{a.title}</p>
+          <p className="m-0 text-subhead text-ink-soft">Due {a.dueDays} days in</p>
         </div>
         {!canRun && (
           <StatusTag tone={tone}>
             {label}
           </StatusTag>
         )}
-        {canRun && waiting > 0 && <StatusTag tone="warn">{waiting} to review</StatusTag>}
+        {canRun && (waiting > 0 ? <StatusTag tone="warn">{`${waiting} to review`}</StatusTag> : <StatusTag tone="neutral">Nothing to review</StatusTag>)}
       </div>
       {(a.instructions || a.rubric) && (
         <Fold className="mt-xs" title="Read the brief">
-          {a.instructions && <p className="m-0 whitespace-pre-wrap text-[14px] font-semibold">{a.instructions}</p>}
+          {a.instructions && <p className="m-0 whitespace-pre-wrap text-subhead">{a.instructions}</p>}
           {a.rubric && (
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
-              <span className="font-bold">Judged on:</span> {a.rubric}
+            <p className="mt-xs m-0 text-subhead text-ink-soft">
+              <span className="font-semibold">Judged on:</span> {a.rubric}
             </p>
           )}
         </Fold>
@@ -334,8 +335,8 @@ function AssignmentCard({ a, cohortId, mine, all, canRun, enrolled, onChange }: 
       {mine && mine.feedback.length > 0 && (
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {mine.feedback.map((f) => (
-            <li key={f.id} className="rounded-tile bg-paper p-sm text-[14px] font-semibold">
-              <span className="font-bold">
+            <li key={f.id} className="rounded-tile bg-paper p-sm text-subhead">
+              <span className="font-semibold">
                 {f.reviewerName}
                 {f.grade ? `, ${f.grade}` : ''}:
               </span>{' '}
@@ -353,11 +354,11 @@ function AssignmentCard({ a, cohortId, mine, all, canRun, enrolled, onChange }: 
           }}
         >
           <label className="block">
-            <span className="block text-[12px] font-bold">Link to your work</span>
+            <span className="block text-caption">Link to your work</span>
             <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[12px] font-bold">Or write it here</span>
+            <span className="block text-caption">Or write it here</span>
             <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} maxLength={5000} className={FIELD} />
           </label>
           <Button type="submit" variant={mine ? 'outline' : 'primary'} disabled={submit.isPending || (!url.trim() && !text.trim())}>
@@ -375,7 +376,7 @@ function AssignmentCard({ a, cohortId, mine, all, canRun, enrolled, onChange }: 
           ))}
         </ul>
       )}
-      {canRun && all.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No one has handed this in yet.</p>}
+      {canRun && all.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">No one has handed this in yet.</p>}
     </div>
   );
 }
@@ -393,22 +394,22 @@ function SubmissionReview({ s, onChange }: { s: Submission; onChange: () => void
   return (
     <div className="rounded-tile bg-paper p-sm">
       <div className="flex items-center justify-between gap-sm">
-        <p className="m-0 text-[14px] font-bold">{s.learnerName}</p>
-        <span className="text-[12px] font-extrabold text-ink-soft">
+        <p className="m-0 text-subhead font-semibold">{s.learnerName}</p>
+        <span className="text-caption text-ink-soft">
           {s.status}, {fmtDate(s.submittedAt)}
         </span>
       </div>
       {s.url && (
-        <a href={s.url} target="_blank" rel="noreferrer" className="block break-all text-[14px] font-semibold underline underline-offset-4">
+        <a href={s.url} target="_blank" rel="noreferrer" className="block break-all text-subhead underline underline-offset-4">
           {s.url}
         </a>
       )}
-      {s.text && <p className="mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold">{s.text}</p>}
+      {s.text && <p className="mt-xs m-0 whitespace-pre-wrap text-subhead">{s.text}</p>}
       {s.feedback.length > 0 && (
         <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
           {s.feedback.map((f) => (
-            <li key={f.id} className="text-[14px] font-semibold text-ink-soft">
-              <span className="font-bold">
+            <li key={f.id} className="text-subhead text-ink-soft">
+              <span className="font-semibold">
                 {f.reviewerName}
                 {f.grade ? `, ${f.grade}` : ''}:
               </span>{' '}
@@ -420,11 +421,11 @@ function SubmissionReview({ s, onChange }: { s: Submission; onChange: () => void
       {s.status !== 'approved' && (
         <div className="mt-sm">
           <label className="block">
-            <span className="block text-[12px] font-bold">Feedback</span>
+            <span className="block text-caption">Feedback</span>
             <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} maxLength={3000} className={FIELD} />
           </label>
           <label className="mt-xs block">
-            <span className="block text-[12px] font-bold">Grade, optional</span>
+            <span className="block text-caption">Grade, optional</span>
             <input value={grade} onChange={(e) => setGrade(e.target.value)} maxLength={20} placeholder="A, 8/10, pass" className={FIELD} />
           </label>
           <div className="mt-xs flex gap-xs">
@@ -467,21 +468,21 @@ function ScheduleSheet({ cohortId, open, onClose, onDone }: { cohortId: string; 
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Title</span>
+          <span className="block text-subhead font-semibold">Title</span>
           <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
-            <span className="block text-[14px] font-bold">Starts</span>
+            <span className="block text-subhead font-semibold">Starts</span>
             <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Minutes</span>
+            <span className="block text-subhead font-semibold">Minutes</span>
             <input type="number" min={15} max={600} value={minutes} onChange={(e) => setMinutes(e.target.value)} className={FIELD} />
           </label>
         </div>
         <label className="block">
-          <span className="block text-[14px] font-bold">Joining link</span>
+          <span className="block text-subhead font-semibold">Joining link</span>
           <input type="url" value={onlineUrl} onChange={(e) => setOnlineUrl(e.target.value)} placeholder="https://" className={FIELD} />
         </label>
         <ErrorLine e={schedule.error} />

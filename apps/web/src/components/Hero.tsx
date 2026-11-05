@@ -137,11 +137,6 @@ const FLOWER_SHAPE: Record<FlowerKind, () => ReactNode> = {
   ),
 };
 
-/** One flower's shapes around the origin (about 150 units across), for art that draws its own flower inside a larger scene (fx/CoverArt). */
-export function flowerShape(kind: FlowerKind): ReactNode {
-  return FLOWER_SHAPE[kind]();
-}
-
 /** A flower's shape alone, around the origin and about 150 units across, for a drawing that places it itself (the app covers). */
 export function FlowerShape({ kind }: { kind: FlowerKind }) {
   return <>{FLOWER_SHAPE[kind]()}</>;
@@ -190,25 +185,6 @@ export function Posy({
   );
 }
 
-/** A thin rule with one small blossom in the middle: a quiet full stop for the end of a page. */
-export function Ornament({ className = '' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 260 44" className={`mx-auto h-[44px] w-[260px] max-w-full text-ink ${className}`} aria-hidden="true">
-      <g fill="currentColor" opacity="0.4">
-        <rect x="8" y="21.1" width="92" height="1.8" rx="0.9" />
-        <rect x="160" y="21.1" width="92" height="1.8" rx="0.9" />
-      </g>
-      {/* A crisp flower: five petals in the pillar colours (red to violet, five of the seven), a gold heart. Drawn in colour so it reads on light and dark. */}
-      <g transform="translate(130 22)">
-        {['--color-r1', '--color-r2', '--color-r4', '--color-r5', '--color-r6'].map((c, i) => (
-          <ellipse key={c} cx="0" cy="-9" rx="6.2" ry="8.8" fill={`var(${c})`} transform={`rotate(${i * 72})`} />
-        ))}
-        <circle r="4.8" fill="var(--color-r3)" />
-      </g>
-    </svg>
-  );
-}
-
 /** What sits behind a hero or a coloured card: one flower, at the top right where the buttons are. Pass `kind` or a `seed`. */
 export function HeroBlobs({ opacity = 0.14, tone = 'white', kind, seed }: { opacity?: number; tone?: 'white' | 'ink'; kind?: FlowerKind; seed?: string }) {
   return <Posy kind={kind} seed={seed} tone={tone} opacity={opacity} className="top-0 right-0" />;
@@ -218,11 +194,11 @@ export function HeroBlobs({ opacity = 0.14, tone = 'white', kind, seed }: { opac
 export function HeroNumber({ value, unit, label, align = 'left' }: { value: ReactNode; unit?: string; label: ReactNode; align?: 'left' | 'center' }) {
   return (
     <div className={align === 'center' ? 'text-center' : ''}>
-      <p className="m-0 font-display text-[64px] font-extrabold leading-none">
+      <p className="m-0 text-figure-hero type-figure leading-none">
         {value}
-        {unit && <span className="text-[24px]"> {unit}</span>}
+        {unit && <span className="text-title2 font-normal"> {unit}</span>}
       </p>
-      <p className="mt-xs m-0 text-[18px] font-extrabold">{label}</p>
+      <p className="mt-xs m-0 text-headline">{label}</p>
     </div>
   );
 }

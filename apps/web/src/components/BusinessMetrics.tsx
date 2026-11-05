@@ -90,10 +90,10 @@ export function BusinessMetrics({ kind, date }: { kind: PeriodKind; date: string
   if (q.isError || !d) {
     return (
       <section className="mt-lg" aria-labelledby="metrics-heading">
-        <h2 id="metrics-heading" className="text-[24px]">
+        <h2 id="metrics-heading" className="text-title2">
           Business metrics
         </h2>
-        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-xs m-0 text-subhead">
           Could not load these. Try again in a moment.
         </p>
       </section>
@@ -103,7 +103,7 @@ export function BusinessMetrics({ kind, date }: { kind: PeriodKind; date: string
   return (
     <section className="mt-lg" aria-labelledby="metrics-heading">
       <div className="flex flex-wrap items-baseline justify-between gap-sm">
-        <h2 id="metrics-heading" className="text-[24px]">
+        <h2 id="metrics-heading" className="text-title2">
           Business metrics
         </h2>
         {d.enabled && (
@@ -112,12 +112,12 @@ export function BusinessMetrics({ kind, date }: { kind: PeriodKind; date: string
           </Button>
         )}
       </div>
-      <p className="mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">{d.enabled ? COPY.on : COPY.off}</p>
+      <p className="mt-xs m-0 text-balance text-subhead text-ink-soft">{d.enabled ? COPY.on : COPY.off}</p>
       <div className="mt-sm">
         <Toggle on={d.enabled} onChange={(on) => toggle.mutate(on)} disabled={toggle.isPending} label="Show business metrics" hint={d.enabled ? 'Switch off to hide them here. Your metrics stay saved.' : undefined} />
       </div>
       {toggle.isError && (
-        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-xs m-0 text-subhead">
           That did not change. Try again.
         </p>
       )}
@@ -125,7 +125,7 @@ export function BusinessMetrics({ kind, date }: { kind: PeriodKind; date: string
       {d.enabled && (
         <>
           {d.readings.length === 0 && (
-            <p className="mt-sm m-0 rounded-tile bg-card p-sm text-[14px] font-semibold text-ink-soft shadow-toy-soft">
+            <p className="mt-sm m-0 rounded-tile bg-card p-sm text-subhead text-ink-soft shadow-toy-soft">
               No {PERIOD_META[kind].short.toLowerCase()} metrics yet. Add one, such as pieces published or sales calls.
             </p>
           )}
@@ -137,7 +137,7 @@ export function BusinessMetrics({ kind, date }: { kind: PeriodKind; date: string
             ))}
           </ul>
           {d.elsewhere > 0 && (
-            <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">
+            <p className="mt-sm m-0 text-subhead text-ink-soft">
               {d.elsewhere} more {d.elsewhere === 1 ? 'metric is' : 'metrics are'} for other periods. Pick that period above to see {d.elsewhere === 1 ? 'it' : 'them'}.
             </p>
           )}
@@ -171,21 +171,21 @@ function Card({ r, currency, date, onEdit }: { r: KpiReading; currency: string; 
   return (
     <div className="h-full rounded-card bg-card p-md shadow-toy-soft">
       <div className="flex items-start justify-between gap-xs">
-        <h3 className="m-0 min-w-0 text-[18px]">{k.name}</h3>
+        <h3 className="m-0 min-w-0 text-headline">{k.name}</h3>
         <StatusTag tone={st.tone}>{st.word}</StatusTag>
       </div>
       <div className="mt-xs flex items-end justify-between gap-sm">
         <div className="min-w-0">
-          <p className="m-0 font-display text-[28px] font-extrabold leading-none">{r.value === null ? '—' : kpiShown(k.unit, r.value, currency)}</p>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+          <p className="m-0 text-title1 type-figure leading-none">{r.value === null ? '—' : kpiShown(k.unit, r.value, currency)}</p>
+          <p className="mt-xs m-0 text-subhead text-ink-soft">
             Target {k.target > 0 ? `${k.direction === 'down' ? 'at most ' : ''}${kpiShown(k.unit, k.target, currency)}` : 'not set'}
           </p>
         </div>
         <Sparkline values={r.series} max={max} color="var(--color-r5)" width={96} height={36} />
       </div>
-      {moved && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{moved}</p>}
+      {moved && <p className="mt-xs m-0 text-subhead text-ink-soft">{moved}</p>}
       {auto ? (
-        <p className="mt-sm m-0 text-[12px] font-bold text-ink-mute">
+        <p className="mt-sm m-0 text-caption text-ink-mute">
           {COPY.auto}: {KPI_AUTO_BY_KEY[k.source]?.name ?? k.source}
         </p>
       ) : (
@@ -196,16 +196,16 @@ function Card({ r, currency, date, onEdit }: { r: KpiReading; currency: string; 
             if (typed !== null) save.mutate(typed);
           }}
         >
-          <label className="block text-[14px] font-bold" htmlFor={`v-${k.id}`}>
+          <label className="block text-subhead font-semibold" htmlFor={`v-${k.id}`}>
             This period, {unitHint(k.unit, currency)}
           </label>
           <NumberField id={`v-${k.id}`} unit={k.unit} stored={typed} onChange={setTyped} label={`${k.name}, this period`} />
-          <label className="mt-xs block text-[14px] font-bold" htmlFor={`n-${k.id}`}>
+          <label className="mt-xs block text-subhead font-semibold" htmlFor={`n-${k.id}`}>
             A note
           </label>
           <input id={`n-${k.id}`} value={note} maxLength={KPI_NOTE_MAX} onChange={(e) => setNote(e.target.value)} className={FIELD} />
           {save.isError && (
-            <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+            <p role="alert" className="mt-xs m-0 text-subhead">
               {save.error instanceof ApiError ? save.error.message : 'That did not save. Try again.'}
             </p>
           )}
@@ -290,7 +290,7 @@ function MetricSheet({ editing, kind, onClose, currency }: { editing: Kpi | 'new
         }}
       >
         {!prev && (
-          <label className="block text-[14px] font-bold" htmlFor="m-source">
+          <label className="block text-subhead font-semibold" htmlFor="m-source">
             Where does the number come from
             <select
               id="m-source"
@@ -312,13 +312,13 @@ function MetricSheet({ editing, kind, onClose, currency }: { editing: Kpi | 'new
             </select>
           </label>
         )}
-        <label className="mt-sm block text-[14px] font-bold" htmlFor="m-name">
+        <label className="mt-sm block text-subhead font-semibold" htmlFor="m-name">
           Name
         </label>
         <input id="m-name" value={name} maxLength={KPI_NAME_MAX} onChange={(e) => setName(e.target.value)} placeholder={def?.name ?? 'Sales calls'} className={FIELD} />
         {!def && (
           <div className="mt-sm grid gap-sm md:grid-cols-2">
-            <label className="block text-[14px] font-bold">
+            <label className="block text-subhead font-semibold">
               What it counts
               <select value={unit} onChange={(e) => setUnit(e.target.value as KpiUnit)} className={FIELD}>
                 {KPI_UNITS.map((u) => (
@@ -328,7 +328,7 @@ function MetricSheet({ editing, kind, onClose, currency }: { editing: Kpi | 'new
                 ))}
               </select>
             </label>
-            <label className="block text-[14px] font-bold">
+            <label className="block text-subhead font-semibold">
               Which way is good
               <select value={direction} onChange={(e) => setDirection(e.target.value as 'up' | 'down')} className={FIELD}>
                 <option value="up">More is better</option>
@@ -337,8 +337,8 @@ function MetricSheet({ editing, kind, onClose, currency }: { editing: Kpi | 'new
             </label>
           </div>
         )}
-        {def && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">This one is {KPI_UNIT_NAME[def.unit].toLowerCase()}, and more is better. It comes from Agency, so there is nothing to type.</p>}
-        <label className="mt-sm block text-[14px] font-bold" htmlFor="m-cadence">
+        {def && <p className="mt-xs m-0 text-subhead text-ink-soft">This one is {KPI_UNIT_NAME[def.unit].toLowerCase()}, and more is better. It comes from Agency, so there is nothing to type.</p>}
+        <label className="mt-sm block text-subhead font-semibold" htmlFor="m-cadence">
           How often
         </label>
         <select id="m-cadence" value={cadence} onChange={(e) => setCadence(e.target.value as PeriodKind)} className={FIELD}>
@@ -348,12 +348,12 @@ function MetricSheet({ editing, kind, onClose, currency }: { editing: Kpi | 'new
             </option>
           ))}
         </select>
-        <label className="mt-sm block text-[14px] font-bold" htmlFor="m-target">
+        <label className="mt-sm block text-subhead font-semibold" htmlFor="m-target">
           Target, {unitHint(shownUnit, currency)}
         </label>
         <NumberField id="m-target" unit={shownUnit} stored={target} onChange={setTarget} label="Target" />
         {error != null && (
-          <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+          <p role="alert" className="mt-sm m-0 text-subhead">
             {error instanceof ApiError ? error.message : 'That did not work. Try again.'}
           </p>
         )}

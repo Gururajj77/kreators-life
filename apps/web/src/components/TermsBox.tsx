@@ -6,13 +6,13 @@ export function TermsBox({ checked, onChange }: { checked: boolean; onChange: (c
   return (
     <label className="toy toy-flat mt-xs flex min-h-[44px] cursor-pointer items-start gap-sm rounded-tile px-xs py-xs">
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-xs size-[24px] shrink-0" />
-      <span className="text-[14px] font-semibold leading-snug">
+      <span className="text-subhead">
         I agree to the{' '}
-        <Link to="/terms" target="_blank" className="font-extrabold underline underline-offset-4">
+        <Link to="/terms" target="_blank" className="font-medium underline underline-offset-4">
           Terms of use
         </Link>{' '}
         and have read the{' '}
-        <Link to="/privacy" target="_blank" className="font-extrabold underline underline-offset-4">
+        <Link to="/privacy" target="_blank" className="font-medium underline underline-offset-4">
           Privacy policy
         </Link>{' '}
         (version {LEGAL_VERSION}).

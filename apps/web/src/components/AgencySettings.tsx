@@ -53,30 +53,30 @@ function HouseTemplates() {
   const house = list.filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true)));
   return (
     <div>
-      <p className="m-0 text-[14px] font-semibold text-ink-soft">Starting points from the kreators.app team. Pick one when you start a new invoice, agreement or document; you get your own copy to change.</p>
+      <p className="m-0 text-subhead text-ink-soft">Starting points from the kreators.app team. Pick one when you start a new invoice, agreement or document; you get your own copy to change.</p>
       {(inv.isPending || con.isPending || doc.isPending) && (
         <div className="mt-xs">
           <PaperLoading label="Loading house templates" />
         </div>
       )}
       {(inv.isError || con.isError || doc.isError) && (
-        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-xs m-0 text-subhead">
           Could not load the house templates. Try again.
         </p>
       )}
-      {inv.data && con.data && doc.data && house.length === 0 && <p className="mt-xs m-0 rounded-tile bg-card p-sm text-[14px] font-semibold text-ink-soft">No house templates yet.</p>}
+      {inv.data && con.data && doc.data && house.length === 0 && <p className="mt-xs m-0 rounded-tile bg-card p-sm text-subhead text-ink-soft">No house templates yet.</p>}
       <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
         {house.map((t) => (
           <li key={t.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
             <CardHead tag={<StatusTag fit tone="info">{KIND_NAME[t.kind] ?? 'Template'}</StatusTag>}>
-              <span className="block text-[16px] font-extrabold">{t.name}</span>
+              <span className="block text-headline">{t.name}</span>
             </CardHead>
-            <span className="mt-xs block text-[14px] font-semibold text-ink-soft">{t.summary}</span>
+            <span className="mt-xs block text-subhead text-ink-soft">{t.summary}</span>
           </li>
         ))}
       </ul>
       {me.data?.user.role === 'admin' && (
-        <p className="mt-sm m-0 text-[14px] font-bold">
+        <p className="mt-sm m-0 text-subhead font-semibold">
           <Link to="/admin?tab=agencyhouse">Manage house templates in Admin</Link>
         </p>
       )}
@@ -167,7 +167,7 @@ export function AgencySettings() {
 
   if (q.isError) {
     return (
-      <p role="alert" className="mt-md m-0 text-[14px] font-bold">
+      <p role="alert" className="mt-md m-0 text-subhead">
         Could not load your business details. Try again.
       </p>
     );
@@ -239,26 +239,26 @@ export function AgencySettings() {
           <span className="flex h-[40px] w-[48px] shrink-0 items-center justify-center text-ink-soft">
             <Icon icon={LayoutTemplate} size={20} />
           </span>
-          <span className="min-w-0 flex-1 text-[16px] font-extrabold">Templates</span>
+          <span className="min-w-0 flex-1 text-headline">Templates</span>
           <Icon icon={ChevronRight} size={20} className="text-ink-mute" />
         </button>
         <button type="button" onClick={() => setPanel('fill')} className="toy toy-soft flex min-h-[56px] min-w-0 flex-1 basis-[240px] items-center gap-xs rounded-tile bg-card px-xs text-left text-ink shadow-toy-soft">
           <span className="flex h-[40px] w-[48px] shrink-0 items-center justify-center text-ink-soft">
             <Icon icon={ListChecks} size={20} />
           </span>
-          <span className="min-w-0 flex-1 text-[16px] font-extrabold">Fill in your business details</span>
+          <span className="min-w-0 flex-1 text-headline">Fill in your business details</span>
           <Icon icon={ChevronRight} size={20} className="text-ink-mute" />
         </button>
         <MoreMenu items={more} label="More business settings" />
       </div>
-      <p role="status" aria-live="polite" className="mt-xs m-0 min-h-[24px] text-[14px] font-semibold text-ink-soft">
+      <p role="status" aria-live="polite" className="mt-xs m-0 min-h-[24px] text-subhead text-ink-soft">
         {save.isPending ? 'Saving' : note}
         {note === 'Saved' && undo && !save.isPending && (
           <>
             {' '}
             <button
               type="button"
-              className="font-bold text-ink underline"
+              className="font-semibold text-ink underline"
               onClick={() => {
                 const back = undo;
                 setUndo(null);
@@ -271,34 +271,34 @@ export function AgencySettings() {
         )}
       </p>
 
-      <h3 className="mt-sm mb-xs text-[16px] font-extrabold">Your invoice</h3>
+      <h3 className="mt-sm mb-xs text-headline">Your invoice</h3>
       <div className="legal-host">
         <div aria-hidden="true" />
         <InvoiceView invoice={preview} editor={editor} />
       </div>
 
-      <h3 className="mt-lg mb-xs text-[16px] font-extrabold">Your agreements</h3>
+      <h3 className="mt-lg mb-xs text-headline">Your agreements</h3>
       <AgreementPaper p={p} currency={draft.currency} set={set} />
 
       <FillDetailsSheet open={panel === 'fill'} onClose={() => setPanel(null)} doc={null} profile={p} onProfile={(next) => set(next)} />
       <Sheet open={panel === 'templates'} onClose={() => setPanel(null)} title="Templates">
         <div className="grid gap-md pb-xl">
           <div>
-            <h3 className="m-0 mb-xs text-[16px] font-extrabold">Invoice templates</h3>
+            <h3 className="m-0 mb-xs text-headline">Invoice templates</h3>
             <InvoiceTemplates />
           </div>
           <div>
-            <h3 className="m-0 mb-xs text-[16px] font-extrabold">Agreement templates</h3>
+            <h3 className="m-0 mb-xs text-headline">Agreement templates</h3>
             <AgreementTemplates />
           </div>
           <div>
-            <h3 className="m-0 mb-xs text-[16px] font-extrabold">House templates</h3>
+            <h3 className="m-0 mb-xs text-headline">House templates</h3>
             <HouseTemplates />
           </div>
         </div>
       </Sheet>
       <Sheet open={panel === 'show'} onClose={() => setPanel(null)} title="What the client sees">
-        <p className="mt-0 mb-sm text-[14px] font-semibold text-ink-soft">What every new invoice shows. Change it on any one invoice too.</p>
+        <p className="mt-0 mb-sm text-subhead text-ink-soft">What every new invoice shows. Change it on any one invoice too.</p>
         <ShowSwitches value={p.show} onChange={(show) => set({ show })} />
         <div className="mt-md pb-xl">
           <Button onClick={() => setPanel(null)}>Done</Button>
@@ -320,8 +320,8 @@ export function AgencySettings() {
             <div role="group" aria-label="Invoice design" className="mt-xs grid gap-xs md:grid-cols-2">
               {INVOICE_DESIGNS.map((d) => (
                 <button key={d} type="button" aria-pressed={p.design === d} onClick={() => set({ design: d })} className={`toy rounded-tile border-2 p-sm text-left ${p.design === d ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
-                  <span className="block text-[16px] font-extrabold">{INVOICE_DESIGN_META[d].name}</span>
-                  <span className="mt-xs block text-[14px] font-semibold text-ink-soft">{INVOICE_DESIGN_META[d].blurb}</span>
+                  <span className="block text-headline">{INVOICE_DESIGN_META[d].name}</span>
+                  <span className="mt-xs block text-subhead text-ink-soft">{INVOICE_DESIGN_META[d].blurb}</span>
                 </button>
               ))}
             </div>
@@ -344,7 +344,7 @@ export function AgencySettings() {
           </div>
           <div className="min-w-0">
             <Field id="set-weekly" label="Hours a week" inputMode="numeric" value={String(draft.weeklyHours)} onChange={(v) => setDraft({ ...draft, weeklyHours: Math.max(1, Math.min(100, Math.round(Number.parseFloat(v) || 1))) })} />
-            <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">Used to work out how much of your week is paid work.</p>
+            <p className="mt-xs m-0 text-caption text-ink-soft">Used to work out how much of your week is paid work.</p>
           </div>
         </div>
       </Sheet>
@@ -402,7 +402,7 @@ function AgreementPaper({ p, currency, set }: { p: BusinessProfile; currency: st
   const unit = pk.unit || 'Videos';
   const line = (label: string, field: ReactNode) => (
     <div className="flex flex-wrap items-baseline gap-x-xs">
-      <span className="shrink-0 font-bold">{label}</span>
+      <span className="shrink-0 font-semibold">{label}</span>
       {field}
     </div>
   );
@@ -506,7 +506,7 @@ function AgreementPaper({ p, currency, set }: { p: BusinessProfile; currency: st
         </div>
         {rows.length === 0 && (
           <p className="legal-clause no-print">
-            <button type="button" onClick={addRow} className="min-h-[44px] font-bold underline">
+            <button type="button" onClick={addRow} className="min-h-[44px] font-semibold underline">
               Add your first package
             </button>
           </p>

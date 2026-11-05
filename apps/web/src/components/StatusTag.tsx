@@ -25,7 +25,7 @@ export function StatusTag({ tone, children, title, mark, fit = false, className 
   const t = TONE[tone];
   const tip = title ?? (fit && typeof children === 'string' ? children : undefined);
   return (
-    <span title={tip} className={`tag inline-flex items-center gap-xs rounded-pill px-sm text-[12px] font-extrabold leading-[24px] text-ink ${fit ? 'min-w-0 max-w-full shrink' : 'shrink-0'} ${className}`} style={{ background: t.bg }}>
+    <span title={tip} className={`tag inline-flex items-center gap-xs rounded-pill px-sm text-caption font-medium leading-[24px] text-ink ${fit ? 'min-w-0 max-w-full shrink' : 'shrink-0'} ${className}`} style={{ background: t.bg }}>
       {mark ? (
         <span aria-hidden="true" className="inline-flex shrink-0" style={{ color: t.ink }}>
           {mark}

@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { App, routePattern } from './App';
 import { CelebrationProvider } from './components/Celebration';
 import { ApiError } from './lib/api';
+import { useSession } from './lib/store';
 import './app.css';
 
 // Read data counts as fresh for 30 seconds, so moving between screens and back to a tab does not ask the server again
@@ -17,6 +18,15 @@ const queryClient = new QueryClient({
       retry: (count, err) => count < 1 && !(err instanceof ApiError && err.status >= 400 && err.status < 500),
     },
   },
+});
+
+// A change of account (signing out, or another session on the same device) drops every cached answer, so the next person never
+// sees the last one's data, not even for a moment (Emerging's one query per day is not keyed by person).
+let lastToken = useSession.getState().token;
+useSession.subscribe((s) => {
+  if (s.token === lastToken) return;
+  if (lastToken) queryClient.clear();
+  lastToken = s.token;
 });
 
 // Page speed notes load beside the app, not in its first download. The browser keeps the timings it took before (buffered), so

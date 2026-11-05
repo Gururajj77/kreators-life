@@ -113,10 +113,10 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
               Pillars
             </BackLink>
           </div>
-          <p className="mt-sm m-0 text-[14px] font-bold">
+          <p className="mt-sm m-0 text-subhead font-semibold">
             Pillar {rel.floor} of 7, {rel.character}, your {rel.role}
           </p>
-          <h1 className="text-[30px]">{rel.name}</h1>
+          <h1 className="text-large-title">{rel.name}</h1>
           <div className="mt-md">
             <EvolutionReveal
               now={<Avatar relationship={relationship} size={88} mood={built ? 'happy' : 'sleepy'} stage={evo.stage.stage} decorative />}
@@ -128,7 +128,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
               readyInDays={evo.readyInDays}
             />
           </div>
-          <p className="mt-sm m-0 text-center text-[14px] font-bold">
+          <p className="mt-sm m-0 text-center text-subhead font-semibold">
             Level {lp.level}, {state?.xp ?? 0} xp.{' '}
             {evo.preparing && evo.next
               ? `${evo.next.name} evolves in ${evo.readyInDays} ${evo.readyInDays === 1 ? 'day' : 'days'}.`
@@ -136,9 +136,9 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                 ? `${evo.xpToNext} xp until ${evo.next.name}.`
                 : 'Final form.'}
           </p>
-          <p className="mt-md m-0 rounded-card rounded-tl-[8px] bg-card p-md text-[16px] font-semibold text-ink">{rel.greeting}</p>
+          <p className="mt-md m-0 rounded-card rounded-tl-[8px] bg-card p-md text-callout text-ink">{rel.greeting}</p>
           {placement && (
-            <p className="mt-sm m-0 text-[14px] font-bold">
+            <p className="mt-sm m-0 text-subhead font-semibold">
               {placementLine(placement)}{' '}
               <Link to="/tower#life-map" className="underline underline-offset-4">
                 See the map
@@ -150,18 +150,18 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
 
       <Screen>
         {notice && (
-          <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {notice}
           </p>
         )}
 
         {!nodesQ.isPending && !built && (
           <section className="mt-lg" aria-labelledby="build-heading">
-            <h2 id="build-heading" className="text-[24px]">
+            <h2 id="build-heading" className="text-title2">
               Set up this pillar
             </h2>
             <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft" style={{ backgroundImage: `linear-gradient(145deg, color-mix(in oklab, ${rel.color} 16%, transparent), transparent 65%)` }}>
-              <p className="m-0 text-[16px] font-semibold">
+              <p className="m-0 text-callout">
                 {rel.character} built a pyramid from your answers: the foundation you picked, then a guiding principle, a value goal, a goal outcome, a project and three tasks. One tap and they show up on Daily.
               </p>
               <Button variant="color" color={fillVar(rel)} deep={`var(--deep-${rel.key})`} full className="mt-md" style={{ color: ON_FILL }} onClick={() => acceptQuest.mutate()} disabled={acceptQuest.isPending}>
@@ -177,10 +177,10 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
         {built && (
           <>
             <section className="mt-lg" aria-labelledby="do-heading">
-              <h2 id="do-heading" className="text-[24px]">
+              <h2 id="do-heading" className="text-title2">
                 Tasks to do
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Tick the box when you have done it. The whole pyramid gets stronger.</p>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">Tick the box when you have done it. The whole pyramid gets stronger.</p>
               {activeTasks.length > 0 ? (
                 <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                   <AnimatePresence initial={false}>
@@ -203,20 +203,20 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                   </AnimatePresence>
                 </ul>
               ) : (
-                <p className="mt-sm m-0 rounded-tile bg-card p-sm text-[14px] font-semibold text-ink-soft shadow-toy-soft">Nothing waiting. Add one below.</p>
+                <p className="mt-sm m-0 rounded-tile bg-card p-sm text-subhead text-ink-soft shadow-toy-soft">Nothing waiting. Add one below.</p>
               )}
               <Button full className="mt-sm" plusToX expanded={adding === 'task'} onClick={() => setAdding('task')} disabled={projects.length === 0}>
                 Add a task
               </Button>
               {/* The caption of the button above: it says why that one button is off, so it sits centred under it. */}
-              {projects.length === 0 && <p className="mt-xs m-0 text-center text-[12px] font-semibold text-balance text-ink-soft">Tasks need a project. Open the pyramid below to add one.</p>}
+              {projects.length === 0 && <p className="mt-xs m-0 text-center text-caption text-balance text-ink-soft">Tasks need a project. Open the pyramid below to add one.</p>}
             </section>
 
             <section className="mt-lg" aria-labelledby="ladder-heading">
-              <h2 id="ladder-heading" className="text-[24px]">
+              <h2 id="ladder-heading" className="text-title2">
                 The pyramid
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+              <p className="mt-xs m-0 text-subhead text-ink-soft">
                 Five layers lead down to the tasks. Open a layer to see what is there, change it, or add to it.
               </p>
               <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
@@ -241,24 +241,24 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                         title={
                           <span className="flex items-center gap-sm py-xs">
                             <span
-                              className="flex size-[32px] shrink-0 items-center justify-center rounded-pill font-display text-[14px] font-extrabold"
+                              className="flex size-[32px] shrink-0 items-center justify-center rounded-pill text-subhead font-medium"
                               style={locked ? { background: 'var(--color-line)', color: 'var(--color-ink-soft)' } : { background: fillVar(rel), color: ON_FILL }}
                               aria-hidden="true"
                             >
                               {meta.rung}
                             </span>
                             <span className="min-w-0 flex-1">
-                              <span className="block text-[16px] font-bold">
+                              <span className="block text-headline">
                                 {meta.plural}
                                 {items.length > 0 && <span className="text-ink-mute"> {items.length}</span>}
                               </span>
-                              <span className="block truncate text-[14px] font-semibold text-ink-soft">{summary}</span>
+                              <span className="block truncate text-subhead text-ink-soft">{summary}</span>
                             </span>
                           </span>
                         }
                       >
                         <div className="border-t border-line p-sm">
-                          <p className="m-0 text-[14px] font-semibold text-ink-soft">{meta.hint}</p>
+                          <p className="m-0 text-subhead text-ink-soft">{meta.hint}</p>
                           {items.length > 0 && (
                             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                               {items.map((n) => {
@@ -268,11 +268,11 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                                     <button type="button" onClick={() => setEditing(n)} className="toy toy-flat flex w-full items-center gap-sm rounded-tile bg-paper p-sm text-left">
                                       <span className="w-[6px] self-stretch rounded-pill" style={{ background: n.status === 'done' ? rel.deep : rel.color }} aria-hidden="true" />
                                       <span className="min-w-0 flex-1">
-                                        <span className="block truncate text-[16px] font-bold">
+                                        <span className="block truncate text-headline">
                                           {n.title}
                                           {n.status === 'done' && <span className="text-ink-mute"> (cleared)</span>}
                                         </span>
-                                        {parentNode && <span className="block truncate text-[14px] font-semibold text-ink-soft">Holds up: {parentNode.title}</span>}
+                                        {parentNode && <span className="block truncate text-subhead text-ink-soft">Holds up: {parentNode.title}</span>}
                                         {n.kind === 'project' && n.status === 'active' && (
                                           <PaceTag
                                             created={n.createdAt}
@@ -308,7 +308,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                           <span className="flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-r4 text-on-fill" aria-hidden="true">
                             <Icon icon={Check} size={16} strokeWidth={3} />
                           </span>
-                          <span className="min-w-0 flex-1 text-[16px] font-bold">Done tasks {doneTasks.length}</span>
+                          <span className="min-w-0 flex-1 text-headline">Done tasks {doneTasks.length}</span>
                         </span>
                       }
                     >
@@ -345,7 +345,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
 }
 
 function AddSheet({ kind, relationship, nodes, today, onClose }: { kind: NodeKind | null; relationship: RelationshipKey; nodes: Node[]; today: string; onClose: () => void }) {
-  const refresh = useRefreshAll();
+  const refresh = useRefreshAll({ insights: true });
   const [title, setTitle] = useState('');
   const [parentId, setParentId] = useState('');
   const [plan, setPlan] = useState<Plan>(() => planOf(null, today));
@@ -383,7 +383,7 @@ function AddSheet({ kind, relationship, nodes, today, onClose }: { kind: NodeKin
           }}
         >
           <label className="block">
-            <span className="block text-[14px] font-bold">{meta.hint}</span>
+            <span className="block text-subhead">{meta.hint}</span>
             <input
               autoFocus
               value={title}
@@ -391,13 +391,13 @@ function AddSheet({ kind, relationship, nodes, today, onClose }: { kind: NodeKin
               maxLength={140}
               placeholder={meta.prompt}
               required
-              className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]"
+              className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body"
             />
           </label>
           {parent && (
             <label className="block">
-              <span className="block text-[14px] font-bold">Which {KIND_META[parent].label.toLowerCase()} does it hold up?</span>
-              <select value={parentId} onChange={(e) => setParentId(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]">
+              <span className="block text-subhead font-semibold">Which {KIND_META[parent].label.toLowerCase()} does it hold up?</span>
+              <select value={parentId} onChange={(e) => setParentId(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body">
                 {parents.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.title}
@@ -409,11 +409,11 @@ function AddSheet({ kind, relationship, nodes, today, onClose }: { kind: NodeKin
           {kind === 'task' && (
             <>
               <TaskPlanFields plan={plan} onChange={setPlan} today={today} />
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">No do date? It waits in Not scheduled yet on Daily. A new task can be ticked after ten minutes.</p>
+              <p className="m-0 text-subhead text-ink-soft">No do date? It waits in Not scheduled yet on Daily. A new task can be ticked after ten minutes.</p>
             </>
           )}
           {create.isError && (
-            <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+            <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
               {create.error instanceof Error ? create.error.message : 'Could not add it. Try again.'}
             </p>
           )}
@@ -427,7 +427,7 @@ function AddSheet({ kind, relationship, nodes, today, onClose }: { kind: NodeKin
 }
 
 function EditSheet({ node, onClose }: { node: Node | null; onClose: () => void }) {
-  const refresh = useRefreshAll();
+  const refresh = useRefreshAll({ insights: true });
   const [title, setTitle] = useState('');
   const [note, setNote] = useState('');
   const [plan, setPlan] = useState<Plan>(() => planOf(null));
@@ -484,12 +484,12 @@ function EditSheet({ node, onClose }: { node: Node | null; onClose: () => void }
           }}
         >
           <label className="block">
-            <span className="block text-[14px] font-bold">Title</span>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} required className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+            <span className="block text-subhead font-semibold">Title</span>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} required className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Note</span>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={3} placeholder="Why this matters, in your words" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+            <span className="block text-subhead font-semibold">Note</span>
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={3} placeholder="Why this matters, in your words" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
           </label>
           {node.kind === 'task' && (
             <>
@@ -499,7 +499,7 @@ function EditSheet({ node, onClose }: { node: Node | null; onClose: () => void }
               <StartFocus task={{ ...node, estimateMin: Number(plan.minutes) > 0 ? Number(plan.minutes) : node.estimateMin }} />
             </>
           )}
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">
+          <p className="m-0 text-subhead text-ink-soft">
             {node.xp} xp earned here. {node.kind === 'task' ? 'Changing the title makes it a new task, so the ten-minute wait starts again.' : 'Removing it also removes everything it holds up.'}
           </p>
           <Button type="submit" size="lg" full disabled={save.isPending || !title.trim() || (node.kind === 'task' && planProblem(plan) !== null)}>

@@ -65,7 +65,7 @@ export const JOURNAL_CARE_NOTE = 'If this brings up something too heavy, stop, t
 export const JOURNAL_PLAN_NOTE = 'This is a reflection and planning tool, not a guarantee.';
 export { JOURNAL_PROMPT_CREDIT } from './index';
 /** Said on the card, because a prompt is not therapy. */
-export const JOURNAL_PROMPT_SAFETY = 'Prompts are for reflection. They are not therapy or medical advice. If you feel unsafe, call your local emergency number. In India, Tele-MANAS is 14416.';
+export const JOURNAL_PROMPT_SAFETY = 'Prompts are for reflection. They are not therapy or medical advice. If you feel unsafe, call your local emergency number or go to the nearest hospital. In India, Tele-MANAS is 14416.';
 
 export const JOURNAL_PROMPT_CATEGORIES: readonly JournalPromptCategory[] = [
   { key: 'shadow', name: 'Shadow work', meaning: 'Meet the parts of you that you hide, deny or push away.', tradition: 'Shadow work', howTo: 'Write fast and plain, and stay curious instead of harsh. You are looking at a part of you, not putting it on trial. Stop whenever you need to.', accent: 'divine', care: 'heavy' },

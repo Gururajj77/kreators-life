@@ -100,7 +100,7 @@ export function Assistant() {
         ref={tip}
         id="assistant-tip"
         role="tooltip"
-        className="tip-card pointer-events-none absolute right-0 bottom-full mb-sm whitespace-nowrap rounded-pill border border-line px-sm py-xs text-[14px] font-bold shadow-toy-soft"
+        className="tip-card pointer-events-none absolute right-0 bottom-full mb-sm whitespace-nowrap rounded-pill border border-line px-sm py-xs text-subhead font-medium shadow-toy-soft"
         style={{ opacity: 0, visibility: 'hidden' }}
       >
         Chat with AI assistant

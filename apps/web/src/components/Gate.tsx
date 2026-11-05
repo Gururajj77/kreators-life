@@ -27,12 +27,12 @@ export function Gate({ moduleKey, children }: { moduleKey: string; children: Rea
         <p className="m-0 flex justify-center text-ink-soft">
           <AppIcon name={meta?.icon} size={40} />
         </p>
-        <h1 className="mt-sm text-[30px]">{meta?.name ?? 'This feature'} is off</h1>
-        <p className="mt-sm m-0 text-[16px] font-semibold text-ink-soft">
+        <h1 className="mt-sm text-large-title">{meta?.name ?? 'This feature'} is off</h1>
+        <p className="mt-sm m-0 text-callout text-ink-soft">
           {m.available ? 'It is switched off. Turn it on from Apps.' : 'It is not available on your account right now.'}
         </p>
         {m.available && (
-          <Link to="/apps" className="toy mt-md inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+          <Link to="/apps" className="toy mt-md inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
             Open Apps
           </Link>
         )}

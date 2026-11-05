@@ -8,7 +8,7 @@ import { useSession } from '../lib/store';
 import { BOOK_CHAPTERS, BOOK_PAGE } from './content';
 import { GuideLine } from './GuideLine';
 import { SiteLayout } from './SiteLayout';
-import { SiteArrow, SITE_LINK, SITE_LINK_INLINE, SITE_PRIMARY, SITE_SECONDARY } from './buttons';
+import { SiteArrow, SITE_CHIP_BASE, SITE_LINK_INLINE, SITE_PRIMARY, SITE_SECONDARY } from './buttons';
 
 /** Where "Read the course in the app" goes: the Book page for someone signed in, through sign-in for a visitor. */
 export function useBookEntry(): string {
@@ -35,14 +35,14 @@ export function BookCover({ book, className = '', eager = false }: { book: Book;
 function CoverWords({ book }: { book: Book }) {
   if (book.back.length === 0) {
     return (
-      <blockquote className="prose-long m-0 border-l-2 border-line pl-sm text-[16px] font-semibold text-ink-soft">
+      <blockquote className="prose-long m-0 border-l-2 border-line pl-sm text-prose text-ink-soft">
         <p className="m-0">{book.tagline}.</p>
         <p className="mt-xs m-0">{book.subtitle}.</p>
       </blockquote>
     );
   }
   return (
-    <blockquote className="prose-long m-0 border-l-2 border-line pl-sm text-[16px] font-semibold text-ink-soft">
+    <blockquote className="prose-long m-0 border-l-2 border-line pl-sm text-prose text-ink-soft">
       {book.back.map((p) => (
         <p key={p} className="m-0 mb-xs">
           {p}
@@ -50,7 +50,7 @@ function CoverWords({ book }: { book: Book }) {
       ))}
       {book.inside.length > 0 && (
         <>
-          <p className="m-0 font-bold text-ink">{book.insideLead}</p>
+          <p className="m-0 font-semibold text-ink">{book.insideLead}</p>
           <ul className="mt-xs m-0 grid list-disc gap-xs pl-md">
             {book.inside.map((t) => (
               <li key={t}>{t}</li>
@@ -66,7 +66,7 @@ function CoverWords({ book }: { book: Book }) {
 function Chapters({ slug }: { slug: string }) {
   const list = BOOK_CHAPTERS[slug] ?? [];
   return (
-    <ol className="m-0 grid list-decimal gap-xs pl-lg text-[16px] font-semibold text-ink-soft">
+    <ol className="m-0 grid list-decimal gap-xs pl-lg text-callout text-ink-soft">
       {list.map((c) => (
         <li key={c}>{c}</li>
       ))}
@@ -85,17 +85,17 @@ export function Books() {
     <SiteLayout>
       <header
         data-pillar="guru"
-        className="wash mt-lg grid gap-md rounded-card bg-card p-md shadow-toy-soft md:grid-cols-[3fr_2fr] md:items-center md:p-lg"
+        className="wash mt-lg grid gap-md rounded-card bg-card p-md shadow-toy-soft lg:grid-cols-[3fr_2fr] lg:items-center md:p-lg"
         style={{ '--wash': 'var(--color-r6)' } as CSSProperties}
       >
         <div>
           <BackLink to="/features">All features</BackLink>
           <p className="m-0 type-eyebrow text-ink-mute">Books</p>
-          <h1 className="type-hook mt-xs text-[clamp(40px,9vw,80px)]">
+          <h1 className="type-hook mt-xs text-display-1">
             Three books, <em>three courses</em>
           </h1>
-          <p className="mt-sm m-0 max-w-[560px] text-[16px] font-semibold leading-snug text-ink-soft">
-            {BOOK_AUTHOR}, who builds kreators.app, wrote all three. Each one is a course in School.
+          <p className="mt-sm m-0 max-w-[560px] text-callout text-ink-soft">
+            {BOOK_AUTHOR}, who builds kreators.app, wrote all three. He left college to live as a monk, and came back with the idea this app is built on: seven relationships make a life. Each book is a course in School.
           </p>
           {/* One main action (site/buttons.ts): Start free for a visitor, the courses for someone signed in. */}
           <div className="mt-md flex flex-wrap items-center gap-sm">
@@ -128,14 +128,16 @@ export function Books() {
               <div className="mx-auto w-[180px] md:w-full">
                 <BookCover book={b} eager />
               </div>
-              <div className="min-w-0">
-                <h2 id={`${b.slug}-title`} className="type-hook m-0 text-[clamp(28px,5vw,40px)]">
+              {/* The words at the top, the way into the course at the foot on the right, level with the cover's foot: the column used to end
+                  in a lone link under the folds with an empty band below it. */}
+              <div className="flex min-w-0 flex-col">
+                <h2 id={`${b.slug}-title`} className="type-hook m-0 text-display-3">
                   {b.title}
                 </h2>
-                <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">{b.subtitle}</p>
-                <p className="mt-xs m-0 text-[14px] font-bold text-ink-mute">by {b.author}</p>
+                <p className="mt-xs m-0 text-callout text-ink-soft">{b.subtitle}</p>
+                <p className="mt-xs m-0 text-subhead text-ink-mute">by {b.author}</p>
                 {b.slug === 'the-relationship-method' && (
-                  <p className="mt-sm m-0 text-[16px] font-semibold text-ink">
+                  <p className="mt-sm m-0 text-callout text-ink">
                     The book behind the seven relationships this app is built on.{' '}
                     <Link to="/7rp" className={SITE_LINK_INLINE}>
                       Meet the seven
@@ -154,9 +156,10 @@ export function Books() {
                     </div>
                   </Fold>
                 </div>
-                <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">
-                  <Link to={course} className={`${SITE_LINK} text-ink`}>
+                <p className="mt-auto m-0 flex justify-end pt-md">
+                  <Link to={course} className={`${SITE_CHIP_BASE} px-md`}>
                     Read the course in the app
+                    <SiteArrow />
                   </Link>
                 </p>
               </div>
@@ -165,7 +168,7 @@ export function Books() {
         ))}
       </ul>
 
-      <p className="type-measure mt-lg m-0 text-[14px] font-semibold text-ink-soft">
+      <p className="type-measure mt-lg m-0 text-subhead text-ink-soft">
         The courses teach from the books in plain words. Each lesson marks what comes from the book, and anything it adds is the app’s own.
       </p>
     </SiteLayout>

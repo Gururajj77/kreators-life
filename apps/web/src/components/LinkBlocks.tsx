@@ -47,17 +47,17 @@ export function LinkBlocks({ blocks, onOpen }: { blocks: LinkBlock[]; onOpen?: (
                   </span>
                 )}
                 <span className="min-w-0 flex-1">
-                  <span className={`block break-words font-bold leading-snug ${b.featured ? 'text-[18px]' : 'text-[16px]'}`}>{b.title || hostOf(b.url) || b.url}</span>
-                  {b.title && hostOf(b.url) && <span className="block truncate text-[12px] font-semibold text-ink-soft">{hostOf(b.url)}</span>}
+                  <span className={`block break-words font-semibold leading-snug ${b.featured ? 'text-headline' : 'text-callout'}`}>{b.title || hostOf(b.url) || b.url}</span>
+                  {b.title && hostOf(b.url) && <span className="block truncate text-caption text-ink-soft">{hostOf(b.url)}</span>}
                 </span>
-                <span className="flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink-soft transition-transform motion-safe:group-hover:translate-x-xs" aria-hidden="true">
+                <span className="flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink-soft transition-transform motion-safe:group-hover:translate-x-xs motion-safe:group-hover:-translate-y-xs" aria-hidden="true">
                   <Icon icon={ArrowUpRight} size={16} strokeWidth={2.5} />
                 </span>
                 {b.featured && <span className="sr-only">Featured.</span>}
               </a>
             )}
-            {b.type === 'header' && <h2 className="mt-md text-[20px]">{b.title}</h2>}
-            {b.type === 'text' && <p className="m-0 px-xs text-[14px] font-semibold leading-relaxed text-ink-soft">{b.text}</p>}
+            {b.type === 'header' && <h2 className="mt-md text-title3">{b.title}</h2>}
+            {b.type === 'text' && <p className="m-0 px-xs text-prose text-ink-soft">{b.text}</p>}
             {b.type === 'image' && (
               <figure className="m-0 overflow-hidden rounded-card bg-card shadow-toy-soft">
                 {b.url ? (
@@ -67,7 +67,7 @@ export function LinkBlocks({ blocks, onOpen }: { blocks: LinkBlock[]; onOpen?: (
                 ) : (
                   <FadeImage src={b.image} alt={b.title} loading="lazy" decoding="async" className="block max-h-[360px] w-full object-cover" />
                 )}
-                {b.title && <figcaption className="px-md py-sm text-[14px] font-semibold">{b.title}</figcaption>}
+                {b.title && <figcaption className="px-md py-sm text-subhead">{b.title}</figcaption>}
               </figure>
             )}
             {b.type === 'video' &&
@@ -76,19 +76,19 @@ export function LinkBlocks({ blocks, onOpen }: { blocks: LinkBlock[]; onOpen?: (
                   <EmbedGate url={b.url} title={b.title || 'Video'} className="rounded-none">
                     <iframe src={`https://www.youtube-nocookie.com/embed/${youtubeId(b.url)}`} title={b.title || 'Video'} className="block aspect-video w-full border-0" allow="accelerometer; encrypted-media; picture-in-picture" allowFullScreen loading="lazy" />
                   </EmbedGate>
-                  {b.title && <figcaption className="px-md py-sm text-[14px] font-semibold">{b.title}</figcaption>}
+                  {b.title && <figcaption className="px-md py-sm text-subhead">{b.title}</figcaption>}
                 </figure>
               ) : (
                 <a href={b.url} target="_blank" rel="noreferrer" onClick={open(b.id)} className="group toy toy-soft flex min-h-[64px] items-center gap-sm rounded-tile bg-card px-md py-sm text-ink">
                   <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper" aria-hidden="true">
                     <Icon icon={Play} size={18} filled />
                   </span>
-                  <span className="min-w-0 flex-1 text-[16px] font-bold leading-snug">{b.title || 'Watch'}</span>
+                  <span className="min-w-0 flex-1 text-headline">{b.title || 'Watch'}</span>
                 </a>
               ))}
             {b.type === 'carousel' && (
               <div>
-                {b.title && <h2 className="mt-md text-[20px]">{b.title}</h2>}
+                {b.title && <h2 className="mt-md text-title3">{b.title}</h2>}
                 <div className="mt-xs">
                   <ul className="scroll-row snap-x list-none" aria-label={b.title || 'Carousel'}>
                     {b.items.map((it) => {
@@ -101,7 +101,7 @@ export function LinkBlocks({ blocks, onOpen }: { blocks: LinkBlock[]; onOpen?: (
                               <Icon icon={GalleryHorizontal} size={32} />
                             </span>
                           )}
-                          {it.title && <span className="block px-sm py-sm text-[14px] font-bold leading-snug">{it.title}</span>}
+                          {it.title && <span className="block px-sm py-sm text-subhead font-semibold">{it.title}</span>}
                         </>
                       );
                       return (

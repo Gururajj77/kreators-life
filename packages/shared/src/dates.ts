@@ -10,11 +10,33 @@ export interface AvailabilityOverride {
   ranges: { startMin: number; endMin: number }[];
 }
 
+/**
+ * One formatter per zone (2026-11-05): building an Intl.DateTimeFormat is the slow part (about 30 µs), and Emerging reads thousands
+ * of ticks in one zone. A zone the platform does not know is remembered as null, so it answers 0 without throwing again.
+ */
+const ZONE_FORMATS = new Map<string, Intl.DateTimeFormat | null>();
+function zoneFormat(zone: string): Intl.DateTimeFormat | null {
+  const hit = ZONE_FORMATS.get(zone);
+  if (hit !== undefined) return hit;
+  let fmt: Intl.DateTimeFormat | null;
+  try {
+    // en-US on purpose: these parts are parsed for zone maths, never shown.
+    fmt = new Intl.DateTimeFormat('en-US', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  } catch {
+    fmt = null;
+  }
+  // Zone names come from people's profiles, so the cache is bounded; past the bound it starts again.
+  if (ZONE_FORMATS.size >= 512) ZONE_FORMATS.clear();
+  ZONE_FORMATS.set(zone, fmt);
+  return fmt;
+}
+
 /** Minutes the zone is ahead of UTC at a given instant, via the platform's own tables. */
 export function zoneOffsetMinutes(zone: string, at: Date): number {
   try {
-    // en-US on purpose: these parts are parsed for zone maths, never shown.
-    const parts = new Intl.DateTimeFormat('en-US', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(at);
+    const fmt = zoneFormat(zone);
+    if (!fmt) return 0;
+    const parts = fmt.formatToParts(at);
     const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
     const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
     return Math.round((asUtc - at.getTime()) / 60_000);

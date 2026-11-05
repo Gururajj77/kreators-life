@@ -5,6 +5,9 @@ import { Link, useParams } from 'react-router';
 import { Button } from '../components/Button';
 import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
+import { FactTag } from '../components/FactTag';
+import { RowCard } from '../components/RowCard';
+import { Reveal } from '../components/fx/Reveal';
 import { Sheet } from '../components/Sheet';
 import { Toggle } from '../components/Toggle';
 import { api, errorText } from '../lib/api';
@@ -60,16 +63,16 @@ export function Army() {
 
       {offers.length > 0 && (
         <section className="mt-lg" aria-labelledby="offers-heading">
-          <h2 id="offers-heading" className="text-[24px]">
+          <h2 id="offers-heading" className="text-title2">
             Offers for you
           </h2>
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {offers.map((a) => (
               <li key={a.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <p className="m-0 text-[16px] font-bold">
+                <p className="m-0 text-headline">
                   {a.role} on a campaign{a.feeAmount > 0 ? `, ${a.currency} ${a.feeAmount}` : ''}
                 </p>
-                <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Accepting means you agree to the brief, usage rights and exclusivity terms shown on the campaign.</p>
+                <p className="mt-xs m-0 text-subhead text-ink-soft">Accepting means you agree to the brief, usage rights and exclusivity terms shown on the campaign.</p>
                 <div className="mt-sm flex flex-wrap gap-xs">
                   <Button onClick={() => answer.mutate({ id: a.id, status: 'accepted' })} disabled={answer.isPending}>
                     Accept
@@ -77,7 +80,7 @@ export function Army() {
                   <Button variant="outline" onClick={() => answer.mutate({ id: a.id, status: 'declined' })} disabled={answer.isPending}>
                     Decline
                   </Button>
-                  <Link to={`/army/${a.campaignId}`} className="toy toy-soft inline-flex min-h-[48px] items-center rounded-pill bg-card px-md font-bold">
+                  <Link to={`/army/${a.campaignId}`} className="toy toy-soft inline-flex min-h-[48px] items-center rounded-pill bg-card px-md font-semibold">
                     Read the brief
                   </Link>
                 </div>
@@ -92,28 +95,28 @@ export function Army() {
 
       <section className="mt-lg" aria-labelledby="campaigns-heading">
         <div className="flex items-center justify-between gap-sm">
-          <h2 id="campaigns-heading" className="text-[24px]">
+          <h2 id="campaigns-heading" className="text-title2">
             Campaigns
           </h2>
           {(myOrgs.length > 0 || d?.staff) && <Button onClick={() => setCreatingCampaign(true)}>New campaign</Button>}
         </div>
-        {d && d.campaigns.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing here yet. Brands start a campaign; creators appear once the team assigns them.</p>}
+        {d && d.campaigns.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">Nothing here yet. Brands start a campaign; creators appear once the team assigns them.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-          {d?.campaigns.map((c) => (
-            <li key={c.id}>
-              <Link to={`/army/${c.id}`} className="toy toy-soft block rounded-tile bg-card p-sm">
-                <span className="flex items-start justify-between gap-sm">
-                  <span className="min-w-0">
-                    <span className="block truncate text-[16px] font-bold">{c.name}</span>
-                    <span className="block text-[14px] font-semibold text-ink-soft">{c.organizationName}</span>
-                  </span>
-                  <StatusPill status={c.status} />
-                </span>
-                <span className="mt-xs block text-[14px] font-semibold text-ink-soft">
-                  {c.deliverableCount} deliverable{c.deliverableCount === 1 ? '' : 's'}, {c.assignmentCount} creator{c.assignmentCount === 1 ? '' : 's'}, due {fmtDate(c.dueDate)}
-                </span>
-              </Link>
-            </li>
+          {d?.campaigns.map((c, i) => (
+            <Reveal as="li" key={c.id} index={i} className="flex">
+              {/* The name and brand at the top left, the stage in the corner, the counts and the due day as tags at the foot, the arrow at the bottom right. */}
+              <RowCard
+                to={`/army/${c.id}`}
+                title={c.name}
+                sub={c.organizationName}
+                corner={<StatusPill status={c.status} />}
+                facts={[
+                  <FactTag key="del" kind="category">{`${c.deliverableCount} deliverable${c.deliverableCount === 1 ? '' : 's'}`}</FactTag>,
+                  <FactTag key="cr" kind="availability">{`${c.assignmentCount} creator${c.assignmentCount === 1 ? '' : 's'}`}</FactTag>,
+                  <FactTag key="due" kind="when">{c.dueDate ? `Due ${fmtDate(c.dueDate)}` : 'No due day'}</FactTag>,
+                ]}
+              />
+            </Reveal>
           ))}
         </ul>
         <Pager page={d?.page} label="campaigns" />
@@ -121,15 +124,15 @@ export function Army() {
 
       <section className="mt-lg" aria-labelledby="brands-heading">
         <div className="flex items-center justify-between gap-sm">
-          <h2 id="brands-heading" className="text-[24px]">
+          <h2 id="brands-heading" className="text-title2">
             Brands
           </h2>
           <Button variant="outline" onClick={() => setCreatingOrg(true)}>
             New brand
           </Button>
         </div>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">A brand is a team that runs campaigns. Whoever creates it owns it and can add teammates by email.</p>
-        {orgs.data && myOrgs.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">You are not part of a brand yet.</p>}
+        <p className="mt-xs m-0 text-subhead text-ink-soft">A brand is a team that runs campaigns. Whoever creates it owns it and can add teammates by email.</p>
+        {orgs.data && myOrgs.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">You are not part of a brand yet.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {myOrgs.map((o) => (
             <li key={o.id}>
@@ -178,12 +181,12 @@ function OrgCard({ org }: { org: Organization }) {
     <div className="rounded-tile bg-card p-sm shadow-toy-soft">
       <button type="button" aria-expanded={open} aria-controls={`org-people-${org.id}`} onClick={() => setOpen((v) => !v)} className="toy toy-flat flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile text-left">
         <span className="min-w-0">
-          <span className="block truncate text-[16px] font-bold">{org.name}</span>
-          <span className="block text-[14px] font-semibold text-ink-soft">
+          <span className="block text-balance text-headline [overflow-wrap:anywhere]">{org.name}</span>
+          <span className="block text-subhead text-ink-soft">
             {org.type}, you are {org.myRole ?? 'a guest'}
           </span>
         </span>
-        <span className="flex shrink-0 items-center gap-xs text-[14px] font-bold text-ink-soft">
+        <span className="flex shrink-0 items-center gap-xs text-subhead text-ink-soft">
           {open ? 'Hide' : 'People'}
           <ToggleChevron open={open} />
         </span>
@@ -194,8 +197,8 @@ function OrgCard({ org }: { org: Organization }) {
             {members.data?.members.map((m) => (
               <li key={m.userId} className="flex items-center gap-sm rounded-tile bg-paper p-sm">
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[16px] font-bold">{m.name}</span>
-                  <span className="block truncate text-[14px] font-semibold text-ink-soft">
+                  <span className="block text-balance text-headline [overflow-wrap:anywhere]">{m.name}</span>
+                  <span className="block text-subhead text-ink-soft [overflow-wrap:anywhere]">
                     {m.role}
                     {m.email ? `, ${m.email}` : ''}
                   </span>
@@ -217,7 +220,7 @@ function OrgCard({ org }: { org: Organization }) {
               }}
             >
               <label className="block min-w-0 flex-1">
-                <span className="block text-[14px] font-bold">Add a teammate by email</span>
+                <span className="block text-subhead font-semibold">Add a teammate by email</span>
                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@brand.com" className={FIELD} />
               </label>
               <Button type="submit" disabled={add.isPending || !email.trim()}>
@@ -254,14 +257,14 @@ function NewOrgSheet({ open, onClose, onCreated }: { open: boolean; onClose: () 
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Name</span>
+          <span className="block text-subhead font-semibold">Name</span>
           <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required className={FIELD} />
         </label>
         <fieldset className="m-0 border-0 p-0">
-          <legend className="text-[14px] font-bold">What kind of team is it?</legend>
+          <legend className="text-subhead">What kind of team is it?</legend>
           <div className="mt-xs flex flex-wrap gap-xs">
             {(['brand', 'agency', 'partner'] as const).map((t) => (
-              <button key={t} type="button" aria-pressed={type === t} onClick={() => setType(t)} className={`min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold ${type === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+              <button key={t} type="button" aria-pressed={type === t} onClick={() => setType(t)} className={`min-h-[44px] rounded-pill border-2 px-sm text-subhead font-medium ${type === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
                 {t}
               </button>
             ))}
@@ -320,7 +323,7 @@ function NewCampaignSheet({ open, orgs, staff, onClose, onCreated }: { open: boo
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Brand</span>
+          <span className="block text-subhead font-semibold">Brand</span>
           <select value={orgId} onChange={(e) => setOrganizationId(e.target.value)} className={FIELD}>
             {choices.map((o) => (
               <option key={o.id} value={o.id}>
@@ -330,41 +333,41 @@ function NewCampaignSheet({ open, orgs, staff, onClose, onCreated }: { open: boo
           </select>
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Name</span>
+          <span className="block text-subhead font-semibold">Name</span>
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Brief</span>
+          <span className="block text-subhead font-semibold">Brief</span>
           <textarea value={brief} onChange={(e) => setBrief(e.target.value)} rows={4} maxLength={5000} placeholder="What the brand wants made, for whom, and in what tone" className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
-            <span className="block text-[14px] font-bold">Budget</span>
+            <span className="block text-subhead font-semibold">Budget</span>
             <input type="number" min={0} value={budget} onChange={(e) => setBudget(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Currency</span>
+            <span className="block text-subhead font-semibold">Currency</span>
             <input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} maxLength={3} className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Start</span>
+            <span className="block text-subhead font-semibold">Start</span>
             <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Due</span>
+            <span className="block text-subhead font-semibold">Due</span>
             <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={FIELD} />
           </label>
         </div>
         <label className="block">
-          <span className="block text-[14px] font-bold">Usage rights</span>
+          <span className="block text-subhead font-semibold">Usage rights</span>
           <textarea value={usage} onChange={(e) => setUsage(e.target.value)} rows={2} maxLength={1000} placeholder="Where and for how long the brand may use the work" className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Exclusivity</span>
+          <span className="block text-subhead font-semibold">Exclusivity</span>
           <textarea value={exclusivity} onChange={(e) => setExclusivity(e.target.value)} rows={2} maxLength={1000} placeholder="Any period the creator must not work with competitors" className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Restrictions</span>
+          <span className="block text-subhead font-semibold">Restrictions</span>
           <textarea value={restrictions} onChange={(e) => setRestrictions(e.target.value)} rows={2} maxLength={1000} placeholder="Things that must not appear" className={FIELD} />
         </label>
         <ErrorLine e={create.error} />
@@ -431,7 +434,7 @@ export function Campaign() {
             const done = i < idx && c.status !== 'cancelled';
             const current = s === c.status;
             return (
-              <li key={s} aria-current={current ? 'step' : undefined} className={`rounded-pill px-xs text-center text-[12px] font-extrabold leading-[24px] ${current ? 'bg-ink text-on-ink' : done ? 'bg-r4 text-on-fill' : 'bg-card text-ink-soft shadow-toy-soft'}`}>
+              <li key={s} aria-current={current ? 'step' : undefined} className={`rounded-pill px-xs text-center text-caption font-medium leading-[24px] ${current ? 'bg-ink text-on-ink' : done ? 'bg-r4 text-on-fill' : 'bg-card text-ink-soft shadow-toy-soft'}`}>
                 {CAMPAIGN_STATUS_META[s]}
               </li>
             );
@@ -442,23 +445,23 @@ export function Campaign() {
       <MediaSection type="campaign" id={c.id} />
 
       <section className="mt-lg rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="brief-heading">
-        <h2 id="brief-heading" className="text-[24px]">
+        <h2 id="brief-heading" className="text-title2">
           Brief
         </h2>
-        <p className="mt-xs m-0 whitespace-pre-wrap text-[16px] font-semibold">{c.brief || 'No brief written yet.'}</p>
+        <p className="mt-xs m-0 whitespace-pre-wrap text-prose">{c.brief || 'No brief written yet.'}</p>
         <dl className="mt-sm grid grid-cols-2 gap-xs m-0">
           <div>
-            <dt className="text-[12px] font-bold text-ink-soft">Start</dt>
-            <dd className="m-0 text-[16px] font-bold">{fmtDate(c.startDate)}</dd>
+            <dt className="text-caption text-ink-soft">Start</dt>
+            <dd className="m-0 text-headline">{fmtDate(c.startDate)}</dd>
           </div>
           <div>
-            <dt className="text-[12px] font-bold text-ink-soft">Due</dt>
-            <dd className="m-0 text-[16px] font-bold">{fmtDate(c.dueDate)}</dd>
+            <dt className="text-caption text-ink-soft">Due</dt>
+            <dd className="m-0 text-headline">{fmtDate(c.dueDate)}</dd>
           </div>
           {who !== 'creator' && (
             <div>
-              <dt className="text-[12px] font-bold text-ink-soft">Budget</dt>
-              <dd className="m-0 text-[16px] font-bold">
+              <dt className="text-caption text-ink-soft">Budget</dt>
+              <dd className="m-0 text-headline">
                 {c.currency} {c.budgetAmount}
               </dd>
             </div>
@@ -468,20 +471,20 @@ export function Campaign() {
           <dl className="mt-sm flex flex-col gap-xs m-0">
             {c.usageRights && (
               <div>
-                <dt className="text-[12px] font-bold text-ink-soft">Usage rights</dt>
-                <dd className="m-0 text-[14px] font-semibold">{c.usageRights}</dd>
+                <dt className="text-caption text-ink-soft">Usage rights</dt>
+                <dd className="m-0 text-subhead">{c.usageRights}</dd>
               </div>
             )}
             {c.exclusivityTerms && (
               <div>
-                <dt className="text-[12px] font-bold text-ink-soft">Exclusivity</dt>
-                <dd className="m-0 text-[14px] font-semibold">{c.exclusivityTerms}</dd>
+                <dt className="text-caption text-ink-soft">Exclusivity</dt>
+                <dd className="m-0 text-subhead">{c.exclusivityTerms}</dd>
               </div>
             )}
             {c.brandRestrictions && (
               <div>
-                <dt className="text-[12px] font-bold text-ink-soft">Restrictions</dt>
-                <dd className="m-0 text-[14px] font-semibold">{c.brandRestrictions}</dd>
+                <dt className="text-caption text-ink-soft">Restrictions</dt>
+                <dd className="m-0 text-subhead">{c.brandRestrictions}</dd>
               </div>
             )}
           </dl>
@@ -490,7 +493,7 @@ export function Campaign() {
 
       {canManage && (
         <section className="mt-lg" aria-labelledby="manage-heading">
-          <h2 id="manage-heading" className="text-[24px]">
+          <h2 id="manage-heading" className="text-title2">
             Move it along
           </h2>
           {statusChoices.length > 0 && (
@@ -504,7 +507,7 @@ export function Campaign() {
                 ))}
             </div>
           )}
-          {who === 'brand' && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">You can approve the shortlist or cancel. The team moves the other steps.</p>}
+          {who === 'brand' && <p className="mt-xs m-0 text-subhead text-ink-soft">You can approve the shortlist or cancel. The team moves the other steps.</p>}
           <div className="mt-sm">
             <ErrorLine e={setStatus.error} />
           </div>
@@ -517,12 +520,12 @@ export function Campaign() {
 
       <section className="mt-lg" aria-labelledby="deliverables-heading">
         <div className="flex items-center justify-between gap-sm">
-          <h2 id="deliverables-heading" className="text-[24px]">
+          <h2 id="deliverables-heading" className="text-title2">
             Deliverables
           </h2>
           {canManage && <Button onClick={() => setAddingDeliverable(true)}>Add</Button>}
         </div>
-        {d.deliverables.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing to make yet.</p>}
+        {d.deliverables.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">Nothing to make yet.</p>}
         <ul className="mt-sm flex list-none flex-col gap-sm p-0 m-0">
           {d.deliverables.map((del) => (
             <li key={del.id}>
@@ -534,19 +537,19 @@ export function Campaign() {
 
       <section className="mt-lg" aria-labelledby="creators-heading">
         <div className="flex items-center justify-between gap-sm">
-          <h2 id="creators-heading" className="text-[24px]">
+          <h2 id="creators-heading" className="text-title2">
             {who === 'creator' ? 'Your role' : 'Creators'}
           </h2>
           {who === 'staff' && <Button variant="outline" onClick={() => setAssigning(true)}>Assign</Button>}
         </div>
-        {d.assignments.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{who === 'staff' ? 'No one assigned yet.' : 'The team has not assigned anyone yet.'}</p>}
+        {d.assignments.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">{who === 'staff' ? 'No one assigned yet.' : 'The team has not assigned anyone yet.'}</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {d.assignments.map((a) => (
             <li key={a.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <p className="m-0 text-[16px] font-bold">
+              <p className="m-0 text-headline">
                 {a.creatorName}, {a.role}
               </p>
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">
+              <p className="m-0 text-subhead text-ink-soft">
                 {a.status}
                 {a.feeAmount > 0 && who !== 'brand' ? `, ${a.currency} ${a.feeAmount}` : ''}
                 {a.termsAcceptedAt ? `, terms accepted ${fmtDate(a.termsAcceptedAt)}` : ''}
@@ -575,17 +578,17 @@ export function Campaign() {
       </section>
 
       <section className="mt-lg" aria-labelledby="log-heading">
-        <h2 id="log-heading" className="text-[24px]">
+        <h2 id="log-heading" className="text-title2">
           What happened
         </h2>
-        {d.events.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Quiet so far.</p>}
+        {d.events.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">Quiet so far.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {d.events.map((e) => (
             <li key={e.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <p className="m-0 text-[14px] font-bold">
+              <p className="m-0 text-subhead font-semibold">
                 {e.actorName}, {e.eventType}
               </p>
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">
+              <p className="m-0 text-subhead text-ink-soft">
                 {e.note ? `${e.note}. ` : ''}
                 {fmtWhen(e.createdAt)}
               </p>
@@ -643,8 +646,8 @@ function DeliverableCard({ deliverable: del, who, onChange }: { deliverable: Del
     <div className="rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="flex items-start justify-between gap-sm">
         <div className="min-w-0">
-          <p className="m-0 truncate text-[16px] font-bold">{del.title}</p>
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">
+          <p className="m-0 text-balance text-headline [overflow-wrap:anywhere]">{del.title}</p>
+          <p className="m-0 text-subhead text-ink-soft">
             {[del.format, del.platform].filter(Boolean).join(', ') || 'any format'}
             {del.dueAt ? `, due ${fmtDate(del.dueAt)}` : ''}
           </p>
@@ -654,7 +657,7 @@ function DeliverableCard({ deliverable: del, who, onChange }: { deliverable: Del
         </StatusTag>
       </div>
       {del.finalUrl && (
-        <a href={del.finalUrl} target="_blank" rel="noreferrer" className="toy toy-soft mt-sm inline-flex min-h-[44px] items-center rounded-pill bg-paper px-md text-[14px] font-bold">
+        <a href={del.finalUrl} target="_blank" rel="noreferrer" className="toy toy-soft mt-sm inline-flex min-h-[44px] items-center rounded-pill bg-paper px-md text-subhead font-semibold">
           Open the approved version
         </a>
       )}
@@ -662,22 +665,22 @@ function DeliverableCard({ deliverable: del, who, onChange }: { deliverable: Del
         <ol className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {del.versions.map((v) => (
             <li key={v.id} className="rounded-tile bg-paper p-sm">
-              <p className="m-0 text-[14px] font-bold">
+              <p className="m-0 text-subhead font-semibold">
                 Version {v.versionNumber} by {v.submittedByName}, {v.reviewStatus === 'pending' ? 'waiting' : v.reviewStatus}
               </p>
-              <a href={v.url} target="_blank" rel="noreferrer" className="block break-all text-[14px] font-semibold underline underline-offset-4">
+              <a href={v.url} target="_blank" rel="noreferrer" className="block break-all text-subhead underline underline-offset-4">
                 {v.url}
               </a>
-              {v.note && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{v.note}</p>}
+              {v.note && <p className="mt-xs m-0 text-subhead text-ink-soft">{v.note}</p>}
               {v.feedback.map((f) => (
-                <p key={f.id} className="mt-xs m-0 text-[14px] font-semibold">
-                  <span className="font-bold">{f.authorName}:</span> {f.comment}
+                <p key={f.id} className="mt-xs m-0 text-subhead">
+                  <span className="font-semibold">{f.authorName}:</span> {f.comment}
                 </p>
               ))}
               {canReview && v.reviewStatus === 'pending' && (
                 <div className="mt-sm">
                   <label className="block">
-                    <span className="block text-[12px] font-bold">Comment</span>
+                    <span className="block text-caption">Comment</span>
                     <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} maxLength={2000} className={FIELD} />
                   </label>
                   <div className="mt-xs flex gap-xs">
@@ -703,11 +706,11 @@ function DeliverableCard({ deliverable: del, who, onChange }: { deliverable: Del
           }}
         >
           <label className="block">
-            <span className="block text-[12px] font-bold">Link to the work</span>
+            <span className="block text-caption">Link to the work</span>
             <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[12px] font-bold">Note</span>
+            <span className="block text-caption">Note</span>
             <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} placeholder="What changed, or what to look at" className={FIELD} />
           </label>
           <Button type="submit" variant="outline" disabled={upload.isPending || !url.trim()}>
@@ -744,21 +747,21 @@ function AddDeliverableSheet({ campaignId, open, onClose, onAdded }: { campaignI
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Title</span>
+          <span className="block text-subhead font-semibold">Title</span>
           <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} required placeholder="One 60 second video" className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
-            <span className="block text-[14px] font-bold">Format</span>
+            <span className="block text-subhead font-semibold">Format</span>
             <input value={format} onChange={(e) => setFormat(e.target.value)} maxLength={60} placeholder="Reel, post, story" className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Platform</span>
+            <span className="block text-subhead font-semibold">Platform</span>
             <input value={platform} onChange={(e) => setPlatform(e.target.value)} maxLength={60} placeholder="Instagram" className={FIELD} />
           </label>
         </div>
         <label className="block">
-          <span className="block text-[14px] font-bold">Due</span>
+          <span className="block text-subhead font-semibold">Due</span>
           <input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} className={FIELD} />
         </label>
         <ErrorLine e={add.error} />
@@ -793,24 +796,24 @@ function AssignSheet({ campaignId, open, onClose, onAssigned }: { campaignId: st
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Creator</span>
+          <span className="block text-subhead font-semibold">Creator</span>
           <input autoFocus value={creator} onChange={(e) => setCreator(e.target.value)} maxLength={120} required placeholder="Email, page name or id" className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Role</span>
+          <span className="block text-subhead font-semibold">Role</span>
           <input value={role} onChange={(e) => setRole(e.target.value)} maxLength={60} className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
-            <span className="block text-[14px] font-bold">Fee</span>
+            <span className="block text-subhead font-semibold">Fee</span>
             <input type="number" min={0} value={fee} onChange={(e) => setFee(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Currency</span>
+            <span className="block text-subhead font-semibold">Currency</span>
             <input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} maxLength={3} className={FIELD} />
           </label>
         </div>
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">They get an offer in their inbox and accept the terms before they see anything else.</p>
+        <p className="m-0 text-subhead text-ink-soft">They get an offer in their inbox and accept the terms before they see anything else.</p>
         <ErrorLine e={assign.error} />
         <Button type="submit" size="lg" full disabled={assign.isPending || !creator.trim()}>
           Send the offer

@@ -128,7 +128,7 @@ function YouView({ data }: { data: MeResponse }) {
       <AppCover
         className="app-cover-start"
         cover="you"
-        topStart={<p className="m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-mute">Profile</p>}
+        topStart={<p className="m-0 text-eyebrow uppercase text-ink-mute">Profile</p>}
         topEnd={<SignOut compact />}
         title={user.displayName ? user.displayName : 'You'}
         heading={
@@ -142,11 +142,11 @@ function YouView({ data }: { data: MeResponse }) {
             </span>
             {/* The name in full (it wraps, never cut short); the Pro and role marks follow it and drop under it when there is no room. */}
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-sm gap-y-xs">
-              <h1 className="min-w-0 text-balance text-[30px] leading-tight">{user.displayName ? user.displayName : 'You'}</h1>
+              <h1 className="min-w-0 text-balance text-large-title">{user.displayName ? user.displayName : 'You'}</h1>
               {(user.isPro || badgeRoleOf(user) !== 'user') && (
                 <span className="flex shrink-0 items-center gap-xs">
-                  {user.isPro && <span className="rounded-pill bg-r7 px-sm py-xs text-[14px] font-extrabold text-white">Pro</span>}
-                  {badgeRoleOf(user) !== 'user' && <span className="rounded-pill bg-r6 px-sm py-xs text-[14px] font-extrabold text-white">{BADGE_META[badgeRoleOf(user)].name}</span>}
+                  {user.isPro && <span className="rounded-pill bg-r7 px-sm py-xs text-subhead font-medium text-white">Pro</span>}
+                  {badgeRoleOf(user) !== 'user' && <span className="rounded-pill bg-r6 px-sm py-xs text-subhead font-medium text-white">{BADGE_META[badgeRoleOf(user)].name}</span>}
                 </span>
               )}
             </div>
@@ -161,14 +161,14 @@ function YouView({ data }: { data: MeResponse }) {
         }
       >
         <div className="flex flex-wrap items-center gap-xs">
-          <Link to={user.handle ? `/u/${user.handle}` : `/people/${user.id}`} className="toy toy-soft inline-flex min-h-[48px] items-center gap-xs rounded-pill bg-card px-md text-[14px] font-bold text-ink">
+          <Link to={user.handle ? `/u/${user.handle}` : `/people/${user.id}`} className="toy toy-soft inline-flex min-h-[48px] items-center gap-xs rounded-pill bg-card px-md text-subhead font-semibold text-ink">
             <Icon icon={UserRound} size={18} />
             See my public page
           </Link>
-          <Link to="/profile" className="inline-flex min-h-[48px] items-center px-sm text-[14px] font-bold text-ink-mute underline-offset-4 hover:text-ink hover:underline">
+          <Link to="/profile" className="inline-flex min-h-[48px] items-center px-sm text-subhead text-ink-mute underline-offset-4 hover:text-ink hover:underline">
             Edit page
           </Link>
-          <Link to="/plans" className="toy toy-soft inline-flex min-h-[48px] w-full items-center justify-center gap-xs rounded-pill bg-card px-md text-[14px] font-bold text-ink md:ml-auto md:w-auto md:justify-start">
+          <Link to="/plans" className="toy toy-soft inline-flex min-h-[48px] w-full items-center justify-center gap-xs rounded-pill bg-card px-md text-subhead font-semibold text-ink md:ml-auto md:w-auto md:justify-start">
             <Icon icon={WandSparkles} size={18} />
             Plans and credits
           </Link>
@@ -176,39 +176,39 @@ function YouView({ data }: { data: MeResponse }) {
       </AppCover>
 
       <section className="mt-lg" aria-labelledby="who-heading">
-        <h2 id="who-heading" className="text-[24px]">
+        <h2 id="who-heading" className="text-title2">
           Who you are
         </h2>
-        {whoLine && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{whoLine}</p>}
+        {whoLine && <p className="mt-xs m-0 text-subhead text-ink-soft">{whoLine}</p>}
         {/* The tags (or, with none yet, what they are for) on the left, and the way to change them at the right of the same line. */}
         <div className="mt-sm flex flex-wrap items-center justify-between gap-xs">
-          {user.identities.length === 0 && <p className="m-0 min-w-0 flex-[1_1_220px] text-[14px] font-semibold text-ink-soft">No tags yet. A short chat sets them, and switches on the apps that fit.</p>}
+          {user.identities.length === 0 && <p className="m-0 min-w-0 flex-[1_1_220px] text-subhead text-ink-soft">No tags yet. A short chat sets them, and switches on the apps that fit.</p>}
           {user.identities.length > 0 && (
             <ul className="flex min-w-0 list-none flex-wrap gap-xs p-0 m-0" aria-label="Your tags">
               {user.identities.map((k) => (
-                <li key={k} className="inline-flex items-center gap-xs rounded-pill bg-card px-sm py-xs text-[14px] font-bold shadow-toy-soft">
+                <li key={k} className="inline-flex items-center gap-xs rounded-pill bg-card px-sm py-xs text-subhead font-medium shadow-toy-soft">
                   <AppIcon name={IDENTITY_BY_KEY[k]?.icon ?? OWN_TAG_ICON} size={16} className="text-ink-soft" />
                   {identityLabel(k)}
                 </li>
               ))}
             </ul>
           )}
-          <Link to="/onboarding?fresh=1" className="toy toy-soft ml-auto inline-flex min-h-[48px] shrink-0 items-center rounded-pill bg-card px-md text-[14px] font-bold text-ink">
+          <Link to="/onboarding?fresh=1" className="toy toy-soft ml-auto inline-flex min-h-[48px] shrink-0 items-center rounded-pill bg-card px-md text-subhead font-semibold text-ink">
             {user.identities.length ? 'Change my tags and apps' : 'Set my tags and apps'}
           </Link>
         </div>
         {/* Two short lines: what tags do, then the privacy promise with the way to read more. */}
-        <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Tags pick your apps and fill in your skills and interests.</p>
+        <p className="mt-xs m-0 text-caption text-ink-soft">Tags pick your apps and fill in your skills and interests.</p>
         <Nudge text="They never show on your public page." />
       </section>
 
       <MyCoachSection />
 
       <section className="mt-lg" aria-labelledby="look-heading">
-        <h2 id="look-heading" className="text-[24px]">
+        <h2 id="look-heading" className="text-title2">
           Appearance
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Dark mode keeps the same colors on a deep slate.</p>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">Dark mode keeps the same colors on a deep slate.</p>
         <div className="mt-sm grid grid-cols-3 gap-xs" role="group" aria-label="Theme">
           {(
             [
@@ -217,7 +217,7 @@ function YouView({ data }: { data: MeResponse }) {
               ['dark', 'Dark'],
             ] as [ThemeMode, string][]
           ).map(([m, label]) => (
-            <button key={m} type="button" aria-pressed={themeMode === m} onClick={() => setThemeMode(m)} className={`toy min-h-[48px] rounded-pill border-2 text-[14px] font-bold ${themeMode === m ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={m} type="button" aria-pressed={themeMode === m} onClick={() => setThemeMode(m)} className={`toy min-h-[48px] rounded-pill border-2 text-subhead font-medium ${themeMode === m ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {label}
             </button>
           ))}
@@ -225,10 +225,10 @@ function YouView({ data }: { data: MeResponse }) {
       </section>
 
       <section className="mt-lg" aria-labelledby="features-heading" id="features">
-        <h2 id="features-heading" className="text-[24px]">
+        <h2 id="features-heading" className="text-title2">
           Features
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Open a group to switch its apps. Off hides an app; nothing is deleted.</p>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">Open a group to switch its apps. Off hides an app; nothing is deleted.</p>
         <div className="mt-md">
           <AppGroups groups={featureGroups} fits={fits} open where="profile" />
         </div>
@@ -238,13 +238,13 @@ function YouView({ data }: { data: MeResponse }) {
       <PrivacyChoices />
 
       <section className="mt-lg" aria-labelledby="account-heading">
-        <h2 id="account-heading" className="text-[24px]">
+        <h2 id="account-heading" className="text-title2">
           Account
         </h2>
         {user.email ? (
           <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
-            <p className="m-0 text-[16px] font-bold">{user.email}</p>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+            <p className="m-0 text-headline">{user.email}</p>
+            <p className="mt-xs m-0 text-subhead text-ink-soft">
               Your pillars are saved to this account. Sign in on any phone to pick them up.
             </p>
             <div className="mt-sm flex flex-wrap gap-xs">
@@ -257,17 +257,17 @@ function YouView({ data }: { data: MeResponse }) {
         ) : (
           <div data-pillar="parent_child" className="mt-sm flex flex-wrap-reverse items-center justify-between gap-sm rounded-card p-md" style={{ background: 'var(--tint-yellow)' }}>
             <div className="min-w-0 flex-1 basis-[60%]">
-              <p className="m-0 text-[16px] font-bold">Only on this device so far.</p>
-              <p className="mt-xs m-0 text-[14px] font-semibold">Add an email and password and everything here comes with you to a new phone.</p>
+              <p className="m-0 text-headline">Only on this device so far.</p>
+              <p className="mt-xs m-0 text-subhead">Add an email and password and everything here comes with you to a new phone.</p>
             </div>
-            <Link to="/onboarding" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+            <Link to="/onboarding" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
               Create an account
             </Link>
           </div>
         )}
         <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
-          <p className="m-0 text-[16px] font-bold">Your data</p>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Everything we hold about you as one file, or the whole account gone.</p>
+          <p className="m-0 text-headline">Your data</p>
+          <p className="mt-xs m-0 text-subhead text-ink-soft">Everything we hold about you as one file, or the whole account gone.</p>
           <div className="mt-sm fill-row flex flex-wrap gap-xs">
             <Button variant="outline" onClick={() => exportData.mutate()} disabled={exportData.isPending}>
               {exportData.isPending ? 'Preparing' : 'Export my data'}
@@ -280,7 +280,7 @@ function YouView({ data }: { data: MeResponse }) {
             </Button>
           </div>
           {exportData.isError && (
-            <p role="alert" className="mt-xs m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+            <p role="alert" className="mt-xs m-0 rounded-tile bg-r1/15 p-sm text-subhead">
               Could not prepare the export. Try again.
             </p>
           )}
@@ -293,23 +293,23 @@ function YouView({ data }: { data: MeResponse }) {
             if (pwCurrent && !passwordProblem(pwNew, user.email ?? '') && pwNew === pwAgain) setPassword.mutate();
           }}
         >
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">Type the one you have, then the new one twice. Every other device is signed out.</p>
+          <p className="m-0 text-subhead text-ink-soft">Type the one you have, then the new one twice. Every other device is signed out.</p>
           <label className="block">
-            <span className="block text-[14px] font-bold">Current password</span>
-            <input type="password" required value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} autoComplete="current-password" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+            <span className="block text-subhead font-semibold">Current password</span>
+            <input type="password" required value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} autoComplete="current-password" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">New password</span>
-            <input type="password" required minLength={8} value={pwNew} onChange={(e) => setPwNew(e.target.value)} autoComplete="new-password" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+            <span className="block text-subhead font-semibold">New password</span>
+            <input type="password" required minLength={8} value={pwNew} onChange={(e) => setPwNew(e.target.value)} autoComplete="new-password" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Once more</span>
-            <input type="password" required minLength={8} value={pwAgain} onChange={(e) => setPwAgain(e.target.value)} autoComplete="new-password" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+            <span className="block text-subhead font-semibold">Once more</span>
+            <input type="password" required minLength={8} value={pwAgain} onChange={(e) => setPwAgain(e.target.value)} autoComplete="new-password" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
           </label>
-          {pwNew && passwordProblem(pwNew, user.email ?? '') && <p className="m-0 text-[14px] font-bold text-ink-soft">{passwordProblem(pwNew, user.email ?? '')}</p>}
-          {pwAgain && pwNew !== pwAgain && <p className="m-0 text-[14px] font-bold text-ink-soft">The two do not match yet.</p>}
+          {pwNew && passwordProblem(pwNew, user.email ?? '') && <p className="m-0 text-subhead text-ink-soft">{passwordProblem(pwNew, user.email ?? '')}</p>}
+          {pwAgain && pwNew !== pwAgain && <p className="m-0 text-subhead text-ink-soft">The two do not match yet.</p>}
           {setPassword.isError && (
-            <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+            <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
               {setPassword.error instanceof Error ? setPassword.error.message : 'Could not save it.'}
             </p>
           )}
@@ -319,18 +319,18 @@ function YouView({ data }: { data: MeResponse }) {
         </form>
       </Sheet>
       <Sheet open={deleting} onClose={() => setDeleting(false)} title="Delete your account">
-          <p className="m-0 text-[14px] font-bold">This cannot be undone.</p>
-          <ul className="mt-xs m-0 flex list-disc flex-col gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+          <p className="m-0 text-subhead font-semibold">This cannot be undone.</p>
+          <ul className="mt-xs m-0 flex list-disc flex-col gap-xs pl-md text-subhead text-ink-soft">
             <li>Gone: your name, email, page, bio, pillars, logs, journal, messages and notifications.</li>
             <li>Archived: anything you sell.</li>
             <li>Kept, anonymised: money records, because the books have to.</li>
           </ul>
           <label className="mt-md block">
-            <span className="block text-[14px] font-bold">Type DELETE to confirm</span>
-            <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} autoComplete="off" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+            <span className="block text-subhead font-semibold">Type DELETE to confirm</span>
+            <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} autoComplete="off" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
           </label>
           {deleteAccount.isError && (
-            <p role="alert" className="mt-xs m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+            <p role="alert" className="mt-xs m-0 rounded-tile bg-r1/15 p-sm text-subhead">
               {deleteAccount.error instanceof Error ? deleteAccount.error.message : 'Could not delete the account.'}
             </p>
           )}
@@ -338,15 +338,15 @@ function YouView({ data }: { data: MeResponse }) {
             type="button"
             disabled={confirmText !== 'DELETE' || deleteAccount.isPending}
             onClick={() => deleteAccount.mutate()}
-            className="toy mt-md inline-flex min-h-[56px] w-full items-center justify-center gap-xs rounded-pill bg-r1 px-md text-[18px] font-bold text-on-fill disabled:opacity-50"
+            className="toy mt-md inline-flex min-h-[56px] w-full items-center justify-center gap-xs rounded-pill bg-r1 px-md text-headline text-on-fill disabled:opacity-50"
           >
             Delete everything
           </button>
         </Sheet>
       <Sheet open={erasing} onClose={() => setErasing(false)} title="Erase everything?">
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">Your pillars, xp, streak and badges go, and you start over. There is no undo.</p>
+        <p className="m-0 text-subhead text-ink-soft">Your pillars, xp, streak and badges go, and you start over. There is no undo.</p>
         {reset.isError && (
-          <p role="alert" className="mt-xs m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="mt-xs m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             Could not erase it. Try again.
           </p>
         )}
@@ -355,7 +355,7 @@ function YouView({ data }: { data: MeResponse }) {
             type="button"
             disabled={reset.isPending}
             onClick={() => reset.mutate()}
-            className="toy inline-flex min-h-[56px] items-center justify-center gap-xs rounded-pill bg-r1 px-md text-[18px] font-bold text-on-fill disabled:opacity-50"
+            className="toy inline-flex min-h-[56px] items-center justify-center gap-xs rounded-pill bg-r1 px-md text-headline text-on-fill disabled:opacity-50"
           >
             {reset.isPending ? 'Erasing' : 'Yes, erase everything'}
           </button>
@@ -367,10 +367,10 @@ function YouView({ data }: { data: MeResponse }) {
       </section>
 
       <section className="mt-lg" aria-labelledby="evo-heading">
-        <h2 id="evo-heading" className="text-[24px]">
+        <h2 id="evo-heading" className="text-title2">
           Who you are becoming
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Xp fills in your next form, and each form also needs time in the app.</p>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">Xp fills in your next form, and each form also needs time in the app.</p>
         <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
           <EvolutionReveal
             now={<Person stage={identity.stage.stage} size={104} decorative />}
@@ -381,7 +381,7 @@ function YouView({ data }: { data: MeResponse }) {
             preparing={identity.preparing}
             readyInDays={identity.readyInDays}
           />
-          <p className="mt-sm m-0 text-center text-[14px] font-semibold text-ink-soft">
+          <p className="mt-sm m-0 text-center text-subhead text-ink-soft">
             {identity.preparing && identity.next
               ? `${identity.next.name} is fully revealed and being prepared. It evolves in ${identity.readyInDays} ${identity.readyInDays === 1 ? 'day' : 'days'}.`
               : identity.next
@@ -393,19 +393,19 @@ function YouView({ data }: { data: MeResponse }) {
               const reached = st.stage <= identity.stage.stage;
               const color = RELATIONSHIPS[st.stage - 1];
               return (
-                <li key={st.stage} className={`flex items-center gap-sm text-[14px] ${reached ? '' : 'text-ink-soft'}`}>
+                <li key={st.stage} className={`flex items-center gap-sm text-subhead ${reached ? '' : 'text-ink-soft'}`}>
                   <span
-                    className="flex size-[24px] shrink-0 items-center justify-center rounded-pill text-[12px] font-extrabold"
+                    className="flex size-[24px] shrink-0 items-center justify-center rounded-pill text-caption font-medium"
                     style={reached ? { background: color?.color, color: color?.text } : { background: 'var(--color-line)', color: 'var(--color-ink-soft)' }}
                     aria-hidden="true"
                   >
                     {st.stage}
                   </span>
-                  <span className="min-w-0 flex-1 font-bold">
+                  <span className={`min-w-0 flex-1 ${st.stage === identity.stage.stage ? 'font-semibold' : ''}`}>
                     {st.name}
-                    {st.stage === identity.stage.stage && <span className="font-semibold text-ink-soft"> (now)</span>}
+                    {st.stage === identity.stage.stage && <span className="text-ink-soft"> (now)</span>}
                   </span>
-                  <span className="shrink-0 text-[12px] font-bold text-ink-soft">
+                  <span className="shrink-0 text-caption text-ink-soft">
                     {st.minXp} xp{st.minDays > 0 ? `, ${st.minDays} days` : ''}
                   </span>
                 </li>
@@ -416,21 +416,21 @@ function YouView({ data }: { data: MeResponse }) {
       </section>
 
       <section className="mt-lg" aria-labelledby="points-heading">
-        <h2 id="points-heading" className="text-[24px]">
+        <h2 id="points-heading" className="text-title2">
           Points
         </h2>
         <div className="mt-sm flex items-center gap-sm rounded-card bg-card p-md shadow-toy-soft">
           <div className="min-w-0 flex-1">
-            <p className="m-0 font-display text-[30px] font-extrabold leading-none">{user.points}</p>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+            <p className="m-0 text-large-title type-figure leading-none">{user.points}</p>
+            <p className="mt-xs m-0 text-subhead text-ink-soft">
               {POINTS.checkin} per check-in, {POINTS.streakBonus} bonus every {POINTS.streakBonusEvery}th day. Trade them for real things.
             </p>
           </div>
           <div className="flex shrink-0 flex-col gap-xs">
-            <Link to="/rewards" className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-ink px-md font-bold text-on-ink">
+            <Link to="/rewards" className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
               Rewards
             </Link>
-            <Link to="/leaderboard" className="toy toy-ink inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-ink bg-card px-md font-bold text-ink">
+            <Link to="/leaderboard" className="toy toy-ink inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-ink bg-card px-md font-semibold text-ink">
               Rank
             </Link>
           </div>
@@ -463,8 +463,8 @@ function YouView({ data }: { data: MeResponse }) {
           <BadgeGallery />
         </Suspense>
         {nextBadge(badges) && <Nudge className="mt-sm" text={`Next up: ${nextBadge(badges)!.name}. ${nextBadge(badges)!.how}.`} />}
-        <h3 className="mt-md text-[16px]">Awarded</h3>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Given by the kreators.app team, or unlocked by time in the app. These count on the leaderboard too.</p>
+        <h3 className="mt-md text-headline">Awarded</h3>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">Given by the kreators.app team, or unlocked by time in the app. These count on the leaderboard too.</p>
         <ul className="mt-sm grid list-none grid-cols-2 gap-sm p-0 m-0 md:grid-cols-3">
           {HONORS.map((h) => {
             const on = awarded.has(h.key);
@@ -472,8 +472,8 @@ function YouView({ data }: { data: MeResponse }) {
               <li key={h.key} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                 <BadgeArt name={h.name} icon={h.icon} tier={h.tier} shape="seal" earned={on} size="sm" decorative />
                 <span className="min-w-0">
-                  <span className="block text-[14px] font-extrabold">{h.name}</span>
-                  <span className="block text-balance text-[12px] font-semibold text-ink-soft">{on ? (h.source === 'time' ? 'Unlocked' : 'Awarded') : tie(`Locked · ${h.how}`)}</span>
+                  <span className="block text-subhead font-semibold">{h.name}</span>
+                  <span className="block text-balance text-caption text-ink-soft">{on ? (h.source === 'time' ? 'Unlocked' : 'Awarded') : tie(`Locked · ${h.how}`)}</span>
                 </span>
               </li>
             );
@@ -482,7 +482,7 @@ function YouView({ data }: { data: MeResponse }) {
       </section>
 
       <section className="mt-lg" aria-labelledby="rainbow-heading">
-        <h2 id="rainbow-heading" className="text-[24px]">
+        <h2 id="rainbow-heading" className="text-title2">
           Your vibe check
         </h2>
         <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
@@ -495,7 +495,7 @@ function YouView({ data }: { data: MeResponse }) {
             {floors.map((r) => {
               const score = byKey.get(r.key)?.score ?? 0;
               return (
-                <li key={r.key} className="flex items-center gap-sm text-[14px] font-bold">
+                <li key={r.key} className="flex items-center gap-sm text-subhead">
                   <span className="w-[120px] shrink-0 truncate">{r.name}</span>
                   <span className="h-[12px] flex-1 overflow-hidden rounded-pill bg-paper" aria-hidden="true">
                     <span className="block h-full rounded-pill" style={{ width: `${Math.max(4, score)}%`, background: r.color }} />
@@ -506,10 +506,10 @@ function YouView({ data }: { data: MeResponse }) {
             })}
           </ul>
           <div className="mt-md flex flex-wrap gap-sm">
-            <Link to="/session?fresh=1" className="inline-flex min-h-[44px] items-center font-bold text-ink-soft underline underline-offset-4">
+            <Link to="/session?fresh=1" className="inline-flex min-h-[44px] items-center text-ink-soft underline underline-offset-4">
               Run the strategy session again
             </Link>
-            <Link to="/vibe-check" className="inline-flex min-h-[44px] items-center font-bold text-ink-soft underline underline-offset-4">
+            <Link to="/vibe-check" className="inline-flex min-h-[44px] items-center text-ink-soft underline underline-offset-4">
               Retake the vibe check
             </Link>
           </div>
@@ -517,7 +517,7 @@ function YouView({ data }: { data: MeResponse }) {
       </section>
 
       <section className="mt-lg" aria-labelledby="profile-heading">
-        <h2 id="profile-heading" className="text-[24px]">
+        <h2 id="profile-heading" className="text-title2">
           Profile
         </h2>
         <form
@@ -528,11 +528,11 @@ function YouView({ data }: { data: MeResponse }) {
           }}
         >
           <label className="block">
-            <span className="block text-[14px] font-bold">Name</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} autoComplete="nickname" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+            <span className="block text-subhead font-semibold">Name</span>
+            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} autoComplete="nickname" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
           </label>
           <fieldset className="m-0 border-0 p-0">
-            <legend className="text-[14px] font-bold">What fills most of your days</legend>
+            <legend className="text-subhead">What fills most of your days</legend>
             <div className="fill-row-all mt-xs flex flex-wrap gap-xs">
               {FOCUS_OPTIONS.map((t) => (
                 <button
@@ -540,18 +540,18 @@ function YouView({ data }: { data: MeResponse }) {
                   type="button"
                   aria-pressed={type === t}
                   onClick={() => setType(t)}
-                  className={`min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${type === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}
+                  className={`min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${type === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}
                 >
                   {t}
                 </button>
               ))}
             </div>
           </fieldset>
-          <label className="flex min-h-[44px] cursor-pointer items-center gap-sm text-[14px] font-bold">
+          <label className="flex min-h-[44px] cursor-pointer items-center gap-sm text-body">
             <input type="checkbox" checked={optIn} onChange={(e) => setOptIn(e.target.checked)} className="size-[20px] accent-ink" />
             Show me on the leaderboard
           </label>
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">
+          <p className="m-0 text-subhead text-ink-soft">
             Your public page, skills, portfolio and introductions live under{' '}
             <Link to="/profile" className="underline underline-offset-4">
               Public page
@@ -569,7 +569,7 @@ function YouView({ data }: { data: MeResponse }) {
       </section>
 
       <section className="mt-lg" aria-labelledby="help-heading">
-        <h2 id="help-heading" className="text-[24px]">
+        <h2 id="help-heading" className="text-title2">
           Help
         </h2>
         <div className="mt-sm flex flex-wrap gap-xs">

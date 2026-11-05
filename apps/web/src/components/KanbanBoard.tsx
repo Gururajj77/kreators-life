@@ -468,12 +468,12 @@ export function KanbanBoard<T extends { id: string }>({ columns, card, itemLabel
               className={`w-[260px] min-w-[260px] shrink-0 rounded-card p-sm md:w-[280px] ${gapHere ? 'bg-card-strong ring-2 ring-ink/30' : 'bg-card'}`}
             >
               <header className="flex items-baseline justify-between gap-xs">
-                <h3 className="m-0 text-[16px] font-extrabold">{col.name}</h3>
+                <h3 className="m-0 text-headline">{col.name}</h3>
                 <StatusTag tone="neutral" title={`${col.total} in ${col.name}`}>{String(col.total)}</StatusTag>
               </header>
-              {col.note && <p className="m-0 text-[12px] font-bold text-ink-soft">{col.note}</p>}
+              {col.note && <p className="m-0 text-caption text-ink-soft">{col.note}</p>}
               <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">{rows}</ul>
-              {shown.length === 0 && !gapHere && <p className="mt-xs m-0 rounded-tile border-2 border-dashed border-line p-sm text-center text-[12px] font-bold text-ink-mute">{empty}</p>}
+              {shown.length === 0 && !gapHere && <p className="mt-xs m-0 rounded-tile border-2 border-dashed border-line p-sm text-center text-caption text-ink-mute">{empty}</p>}
               {onMore && col.total > col.items.length && (
                 <div className="mt-xs">
                   <Button variant="outline" size="sm" full onClick={() => onMore(col.stage)}>
@@ -504,14 +504,14 @@ export function KanbanBoard<T extends { id: string }>({ columns, card, itemLabel
       {onMove && (
         <Sheet open={moving !== null} onClose={() => setMoving(null)} title={moving ? `Move ${itemLabel(moving.item)}` : 'Move'}>
           {targets.length === 0 ? (
-            <p className="m-0 text-[14px] font-semibold text-ink-soft">This one cannot move from here.</p>
+            <p className="m-0 text-subhead text-ink-soft">This one cannot move from here.</p>
           ) : (
             <ul className="fx-inset">
               {targets.map((c) => (
                 <li key={c.stage}>
                   <button
                     type="button"
-                    className="fx-row text-[16px] font-bold text-ink"
+                    className="fx-row text-headline text-ink"
                     onClick={() => {
                       const m = moving;
                       setMoving(null);
@@ -519,7 +519,7 @@ export function KanbanBoard<T extends { id: string }>({ columns, card, itemLabel
                     }}
                   >
                     <span className="min-w-0 flex-1">{c.name}</span>
-                    <span className="text-[12px] font-extrabold text-ink-mute">{c.total}</span>
+                    <span className="text-caption text-ink-mute">{c.total}</span>
                   </button>
                 </li>
               ))}

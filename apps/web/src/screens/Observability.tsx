@@ -67,15 +67,15 @@ export function Observability() {
 
   return (
     <Screen>
-      <PageHeader back={{ to: '/apps', label: 'Apps' }} eyebrow={MODULE_GROUPS.manage} aside={isAdmin ? <Link to="/internal/logs" className="toy toy-soft inline-flex min-h-[44px] items-center rounded-pill border border-line bg-card-strong px-md text-[14px] font-bold">Logs</Link> : undefined} title="Observability" lede="Who is here, which apps they have on, and who holds which role. Only the team sees this. Journals and wellbeing never appear." />
+      <PageHeader back={{ to: '/apps', label: 'Apps' }} eyebrow={MODULE_GROUPS.manage} aside={isAdmin ? <Link to="/internal/logs" className="toy toy-soft inline-flex min-h-[44px] items-center rounded-pill border border-line bg-card-strong px-md text-subhead font-semibold">Logs</Link> : undefined} title="Observability" lede="Who is here, which apps they have on, and who holds which role. Only the team sees this. Journals and wellbeing never appear." />
 
       {d.isPending && (
-        <p className="mt-md m-0 text-[14px] font-bold text-ink-soft" role="status">
+        <p className="mt-md m-0 text-subhead text-ink-soft" role="status">
           Counting people
         </p>
       )}
       {d.isError && (
-        <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+        <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           Could not load this. Refresh the page to try again.
         </p>
       )}
@@ -146,11 +146,11 @@ export function Observability() {
               <StatTile label="Changes" value={data.additions.logs.changes} hint="things people changed" />
             </div>
             {isAdmin ? (
-              <Link to="/internal/logs" className="toy mt-sm inline-flex min-h-[48px] items-center justify-center rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink">
+              <Link to="/internal/logs" className="toy mt-sm inline-flex min-h-[48px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
                 Open the logs
               </Link>
             ) : (
-              <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">The lines themselves name people, so only a super admin reads them.</p>
+              <p className="mt-sm m-0 text-subhead text-ink-soft">The lines themselves name people, so only a super admin reads them.</p>
             )}
           </Section>
 
@@ -164,14 +164,14 @@ export function Observability() {
                 <li key={u.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
                   <div className="flex items-center gap-sm">
                     <span className="relative shrink-0">
-                      <span className="flex size-[48px] items-center justify-center rounded-pill bg-paper text-[18px] font-extrabold" aria-hidden="true">
+                      <span className="flex size-[48px] items-center justify-center rounded-pill bg-paper text-[18px] font-bold" aria-hidden="true">
                         {u.name.trim().charAt(0).toUpperCase() || '?'}
                       </span>
                       <RoleBadge role={u.role} size={20} className="absolute right-0 bottom-0" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[16px] font-bold">{u.name}</span>
-                      <span className="block text-[12px] font-bold text-ink-soft">
+                      <span className="block text-balance text-headline [overflow-wrap:anywhere]">{u.name}</span>
+                      <span className="block text-caption text-ink-soft">
                         {u.handle ? `/u/${u.handle} · ` : ''}
                         since {longDate(u.createdAt)}
                         {u.onboarded ? '' : ' · not set up yet'}
@@ -180,7 +180,7 @@ export function Observability() {
                     {isAdmin && u.id !== me.data?.user.id ? (
                       <label className="shrink-0">
                         <span className="sr-only">Role for {u.name}</span>
-                        <select value={u.role} onChange={(e) => setAsking({ user: u, role: e.target.value as Role })} className="min-h-[44px] rounded-pill border-2 border-line bg-card px-sm text-[14px] font-bold">
+                        <select value={u.role} onChange={(e) => setAsking({ user: u, role: e.target.value as Role })} className="min-h-[44px] rounded-pill border-2 border-line bg-card px-sm text-subhead font-medium">
                           {ROLES.map((r) => (
                             <option key={r} value={r}>
                               {ROLE_META[r].name}
@@ -192,7 +192,7 @@ export function Observability() {
                       <StatusTag tone="calm">{ROLE_META[u.role].name}</StatusTag>
                     )}
                   </div>
-                  <p className="fill-row-all mt-xs m-0 flex flex-wrap items-center gap-xs text-[12px] font-bold text-ink-soft">
+                  <p className="fill-row-all mt-xs m-0 flex flex-wrap items-center gap-xs text-caption text-ink-soft">
                     <span className="shrink-0">
                       {u.apps.length} {u.apps.length === 1 ? 'app' : 'apps'} on:
                     </span>
@@ -210,7 +210,7 @@ export function Observability() {
                 </li>
               ))}
             </ul>
-            {data.users.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nobody matches "{query}".</p>}
+            {data.users.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">Nobody matches "{query}".</p>}
             <Pager page={data.page} label="accounts" />
           </Section>
         </>
@@ -224,15 +224,15 @@ export function Observability() {
             <div className="flex items-center gap-sm">
               <RoleBadge role={asking.role} size={40} />
               <div className="min-w-0">
-                <p className="m-0 text-[16px] font-bold">{ROLE_META[asking.role].name}</p>
-                <p className="m-0 text-[14px] font-semibold text-ink-soft">{ROLE_META[asking.role].blurb}</p>
+                <p className="m-0 text-headline">{ROLE_META[asking.role].name}</p>
+                <p className="m-0 text-subhead text-ink-soft">{ROLE_META[asking.role].blurb}</p>
               </div>
             </div>
-            <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">
+            <p className="mt-md m-0 text-subhead text-ink-soft">
               {asking.user.name} is {ROLE_META[asking.user.role].name === 'Admin' ? 'an' : 'a'} {ROLE_META[asking.user.role].name.toLowerCase()} now. The change is written to the audit log with your name on it.
             </p>
             {setRole.isError && (
-              <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+              <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
                 {setRole.error instanceof Error ? setRole.error.message : 'Could not change the role. Try again.'}
               </p>
             )}

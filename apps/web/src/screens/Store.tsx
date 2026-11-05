@@ -23,6 +23,11 @@ import { MoreMenu, type MoreMenuItem } from '../components/MoreMenu';
 import { bento } from '../lib/bento';
 import { TabRow } from '../components/TabRow';
 import { FilterBar, FilterSelect } from '../components/FilterSelect';
+import { CardHead } from '../components/CardHead';
+import { Reveal } from '../components/fx/Reveal';
+import { Icon } from '../components/Icon';
+import { ArrowRight } from 'lucide-react';
+import '../components/fx/spotlight';
 
 const pill = chip;
 const BUDGETS: { label: string; cents: number | null }[] = [
@@ -84,8 +89,7 @@ export function Store() {
           { key: 'hide', label: type === 'item' ? 'Hide this product' : 'Hide this kit', destructive: true, confirm: 'Tap again to hide it from everyone', onSelect: () => (type === 'item' ? hideItem.mutate(id) : hideKit.mutate(id)) },
         ]
       : [];
-  const adminBar = (type: 'item' | 'kit', id: string, title: string, featuredUntil: string | null) => <TeamMenu title={title} items={teamItems(type, id, featuredUntil)} />;
-
+  
   return (
     <Screen>
       {/* The cover card: the main action and the team's More sit on the helper's line, at its left (founder, 2026-11-04). */}
@@ -120,7 +124,7 @@ export function Store() {
       </section>
 
       {q.isError && (
-        <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+        <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           Could not load the store. Try again in a moment.
         </p>
       )}
@@ -129,14 +133,14 @@ export function Store() {
 
       {d && d.featured.length > 0 && (
         <section className="mt-lg" aria-labelledby="featured-heading">
-          <h2 id="featured-heading" className="text-[24px]">
+          <h2 id="featured-heading" className="text-title2">
             Featured this week
           </h2>
           <div className="mt-sm">
           {/* A single featured piece fills the row instead of sitting at a fixed card width with empty space beside it. */}
           <ul className={d.featured.length === 1 ? 'list-none' : 'scroll-row list-none gap-sm'}>
             {d.featured.map((f) => (
-              <li key={`${f.type}-${f.type === 'item' ? f.item.id : f.type === 'kit' ? f.kit.id : f.listing.id}`} className={d.featured.length === 1 ? 'w-full' : 'w-[260px] shrink-0'}>
+              <li key={`${f.type}-${f.type === 'item' ? f.item.id : f.type === 'kit' ? f.kit.id : f.listing.id}`} className={`flex ${d.featured.length === 1 ? 'w-full' : 'w-[260px] shrink-0'}`}>
                 <FeaturedCard card={f} onOpen={setOpen} />
               </li>
             ))}
@@ -146,48 +150,47 @@ export function Store() {
       )}
 
       <section className="mt-lg" aria-labelledby="kits-heading">
-        <h2 id="kits-heading" className="text-[24px]">
+        <h2 id="kits-heading" className="text-title2">
           Kits by budget
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">What to buy at your stage, and what it comes to. A kit can mix new gear with pre-owned pieces.</p>
-        {kits.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{d?.kits.length ? 'Nothing in this budget or stage.' : 'No kits yet.'}</p>}
+        <p className="mt-xs m-0 text-subhead text-ink-soft">What to buy at your stage, and what it comes to. A kit can mix new gear with pre-owned pieces.</p>
+        {kits.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">{d?.kits.length ? 'Nothing in this budget or stage.' : 'No kits yet.'}</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-          {kits.map((k) => (
-            <li key={k.id} className={cardClass(isFeatured(k.featuredUntil))}>
-              <KitBody kit={k} />
-              {adminBar('kit', k.id, k.title, k.featuredUntil)}
-            </li>
+          {kits.map((k, n) => (
+            <Reveal as="li" key={k.id} index={n} className={cardClass(isFeatured(k.featuredUntil))}>
+              <KitBody kit={k} team={teamItems('kit', k.id, k.featuredUntil)} />
+            </Reveal>
           ))}
         </ul>
       </section>
 
       <section className="mt-lg" aria-labelledby="new-heading">
-        <h2 id="new-heading" className="text-[24px]">
+        <h2 id="new-heading" className="text-title2">
           New
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Picked by the team. Each link opens the seller's site.</p>
-        {items.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{d?.items.length ? 'Nothing here for these filters.' : 'Nothing on the shelf yet.'}</p>}
+        <p className="mt-xs m-0 text-subhead text-ink-soft">Picked by the team. Each link opens the seller's site.</p>
+        {items.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">{d?.items.length ? 'Nothing here for these filters.' : 'Nothing on the shelf yet.'}</p>}
         <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
           {items.map((i, n) => (
-            <li key={i.id} className={`${cardClass(isFeatured(i.featuredUntil))} ${bento(n, items.length, 1, 2)}`}>
+            <Reveal as="li" key={i.id} index={n} className={`${cardClass(isFeatured(i.featuredUntil))} ${bento(n, items.length, 1, 2)}`}>
               <ItemBody item={i} team={teamItems('item', i.id, i.featuredUntil)} />
-            </li>
+            </Reveal>
           ))}
         </ul>
         <Pager page={d?.itemsPage} prefix="i" label="new gear" />
       </section>
 
       <section className="mt-lg" aria-labelledby="preowned-heading">
-        <h2 id="preowned-heading" className="text-[24px]">
+        <h2 id="preowned-heading" className="text-title2">
           Pre-owned
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Tap one to make an offer or ask a question. Sold ones stay two weeks, so you see prices.</p>
-        {listings.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{d?.listings.length ? 'Nothing here for these filters.' : 'Nothing listed yet. Yours could be first.'}</p>}
+        <p className="mt-xs m-0 text-subhead text-ink-soft">Tap one to make an offer or ask a question. Sold ones stay two weeks, so you see prices.</p>
+        {listings.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">{d?.listings.length ? 'Nothing here for these filters.' : 'Nothing listed yet. Yours could be first.'}</p>}
         <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
           {listings.map((l, n) => (
-            <li key={l.id} className={bento(n, listings.length, 1, 2)}>
+            <Reveal as="li" key={l.id} index={n} className={`flex ${bento(n, listings.length, 1, 2)}`}>
               <ListingButton l={l} onOpen={setOpen} />
-            </li>
+            </Reveal>
           ))}
         </ul>
         <Pager page={d?.listingsPage} prefix="l" label="pre-owned gear" />
@@ -195,13 +198,13 @@ export function Store() {
 
       {d && (d.mine.listings.length > 0 || d.mine.offers.length > 0) && (
         <section className="mt-lg" aria-labelledby="mine-heading">
-          <h2 id="mine-heading" className="text-[24px]">
+          <h2 id="mine-heading" className="text-title2">
             Yours
           </h2>
           {d.mine.listings.length > 0 && (
             <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
               {d.mine.listings.map((l, n) => (
-                <li key={l.id} className={bento(n, d.mine.listings.length, 1, 2)}>
+                <li key={l.id} className={`flex ${bento(n, d.mine.listings.length, 1, 2)}`}>
                   <ListingButton l={l} onOpen={setOpen} />
                 </li>
               ))}
@@ -213,8 +216,8 @@ export function Store() {
                 <li key={o.id}>
                   <button type="button" onClick={() => setOpen(o.listingId)} className="toy toy-soft flex w-full items-center gap-sm rounded-tile bg-card p-sm text-left text-ink">
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[16px] font-bold">{o.listingTitle}</span>
-                      <span className="block text-[14px] font-semibold text-ink-soft">Your offer {money(o.cents, 'INR')}</span>
+                      <span className="block text-headline">{o.listingTitle}</span>
+                      <span className="block text-subhead text-ink-soft">Your offer {money(o.cents, 'INR')}</span>
                     </span>
                     <StatusTag tone={o.status === 'accepted' ? 'good' : o.status === 'declined' ? 'bad' : o.status === 'open' ? 'info' : 'neutral'}>{o.status}</StatusTag>
                   </button>
@@ -236,110 +239,129 @@ export function Store() {
 function Price({ cents, original, currency }: { cents: number; original?: number | null; currency: string }) {
   return (
     <span className="flex flex-wrap items-baseline gap-xs">
-      <span className="font-display text-[20px] font-extrabold leading-none">{money(cents, currency)}</span>
-      {original && original > cents && <span className="text-[12px] font-bold text-ink-mute line-through">{money(original, currency)}</span>}
+      <span className="text-title3 type-figure leading-none">{money(cents, currency)}</span>
+      {original && original > cents && <span className="text-caption text-ink-mute line-through">{money(original, currency)}</span>}
     </span>
   );
 }
 
-/** One More button at the foot of a card for the team's actions; nothing when there are none. */
+/** One More button for the team's actions, sitting beside the card's main action at its foot; nothing when there are none. */
 function TeamMenu({ title, items }: { title: string; items: MoreMenuItem[] }) {
   if (items.length === 0) return null;
-  return (
-    <div className="mt-sm flex justify-end">
-      <MoreMenu label={`Team actions for ${title}`} title={title} items={items} />
-    </div>
-  );
+  return <MoreMenu label={`Team actions for ${title}`} title={title} items={items} />;
 }
 
+/** The facts on a store card, at its foot: one line that fills, so no tag stands alone. */
+function TagRow({ children }: { children: ReactNode }) {
+  return <span className="fill-row-all flex min-w-0 flex-wrap gap-xs">{children}</span>;
+}
+
+// A store card is placed like every card (2026-11-05): the title at the top left, the price in the top right corner, the words under
+// them, then at the foot the tags on the left and the main action at the bottom right, so the cards of a row line up.
 function ItemBody({ item, team = [] }: { item: StoreItem; team?: MoreMenuItem[] }) {
   // Pictures and videos are edited from the card's More menu (the team's), never a button of their own.
   const [editingMedia, setEditingMedia] = useState(false);
   const mediaItem = useMediaMenuItem('item', item.id, () => setEditingMedia(true));
+  const menu = mediaItem ? [mediaItem, ...team] : team;
   return (
-    <div className="flex flex-col gap-xs">
-      {item.imageUrl && <FadeImage src={item.imageUrl} alt={item.title} loading="lazy" decoding="async" frame="aspect-video w-full rounded-tile bg-paper" className="h-full w-full object-cover" />}
-      <div className="flex flex-wrap items-center gap-xs">
-        {isFeatured(item.featuredUntil) && <FeaturedTag />}
-        <FactTag kind="category">{item.category}</FactTag>
-        {item.stage !== 'any' && <IconTag tone="calm" icon="Sprout">{STORE_STAGE_META[item.stage].name}</IconTag>}
+    <div className="flex h-full flex-col">
+      {item.imageUrl && <FadeImage src={item.imageUrl} alt={item.title} loading="lazy" decoding="async" frame="mb-sm aspect-video w-full rounded-tile bg-paper" className="h-full w-full object-cover" />}
+      <CardHead tag={<Price cents={item.priceCents} currency={item.currency} />}>
+        <span className="block text-balance text-headline">{item.title}</span>
+      </CardHead>
+      {item.description && <span className="mt-xs block text-subhead text-ink-soft">{item.description}</span>}
+      <div className="mt-auto flex flex-col gap-xs pt-sm">
+        <span className="flex">
+          <TagRow>
+            {isFeatured(item.featuredUntil) && <FeaturedTag />}
+            <FactTag kind="category">{item.category}</FactTag>
+            {item.stage !== 'any' && <IconTag tone="calm" icon="Sprout">{STORE_STAGE_META[item.stage].name}</IconTag>}
+          </TagRow>
+        </span>
+        {!item.unlock.ok && <LockedButton unlock={item.unlock} />}
+        <div className="flex items-end justify-between gap-sm">
+          <span className="min-w-0 text-caption text-ink-mute">{item.unlock.ok ? `Partner link. Kreators may earn a share.${item.minPoints > 0 || item.minXp > 0 || item.badge ? ` ${unlockAt(item.unlock)}. You have it.` : ''}` : ''}</span>
+          <span className="flex shrink-0 items-center gap-xs">
+            <TeamMenu title={item.title} items={menu} />
+            {item.unlock.ok ? (
+              // The outline look Tools uses for Open and Get it, so the screen keeps one solid button, Sell something.
+              <a href={`/out/item/${item.id}`} target="_blank" rel="noreferrer" className="toy toy-ink inline-flex min-h-[44px] items-center rounded-pill border-2 border-ink bg-card px-sm text-subhead font-semibold">
+                Get it
+              </a>
+            ) : null}
+          </span>
+        </div>
       </div>
-      <span className="block text-[16px] font-bold">{item.title}</span>
-      {item.description && <span className="block text-[14px] font-semibold text-ink-soft">{item.description}</span>}
-      <div className="flex items-center justify-between gap-sm">
-        <Price cents={item.priceCents} currency={item.currency} />
-        {item.unlock.ok ? (
-          // The outline look Tools uses for Open and Get it, so the screen keeps one solid button, Sell something.
-          <a href={`/out/item/${item.id}`} target="_blank" rel="noreferrer" className="toy toy-ink inline-flex min-h-[44px] shrink-0 items-center rounded-pill border-2 border-ink bg-card px-sm text-[14px] font-bold">
-            Get it
-          </a>
-        ) : null}
-      </div>
-      {!item.unlock.ok && <LockedButton unlock={item.unlock} />}
-      {item.unlock.ok && <span className="block text-[12px] font-bold text-ink-mute">Partner link. Kreators may earn a share.{item.minPoints > 0 || item.minXp > 0 || item.badge ? ` ${unlockAt(item.unlock)}. You have it.` : ''}</span>}
       <MediaSection type="item" id={item.id} title="More pictures, GIFs and video" trigger={null} open={editingMedia} onOpenChange={setEditingMedia} />
-      <TeamMenu title={item.title} items={mediaItem ? [mediaItem, ...team] : team} />
     </div>
   );
 }
 
-function KitBody({ kit }: { kit: StoreKit }) {
+function KitBody({ kit, team = [] }: { kit: StoreKit; team?: MoreMenuItem[] }) {
   const over = kit.budgetCents > 0 && kit.totalCents > kit.budgetCents;
   return (
-    <div className="flex flex-col gap-xs">
-      <div className="flex flex-wrap items-center gap-xs">
-        {isFeatured(kit.featuredUntil) && <FeaturedTag />}
-        <IconTag tone="calm" icon="Sprout">{STORE_STAGE_META[kit.stage].name}</IconTag>
-        {kit.budgetCents > 0 && <FactTag kind="price">{`Budget ${money(kit.budgetCents, kit.currency)}`}</FactTag>}
-      </div>
-      <span className="block text-[18px] font-bold">{kit.title}</span>
-      {kit.description && <span className="block text-[14px] font-semibold text-ink-soft">{kit.description}</span>}
-      <ul className="list-none p-0 m-0">
+    <div className="flex h-full flex-col">
+      <CardHead tag={<IconTag tone="calm" icon="Sprout" fit>{STORE_STAGE_META[kit.stage].name}</IconTag>}>
+        <span className="block text-balance text-headline">{kit.title}</span>
+      </CardHead>
+      {kit.description && <span className="mt-xs block text-subhead text-ink-soft">{kit.description}</span>}
+      <ul className="mt-xs list-none p-0 m-0">
         {kit.items.map((it) => (
-          <li key={`${it.type}-${it.id}`} className="flex items-baseline justify-between gap-sm border-t border-line py-xs text-[14px] font-semibold">
-            <span className="min-w-0 flex-1 truncate">
+          <li key={`${it.type}-${it.id}`} className="flex items-baseline justify-between gap-sm border-t border-line py-xs text-subhead">
+            <span className="min-w-0 flex-1">
               {it.title}
               <span className="text-ink-soft"> · {it.type === 'listing' ? (it.status === 'live' ? 'pre-owned' : `pre-owned, ${it.status}`) : 'new'}</span>
             </span>
-            <span className="shrink-0 font-bold">{money(it.priceCents, kit.currency)}</span>
+            <span className="shrink-0 font-semibold">{money(it.priceCents, kit.currency)}</span>
           </li>
         ))}
       </ul>
-      <p className={`m-0 text-[14px] font-extrabold ${over ? 'text-r1' : ''}`}>
-        Comes to {money(kit.totalCents, kit.currency)}
-        {over ? ', over the budget' : ''}
-      </p>
+      <div className="mt-auto flex items-center justify-between gap-sm pt-sm">
+        <span className="flex min-w-0 flex-col items-start gap-xs">
+          {(isFeatured(kit.featuredUntil) || kit.budgetCents > 0) && (
+            <TagRow>
+              {isFeatured(kit.featuredUntil) && <FeaturedTag />}
+              {kit.budgetCents > 0 && <FactTag kind="price">{`Budget ${money(kit.budgetCents, kit.currency)}`}</FactTag>}
+            </TagRow>
+          )}
+          <span className={`text-subhead font-semibold ${over ? 'text-r1' : ''}`}>
+            Comes to {money(kit.totalCents, kit.currency)}
+            {over ? ', over the budget' : ''}
+          </span>
+        </span>
+        <TeamMenu title={kit.title} items={team} />
+      </div>
     </div>
   );
 }
 
 function ListingButton({ l, onOpen }: { l: PreownedListing; onOpen: (id: string) => void }) {
+  // The picture and the title at the top left, the price in the corner, who and where under the title, the condition, trust and
+  // state as tags at the foot and an arrow at the bottom right.
   return (
-    <button type="button" onClick={() => onOpen(l.id)} className={`toy w-full text-left text-ink ${cardClass(isFeatured(l.featuredUntil) && l.status === 'live')}`}>
-      <span className="flex gap-sm">
-        {l.images[0] && <FadeImage src={l.images[0]} alt={l.title} loading="lazy" decoding="async" frame="size-[80px] shrink-0 rounded-tile bg-paper" className="h-full w-full object-cover" />}
-        <span className="min-w-0 flex-1">
-          <span className="fill-row-all flex flex-wrap items-center gap-xs">
-            {isFeatured(l.featuredUntil) && l.status === 'live' && <FeaturedTag />}
-            <IconTag tone="info" icon="Sparkle">{PREOWNED_CONDITION_META[l.condition].name}</IconTag>
-            {l.isKit && <FactTag kind="category">Whole setup</FactTag>}
-            <IconTag tone="good" icon="ShieldCheck" title={l.sellerTrust.label}>{`Trust ${l.sellerTrust.score}`}</IconTag>
-          </span>
-          {l.status !== 'live' && (
-            <span className="mt-xs flex flex-wrap items-center gap-xs">
-              {l.status === 'sold' && <StatusTag tone="good">Sold{l.soldCents ? ` for ${money(l.soldCents, l.currency)}` : ''}</StatusTag>}
-              {l.status === 'agreed' && <StatusTag tone="info">Offer accepted</StatusTag>}
-              {l.status === 'withdrawn' && <StatusTag tone="bad">Taken down</StatusTag>}
-            </span>
-          )}
-          <span className="mt-xs block text-[16px] font-bold">{l.title}</span>
-          <Price cents={l.priceCents} original={l.originalCents} currency={l.currency} />
-          <span className="block text-[12px] font-bold text-ink-soft">
-            {l.offers > 0 ? `${l.offers} ${l.offers === 1 ? 'offer' : 'offers'}` : 'No offers yet'}
-            {l.city ? ` · ${l.city}` : ''}
-            {l.mine ? ' · yours' : ` · ${l.sellerName}`}
-          </span>
+    <button type="button" onClick={() => onOpen(l.id)} className={`fx-spot toy group flex h-full w-full flex-col text-left text-ink ${cardClass(isFeatured(l.featuredUntil) && l.status === 'live')}`}>
+      <CardHead
+        lead={l.images[0] ? <FadeImage src={l.images[0]} alt={l.title} loading="lazy" decoding="async" frame="size-[64px] rounded-inner bg-paper" className="h-full w-full object-cover" /> : null}
+        tag={<Price cents={l.priceCents} original={l.originalCents} currency={l.currency} />}
+      >
+        <span className="block text-balance text-headline">{l.title}</span>
+        <span className="block text-caption text-ink-soft">
+          {l.offers > 0 ? `${l.offers} ${l.offers === 1 ? 'offer' : 'offers'}` : 'No offers yet'}
+          {l.city ? ` · ${l.city}` : ''}
+          {l.mine ? ' · yours' : ` · ${l.sellerName}`}
         </span>
+      </CardHead>
+      <span className="mt-auto flex items-end justify-between gap-xs pt-sm">
+        <TagRow>
+          {isFeatured(l.featuredUntil) && l.status === 'live' && <FeaturedTag />}
+          {l.status === 'sold' && <StatusTag tone="good">Sold{l.soldCents ? ` for ${money(l.soldCents, l.currency)}` : ''}</StatusTag>}
+          {l.status === 'agreed' && <StatusTag tone="info">Offer accepted</StatusTag>}
+          {l.status === 'withdrawn' && <StatusTag tone="bad">Taken down</StatusTag>}
+          <IconTag tone="info" icon="Sparkle">{PREOWNED_CONDITION_META[l.condition].name}</IconTag>
+          {l.isKit && <FactTag kind="category">Whole setup</FactTag>}
+          <IconTag tone="good" icon="ShieldCheck" title={l.sellerTrust.label}>{`Trust ${l.sellerTrust.score}`}</IconTag>
+        </TagRow>
+        <Icon icon={ArrowRight} size={16} className="read-arrow mb-xs shrink-0 text-ink-mute" />
       </span>
     </button>
   );
@@ -348,7 +370,7 @@ function ListingButton({ l, onOpen }: { l: PreownedListing; onOpen: (id: string)
 function FeaturedCard({ card, onOpen }: { card: MarketCard; onOpen: (id: string) => void }) {
   if (card.type === 'listing') return <ListingButton l={card.listing} onOpen={onOpen} />;
   return (
-    <div className={cardClass(true)}>
+    <div className={`w-full ${cardClass(true)}`}>
       {card.type === 'item' ? <ItemBody item={card.item} /> : <KitBody kit={card.kit} />}
     </div>
   );
@@ -357,7 +379,7 @@ function FeaturedCard({ card, onOpen }: { card: MarketCard; onOpen: (id: string)
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="block text-[14px] font-bold">{label}</span>
+      <span className="block text-subhead font-semibold">{label}</span>
       {children}
     </label>
   );
@@ -415,12 +437,12 @@ function SellSheet({ open, onClose, onSaved, city }: { open: boolean; onClose: (
           save.mutate();
         }}
       >
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">Say what it is, its state and your price. You and the buyer settle the handover.</p>
+        <p className="m-0 text-subhead text-ink-soft">Say what it is, its state and your price. You and the buyer settle the handover.</p>
         <Field label="What is it">
           <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Sony ZV-E10 body" className={FIELD} />
         </Field>
         <fieldset className="m-0 border-0 p-0">
-          <legend className="text-[14px] font-bold">Category</legend>
+          <legend className="text-subhead font-semibold">Category</legend>
           <div className="mt-xs flex flex-wrap gap-xs">
             {STORE_CATEGORIES.map((c) => (
               <button key={c} type="button" aria-pressed={category === c} onClick={() => setCategory(c)} className={pill(category === c)}>
@@ -430,7 +452,7 @@ function SellSheet({ open, onClose, onSaved, city }: { open: boolean; onClose: (
           </div>
         </fieldset>
         <fieldset className="m-0 border-0 p-0">
-          <legend className="text-[14px] font-bold">Condition</legend>
+          <legend className="text-subhead font-semibold">Condition</legend>
           <div className="mt-xs flex flex-wrap gap-xs">
             {PREOWNED_CONDITIONS.map((c) => (
               <button key={c} type="button" aria-pressed={condition === c} onClick={() => setCondition(c)} className={pill(condition === c)} title={PREOWNED_CONDITION_META[c].blurb}>
@@ -464,7 +486,7 @@ function SellSheet({ open, onClose, onSaved, city }: { open: boolean; onClose: (
         </Field>
         <label className="flex min-h-[44px] items-center gap-sm">
           <input type="checkbox" checked={isKit} onChange={(e) => setIsKit(e.target.checked)} className="size-[20px]" />
-          <span className="text-[14px] font-bold">This is a whole setup sold together</span>
+          <span className="text-subhead">This is a whole setup sold together</span>
         </label>
         <ErrorLine e={save.isError ? save.error : null} />
         <Button type="submit" size="lg" full disabled={save.isPending || !title.trim() || !price}>
@@ -507,7 +529,7 @@ function ItemSheet({ open, onClose, onSaved }: { open: boolean; onClose: () => v
           save.mutate();
         }}
       >
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">Team only. The link is the partner link; people go through it when they tap Get it.</p>
+        <p className="m-0 text-subhead text-ink-soft">Team only. The link is the partner link; people go through it when they tap Get it.</p>
         <Field label="Name">
           <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} className={FIELD} />
         </Field>
@@ -529,7 +551,7 @@ function ItemSheet({ open, onClose, onSaved }: { open: boolean; onClose: () => v
           </Field>
         </div>
         <fieldset className="m-0 border-0 p-0">
-          <legend className="text-[14px] font-bold">Category</legend>
+          <legend className="text-subhead font-semibold">Category</legend>
           <div className="mt-xs flex flex-wrap gap-xs">
             {STORE_CATEGORIES.map((c) => (
               <button key={c} type="button" aria-pressed={category === c} onClick={() => setCategory(c)} className={pill(category === c)}>
@@ -600,7 +622,7 @@ function KitSheet({ open, onClose, onSaved, items, listings }: { open: boolean; 
           save.mutate();
         }}
       >
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">Team only. Pick what to buy at this stage, in this budget, new or pre-owned.</p>
+        <p className="m-0 text-subhead text-ink-soft">Team only. Pick what to buy at this stage, in this budget, new or pre-owned.</p>
         <Field label="Name">
           <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Starter kit under 50k" className={FIELD} />
         </Field>
@@ -622,14 +644,14 @@ function KitSheet({ open, onClose, onSaved, items, listings }: { open: boolean; 
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} maxLength={2000} className={FIELD} />
         </Field>
         <fieldset className="m-0 border-0 p-0">
-          <legend className="text-[14px] font-bold">Pieces</legend>
+          <legend className="text-subhead font-semibold">Pieces</legend>
           <ul className="mt-xs flex max-h-[280px] list-none flex-col gap-xs overflow-y-auto p-0 m-0">
             {items.map((i) => (
               <li key={i.id}>
                 <label className="flex min-h-[44px] items-center gap-sm rounded-tile bg-paper px-sm">
                   <input type="checkbox" checked={has('item', i.id)} onChange={() => toggle('item', i.id)} className="size-[20px]" />
-                  <span className="min-w-0 flex-1 truncate text-[14px] font-bold">{i.title}</span>
-                  <span className="text-[14px] font-semibold text-ink-soft">{money(i.priceCents, i.currency)}</span>
+                  <span className="min-w-0 flex-1 truncate text-subhead font-semibold">{i.title}</span>
+                  <span className="text-subhead text-ink-soft">{money(i.priceCents, i.currency)}</span>
                 </label>
               </li>
             ))}
@@ -637,16 +659,16 @@ function KitSheet({ open, onClose, onSaved, items, listings }: { open: boolean; 
               <li key={l.id}>
                 <label className="flex min-h-[44px] items-center gap-sm rounded-tile bg-paper px-sm">
                   <input type="checkbox" checked={has('listing', l.id)} onChange={() => toggle('listing', l.id)} className="size-[20px]" />
-                  <span className="min-w-0 flex-1 truncate text-[14px] font-bold">
+                  <span className="min-w-0 flex-1 truncate text-subhead font-semibold">
                     {l.title} <span className="text-ink-soft">· pre-owned</span>
                   </span>
-                  <span className="text-[14px] font-semibold text-ink-soft">{money(l.priceCents, l.currency)}</span>
+                  <span className="text-subhead text-ink-soft">{money(l.priceCents, l.currency)}</span>
                 </label>
               </li>
             ))}
           </ul>
         </fieldset>
-        <p className="m-0 text-[14px] font-extrabold">Comes to {money(total, 'INR')}</p>
+        <p className="m-0 text-subhead font-semibold">Comes to {money(total, 'INR')}</p>
         <ErrorLine e={save.isError ? save.error : null} />
         <Button type="submit" size="lg" full disabled={save.isPending || !title.trim() || picked.length === 0}>
           Make the kit

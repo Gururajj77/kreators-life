@@ -1,14 +1,16 @@
 import { Hono } from 'hono';
 import {
   DEFAULT_ZONE,
+  discoverProfile,
   INSIGHT_WINDOW_DAYS,
-  insightsFor,
-  insightsForApp,
+  insightsForEvery,
+  insightsForPlace,
   isInsightApp,
   isRelationshipKey,
   periodFor,
   periodShift,
   type InsightFacts,
+  type DiscoverResult,
   type InsightReviewFact,
   type InsightsResponse,
   type PeriodKind,
@@ -19,7 +21,6 @@ import {
 import type { AppEnv } from '../env';
 import { resolveAccess } from '../access';
 import { currencyOf, DATE_RE, dayFromDevice, shiftDate } from '../db';
-import { latestProfile, settingsOf } from './discover';
 import { numbersFor } from './reviews';
 
 /**
@@ -27,6 +28,10 @@ import { numbersFor } from './reviews';
  * only, nothing stored. Every statement binds the session's id. A signal is computed only while every app it reads is on,
  * and the reads for an app that is off are never sent. The journal is read by when an entry was written, never a word;
  * wellbeing by kind, day and number, never a note or an extra. The rules are `insightsFor` in shared.
+ *
+ * One answer for every place (2026-11-05): with no `app` it is the person's whole list, each pillar's own balance line included, and
+ * the screens pick their share with `insightsForPlace` from one cached query per device day. `app` (and `rel`) still narrow it the
+ * old way, for a client that has not reloaded. Limit `insights` per person (limits.ts).
  */
 const insights = new Hono<AppEnv>();
 
@@ -69,16 +74,20 @@ insights.get('/', async (c) => {
 
   // One round trip for everything core; the reads for apps that are on ride in the same batch.
   const stmts: D1PreparedStatement[] = [
+    // The newest ticks when there are more than the cap (shared orders them again); the cap keeps the weeks closest to today.
     db
-      .prepare("SELECT id, title, relationship, parent_id, completed_at, (repeat_json IS NOT NULL OR spawned_from IS NOT NULL) AS repeats, habit FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? ORDER BY completed_at LIMIT 3000")
+      .prepare("SELECT id, title, relationship, parent_id, completed_at, (repeat_json IS NOT NULL OR spawned_from IS NOT NULL) AS repeats, habit FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? ORDER BY completed_at DESC LIMIT 3000")
       .bind(uid, fromTs),
-    db.prepare("SELECT id, title, relationship, parent_id, (repeat_json IS NOT NULL) AS repeats, habit, COALESCE(do_date, due_date) AS open_day FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' LIMIT 1000").bind(uid),
-    db.prepare("SELECT id, relationship FROM nodes WHERE user_id = ? AND kind = 'project' AND status = 'active' LIMIT 500").bind(uid),
+    // Past the cap, the open tasks touched most recently; handed over in the order they were made (rowid), the order the unordered
+    // read always gave, so the open task a habit card picks (`mates[0]`, `habitOf`) never changes between two made in one batch.
+    db
+      .prepare("SELECT * FROM (SELECT rowid AS rid, id, title, relationship, parent_id, (repeat_json IS NOT NULL) AS repeats, habit, COALESCE(do_date, due_date) AS open_day FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' ORDER BY updated_at DESC, id LIMIT 1000) ORDER BY rid")
+      .bind(uid),
+    db.prepare("SELECT id, relationship FROM nodes WHERE user_id = ? AND kind = 'project' AND status = 'active' ORDER BY updated_at DESC, id LIMIT 500").bind(uid),
     db.prepare("SELECT relationship, SUM(amount) AS xp FROM xp_events WHERE user_id = ? AND created_at >= ? AND relationship IS NOT NULL GROUP BY relationship").bind(uid, from30Utc),
     db.prepare("SELECT DISTINCT source_id AS day FROM xp_events WHERE user_id = ? AND source = 'checkin' AND source_id >= ?").bind(uid, from),
     db.prepare("SELECT MIN(source_id) AS first FROM xp_events WHERE user_id = ? AND source = 'checkin'").bind(uid),
     db.prepare('SELECT day, SUM(minutes) AS minutes FROM focus_rounds WHERE user_id = ? AND day >= ? GROUP BY day').bind(uid, from),
-    db.prepare("SELECT day, SUM(status = 'slipped') AS slipped, SUM(status = 'kept') AS kept FROM not_to_do_days WHERE user_id = ? AND day >= ? GROUP BY day").bind(uid, from),
     db.prepare('SELECT day, SUM(ml) AS ml FROM water_logs WHERE user_id = ? AND day >= ? GROUP BY day').bind(uid, from),
     db.prepare('SELECT water_goal_ml FROM reminder_prefs WHERE user_id = ?').bind(uid),
     db.prepare('SELECT day, kind FROM day_types WHERE user_id = ? AND day >= ?').bind(uid, from),
@@ -100,6 +109,11 @@ insights.get('/', async (c) => {
   // Spending in the person's own currency only; other currencies are never added in.
   if (on('finance')) add('money', db.prepare("SELECT date, SUM(amount_cents) AS cents FROM finance_transactions WHERE user_id = ? AND kind = 'expense' AND currency = ? AND date >= ? GROUP BY date").bind(uid, currency, from));
   if (on('agency')) add('agency', db.prepare('SELECT DISTINCT due_date AS day FROM agency_items WHERE user_id = ? AND due_date >= ? AND due_date <= ?').bind(uid, from, today));
+  // Discover's switches and its latest result ride in the same batch (they were two more round trips after it).
+  if (on('discover')) {
+    add('discoverSettings', db.prepare('SELECT steps FROM discover_settings WHERE user_id = ?').bind(uid));
+    add('discoverResult', db.prepare('SELECT result_json, created_at FROM discover_results WHERE user_id = ? ORDER BY created_at DESC LIMIT 1').bind(uid));
+  }
   if (on('reviews')) add('review', db.prepare('SELECT kind, period_start, period_end, snapshot_json FROM reviews WHERE user_id = ? AND period_end < ? ORDER BY period_end DESC, updated_at DESC LIMIT 1').bind(uid, today));
 
   const res = await db.batch(stmts);
@@ -121,22 +135,40 @@ insights.get('/', async (c) => {
   const rels = new Set<RelationshipKey>([...xpRows.map((r) => r.relationship), ...ticks30.keys()]);
   const xp30 = [...rels].map((k) => ({ relationship: k, xp: Math.max(0, xpRows.find((r) => r.relationship === k)?.xp ?? 0), ticks: ticks30.get(k) ?? 0 }));
 
-  const discover = on('discover') ? await (async () => {
-    const [settings, profile] = await Promise.all([settingsOf(db, uid), latestProfile(db, uid)]);
-    return profile ? { growth: profile.growth, steps: settings.steps } : null;
-  })() : null;
-
-  let review: InsightReviewFact | null = null;
+  // The one read that has to wait for the batch: the period after the last review, so far. It is started first and Discover is read
+  // while it runs.
+  let reviewPending: Promise<InsightReviewFact> | null = null;
   const rv = row<{ kind: PeriodKind; period_start: string; period_end: string; snapshot_json: string }>(extra.review);
   if (rv) {
     const snap = json<{ now?: PeriodNumbers } | null>(rv.snapshot_json, null);
     const p = periodFor(rv.kind, rv.period_start);
     const next = periodShift(p, 1);
-    if (snap?.now && next.start <= today) {
-      const upTo = next.end < today ? next.end : today;
-      const since = await numbersFor(db, uid, { kind: next.kind, start: next.start, end: upTo });
-      review = { kind: rv.kind, start: rv.period_start, end: rv.period_end, then: snap.now, since, sinceStart: next.start, sinceEnd: next.end, ended: next.end < today };
+    if (snap?.now) {
+      const then = snap.now;
+      if (next.start <= today) {
+        const upTo = next.end < today ? next.end : today;
+        reviewPending = numbersFor(db, uid, { kind: next.kind, start: next.start, end: upTo }).then((since) => ({ kind: rv.kind, start: rv.period_start, end: rv.period_end, then, since, sinceStart: next.start, sinceEnd: next.end, ended: next.end < today }));
+      }
     }
+  }
+
+  // The same reading as `settingsOf` (steps on unless switched off) and `latestProfile` in routes/discover.ts.
+  const dset = row<{ steps: number }>(extra.discoverSettings);
+  const dres = row<{ result_json: string; created_at: string }>(extra.discoverResult);
+  const dparsed = dres ? json<DiscoverResult | null>(dres.result_json, null) : null;
+  const dprofile = dres && dparsed ? discoverProfile(dparsed, dres.created_at) : null;
+  const discover = on('discover') && dprofile ? { growth: dprofile.growth, steps: dset ? dset.steps === 1 : true } : null;
+
+  const review: InsightReviewFact | null = reviewPending ? await reviewPending : null;
+
+  // Kept and slipped per day, from the same marks the good and bad habits read (one statement fewer).
+  const marks = rows<{ item_id: string; day: string; status: string }>(extra.ntdMarks);
+  const perDay = new Map<string, { day: string; slipped: number; kept: number }>();
+  for (const m of marks) {
+    const d = perDay.get(m.day) ?? { day: m.day, slipped: 0, kept: 0 };
+    if (m.status === 'slipped') d.slipped += 1;
+    else if (m.status === 'kept') d.kept += 1;
+    perDay.set(m.day, d);
   }
 
   const facts: InsightFacts = {
@@ -144,33 +176,33 @@ insights.get('/', async (c) => {
     zone,
     currency,
     apps,
-    rel,
+    rel: null,
     done,
     open,
     projects,
     xp30,
-    focusPillars: json<RelationshipKey[]>(row<{ focus_json: string }>(12)?.focus_json, []).filter(isRelationshipKey),
+    focusPillars: json<RelationshipKey[]>(row<{ focus_json: string }>(11)?.focus_json, []).filter(isRelationshipKey),
     checkins: rows<{ day: string }>(4).map((r) => r.day),
     firstCheckin: row<{ first: string | null }>(5)?.first ?? null,
     wellbeing: rows<{ kind: string; date: string; value: number }>(extra.wellbeing),
     focus: rows<{ day: string; minutes: number }>(6),
-    notToDo: rows<{ day: string; slipped: number; kept: number }>(7),
+    notToDo: [...perDay.values()],
     notToDoItems: rows<{ id: string; title: string; relationship: string | null }>(extra.ntdItems).map((r) => ({ id: r.id, title: r.title, relationship: r.relationship && isRelationshipKey(r.relationship) ? r.relationship : null })),
-    notToDoMarks: rows<{ item_id: string; day: string; status: string }>(extra.ntdMarks)
+    notToDoMarks: marks
       .filter((r) => r.status === 'kept' || r.status === 'slipped')
       .map((r) => ({ itemId: r.item_id, day: r.day, status: r.status as 'kept' | 'slipped' })),
-    water: rows<{ day: string; ml: number }>(8),
-    waterGoal: row<{ water_goal_ml: number }>(9)?.water_goal_ml ?? null,
-    dayTypes: rows<{ day: string; kind: string }>(10),
-    routine: rows<{ day: string; done: number }>(11).map((r) => ({ day: r.day, done: r.done === 1 })),
+    water: rows<{ day: string; ml: number }>(7),
+    waterGoal: row<{ water_goal_ml: number }>(8)?.water_goal_ml ?? null,
+    dayTypes: rows<{ day: string; kind: string }>(9),
+    routine: rows<{ day: string; done: number }>(10).map((r) => ({ day: r.day, done: r.done === 1 })),
     journalAt: rows<{ created_at: string }>(extra.journal).map((r) => r.created_at),
     expenses: rows<{ date: string; cents: number }>(extra.money),
     review,
     discover,
     agencyDue: rows<{ day: string }>(extra.agency).map((r) => r.day),
   };
-  const all = insightsFor(facts);
-  const body: InsightsResponse = { day: today, insights: insightsForApp(all, app, rel) };
+  const all = insightsForEvery(facts);
+  const body: InsightsResponse = { day: today, insights: app ? insightsForPlace(all, app, rel) : all };
   return c.json(body);
 });
 

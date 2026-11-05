@@ -106,7 +106,7 @@ export function WorkingLine({ label, phrases, since, loop = true, className = ''
   }, [still, running, phrase]);
 
   return (
-    <span ref={root} role="status" className={`inline-flex min-w-0 items-baseline gap-xs text-[14px] font-bold ${className}`}>
+    <span ref={root} role="status" className={`inline-flex min-w-0 items-baseline gap-xs text-subhead ${className}`}>
       <span className="sr-only">{label}</span>
       <span ref={wrap} aria-hidden="true" className="relative inline-block min-w-0 overflow-hidden whitespace-nowrap align-bottom text-ink-soft">
         {phrase}…
@@ -116,7 +116,7 @@ export function WorkingLine({ label, phrases, since, loop = true, className = ''
           </span>
         </span>
       </span>
-      <span aria-hidden="true" className="shrink-0 tabular-nums text-[12px] text-ink-mute">
+      <span aria-hidden="true" className="shrink-0 tabular-nums text-caption text-ink-mute">
         {elapsedLabel((now - begin) / 1000)}
       </span>
     </span>

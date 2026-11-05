@@ -15,6 +15,10 @@ import { FIELD } from '../lib/ui';
 import { ErrorLine } from '../components/ErrorLine';
 import { MoreMenu } from '../components/MoreMenu';
 import { SkeletonList } from '../components/Skeleton';
+import { CardHead } from '../components/CardHead';
+import { FactTag, IconTag } from '../components/FactTag';
+import { StatusTag } from '../components/StatusTag';
+import '../components/fx/spotlight';
 
 function ToolRow({ t, reviewer, onChange }: { t: Tool; reviewer: boolean; onChange: () => void }) {
   const set = useMutation({ mutationFn: (body: { verified?: boolean; affiliate?: boolean; featured?: boolean }) => api.setTool(t.id, body), onSuccess: onChange });
@@ -26,66 +30,75 @@ function ToolRow({ t, reviewer, onChange }: { t: Tool; reviewer: boolean; onChan
   const [editingMedia, setEditingMedia] = useState(false);
   const mediaItem = useMediaMenuItem('tool', t.id, () => setEditingMedia(true));
   return (
-    <li className={`rounded-tile bg-card p-sm ${featured ? 'border-2 border-r3 shadow-toy' : 'border-2 border-transparent shadow-toy-soft'}`}>
-      <div className="flex items-start gap-sm">
-        <span className="min-w-0 flex-1">
-          {featured && (
-            <span className="mb-xs block">
-              <FeaturedTag />
+    // The name at the top left, Verified or Waiting in the corner of every card, the words under it, then at the foot the marks on the
+    // left and Open or Get it at the bottom right with the More beside it (2026-11-05, the founder's card rules).
+    <li className={`fx-spot flex h-full flex-col rounded-tile bg-card p-sm ${featured ? 'border-2 border-r3 shadow-toy' : 'border-2 border-transparent shadow-toy-soft'}`}>
+      <CardHead tag={t.verified ? <FactTag kind="verified">Verified</FactTag> : <StatusTag tone="warn">Waiting for review</StatusTag>}>
+        <span className="block text-balance text-headline">{t.name}</span>
+      </CardHead>
+      {t.description && <span className="mt-xs block text-subhead text-ink-soft">{t.description}</span>}
+      {!t.unlock.ok && (
+        <div className="mt-sm">
+          <LockedButton unlock={t.unlock} />
+        </div>
+      )}
+      <div className="mt-auto flex items-end justify-between gap-sm pt-sm">
+        <span className="flex min-w-0 flex-col items-start gap-xs">
+          {(featured || t.clicks > 0) && (
+            <span className="fill-row-all flex min-w-0 flex-wrap gap-xs">
+              {featured && <FeaturedTag />}
+              {t.clicks > 0 && <IconTag tone="neutral" icon="TrendingUp">{`${formatCount(t.clicks)} ${t.clicks === 1 ? 'tap' : 'taps'}`}</IconTag>}
             </span>
           )}
-          <span className="block text-[16px] font-bold">{t.name}</span>
-          {t.description && <span className="block text-[14px] font-semibold text-ink-soft">{t.description}</span>}
-          <span className="block text-[12px] font-bold text-ink-mute">
-            {t.verified ? 'Verified by the team' : `Suggested by ${t.suggestedByName}, waiting for review`}
-            {t.affiliate ? '. Partner link. Kreators may earn a share.' : ''}
-            {t.clicks > 0 ? ` · ${formatCount(t.clicks)} ${t.clicks === 1 ? 'tap' : 'taps'}` : ''}
-            {t.unlock.ok && (t.minPoints > 0 || t.minXp > 0 || t.badge) ? ` · ${unlockAt(t.unlock)}. You have it.` : ''}
-          </span>
+          {(!t.verified || t.affiliate || (t.unlock.ok && (t.minPoints > 0 || t.minXp > 0 || t.badge))) && (
+            <span className="block text-caption text-ink-mute">
+              {[!t.verified ? `Suggested by ${t.suggestedByName}.` : '', t.affiliate ? 'Partner link. Kreators may earn a share.' : '', t.unlock.ok && (t.minPoints > 0 || t.minXp > 0 || t.badge) ? `${unlockAt(t.unlock)}. You have it.` : ''].filter(Boolean).join(' ')}
+            </span>
+          )}
         </span>
-        {!t.unlock.ok ? (
-          <LockedButton unlock={t.unlock} full={false} className="w-[200px] shrink-0" />
-        ) : t.affiliate && t.verified ? (
-          // The same outline look as Open, so the page keeps one solid button, Suggest a tool.
-          <a href={`/out/tool/${t.id}`} target="_blank" rel="noreferrer" className="toy toy-ink inline-flex min-h-[44px] shrink-0 items-center rounded-pill border-2 border-ink bg-card px-sm text-[14px] font-bold">
-            Get it
-          </a>
-        ) : (
-          <a href={t.url} target="_blank" rel="noreferrer" className="toy toy-ink inline-flex min-h-[44px] shrink-0 items-center rounded-pill border-2 border-ink bg-card px-sm text-[14px] font-bold">
-            Open
-          </a>
-        )}
-        {(reviewer || mediaItem) && (
-          <MoreMenu
-            label={`Review actions for ${t.name}`}
-            title={t.name}
-            items={[
-              ...(mediaItem ? [mediaItem] : []),
-              ...(reviewer
-                ? [
-                    ...(!t.verified ? [{ key: 'verify', label: 'Verify', disabled: set.isPending, onSelect: () => set.mutate({ verified: true }) }] : []),
-                    { key: 'affiliate', label: t.affiliate ? 'Not a partner link' : 'Mark as partner link', disabled: set.isPending, onSelect: () => set.mutate({ affiliate: !t.affiliate }) },
-                    { key: 'feature', label: featured ? 'Take off the top' : 'Feature for a week', disabled: set.isPending, onSelect: () => set.mutate({ featured: !featured }) },
-                    { key: 'remove', label: 'Remove', destructive: true, disabled: remove.isPending, onSelect: () => setRemoving(true) },
-                  ]
-                : []),
-            ]}
-          />
-        )}
+        <span className="flex shrink-0 items-center gap-xs">
+            {(reviewer || mediaItem) && (
+              <MoreMenu
+                label={`Review actions for ${t.name}`}
+                title={t.name}
+                items={[
+                  ...(mediaItem ? [mediaItem] : []),
+                  ...(reviewer
+                    ? [
+                        ...(!t.verified ? [{ key: 'verify', label: 'Verify', disabled: set.isPending, onSelect: () => set.mutate({ verified: true }) }] : []),
+                        { key: 'affiliate', label: t.affiliate ? 'Not a partner link' : 'Mark as partner link', disabled: set.isPending, onSelect: () => set.mutate({ affiliate: !t.affiliate }) },
+                        { key: 'feature', label: featured ? 'Take off the top' : 'Feature for a week', disabled: set.isPending, onSelect: () => set.mutate({ featured: !featured }) },
+                        { key: 'remove', label: 'Remove', destructive: true, disabled: remove.isPending, onSelect: () => setRemoving(true) },
+                      ]
+                    : []),
+                ]}
+              />
+            )}
+          {!t.unlock.ok ? null : t.affiliate && t.verified ? (
+            // The same outline look as Open, so the page keeps one solid button, Suggest a tool.
+            <a href={`/out/tool/${t.id}`} target="_blank" rel="noreferrer" className="toy toy-ink inline-flex min-h-[44px] items-center rounded-pill border-2 border-ink bg-card px-sm text-subhead font-semibold">
+              Get it
+            </a>
+          ) : (
+            <a href={t.url} target="_blank" rel="noreferrer" className="toy toy-ink inline-flex min-h-[44px] items-center rounded-pill border-2 border-ink bg-card px-sm text-subhead font-semibold">
+              Open
+            </a>
+          )}
+        </span>
       </div>
       <MediaSection type="tool" id={t.id} title="Pictures and videos" trigger={null} open={editingMedia} onOpenChange={setEditingMedia} />
       {reviewer && <ErrorLine e={set.isError ? set.error : null} />}
       {reviewer && (
         <Sheet open={removing} onClose={() => setRemoving(false)} title="Remove this tool?">
           <div className="grid gap-md pb-xl">
-            <p className="m-0 text-[16px] font-semibold text-ink-soft">{t.name} leaves the directory for everyone.</p>
+            <p className="m-0 text-callout text-ink-soft">{t.name} leaves the directory for everyone.</p>
             <ErrorLine e={remove.isError ? remove.error : null} />
             <div className="flex flex-wrap gap-xs">
               <button
                 type="button"
                 disabled={remove.isPending}
                 onClick={() => remove.mutate(undefined, { onSuccess: () => setRemoving(false) })}
-                className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-[16px] font-semibold text-on-fill disabled:opacity-50"
+                className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill disabled:opacity-50"
               >
                 Yes, remove it
               </button>
@@ -120,7 +133,7 @@ export function Tools() {
 
       {q.isError && (
         <div className="mt-md flex flex-wrap-reverse items-center justify-between gap-sm rounded-card bg-card p-md shadow-toy-soft" role="alert">
-          <p className="m-0 min-w-0 flex-1 basis-[60%] font-bold">Could not load the directory.</p>
+          <p className="m-0 min-w-0 flex-1 basis-[60%] font-semibold">Could not load the directory.</p>
           <Button variant="outline" onClick={() => q.refetch()}>
             Try again
           </Button>
@@ -129,11 +142,11 @@ export function Tools() {
 
       {q.isPending && <SkeletonList className="mt-lg" count={3} lines={2} label="Loading the tools" />}
 
-      {d && verified.length === 0 && <p className="mt-lg m-0 text-[14px] font-semibold text-ink-soft">The shelf is empty. Suggest the first tool.</p>}
+      {d && verified.length === 0 && <p className="mt-lg m-0 text-subhead text-ink-soft">The shelf is empty. Suggest the first tool.</p>}
 
       {verified.some((t) => isFeatured(t.featuredUntil)) && (
         <section className="mt-lg" aria-labelledby="featured-tools">
-          <h2 id="featured-tools" className="text-[24px]">
+          <h2 id="featured-tools" className="text-title2">
             Featured this week
           </h2>
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -149,7 +162,7 @@ export function Tools() {
         if (list.length === 0) return null;
         return (
           <section key={cat} className="mt-lg" aria-labelledby={`cat-${cat}`}>
-            <h2 id={`cat-${cat}`} className="text-[24px]">
+            <h2 id={`cat-${cat}`} className="text-title2">
               {cat}
             </h2>
             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -164,7 +177,7 @@ export function Tools() {
 
       {pending.length > 0 && (
         <section className="mt-lg" aria-labelledby="pending-heading">
-          <h2 id="pending-heading" className="text-[24px]">
+          <h2 id="pending-heading" className="text-title2">
             {d?.reviewer ? 'Suggestions to review' : 'Your suggestions'}
           </h2>
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -208,39 +221,39 @@ function SuggestSheet({ open, onClose, onDone, categories, reviewer }: { open: b
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Name</span>
+          <span className="block text-subhead font-semibold">Name</span>
           <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Link</span>
+          <span className="block text-subhead font-semibold">Link</span>
           <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} maxLength={500} required placeholder="https://" className={FIELD} />
         </label>
         <fieldset className="m-0 border-0 p-0">
-          <legend className="text-[14px] font-bold">Category</legend>
+          <legend className="text-subhead font-semibold">Category</legend>
           <div className="mt-xs flex flex-wrap gap-xs">
             {categories.map((c) => (
-              <button key={c} type="button" aria-pressed={category === c} onClick={() => setCategory(c)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${category === c ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+              <button key={c} type="button" aria-pressed={category === c} onClick={() => setCategory(c)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${category === c ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                 {c}
               </button>
             ))}
           </div>
         </fieldset>
         <label className="block">
-          <span className="block text-[14px] font-bold">What it is good for</span>
+          <span className="block text-subhead font-semibold">What it is good for</span>
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} rows={3} className={FIELD} />
         </label>
         {reviewer && (
           <div className="grid grid-cols-2 gap-xs">
             <label className="block">
-              <span className="block text-[14px] font-bold">Xp of at least</span>
+              <span className="block text-subhead font-semibold">Xp of at least</span>
               <input type="number" min={0} value={minXp} onChange={(e) => setMinXp(e.target.value)} className={FIELD} />
             </label>
             <label className="block">
-              <span className="block text-[14px] font-bold">Points balance of at least</span>
+              <span className="block text-subhead font-semibold">Points balance of at least</span>
               <input type="number" min={0} value={minPoints} onChange={(e) => setMinPoints(e.target.value)} className={FIELD} />
             </label>
             <label className="block">
-              <span className="block text-[14px] font-bold">Holds the badge</span>
+              <span className="block text-subhead font-semibold">Holds the badge</span>
               <select value={badge} onChange={(e) => setBadge(e.target.value)} className={FIELD}>
                 <option value="">Any badge or none</option>
                 {PUBLIC_BADGES.map((b) => (
@@ -252,7 +265,7 @@ function SuggestSheet({ open, onClose, onDone, categories, reviewer }: { open: b
             </label>
           </div>
         )}
-        <p className="m-0 text-[12px] font-bold text-ink-soft">A reviewer checks it before it shows to everyone. You see it straight away.</p>
+        <p className="m-0 text-caption text-ink-soft">A reviewer checks it before it shows to everyone. You see it straight away.</p>
         <ErrorLine e={suggest.isError ? suggest.error : null} />
         <Button type="submit" size="lg" full disabled={suggest.isPending || !name.trim() || !url.trim()}>
           Send suggestion

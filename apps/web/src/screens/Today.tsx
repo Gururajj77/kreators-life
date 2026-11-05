@@ -90,13 +90,13 @@ function BacklogTask({ t, date, queue }: { t: Node; date: string; queue: ReturnT
       panel={
         <>
           <div className="mt-xs flex flex-wrap items-center gap-xs" role="group" aria-label={`Pick a day for ${t.title}`}>
-            <button type="button" onClick={() => pick.mutate(date)} className="toy toy-soft min-h-[44px] rounded-pill border-2 border-line bg-card px-sm text-[14px] font-bold">
+            <button type="button" onClick={() => pick.mutate(date)} className="toy toy-soft min-h-[44px] rounded-pill border-2 border-line bg-card px-sm text-subhead font-medium">
               Today
             </button>
-            <button type="button" onClick={() => pick.mutate(addDays(date, 1))} className="toy toy-soft min-h-[44px] rounded-pill border-2 border-line bg-card px-sm text-[14px] font-bold">
+            <button type="button" onClick={() => pick.mutate(addDays(date, 1))} className="toy toy-soft min-h-[44px] rounded-pill border-2 border-line bg-card px-sm text-subhead font-medium">
               Tomorrow
             </button>
-            <input type="date" aria-label={`Do date for ${t.title}`} min={date} onChange={(e) => /^\d{4}-\d{2}-\d{2}$/.test(e.target.value) && e.target.value >= '2000-01-01' && pick.mutate(e.target.value)} className="min-h-[44px] rounded-pill border-2 border-line bg-paper px-sm text-[14px] font-bold" />
+            <input type="date" aria-label={`Do date for ${t.title}`} min={date} onChange={(e) => /^\d{4}-\d{2}-\d{2}$/.test(e.target.value) && e.target.value >= '2000-01-01' && pick.mutate(e.target.value)} className="min-h-[44px] rounded-pill border-2 border-line bg-paper px-sm text-subhead font-medium" />
           </div>
           {open && (
             <div id={`task-plan-${t.id}`}>
@@ -175,11 +175,11 @@ export function Today() {
   return (
     <Screen columns={false}>
       <header className="pt-lg">
-        <p className="m-0 text-[14px] font-bold text-ink-soft">{prettyDate(date)}</p>
+        <p className="m-0 text-subhead text-ink-soft">{prettyDate(date)}</p>
         <div className="flex items-center justify-between gap-sm">
-          <h1 className="text-[30px]">Daily</h1>
+          <h1 className="text-large-title">Daily</h1>
           {data && (
-            <span className="inline-flex shrink-0 items-center gap-xs rounded-pill bg-card px-sm py-xs text-[14px] font-extrabold shadow-toy-soft">
+            <span className="inline-flex shrink-0 items-center gap-xs rounded-pill bg-card px-sm py-xs text-subhead font-medium shadow-toy-soft">
               <Icon icon={Flame} size={16} />
               <span>
                 <RollNumber value={data.streak} /> {data.streak === 1 ? 'day' : 'days'}
@@ -189,7 +189,7 @@ export function Today() {
         </div>
         {data && (
           <div className="mt-sm">
-            <p className="m-0 text-[14px] font-bold">
+            <p className="m-0 text-subhead">
               {doneCount === 3 ? 'All three done. See you tomorrow.' : `${doneCount} of 3 done. Tick a box when you have done the thing.`}
             </p>
             <div className="mt-xs flex gap-xs" aria-hidden="true">
@@ -210,7 +210,7 @@ export function Today() {
       )}
       {isError && (
         <div className="mt-md rounded-card bg-card p-md shadow-toy-soft flex flex-wrap-reverse items-center justify-between gap-sm" role="alert">
-          <p className="m-0 font-bold min-w-0 flex-1 basis-[60%]">Could not load today.</p>
+          <p className="m-0 font-semibold min-w-0 flex-1 basis-[60%]">Could not load today.</p>
           <Button variant="outline" onClick={() => refetch()}>
             Try again
           </Button>
@@ -220,7 +220,7 @@ export function Today() {
       {data && rel && (
         <>
           <section className="mt-lg" aria-labelledby="show-heading">
-            <h2 id="show-heading" className="text-[18px]">
+            <h2 id="show-heading" className="text-title2">
               Show up
             </h2>
             <div className="mt-sm">
@@ -256,7 +256,7 @@ export function Today() {
           <section data-pillar={rel.key} className="mt-lg" aria-labelledby="spark-heading">
             <div className="flex items-center gap-sm">
               <Avatar relationship={rel.key} size={36} still decorative mood={data.spark.done ? 'excited' : 'happy'} />
-              <h2 id="spark-heading" className="text-[18px]">
+              <h2 id="spark-heading" className="text-title2">
                 {rel.character}&rsquo;s small act for today
               </h2>
             </div>
@@ -279,11 +279,11 @@ export function Today() {
 
           <section className="mt-lg" aria-labelledby="tasks-heading">
             <div className="flex items-baseline justify-between gap-sm">
-              <h2 id="tasks-heading" className="text-[18px]">
+              <h2 id="tasks-heading" className="text-title2">
                 Tasks
               </h2>
               <div className="flex flex-wrap items-center justify-end gap-sm">
-                {tasks.length > 0 && <span className="text-[14px] font-bold text-ink-soft">{tasks.length} waiting</span>}
+                {tasks.length > 0 && <span className="text-subhead text-ink-soft">{tasks.length} waiting</span>}
                 <WeekPlanButton />
               </div>
             </div>
@@ -306,10 +306,10 @@ export function Today() {
             {data.timePlan.plannedMin + data.timePlan.doneMin > 0 && (
               <div className="mt-xs rounded-tile bg-card p-sm shadow-toy-soft" aria-label="Time plan">
                 <div className="flex items-baseline justify-between gap-sm">
-                  <p className="m-0 text-[14px] font-bold">
+                  <p className="m-0 text-subhead font-semibold">
                     {data.timePlan.doneMin > 0 ? `${data.timePlan.doneMin} of ${data.timePlan.doneMin + data.timePlan.plannedMin} min done` : `${data.timePlan.plannedMin} min planned`}
                   </p>
-                  <p className="m-0 text-[12px] font-bold text-ink-soft">{data.timePlan.timed > 0 ? `${data.timePlan.timed} with a set time` : 'no set times yet'}</p>
+                  <p className="m-0 text-caption text-ink-soft">{data.timePlan.timed > 0 ? `${data.timePlan.timed} with a set time` : 'no set times yet'}</p>
                 </div>
                 <div className="mt-xs h-[8px] overflow-hidden rounded-pill bg-line" aria-hidden="true">
                   <div className="h-full rounded-pill bg-r4" style={{ width: `${Math.round((data.timePlan.doneMin / Math.max(1, data.timePlan.doneMin + data.timePlan.plannedMin)) * 100)}%` }} />
@@ -327,10 +327,10 @@ export function Today() {
               </ul>
             ) : (
               <div className="mt-sm flex flex-wrap-reverse items-center justify-between gap-sm rounded-card border-2 border-dashed border-line p-md">
-                <p className="m-0 min-w-0 flex-1 basis-[60%] text-[14px] font-semibold text-ink-soft">
+                <p className="m-0 min-w-0 flex-1 basis-[60%] text-subhead text-ink-soft">
                   {taskDone ? 'Tasks done for today. Their pyramids got stronger. More arrive as their dates come up.' : 'Tasks come from pillars you set up.'}
                 </p>
-                <Link to="/tower" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+                <Link to="/tower" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
                   {taskDone ? 'Set up another pillar' : 'Set up a pillar'}
                 </Link>
               </div>
@@ -359,19 +359,19 @@ export function Today() {
               </Suspense>
             </Fold>
             {added && (
-              <p role="status" className="mt-xs m-0 text-[14px] font-bold text-ink-soft">
+              <p role="status" className="mt-xs m-0 text-subhead text-ink-soft">
                 {added}
               </p>
             )}
             {remembered.length > 0 && (
               <div role="group" className="mt-md" aria-labelledby="remember-heading">
                 <div className="flex items-baseline justify-between gap-sm">
-                  <h3 id="remember-heading" className="text-[16px]">
+                  <h3 id="remember-heading" className="text-headline">
                     To remember
                   </h3>
-                  <span className="text-[14px] font-bold text-ink-soft">{remembered.length}</span>
+                  <span className="text-subhead text-ink-soft">{remembered.length}</span>
                 </div>
-                <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Pick a day to move one into Tasks, with an inbox note.</p>
+                <p className="mt-xs m-0 text-caption text-ink-soft">Pick a day to move one into Tasks, with an inbox note.</p>
                 <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
                   {remembered.map((t) => (
                     <BacklogTask key={t.id} t={t} date={date} queue={queue} />
@@ -381,22 +381,22 @@ export function Today() {
             )}
             {waiting > 0 && (
               <Fold className="mt-md" title="Not scheduled yet" hint={String(waiting)}>
-                <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Pick a do date or a due date to move one into Tasks.</p>
+                <p className="mt-xs m-0 text-subhead text-ink-soft">Pick a do date or a due date to move one into Tasks.</p>
                 <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
                   {backlog.map((t) => (
                     <BacklogTask key={t.id} t={t} date={date} queue={queue} />
                   ))}
                 </ul>
-                {waiting > backlog.length && <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Showing {backlog.length} of {waiting}. Pillars lists the rest.</p>}
+                {waiting > backlog.length && <p className="mt-xs m-0 text-caption text-ink-soft">Showing {backlog.length} of {waiting}. Pillars lists the rest.</p>}
               </Fold>
             )}
             {done.length > 0 && (
               <div role="group" className="mt-md" aria-labelledby="done-heading">
                 <div className="flex items-baseline justify-between gap-sm">
-                  <h3 id="done-heading" className="text-[16px]">
+                  <h3 id="done-heading" className="text-headline">
                     Done today
                   </h3>
-                  <span className="text-[14px] font-bold text-ink-soft">{done.length}</span>
+                  <span className="text-subhead text-ink-soft">{done.length}</span>
                 </div>
                 <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
                   <AnimatePresence initial={false}>
@@ -413,7 +413,7 @@ export function Today() {
                     ))}
                   </AnimatePresence>
                 </ul>
-                <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+                <p className="mt-xs m-0 text-caption text-ink-soft">
                   Tap one to untick it; that takes back its xp. Earlier days are on each pillar in{' '}
                   <Link to="/tower" className="underline underline-offset-4 hover:text-ink">
                     Pillars
@@ -435,7 +435,7 @@ export function Today() {
 
       {identity && (
         <section className="mt-lg" aria-labelledby="evo-heading">
-          <h2 id="evo-heading" className="text-[18px]">
+          <h2 id="evo-heading" className="text-title2">
             Who you are becoming
           </h2>
           <Link to="/you" className="toy toy-soft mt-sm block rounded-card bg-card p-md text-ink">
@@ -448,7 +448,7 @@ export function Today() {
               preparing={identity.preparing}
               readyInDays={identity.readyInDays}
             />
-            <p className="mt-sm m-0 text-center text-[14px] font-semibold text-ink-soft">
+            <p className="mt-sm m-0 text-center text-subhead text-ink-soft">
               {identity.preparing && identity.next
                 ? `Fully revealed. Evolves in ${identity.readyInDays} ${identity.readyInDays === 1 ? 'day' : 'days'}.`
                 : identity.next

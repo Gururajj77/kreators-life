@@ -679,38 +679,3 @@ export function Chips<T extends string | number>({ label, options, value, onChan
     </div>
   );
 }
-
-/**
- * One part of a document, in a line or two, with a small Edit button that opens only that part's form in a sheet.
- * The page stays short: the document on top, then these cards. `row` draws it as one line of an inset list (`.fx-inset`): the whole
- * line is the button (title, what is set now, a chevron), so a long list of parts is one calm group instead of a column of Edit pills.
- */
-export function SummaryCard({ title, summary, onEdit, editLabel = 'Edit', disabled = false, row = false, badge }: { title: string; summary: ReactNode; onEdit: () => void; editLabel?: string; disabled?: boolean; row?: boolean; /** A short tag after the title (a row only): "2 new". */ badge?: ReactNode }) {
-  if (row) {
-    return (
-      <li>
-        <button type="button" onClick={onEdit} disabled={disabled} aria-label={`${editLabel} ${title.toLowerCase()}`} className="fx-row text-ink disabled:opacity-60">
-          <span className="min-w-0 flex-1">
-            <span className="flex flex-wrap items-center gap-xs">
-              <span className="text-[16px] font-extrabold">{title}</span>
-              {badge}
-            </span>
-            <span className="mt-xs block text-[14px] font-semibold text-ink-soft">{summary}</span>
-          </span>
-          {!disabled && <Icon icon={ChevronRight} size={20} className="shrink-0 text-ink-mute" />}
-        </button>
-      </li>
-    );
-  }
-  return (
-    <li className="flex items-start justify-between gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-      <div className="min-w-0">
-        <h3 className="m-0 text-[16px] font-extrabold">{title}</h3>
-        <div className="mt-xs text-[14px] font-semibold text-ink-soft">{summary}</div>
-      </div>
-      <Button variant="outline" size="sm" onClick={onEdit} disabled={disabled} aria-label={`${editLabel} ${title.toLowerCase()}`}>
-        {editLabel}
-      </Button>
-    </li>
-  );
-}

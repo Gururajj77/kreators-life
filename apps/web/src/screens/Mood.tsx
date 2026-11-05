@@ -52,11 +52,11 @@ export function Mood() {
           <BackLink to="/wellbeing" inherit>
             Wellbeing
           </BackLink>
-          <h1 className="mt-sm text-center text-[30px]">How are you feeling today?</h1>
+          <h1 className="mt-sm text-center text-large-title">How are you feeling today?</h1>
           <div className="my-md flex justify-center">
             <MoodFace value={mood.value} size={140} color="rgba(255,255,255,0.22)" face="var(--color-on-fill)" label={mood.name} />
           </div>
-          <p className="m-0 text-center text-[20px] font-extrabold">I am feeling {mood.name.toLowerCase()}</p>
+          <p className="m-0 text-center text-title3">I am feeling {mood.name.toLowerCase()}</p>
           <div className="mt-md grid grid-cols-5 gap-xs" role="group" aria-label="Pick a mood">
             {MOODS.map((m) => (
               <button
@@ -67,7 +67,7 @@ export function Mood() {
                   setTouched(true);
                   setValue(m.value);
                 }}
-                className="toy flex min-h-[64px] flex-col items-center justify-center gap-xs rounded-tile bg-card-strong text-[12px] font-bold text-ink"
+                className="toy flex min-h-[64px] flex-col items-center justify-center gap-xs rounded-tile bg-card-strong text-caption text-ink"
                 style={value === m.value ? { outline: '3px solid var(--color-on-fill)', outlineOffset: 2 } : undefined}
               >
                 <MoodFace value={m.value} size={28} />
@@ -86,10 +86,10 @@ export function Mood() {
       <Screen>
         {why && (
           <section className="mt-lg rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="why-heading">
-            <h2 id="why-heading" className="text-[24px]">
+            <h2 id="why-heading" className="text-title2">
               Why do you feel {mood.name.toLowerCase()}?
             </h2>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Three quick sliders. They help the score explain itself later.</p>
+            <p className="mt-xs m-0 text-subhead text-ink-soft">Three quick sliders. They help the score explain itself later.</p>
             {(
               [
                 ['How active were you?', active, setActive],
@@ -98,7 +98,7 @@ export function Mood() {
               ] as const
             ).map(([label, v, set]) => (
               <label key={label} className="mt-md block">
-                <span className="flex justify-between text-[14px] font-bold">
+                <span className="flex justify-between text-subhead font-semibold">
                   <span>{label}</span>
                   <span>{v} of 5</span>
                 </span>
@@ -106,11 +106,11 @@ export function Mood() {
               </label>
             ))}
             <label className="mt-md block">
-              <span className="block text-[14px] font-bold">Anything else</span>
-              <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Optional" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+              <span className="block text-subhead font-semibold">Anything else</span>
+              <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Optional" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
             </label>
             {save.isError && (
-              <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+              <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
                 {save.error instanceof Error ? save.error.message : 'Could not save.'}
               </p>
             )}
@@ -121,7 +121,7 @@ export function Mood() {
         )}
 
         <section className="mt-lg" aria-labelledby="week-heading">
-          <h2 id="week-heading" className="text-[24px]">
+          <h2 id="week-heading" className="text-title2">
             This week
           </h2>
           <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
@@ -146,7 +146,7 @@ export function Mood() {
         <PeriodPanel id="mood-period" parts={['wellbeing']} />
         <EmergenceSlot app="mood" max={2} />
         <section className="mt-lg" aria-labelledby="thirty-heading">
-          <h2 id="thirty-heading" className="text-[24px]">
+          <h2 id="thirty-heading" className="text-title2">
             Last 30 days
           </h2>
           <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
@@ -159,7 +159,7 @@ export function Mood() {
         </section>
 
         <section className="mt-lg" aria-labelledby="month-heading">
-          <h2 id="month-heading" className="text-[24px]">
+          <h2 id="month-heading" className="text-title2">
             This month
           </h2>
           <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
@@ -180,10 +180,10 @@ export function Mood() {
         </section>
 
         <section className="mt-lg" aria-labelledby="hist-heading">
-          <h2 id="hist-heading" className="text-[24px]">
+          <h2 id="hist-heading" className="text-title2">
             My mood
           </h2>
-          {logs.data && logs.data.logs.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Nothing logged yet. Today is a good day to start.</p>}
+          {logs.data && logs.data.logs.length === 0 && <p className="mt-xs m-0 text-subhead text-ink-soft">Nothing logged yet. Today is a good day to start.</p>}
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {logs.data?.logs.map((l) => {
               const m = MOODS.find((x) => x.value === Math.round(l.value)) ?? MOODS[2]!;
@@ -191,8 +191,8 @@ export function Mood() {
                 <li key={l.id} className={`flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft`}>
                   <MoodFace value={m.value} size={40} />
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[16px] font-bold">{m.name}</span>
-                    <span className="block truncate text-[14px] font-semibold text-ink-soft">
+                    <span className="block text-headline">{m.name}</span>
+                    <span className="block truncate text-subhead text-ink-soft">
                       {new Date(`${l.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', month: 'short', day: 'numeric' })}
                       {l.note ? `. ${l.note}` : ''}
                     </span>
@@ -230,20 +230,20 @@ function MoodDaySheet({ date, existing, onClose, onChanged }: { date: string | n
   return (
     <Sheet open={date !== null} onClose={onClose} title={pretty}>
       <div className="flex flex-col gap-md pb-xl">
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">{existing ? 'Change how this day felt, or take it away.' : 'How did this day feel?'}</p>
+        <p className="m-0 text-subhead text-ink-soft">{existing ? 'Change how this day felt, or take it away.' : 'How did this day feel?'}</p>
         <div className="grid grid-cols-5 gap-xs" role="group" aria-label="Pick a mood">
           {MOODS.map((m) => (
-            <button key={m.value} type="button" aria-pressed={value === m.value} onClick={() => setValue(m.value)} className={`toy flex min-h-[64px] flex-col items-center justify-center gap-xs rounded-tile border-2 text-[12px] font-bold ${value === m.value ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
+            <button key={m.value} type="button" aria-pressed={value === m.value} onClick={() => setValue(m.value)} className={`toy flex min-h-[64px] flex-col items-center justify-center gap-xs rounded-tile border-2 text-caption ${value === m.value ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
               <MoodFace value={m.value} size={28} />
               {m.name}
             </button>
           ))}
         </div>
         <label className="block">
-          <span className="block text-[14px] font-bold">A note (optional)</span>
-          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+          <span className="block text-subhead font-semibold">A note (optional)</span>
+          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
         </label>
-        {failed && <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">{failed instanceof Error ? failed.message : 'That did not save.'}</p>}
+        {failed && <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">{failed instanceof Error ? failed.message : 'That did not save.'}</p>}
         <Button full size="lg" onClick={() => save.mutate()} disabled={save.isPending}>
           {existing ? 'Save this day' : 'Add this day'}
         </Button>
@@ -254,15 +254,15 @@ function MoodDaySheet({ date, existing, onClose, onChanged }: { date: string | n
         )}
         {existing && asking && (
           <div className="grid gap-sm rounded-tile bg-card p-sm" role="group" aria-label="Remove this day’s mood?">
-            <p className="m-0 text-[16px] font-bold">Remove this day’s mood?</p>
-            <p className="m-0 text-[14px] font-semibold text-ink-soft">It comes off your calendar and charts. This cannot be undone.</p>
-            {remove.isError && <p className="m-0 text-[14px] font-bold text-r1">That did not work. Try again.</p>}
+            <p className="m-0 text-headline">Remove this day’s mood?</p>
+            <p className="m-0 text-subhead text-ink-soft">It comes off your calendar and charts. This cannot be undone.</p>
+            {remove.isError && <p className="m-0 text-subhead text-r1">That did not work. Try again.</p>}
             <div className="flex flex-wrap gap-xs">
               <button
                 type="button"
                 disabled={remove.isPending}
                 onClick={() => remove.mutate()}
-                className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-[16px] font-semibold text-on-fill disabled:opacity-50"
+                className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill disabled:opacity-50"
               >
                 Yes, delete it
               </button>

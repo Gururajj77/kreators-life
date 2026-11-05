@@ -83,18 +83,18 @@ export function LinksEditor({ initial }: { initial: LinkBlock[] }) {
               setEditing(blank(t));
               setIsNew(true);
             }}
-            className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill border-2 border-line bg-card px-sm text-[14px] font-bold disabled:opacity-50"
+            className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill border-2 border-line bg-card px-sm text-subhead font-medium disabled:opacity-50"
           >
             <AppIcon name={LINK_BLOCK_META[t].icon} size={16} />
             {LINK_BLOCK_META[t].name}
           </button>
         ))}
       </div>
-      <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+      <p className="mt-xs m-0 text-caption text-ink-soft">
         {blocks.length} of {MAX_LINK_BLOCKS} blocks. {save.isPending ? 'Saving.' : save.isError ? 'Could not save. Try again.' : save.isSuccess ? 'Saved.' : ''}
       </p>
       {blocks.length === 0 ? (
-        <p className="mt-sm m-0 rounded-tile bg-paper p-sm text-[14px] font-semibold text-ink-soft">Nothing here yet. Add a link to your best thing first; people tap the top one most.</p>
+        <p className="mt-sm m-0 rounded-tile bg-paper p-sm text-subhead text-ink-soft">Nothing here yet. Add a link to your best thing first; people tap the top one most.</p>
       ) : (
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {blocks.map((b, i) => (
@@ -104,12 +104,12 @@ export function LinksEditor({ initial }: { initial: LinkBlock[] }) {
                   <AppIcon name={LINK_BLOCK_META[b.type].icon} size={20} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[16px] font-bold">
+                  <span className="block truncate text-headline">
                     {b.title || LINK_BLOCK_META[b.type].name}
                     {b.featured ? ' · featured' : ''}
                     {b.on ? '' : ' · hidden'}
                   </span>
-                  <span className="block truncate text-[12px] font-bold text-ink-soft">{summary(b)}</span>
+                  <span className="block truncate text-caption text-ink-soft">{summary(b)}</span>
                 </span>
                 {(b.type === 'link' || b.type === 'image' || b.type === 'video' || b.type === 'carousel') && (
                   <StatusTag tone="info">{clicks.data?.clicks[b.id] ?? 0} {(clicks.data?.clicks[b.id] ?? 0) === 1 ? 'tap' : 'taps'}</StatusTag>
@@ -153,46 +153,46 @@ export function LinksEditor({ initial }: { initial: LinkBlock[] }) {
               if (!err) done();
             }}
           >
-            <p className="m-0 text-[14px] font-semibold text-ink-soft">{LINK_BLOCK_META[editing.type].blurb}</p>
+            <p className="m-0 text-subhead text-ink-soft">{LINK_BLOCK_META[editing.type].blurb}</p>
             {editing.type !== 'text' && (
               <label className="block">
-                <span className="block text-[14px] font-bold">{editing.type === 'header' ? 'Header' : editing.type === 'link' ? 'Button text' : 'Title (optional)'}</span>
+                <span className="block text-subhead">{editing.type === 'header' ? 'Header' : editing.type === 'link' ? 'Button text' : 'Title (optional)'}</span>
                 <input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} maxLength={120} className={FIELD} />
               </label>
             )}
             {(editing.type === 'link' || editing.type === 'video' || editing.type === 'image') && (
               <label className="block">
-                <span className="block text-[14px] font-bold">{editing.type === 'video' ? 'YouTube link' : editing.type === 'image' ? 'Link when tapped (optional)' : 'Link'}</span>
+                <span className="block text-subhead font-semibold">{editing.type === 'video' ? 'YouTube link' : editing.type === 'image' ? 'Link when tapped (optional)' : 'Link'}</span>
                 <input value={editing.url} onChange={(e) => setEditing({ ...editing, url: e.target.value })} maxLength={500} placeholder="https://" inputMode="url" className={FIELD} />
               </label>
             )}
             {editing.type === 'image' && (
               <label className="block">
-                <span className="block text-[14px] font-bold">Picture address</span>
+                <span className="block text-subhead font-semibold">Picture address</span>
                 <input value={editing.image} onChange={(e) => setEditing({ ...editing, image: e.target.value })} maxLength={500} placeholder="https://" inputMode="url" className={FIELD} />
               </label>
             )}
             {editing.type === 'text' && (
               <label className="block">
-                <span className="block text-[14px] font-bold">Text</span>
+                <span className="block text-subhead font-semibold">Text</span>
                 <textarea value={editing.text} onChange={(e) => setEditing({ ...editing, text: e.target.value })} maxLength={600} rows={4} className={FIELD} />
               </label>
             )}
             {editing.type === 'link' && (
-              <label className="flex min-h-[44px] cursor-pointer items-center gap-sm text-[14px] font-bold">
+              <label className="flex min-h-[44px] cursor-pointer items-center gap-sm text-subhead font-semibold">
                 <input type="checkbox" checked={editing.featured} onChange={(e) => setEditing({ ...editing, featured: e.target.checked })} className="size-[20px] accent-ink" />
                 Featured: big and in colour
               </label>
             )}
             {editing.type === 'carousel' && (
               <fieldset className="m-0 border-0 p-0">
-                <legend className="text-[14px] font-bold">Cards, up to {MAX_CAROUSEL_ITEMS}</legend>
+                <legend className="text-subhead font-semibold">Cards, up to {MAX_CAROUSEL_ITEMS}</legend>
                 <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
                   {editing.items.map((it, i) => {
                     const set = (patch: Partial<LinkBlockItem>) => setEditing({ ...editing, items: editing.items.map((x, j) => (j === i ? { ...x, ...patch } : x)) });
                     return (
                       <li key={it.id} className="rounded-tile bg-paper p-sm">
-                        <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">Card {i + 1}</p>
+                        <p className="m-0 text-eyebrow uppercase text-ink-soft">Card {i + 1}</p>
                         <input value={it.title} onChange={(e) => set({ title: e.target.value })} maxLength={80} placeholder="Title" className={FIELD} />
                         <input value={it.image} onChange={(e) => set({ image: e.target.value })} maxLength={500} placeholder="Picture https://" inputMode="url" className={FIELD} />
                         <input value={it.url} onChange={(e) => set({ url: e.target.value })} maxLength={500} placeholder="Link https:// (optional)" inputMode="url" className={FIELD} />
@@ -208,7 +208,7 @@ export function LinksEditor({ initial }: { initial: LinkBlock[] }) {
                 </Button>
               </fieldset>
             )}
-            {err && <p className="m-0 text-[14px] font-bold text-ink-soft">{err}</p>}
+            {err && <p className="m-0 text-subhead text-ink-soft">{err}</p>}
             <div className="flex gap-xs">
               <Button type="submit" size="lg" className="flex-1" disabled={Boolean(err)}>
                 {isNew ? 'Add to my page' : 'Save'}

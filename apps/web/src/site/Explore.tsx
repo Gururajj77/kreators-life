@@ -66,8 +66,8 @@ export function Explore() {
   return (
     <SiteLayout>
       <header className="pt-lg">
-        <h1 className="type-hook text-[clamp(40px,9vw,72px)]">Explore</h1>
-        <p className="mt-xs m-0 max-w-[640px] text-[16px] font-semibold text-ink-soft">
+        <h1 className="type-hook text-display-1">Explore</h1>
+        <p className="mt-xs m-0 max-w-[640px] text-callout text-ink-soft">
           Content rewards, opportunities, events, programs, tools and campaigns. Search here, then sign in to join, apply or submit. You come straight back to the one you picked.
         </p>
         <label className="mt-md block">
@@ -77,7 +77,7 @@ export function Explore() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search by brand, title, skill or place"
-            className="w-full rounded-pill border-2 border-line bg-card px-md py-sm text-[18px] font-semibold shadow-toy-soft"
+            className="w-full rounded-pill border-2 border-line bg-card px-md py-sm text-headline shadow-toy-soft"
           />
         </label>
         {/* One line: as many types as fit, the rest behind More, so none is cut or left alone on a second line. */}
@@ -93,20 +93,20 @@ export function Explore() {
       </header>
 
       <section className="mt-lg" aria-live="polite">
-        {results.isPending && <p className="m-0 text-[16px] font-semibold text-ink-soft">Looking…</p>}
+        {results.isPending && <p className="m-0 text-callout text-ink-soft">Looking…</p>}
         {results.isError && (
-          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             Could not load listings. Try again in a moment.
           </p>
         )}
         {results.data && list.length === 0 && (
-          <p className="m-0 rounded-tile bg-card p-md text-[16px] font-semibold text-ink-soft shadow-toy-soft">
+          <p className="m-0 rounded-tile bg-card p-md text-callout text-ink-soft shadow-toy-soft">
             Nothing matches yet. {debounced ? 'Try fewer words, or a different type.' : 'The team adds listings from the admin console; check back soon.'}
           </p>
         )}
         {list.length > 0 && (
           <>
-            <p className="m-0 text-[14px] font-bold text-ink-soft">
+            <p className="m-0 text-subhead text-ink-soft">
               {list.length} {list.length === 1 ? 'listing' : 'listings'}
             </p>
             <ul className="mt-sm grid list-none gap-sm p-0 m-0 md:grid-cols-2 lg:grid-cols-3">

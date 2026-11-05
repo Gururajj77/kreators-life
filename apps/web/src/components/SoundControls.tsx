@@ -72,7 +72,7 @@ export function SoundControls({ settings, onChange, breaks = false, part = 'all'
       {part === 'all' ? (
         <>
           <Toggle compact on={settings.sound} onChange={(v) => set({ sound: v })} label={bare(COPY.master)} />
-          <p className="m-0 text-[12px] font-semibold text-ink-soft">{off ? COPY.silent : COPY.covers}</p>
+          <p className="m-0 text-caption text-ink-soft">{off ? COPY.silent : COPY.covers}</p>
         </>
       ) : (
         off && (
@@ -84,10 +84,10 @@ export function SoundControls({ settings, onChange, breaks = false, part = 'all'
           <Toggle compact disabled={off} on={settings.soundShort} onChange={(v) => set({ soundShort: v })} label={bare(COPY.oneBeat)} />
           <Toggle compact disabled={off} on={settings.soundLong} onChange={(v) => set({ soundLong: v })} label={bare(COPY.threeBeats)} />
           <div className="flex flex-wrap gap-xs">
-            <button type="button" disabled={off} onClick={() => playBeats(BREAK_BEATS.short)} className="toy toy-soft min-h-[44px] rounded-pill border border-line bg-card-strong px-sm text-[14px] font-bold disabled:opacity-60">
+            <button type="button" disabled={off} onClick={() => playBeats(BREAK_BEATS.short)} className="toy toy-soft min-h-[44px] rounded-pill border border-line bg-card-strong px-sm text-subhead font-medium disabled:opacity-60">
               {bare(COPY.hearOne)}
             </button>
-            <button type="button" disabled={off} onClick={() => playBeats(BREAK_BEATS.long)} className="toy toy-soft min-h-[44px] rounded-pill border border-line bg-card-strong px-sm text-[14px] font-bold disabled:opacity-60">
+            <button type="button" disabled={off} onClick={() => playBeats(BREAK_BEATS.long)} className="toy toy-soft min-h-[44px] rounded-pill border border-line bg-card-strong px-sm text-subhead font-medium disabled:opacity-60">
               {bare(COPY.hearThree)}
             </button>
           </div>
@@ -95,8 +95,8 @@ export function SoundControls({ settings, onChange, breaks = false, part = 'all'
         </div>
       )}
       <div className={off ? 'opacity-50' : ''}>
-        <p className="m-0 text-[14px] font-extrabold">{bare(COPY.background)}</p>
-        <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{COPY.background2}</p>
+        <p className="m-0 text-subhead font-semibold">{bare(COPY.background)}</p>
+        <p className="mt-xs m-0 text-caption text-ink-soft">{COPY.background2}</p>
         <div className="mt-xs grid grid-cols-3 gap-xs md:grid-cols-5" role="group" aria-label={bare(COPY.background)}>
           {AMBIENT_SOUNDS.map((s, i) => (
             <button
@@ -105,7 +105,7 @@ export function SoundControls({ settings, onChange, breaks = false, part = 'all'
               disabled={off}
               aria-pressed={settings.ambient === s.key}
               onClick={() => set({ ambient: s.key })}
-              className={`toy flex min-h-[64px] flex-col items-center justify-center gap-xs rounded-tile border-2 p-xs text-[14px] font-bold disabled:opacity-60 ${bento(i, AMBIENT_SOUNDS.length, 3, 5)} ${settings.ambient === s.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+              className={`toy flex min-h-[64px] flex-col items-center justify-center gap-xs rounded-tile border-2 p-xs text-subhead font-semibold disabled:opacity-60 ${bento(i, AMBIENT_SOUNDS.length, 3, 5)} ${settings.ambient === s.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
             >
               <AppIcon name={s.icon} size={20} />
               {s.name}
@@ -114,13 +114,13 @@ export function SoundControls({ settings, onChange, breaks = false, part = 'all'
         </div>
         {settings.ambient !== 'off' && (
           <>
-            <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{AMBIENT_SOUNDS.find((s) => s.key === settings.ambient)!.blurb}</p>
+            <p className="mt-xs m-0 text-caption text-ink-soft">{AMBIENT_SOUNDS.find((s) => s.key === settings.ambient)!.blurb}</p>
             <label className="mt-xs flex items-center gap-sm">
-              <span className="shrink-0 text-[12px] font-extrabold text-ink-soft">{bare(COPY.volume)}</span>
+              <span className="shrink-0 text-caption text-ink-soft">{bare(COPY.volume)}</span>
               <input type="range" min={0} max={100} step={5} disabled={off} value={settings.ambientVolume} onChange={(e) => set({ ambientVolume: Number(e.target.value) })} aria-label={bare(COPY.volumeLabel)} className="min-w-0 flex-1" />
-              <span className="w-[40px] shrink-0 text-right text-[12px] font-bold text-ink-soft">{settings.ambientVolume}</span>
+              <span className="w-[40px] shrink-0 text-right text-caption text-ink-soft">{settings.ambientVolume}</span>
             </label>
-            <button type="button" disabled={off} onClick={() => (t.on ? t.stop() : t.taste(settings.ambient as Exclude<AmbientKind, 'off'>, settings.ambientVolume))} className="toy toy-soft mt-xs min-h-[44px] rounded-pill border border-line bg-card-strong px-sm text-[14px] font-bold disabled:opacity-60">
+            <button type="button" disabled={off} onClick={() => (t.on ? t.stop() : t.taste(settings.ambient as Exclude<AmbientKind, 'off'>, settings.ambientVolume))} className="toy toy-soft mt-xs min-h-[44px] rounded-pill border border-line bg-card-strong px-sm text-subhead font-medium disabled:opacity-60">
               {bare(t.on ? COPY.stopTaste : COPY.taste)}
             </button>
           </>

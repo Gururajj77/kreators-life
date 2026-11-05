@@ -597,7 +597,3 @@ export function parseDocStyle(v: unknown, base: DocStyle = defaultDocStyle()): D
     layout: oneOfList(o.layout, DOC_LAYOUTS, base.layout ?? 'legal'),
   };
 }
-/** One plain line on a style, for its summary card. */
-export function docStyleSummary(s: DocStyle): string {
-  return `${s.layout === 'typed' ? 'Typed, ' : ''}${DOC_STYLE_NAMES.font[s.font]}, ${DOC_STYLE_NAMES.size[s.size].toLowerCase()} type, ${DOC_STYLE_NAMES.page[s.page]}, ${s.heading === 'numbered' ? 'numbered' : 'plain'} headings${s.letterhead ? '' : ', no letterhead'}`;
-}

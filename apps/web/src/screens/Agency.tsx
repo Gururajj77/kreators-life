@@ -16,7 +16,7 @@ import {
   type AgencyOverview,
 } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, Settings } from 'lucide-react';
+import { ArrowUpRight, ChevronRight, Settings } from 'lucide-react';
 import { Suspense, useEffect, useLayoutEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { AgencyContracts, usePaperSegment } from '../components/AgencyContracts';
@@ -221,7 +221,7 @@ export function Agency() {
       {active.length > 0 && (
         <div className="mt-md">
           <label className="flex flex-wrap items-center gap-xs">
-            <span className="text-[14px] font-bold">Agency</span>
+            <span className="text-subhead font-semibold">Agency</span>
             <select value={member ? member.id : ''} onChange={(e) => pickTeam(e.target.value)} className={`min-w-0 flex-1 sm:flex-none ${FILTER_SELECT}`} aria-label="Whose Agency">
               <option value="">Mine</option>
               {active.map((t) => (
@@ -234,7 +234,7 @@ export function Agency() {
         </div>
       )}
       {(lost || (row && row.id === gone)) && (
-        <p role="status" className="mt-md m-0 rounded-tile bg-card p-sm text-[14px] font-bold">
+        <p role="status" className="mt-md m-0 rounded-tile bg-card p-sm text-subhead">
           You are no longer on that team. This is your own Agency.
         </p>
       )}
@@ -304,7 +304,7 @@ function Overview({ onTab, onAdd }: { onTab: (t: TabKey, paper?: 'invoices' | 'a
   const d = q.data;
   if (q.isError)
     return (
-      <p role="alert" className="mt-md m-0 rounded-tile bg-card p-sm text-[14px] font-bold">
+      <p role="alert" className="mt-md m-0 rounded-tile bg-card p-sm text-subhead">
         {COPY.fail}
       </p>
     );
@@ -312,7 +312,7 @@ function Overview({ onTab, onAdd }: { onTab: (t: TabKey, paper?: 'invoices' | 'a
   if (d.clients.length === 0 && d.page.page === 1)
     return (
       <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-        <p className="m-0 text-[16px] font-semibold">{access ? COPY.emptyClients : COPY.empty}</p>
+        <p className="m-0 text-callout">{access ? COPY.emptyClients : COPY.empty}</p>
         {!access && (
           <div className="mt-sm">
             <Button variant="outline" plusToX onClick={onAdd}>Add client</Button>
@@ -366,14 +366,14 @@ function Overview({ onTab, onAdd }: { onTab: (t: TabKey, paper?: 'invoices' | 'a
 
       <Section id="look-heading" title="Needs a look">
         {d.attention.length === 0 ? (
-          <p className="m-0 rounded-tile bg-card p-sm text-[14px] font-semibold text-ink-soft">{COPY.quiet}</p>
+          <p className="m-0 rounded-tile bg-card p-sm text-subhead text-ink-soft">{COPY.quiet}</p>
         ) : (
           <ul className="flex list-none flex-col gap-xs p-0 m-0">
             {d.attention.map((a, i) => (
               <li key={`${a.clientId}-${i}`}>
-                <Link to={`/agency/${a.clientId}`} className="toy toy-soft flex min-h-[44px] items-center gap-sm rounded-tile bg-card p-sm text-[14px] font-bold">
+                <Link to={`/agency/${a.clientId}`} className="toy toy-soft flex min-h-[44px] items-center gap-sm rounded-tile bg-card p-sm text-subhead">
                   <span className="min-w-0 flex-1">{a.text}</span>
-                  <Icon icon={ChevronRight} size={20} className="text-ink-mute" />
+                  <Icon icon={ArrowUpRight} size={20} className="text-ink-mute" />
                 </Link>
               </li>
             ))}
@@ -383,7 +383,7 @@ function Overview({ onTab, onAdd }: { onTab: (t: TabKey, paper?: 'invoices' | 'a
 
       <Section id="coming-heading" title="Coming up" lede="Due or going live in the next two weeks, soonest first.">
         {d.coming.length === 0 ? (
-          <p className="m-0 rounded-tile bg-card p-sm text-[14px] font-semibold text-ink-soft">Nothing is due soon.</p>
+          <p className="m-0 rounded-tile bg-card p-sm text-subhead text-ink-soft">Nothing is due soon.</p>
         ) : (
           <>
             <ul className="flex list-none flex-col gap-xs p-0 m-0">
@@ -398,12 +398,12 @@ function Overview({ onTab, onAdd }: { onTab: (t: TabKey, paper?: 'invoices' | 'a
                     className="toy toy-soft flex w-full items-center gap-sm rounded-tile bg-card p-sm text-left"
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[16px] font-extrabold leading-snug">{c.title}</span>
+                      <span className="block text-headline">{c.title}</span>
                       <span className="mt-xs flex flex-wrap items-center gap-xs">
                         <StatusTag tone={DELIVERABLE_STAGE_TONE[c.stage]}>{DELIVERABLE_STAGE_META[c.stage].name}</StatusTag>
                         {c.overdue && <StatusTag tone="bad">Late</StatusTag>}
                       </span>
-                      <span className="mt-xs block text-[12px] font-bold text-ink-soft">{[c.clientName, c.platform, comingDay(c)].filter(Boolean).join(', ')}</span>
+                      <span className="mt-xs block text-caption text-ink-soft">{[c.clientName, c.platform, comingDay(c)].filter(Boolean).join(', ')}</span>
                     </span>
                     <Icon icon={ChevronRight} size={20} className="text-ink-mute" />
                   </button>
@@ -432,22 +432,22 @@ function ClientFacts({ c, cur, compact = false }: { c: AgencyClient; cur: string
   if (compact)
     return (
       <>
-        <span className="block text-[16px] font-extrabold leading-snug">{c.name}</span>
+        <span className="block text-headline">{c.name}</span>
         <span className="mt-xs flex flex-wrap items-center gap-xs">
           <StatusTag tone={CLIENT_HEALTH_TONE[c.health]}>{AGENCY_HEALTH_NAME[c.health]}</StatusTag>
         </span>
-        {line && <span className="mt-xs block text-[12px] font-bold text-ink-soft">{line}</span>}
+        {line && <span className="mt-xs block text-caption text-ink-soft">{line}</span>}
       </>
     );
   return (
     <>
-      <span className="block text-[16px] font-extrabold leading-snug">{c.name}</span>
+      <span className="block text-headline">{c.name}</span>
       <span className="mt-xs flex flex-wrap items-center gap-xs">
         <StatusTag tone={CLIENT_STATUS_TONE[c.status]}>{AGENCY_STATUS_NAME[c.status]}</StatusTag>
         <StatusTag tone={CLIENT_HEALTH_TONE[c.health]}>{AGENCY_HEALTH_NAME[c.health]}</StatusTag>
       </span>
-      {line && <span className="mt-xs block text-[12px] font-bold text-ink-soft">{line}</span>}
-      {c.flags.length > 0 && <span className="mt-xs block text-[12px] font-semibold text-ink-soft">{c.flags.join(', ')}</span>}
+      {line && <span className="mt-xs block text-caption text-ink-soft">{line}</span>}
+      {c.flags.length > 0 && <span className="mt-xs block text-caption text-ink-soft">{c.flags.join(', ')}</span>}
     </>
   );
 }
@@ -522,7 +522,7 @@ function Clients({ onAdd }: { onAdd: () => void }) {
           </select>
         ))}
       {q.isError && (
-        <p role="alert" className="m-0 text-[14px] font-bold">
+        <p role="alert" className="m-0 text-subhead">
           {COPY.fail}
         </p>
       )}
@@ -535,7 +535,7 @@ function Clients({ onAdd }: { onAdd: () => void }) {
       )}
       {d && d.clients.length === 0 && (
         <div className="rounded-card bg-card p-md shadow-toy-soft">
-          <p className="m-0 text-[16px] font-semibold">{status ? COPY.emptyClients : COPY.empty}</p>
+          <p className="m-0 text-callout">{status ? COPY.emptyClients : COPY.empty}</p>
           {!status && !access && (
             <div className="mt-sm">
               <Button variant="outline" plusToX onClick={onAdd}>Add client</Button>
@@ -572,7 +572,7 @@ function Clients({ onAdd }: { onAdd: () => void }) {
                   <span className="min-w-0 flex-1">
                     <ClientFacts c={c} cur={d.settings.currency} />
                   </span>
-                  <Icon icon={ChevronRight} size={20} className="text-ink-mute" />
+                  <Icon icon={ArrowUpRight} size={20} className="text-ink-mute" />
                 </Link>
               </li>
             ))}
@@ -581,7 +581,7 @@ function Clients({ onAdd }: { onAdd: () => void }) {
         </>
       )}
       {move.isError && (
-        <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-sm m-0 text-subhead">
           That move did not save, so the card went back.
         </p>
       )}

@@ -96,10 +96,10 @@ export function PasswordField({
   const problem = value ? portalPasswordProblem(value, clientName) : null;
   return (
     <div>
-      <label htmlFor={fid} className="block text-[14px] font-bold">
+      <label htmlFor={fid} className="block text-subhead font-semibold">
         {label}
       </label>
-      <span id={`${fid}-h`} className="block text-[12px] font-semibold text-ink-soft">
+      <span id={`${fid}-h`} className="block text-caption text-ink-soft">
         {hint ? `${hint} ${COPY.rule}` : COPY.rule}
       </span>
       <input
@@ -115,7 +115,7 @@ export function PasswordField({
         spellCheck={false}
         aria-invalid={problem ? true : undefined}
         aria-describedby={problem ? `${fid}-h ${fid}-e` : `${fid}-h`}
-        className="mt-xs min-h-[48px] w-full rounded-tile border-2 border-line bg-paper px-sm font-mono text-[16px]"
+        className="mt-xs min-h-[48px] w-full rounded-tile border-2 border-line bg-paper px-sm font-mono text-body"
       />
       <div className="mt-xs flex flex-wrap items-center gap-xs">
         <Button type="button" variant="outline" size="sm" onClick={() => setShow((s) => !s)} aria-pressed={show} aria-controls={fid}>
@@ -137,17 +137,17 @@ export function PasswordField({
           Copy
         </Button>
         {said && (
-          <span role="status" className="text-[14px] font-bold">
+          <span role="status" className="text-subhead">
             {said}
           </span>
         )}
       </div>
       {value && (
-        <p id={`${fid}-e`} role={problem ? 'alert' : 'status'} className="mt-xs m-0 text-[12px] font-bold">
+        <p id={`${fid}-e`} role={problem ? 'alert' : 'status'} className="mt-xs m-0 text-caption">
           {problem ?? 'Good. It meets the rule.'}
         </p>
       )}
-      <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{COPY.share}</p>
+      <p className="mt-xs m-0 text-caption text-ink-soft">{COPY.share}</p>
     </div>
   );
 }
@@ -158,22 +158,22 @@ export function ShownOnce({ password, note = COPY.shownOnce }: { password: strin
   const { copy, said } = useCopy();
   return (
     <div role="status" className="rounded-tile bg-paper p-sm">
-      <p className="m-0 text-[14px] font-bold">{note}</p>
+      <p className="m-0 text-subhead">{note}</p>
       <input
         id={own}
         readOnly
         value={password}
         aria-label="The password"
         onFocus={(e) => e.currentTarget.select()}
-        className="mt-xs min-h-[44px] w-full rounded-tile border-2 border-line bg-card px-sm font-mono text-[16px]"
+        className="mt-xs min-h-[44px] w-full rounded-tile border-2 border-line bg-card px-sm font-mono text-body"
       />
       <div className="mt-xs">
         <Button size="sm" variant="outline" onClick={() => void copy(password)}>
           {said === 'Copied' ? 'Copied' : 'Copy'}
         </Button>
       </div>
-      {said && said !== 'Copied' && <p className="mt-xs m-0 text-[12px] font-bold">{said}</p>}
-      <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{COPY.share}</p>
+      {said && said !== 'Copied' && <p className="mt-xs m-0 text-caption">{said}</p>}
+      <p className="mt-xs m-0 text-caption text-ink-soft">{COPY.share}</p>
     </div>
   );
 }
@@ -304,15 +304,15 @@ export function ClientPassword({
         style={ask && !bare ? { background: 'var(--tint-yellow)' } : undefined}
       >
         <CardHead tag={tag}>
-          <h3 className="m-0 text-[16px] font-extrabold">{words.title}</h3>
+          <h3 className="m-0 text-headline">{words.title}</h3>
         </CardHead>
-        <p className="mt-xs m-0 text-[14px] font-bold">{line}</p>
+        <p className="mt-xs m-0 text-subhead">{line}</p>
         {ask?.reason && (
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+          <p className="mt-xs m-0 text-subhead text-ink-soft">
             <Inert text={`“${ask.reason}”`} />
           </p>
         )}
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{[state.set || ask ? words.oneLock : '', opened].filter(Boolean).join(' ')}</p>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">{[state.set || ask ? words.oneLock : '', opened].filter(Boolean).join(' ')}</p>
 
         {/* One main action across the row with its round button at the right end (wave 15). With only "Generate one" to offer,
             that button is the action itself, not a menu of one. */}
@@ -342,12 +342,12 @@ export function ClientPassword({
           </div>
         )}
         {done && (
-          <p role="status" className="mt-sm m-0 text-[14px] font-bold">
+          <p role="status" className="mt-sm m-0 text-subhead">
             {done.kind === 'saved' ? words.ended : done.kind === 'removed' ? COPY.removed : COPY.dismissed}
           </p>
         )}
         {err && (
-          <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+          <p role="alert" className="mt-xs m-0 text-subhead">
             {failed(err)}
           </p>
         )}
@@ -371,9 +371,9 @@ export function ClientPassword({
           </Sheet>
 
           <Sheet open={removing} onClose={() => setRemoving(false)} title="Remove the password?">
-            <p className="m-0 text-[16px] font-semibold">{words.removeAsk}</p>
+            <p className="m-0 text-callout">{words.removeAsk}</p>
             {remove.isError && (
-              <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+              <p role="alert" className="mt-xs m-0 text-subhead">
                 {failed(remove.error)}
               </p>
             )}
@@ -413,9 +413,9 @@ function SetPassword({ clientId, clientName, onSaved, link = 'client' }: { clien
       }}
     >
       <PasswordField value={pw} onChange={setPw} clientName={clientName} required />
-      <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{link === 'team' ? 'Saving ends every open session on the team link.' : 'Saving ends every open session on their link.'}</p>
+      <p className="mt-sm m-0 text-subhead text-ink-soft">{link === 'team' ? 'Saving ends every open session on the team link.' : 'Saving ends every open session on their link.'}</p>
       {save.isError && (
-        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-xs m-0 text-subhead">
           {failed(save.error)}
         </p>
       )}

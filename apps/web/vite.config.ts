@@ -54,6 +54,9 @@ export default defineConfig({
           // be. It must stay a leaf (lines.ts imports nothing): a split-off file that imports the rest of shared makes a cycle between
           // the two chunks and the app stops at "Cannot access before initialization" (design.ts did, 2026-11-04).
           if (id.includes('/packages/shared/src/lines.ts')) return 'shared-lines';
+          // The legal lists (versions, consent purposes, retention, subprocessors) are a leaf too (legal.ts imports nothing), split off
+          // for the same reason once Emerging's one-list read (2026-11-05) took the shared chunk past 400 kB.
+          if (id.includes('/packages/shared/src/legal.ts')) return 'shared-legal';
           if (id.includes('/packages/shared/src/')) return 'shared';
           // The icons the shared registries name (every app, setup tag, role...) are one map the shell needs, so it is a
           // chunk of its own: preloaded with the first download, but kept out of the entry's 480 kB budget.

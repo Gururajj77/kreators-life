@@ -12,7 +12,7 @@ import { Toggle } from './Toggle';
 import { FIELD } from '../lib/ui';
 import { StatusTag } from './StatusTag';
 
-const CHIP = 'inline-flex shrink-0 items-center rounded-pill px-sm text-[12px] font-extrabold leading-[24px]';
+const CHIP = 'inline-flex shrink-0 items-center rounded-pill px-sm text-caption font-medium leading-[24px]';
 const ESTIMATES = [15, 25, 45, 60, 90];
 
 /** A priority tag in its colour: P0 red, P1 orange, P2 purple, P3 grey. */
@@ -62,16 +62,16 @@ export function TaskTags({ task, priority = true }: { task: Node; /** False wher
 export function PriorityPicker({ value, onChange }: { value: Priority | null; onChange: (p: Priority | null) => void }) {
   return (
     <div>
-      <span className="block text-[14px] font-bold">Priority</span>
+      <span className="block text-subhead font-semibold">Priority</span>
       {/* Two columns of equal buttons on a phone (P0 and P1, then P2 and P3), four in a row from the tablet width. */}
       <div className="mt-xs grid grid-cols-2 gap-xs sm:grid-cols-4" role="group" aria-label="Priority">
         {PRIORITIES.map((p) => (
-          <button key={p.value} type="button" aria-pressed={value === p.value} onClick={() => onChange(value === p.value ? null : p.value)} className={`pri-${p.value} pri-chip toy min-h-[44px] w-full whitespace-nowrap rounded-pill px-xs text-[14px] font-bold`}>
+          <button key={p.value} type="button" aria-pressed={value === p.value} onClick={() => onChange(value === p.value ? null : p.value)} className={`pri-${p.value} pri-chip toy min-h-[44px] w-full whitespace-nowrap rounded-pill px-xs text-subhead font-medium`}>
             {p.tag} {p.name}
           </button>
         ))}
       </div>
-      <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{value === null ? 'Pick one to sort by it. It never changes what a tick pays.' : PRIORITIES[value]!.blurb}</p>
+      <p className="mt-xs m-0 text-caption text-ink-soft">{value === null ? 'Pick one to sort by it. It never changes what a tick pays.' : PRIORITIES[value]!.blurb}</p>
     </div>
   );
 }
@@ -126,7 +126,7 @@ export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange
   return (
     <div className="flex flex-col gap-md">
       <div>
-        <span className="block text-[14px] font-bold">Do on</span>
+        <span className="block text-subhead font-semibold">Do on</span>
         <div className="flex flex-wrap items-end gap-xs">
           <input type="date" aria-label="Do date" value={plan.doDate} onChange={(e) => set({ doDate: e.target.value })} className={`${FIELD} min-w-[200px] flex-1`} />
           {/* A phone: the three quick days as one even row across the full width under the date; wider, beside the date at its right. */}
@@ -136,21 +136,21 @@ export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange
             { name: 'Tomorrow', day: addDays(today, 1) },
             { name: 'Next week', day: addDays(today, 7) },
           ].map((q) => (
-            <button key={q.name} type="button" aria-pressed={plan.doDate === q.day} onClick={() => set({ doDate: plan.doDate === q.day ? '' : q.day })} className={`toy min-h-[44px] whitespace-nowrap rounded-pill border-2 px-xs text-[14px] font-bold sm:px-sm ${plan.doDate === q.day ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={q.name} type="button" aria-pressed={plan.doDate === q.day} onClick={() => set({ doDate: plan.doDate === q.day ? '' : q.day })} className={`toy min-h-[44px] whitespace-nowrap rounded-pill border-2 px-xs text-subhead font-medium sm:px-sm ${plan.doDate === q.day ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {q.name}
             </button>
           ))}
           </div>
         </div>
-        <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{plan.doDate ? 'It shows on Daily from this day. It cannot be ticked before.' : 'No do date: it waits in the list below Tasks on Daily until you pick a day.'}</p>
+        <p className="mt-xs m-0 text-caption text-ink-soft">{plan.doDate ? 'It shows on Daily from this day. It cannot be ticked before.' : 'No do date: it waits in the list below Tasks on Daily until you pick a day.'}</p>
       </div>
       <label className="block">
-        <span className="block text-[14px] font-bold">Due by</span>
+        <span className="block text-subhead font-semibold">Due by</span>
         <input type="date" value={plan.dueDate} min={plan.doDate || undefined} onChange={(e) => set({ dueDate: e.target.value })} className={FIELD} />
-        <span className="mt-xs block text-[12px] font-semibold text-ink-soft">The deadline. It shows Overdue after this day, and never stops you ticking it.</span>
+        <span className="mt-xs block text-caption text-ink-soft">The deadline. It shows Overdue after this day, and never stops you ticking it.</span>
       </label>
       {problem && (
-        <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+        <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           {problem}
         </p>
       )}
@@ -180,18 +180,18 @@ export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange
       <div className="flex flex-wrap items-end gap-xs">
       <div className="grid min-w-[240px] flex-1 grid-cols-2 gap-xs">
         <label className="block">
-          <span className="block text-[14px] font-bold">Time (optional)</span>
+          <span className="block text-subhead font-semibold">Time (optional)</span>
           <input type="time" value={plan.time} onChange={(e) => set({ time: e.target.value })} className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Minutes (optional)</span>
+          <span className="block text-subhead font-semibold">Minutes (optional)</span>
           <input type="number" min={5} max={600} step={5} value={plan.minutes} onChange={(e) => set({ minutes: e.target.value })} placeholder="25" className={FIELD} />
         </label>
       </div>
       {/* On a phone the five chips are one even row across the full width, like the quick days above; wider, at the right. */}
       <div className="grid w-full grid-cols-5 gap-xs sm:ml-auto sm:flex sm:w-auto sm:flex-wrap sm:justify-end" role="group" aria-label="How long it should take">
         {ESTIMATES.map((m) => (
-          <button key={m} type="button" aria-pressed={plan.minutes === String(m)} onClick={() => set({ minutes: plan.minutes === String(m) ? '' : String(m) })} className={`toy min-h-[44px] whitespace-nowrap rounded-pill border-2 px-0 text-[14px] font-bold sm:px-sm ${plan.minutes === String(m) ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+          <button key={m} type="button" aria-pressed={plan.minutes === String(m)} onClick={() => set({ minutes: plan.minutes === String(m) ? '' : String(m) })} className={`toy min-h-[44px] whitespace-nowrap rounded-pill border-2 px-0 text-subhead font-medium sm:px-sm ${plan.minutes === String(m) ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
             {m >= 60 ? `${m / 60} h` : `${m} min`}
           </button>
         ))}
@@ -221,7 +221,7 @@ export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange
 export function StartFocus({ task, className = '' }: { task: Node; className?: string }) {
   const min = task.estimateMin ?? 25;
   return (
-    <Link to={`/mindful?task=${task.id}&min=${min}#focus-heading`} className={`toy toy-soft inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-line bg-card px-md text-[14px] font-bold ${className}`}>
+    <Link to={`/mindful?task=${task.id}&min=${min}#focus-heading`} className={`toy toy-soft inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-line bg-card px-md text-subhead font-medium ${className}`}>
       Start focus, {min} min
     </Link>
   );
@@ -244,15 +244,15 @@ export function Subtasks({ task }: { task: Node }) {
   return (
     <div>
       <div className="flex items-baseline justify-between gap-sm">
-        <span className="block text-[14px] font-bold">Subtasks</span>
-        {total > 0 && <span className="text-[12px] font-bold text-ink-soft">{done} of {total} done</span>}
+        <span className="block text-subhead font-semibold">Subtasks</span>
+        {total > 0 && <span className="text-caption text-ink-soft">{done} of {total} done</span>}
       </div>
       <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
         {list.data?.subtasks.map((s) => (
           <li key={s.id} className="toy flex items-center gap-xs rounded-tile bg-paper px-sm">
             <label className="flex min-h-[44px] min-w-0 flex-1 cursor-pointer items-center gap-sm">
               <input type="checkbox" checked={s.done} onChange={(e) => tick.mutate({ id: s.id, done: e.target.checked })} className="size-[20px] shrink-0" />
-              <span className={`min-w-0 break-words text-[16px] font-semibold ${s.done ? 'text-ink-soft line-through' : ''}`}>{s.title}</span>
+              <span className={`min-w-0 break-words text-callout ${s.done ? 'text-ink-soft line-through' : ''}`}>{s.title}</span>
             </label>
             <button type="button" onClick={() => remove.mutate(s.id)} aria-label={`Remove "${s.title}"`} className="flex min-h-[44px] min-w-[44px] items-center justify-center text-ink-soft hover:text-ink">
               <Icon icon={X} size={18} />
@@ -267,13 +267,13 @@ export function Subtasks({ task }: { task: Node }) {
           if (title.trim()) add.mutate();
         }}
       >
-        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} placeholder="Add a small step" aria-label="New subtask" className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
-        <button type="submit" disabled={add.isPending || !title.trim()} className="toy min-h-[48px] rounded-pill bg-ink px-md text-[14px] font-bold text-on-ink disabled:opacity-60">
+        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} placeholder="Add a small step" aria-label="New subtask" className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+        <button type="submit" disabled={add.isPending || !title.trim()} className="toy min-h-[48px] rounded-pill bg-ink px-md text-subhead font-medium text-on-ink disabled:opacity-60">
           Add
         </button>
       </form>
       {add.isError && (
-        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-xs m-0 text-subhead">
           {add.error instanceof Error ? add.error.message : 'Could not add it.'}
         </p>
       )}
@@ -288,7 +288,7 @@ export function Subtasks({ task }: { task: Node }) {
 export function ProjectSelect({ projects, value, onChange }: { projects: MonthProject[]; value: string; onChange: (id: string) => void }) {
   return (
     <label className="block">
-      <span className="block text-[14px] font-bold">Pillar and project</span>
+      <span className="block text-subhead font-semibold">Pillar and project</span>
       <select value={value} onChange={(e) => onChange(e.target.value)} className={FIELD}>
         {!projects.some((p) => p.id === value) && <option value={value}>Where it is now</option>}
         {RELATIONSHIPS.map((r) => {
@@ -304,14 +304,15 @@ export function ProjectSelect({ projects, value, onChange }: { projects: MonthPr
           ) : null;
         })}
       </select>
-      <span className="mt-xs block text-[12px] font-semibold text-ink-soft">Moving it to a project in another pillar moves the task to that pillar.</span>
+      <span className="mt-xs block text-caption text-ink-soft">Moving it to a project in another pillar moves the task to that pillar.</span>
     </label>
   );
 }
 
 /** The panel under a task on Daily: plan it, break it into subtasks, size it and start a focus session on it. */
 export function TaskPanel({ task, today }: { task: Node; today: string }) {
-  const refresh = useRefreshAll();
+  // A save can change the repeat, the habit pick, the title or the place, which decide what an Emerging card offers.
+  const refresh = useRefreshAll({ insights: true });
   const [plan, setPlan] = useState<Plan>(() => planOf(task));
   // The pillar and project it holds up: any of the person's open projects, grouped by pillar. The projects come from this month's
   // answer, the same read the month calendar and "Add a task" use. A ticked task stays where it is.
@@ -342,11 +343,11 @@ export function TaskPanel({ task, today }: { task: Node; today: string }) {
         today={today}
       />
       {save.isError && (
-        <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+        <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           {save.error instanceof Error ? save.error.message : 'Could not save. Try again.'}
         </p>
       )}
-      <button type="button" disabled={save.isPending || problem !== null} onClick={() => save.mutate()} className="toy min-h-[48px] rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink disabled:opacity-60">
+      <button type="button" disabled={save.isPending || problem !== null} onClick={() => save.mutate()} className="toy min-h-[48px] rounded-pill bg-ink px-md text-headline text-on-ink disabled:opacity-60">
         {save.isSuccess && !save.isPending ? 'Saved' : 'Save plan'}
       </button>
       <Subtasks task={task} />

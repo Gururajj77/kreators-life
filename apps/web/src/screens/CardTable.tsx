@@ -193,11 +193,11 @@ function Cover({ game, deck, size, badge = false, onHint }: { game: CardGamePlay
         <Avatar relationship={game.accent} size={Math.round(size * 0.26)} decorative />
       </span>
       {/* A long name is set a size smaller, so its last two words fit one line together and none is left alone. */}
-      <span className="relative text-balance font-display font-extrabold leading-[1.15]" style={{ fontSize: game.name.length > 24 ? Math.max(12, size * 0.087) : Math.max(14, size * 0.1) }}>
+      <span className="relative text-balance font-display font-bold leading-[1.15]" style={{ fontSize: game.name.length > 24 ? Math.max(12, size * 0.087) : Math.max(14, size * 0.1) }}>
         {game.name.length > 24 ? tie(game.name) : game.name}
       </span>
-      {deck && <span className="relative text-balance text-[12px] font-bold opacity-90">{deck.name}</span>}
-      {shown && <span className="relative text-balance text-[12px] font-semibold leading-[1.3]">{deck?.hint}</span>}
+      {deck && <span className="relative text-balance text-caption opacity-90">{deck.name}</span>}
+      {shown && <span className="relative text-balance text-caption leading-[1.3]">{deck?.hint}</span>}
     </div>
   );
 }
@@ -211,15 +211,15 @@ function Face({ game, deck, label, title, text, list, size, onRead }: { game: Ca
   return (
     <div data-card-face className="flex size-full flex-col overflow-hidden rounded-tile border border-line bg-card-strong text-ink">
       <div className="flex items-center justify-between gap-xs px-sm py-xs text-on-fill" style={fill(rel)}>
-        <span className="truncate text-[12px] font-extrabold">{deck.name}</span>
-        {label && <span className="shrink-0 rounded-pill bg-on-fill/20 px-xs text-[12px] font-extrabold">{label}</span>}
+        <span className="truncate text-caption font-semibold">{deck.name}</span>
+        {label && <span className="shrink-0 rounded-pill bg-on-fill/20 px-xs text-caption font-medium">{label}</span>}
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-xs p-sm">
         <div ref={body} data-card-body className="relative flex min-h-0 flex-1 flex-col gap-xs overflow-hidden">
-          {title && <p className="m-0 font-display font-extrabold leading-[1.2] text-ink" style={{ fontSize: Math.max(15, size * 0.095) }}>{title}</p>}
-          {text && <p className="m-0 font-medium leading-[1.35] text-ink-soft" style={{ fontSize: Math.max(13, size * (long ? 0.066 : 0.08)) }}>{text}</p>}
+          {title && <p className="m-0 font-display font-bold leading-[1.2] text-ink" style={{ fontSize: Math.max(15, size * 0.095) }}>{title}</p>}
+          {text && <p className="m-0 leading-[1.35] text-ink-soft" style={{ fontSize: Math.max(13, size * (long ? 0.066 : 0.08)) }}>{text}</p>}
           {list && list.length > 0 && (
-            <ul className="m-0 list-disc pl-md font-semibold text-ink-soft" style={{ fontSize: Math.max(12, size * 0.062) }}>
+            <ul className="m-0 list-disc pl-md text-ink-soft" style={{ fontSize: Math.max(12, size * 0.062) }}>
               {list.slice(0, 2).map((x) => (
                 <li key={x}>{x}</li>
               ))}
@@ -235,7 +235,7 @@ function Face({ game, deck, label, title, text, list, size, onRead }: { game: Ca
               e.stopPropagation();
               onRead();
             }}
-            className="mt-auto inline-flex min-h-[44px] items-center self-start text-[12px] font-extrabold underline underline-offset-4"
+            className="mt-auto inline-flex min-h-[44px] items-center self-start text-caption font-semibold underline underline-offset-4"
           >
             Read all
           </button>
@@ -457,7 +457,7 @@ function FocusButton({ on, onClick }: { on: boolean; onClick: () => void }) {
       aria-pressed={on}
       aria-label={on ? 'Leave focus mode' : 'Focus mode: hide the menu and the assistant'}
       title={on ? 'Leave focus mode (Esc)' : 'Focus mode'}
-      className="toy toy-soft flex min-h-[44px] min-w-[44px] items-center justify-center gap-xs rounded-pill border border-line bg-card-strong px-sm text-[14px] font-bold text-ink"
+      className="toy toy-soft flex min-h-[44px] min-w-[44px] items-center justify-center gap-xs rounded-pill border border-line bg-card-strong px-sm text-subhead font-medium text-ink"
     >
       {/* The animated maximize/minimize icon: corners out to enter, in to leave (the still lucide glyph until it loads). */}
       <AnimatedIcon name="maximizeMinimize" size={22} active={on} />
@@ -568,7 +568,7 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
         name: d.name,
         label: (
           <>
-            {d.name} <span className="font-semibold opacity-70">{piles[d.key]?.length ?? 0}</span>
+            {d.name} <span className="opacity-70">{piles[d.key]?.length ?? 0}</span>
           </>
         ),
       })),
@@ -598,7 +598,7 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
         value={deck.key}
         onChange={setDeckKey}
         className={`shrink-0 ${focus ? '' : 'mt-md'} ${focus && game.decks.length === 1 ? 'hidden' : ''}`}
-        pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-md text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+        pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-md text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
       />
 
       {/* One row: Draw (the one solid button), then Shuffle, Flip all and Clear table as round icons, water and focus mode at the right. How many
@@ -630,7 +630,7 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
           style={{ left: pileX, top: pileY, width: size, height, zIndex: 1 }}
         >
           {left === 0 ? (
-            <span className="flex size-full items-center justify-center rounded-tile border-2 border-dashed border-line p-sm text-center text-[14px] font-bold text-ink-soft">Empty. Tap Shuffle.</span>
+            <span className="flex size-full items-center justify-center rounded-tile border-2 border-dashed border-line p-sm text-center text-subhead text-ink-soft">Empty. Tap Shuffle.</span>
           ) : (
             <>
               {[2, 1, 0].filter((k) => k < left).map((k) => (
@@ -645,7 +645,7 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
           )}
         </button>
         {table.length === 0 && (
-          <div className="absolute text-[14px] font-semibold text-ink-soft" style={{ left: pileX + size + 32, top: 32, right: 16 }}>
+          <div className="absolute text-subhead text-ink-soft" style={{ left: pileX + size + 32, top: 32, right: 16 }}>
             {!pileHint && deck.hint && left > 0 && <p className="mb-sm mt-0 text-ink">{deck.hint}</p>}
             <p className="m-0">Tap the pile to draw. Tap a card to flip it. Drag it where you like.</p>
           </div>
@@ -664,11 +664,11 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
         <div className="rounded-card bg-card p-md shadow-toy-soft">
           {guide.length > 1 && <Segmented label="Rules" value={shownGuide} onChange={setGuideTab} options={guide} className="mb-sm" />}
           {/* The rules are read at the table, so they are a reading block (full lines, exempt from the phone's density rule). */}
-          {shownGuide === 'how' && <p className="prose-long m-0 text-[14px] font-semibold text-ink-soft">{game.howTo}</p>}
+          {shownGuide === 'how' && <p className="prose-long m-0 text-prose text-ink-soft">{game.howTo}</p>}
           {shownGuide === 'rules' && game.rules && (
             <ul className="m-0 list-none divide-y divide-line p-0">
               {game.rules.map((s) => (
-                <li key={s} className="py-sm text-[14px] font-semibold first:pt-0 last:pb-0">{s}</li>
+                <li key={s} className="py-sm text-subhead first:pt-0 last:pb-0">{s}</li>
               ))}
             </ul>
           )}
@@ -676,10 +676,10 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
             <>
               <ul className="m-0 list-none divide-y divide-line p-0">
                 {game.special.map((s) => (
-                  <li key={s} className="py-sm text-[14px] font-semibold first:pt-0 last:pb-0">{s}</li>
+                  <li key={s} className="py-sm text-subhead first:pt-0 last:pb-0">{s}</li>
                 ))}
               </ul>
-              {game.specialNote && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{game.specialNote}</p>}
+              {game.specialNote && <p className="mt-sm m-0 text-subhead text-ink-soft">{game.specialNote}</p>}
               <Button className="mt-sm" size="sm" variant="outline" onClick={() => setSpecial(game.special![Math.floor(Math.random() * game.special!.length)]!)}>
                 Draw a special card
               </Button>
@@ -694,10 +694,10 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
       <Sheet open={reading !== null} onClose={() => setReading(null)} title={reading ? reading.card.title ?? reading.deck.name : ''}>
         {reading && (
           <div className="flex flex-col gap-xs">
-            <p className="m-0 text-[12px] font-extrabold text-ink-soft">{reading.deck.name}{(reading.side === 'a' ? reading.card.label : reading.card.alt?.label) ? `, ${reading.side === 'a' ? reading.card.label : reading.card.alt?.label}` : ''}</p>
-            {(reading.side === 'a' ? reading.card.text : reading.card.alt?.text) && <p className="m-0 text-[16px] font-semibold">{reading.side === 'a' ? reading.card.text : reading.card.alt?.text}</p>}
+            <p className="m-0 text-caption text-ink-soft">{reading.deck.name}{(reading.side === 'a' ? reading.card.label : reading.card.alt?.label) ? `, ${reading.side === 'a' ? reading.card.label : reading.card.alt?.label}` : ''}</p>
+            {(reading.side === 'a' ? reading.card.text : reading.card.alt?.text) && <p className="m-0 text-callout">{reading.side === 'a' ? reading.card.text : reading.card.alt?.text}</p>}
             {reading.side === 'a' && reading.card.list && (
-              <ul className="m-0 list-disc pl-md text-[14px] font-semibold text-ink-soft">
+              <ul className="m-0 list-disc pl-md text-subhead text-ink-soft">
                 {reading.card.list.map((x) => (
                   <li key={x}>{x}</li>
                 ))}
@@ -707,7 +707,7 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
         )}
       </Sheet>
       <Sheet open={special !== null} onClose={() => setSpecial(null)} title="Special card">
-        <p className="m-0 text-[18px] font-bold">{special}</p>
+        <p className="m-0 text-headline">{special}</p>
       </Sheet>
     </div>
   );
@@ -768,9 +768,9 @@ export function CardTable() {
       )}
       {q.isError && (
         <div className="mt-md rounded-card bg-card p-md shadow-toy-soft" role="alert">
-          <p className="m-0 font-bold">{err || 'Could not open this game.'}</p>
+          <p className="m-0 font-semibold">{err || 'Could not open this game.'}</p>
           {info ? (
-            <Link to="/rewards#games" className="toy mt-sm inline-flex min-h-[48px] items-center justify-center rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink">
+            <Link to="/rewards#games" className="toy mt-sm inline-flex min-h-[48px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
               Unlock it in Rewards
             </Link>
           ) : (

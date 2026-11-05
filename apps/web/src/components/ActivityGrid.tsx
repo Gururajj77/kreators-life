@@ -57,10 +57,10 @@ export function ActivityGrid() {
   const m: ActivityMetric = metric === "ticks" ? "ticks" : "xp";
   return (
     <section className="act-year mt-lg" aria-labelledby="year-heading">
-      <h2 id="year-heading" className="text-[24px]">
+      <h2 id="year-heading" className="text-title2">
         Your year
       </h2>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+      <p className="mt-xs m-0 text-subhead text-ink-soft">
         {m === "xp"
           ? "Xp a day for the last year."
           : "Tasks ticked a day for the last year."}{" "}
@@ -345,8 +345,8 @@ function YearGrid({
           ? `${longDate(activeDay.day)}: ${countWords(activeDay[metric], metric)}`
           : ""}
       </div>
-      <div className="mt-sm flex flex-wrap items-center justify-between gap-sm text-[12px] font-bold text-ink-soft">
-        <p className="m-0 text-[14px] text-ink">
+      <div className="mt-sm flex flex-wrap items-center justify-between gap-sm text-caption text-ink-soft">
+        <p className="m-0 text-subhead text-ink">
           {countWords(total, metric)} in the last year
         </p>
         <p className="m-0 flex items-center gap-xs">

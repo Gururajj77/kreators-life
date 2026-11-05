@@ -45,8 +45,8 @@ function LifeCard({ title, children, action }: { title: string; children: ReactN
   return (
     <li className="flex items-start justify-between gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="min-w-0 flex-1">
-        <h3 className="m-0 text-[16px] font-extrabold">{title}</h3>
-        <div className="mt-xs text-[14px] font-semibold text-ink-soft">{children}</div>
+        <h3 className="m-0 text-headline">{title}</h3>
+        <div className="mt-xs text-subhead text-ink-soft">{children}</div>
       </div>
       {action}
     </li>
@@ -82,7 +82,7 @@ export function LifecycleCard({ client, life, compact = false }: { client: Agenc
 
   const checklist = (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <h3 className="m-0 text-[16px] font-extrabold">{`Checklist for this stage, ${done} of ${stage.steps.length}`}</h3>
+      <h3 className="m-0 text-headline">{`Checklist for this stage, ${done} of ${stage.steps.length}`}</h3>
       <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
         {stage.steps.map((s) => {
           const key = `${stage.key}:${s.key}`;
@@ -112,25 +112,25 @@ export function LifecycleCard({ client, life, compact = false }: { client: Agenc
   );
   const trialRules = life.stage === 'trial' && (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <h3 className="m-0 text-[16px] font-extrabold">The trial rules</h3>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">The client sees these at their link. They are quoted from the Trial and pilot agreement; if you changed your copy of it, yours wins.</p>
-      <ul className="mt-xs m-0 list-disc pl-md text-[14px] font-semibold">
+      <h3 className="m-0 text-headline">The trial rules</h3>
+      <p className="mt-xs m-0 text-subhead text-ink-soft">The client sees these at their link. They are quoted from the Trial and pilot agreement; if you changed your copy of it, yours wins.</p>
+      <ul className="mt-xs m-0 list-disc pl-md text-subhead">
         {TRIAL_RULES.map((r) => (
           <li key={r.key}>
-            {r.text} <span className="text-[12px] text-ink-soft">{`(${r.source})`}</span>
+            {r.text} <span className="text-caption text-ink-soft">{`(${r.source})`}</span>
           </li>
         ))}
       </ul>
       <div className="mt-sm">
         {life.trialItemId ? (
-          <p className="m-0 text-[14px] font-bold">The trial video is in the pipeline under Work. Send it for review when it is ready.</p>
+          <p className="m-0 text-subhead">The trial video is in the pipeline under Work. Send it for review when it is ready.</p>
         ) : (
           <Button size="sm" onClick={() => trial.mutate()} disabled={trial.isPending}>
             {trial.isPending ? 'Adding' : 'Add the trial video to the pipeline'}
           </Button>
         )}
         {trial.isError && (
-          <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+          <p role="alert" className="mt-xs m-0 text-subhead">
             {failed(trial.error)}
           </p>
         )}
@@ -139,12 +139,12 @@ export function LifecycleCard({ client, life, compact = false }: { client: Agenc
   );
   const logList =
     life.log.length === 0 ? (
-      <p className="m-0 text-[14px] font-semibold text-ink-soft">Nothing yet. Stage moves, password changes and retainer steps are written here.</p>
+      <p className="m-0 text-subhead text-ink-soft">Nothing yet. Stage moves, password changes and retainer steps are written here.</p>
     ) : (
       <ul className="m-0 flex list-none flex-col gap-xs p-0">
         {life.log.map((l) => (
-          <li key={l.id} className="rounded-tile bg-paper p-sm text-[14px] font-semibold">
-            <span className="block text-[12px] font-bold text-ink-soft">{`${l.actor === 'me' ? 'You' : l.actor === 'client' ? 'The client' : 'Automatic'}, ${prettyDate(l.at.slice(0, 10))}`}</span>
+          <li key={l.id} className="rounded-tile bg-paper p-sm text-subhead">
+            <span className="block text-caption text-ink-soft">{`${l.actor === 'me' ? 'You' : l.actor === 'client' ? 'The client' : 'Automatic'}, ${prettyDate(l.at.slice(0, 10))}`}</span>
             {l.text}
           </li>
         ))}
@@ -175,13 +175,13 @@ export function LifecycleCard({ client, life, compact = false }: { client: Agenc
             </Button>
           ))}
       </div>
-      {problem && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{problem}</p>}
+      {problem && <p className="mt-xs m-0 text-subhead text-ink-soft">{problem}</p>}
       {move.isError && (
-        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-xs m-0 text-subhead">
           {failed(move.error)}
         </p>
       )}
-      {!next && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">This is the last stage. The work goes on, month by month.</p>}
+      {!next && <p className="mt-xs m-0 text-subhead text-ink-soft">This is the last stage. The work goes on, month by month.</p>}
     </>
   );
   const daysSheet = (
@@ -194,7 +194,7 @@ export function LifecycleCard({ client, life, compact = false }: { client: Agenc
     return (
       <div className="rounded-card bg-card p-md shadow-toy-soft">
         <StageBar stage={life.stage} />
-        <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">
+        <p className="mt-sm m-0 text-subhead text-ink-soft">
           <strong className="text-ink">You:</strong> {stage.ownerDoes}
         </p>
         {moves}
@@ -207,7 +207,7 @@ export function LifecycleCard({ client, life, compact = false }: { client: Agenc
             {days}
             {trialRules}
             <li className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <h3 className="m-0 text-[16px] font-extrabold">What happened</h3>
+              <h3 className="m-0 text-headline">What happened</h3>
               <div className="mt-xs">{logList}</div>
             </li>
           </ul>
@@ -296,7 +296,7 @@ function DaysForm({ client, life, onClose }: { client: AgencyClient; life: Clien
         <input inputMode="numeric" value={revisions} onChange={(e) => setRevisions(e.target.value.replace(/\D/g, '').slice(0, 2))} className={FIELD} />
       </FieldLabel>
       {save.isError && (
-        <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-sm m-0 text-subhead">
           {failed(save.error)}
         </p>
       )}
@@ -319,18 +319,18 @@ export function DocPassword({ clientId, clientName, savedClientId }: { clientId:
   const q = useAuthed(['agency', 'client', clientId ?? ''], () => api.agencyClient(clientId ?? ''), Boolean(clientId));
   const page = q.data;
   if (!clientId) {
-    return <p className="no-print mt-sm m-0 text-[14px] font-semibold text-ink-soft">Pick a client for this document to protect its link with a password.</p>;
+    return <p className="no-print mt-sm m-0 text-subhead text-ink-soft">Pick a client for this document to protect its link with a password.</p>;
   }
   // The client picked here is not saved yet: the live link still follows the client it was saved with, so its password says nothing yet.
   if (savedClientId !== undefined && savedClientId !== clientId) {
-    return <p className="no-print mt-sm m-0 text-[14px] font-semibold text-ink-soft">Save this change first. Until then the link is protected by the password of the client it was saved with.</p>;
+    return <p className="no-print mt-sm m-0 text-subhead text-ink-soft">Save this change first. Until then the link is protected by the password of the client it was saved with.</p>;
   }
   if (q.isError && !page) {
     const gone = q.error instanceof ApiError && q.error.status === 404;
     return (
       <div role="alert" className="no-print mt-sm flex flex-wrap items-center gap-xs rounded-tile bg-card p-sm shadow-toy-soft">
         <StatusTag tone="warn">{gone ? 'Client gone' : 'Not checked'}</StatusTag>
-        <p className="m-0 min-w-0 flex-1 text-[14px] font-semibold text-ink-soft">{gone ? 'The client for this document was removed. Pick another client to protect its link.' : 'We could not check the password just now.'}</p>
+        <p className="m-0 min-w-0 flex-1 text-subhead text-ink-soft">{gone ? 'The client for this document was removed. Pick another client to protect its link.' : 'We could not check the password just now.'}</p>
         {!gone && (
           <Button size="sm" variant="outline" onClick={() => void q.refetch()} disabled={q.isFetching}>
             {q.isFetching ? 'Checking' : 'Try again'}
@@ -343,7 +343,7 @@ export function DocPassword({ clientId, clientName, savedClientId }: { clientId:
     return (
       <div className="no-print mt-sm flex flex-wrap items-center gap-xs rounded-tile bg-card p-sm shadow-toy-soft">
         <StatusTag tone="neutral">Checking</StatusTag>
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">Checking the password on this link.</p>
+        <p className="m-0 text-subhead text-ink-soft">Checking the password on this link.</p>
       </div>
     );
   }
@@ -372,7 +372,7 @@ export function RetainerCard({ client, life, currency }: { client: AgencyClient;
     <div className="rounded-card bg-card p-md shadow-toy-soft">
       {!r && (
         <>
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">
+          <p className="m-0 text-subhead text-ink-soft">
             {ready ? 'The pilot is done. Offer the retainer: the client picks how many months, and each month then makes its own invoice and pieces.' : 'A retainer comes after the pilot month. Move the client to the pilot month first.'}
           </p>
           <div className="mt-sm">
@@ -385,25 +385,25 @@ export function RetainerCard({ client, life, currency }: { client: AgencyClient;
       {r && (
         <>
           <CardHead tag={<StatusTag fit tone={RETAINER_STATUS_TONE[r.status]}>{RETAINER_STATUS_NAME[r.status]}</StatusTag>}>
-            <h3 className="m-0 text-[16px] font-extrabold">{r.status === 'active' ? 'Running retainer' : r.status === 'ended' ? 'Last retainer' : 'Retainer offer'}</h3>
+            <h3 className="m-0 text-headline">{r.status === 'active' ? 'Running retainer' : r.status === 'ended' ? 'Last retainer' : 'Retainer offer'}</h3>
           </CardHead>
           <OptionsList r={r} currency={currency} />
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+          <p className="mt-xs m-0 text-subhead text-ink-soft">
             {`${r.piecesPerMonth} ${r.piecesPerMonth === 1 ? 'piece' : 'pieces'} a month, ${r.revisionsPerPiece} ${r.revisionsPerPiece === 1 ? 'change' : 'changes'} included in each.`}
           </p>
           {r.status === 'chosen' && r.months && (
-            <p role="status" className="mt-sm m-0 rounded-tile p-sm text-[14px] font-bold" style={{ background: 'var(--tint-yellow)' }}>
+            <p role="status" className="mt-sm m-0 rounded-tile p-sm text-subhead" style={{ background: 'var(--tint-yellow)' }}>
               {`${client.name} chose ${r.months} months: ${money(r.monthlyCents ?? 0, currency)} a month, ${money(r.totalCents ?? 0, currency)} in all.`}
             </p>
           )}
-          {r.status === 'offered' && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Waiting for the client to pick a length at their link.</p>}
+          {r.status === 'offered' && <p className="mt-sm m-0 text-subhead text-ink-soft">Waiting for the client to pick a length at their link.</p>}
           {r.status === 'active' && (
             <>
-              <p className="mt-sm m-0 text-[14px] font-bold">
+              <p className="mt-sm m-0 text-subhead font-semibold">
                 {`${r.months} months from ${r.startDay ? prettyDate(r.startDay) : 'the start day'}. ${r.cyclesMade} of ${r.months} made.`}
                 {r.nextCycle ? ` Next cycle: ${new Date(`${r.nextCycle.day}T00:00:00`).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' })}.` : ''}
               </p>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Each month makes its invoice and its pieces by itself, once, on the retainer&apos;s own day. A short month falls on its last day.</p>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">Each month makes its invoice and its pieces by itself, once, on the retainer&apos;s own day. A short month falls on its last day.</p>
             </>
           )}
           {r.status !== 'ended' && r.status !== 'withdrawn' && (
@@ -444,11 +444,11 @@ export function RetainerCard({ client, life, currency }: { client: AgencyClient;
                 </Button>
               ))}
           </div>
-          {r.status === 'active' && confirmEnd && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Months not yet made will not be made. What is already made stays.</p>}
+          {r.status === 'active' && confirmEnd && <p className="mt-xs m-0 text-subhead text-ink-soft">Months not yet made will not be made. What is already made stays.</p>}
         </>
       )}
       {err && (
-        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-xs m-0 text-subhead">
           {failed(err)}
         </p>
       )}
@@ -468,7 +468,7 @@ function OptionsList({ r, currency }: { r: AgencyRetainer; currency: string }) {
   return (
     <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
       {rows.map((o) => (
-        <li key={o.months} className={`rounded-tile p-sm text-[14px] font-semibold ${r.months === o.months ? 'bg-card-strong' : 'bg-paper'}`}>
+        <li key={o.months} className={`rounded-tile p-sm text-subhead ${r.months === o.months ? 'bg-card-strong' : 'bg-paper'}`}>
           <strong className="text-ink">{`${o.months} ${o.months === 1 ? 'month' : 'months'}`}</strong>
           {`: ${money(retainerMonthlyCents(r.feeCents, o.discountBps), currency)} a month, ${money(retainerTotalCents(r.feeCents, o.months, o.discountBps), currency)} in all${o.discountBps > 0 ? `, ${pct(o.discountBps)} off` : ''}`}
           {r.months === o.months && r.status !== 'active' && r.status !== 'ended' ? ', chosen' : ''}
@@ -521,14 +521,14 @@ function OfferForm({ client, currency, previous, onClose }: { client: AgencyClie
         </FieldLabel>
       </div>
       <fieldset className="mt-sm m-0 border-0 p-0">
-        <legend className="p-0 text-[14px] font-bold">Lengths to offer, with a discount on the month if you like</legend>
+        <legend className="p-0 text-subhead">Lengths to offer, with a discount on the month if you like</legend>
         {rows.map((r, i) => (
           <div key={i} className="mt-xs grid grid-cols-[1fr_1fr_auto] items-end gap-xs">
-            <label className="text-[12px] font-bold">
+            <label className="text-caption">
               Months
               <input inputMode="numeric" value={r.months} onChange={(e) => setRow(i, { months: e.target.value.replace(/\D/g, '').slice(0, 2) })} className={FIELD} />
             </label>
-            <label className="text-[12px] font-bold">
+            <label className="text-caption">
               Percent off
               <input inputMode="decimal" value={r.off} placeholder="0" onChange={(e) => setRow(i, { off: e.target.value.replace(/[^\d.]/g, '').slice(0, 5) })} className={FIELD} />
             </label>
@@ -546,12 +546,12 @@ function OfferForm({ client, currency, previous, onClose }: { client: AgencyClie
         )}
       </fieldset>
       {badOff && (
-        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-xs m-0 text-subhead">
           A percent off is a number from 0.01 to 100, like 5 or 7.5. Leave it blank for no discount.
         </p>
       )}
       {Number.isFinite(cents) && cents > 0 && options.length > 0 && !badOff && (
-        <ul className="mt-sm m-0 list-none rounded-tile bg-paper p-sm text-[14px] font-semibold text-ink-soft">
+        <ul className="mt-sm m-0 list-none rounded-tile bg-paper p-sm text-subhead text-ink-soft">
           {options.map((o) => (
             <li key={o.months}>{`${o.months} months: ${money(retainerMonthlyCents(cents, o.discountBps), currency)} a month, ${money(retainerTotalCents(cents, o.months, o.discountBps), currency)} in all`}</li>
           ))}
@@ -561,7 +561,7 @@ function OfferForm({ client, currency, previous, onClose }: { client: AgencyClie
         <Toggle compact on={auto} onChange={setAuto} label="Send each month's invoice by itself" hint="Off keeps each one as a draft for you to send." />
       </div>
       {save.isError && (
-        <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-sm m-0 text-subhead">
           {failed(save.error)}
         </p>
       )}
@@ -592,7 +592,7 @@ function ConfirmForm({ retainer, currency, onClose }: { retainer: AgencyRetainer
         if (start) save.mutate();
       }}
     >
-      <p className="m-0 text-[14px] font-semibold text-ink-soft">{`${retainer.months} months at ${money(retainer.monthlyCents ?? 0, currency)} a month. The first month starts on the day below; the next ones start on the same day of each month (a short month on its last day).`}</p>
+      <p className="m-0 text-subhead text-ink-soft">{`${retainer.months} months at ${money(retainer.monthlyCents ?? 0, currency)} a month. The first month starts on the day below; the next ones start on the same day of each month (a short month on its last day).`}</p>
       <FieldLabel className="mt-sm" label="First month starts">
         <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className={FIELD} />
       </FieldLabel>
@@ -600,7 +600,7 @@ function ConfirmForm({ retainer, currency, onClose }: { retainer: AgencyRetainer
         <Toggle compact on={auto} onChange={setAuto} label="Send each month's invoice by itself" />
       </div>
       {save.isError && (
-        <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-sm m-0 text-subhead">
           {failed(save.error)}
         </p>
       )}

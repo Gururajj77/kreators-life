@@ -17,9 +17,9 @@ export function MapLadder({ placements = [], compact = false }: { placements?: P
     <div className="flex flex-col gap-xs" role="img" aria-label={placements.length ? 'Your seven on the map' : 'The map, Shame at the bottom, Oneness on top'}>
       {bands.map((b) => (
         <section key={b} className="rounded-tile bg-card p-sm shadow-toy-soft">
-          <p className="m-0 flex items-baseline justify-between gap-sm text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
+          <p className="m-0 flex items-baseline justify-between gap-sm text-eyebrow uppercase text-ink-soft">
             <span>{MAP_BAND_META[b].name}</span>
-            {!compact && <span className="normal-case tracking-normal font-semibold">{MAP_BAND_META[b].blurb}</span>}
+            {!compact && <span className="normal-case tracking-normal">{MAP_BAND_META[b].blurb}</span>}
           </p>
           <ol className="mt-xs m-0 flex list-none flex-col p-0">
             {levels
@@ -31,11 +31,11 @@ export function MapLadder({ placements = [], compact = false }: { placements?: P
                 return (
                   <li key={l.value} className={`flex min-h-[32px] items-center gap-sm border-t border-line py-xs first:border-t-0 ${courage ? 'rounded-tile bg-paper px-xs' : ''}`}>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[14px] font-bold">
+                      <span className="block text-subhead">
                         {l.name}
                         {courage ? '. Live above this line.' : ''}
                       </span>
-                      {!compact && <span className="block text-[12px] font-semibold text-ink-soft">“{l.sounds}”</span>}
+                      {!compact && <span className="block text-caption text-ink-soft">“{l.sounds}”</span>}
                     </span>
                     {(cores.length > 0 || floors.length > 0) && (
                       <span className="flex shrink-0 items-center gap-xs">
@@ -57,7 +57,7 @@ export function MapLadder({ placements = [], compact = false }: { placements?: P
           </ol>
         </section>
       ))}
-      {placements.length > 0 && <p className="m-0 text-[12px] font-bold text-ink-soft">A full face is where you live. A faded one is where you drop under stress.</p>}
+      {placements.length > 0 && <p className="m-0 text-caption text-ink-soft">A full face is where you live. A faded one is where you drop under stress.</p>}
     </div>
   );
 }
@@ -247,7 +247,7 @@ function ScaleDrawing({ L }: { L: Layout }) {
 
       {/* The column heads. */}
       {L.heads.map(([t, x]) => (
-        <text key={t} x={x} y={14} fontSize={sizes.head} textAnchor="middle" className="font-semibold" style={{ fill: 'var(--color-ink-soft)' }}>
+        <text key={t} x={x} y={14} fontSize={sizes.head} textAnchor="middle" className="" style={{ fill: 'var(--color-ink-soft)' }}>
           {t}
         </text>
       ))}
@@ -259,13 +259,13 @@ function ScaleDrawing({ L }: { L: Layout }) {
             <Span key={sp.from} x={8} y1={top(sp.from) + 2} y2={bottom(sp.to) - 2} color={sp.color} />
           ))}
           {SELVES.map((sf) => (
-            <g key={sf.lines[0]}>{lines(sf.lines, 80, middle(sf.from, sf.to), 10.5, 'middle', 'font-bold', { fill: 'var(--color-ink)' })}</g>
+            <g key={sf.lines[0]}>{lines(sf.lines, 80, middle(sf.from, sf.to), 10.5, 'middle', 'font-semibold', { fill: 'var(--color-ink)' })}</g>
           ))}
           {/* Where that is. */}
           {PLACES.map((pl) => (
             <g key={pl.name}>
               <Span x={152} y1={top(pl.from) + 2} y2={bottom(pl.to) - 2} color={pl.color} />
-              {lines([pl.name], 160, middle(pl.from, pl.to), 11, 'start', 'font-bold', { fill: 'var(--color-ink)' })}
+              {lines([pl.name], 160, middle(pl.from, pl.to), 11, 'start', 'font-semibold', { fill: 'var(--color-ink)' })}
             </g>
           ))}
         </>
@@ -289,7 +289,7 @@ function ScaleDrawing({ L }: { L: Layout }) {
         if (!d.light)
           return (
             <g key={d.from}>
-              {lines(words, cx, y, sizes.dim, 'middle', 'font-bold', { fill: 'var(--color-on-fill)', stroke: 'var(--color-ink-fixed)', strokeOpacity: 0.55, strokeWidth: 3, strokeLinejoin: 'round', paintOrder: 'stroke' })}
+              {lines(words, cx, y, sizes.dim, 'middle', 'font-semibold', { fill: 'var(--color-on-fill)', stroke: 'var(--color-ink-fixed)', strokeOpacity: 0.55, strokeWidth: 3, strokeLinejoin: 'round', paintOrder: 'stroke' })}
             </g>
           );
         // A light band (gold, lime, yellow) puts its words on a small card-coloured chip in the theme's own ink, so they read in
@@ -304,7 +304,7 @@ function ScaleDrawing({ L }: { L: Layout }) {
         return (
           <g key={d.from}>
             <rect x={chipX} y={y - ch / 2} width={cw} height={ch} rx={ch / 2 > 10 ? 8 : ch / 2} style={{ fill: 'var(--color-card-strong)' }} fillOpacity={0.92} />
-            {lines(words, tx, y, sizes.dim, 'middle', 'font-bold', { fill: 'var(--color-ink)' })}
+            {lines(words, tx, y, sizes.dim, 'middle', 'font-semibold', { fill: 'var(--color-ink)' })}
           </g>
         );
       })}
@@ -313,7 +313,7 @@ function ScaleDrawing({ L }: { L: Layout }) {
       {SCALE.map((l) => {
         const y = top(l.value) + R / 2;
         return (
-          <text key={l.value} x={edge(y) + 7} y={y + sizes.level * 0.36} fontSize={sizes.level} className="font-bold" style={{ fill: 'var(--color-ink)' }}>
+          <text key={l.value} x={edge(y) + 7} y={y + sizes.level * 0.36} fontSize={sizes.level} className="font-semibold" style={{ fill: 'var(--color-ink)' }}>
             {l.value} - {l.name}
           </text>
         );
@@ -321,7 +321,7 @@ function ScaleDrawing({ L }: { L: Layout }) {
 
       {/* The Courage line. */}
       <line x1={edge(courage) + 2} x2={L.noteX} y1={courage} y2={courage} strokeWidth={1.5} strokeDasharray="4 4" className="stroke-ink-mute" />
-      <text x={L.noteX} y={L.noteBelow ? courage + sizes.note + 3 : courage - 4} fontSize={sizes.note} textAnchor="end" className="font-semibold" style={{ fill: 'var(--color-ink-soft)' }}>
+      <text x={L.noteX} y={L.noteBelow ? courage + sizes.note + 3 : courage - 4} fontSize={sizes.note} textAnchor="end" className="" style={{ fill: 'var(--color-ink-soft)' }}>
         Live above this line
       </text>
 
@@ -335,8 +335,8 @@ function ScaleDrawing({ L }: { L: Layout }) {
                 className) so it always wins over any other rule and never picks up the span's own colour. */}
             {L.sides && (
               <>
-                {lines(c.lines, L.catX, y - 6, sizes.cat, 'end', 'font-bold', { fill: 'var(--color-ink)' })}
-                <text x={L.catX} y={y + (c.lines.length * (sizes.cat + 3)) / 2 + 4} fontSize={sizes.band} textAnchor="end" className="font-semibold" style={{ fill: 'var(--color-ink-soft)' }}>
+                {lines(c.lines, L.catX, y - 6, sizes.cat, 'end', 'font-semibold', { fill: 'var(--color-ink)' })}
+                <text x={L.catX} y={y + (c.lines.length * (sizes.cat + 3)) / 2 + 4} fontSize={sizes.band} textAnchor="end" className="" style={{ fill: 'var(--color-ink-soft)' }}>
                   {MAP_BAND_META[c.band].name}
                 </text>
               </>
@@ -371,8 +371,8 @@ export function ConsciousnessMap() {
   return (
     // Set apart from the lines around it: a line above and below, with room, so the heading never runs into the chat.
     <figure ref={box} className="mx-0 my-md border-y-2 border-line py-md">
-      <p className="m-0 text-left font-display text-[28px] font-semibold uppercase tracking-[0.2em] md:text-center">Consciousness</p>
-      <p className="mt-xs m-0 text-left text-[16px] font-semibold md:text-center">7 ways to move up the scale of consciousness</p>
+      <p className="m-0 text-left text-title2 font-medium uppercase tracking-[0.08em] md:text-center">Consciousness</p>
+      <p className="mt-xs m-0 text-left text-callout md:text-center">7 ways to move up the scale of consciousness</p>
       <div className="mt-sm">
         <ScaleDrawing L={narrow ? NARROW : WIDE} />
       </div>
@@ -380,10 +380,10 @@ export function ConsciousnessMap() {
         // On a phone the three categories are a legend under the picture, matched to the coloured spans at its right edge.
         <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
           {CATEGORIES.map((c) => (
-            <li key={c.band} className="flex items-center gap-sm text-[14px] font-bold">
+            <li key={c.band} className="flex items-center gap-sm text-subhead">
               <span aria-hidden="true" className="h-[16px] w-[4px] shrink-0 rounded-pill" style={{ background: c.color }} />
               <span>
-                {c.lines.join(' ')} <span className="font-semibold text-ink-soft">({MAP_BAND_META[c.band].name})</span>
+                {c.lines.join(' ')} <span className="text-ink-soft">({MAP_BAND_META[c.band].name})</span>
               </span>
             </li>
           ))}
@@ -408,19 +408,19 @@ export function PlacementChart({ placements, focus = [], away = [], compact = fa
           return (
             <li key={p.relationship} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
               <Avatar relationship={rel.key} size={28} decorative still />
-              <span className="min-w-0 flex-1 text-[14px] font-bold">{rel.name}</span>
-              <span className="text-[12px] font-bold text-ink-soft">Set aside for now</span>
+              <span className="min-w-0 flex-1 text-subhead font-semibold">{rel.name}</span>
+              <span className="text-caption text-ink-soft">Set aside for now</span>
             </li>
           );
         return (
           <li key={p.relationship} className={`rounded-tile bg-card p-sm shadow-toy-soft ${inFocus ? 'ring-2 ring-ink' : ''}`}>
             <div className="flex items-center gap-sm">
               <Avatar relationship={rel.key} size={28} decorative still />
-              <span className="min-w-0 flex-1 text-[14px] font-bold">
+              <span className="min-w-0 flex-1 text-subhead">
                 {rel.name}
                 {inFocus ? <span className="text-ink-soft"> · focus</span> : null}
               </span>
-              <span className="text-[12px] font-bold text-ink-soft">
+              <span className="text-caption text-ink-soft">
                 {levelByValue(f.floor)?.name} to {levelByValue(f.core)?.name}
               </span>
             </div>
@@ -429,7 +429,7 @@ export function PlacementChart({ placements, focus = [], away = [], compact = fa
               <span className="absolute top-0 h-full rounded-pill" style={{ left: `${left}%`, width: `${width}%`, background: rel.color }} />
             </div>
             {!compact && (f.required || f.volatile || f.capped) && (
-              <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+              <p className="mt-xs m-0 text-caption text-ink-soft">
                 {[f.required && 'The floor is under Courage: a good place to start.', f.volatile && 'A big drop under stress, so check it each week.', f.capped && 'Held at Acceptance until you can show more.'].filter(Boolean).join(' ')}
               </p>
             )}
@@ -456,7 +456,7 @@ export function ScoreRow({ label, value, color }: { label: string; value: number
   const stars = value === undefined ? null : starsOf(value);
   return (
     <li className="flex items-center justify-between gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-      <span className="min-w-0 flex-1 text-[14px] font-bold">{label}</span>
+      <span className="min-w-0 flex-1 text-subhead font-semibold">{label}</span>
       <span className="flex shrink-0 items-center gap-[2px]" role="img" aria-label={`${label}: ${stars === null ? 'not rated' : `${stars} of 5 stars, ${STAR_WORDS[Math.max(0, stars - 1)]?.toLowerCase()}`}`}>
         {[1, 2, 3, 4, 5].map((n) => (
           <svg key={n} viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">

@@ -58,17 +58,17 @@ export function Logs() {
       <PageHeader back={{ to: '/internal/observability', label: 'Observability' }} eyebrow="Operations" title="Logs" lede="What is happening, where and by whom. Changes, refused requests and errors. Lines are kept for thirty days." />
 
       {!isAdmin && me.data && (
-        <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+        <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           Only a super admin reads the logs. The lines name people.
         </p>
       )}
       {isAdmin && d.isPending && (
-        <p className="mt-md m-0 text-[14px] font-bold text-ink-soft" role="status">
+        <p className="mt-md m-0 text-subhead text-ink-soft" role="status">
           Reading the log
         </p>
       )}
       {d.isError && (
-        <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+        <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           Could not load the logs. Try again in a moment.
         </p>
       )}
@@ -81,7 +81,7 @@ export function Logs() {
             <StatTile label="Changes" value={data.last24h.info} hint="last 24 hours, tap to see them" onClick={() => { setLevel(level === 'info' ? '' : 'info'); pg.reset(); }} pressed={level === 'info'} />
           </div>
 
-          <p className="mt-md m-0 text-[14px] font-semibold text-ink-soft">Newest first. Pick a kind or a person. Tap a name to see only that person. Tap Look now for new lines.</p>
+          <p className="mt-md m-0 text-subhead text-ink-soft">Newest first. Pick a kind or a person. Tap a name to see only that person. Tap Look now for new lines.</p>
           <div className="mt-sm grid grid-cols-1 gap-xs md:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))]">
             <label className="block">
               <span className="sr-only">Search the log by path, message or name</span>
@@ -135,29 +135,29 @@ export function Logs() {
             </Button>
           </div>
 
-          <p className="mt-sm m-0 text-[12px] font-bold text-ink-mute">{data.logs.length} {data.logs.length === 1 ? 'line' : 'lines'} on this page.</p>
+          <p className="mt-sm m-0 text-caption text-ink-mute">{data.logs.length} {data.logs.length === 1 ? 'line' : 'lines'} on this page.</p>
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-            {data.logs.length === 0 && <li className="text-[14px] font-semibold text-ink-soft">Nothing matches. Try another filter.</li>}
+            {data.logs.length === 0 && <li className="text-subhead text-ink-soft">Nothing matches. Try another filter.</li>}
             {data.logs.map((l) => (
               <li key={l.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
                 <div className="flex flex-wrap items-center gap-xs">
-                  <span className="rounded-pill px-xs text-[12px] font-extrabold text-on-fill" style={{ background: TONE[l.level] }}>
+                  <span className="rounded-pill px-xs text-caption font-medium text-on-fill" style={{ background: TONE[l.level] }}>
                     {WORD[l.level]}
                   </span>
-                  <span className="text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{l.area}</span>
-                  <span className="ml-auto text-[12px] font-bold text-ink-mute">{clock(l.at)}</span>
+                  <span className="text-eyebrow uppercase text-ink-soft">{l.area}</span>
+                  <span className="ml-auto text-caption text-ink-mute">{clock(l.at)}</span>
                 </div>
-                <p className="mt-xs m-0 break-all font-mono text-[13px] font-bold">
+                <p className="mt-xs m-0 break-all font-mono text-footnote font-semibold">
                   {l.method} {l.path || '(no path kept)'}
                   {l.status ? ` · ${l.status}` : ''}
                   {l.ms ? ` · ${l.ms} ms` : ''}
                 </p>
-                {l.message && <p className="mt-xs m-0 text-[14px] font-semibold">{l.message}</p>}
-                <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">
+                {l.message && <p className="mt-xs m-0 text-subhead">{l.message}</p>}
+                <p className="mt-xs m-0 text-caption text-ink-soft">
                   {l.actorId && l.actorName ? (
                     <>
                       By{' '}
-                      <button type="button" onClick={() => { setActor(l.actorId!); pg.reset(); }} className="font-extrabold underline underline-offset-4" aria-label={`Show only the lines by ${l.actorName}`}>
+                      <button type="button" onClick={() => { setActor(l.actorId!); pg.reset(); }} className="font-bold underline underline-offset-4" aria-label={`Show only the lines by ${l.actorName}`}>
                         {l.actorName}
                       </button>
                     </>

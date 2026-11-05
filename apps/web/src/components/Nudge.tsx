@@ -6,7 +6,7 @@ import { Link } from 'react-router';
  */
 export function Nudge({ text, className = '' }: { text: string; className?: string }) {
   return (
-    <p className={`m-0 text-[12px] font-bold text-ink-soft ${className}`}>
+    <p className={`m-0 text-caption text-ink-soft ${className}`}>
       {text}{' '}
       <Link to="/help#earning" className="underline underline-offset-4 hover:text-ink">
         How it adds up

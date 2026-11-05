@@ -118,7 +118,7 @@ export function MediaSection({
       )}
       <Sheet open={open} onClose={() => setOpen(false)} title={title}>
         <div className="flex flex-col gap-md pb-xl">
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">
+          <p className="m-0 text-subhead text-ink-soft">
             Up to {max}. Upload a picture or GIF (under 1 MB; pictures are shrunk for you), paste a link to one, or paste a video link from YouTube, Vimeo or a direct .mp4. The first one is the cover.
           </p>
           <ul className="m-0 flex list-none flex-col gap-xs p-0">
@@ -130,7 +130,7 @@ export function MediaSection({
                   ) : (
                     <img src={d.url} alt={d.caption || `${kindOf(d.url) === 'gif' ? 'GIF' : 'Picture'} ${i + 1}${i === 0 ? ', the cover' : ''}`} width={56} height={56} loading="lazy" decoding="async" className="size-[56px] shrink-0 rounded-tile bg-card object-cover" />
                   )}
-                  <span className="min-w-0 flex-1 truncate text-[12px] font-bold text-ink-soft">{kindOf(d.url) === 'video' ? 'Video' : kindOf(d.url) === 'gif' ? 'GIF' : 'Picture'}{i === 0 ? ' · cover' : ''}</span>
+                  <span className="min-w-0 flex-1 truncate text-caption text-ink-soft">{kindOf(d.url) === 'video' ? 'Video' : kindOf(d.url) === 'gif' ? 'GIF' : 'Picture'}{i === 0 ? ' · cover' : ''}</span>
                   <Button variant="ghost" size="sm" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up"><Icon icon={ArrowUp} size={16} /></Button>
                   <Button variant="ghost" size="sm" onClick={() => move(i, 1)} disabled={i === draft.length - 1} aria-label="Move down"><Icon icon={ArrowDown} size={16} /></Button>
                   <Button variant="ghost" size="sm" onClick={() => setDraft((x) => x.filter((_, k) => k !== i))}>Remove</Button>
@@ -140,22 +140,22 @@ export function MediaSection({
             ))}
           </ul>
           <label className="block">
-            <span className="block text-[14px] font-bold">Upload a picture or GIF</span>
+            <span className="block text-subhead font-semibold">Upload a picture or GIF</span>
             <input type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif" disabled={upload.isPending || draft.length >= max} onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); e.target.value = ''; }} className={FIELD} />
           </label>
           <div>
             <label className="block">
-              <span className="block text-[14px] font-bold">Or paste a link</span>
+              <span className="block text-subhead font-semibold">Or paste a link</span>
               <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://… picture, GIF or video" inputMode="url" autoCapitalize="none" className={FIELD} />
             </label>
             <Button variant="outline" size="sm" className="mt-xs" onClick={add} disabled={!link.trim()}>Add the link</Button>
           </div>
           {(note || save.isError) && (
-            <p role="alert" className="m-0 text-[14px] font-bold">
+            <p role="alert" className="m-0 text-subhead">
               {note ?? (save.error instanceof Error ? save.error.message : 'That did not save.')}
             </p>
           )}
-          {upload.isPending && <p className="m-0 text-[14px] font-bold text-ink-soft" role="status">Uploading</p>}
+          {upload.isPending && <p className="m-0 text-subhead text-ink-soft" role="status">Uploading</p>}
           <Button onClick={() => save.mutate()} disabled={save.isPending}>Save</Button>
         </div>
       </Sheet>

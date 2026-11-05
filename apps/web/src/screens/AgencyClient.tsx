@@ -1,6 +1,6 @@
 import { AGENCY_HEALTH_NAME, AGENCY_STATUS_NAME, CLIENT_HEALTH_TONE, CLIENT_STATUS_TONE, minutesLabel2, money, parseOnboarding, stageIndex, type AgencyClient as ClientData, type AgencyClientPage, type ClientOnboarding as OnboardingAnswers } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Clock, ExternalLink, FilePlus, Pencil, ReceiptText } from 'lucide-react';
+import { Clock, ArrowUpRight, FilePlus, Pencil, ReceiptText } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { AgencyContracts } from '../components/AgencyContracts';
@@ -133,7 +133,7 @@ export function AgencyClient() {
       <Screen columns={false}>
         <header className="pt-lg">
           <BackLink to="/agency">Agency</BackLink>
-          <p role="alert" className="mt-md m-0 text-[16px] font-bold">
+          <p role="alert" className="mt-md m-0 text-headline">
             {q.error && 'status' in q.error && (q.error as { status?: number }).status === 404 ? COPY.gone : COPY.retry}
           </p>
         </header>
@@ -177,7 +177,7 @@ export function AgencyClient() {
     logTime.mutate();
   };
   const minutes = parseDuration(minutesText);
-  const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]';
+  const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-callout';
   const portalUrl = c.portalToken ? `${window.location.origin}/a/${c.portalToken}` : '';
   const openTime = () => {
     setSeg('work');
@@ -213,7 +213,7 @@ export function AgencyClient() {
             items={[
               { key: 'edit', label: 'Edit client', icon: Pencil, onSelect: () => setEditing(true) },
               { key: 'billing', label: 'Billing details', icon: ReceiptText, onSelect: () => setEditing(true) },
-              ...(portalUrl ? [{ key: 'link', label: 'Open client link', icon: ExternalLink, onSelect: () => window.open(portalUrl, '_blank', 'noopener') }] : []),
+              ...(portalUrl ? [{ key: 'link', label: 'Open client link', icon: ArrowUpRight, onSelect: () => window.open(portalUrl, '_blank', 'noopener') }] : []),
               { key: 'time', label: 'Log time', icon: Clock, onSelect: openTime },
               { key: 'invoice', label: 'Invoice this month', icon: FilePlus, onSelect: invoiceMonth, disabled: makeInvoice.isPending },
             ]}
@@ -222,7 +222,7 @@ export function AgencyClient() {
       >
         {c.notes && (
           <Fold title="Notes">
-            <p className="m-0 whitespace-pre-wrap text-[14px] font-semibold text-ink-soft">
+            <p className="m-0 whitespace-pre-wrap text-subhead text-ink-soft">
               <Inert text={c.notes} />
             </p>
           </Fold>
@@ -272,8 +272,8 @@ export function AgencyClient() {
                   return (
                     <li key={ch.channel} className="rounded-tile bg-card p-sm shadow-toy-soft">
                       <div className="flex items-baseline justify-between gap-sm">
-                        <span className="min-w-0 text-[16px] font-bold">{ch.channel}</span>
-                        <span className="shrink-0 text-[14px] font-bold text-ink-soft">{`${ch.published} live, ${ch.open} open`}</span>
+                        <span className="min-w-0 text-headline">{ch.channel}</span>
+                        <span className="shrink-0 text-subhead text-ink-soft">{`${ch.published} live, ${ch.open} open`}</span>
                       </div>
                       <div className="mt-xs h-[8px] overflow-hidden rounded-pill bg-line" role="img" aria-label={`${ch.published} of ${total} live`}>
                         <div className="h-full rounded-pill" style={{ width: `${Math.round((ch.published / total) * 100)}%`, background: 'var(--color-r4)' }} />
@@ -299,12 +299,12 @@ export function AgencyClient() {
               {d.time.map((t) => (
                 <li key={t.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                   <div className="min-w-0 flex-1">
-                    <p className="m-0 text-[16px] font-bold">
+                    <p className="m-0 text-headline">
                       {minutesLabel2(t.minutes)}
-                      <span className="ml-xs text-[14px] font-semibold text-ink-soft">{prettyDate(t.day)}</span>
+                      <span className="ml-xs text-subhead text-ink-soft">{prettyDate(t.day)}</span>
                     </p>
                     {(t.itemTitle || t.note) && (
-                      <p className="m-0 text-[14px] font-semibold text-ink-soft">
+                      <p className="m-0 text-subhead text-ink-soft">
                         <Inert text={[t.itemTitle, t.note].filter(Boolean).join(', ')} />
                       </p>
                     )}
@@ -316,7 +316,7 @@ export function AgencyClient() {
                 </li>
               ))}
             </ul>
-            {d.time.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.timeEmpty}</p>}
+            {d.time.length === 0 && <p className="m-0 text-subhead text-ink-soft">{COPY.timeEmpty}</p>}
           </Section>
         </>
       )}
@@ -336,7 +336,7 @@ export function AgencyClient() {
             }
           >
             {makeInvoice.isError && (
-              <p role="alert" className="mb-sm m-0 text-[14px] font-bold">
+              <p role="alert" className="mb-sm m-0 text-subhead">
                 {COPY.invoiceFailed}
               </p>
             )}
@@ -344,7 +344,7 @@ export function AgencyClient() {
           </Section>
 
           <Section id="retainer-heading" title="Retainer" lede={retainerReady ? COPY.retainerLede : undefined}>
-            {retainerReady ? <RetainerCard client={c} life={life} currency={cur} /> : <p className="m-0 text-[12px] font-bold text-ink-soft">{COPY.retainerLater}</p>}
+            {retainerReady ? <RetainerCard client={c} life={life} currency={cur} /> : <p className="m-0 text-caption text-ink-soft">{COPY.retainerLater}</p>}
           </Section>
         </>
       )}
@@ -373,16 +373,16 @@ export function AgencyClient() {
       <Sheet open={timing} onClose={() => setTiming(false)} title="Log time">
         <form onSubmit={submit}>
           <div className="grid grid-cols-2 gap-sm">
-            <label className="block text-[14px] font-bold">
+            <label className="block text-subhead font-semibold">
               How long
               <input value={minutesText} onChange={(e) => setMinutesText(e.target.value)} placeholder="1h 30m" inputMode="text" className={field} />
             </label>
-            <label className="block text-[14px] font-bold">
+            <label className="block text-subhead font-semibold">
               Day
               <input type="date" value={day} max={today} onChange={(e) => setDay(e.target.value)} className={field} />
             </label>
           </div>
-          <label className="mt-sm block text-[14px] font-bold">
+          <label className="mt-sm block text-subhead font-semibold">
             Deliverable, if it was for one
             <select value={itemId} onChange={(e) => setItemId(e.target.value)} className={field}>
               <option value="">Not for one deliverable</option>
@@ -393,7 +393,7 @@ export function AgencyClient() {
               ))}
             </select>
           </label>
-          <label className="mt-sm block text-[14px] font-bold">
+          <label className="mt-sm block text-subhead font-semibold">
             Note
             <input value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="Optional" className={field} />
           </label>
@@ -401,7 +401,7 @@ export function AgencyClient() {
             <Toggle compact on={billable} onChange={setBillable} label="Billable" hint="Counts towards the hours the client pays for." />
           </div>
           {logTime.isError && (
-            <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+            <p role="alert" className="mt-sm m-0 text-subhead">
               {COPY.timeFailed}
             </p>
           )}
@@ -442,7 +442,7 @@ function ClientNotice({ page, portalUrl, passwordFirst, onAnswers }: { page: Age
   if (ob.needed && !ob.done) {
     return (
       <div role="status" className={`${box} bg-card shadow-toy-soft`}>
-        <p className="m-0 min-w-0 flex-1 basis-[220px] text-[14px] font-bold">{`Waiting for ${name} to finish onboarding`}</p>
+        <p className="m-0 min-w-0 flex-1 basis-[220px] text-subhead font-semibold">{`Waiting for ${name} to finish onboarding`}</p>
         {portalUrl && (
           <Button size="sm" variant="outline" onClick={() => void copy(portalUrl)}>
             {said ?? 'Copy link'}
@@ -455,7 +455,7 @@ function ClientNotice({ page, portalUrl, passwordFirst, onAnswers }: { page: Age
   if (recent && ob.at) {
     return (
       <div role="status" className={box} style={{ background: 'var(--tint-green)' }}>
-        <p className="m-0 min-w-0 flex-1 basis-[220px] text-[14px] font-bold">{`${name} finished onboarding on ${prettyDate(ob.at.slice(0, 10))}`}</p>
+        <p className="m-0 min-w-0 flex-1 basis-[220px] text-subhead font-semibold">{`${name} finished onboarding on ${prettyDate(ob.at.slice(0, 10))}`}</p>
         <Button size="sm" variant="outline" onClick={onAnswers}>
           See answers
         </Button>
@@ -499,16 +499,16 @@ function TheirAnswers({ clientId, answers }: { clientId: string; answers: Onboar
       <dl className="m-0 grid gap-xs sm:grid-cols-2">
         {rows.map((f) => (
           <div key={f.key}>
-            <dt className="text-[12px] font-extrabold text-ink-soft">{f.label}</dt>
-            <dd className="m-0 break-words text-[14px] font-semibold">
+            <dt className="text-caption text-ink-soft">{f.label}</dt>
+            <dd className="m-0 break-words text-subhead">
               <Inert text={answers[f.key]} />
             </dd>
           </div>
         ))}
         {answers.references.length > 0 && (
           <div className="sm:col-span-2">
-            <dt className="text-[12px] font-extrabold text-ink-soft">Videos they like</dt>
-            <dd className="m-0 whitespace-pre-wrap break-words text-[14px] font-semibold">
+            <dt className="text-caption text-ink-soft">Videos they like</dt>
+            <dd className="m-0 whitespace-pre-wrap break-words text-subhead">
               <Inert text={answers.references.join('\n')} />
             </dd>
           </div>
@@ -527,13 +527,13 @@ function TheirAnswers({ clientId, answers }: { clientId: string; answers: Onboar
           }}
         >
           {ANSWER_FIELDS.map((f) => (
-            <label key={f.key} className="mt-sm block text-[14px] font-bold">
+            <label key={f.key} className="mt-sm block text-subhead font-semibold">
               {f.label}
               <input value={draft[f.key]} onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value })} className={FIELD} />
             </label>
           ))}
           {save.isError && (
-            <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+            <p role="alert" className="mt-sm m-0 text-subhead">
               That did not save. Try again.
             </p>
           )}

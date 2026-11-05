@@ -38,19 +38,20 @@ export function Stress() {
     <Screen>
       <header className="pt-lg">
         <BackLink to="/wellbeing">Wellbeing</BackLink>
-        <h1 className="text-[30px]">Stress</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Name the level and what is behind it. Naming it is half the work.</p>
+        <h1 className="text-large-title">Stress</h1>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">Name the level and what is behind it. Naming it is half the work.</p>
         {wb.data && (
           // Life's hero: this week's average as a gauge (calm is a full ring), its word, and Pip, whose mood follows it.
           <Hero color="var(--color-r2)" deep="var(--deep-friendship)" className="mt-md" character="friendship" mood={avg7 === null ? 'happy' : avg7 >= 4 ? 'sleepy' : avg7 <= 2 ? 'excited' : 'happy'}>
-            <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide opacity-90">Stress this week</p>
-            <div className="mt-xs flex items-center gap-md">
+            <p className="m-0 text-eyebrow uppercase opacity-90">Stress this week</p>
+            {/* A phone stacks the word and its line under the gauge, so they keep the card's width instead of a sliver beside it. */}
+            <div className="mt-xs flex flex-col items-start gap-xs sm:flex-row sm:items-center sm:gap-md">
               <Gauge value={avg7 === null ? 0 : (5 - avg7) / 4} size={128} stroke={14} color="var(--color-on-fill)" track="rgba(255,255,255,0.3)" label={avg7 === null ? 'Nothing logged this week' : `Average ${avg7.toFixed(1)} of 5`}>
-                <span className="font-display text-[40px] font-extrabold">{avg7 === null ? '–' : avg7.toFixed(1)}</span>
+                <span className="text-figure-lg type-figure">{avg7 === null ? '–' : avg7.toFixed(1)}</span>
               </Gauge>
               <div className="min-w-0">
-                <p className="m-0 font-display text-[28px] font-extrabold leading-tight">{avg7 === null ? 'Nothing yet' : avg7 <= 2 ? 'Calm' : avg7 < 3.5 ? 'Steady' : 'Strained'}</p>
-                <p className="mt-xs m-0 text-[14px] font-semibold opacity-90">{latest === null ? 'Log today to start the week.' : `Latest: ${STRESS_LEVELS[Math.round(latest) - 1] ?? ''}. Out of 5, lower is calmer.`}</p>
+                <p className="m-0 text-title1">{avg7 === null ? 'Nothing yet' : avg7 <= 2 ? 'Calm' : avg7 < 3.5 ? 'Steady' : 'Strained'}</p>
+                <p className="mt-xs m-0 text-subhead opacity-90">{latest === null ? 'Log today to start the week.' : `Latest: ${STRESS_LEVELS[Math.round(latest) - 1] ?? ''}. Out of 5, lower is calmer.`}</p>
               </div>
             </div>
           </Hero>
@@ -59,12 +60,12 @@ export function Stress() {
 
 
       <section data-pillar="friendship" className="mt-md rounded-card p-md" style={{ background: 'var(--tint-orange)' }} aria-labelledby="level-heading">
-        <h2 id="level-heading" className="text-[24px]">
+        <h2 id="level-heading" className="text-title2">
           Right now
         </h2>
-        <p className="mt-md text-center font-display text-[36px] font-extrabold leading-none">{STRESS_LEVELS[level - 1]}</p>
+        <p className="mt-md text-center text-large-title leading-none">{STRESS_LEVELS[level - 1]}</p>
         <input type="range" min={1} max={5} value={level} onChange={(e) => setLevel(Number(e.target.value))} aria-label="Stress level" className="mt-md h-[44px] w-full cursor-pointer accent-ink" />
-        <p className="mt-md m-0 text-[14px] font-bold">What is behind it</p>
+        <p className="mt-md m-0 text-subhead font-semibold">What is behind it</p>
         <div className="fill-row-all mt-xs flex flex-wrap gap-xs" role="group" aria-label="Stressors">
           {STRESSORS.map((s) => {
             const on = picked.includes(s);
@@ -74,7 +75,7 @@ export function Stress() {
                 type="button"
                 aria-pressed={on}
                 onClick={() => setPicked((p) => (on ? p.filter((x) => x !== s) : [...p, s]))}
-                className={`min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}
+                className={`min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}
               >
                 {s}
               </button>
@@ -82,7 +83,7 @@ export function Stress() {
           })}
         </div>
         {level >= 4 && (
-          <p className="mt-md m-0 rounded-tile bg-card p-sm text-[14px] font-semibold">
+          <p className="mt-md m-0 rounded-tile bg-card p-sm text-subhead">
             That is a lot. Try the{' '}
             <Link to="/knowledge/res-breath-446" className="underline underline-offset-4">
               4-4-6 breath
@@ -100,7 +101,7 @@ export function Stress() {
       </section>
 
       <section className="mt-lg" aria-labelledby="week-heading">
-        <h2 id="week-heading" className="text-[24px]">
+        <h2 id="week-heading" className="text-title2">
           This week
         </h2>
         <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
@@ -111,7 +112,7 @@ export function Stress() {
       <PeriodPanel id="stress-period" parts={['wellbeing']} />
       <EmergenceSlot app="stress" max={2} />
       <section className="mt-lg" aria-labelledby="thirty-heading">
-        <h2 id="thirty-heading" className="text-[24px]">
+        <h2 id="thirty-heading" className="text-title2">
           Last 30 days
         </h2>
         <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
@@ -120,32 +121,32 @@ export function Stress() {
             const byDay = new Map((logs.data?.logs ?? []).map((l) => [l.date, l.value]));
             return <AreaLine values={days.map((d) => byDay.get(d) ?? null)} max={5} min={1} color="var(--color-r2)" labels={days.map(shortDay)} height={140} label="Stress level over the last thirty days" />;
           })()}
-          <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Lower is calmer. A line that climbs for a week is worth a word with someone.</p>
+          <p className="mt-xs m-0 text-caption text-ink-soft">Lower is calmer. A line that climbs for a week is worth a word with someone.</p>
         </div>
       </section>
 
       <section className="mt-lg" aria-labelledby="behind-heading">
-        <h2 id="behind-heading" className="text-[24px]">
+        <h2 id="behind-heading" className="text-title2">
           What is behind it
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">How often each stressor came up in the last thirty days. The biggest bubble is the one to look at first.</p>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">How often each stressor came up in the last thirty days. The biggest bubble is the one to look at first.</p>
         <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
           <Bubbles items={[...counts.entries()].map(([label, value], i) => ({ label, value, color: BUBBLE_COLORS[i % BUBBLE_COLORS.length] ?? 'var(--color-r2)' }))} label="Stressors by how often they came up" />
         </div>
       </section>
 
       <section className="mt-lg" aria-labelledby="hist-heading">
-        <h2 id="hist-heading" className="text-[24px]">
+        <h2 id="hist-heading" className="text-title2">
           Days
         </h2>
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {logs.data?.logs.map((l) => (
             <li key={l.id} className={`flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft`}>
               <span className="min-w-0 flex-1">
-                <span className="block text-[16px] font-bold">
+                <span className="block text-headline">
                   {STRESS_LEVELS[Math.round(l.value) - 1]}
                 </span>
-                <span className="block text-[14px] font-semibold text-ink-soft">
+                <span className="block text-subhead text-ink-soft">
                   {new Date(`${l.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', month: 'short', day: 'numeric' })}
                   {Array.isArray(l.extra.stressors) && l.extra.stressors.length > 0 ? `. ${(l.extra.stressors as string[]).join(', ')}` : ''}
                 </span>
@@ -164,14 +165,14 @@ export function Stress() {
         </ul>
         <Sheet open={toDelete !== null} onClose={() => setToDelete(null)} title="Delete this day?">
           <div className="grid gap-md pb-xl">
-            <p className="m-0 text-[16px] font-semibold text-ink-soft">{toDelete?.label}. It comes off your charts. This cannot be undone.</p>
-            {remove.isError && <p className="m-0 text-[14px] font-bold text-r1">That did not work. Try again.</p>}
+            <p className="m-0 text-callout text-ink-soft">{toDelete?.label}. It comes off your charts. This cannot be undone.</p>
+            {remove.isError && <p className="m-0 text-subhead text-r1">That did not work. Try again.</p>}
             <div className="flex flex-wrap gap-xs">
               <button
                 type="button"
                 disabled={remove.isPending}
                 onClick={() => toDelete && remove.mutate(toDelete.id)}
-                className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-[16px] font-semibold text-on-fill disabled:opacity-50"
+                className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill disabled:opacity-50"
               >
                 Yes, delete it
               </button>

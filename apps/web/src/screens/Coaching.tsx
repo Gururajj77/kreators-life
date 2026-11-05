@@ -1,4 +1,4 @@
-import { BADGE_META, COACH_ABOUT_MAX, COACH_SHARE_META, COACH_SHARE_PARTS, RELATIONSHIP_BY_KEY, type CoachHub, type CoachLink, type CoachRosterRow, type RelationshipKey } from '@kreators/shared';
+import { COACH_ABOUT_MAX, COACH_SHARE_META, COACH_SHARE_PARTS, RELATIONSHIP_BY_KEY, type CoachHub, type CoachLink, type CoachRosterRow, type RelationshipKey } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Inert } from '../components/Inert';
 import { useState, type ReactNode } from 'react';
@@ -19,6 +19,9 @@ import { shortDate, dateTime } from '../lib/date';
 import { FIELD_LINE } from '../lib/ui';
 import { StatusTag } from '../components/StatusTag';
 import { CardHead } from '../components/CardHead';
+import { RowCard } from '../components/RowCard';
+import { Reveal } from '../components/fx/Reveal';
+import { FactTag } from '../components/FactTag';
 
 const day = shortDate;
 const when = dateTime;
@@ -27,7 +30,7 @@ const say = (e: unknown) => (e instanceof Error ? e.message : 'That did not work
 function Problem({ e }: { e: unknown }) {
   if (!e) return null;
   return (
-    <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+    <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
       {say(e)}
     </p>
   );
@@ -49,8 +52,8 @@ export function Coaching() {
     <Screen>
       <header className="pt-lg">
         <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Coaching</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+        <h1 className="text-large-title">Coaching</h1>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">
           {h?.coach
             ? 'Each student picks what you see. Every note and task you add is logged for both of you.'
             : 'A coach the team chose sees only what you share, never your journal. End it any time.'}
@@ -79,7 +82,7 @@ function CoachingHero({ hub }: { hub: CoachHub | undefined }) {
     const n = hub.counts.students;
     return (
       <Hero color="var(--color-r6)" deep="var(--deep-guru)" className="mt-md" character="guru" mood={n === 0 ? 'sleepy' : red === 0 ? 'excited' : 'happy'}>
-        <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide opacity-90">Your students</p>
+        <p className="m-0 text-eyebrow uppercase opacity-90">Your students</p>
         <HeroNumber value={n} label={n === 0 ? 'No students yet. Ask one, or wait for an ask.' : red === 0 ? 'Nobody had a red week.' : `${red} had a red week. Start with them.`} />
       </Hero>
     );
@@ -89,14 +92,14 @@ function CoachingHero({ hub }: { hub: CoachHub | undefined }) {
   const on = link ? COACH_SHARE_PARTS.filter((k) => link.share[k]).length : 0;
   return (
     <Hero color="var(--color-r6)" deep="var(--deep-guru)" className="mt-md" character="guru" mood={link ? 'happy' : 'sleepy'}>
-      <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide opacity-90">{link ? `Your coach, ${link.coach.name}` : 'Your coach'}</p>
+      <p className="m-0 text-eyebrow uppercase opacity-90">{link ? `Your coach, ${link.coach.name}` : 'Your coach'}</p>
       {link ? (
         <HeroNumber value={on} unit={`of ${COACH_SHARE_PARTS.length}`} label="parts of your progress you share. Change it below." />
       ) : (
         // No number to show yet: the words are the headline, never a lone dash.
         <>
-          <p className="mt-xs m-0 font-display text-[32px] leading-tight font-semibold">No coach yet</p>
-          <p className="mt-xs m-0 text-[14px] font-semibold opacity-90">Find one in the directory below.</p>
+          <p className="mt-xs m-0 text-large-title">No coach yet</p>
+          <p className="mt-xs m-0 text-subhead opacity-90">Find one in the directory below.</p>
         </>
       )}
     </Hero>
@@ -106,7 +109,7 @@ function CoachingHero({ hub }: { hub: CoachHub | undefined }) {
 function focusPill(k: RelationshipKey) {
   const rel = RELATIONSHIP_BY_KEY[k];
   return (
-    <span key={k} title={rel.name} className="max-w-full truncate rounded-pill px-xs text-[12px] font-extrabold leading-[24px]" style={{ background: rel.color, color: rel.text }}>
+    <span key={k} title={rel.name} className="max-w-full truncate rounded-pill px-xs text-caption font-medium leading-[24px]" style={{ background: rel.color, color: rel.text }}>
       {rel.name}
     </span>
   );
@@ -121,20 +124,20 @@ function RosterRow({ r }: { r: CoachRosterRow }) {
         <CoachFace name={r.student.name} badge={r.student.badge} />
         <span className="min-w-0 flex-1">
           <CardHead tag={r.redWeek ? <StatusTag tone="bad" fit>Below the plan last week</StatusTag> : r.focus?.[0] && focusPill(r.focus[0])}>
-            <span className="block truncate text-[16px] font-bold">{r.student.name}</span>
+            <span className="block truncate text-headline">{r.student.name}</span>
           </CardHead>
-          <span className="block text-[14px] font-semibold text-ink-soft">
+          <span className="block text-subhead text-ink-soft">
             {r.streak !== null ? `Streak ${r.streak}, last check-in ${r.lastCheckin ?? 'never'}. ` : ''}
             Since {day(r.since)}.
           </span>
           {r.week && (
             <span className="mt-xs flex flex-wrap items-center gap-sm">
               <WeekDots days={r.week.map(Boolean)} color="var(--color-r4)" label={`Routine kept ${r.week.filter(Boolean).length} of the last 7 days`} />
-              {r.contractDays !== null && <span className="text-[12px] font-bold text-ink-soft">The deal: {r.contractDays} days a week</span>}
+              {r.contractDays !== null && <span className="text-caption text-ink-soft">The deal: {r.contractDays} days a week</span>}
             </span>
           )}
           {rest.length > 0 && <span className="mt-xs flex flex-wrap gap-xs">{rest.map(focusPill)}</span>}
-          <span className="mt-xs block text-[12px] font-bold text-ink-mute">Sees: {COACH_SHARE_PARTS.filter((k) => r.share[k]).map((k) => COACH_SHARE_META[k].name).join(', ') || 'nothing for now'}</span>
+          <span className="mt-xs block text-caption text-ink-mute">Sees: {COACH_SHARE_PARTS.filter((k) => r.share[k]).map((k) => COACH_SHARE_META[k].name).join(', ') || 'nothing for now'}</span>
         </span>
       </Link>
     </li>
@@ -147,8 +150,8 @@ function AskRow({ l, who, children }: { l: CoachLink; who: CoachLink['coach']; c
     <li className="flex flex-wrap items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
       <CoachFace name={who.name} badge={who.badge} />
       <span className="min-w-0 flex-1">
-        <span className="block font-bold">{who.name}</span>
-        <span className="block text-[14px] font-semibold text-ink-soft">
+        <span className="block font-semibold">{who.name}</span>
+        <span className="block text-subhead text-ink-soft">
           {l.askedBy === 'admin' ? 'Suggested by the team' : 'Asked'} on {day(l.createdAt)}.
         </span>
       </span>
@@ -227,7 +230,7 @@ function CoachSide({ hub, onChange }: { hub: CoachHub; onChange: () => void }) {
             Ask
           </Button>
         </form>
-        {sent && <p className="mt-xs m-0 text-[14px] font-bold">{sent}</p>}
+        {sent && <p className="mt-xs m-0 text-subhead font-semibold">{sent}</p>}
         <Problem e={ask.error} />
       </Section>
 
@@ -273,8 +276,8 @@ function CoachNotes() {
       <ul className="m-0 flex list-none flex-col gap-xs p-0">
         {notes.map((n) => (
           <li key={n.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-            <p className="m-0 whitespace-pre-wrap text-[16px] font-semibold"><Inert text={n.body} /></p>
-            <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+            <p className="m-0 whitespace-pre-wrap text-prose"><Inert text={n.body} /></p>
+            <p className="mt-xs m-0 text-caption text-ink-soft">
               {n.coachName}, {when(n.createdAt)}
             </p>
           </li>
@@ -300,31 +303,35 @@ function Directory() {
   const coaches = q.data?.coaches ?? [];
   return (
     <Section id="directory-heading" title="Find a life coach" lede="Coaches the team chose, taking new students. Ask one; they say yes or no.">
-      {q.data && coaches.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">No coaches are taking new students right now.</p>}
+      {q.data && coaches.length === 0 && <p className="m-0 text-subhead text-ink-soft">No coaches are taking new students right now.</p>}
       <ul className="m-0 flex list-none flex-col gap-xs p-0">
-        {coaches.map((k) => (
-          <li key={k.coach.id} className="flex flex-wrap items-start gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-            <CoachFace name={k.coach.name} badge={k.coach.badge} />
-            <span className="min-w-0 flex-1">
-              <span className="block font-bold">
-                {k.coach.name}
-                {k.coach.handle ? <span className="text-ink-soft"> @{k.coach.handle}</span> : null}
-              </span>
-              <span className="block text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
-                {BADGE_META[k.coach.badge].name}, {k.students} {k.students === 1 ? 'student' : 'students'}
-              </span>
-              {k.about && <span className="mt-xs block text-[14px] font-semibold">{k.about}</span>}
-            </span>
-            {k.mine === 'active' ? (
-              <span className="text-[14px] font-bold">Your coach</span>
-            ) : k.mine === 'pending' ? (
-              <span className="text-[14px] font-bold text-ink-soft">Asked</span>
-            ) : (
-              <Button size="sm" variant="outline" disabled={ask.isPending} onClick={() => ask.mutate(k.coach.id)}>
-                Ask to be coached
-              </Button>
-            )}
-          </li>
+        {coaches.map((k, i) => (
+          <Reveal as="li" key={k.coach.id} index={i} className="flex">
+            {/* The face and the name at the top left, where things stand with this coach in the corner of every row (Taking students,
+                Asked or Your coach), the students as a tag at the foot and Ask at the bottom right, so a phone never squeezes the name
+                beside the button. */}
+            <RowCard
+              lead={
+                // A hairline ring, so the face's paper circle shows on the card.
+                <span className="inline-flex rounded-pill border-2 border-line">
+                  <CoachFace name={k.coach.name} badge={k.coach.badge} />
+                </span>
+              }
+              title={k.coach.name}
+              sub={k.coach.handle ? `@${k.coach.handle}` : undefined}
+              corner={k.mine === 'active' ? <StatusTag tone="good">Your coach</StatusTag> : k.mine === 'pending' ? <StatusTag tone="info">Asked</StatusTag> : <StatusTag tone="neutral">Taking students</StatusTag>}
+              facts={<FactTag kind="availability">{`${k.students} ${k.students === 1 ? 'student' : 'students'}`}</FactTag>}
+              action={
+                k.mine ? undefined : (
+                  <Button size="sm" variant="outline" disabled={ask.isPending} onClick={() => ask.mutate(k.coach.id)}>
+                    Ask to be coached
+                  </Button>
+                )
+              }
+            >
+              {k.about && <span className="mt-xs block text-subhead">{k.about}</span>}
+            </RowCard>
+          </Reveal>
         ))}
       </ul>
       <Pager page={q.data?.page} prefix="dir" label="coaches" />
@@ -340,7 +347,7 @@ function BecomeCoach({ askedAt, about: saved, onChange }: { askedAt: string | nu
   return (
     <Section id="become-heading" title="Are you a life coach?" lede="The team checks every life coach first. Once you are one, your badge says Life coach and students can find you.">
       {askedAt ? (
-        <p className="m-0 rounded-tile bg-card p-sm text-[14px] font-bold shadow-toy-soft">Your ask has been with the team since {day(askedAt)}. The answer lands in your inbox.</p>
+        <p className="m-0 rounded-tile bg-card p-sm text-subhead shadow-toy-soft">Your ask has been with the team since {day(askedAt)}. The answer lands in your inbox.</p>
       ) : (
         <>
           <textarea value={about} onChange={(e) => setAbout(e.target.value)} maxLength={COACH_ABOUT_MAX} rows={3} placeholder="Who you coach, and how" aria-label="Who you coach, and how" className={FIELD_LINE} />
@@ -361,12 +368,12 @@ function ChangeLog() {
   const log = q.data?.log ?? [];
   return (
     <Section id="log-heading" title="Change log" lede="Every ask, yes, note and task change, with when it happened. The same lines your coach or student sees.">
-      {q.data && log.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">Nothing yet.</p>}
+      {q.data && log.length === 0 && <p className="m-0 text-subhead text-ink-soft">Nothing yet.</p>}
       <ol className="m-0 flex list-none flex-col gap-xs p-0">
         {log.map((e) => (
           <li key={e.id} className="flex flex-wrap items-baseline justify-between gap-xs rounded-tile bg-card p-sm shadow-toy-soft">
-            <span className="min-w-0 flex-1 text-[14px] font-semibold">{e.label}</span>
-            <time dateTime={e.createdAt} className="shrink-0 text-[12px] font-bold text-ink-soft">
+            <span className="min-w-0 flex-1 text-subhead">{e.label}</span>
+            <time dateTime={e.createdAt} className="shrink-0 text-caption text-ink-soft">
               {when(e.createdAt)}
             </time>
           </li>

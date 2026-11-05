@@ -69,7 +69,7 @@ function ShareBar({ share }: { share: CoachShare }) {
             label="What they share"
             items={COACH_SHARE_PARTS.map((k) => ({ key: k, label: COACH_SHARE_META[k].name, disabled: !share[k], title: share[k] ? undefined : 'They do not share this' }))}
             onChange={(k) => requestAnimationFrame(() => jumpTo(PART_SECTION_ID[k]))}
-            pillClass={(_on, off) => (off ? 'inline-flex min-h-[44px] items-center rounded-pill bg-line px-sm text-[12px] font-extrabold text-ink-soft line-through' : 'toy toy-soft inline-flex min-h-[44px] items-center rounded-pill bg-card px-sm text-[12px] font-extrabold text-ink')}
+            pillClass={(_on, off) => (off ? 'inline-flex min-h-[44px] items-center rounded-pill bg-line px-sm text-caption font-medium text-ink-soft line-through' : 'toy toy-soft inline-flex min-h-[44px] items-center rounded-pill bg-card px-sm text-caption font-medium text-ink')}
           />
         </nav>
       </div>
@@ -80,7 +80,7 @@ function ShareBar({ share }: { share: CoachShare }) {
 function Problem({ e }: { e: unknown }) {
   if (!e) return null;
   return (
-    <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+    <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
       {say(e)}
     </p>
   );
@@ -94,7 +94,7 @@ function TaskLine({ t, onEdit }: { t: Node; onEdit?: () => void }) {
     <li data-pillar={t.relationship} className="rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="flex items-start gap-xs">
         <span className="mt-xs size-[12px] shrink-0 rounded-pill" style={{ background: RELATIONSHIP_BY_KEY[t.relationship].color }} aria-hidden="true" />
-        <span className={`min-w-0 flex-1 text-[14px] font-bold ${t.status === 'done' ? 'text-ink-soft line-through' : ''}`}>{t.title}</span>
+        <span className={`min-w-0 flex-1 text-subhead font-semibold ${t.status === 'done' ? 'text-ink-soft line-through' : ''}`}>{t.title}</span>
       </div>
       {(hasTags || (onEdit && t.status === 'active')) && (
         <div className="mt-xs flex flex-wrap items-center justify-end gap-xs">
@@ -143,7 +143,7 @@ function TaskSheet({ studentId, editing, projects, onClose, onDone }: { studentI
       >
         {!task && (
           <label className="block">
-            <span className="block text-[14px] font-bold">Under which project</span>
+            <span className="block text-subhead font-semibold">Under which project</span>
             <select value={parentId} onChange={(e) => setParentId(e.target.value)} required className={FIELD}>
               <option value="">Pick a project</option>
               {projects.map((p) => (
@@ -155,28 +155,28 @@ function TaskSheet({ studentId, editing, projects, onClose, onDone }: { studentI
           </label>
         )}
         <label className="block">
-          <span className="block text-[14px] font-bold">The task</span>
+          <span className="block text-subhead font-semibold">The task</span>
           <input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={140} placeholder={KIND_META.task.prompt} className={FIELD} />
         </label>
         <div className="grid grid-cols-3 gap-xs">
           <label className="block">
-            <span className="block text-[14px] font-bold">Day</span>
+            <span className="block text-subhead font-semibold">Day</span>
             <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Time</span>
+            <span className="block text-subhead font-semibold">Time</span>
             <input type="time" value={dueTime} onChange={(e) => setDueTime(e.target.value)} className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Minutes</span>
+            <span className="block text-subhead font-semibold">Minutes</span>
             <input type="number" min={1} max={600} value={minutes} onChange={(e) => setMinutes(e.target.value)} className={FIELD} />
           </label>
         </div>
         <label className="block">
-          <span className="block text-[14px] font-bold">A note, optional</span>
+          <span className="block text-subhead font-semibold">A note, optional</span>
           <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={2} className={FIELD} />
         </label>
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">{task ? 'Renaming a task starts its wait again. The change goes in the change log and to their inbox.' : 'It shows as From your coach. It waits and pays like their own tasks, and only they tick it.'}</p>
+        <p className="m-0 text-subhead text-ink-soft">{task ? 'Renaming a task starts its wait again. The change goes in the change log and to their inbox.' : 'It shows as From your coach. It waits and pays like their own tasks, and only they tick it.'}</p>
         <Problem e={save.error} />
         <Button type="submit" size="lg" full disabled={save.isPending || !title.trim() || (!task && !parentId)}>
           {task ? 'Save the change' : 'Add the task'}
@@ -225,7 +225,7 @@ export function CoachStudent() {
             <p className="m-0">
               {BADGE_META[s.badge].name}{s.handle ? `, @${s.handle}` : ''}. Your student since {new Date(d.link.answeredAt ?? d.link.createdAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' })}. Their today is {shortDay(d.date)}.
             </p>
-            <p className="mt-xs m-0 text-[12px] font-bold">They pick what you see and can change it any time. Never their journal.</p>
+            <p className="mt-xs m-0 text-caption">They pick what you see and can change it any time. Never their journal.</p>
           </>
         }
         actions={<CoachFace name={s.name} badge={s.badge} size={56} />}
@@ -244,9 +244,9 @@ export function CoachStudent() {
       {d.daily && (
         <Section id="daily-heading" title="Daily and streaks" lede="Tasks ticked each day over the last thirty, and the day as it stands.">
           <AreaLine values={d.daily.tasksByDay} max={Math.max(3, ...d.daily.tasksByDay)} color="var(--color-r4)" label={`Tasks ticked per day over thirty days, ${d.daily.tasksByDay.reduce((a, b) => a + b, 0)} in all`} labels={d.daily.tasksByDay.map((_, i) => shortDay(new Date(Date.parse(`${d.date}T00:00:00Z`) - (29 - i) * 86_400_000).toISOString().slice(0, 10)))} />
-          <p className="mt-sm m-0 text-[14px] font-bold">Small act today: {d.daily.smallAct.done ? `done${d.daily.smallAct.relationship ? `, for ${RELATIONSHIP_BY_KEY[d.daily.smallAct.relationship].name}` : ''}` : 'not yet'}.</p>
-          <h3 className="mt-md text-[18px]">Due by today</h3>
-          {d.daily.tasks.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">Nothing due.</p>}
+          <p className="mt-sm m-0 text-subhead font-semibold">Small act today: {d.daily.smallAct.done ? `done${d.daily.smallAct.relationship ? `, for ${RELATIONSHIP_BY_KEY[d.daily.smallAct.relationship].name}` : ''}` : 'not yet'}.</p>
+          <h3 className="mt-md text-headline">Due by today</h3>
+          {d.daily.tasks.length === 0 && <p className="m-0 text-subhead text-ink-soft">Nothing due.</p>}
           <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
             {d.daily.tasks.map((t) => (
               <TaskLine key={t.id} t={t} onEdit={share.pillars ? () => setEditing({ mode: 'edit', task: t }) : undefined} />
@@ -254,7 +254,7 @@ export function CoachStudent() {
           </ul>
           {d.daily.done.length > 0 && (
             <>
-              <h3 className="mt-md text-[18px]">Done today</h3>
+              <h3 className="mt-md text-headline">Done today</h3>
               <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
                 {d.daily.done.map((t) => (
                   <TaskLine key={t.id} t={t} />
@@ -264,13 +264,13 @@ export function CoachStudent() {
           )}
           {d.daily.notToDo.length > 0 && (
             <>
-              <h3 className="mt-md text-[18px]">Not to do</h3>
+              <h3 className="mt-md text-headline">Not to do</h3>
               <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
                 {d.daily.notToDo.map((n) => (
                   <li key={n.id} className="flex flex-wrap items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-                    <span className="min-w-0 flex-1 text-[14px] font-bold">{n.title}</span>
+                    <span className="min-w-0 flex-1 text-subhead font-semibold">{n.title}</span>
                     <WeekDots days={n.week.map((w) => w === 'kept')} color="var(--color-r4)" label={`Kept ${n.week.filter((w) => w === 'kept').length} of the last 7 days`} />
-                    <span className="text-[12px] font-extrabold text-ink-soft">{n.streak} in a row</span>
+                    <span className="text-caption text-ink-soft">{n.streak} in a row</span>
                   </li>
                 ))}
               </ul>
@@ -306,17 +306,17 @@ export function CoachStudent() {
             if (mine.length === 0) return null;
             return (
               <div key={r.key} data-pillar={r.key} className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-                <h3 className="text-[18px]" style={{ color: `var(--deep-${r.key})` }}>
+                <h3 className="text-headline" style={{ color: `var(--deep-${r.key})` }}>
                   {r.name}
                 </h3>
-                <dl className="mt-xs m-0 grid gap-xs text-[14px]">
+                <dl className="mt-xs m-0 grid gap-xs text-subhead">
                   {LAYERS.flatMap((k) =>
                     mine
                       .filter((n) => n.kind === k)
                       .map((n) => (
                         <div key={n.id}>
-                          <dt className="text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{KIND_META[k].label}</dt>
-                          <dd className="m-0 font-bold">{n.title}</dd>
+                          <dt className="text-eyebrow uppercase text-ink-soft">{KIND_META[k].label}</dt>
+                          <dd className="m-0 font-semibold">{n.title}</dd>
                         </div>
                       )),
                   )}
@@ -328,7 +328,7 @@ export function CoachStudent() {
                     return (
                       <div key={p.id} className="mt-sm">
                         <div className="flex flex-wrap items-center justify-between gap-xs">
-                          <p className="m-0 text-[14px] font-extrabold">
+                          <p className="m-0 text-subhead font-semibold">
                             {KIND_META.project.label}: {p.title}
                             {p.status === 'done' ? ' (done)' : ''}
                           </p>
@@ -356,35 +356,35 @@ export function CoachStudent() {
         <Section id="routine-heading" title="Routine and contract" lede="The routine from their strategy session, the last seven days, and the plan they signed.">
           <WeekDots days={d.routine.week.days.map(Boolean)} color="var(--color-r4)" label={`Routine kept ${d.routine.week.done} of the last 7 days`} />
           {d.routine.contract ? (
-            <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0 text-[14px] font-semibold">
+            <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0 text-subhead">
               <li>At least {d.routine.contract.minDays} days a week. These seven days: {d.routine.week.done}.</li>
               <li>Check-in at {d.routine.contract.checkinTime}.</li>
               <li>A short week: {PENALTIES.find((p) => p.key === d.routine?.contract?.penalty)?.name.toLowerCase() ?? 'the streak breaks'}.</li>
               <li>Weekly check on {d.routine.contract.nextWeekly}, monthly review on {d.routine.contract.nextMonthly}.</li>
             </ul>
           ) : (
-            <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No contract signed yet.</p>
+            <p className="mt-sm m-0 text-subhead text-ink-soft">No contract signed yet.</p>
           )}
           {d.routine.general.length > 0 && (
             <ol className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
               {d.routine.general.map((b) => (
                 <li key={b.key} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                  <p className="m-0 text-[14px] font-extrabold">
+                  <p className="m-0 text-subhead font-semibold">
                     {b.name}, {b.start} to {b.end}
                   </p>
-                  {b.steps.length > 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">{b.steps.join(', ')}</p>}
+                  {b.steps.length > 0 && <p className="m-0 text-subhead text-ink-soft">{b.steps.join(', ')}</p>}
                 </li>
               ))}
             </ol>
           )}
-          {d.routine.today && <p className="mt-sm m-0 text-[14px] font-bold">Today’s morning: {d.routine.today.done ? 'done' : `${d.routine.today.steps.length} steps ticked so far`}.</p>}
+          {d.routine.today && <p className="mt-sm m-0 text-subhead font-semibold">Today’s morning: {d.routine.today.done ? 'done' : `${d.routine.today.steps.length} steps ticked so far`}.</p>}
         </Section>
       )}
 
       {d.lifeMap && (
         <Section id="map-heading" title="Life map answers" lede={`From their strategy session on ${new Date(d.lifeMap.createdAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' })}. The bar runs from where they drop under stress to where they usually live.`}>
           <PlacementChart placements={d.lifeMap.placements} focus={d.lifeMap.focus} />
-          <h3 className="mt-md text-[18px]">Scores</h3>
+          <h3 className="mt-md text-headline">Scores</h3>
           <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
             {[...SCORECARD.health, ...SCORECARD.wealth].map((k) => (
               <ScoreRow key={k} label={SCORE_LABEL[k]} value={d.lifeMap?.scores[k]} color="var(--deep-self)" />
@@ -395,16 +395,16 @@ export function CoachStudent() {
           </ul>
           {(d.lifeMap.fears.length > 0 || d.lifeMap.insecurities.length > 0) && (
             <>
-              <h3 className="mt-md text-[18px]">What gets in the way</h3>
+              <h3 className="mt-md text-headline">What gets in the way</h3>
               <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
                 {d.lifeMap.fears.map((f) => (
-                  <li key={`f-${f.text}`} className="rounded-tile bg-card p-sm text-[14px] font-bold shadow-toy-soft">
-                    {f.text} <span className="font-semibold text-ink-soft">({RELATIONSHIP_BY_KEY[f.relationship].name}; {f.drives === 'yes' ? 'drives decisions' : f.drives === 'sometimes' ? 'sometimes drives them' : 'does not drive them'})</span>
+                  <li key={`f-${f.text}`} className="rounded-tile bg-card p-sm text-subhead font-semibold shadow-toy-soft">
+                    {f.text} <span className="text-ink-soft">({RELATIONSHIP_BY_KEY[f.relationship].name}; {f.drives === 'yes' ? 'drives decisions' : f.drives === 'sometimes' ? 'sometimes drives them' : 'does not drive them'})</span>
                   </li>
                 ))}
                 {d.lifeMap.insecurities.map((it, i) => (
-                  <li key={`i-${i}`} className="rounded-tile bg-card p-sm text-[14px] font-bold shadow-toy-soft">
-                    {it.text} <span className="font-semibold text-ink-soft">({RELATIONSHIP_BY_KEY[it.relationship].name}; weighs {weightWord(it.weight).toLowerCase()})</span>
+                  <li key={`i-${i}`} className="rounded-tile bg-card p-sm text-subhead font-semibold shadow-toy-soft">
+                    {it.text} <span className="text-ink-soft">({RELATIONSHIP_BY_KEY[it.relationship].name}; weighs {weightWord(it.weight).toLowerCase()})</span>
                   </li>
                 ))}
               </ul>
@@ -415,7 +415,7 @@ export function CoachStudent() {
 
       {!d.lifeMap && share.lifeMap && (
         <Section id="map-heading" title="Life map answers" lede="Where each pillar sits on the map, their scores and what gets in the way.">
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">No life map yet. It fills in once they finish their strategy session.</p>
+          <p className="m-0 text-subhead text-ink-soft">No life map yet. It fills in once they finish their strategy session.</p>
         </Section>
       )}
 
@@ -423,9 +423,9 @@ export function CoachStudent() {
         <Section id="reflection-heading" title="Reflection" lede="Wellbeing and the trackers over thirty days, numbers only, and their saved reviews. Never their journal or tracker notes.">
           <div className="flex flex-wrap items-center gap-md">
             <Gauge value={d.reflection.wellbeing.score / 100} size={120} stroke={12} color="var(--color-r4)" label={`Wellbeing ${d.reflection.wellbeing.score} of 100, ${d.reflection.wellbeing.label}`}>
-              <span className="font-display text-[28px] font-extrabold">{d.reflection.wellbeing.score}</span>
+              <span className="text-title1 type-figure">{d.reflection.wellbeing.score}</span>
             </Gauge>
-            <p className="m-0 min-w-0 flex-1 text-[14px] font-semibold text-ink-soft">{d.reflection.wellbeing.label}. Mood, sleep, stress, mindful minutes and the streak, over the last seven days.</p>
+            <p className="m-0 min-w-0 flex-1 text-subhead text-ink-soft">{d.reflection.wellbeing.label}. Mood, sleep, stress, mindful minutes and the streak, over the last seven days.</p>
           </div>
           <div className="mt-md">
             <MultiLine
@@ -442,24 +442,24 @@ export function CoachStudent() {
           <div className="mt-md">
             <AreaLine label="Hours of sleep over thirty days" values={d.reflection.days.map((x) => x.sleep)} max={10} color="var(--color-r6)" labels={d.reflection.days.map((x) => shortDay(x.date))} />
           </div>
-          <p className="mt-sm m-0 text-[14px] font-bold">
+          <p className="mt-sm m-0 text-subhead">
             Thirty days: {d.reflection.days.reduce((a, x) => a + x.mindful, 0)} mindful minutes, {d.reflection.days.reduce((a, x) => a + x.move, 0)} minutes moving.
           </p>
-          <h3 className="mt-md text-[18px]">Saved reviews</h3>
-          {d.reflection.reviews.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">No reviews saved yet.</p>}
+          <h3 className="mt-md text-headline">Saved reviews</h3>
+          {d.reflection.reviews.length === 0 && <p className="m-0 text-subhead text-ink-soft">No reviews saved yet.</p>}
           <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
             {d.reflection.reviews.map((r) => (
               <li key={r.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <p className="m-0 text-[14px] font-extrabold">
+                <p className="m-0 text-subhead font-semibold">
                   {r.templateName}, {shortDay(r.start)} to {shortDay(r.end)}
                   {r.rating ? `, ${r.rating} of 5` : ''}
                 </p>
-                <dl className="mt-xs m-0 grid gap-xs text-[14px]">
+                <dl className="mt-xs m-0 grid gap-xs text-subhead">
                   {r.prompts.map((p, i) =>
                     r.answers[i] ? (
                       <div key={i}>
-                        <dt className="font-bold text-ink-soft">{p}</dt>
-                        <dd className="m-0 whitespace-pre-wrap font-semibold">{r.answers[i]}</dd>
+                        <dt className="text-ink-soft">{p}</dt>
+                        <dd className="m-0 whitespace-pre-wrap">{r.answers[i]}</dd>
                       </div>
                     ) : null,
                   )}
@@ -487,9 +487,9 @@ export function CoachStudent() {
         <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
           {d.notes.map((n) => (
             <li key={n.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <p className="m-0 whitespace-pre-wrap text-[16px] font-semibold"><Inert text={n.body} /></p>
+              <p className="m-0 whitespace-pre-wrap text-prose"><Inert text={n.body} /></p>
               <div className="mt-xs flex flex-wrap items-center justify-between gap-xs">
-                <span className="text-[12px] font-bold text-ink-soft">{when(n.createdAt)}</span>
+                <span className="text-caption text-ink-soft">{when(n.createdAt)}</span>
                 {n.mine && (
                   <Button size="sm" variant="ghost" disabled={takeBack.isPending} onClick={() => takeBack.mutate(n.id)}>
                     Take back
@@ -503,12 +503,12 @@ export function CoachStudent() {
       </Section>
 
       <Section id="log-heading" title="Change log" lede="Every ask, yes, note and task change between you two, with when it happened. They see the same lines.">
-        {d.log.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">Nothing yet.</p>}
+        {d.log.length === 0 && <p className="m-0 text-subhead text-ink-soft">Nothing yet.</p>}
         <ol className="m-0 flex list-none flex-col gap-xs p-0">
           {d.log.map((e) => (
             <li key={e.id} className="flex flex-wrap items-baseline justify-between gap-xs rounded-tile bg-card p-sm shadow-toy-soft">
-              <span className="min-w-0 flex-1 text-[14px] font-semibold">{e.label}</span>
-              <time dateTime={e.createdAt} className="shrink-0 text-[12px] font-bold text-ink-soft">
+              <span className="min-w-0 flex-1 text-subhead">{e.label}</span>
+              <time dateTime={e.createdAt} className="shrink-0 text-caption text-ink-soft">
                 {when(e.createdAt)}
               </time>
             </li>

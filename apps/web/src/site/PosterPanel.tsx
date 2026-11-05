@@ -11,7 +11,7 @@ export function PosterPanel({ pillar, title, quiet, mood = 'happy', children, cl
   const r = RELATIONSHIP_BY_KEY[pillar];
   return (
     <div className={`relative isolate flex min-h-[260px] flex-col overflow-hidden rounded-tile p-md bg-r${r.floor} text-on-fill ${className}`}>
-      <p className="relative z-10 m-0 type-hook text-[clamp(26px,4vw,34px)] leading-[1.05]">
+      <p className="relative z-10 m-0 type-hook text-display-3 leading-[1.05]">
         {title}
         {quiet && (
           <>
@@ -20,13 +20,15 @@ export function PosterPanel({ pillar, title, quiet, mood = 'happy', children, cl
           </>
         )}
       </p>
-      {children && <div className="relative z-10 mt-sm text-[14px] font-bold opacity-90">{children}</div>}
       <svg className="pointer-events-none absolute inset-x-0 bottom-0 -z-0 h-[45%] w-full" viewBox="0 0 200 90" preserveAspectRatio="none" aria-hidden="true">
         <path d="M0 40 C40 10 80 60 120 34 C150 16 180 22 200 30 L200 90 L0 90 Z" fill="currentColor" opacity="0.14" />
         <path d="M0 62 C50 44 90 80 140 58 C170 46 190 52 200 56 L200 90 L0 90 Z" fill="currentColor" opacity="0.1" />
       </svg>
-      <div className="relative z-10 mt-auto flex justify-end pt-md" aria-hidden="true">
-        <div className="-mb-xl -mr-xs">
+      {/* The foot: the label lined up at the bottom left (the card rule: words at the top, facts at the foot), the guide peeking up at the
+          bottom right, so a poster stretched beside a long list keeps something at both ends instead of words floating at the top. */}
+      <div className="relative z-10 mt-auto flex items-end justify-between gap-sm pt-md">
+        {children ? <div className="min-w-0 pb-xs text-subhead font-medium opacity-90">{children}</div> : <span />}
+        <div className="-mb-xl -mr-xs shrink-0" aria-hidden="true">
           <Avatar relationship={pillar} size={132} mood={mood} still />
         </div>
       </div>

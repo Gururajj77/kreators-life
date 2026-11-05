@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 /** The version of the terms and the privacy policy (the day they were last changed). A new version is shown to people once. */
-export const LEGAL_VERSION = '2026-11-03';
+export const LEGAL_VERSION = '2026-11-05';
 export const LEGAL_DOCS = [
   { key: 'terms', name: 'Terms of use', path: '/terms' },
   { key: 'privacy', name: 'Privacy policy', path: '/privacy' },

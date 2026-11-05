@@ -38,15 +38,15 @@ type Preset = { research?: ResearchKind; piece?: PieceKind; query?: string; at: 
 
 /** The way from "who is this for" to a month of posts: eight steps, done by doing them. The next one is the one to tap. */
 /** The pale red outline a delete wears (the Sign out button's look), never solid until the sheet asks. */
-const DELETE_BTN = 'toy inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-[16px] font-bold text-r1 hover:bg-r1/10 disabled:opacity-50';
+const DELETE_BTN = 'toy inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-headline text-r1 hover:bg-r1/10 disabled:opacity-50';
 
 /** Asks before a delete, the Mindful session pattern: a red "Yes, delete it" and a quiet "Keep it". */
 function ConfirmDelete({ open, title, body, pending, failed, onYes, onClose }: { open: boolean; title: string; body: string; pending: boolean; failed: boolean; onYes: () => void; onClose: () => void }) {
   return (
     <Sheet open={open} onClose={onClose} title={title}>
       <div className="grid gap-md pb-xl">
-        <p className="m-0 text-[16px] font-semibold text-ink-soft">{body}</p>
-        {failed && <p role="alert" className="m-0 text-[14px] font-bold text-r1">That did not work. Try again.</p>}
+        <p className="m-0 text-callout text-ink-soft">{body}</p>
+        {failed && <p role="alert" className="m-0 text-subhead text-r1">That did not work. Try again.</p>}
         <div className="flex flex-wrap gap-xs">
           <button type="button" disabled={pending} onClick={onYes} className={DELETE_BTN}>
             Yes, delete it
@@ -66,10 +66,10 @@ function StrategyPath({ brand, counts, onGo }: { brand: { niche: string; voice: 
   const next = steps.find((s) => !s.done);
   return (
     <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="path-heading">
-      <h2 id="path-heading" className="text-[18px]">
+      <h2 id="path-heading" className="text-title3">
         Your strategy, step by step
       </h2>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+      <p className="mt-xs m-0 text-subhead text-ink-soft">
         {next ? `${done} of ${steps.length} done. Next: ${next.title.toLowerCase()}.` : 'All eight steps done. Run the steps again whenever the niche moves.'}
       </p>
       <div className="mt-sm h-[8px] rounded-pill bg-line" role="progressbar" aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={done} aria-label="Strategy steps done">
@@ -79,12 +79,12 @@ function StrategyPath({ brand, counts, onGo }: { brand: { niche: string; voice: 
         {steps.map((s, i) => (
           <li key={s.key}>
             <button type="button" onClick={() => onGo(s.go)} className={`toy toy-flat flex min-h-[44px] w-full items-start gap-sm rounded-tile p-xs text-left ${s === next ? 'bg-paper' : ''}`}>
-              <span aria-hidden="true" className={`mt-[2px] flex size-[28px] shrink-0 items-center justify-center rounded-pill text-[14px] font-extrabold ${s.done ? 'bg-r4 text-on-fill' : s === next ? 'bg-ink text-on-ink' : 'bg-line text-ink-soft'}`}>
+              <span aria-hidden="true" className={`mt-[2px] flex size-[28px] shrink-0 items-center justify-center rounded-pill text-[14px] font-bold ${s.done ? 'bg-r4 text-on-fill' : s === next ? 'bg-ink text-on-ink' : 'bg-line text-ink-soft'}`}>
                 {s.done ? <Icon icon={Check} size={14} strokeWidth={3} /> : i + 1}
               </span>
               <span className="min-w-0">
-                <span className={`block text-[16px] font-bold ${s.done ? 'text-ink-soft' : ''}`}>{s.title}</span>
-                <span className="block text-[12px] font-bold text-ink-soft">{s.why}</span>
+                <span className={`block text-headline ${s.done ? 'text-ink-soft' : ''}`}>{s.title}</span>
+                <span className="block text-caption text-ink-soft">{s.why}</span>
               </span>
             </button>
           </li>
@@ -210,10 +210,10 @@ function SourcesTab({ id, sources, onChange, onOpenRun }: { id: string; sources:
   const remove = useMutation({ mutationFn: (sid: string) => api.removeBrandSource(id, sid), onSuccess: onChange });
   return (
     <section className="mt-lg" aria-labelledby="links-heading">
-      <h2 id="links-heading" className="text-[24px]">
+      <h2 id="links-heading" className="text-title2">
         Links the brand is fed
       </h2>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Site, channels, top posts and competitors. A read link stays in the folder.</p>
+      <p className="mt-xs m-0 text-subhead text-ink-soft">Site, channels, top posts and competitors. A read link stays in the folder.</p>
       <form
         className="mt-sm flex flex-col gap-sm rounded-card bg-card p-md shadow-toy-soft"
         onSubmit={(e) => {
@@ -222,23 +222,23 @@ function SourcesTab({ id, sources, onChange, onOpenRun }: { id: string; sources:
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Link</span>
+          <span className="block text-subhead font-semibold">Link</span>
           <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} maxLength={500} placeholder="https://" required className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Label</span>
+          <span className="block text-subhead font-semibold">Label</span>
           <input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={120} placeholder="Their YouTube, our site, top reel" className={FIELD} />
         </label>
         <label className="toy flex min-h-[48px] cursor-pointer items-center gap-sm rounded-tile bg-paper p-sm">
           <input type="checkbox" checked={competitor} onChange={(e) => setCompetitor(e.target.checked)} className="size-[20px] accent-ink" />
-          <span className="text-[14px] font-bold">This is a competitor</span>
+          <span className="text-subhead font-semibold">This is a competitor</span>
         </label>
         <ErrorLine e={add.isError ? add.error : null} className="mt-sm" />
         <Button type="submit" disabled={add.isPending || !url.trim()}>
           Add link
         </Button>
       </form>
-      {sources.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">No links yet. Start with the brand's own site or channel.</p>}
+      {sources.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">No links yet. Start with the brand's own site or channel.</p>}
       <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
         {sources.map((s) => (
           <li key={s.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
@@ -247,15 +247,15 @@ function SourcesTab({ id, sources, onChange, onOpenRun }: { id: string; sources:
                 <AppIcon name={BRAND_SOURCE_META[s.kind].icon} size={20} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[16px] font-bold">{s.label || s.url}</span>
-                <a href={s.url} target="_blank" rel="noreferrer" className="block truncate text-[12px] font-bold text-ink-soft underline-offset-4 hover:underline">
+                <span className="block text-balance text-headline [overflow-wrap:anywhere]">{s.label || s.url}</span>
+                <a href={s.url} target="_blank" rel="noreferrer" className="block truncate text-caption text-ink-soft underline-offset-4 hover:underline">
                   {s.url}
                 </a>
-                <span className="mt-xs block text-[12px] font-bold text-ink-mute">
+                <span className="mt-xs block text-caption text-ink-mute">
                   {BRAND_SOURCE_META[s.kind].name}
                   {s.lastReadAt ? `, read ${when(s.lastReadAt)}` : ', not read yet'}
                 </span>
-                {s.summary && <span className="mt-xs block text-[14px] font-semibold text-ink-soft">{s.summary.slice(0, 220)}{s.summary.length > 220 ? '…' : ''}</span>}
+                {s.summary && <span className="mt-xs block text-subhead text-ink-soft">{s.summary.slice(0, 220)}{s.summary.length > 220 ? '…' : ''}</span>}
               </span>
             </div>
             <div className="mt-sm flex flex-wrap gap-xs">
@@ -295,10 +295,10 @@ function ResearchTab({ id, runs, preset, reach, onChange, onOpen }: { id: string
   const kinds = RESEARCH_KINDS.filter((k) => k !== 'read');
   return (
     <section className="mt-lg" aria-labelledby="research-heading">
-      <h2 id="research-heading" className="text-[24px]">
+      <h2 id="research-heading" className="text-title2">
         Research
       </h2>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{reach ? 'Every run goes out through Agent Reach and is kept here with what it found.' : 'Without Agent Reach, pages can be read, and YouTube works with a key. Connect the bridge for the rest.'}</p>
+      <p className="mt-xs m-0 text-subhead text-ink-soft">{reach ? 'Every run goes out through Agent Reach and is kept here with what it found.' : 'Without Agent Reach, pages can be read, and YouTube works with a key. Connect the bridge for the rest.'}</p>
       <form
         className="mt-sm flex flex-col gap-sm rounded-card bg-card p-md shadow-toy-soft"
         onSubmit={(e) => {
@@ -313,14 +313,14 @@ function ResearchTab({ id, runs, preset, reach, onChange, onOpen }: { id: string
             </button>
           ))}
         </div>
-        <p className="m-0 text-[12px] font-bold text-ink-soft">{RESEARCH_META[kind].blurb}</p>
+        <p className="m-0 text-caption text-ink-soft">{RESEARCH_META[kind].blurb}</p>
         <label className="block">
-          <span className="block text-[14px] font-bold">{RESEARCH_META[kind].needsQuery ? 'What to look for' : 'The link'}</span>
+          <span className="block text-subhead font-semibold">{RESEARCH_META[kind].needsQuery ? 'What to look for' : 'The link'}</span>
           <input value={query} onChange={(e) => setQuery(e.target.value)} maxLength={500} placeholder={RESEARCH_META[kind].needsQuery ? 'phone videography for street food' : 'https://'} required className={FIELD} />
         </label>
         {RESEARCH_META[kind].needsQuery && (
           <label className="block">
-            <span className="block text-[14px] font-bold">How many</span>
+            <span className="block text-subhead font-semibold">How many</span>
             <select value={limit} onChange={(e) => setLimit(e.target.value)} className={FIELD}>
               {['5', '10', '15', '25'].map((v) => (
                 <option key={v} value={v}>
@@ -336,16 +336,16 @@ function ResearchTab({ id, runs, preset, reach, onChange, onOpen }: { id: string
         </Button>
         {go.isPending && <WorkingLine className="self-center" label="Researching" phrases={['Sending the search out', 'Reading what comes back', 'Keeping it in this folder']} loop={false} />}
       </form>
-      {runs.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing researched yet. Start with outliers for the brand's main topic.</p>}
+      {runs.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">Nothing researched yet. Start with outliers for the brand's main topic.</p>}
       <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
         {runs.map((r) => (
           <li key={r.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
             <button type="button" onClick={() => onOpen(r)} className="toy toy-flat min-w-0 flex-1 rounded-tile p-xs text-left">
-              <span className="block truncate text-[16px] font-bold">
+              <span className="block text-balance text-headline [overflow-wrap:anywhere]">
                 {RESEARCH_META[r.kind].name}
                 {r.query ? `: ${r.query}` : ''}
               </span>
-              <span className="block text-[12px] font-bold text-ink-soft">
+              <span className="block text-caption text-ink-soft">
                 {r.status === 'done' ? `${r.items.length} ${r.items.length === 1 ? 'item' : 'items'} via ${r.backend}` : `Failed: ${r.error}`}, {when(r.createdAt)}
               </span>
             </button>
@@ -384,10 +384,10 @@ function CreateTab({ id, runs, preset, writer, onMade }: { id: string; runs: Res
     });
   return (
     <section className="mt-lg" aria-labelledby="create-heading">
-      <h2 id="create-heading" className="text-[24px]">
+      <h2 id="create-heading" className="text-title2">
         Create
       </h2>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{writer === 'none' ? 'No writing model is connected, so you get the research laid out as a digest.' : 'Pick what to write. The piece leans on the research you tick, or the latest runs if you tick none.'}</p>
+      <p className="mt-xs m-0 text-subhead text-ink-soft">{writer === 'none' ? 'No writing model is connected, so you get the research laid out as a digest.' : 'Pick what to write. The piece leans on the research you tick, or the latest runs if you tick none.'}</p>
       <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
         {PIECE_KINDS.map((k) => (
           <li key={k}>
@@ -396,8 +396,8 @@ function CreateTab({ id, runs, preset, writer, onMade }: { id: string; runs: Res
                 <AppIcon name={PIECE_META[k].icon} size={20} />
               </span>
               <span className="min-w-0">
-                <span className="block text-[16px] font-bold">{PIECE_META[k].name}</span>
-                <span className="block text-[14px] font-semibold text-ink-soft">{PIECE_META[k].blurb}</span>
+                <span className="block text-headline">{PIECE_META[k].name}</span>
+                <span className="block text-subhead text-ink-soft">{PIECE_META[k].blurb}</span>
               </span>
             </button>
           </li>
@@ -411,26 +411,26 @@ function CreateTab({ id, runs, preset, writer, onMade }: { id: string; runs: Res
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">The brief</span>
+          <span className="block text-subhead font-semibold">The brief</span>
           <textarea value={brief} onChange={(e) => setBrief(e.target.value)} rows={4} maxLength={4000} placeholder={PIECE_META[kind].askFor} className={FIELD} />
         </label>
         <label className="toy flex min-h-[44px] cursor-pointer items-center gap-sm rounded-tile bg-paper p-xs">
           <input type="checkbox" checked={research} onChange={(e) => setResearch(e.target.checked)} className="size-[20px] accent-ink" />
-          <span className="min-w-0 text-[14px] font-bold">
-            Research first <span className="font-semibold text-ink-soft">reads any unread links and looks up what is working in the niche before writing</span>
+          <span className="min-w-0 text-subhead">
+            Research first <span className="text-ink-soft">reads any unread links and looks up what is working in the niche before writing</span>
           </span>
         </label>
         {done.length > 0 && (
           <fieldset className="m-0 border-0 p-0">
-            <legend className="text-[14px] font-bold">Lean on</legend>
+            <legend className="text-subhead font-semibold">Lean on</legend>
             <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
               {done.slice(0, 12).map((r) => (
                 <li key={r.id}>
                   <label className="toy flex min-h-[44px] cursor-pointer items-center gap-sm rounded-tile bg-paper p-xs">
                     <input type="checkbox" checked={picked.has(r.id)} onChange={() => toggle(r.id)} className="size-[20px] accent-ink" />
-                    <span className="min-w-0 truncate text-[14px] font-bold">
+                    <span className="min-w-0 text-subhead font-semibold [overflow-wrap:anywhere]">
                       {RESEARCH_META[r.kind].name}
-                      {r.query ? `: ${r.query}` : ''} <span className="font-semibold text-ink-soft">({r.items.length})</span>
+                      {r.query ? `: ${r.query}` : ''} <span className="text-ink-soft">({r.items.length})</span>
                     </span>
                   </label>
                 </li>
@@ -451,10 +451,10 @@ function CreateTab({ id, runs, preset, writer, onMade }: { id: string; runs: Res
 function PiecesTab({ pieces, onOpen }: { pieces: BrandPiece[]; onOpen: (p: BrandPiece) => void }) {
   return (
     <section className="mt-lg" aria-labelledby="pieces-heading">
-      <h2 id="pieces-heading" className="text-[24px]">
+      <h2 id="pieces-heading" className="text-title2">
         Pieces
       </h2>
-      {pieces.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing written yet. Create one from the research.</p>}
+      {pieces.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">Nothing written yet. Create one from the research.</p>}
       <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
         {pieces.map((p) => (
           <li key={p.id}>
@@ -463,8 +463,8 @@ function PiecesTab({ pieces, onOpen }: { pieces: BrandPiece[]; onOpen: (p: Brand
                 <AppIcon name={PIECE_META[p.kind].icon} size={20} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[16px] font-bold">{p.title}</span>
-                <span className="block text-[12px] font-bold text-ink-soft">
+                <span className="block text-balance text-headline [overflow-wrap:anywhere]">{p.title}</span>
+                <span className="block text-caption text-ink-soft">
                   {p.writer === 'claude' ? 'Written by Claude' : p.writer === 'workers-ai' ? 'Written by a small model' : 'Research digest, no model'}
                   {p.status === 'kept' ? ', kept' : ''}, {when(p.createdAt)}
                 </span>
@@ -484,14 +484,14 @@ function ItemRow({ it }: { it: ResearchItem }) {
     .join(', ');
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <p className="m-0 text-[16px] font-bold">{it.title || it.url}</p>
-      <p className="m-0 text-[12px] font-bold text-ink-soft">{[it.author, it.publishedAt, stats].filter(Boolean).join(' · ')}</p>
+      <p className="m-0 text-headline">{it.title || it.url}</p>
+      <p className="m-0 text-caption text-ink-soft">{[it.author, it.publishedAt, stats].filter(Boolean).join(' · ')}</p>
       {it.url && (
-        <a href={it.url} target="_blank" rel="noreferrer" className="block truncate text-[12px] font-bold underline-offset-4 hover:underline">
+        <a href={it.url} target="_blank" rel="noreferrer" className="block truncate text-caption underline-offset-4 hover:underline">
           {it.url}
         </a>
       )}
-      {it.text && <p className="mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold text-ink-soft">{it.text.slice(0, 600)}{it.text.length > 600 ? '…' : ''}</p>}
+      {it.text && <p className="mt-xs m-0 whitespace-pre-wrap text-subhead text-ink-soft">{it.text.slice(0, 600)}{it.text.length > 600 ? '…' : ''}</p>}
     </li>
   );
 }
@@ -501,7 +501,7 @@ function RunSheet({ run, onClose }: { run: ResearchRun | null; onClose: () => vo
     <Sheet open={run !== null} onClose={onClose} title={run ? `${RESEARCH_META[run.kind].name}${run.query ? `: ${run.query}` : ''}` : ''}>
       {run && (
         <>
-          <p className="m-0 text-[12px] font-bold text-ink-soft">{run.status === 'done' ? `${run.items.length} items via ${run.backend}` : `Failed: ${run.error}`}</p>
+          <p className="m-0 text-caption text-ink-soft">{run.status === 'done' ? `${run.items.length} items via ${run.backend}` : `Failed: ${run.error}`}</p>
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {run.items.map((it, i) => (
               <ItemRow key={`${it.url}-${i}`} it={it} />
@@ -533,10 +533,10 @@ function PieceSheet({ id, piece, onClose, onChange }: { id: string; piece: Brand
     <Sheet open={piece !== null} onClose={onClose} title={piece?.title ?? ''}>
       {piece && (
         <>
-          <p className="m-0 text-[12px] font-bold text-ink-soft">
+          <p className="m-0 text-caption text-ink-soft">
             {piece.writer === 'claude' ? 'Written by Claude' : piece.writer === 'workers-ai' ? 'Written by a small model' : 'A research digest, no model'} from {piece.sources.length} {piece.sources.length === 1 ? 'run' : 'runs'}, {when(piece.createdAt)}.
           </p>
-          {piece.brief && <p className="mt-xs m-0 rounded-tile bg-paper p-sm text-[14px] font-semibold">Brief: {piece.brief}</p>}
+          {piece.brief && <p className="mt-xs m-0 rounded-tile bg-paper p-sm text-subhead">Brief: {piece.brief}</p>}
           <div className="mt-sm flex flex-wrap gap-xs">
             <Button size="sm" onClick={() => void copy()}>
               {copied ? 'Copied' : 'Copy text'}
@@ -577,19 +577,19 @@ function EditBrandSheet({ open, id, brand, onClose, onSaved }: { open: boolean; 
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Brand</span>
+          <span className="block text-subhead font-semibold">Brand</span>
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Niche</span>
+          <span className="block text-subhead font-semibold">Niche</span>
           <input value={niche} onChange={(e) => setNiche(e.target.value)} maxLength={120} className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">What it is</span>
+          <span className="block text-subhead font-semibold">What it is</span>
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} maxLength={2000} className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">How it sounds</span>
+          <span className="block text-subhead font-semibold">How it sounds</span>
           <textarea value={voice} onChange={(e) => setVoice(e.target.value)} rows={2} maxLength={1000} className={FIELD} />
         </label>
         <ErrorLine e={save.isError ? save.error : null} className="mt-sm" />

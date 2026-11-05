@@ -21,14 +21,14 @@ export function PeriodFilter({ period, onChange, today }: Props) {
         items={PERIOD_ITEMS}
         value={period.kind}
         onChange={(k) => onChange(periodFor(k, today))}
-        pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-md text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card text-ink'}`}
+        pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-md text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card text-ink'}`}
       />
       <div className="flex items-center justify-between gap-sm">
-        <button type="button" onClick={() => onChange(periodShift(period, -1))} aria-label={`The ${PERIOD_META[period.kind].short.toLowerCase()} before`} className="toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-card text-[18px] font-extrabold">
+        <button type="button" onClick={() => onChange(periodShift(period, -1))} aria-label={`The ${PERIOD_META[period.kind].short.toLowerCase()} before`} className="toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-card text-headline">
           ‹
         </button>
-        <p className="m-0 min-w-0 truncate text-center text-[16px] font-extrabold">{periodLabel(period)}</p>
-        <button type="button" onClick={() => onChange(next)} disabled={!canNext} aria-label={`The ${PERIOD_META[period.kind].short.toLowerCase()} after`} className="toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-card text-[18px] font-extrabold disabled:opacity-40">
+        <p className="m-0 min-w-0 truncate text-center text-headline">{periodLabel(period)}</p>
+        <button type="button" onClick={() => onChange(next)} disabled={!canNext} aria-label={`The ${PERIOD_META[period.kind].short.toLowerCase()} after`} className="toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-card text-headline disabled:opacity-40">
           ›
         </button>
       </div>

@@ -36,14 +36,14 @@ function Facts({ item, showClient, showStage, compact = false }: { item: AgencyD
   if (compact)
     return (
       <>
-        <span className="block text-[16px] font-extrabold leading-snug">{item.title}</span>
+        <span className="block text-headline">{item.title}</span>
         {(item.overdue || (item.armyDeliverableId && item.army)) && (
           <span className="mt-xs flex flex-wrap items-center gap-xs">
             {item.overdue && <StatusTag tone="bad">Late</StatusTag>}
             {item.armyDeliverableId && item.army && <StatusTag tone={ARMY_TONE[item.army.status] ?? 'neutral'}>{ARMY_NAME[item.army.status] ?? 'Army'}</StatusTag>}
           </span>
         )}
-        <span className="mt-xs block text-[12px] font-bold text-ink-soft">{tie([showClient ? item.clientName : DELIVERABLE_KIND_NAME[item.kind], day].filter(Boolean).join(', '))}</span>
+        <span className="mt-xs block text-caption text-ink-soft">{tie([showClient ? item.clientName : DELIVERABLE_KIND_NAME[item.kind], day].filter(Boolean).join(', '))}</span>
       </>
     );
   return (
@@ -58,20 +58,20 @@ function Facts({ item, showClient, showStage, compact = false }: { item: AgencyD
           )
         }
       >
-        <span className="block text-[16px] font-extrabold leading-snug">{item.title}</span>
+        <span className="block text-headline">{item.title}</span>
       </CardHead>
       {item.armyDeliverableId && item.army && (
         <span className="mt-xs flex">
           <StatusTag tone={ARMY_TONE[item.army.status] ?? 'neutral'}>{ARMY_NAME[item.army.status] ?? 'Army'}</StatusTag>
         </span>
       )}
-      <span className="mt-xs block text-[12px] font-bold text-ink-soft">
+      <span className="mt-xs block text-caption text-ink-soft">
         {tie(
           `${DELIVERABLE_KIND_NAME[item.kind]}${item.platform && item.platform.toLowerCase() !== DELIVERABLE_KIND_NAME[item.kind].toLowerCase() ? `, ${item.platform}` : ''}${showClient ? `, ${item.clientName}` : ''}`,
         )}
       </span>
       {(day || item.revisions > 0 || item.noteCount > 0) && (
-        <span className="mt-xs block text-[12px] font-semibold text-ink-soft">
+        <span className="mt-xs block text-caption text-ink-soft">
           {tie([day, item.revisions > 0 ? `Sent back ${item.revisions} ${item.revisions === 1 ? 'time' : 'times'}` : '', item.noteCount > 0 ? `${item.noteCount} ${item.noteCount === 1 ? 'note' : 'notes'}` : ''].filter(Boolean).join(', '))}
         </span>
       )}
@@ -165,12 +165,13 @@ export function AgencyPipeline({ clientId, defaultView = 'board', adding, onAddi
       <div className="flex flex-wrap items-center justify-between gap-sm">
         <ViewToggle view={view} onChange={setView} label="Deliverables view" />
         {!onAdding && edit && (
-          <Button size="sm" plusToX disabled={noClients} onClick={() => openItem(null)}>
+          // On a client's page the stage move is the screen's one solid button, so adding a piece there is outline.
+          <Button size="sm" variant={clientId ? 'outline' : 'primary'} plusToX disabled={noClients} onClick={() => openItem(null)}>
             Add deliverable
           </Button>
         )}
       </div>
-      {noClients && <p className="mt-xs m-0 text-[14px] font-bold">{COPY.noClients}</p>}
+      {noClients && <p className="mt-xs m-0 text-subhead">{COPY.noClients}</p>}
       <div className="fill-row mt-sm flex flex-wrap gap-xs">
         {!clientId && (
           <select
@@ -230,7 +231,7 @@ export function AgencyPipeline({ clientId, defaultView = 'board', adding, onAddi
       {view === 'board' ? (
         <div className="mt-sm">
           {boardQ.isError && (
-            <p role="alert" className="m-0 text-[14px] font-bold">
+            <p role="alert" className="m-0 text-subhead">
               {COPY.boardFail}
             </p>
           )}
@@ -260,7 +261,7 @@ export function AgencyPipeline({ clientId, defaultView = 'board', adding, onAddi
         <div className="mt-sm">
           {listQ.isPending && <Loading />}
           {listQ.isError && (
-            <p role="alert" className="m-0 text-[14px] font-bold">
+            <p role="alert" className="m-0 text-subhead">
               {COPY.boardFail}
             </p>
           )}
@@ -273,13 +274,13 @@ export function AgencyPipeline({ clientId, defaultView = 'board', adding, onAddi
               </li>
             ))}
           </ul>
-          {listQ.data && listQ.data.items.length === 0 && <p className="m-0 rounded-tile bg-card p-sm text-[14px] font-semibold text-ink-soft">{total === 0 ? COPY.emptyAll : COPY.emptyList}</p>}
+          {listQ.data && listQ.data.items.length === 0 && <p className="m-0 rounded-tile bg-card p-sm text-subhead text-ink-soft">{total === 0 ? COPY.emptyAll : COPY.emptyList}</p>}
           <Pager page={listQ.data?.page} prefix="p" label="deliverables" />
         </div>
       )}
 
       {move.isError && (
-        <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-sm m-0 text-subhead">
           That move did not save, so the card went back.
         </p>
       )}

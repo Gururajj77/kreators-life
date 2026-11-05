@@ -13,13 +13,13 @@ function Lines({ title, lines, label }: { title: string; lines: BriefLine[]; lab
   if (lines.length === 0) return null;
   return (
     <div className="mt-sm">
-      <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{title}</p>
+      <p className="m-0 text-eyebrow uppercase text-ink-soft">{title}</p>
       <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0" aria-label={label}>
         {lines.map((l) => {
           const inner = (
             <>
               <span className="mt-xs size-[10px] shrink-0 rounded-pill" style={{ background: TONE[l.tone] }} aria-hidden="true" />
-              <span className="min-w-0 flex-1 text-[14px] font-bold">{l.text}</span>
+              <span className="min-w-0 flex-1 text-subhead">{l.text}</span>
             </>
           );
           return (
@@ -53,10 +53,10 @@ export function DailyBrief({ date, hour }: { date: string; hour: number }) {
   return (
     <>
       <section className="span-all mt-md rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="brief-heading">
-        <h2 id="brief-heading" className="text-[20px]">
+        <h2 id="brief-heading" className="text-headline">
           Your daily brief
         </h2>
-        <p className="m-0 text-[12px] font-bold text-ink-soft">Three things that changed, and three next steps, from your own numbers.</p>
+        <p className="m-0 text-subhead text-ink-soft">Three things that changed, and three next steps, from your own numbers.</p>
         <Lines title="What changed" lines={d.brief.signals} label="What changed" />
         <Lines title="Next steps" lines={d.brief.actions} label="Next steps" />
         {d.brief.coach && <Lines title="Your students" lines={d.brief.coach} label="Your students" />}
@@ -66,17 +66,17 @@ export function DailyBrief({ date, hour }: { date: string; hour: number }) {
         <section className="span-all mt-md rounded-card bg-card p-sm shadow-toy-soft" aria-labelledby="start-heading">
           {/* A small toggle: the heading is the button, so the list can be folded away and opened again. */}
           <button type="button" aria-expanded={!g.folded} aria-controls="start-list" onClick={() => fold.mutate(!g.folded)} disabled={fold.isPending} className="toy toy-flat flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile px-sm text-left">
-            <span id="start-heading" className="text-[16px] font-extrabold">
+            <span id="start-heading" className="text-headline">
               Getting started
             </span>
-            <span className="flex shrink-0 items-center gap-xs text-[14px] font-extrabold text-ink-soft">
+            <span className="flex shrink-0 items-center gap-xs text-subhead text-ink-soft">
               {g.done} of {g.items.length}
               <ToggleChevron open={!g.folded} size={14} strokeWidth={3} />
             </span>
           </button>
           {!g.folded && (
             <div id="start-list" className="px-sm pb-sm">
-              <p className="m-0 text-[12px] font-bold text-ink-soft">Your first {GETTING_STARTED_DAYS} days. Each one ticks itself when you do it.</p>
+              <p className="m-0 text-subhead text-ink-soft">Your first {GETTING_STARTED_DAYS} days. Each one ticks itself when you do it.</p>
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                 {g.items.map((i) => (
                   <li key={i.key}>
@@ -84,7 +84,7 @@ export function DailyBrief({ date, hour }: { date: string; hour: number }) {
                       <span className={`flex size-[24px] shrink-0 items-center justify-center rounded-pill border-2 ${i.done ? 'border-r4 bg-r4 text-on-fill' : 'border-line'}`} aria-hidden="true">
                         {i.done ? <Icon icon={Check} size={14} strokeWidth={3} /> : ''}
                       </span>
-                      <span className={`min-w-0 flex-1 text-[14px] font-bold ${i.done ? 'line-through' : ''}`}>{i.label}</span>
+                      <span className={`min-w-0 flex-1 text-body ${i.done ? 'line-through' : ''}`}>{i.label}</span>
                       <span className="sr-only">{i.done ? 'done' : 'not yet'}</span>
                     </Link>
                   </li>

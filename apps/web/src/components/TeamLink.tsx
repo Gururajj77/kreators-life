@@ -1,6 +1,6 @@
 import { portalPasswordProblem, TEAM_LINK_ACTIONS, TEAM_LINK_NEVER, TEAM_LINK_PARTS, type AgencyClient, type TeamLinkActionKey, type TeamLinkPartKey } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ExternalLink, Eye, Link2Off, RefreshCw } from 'lucide-react';
+import { ArrowUpRight, Eye, Link2Off, RefreshCw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../lib/api';
@@ -78,12 +78,12 @@ export function TeamLink({ client }: { client: AgencyClient }) {
     <>
       <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-labelledby={`team-link-${client.id}`} data-team-link>
         <CardHead tag={on ? <StatusTag fit tone="good">On</StatusTag> : <StatusTag fit tone="neutral">Off</StatusTag>}>
-          <h3 id={`team-link-${client.id}`} className="m-0 text-[16px] font-extrabold">
+          <h3 id={`team-link-${client.id}`} className="m-0 text-headline">
             Team link
           </h3>
         </CardHead>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{COPY.lede}</p>
-        {on && <p className="mt-xs m-0 text-[14px] font-bold">{summary}</p>}
+        <p className="mt-xs m-0 text-subhead text-ink-soft">{COPY.lede}</p>
+        {on && <p className="mt-xs m-0 text-subhead">{summary}</p>}
 
         <div className="mt-sm flex items-center gap-xs">
           {on ? (
@@ -101,7 +101,7 @@ export function TeamLink({ client }: { client: AgencyClient }) {
               label="More for the team link"
               items={[
                 { key: 'see', label: 'Change what their team sees', icon: Eye, onSelect: () => setSheet('see') },
-                { key: 'preview', label: 'Open preview', icon: ExternalLink, onSelect: () => window.open(url, '_blank', 'noopener') },
+                { key: 'preview', label: 'Open preview', icon: ArrowUpRight, onSelect: () => window.open(url, '_blank', 'noopener') },
                 { key: 'fresh', label: 'Make a fresh team link', icon: RefreshCw, onSelect: () => setSheet('fresh') },
                 { key: 'off', label: 'Switch the team link off', icon: Link2Off, destructive: true, onSelect: () => send.mutate({ on: false }) },
               ]}
@@ -109,17 +109,17 @@ export function TeamLink({ client }: { client: AgencyClient }) {
           )}
         </div>
 
-        {!on && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{COPY.off}</p>}
+        {!on && <p className="mt-sm m-0 text-subhead text-ink-soft">{COPY.off}</p>}
         {on && manual && (
           <div className="mt-sm">
-            <label className="block text-[14px] font-bold" htmlFor={`team-url-${client.id}`}>
+            <label className="block text-subhead font-semibold" htmlFor={`team-url-${client.id}`}>
               Team link to share
             </label>
-            <input id={`team-url-${client.id}`} readOnly autoFocus value={url} onFocus={(e) => e.currentTarget.select()} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm font-mono text-[14px]" />
+            <input id={`team-url-${client.id}`} readOnly autoFocus value={url} onFocus={(e) => e.currentTarget.select()} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm font-mono text-subhead" />
           </div>
         )}
         {send.isError && (
-          <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+          <p role="alert" className="mt-sm m-0 text-subhead">
             {COPY.failed}
           </p>
         )}
@@ -130,8 +130,8 @@ export function TeamLink({ client }: { client: AgencyClient }) {
       {createPortal(
         <>
           <Sheet open={sheet === 'see'} onClose={() => setSheet(null)} title="What their team sees">
-            <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.on}</p>
-            <h3 className="mt-md text-[16px]">What they can see</h3>
+            <p className="m-0 text-subhead text-ink-soft">{COPY.on}</p>
+            <h3 className="mt-md text-headline">What they can see</h3>
             <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
               {TEAM_LINK_PARTS.map((p) => (
                 <li key={p.key}>
@@ -139,7 +139,7 @@ export function TeamLink({ client }: { client: AgencyClient }) {
                 </li>
               ))}
             </ul>
-            <h3 className="mt-md text-[16px]">What they can do</h3>
+            <h3 className="mt-md text-headline">What they can do</h3>
             <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
               {TEAM_LINK_ACTIONS.map((p) => (
                 <li key={p.key}>
@@ -147,17 +147,17 @@ export function TeamLink({ client }: { client: AgencyClient }) {
                 </li>
               ))}
             </ul>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{COPY.approve(client.name)}</p>
+            <p className="mt-xs m-0 text-subhead text-ink-soft">{COPY.approve(client.name)}</p>
             <Fold className="mt-md" title="Never on the team link">
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.never}</p>
-              <ul className="mt-xs m-0 list-disc pl-md text-[14px] font-semibold text-ink-soft">
+              <p className="m-0 text-subhead text-ink-soft">{COPY.never}</p>
+              <ul className="mt-xs m-0 list-disc pl-md text-subhead text-ink-soft">
                 {TEAM_LINK_NEVER.map((n) => (
                   <li key={n}>{n}</li>
                 ))}
               </ul>
             </Fold>
             {send.isError && (
-              <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+              <p role="alert" className="mt-sm m-0 text-subhead">
                 {COPY.failed}
               </p>
             )}
@@ -175,12 +175,12 @@ export function TeamLink({ client }: { client: AgencyClient }) {
                 if (pass && !passBad) send.mutate({ on: true, password: pass });
               }}
             >
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.openHint}</p>
+              <p className="m-0 text-subhead text-ink-soft">{COPY.openHint}</p>
               <div className="mt-md">
                 <PasswordField id={`team-open-pw-${client.id}`} label={COPY.passLabel} hint={COPY.passHint} value={pass} onChange={setPass} clientName={client.name} required />
               </div>
               {send.isError && (
-                <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+                <p role="alert" className="mt-sm m-0 text-subhead">
                   {COPY.failed}
                 </p>
               )}
@@ -193,7 +193,7 @@ export function TeamLink({ client }: { client: AgencyClient }) {
           </Sheet>
 
           <Sheet open={sheet === 'fresh'} onClose={() => setSheet(null)} title={COPY.freshTitle}>
-            <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.freshHint}</p>
+            <p className="m-0 text-subhead text-ink-soft">{COPY.freshHint}</p>
             <div className="mt-md flex flex-wrap gap-xs pb-xl">
               <Button
                 onClick={() => {

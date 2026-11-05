@@ -18,10 +18,10 @@ export function Toggle({ on, onChange, label, hint, disabled = false, color = 'v
   return (
     <label className={`flex cursor-pointer select-none items-center gap-sm ${compact ? 'min-h-[44px]' : 'min-h-[56px] rounded-tile bg-card p-sm shadow-toy-soft'} ${disabled ? 'opacity-60' : ''}`}>
       <span className="min-w-0 flex-1">
-        <span className={`block font-bold leading-snug ${compact ? 'text-[14px] text-ink-soft' : 'text-[16px]'}`} id={`${id}-l`}>
+        <span className={`block ${compact ? 'text-subhead text-ink-soft' : 'text-body'}`} id={`${id}-l`}>
           {label}
         </span>
-        {hint && <span className="prose-long block text-[14px] font-semibold text-ink-soft">{hint}</span>}
+        {hint && <span className="prose-long block text-subhead text-ink-soft">{hint}</span>}
       </span>
       <button
         type="button"

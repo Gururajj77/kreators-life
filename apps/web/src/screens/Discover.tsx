@@ -81,7 +81,7 @@ function Pick({ on, label, tone, onClick }: { on: boolean; label: string; tone: 
 
 function Head({ least, most }: { least: string; most: string }) {
   return (
-    <div className="grid items-end gap-xs text-center text-[12px] font-extrabold" style={{ gridTemplateColumns: '64px 1fr 64px' }}>
+    <div className="grid items-end gap-xs text-center text-caption font-semibold" style={{ gridTemplateColumns: '64px 1fr 64px' }}>
       <span style={{ color: 'var(--color-r2)' }}>
         Choose
         <br />
@@ -115,7 +115,7 @@ function Triad({ index, value, onChange }: { index: number; value: { most: numbe
       {ids.map((id, row) => (
         <div key={id} className="grid items-center gap-xs rounded-tile bg-card p-xs shadow-toy-soft" style={{ gridTemplateColumns: '44px 1fr 44px' }}>
           <Pick on={half.least === row} tone="least" label={`Least like you: ${DISCOVER_STATEMENTS[id]!.text}`} onClick={() => choose(row, 'least')} />
-          <span className="text-center text-[16px] font-semibold">{DISCOVER_STATEMENTS[id]!.text}</span>
+          <span className="text-center text-callout">{DISCOVER_STATEMENTS[id]!.text}</span>
           <Pick on={half.most === row} tone="most" label={`Most like you: ${DISCOVER_STATEMENTS[id]!.text}`} onClick={() => choose(row, 'most')} />
         </div>
       ))}
@@ -160,11 +160,11 @@ function Words({ index, value, onChange }: { index: number; value: { most: numbe
       {list.map((w, k) => (
         <div key={w.text} className="grid items-center gap-xs rounded-tile bg-card p-xs shadow-toy-soft" style={{ gridTemplateColumns: '44px 1fr 44px' }}>
           <Pick on={least.includes(k)} tone="least" label={`Least like you: ${w.text}`} onClick={() => toggle(k, 'least')} />
-          <span className="text-center text-[16px] font-bold">{w.text}</span>
+          <span className="text-center text-headline">{w.text}</span>
           <Pick on={most.includes(k)} tone="most" label={`Most like you: ${w.text}`} onClick={() => toggle(k, 'most')} />
         </div>
       ))}
-      <p className="m-0 text-center text-[12px] font-bold text-ink-soft" role="status">
+      <p className="m-0 text-center text-caption text-ink-soft" role="status">
         {least.length} of 3 least, {most.length} of 3 most. Tap a pick again to take it back.
       </p>
     </div>
@@ -183,12 +183,12 @@ function Scene({ scene: s, value, onChange }: { scene: { situation: string; opti
   };
   return (
     <div role="group" aria-label="Pick the most and the least effective response" className="flex flex-col gap-xs">
-      <p className="m-0 rounded-tile bg-card p-sm text-[16px] font-semibold shadow-toy-soft">{s.situation}</p>
+      <p className="m-0 rounded-tile bg-card p-sm text-callout shadow-toy-soft">{s.situation}</p>
       <Head least="LEAST EFFECTIVE" most="MOST EFFECTIVE" />
       {s.options.map((o, row) => (
         <div key={o} className="grid items-center gap-xs rounded-tile bg-card p-xs shadow-toy-soft" style={{ gridTemplateColumns: '44px 1fr 44px' }}>
           <Pick on={half.least === row} tone="least" label={`Least effective: ${o}`} onClick={() => choose(row, 'least')} />
-          <span className="text-center text-[14px] font-semibold">{o}</span>
+          <span className="text-center text-subhead">{o}</span>
           <Pick on={half.most === row} tone="most" label={`Most effective: ${o}`} onClick={() => choose(row, 'most')} />
         </div>
       ))}
@@ -212,7 +212,7 @@ function CellArt({ kind, cell, tone }: { kind: PuzzleKind; cell: PuzzleCell | nu
     return (
       <svg viewBox="0 0 60 60" className="size-full" aria-label="The missing piece">
         <rect x="4" y="4" width="52" height="52" rx="10" fill="var(--color-paper)" stroke="var(--color-line)" strokeWidth="2" strokeDasharray="5 4" />
-        <text x="30" y="40" textAnchor="middle" fontSize="28" fontWeight="800" fill="var(--color-ink-soft)">?</text>
+        <text x="30" y="40" textAnchor="middle" fontSize="28" fontWeight="600" fill="var(--color-ink-soft)">?</text>
       </svg>
     );
   }
@@ -220,7 +220,7 @@ function CellArt({ kind, cell, tone }: { kind: PuzzleKind; cell: PuzzleCell | nu
     return (
       <svg viewBox="0 0 60 60" className="size-full" role="img" aria-label={`The number ${cell.text}`}>
         <rect x="4" y="4" width="52" height="52" rx="10" fill={tone} />
-        <text x="30" y="39" textAnchor="middle" fontSize={(cell.text ?? '').length > 2 ? 20 : 26} fontWeight="800" fill="var(--color-on-fill)">{cell.text}</text>
+        <text x="30" y="39" textAnchor="middle" fontSize={(cell.text ?? '').length > 2 ? 20 : 26} fontWeight="600" fill="var(--color-on-fill)">{cell.text}</text>
       </svg>
     );
   if (kind === 'dice' || kind === 'odd')
@@ -262,7 +262,7 @@ function Puzzle({ puzzle: p, index, value, onChange }: { puzzle: DiscoverPuzzle;
     <div className="flex flex-col items-center gap-sm">
       {p.cells.length > 0 && (
         <>
-          <p className="m-0 text-center text-[14px] font-bold text-ink-soft">Look over the picture.</p>
+          <p className="m-0 text-center text-subhead text-ink-soft">Look over the picture.</p>
           <div className="grid gap-xs rounded-card bg-card p-sm shadow-toy-soft" style={{ gridTemplateColumns: `repeat(${p.cols}, ${size}px)` }}>
             {p.cells.map((c, k) => (
               <div key={k} style={{ width: size, height: size }}>
@@ -272,7 +272,7 @@ function Puzzle({ puzzle: p, index, value, onChange }: { puzzle: DiscoverPuzzle;
           </div>
         </>
       )}
-      <p className="m-0 text-center text-[14px] font-bold">{p.prompt}</p>
+      <p className="m-0 text-center text-subhead font-semibold">{p.prompt}</p>
       <div role="radiogroup" aria-label="The pieces to choose from" className="flex flex-wrap justify-center gap-xs">
         {p.options.map((o, k) => (
           <button
@@ -304,13 +304,13 @@ function Feelings({ index, value, onChange }: { index: number; value: number[] |
   };
   return (
     <div role="group" aria-label="Rate each line from not like me to very like me" className="flex flex-col gap-xs">
-      <div className="flex justify-between gap-sm px-xs text-[12px] font-extrabold text-ink-soft">
+      <div className="flex justify-between gap-sm px-xs text-caption text-ink-soft">
         <span>{EQ_SCALE[0]}</span>
         <span>{EQ_SCALE[4]}</span>
       </div>
       {items.map((it, k) => (
         <div key={it.text} className="rounded-tile bg-card p-sm shadow-toy-soft">
-          <p className="m-0 text-center text-[16px] font-semibold">{it.text}</p>
+          <p className="m-0 text-center text-callout">{it.text}</p>
           <div role="radiogroup" aria-label={it.text} className="mt-xs flex justify-center gap-xs">
             {EQ_SCALE.map((label, v) => (
               <button
@@ -320,7 +320,7 @@ function Feelings({ index, value, onChange }: { index: number; value: number[] |
                 aria-checked={rates[k] === v}
                 aria-label={`${label}: ${it.text}`}
                 onClick={() => rate(k, v)}
-                className="flex size-[44px] items-center justify-center rounded-pill border-2 text-[14px] font-extrabold transition-colors"
+                className="flex size-[44px] items-center justify-center rounded-pill border-2 text-subhead font-medium transition-colors"
                 style={{ borderColor: rates[k] === v ? 'var(--color-r4)' : 'var(--color-line)', background: rates[k] === v ? 'var(--color-r4)' : 'transparent', color: rates[k] === v ? 'var(--color-on-fill)' : 'var(--color-ink)' }}
               >
                 {v + 1}
@@ -338,8 +338,8 @@ function Reading({ index, value, onChange }: { index: number; value: number | nu
   const q = EQ_READING[index]!;
   return (
     <div role="radiogroup" aria-label="Pick the feeling that fits" className="flex flex-col gap-xs">
-      <p className="m-0 rounded-tile bg-card p-sm text-[16px] font-semibold shadow-toy-soft">{q.scene}</p>
-      <p className="m-0 text-center text-[14px] font-bold">What is the person feeling?</p>
+      <p className="m-0 rounded-tile bg-card p-sm text-callout shadow-toy-soft">{q.scene}</p>
+      <p className="m-0 text-center text-subhead font-semibold">What is the person feeling?</p>
       {q.options.map((o, k) => (
         <button
           key={o}
@@ -347,7 +347,7 @@ function Reading({ index, value, onChange }: { index: number; value: number | nu
           role="radio"
           aria-checked={value === k}
           onClick={() => onChange(k)}
-          className="toy min-h-[48px] rounded-tile border-2 bg-card px-sm text-center text-[16px] font-bold"
+          className="toy min-h-[48px] rounded-tile border-2 bg-card px-sm text-center text-headline"
           style={{ borderColor: value === k ? 'var(--color-ink)' : 'var(--color-line)' }}
         >
           {o}
@@ -427,10 +427,10 @@ function Quiz({ answers, setAnswers, onLeave, onDone, busy, error }: { answers: 
       <div className="rounded-card bg-card p-md shadow-toy-soft">
         {/* The count sits in the card's top right corner, level with the part line, so the heading moves up. */}
         <CardHead tag={<IconTag tone="calm" icon="ListChecks" fit>{`${s.count} questions`}</IconTag>}>
-          <p className="m-0 text-[12px] font-extrabold uppercase leading-[24px] tracking-wide text-ink-soft">Part {intro + 1} of {DISCOVER_SECTIONS.length}</p>
+          <p className="m-0 text-eyebrow uppercase leading-[24px] text-ink-soft">Part {intro + 1} of {DISCOVER_SECTIONS.length}</p>
         </CardHead>
-        <h2 className="mt-xs text-[24px]">{s.name}</h2>
-        <p className="mt-sm m-0 text-[16px] font-semibold">{s.blurb}</p>
+        <h2 className="mt-xs text-title2">{s.name}</h2>
+        <p className="mt-sm m-0 text-callout">{s.blurb}</p>
         <Button className="mt-md" onClick={() => setIntro(null)}>
           Start this part
         </Button>
@@ -439,8 +439,8 @@ function Quiz({ answers, setAnswers, onLeave, onDone, busy, error }: { answers: 
   } else if (gate) {
     body = (
       <div className="rounded-card bg-card p-md shadow-toy-soft">
-        <h2 className="text-[24px]">Your strengths are ready</h2>
-        <p className="mt-sm m-0 text-[16px] font-semibold">See them now, or first add emotional intelligence: how you handle feelings and read people. You can also add it later.</p>
+        <h2 className="text-title2">Your strengths are ready</h2>
+        <p className="mt-sm m-0 text-callout">See them now, or first add emotional intelligence: how you handle feelings and read people. You can also add it later.</p>
         <div className="mt-md flex flex-col gap-xs">
           <Button onClick={() => { setGate(false); go(at + 1); }}>Add emotional intelligence</Button>
           <Button variant="outline" onClick={onDone} disabled={busy}>{busy ? 'Working it out' : 'See my strengths now'}</Button>
@@ -459,18 +459,18 @@ function Quiz({ answers, setAnswers, onLeave, onDone, busy, error }: { answers: 
   return (
     <>
       <header ref={top} className="focus-dimmable pt-lg">
-        <button type="button" onClick={onLeave} className="text-[14px] font-bold text-ink-soft underline underline-offset-4">
+        <button type="button" onClick={onLeave} className="text-subhead text-ink-soft underline underline-offset-4">
           Save and leave
         </button>
-        <h1 className="mt-xs text-[24px]">{sec.name}</h1>
-        <p className="m-0 text-[14px] font-bold text-ink-soft">
+        <h1 className="mt-xs text-title2">{sec.name}</h1>
+        <p className="m-0 text-subhead text-ink-soft">
           {gate ? 'Core parts done' : intro === null ? `Question ${st.at + 1} of ${sec.count}${sec.optional ? ', optional' : ''}` : 'Before you start'}
         </p>
         <Segmented answers={answers} at={at} />
       </header>
       <div className="focus-target mt-md">{body}</div>
       {error && (
-        <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+        <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           {error}
         </p>
       )}
@@ -500,13 +500,13 @@ function TraitBar({ name, low, high, value }: { name: string; low: string; high:
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="flex items-baseline justify-between gap-sm">
-        <span className="text-[16px] font-bold">{name}</span>
-        <span className="font-display text-[20px] font-extrabold">{value}</span>
+        <span className="text-headline">{name}</span>
+        <span className="text-title3 type-figure">{value}</span>
       </div>
       <div className="relative mt-xs h-[8px] rounded-pill" style={{ background: 'var(--color-line)' }} role="img" aria-label={`${name}: ${value} out of 100`}>
         <span className="absolute inset-y-0 left-0 rounded-pill" style={{ width: `${value}%`, background: 'var(--color-r4)' }} />
       </div>
-      <div className="mt-xs flex justify-between gap-sm text-[12px] font-semibold text-ink-soft">
+      <div className="mt-xs flex justify-between gap-sm text-caption text-ink-soft">
         <span className="max-w-[45%]">{low}</span>
         <span className="max-w-[45%] text-right">{high}</span>
       </div>
@@ -532,29 +532,29 @@ function PersonalityTab({ result }: { result: DiscoverResult }) {
           {a.personality.map((p) => (
             <li key={p.trait} className="rounded-card bg-card p-md shadow-toy-soft">
               <div className="flex items-baseline justify-between gap-sm">
-                <h3 className="text-[18px]">{p.name}</h3>
-                <span className="font-display text-[24px] font-extrabold">{p.score}</span>
+                <h3 className="text-headline">{p.name}</h3>
+                <span className="text-title2 type-figure">{p.score}</span>
               </div>
-              <p className="m-0 text-[14px] font-extrabold text-ink-soft">{p.reading.title}</p>
+              <p className="m-0 text-subhead text-ink-soft">{p.reading.title}</p>
               <div className="relative mt-xs h-[8px] rounded-pill" style={{ background: 'var(--color-line)' }} role="img" aria-label={`${p.name}: ${p.score} out of 100, ${p.band === 'mid' ? 'in the middle' : p.band}`}>
                 <span className="absolute inset-y-0 left-0 rounded-pill" style={{ width: `${p.score}%`, background: 'var(--color-r4)' }} />
               </div>
-              <p className="mt-sm m-0 text-[14px] font-semibold">{p.reading.describes}</p>
-              <dl className="mt-sm m-0 flex flex-col gap-xs text-[14px] font-semibold">
+              <p className="mt-sm m-0 text-subhead">{p.reading.describes}</p>
+              <dl className="mt-sm m-0 flex flex-col gap-xs text-subhead">
                 <div>
-                  <dt className="font-extrabold">At your best</dt>
+                  <dt className="font-bold">At your best</dt>
                   <dd className="m-0 text-ink-soft">{p.reading.atBest}</dd>
                 </div>
                 <div>
-                  <dt className="font-extrabold">Watch for</dt>
+                  <dt className="font-bold">Watch for</dt>
                   <dd className="m-0 text-ink-soft">{p.reading.watchFor}</dd>
                 </div>
                 <div>
-                  <dt className="font-extrabold">With the people close to you</dt>
+                  <dt className="font-bold">With the people close to you</dt>
                   <dd className="m-0 text-ink-soft">{p.reading.inRelationships}</dd>
                 </div>
                 <div>
-                  <dt className="font-extrabold">Try this week</dt>
+                  <dt className="font-bold">Try this week</dt>
                   <dd className="m-0 text-ink-soft">{p.reading.tryThis}</dd>
                 </div>
               </dl>
@@ -562,7 +562,7 @@ function PersonalityTab({ result }: { result: DiscoverResult }) {
           ))}
         </ul>
       </Section>
-      <p className="mt-lg m-0 text-[12px] font-semibold text-ink-soft">A low or high number is not good or bad. It is a different way to be, and each end has its own strengths.</p>
+      <p className="mt-lg m-0 text-caption text-ink-soft">A low or high number is not good or bad. It is a different way to be, and each end has its own strengths.</p>
     </>
   );
 }
@@ -575,9 +575,9 @@ function EqTab({ result }: { result: DiscoverResult }) {
       <Section id="eq-top" title="Your emotional intelligence" lede="How you notice and handle feelings, yours and other people’s. Each part mixes how you see yourself with how you chose in real situations.">
         <div className="relative overflow-hidden rounded-card p-md text-on-fill" style={fillOf(RELATIONSHIP_BY_KEY.lover_partner.color)}>
           <HeroBlobs seed="eq" />
-          <p className="relative m-0 text-[12px] font-extrabold uppercase tracking-wide opacity-90">Across the five parts</p>
-          <p className="relative m-0 font-display text-[44px] font-extrabold leading-none">{eq.overall}</p>
-          <p className="relative mt-xs m-0 text-[14px] font-semibold">
+          <p className="relative m-0 text-eyebrow uppercase opacity-90">Across the five parts</p>
+          <p className="relative m-0 text-figure-lg type-figure leading-none">{eq.overall}</p>
+          <p className="relative mt-xs m-0 text-subhead">
             Strongest: {EQ_DIMS.find((d) => d.key === eq.strongest)!.name}. Quietest: {EQ_DIMS.find((d) => d.key === eq.quietest)!.name}.
           </p>
         </div>
@@ -589,35 +589,35 @@ function EqTab({ result }: { result: DiscoverResult }) {
             return (
               <li key={d.dim} className="rounded-card bg-card p-md shadow-toy-soft">
                 <div className="flex items-baseline justify-between gap-sm">
-                  <h3 className="text-[18px]">{d.name}</h3>
-                  <span className="font-display text-[24px] font-extrabold">{d.score}</span>
+                  <h3 className="text-headline">{d.name}</h3>
+                  <span className="text-title2 type-figure">{d.score}</span>
                 </div>
-                <p className="m-0 text-[14px] font-extrabold text-ink-soft">{d.reading.title}</p>
+                <p className="m-0 text-subhead text-ink-soft">{d.reading.title}</p>
                 <div className="relative mt-xs h-[8px] rounded-pill" style={{ background: 'var(--color-line)' }} role="img" aria-label={`${d.name}: ${d.score} out of 100`}>
                   <span className="absolute inset-y-0 left-0 rounded-pill" style={{ width: `${d.score}%`, background: rel.color }} />
                 </div>
-                <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">How you see yourself: {d.self}. How you chose in situations: {d.ability}.</p>
-                <p className="mt-sm m-0 text-[14px] font-semibold">{d.reading.describes}</p>
-                {d.gap && <p className="mt-xs m-0 text-[14px] font-semibold">{d.gap}</p>}
-                <dl className="mt-sm m-0 flex flex-col gap-xs text-[14px] font-semibold">
+                <p className="mt-xs m-0 text-caption text-ink-soft">How you see yourself: {d.self}. How you chose in situations: {d.ability}.</p>
+                <p className="mt-sm m-0 text-subhead">{d.reading.describes}</p>
+                {d.gap && <p className="mt-xs m-0 text-subhead">{d.gap}</p>}
+                <dl className="mt-sm m-0 flex flex-col gap-xs text-subhead">
                   <div>
-                    <dt className="font-extrabold">At your best</dt>
+                    <dt className="font-bold">At your best</dt>
                     <dd className="m-0 text-ink-soft">{d.reading.atBest}</dd>
                   </div>
                   <div>
-                    <dt className="font-extrabold">Watch for</dt>
+                    <dt className="font-bold">Watch for</dt>
                     <dd className="m-0 text-ink-soft">{d.reading.watchFor}</dd>
                   </div>
                   <div>
-                    <dt className="font-extrabold">With the people close to you</dt>
+                    <dt className="font-bold">With the people close to you</dt>
                     <dd className="m-0 text-ink-soft">{d.reading.inRelationships}</dd>
                   </div>
                   <div>
-                    <dt className="font-extrabold">Try this week</dt>
+                    <dt className="font-bold">Try this week</dt>
                     <dd className="m-0 text-ink-soft">{d.reading.tryThis}</dd>
                   </div>
                   <div>
-                    <dt className="font-extrabold">Helps most with</dt>
+                    <dt className="font-bold">Helps most with</dt>
                     <dd className="m-0 text-ink-soft">{DISCOVER_STRENGTHS[d.helps].name}, in {rel.role}</dd>
                   </div>
                 </dl>
@@ -627,9 +627,9 @@ function EqTab({ result }: { result: DiscoverResult }) {
         </ul>
       </Section>
       <Section id="eq-read" title="Reading people">
-        <p className="m-0 text-[14px] font-semibold">{eq.readingLine}</p>
+        <p className="m-0 text-subhead">{eq.readingLine}</p>
       </Section>
-      <p className="mt-lg m-0 text-[12px] font-semibold text-ink-soft">This is a self-discovery tool, not a clinical test. It shows how you see yourself and how you chose in eight situations today. It can change with sleep, stress and practice.</p>
+      <p className="mt-lg m-0 text-caption text-ink-soft">This is a self-discovery tool, not a clinical test. It shows how you see yourself and how you chose in eight situations today. It can change with sleep, stress and practice.</p>
     </>
   );
 }
@@ -641,13 +641,13 @@ function ReasoningTab({ result }: { result: DiscoverResult }) {
       <Section id="level" title="Your reasoning">
         <div className="relative overflow-hidden rounded-card p-md text-on-fill" style={fillOf(RELATIONSHIP_BY_KEY.guru.color)}>
           <HeroBlobs seed="reasoning" />
-          <p className="relative m-0 text-[12px] font-extrabold uppercase tracking-wide opacity-90">Adjusting puzzles</p>
-          <p className="relative m-0 font-display text-[44px] font-extrabold leading-none">
-            {r.right} <span className="text-[20px]">of {r.of}</span>
+          <p className="relative m-0 text-eyebrow uppercase opacity-90">Adjusting puzzles</p>
+          <p className="relative m-0 text-figure-lg type-figure leading-none">
+            {r.right} <span className="text-title3">of {r.of}</span>
           </p>
-          {r.levelNumber !== null && <p className="relative m-0 text-[14px] font-bold opacity-90">Settled at level {r.levelNumber} of 5</p>}
-          <h3 className="relative mt-xs text-[22px]">{r.level}</h3>
-          <p className="relative mt-xs m-0 text-[14px] font-semibold">{r.levelLine}</p>
+          {r.levelNumber !== null && <p className="relative m-0 text-subhead font-semibold opacity-90">Settled at level {r.levelNumber} of 5</p>}
+          <h3 className="relative mt-xs text-title2">{r.level}</h3>
+          <p className="relative mt-xs m-0 text-subhead">{r.levelLine}</p>
         </div>
       </Section>
       {r.kinds.length > 0 && (
@@ -656,14 +656,14 @@ function ReasoningTab({ result }: { result: DiscoverResult }) {
             {r.kinds.map((k) => (
               <li key={k.kind} className="rounded-tile bg-card p-sm shadow-toy-soft">
                 <div className="flex items-baseline justify-between gap-sm">
-                  <span className="text-[16px] font-bold">{k.name}</span>
-                  <span className="font-display text-[18px] font-extrabold">{k.right} of {k.of}</span>
+                  <span className="text-headline">{k.name}</span>
+                  <span className="text-headline">{k.right} of {k.of}</span>
                 </div>
                 <span className="mt-xs block h-[8px] rounded-pill" style={{ background: 'var(--color-line)' }}>
                   <span className="block h-full rounded-pill" style={{ width: `${(k.right / k.of) * 100}%`, background: 'var(--color-r6)' }} />
                 </span>
-                <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{k.what}</p>
-                <p className="mt-xs m-0 text-[14px] font-semibold">{k.note}</p>
+                <p className="mt-xs m-0 text-caption text-ink-soft">{k.what}</p>
+                <p className="mt-xs m-0 text-subhead">{k.note}</p>
               </li>
             ))}
           </ul>
@@ -671,14 +671,14 @@ function ReasoningTab({ result }: { result: DiscoverResult }) {
       )}
       {(r.trend || r.speed) && (
         <Section id="trend" title="How you worked">
-          {r.trend && <p className="m-0 text-[14px] font-semibold">{r.trend}</p>}
-          {r.speed && <p className="mt-xs m-0 text-[14px] font-semibold">{r.speed}</p>}
+          {r.trend && <p className="m-0 text-subhead">{r.trend}</p>}
+          {r.speed && <p className="mt-xs m-0 text-subhead">{r.speed}</p>}
         </Section>
       )}
       <Section id="situations" title="Real situations" lede="The last part asked how you would handle people. It is judged against the team’s own reading of each case, not a test.">
         <StatTile label="Situations" value={result.judgment} hint="Out of 100" />
       </Section>
-      <p className="mt-lg m-0 text-[12px] font-semibold text-ink-soft">{r.caveat}</p>
+      <p className="mt-lg m-0 text-caption text-ink-soft">{r.caveat}</p>
     </>
   );
 }
@@ -692,7 +692,7 @@ function UseTab({ settings, onChange }: { settings: { steps: boolean; assistant:
         <Toggle on={settings.assistant} onChange={(v) => onChange({ assistant: v })} label="Let the assistant learn from them" hint="Only a model that keeps no data can read it." />
       </div>
       <Fold title="What is used" className="mt-sm">
-        <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+        <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-subhead text-ink-soft">
           <li>Only a short summary: your strengths, how each trait reads and your reasoning level.</li>
           <li>The assistant uses it to choose its tone and the size of a step.</li>
           <li>How your mind works, once switched on, shapes next steps and helps the assistant pace things. It only matters if you took that self-check.</li>
@@ -711,8 +711,8 @@ function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, 
   const growthRel = RELATIONSHIP_BY_KEY[result.growth];
   return (
     <>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Taken {new Date(at).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long', year: 'numeric' })}. Only you can see this.</p>
-      <TabRow className="mt-sm" pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-md text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`} label="Parts of your result" items={TABS.filter(([k]) => k !== 'eq' || result.eq).map(([key, label]) => ({ key, label }))} value={tab} onChange={setTab} />
+      <p className="mt-xs m-0 text-subhead text-ink-soft">Taken {new Date(at).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long', year: 'numeric' })}. Only you can see this.</p>
+      <TabRow className="mt-sm" pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-md text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`} label="Parts of your result" items={TABS.filter(([k]) => k !== 'eq' || result.eq).map(([key, label]) => ({ key, label }))} value={tab} onChange={setTab} />
       {tab === 'personality' && <PersonalityTab result={result} />}
       {tab === 'eq' && <EqTab result={result} />}
       {tab === 'reasoning' && <ReasoningTab result={result} />}
@@ -732,14 +732,14 @@ function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, 
                 <div className="relative flex items-center gap-sm">
                   <Avatar relationship={key} size={n === 0 ? 72 : 56} decorative still mood="happy" />
                   <div className="min-w-0">
-                    <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide opacity-90">
+                    <p className="m-0 text-eyebrow uppercase opacity-90">
                       {n + 1}. {rel.role}
                     </p>
-                    <h3 className="text-[22px] leading-[1.15]">{s.name}</h3>
+                    <h3 className="text-title2 leading-[1.15]">{s.name}</h3>
                   </div>
                 </div>
-                <p className="relative mt-sm m-0 text-[14px] font-semibold">{s.line}</p>
-                <p className="relative mt-xs m-0 font-display text-[28px] font-extrabold">{score}</p>
+                <p className="relative mt-sm m-0 text-subhead">{s.line}</p>
+                <p className="relative mt-xs m-0 text-title1 type-figure">{score}</p>
               </li>
             );
           })}
@@ -755,8 +755,8 @@ function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, 
                 <Avatar relationship={s.key} size={36} decorative still mood="happy" />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline justify-between gap-sm">
-                    <span className="truncate text-[16px] font-bold">{DISCOVER_STRENGTHS[s.key].name}</span>
-                    <span className="shrink-0 font-display text-[18px] font-extrabold">{s.score}</span>
+                    <span className="truncate text-headline">{DISCOVER_STRENGTHS[s.key].name}</span>
+                    <span className="shrink-0 text-title3 type-figure">{s.score}</span>
                   </span>
                   <span className="mt-xs block h-[8px] rounded-pill" style={{ background: 'var(--color-line)' }}>
                     <span className="block h-full rounded-pill" style={{ width: `${s.score}%`, background: rel.color }} />
@@ -786,10 +786,10 @@ function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, 
             const s = DISCOVER_STRENGTHS[key];
             return (
               <li key={key} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <h3 className="text-[18px]">{s.name}</h3>
-                <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">Use it: </span>{s.use}</p>
-                <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">Watch for: </span>{s.watch}</p>
-                <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">Try this week: </span>{s.tryThis}</p>
+                <h3 className="text-headline">{s.name}</h3>
+                <p className="mt-xs m-0 text-subhead"><span className="font-bold">Use it: </span>{s.use}</p>
+                <p className="mt-xs m-0 text-subhead"><span className="font-bold">Watch for: </span>{s.watch}</p>
+                <p className="mt-xs m-0 text-subhead"><span className="font-bold">Try this week: </span>{s.tryThis}</p>
               </li>
             );
           })}
@@ -801,13 +801,13 @@ function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, 
           <div className="flex items-center gap-sm">
             <Avatar relationship={result.growth} size={48} decorative still mood="sleepy" />
             <div>
-              <h3 className="text-[18px]">{growth.name}</h3>
-              <p className="m-0 text-[14px] font-semibold" style={{ color: `var(--deep-${result.growth})` }}>{growthRel.role}</p>
+              <h3 className="text-headline">{growth.name}</h3>
+              <p className="m-0 text-subhead" style={{ color: `var(--deep-${result.growth})` }}>{growthRel.role}</p>
             </div>
           </div>
-          <p className="mt-sm m-0 text-[14px] font-semibold">This is your quietest strength today. That does not make it weak. It is the easiest place to start a small habit.</p>
-          <p className="mt-xs m-0 text-[14px] font-semibold">{growth.tryThis}</p>
-          <Link to={`/realm/${result.growth}`} className="toy mt-sm inline-flex min-h-[48px] items-center justify-center rounded-pill bg-ink px-md text-[16px] font-bold text-on-ink">
+          <p className="mt-sm m-0 text-subhead">This is your quietest strength today. That does not make it weak. It is the easiest place to start a small habit.</p>
+          <p className="mt-xs m-0 text-subhead">{growth.tryThis}</p>
+          <Link to={`/realm/${result.growth}`} className="toy mt-sm inline-flex min-h-[48px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
             Open this pillar
           </Link>
         </div>
@@ -815,7 +815,7 @@ function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, 
         </>
       )}
 
-      <p className="mt-lg m-0 text-[12px] font-semibold text-ink-soft">
+      <p className="mt-lg m-0 text-caption text-ink-soft">
         This is a self-discovery tool, not a diagnosis or a hiring test. It compares you with your own scale, not with other people, and a quiz can only show how you see yourself today.
       </p>
       <div className="mt-sm flex flex-wrap gap-xs">
@@ -905,13 +905,13 @@ export function Discover() {
       <AppCover back={{ to: '/apps', label: 'Apps' }} title="Discover" lede="A quiz on how you think, feel and act, and where your strengths are." />
 
       {q.isPending && (
-        <p className="mt-md text-[14px] font-bold text-ink-soft" role="status">
+        <p className="mt-md text-subhead text-ink-soft" role="status">
           Opening your quiz
         </p>
       )}
       {q.isError && (
         <div className="mt-md rounded-card bg-card p-md shadow-toy-soft flex flex-wrap-reverse items-center justify-between gap-sm" role="alert">
-          <p className="m-0 font-bold min-w-0 flex-1 basis-[60%]">Could not load Discover.</p>
+          <p className="m-0 font-semibold min-w-0 flex-1 basis-[60%]">Could not load Discover.</p>
           <Button variant="outline" onClick={() => q.refetch()}>
             Try again
           </Button>
@@ -927,13 +927,13 @@ export function Discover() {
           <section className="relative mt-md overflow-hidden rounded-card p-md text-on-fill" style={fillOf(RELATIONSHIP_BY_KEY.self.color)} data-pillar="self" aria-labelledby="quiz-head">
             <HeroBlobs seed="discover" />
             <div className="relative flex items-start justify-between gap-sm">
-              <h2 id="quiz-head" className="min-w-0 text-[22px]">{prog.done === 0 ? 'Find out what you are good at' : `${prog.done} of ${DISCOVER_STEPS} answered`}</h2>
+              <h2 id="quiz-head" className="min-w-0 text-title2">{prog.done === 0 ? 'Find out what you are good at' : `${prog.done} of ${DISCOVER_STEPS} answered`}</h2>
               {/* Dew, guide to yourself: Discover is about knowing yourself, and a coloured card carries its guide. */}
               <span className="shrink-0" aria-hidden="true">
                 <Avatar relationship="self" size={64} decorative mood={prog.done === 0 ? 'happy' : 'excited'} />
               </span>
             </div>
-            <p className="relative mt-xs m-0 text-[14px] font-semibold">Five short parts, saved as you go, so you can stop and come back.</p>
+            <p className="relative mt-xs m-0 text-subhead">Five short parts, saved as you go, so you can stop and come back.</p>
             <div className="relative mt-sm flex flex-wrap gap-xs">
               <Button variant="light" onClick={() => setMode('quiz')}>
                 {prog.done === 0 ? 'Start the quiz' : prog.core.done === prog.core.total ? 'Add emotional intelligence' : 'Continue'}
@@ -959,10 +959,10 @@ export function Discover() {
                 const p = prog.parts[k]!;
                 return (
                   <li key={s.key} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-                    <span className="flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-paper text-[14px] font-extrabold">{k + 1}</span>
+                    <span className="flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-paper text-subhead font-medium">{k + 1}</span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[16px] font-bold">{s.name}{s.optional ? ' (optional)' : ''}</span>
-                      <span className="block text-[14px] font-semibold text-ink-soft">{p.done} of {s.count} done</span>
+                      <span className="block text-headline">{s.name}{s.optional ? ' (optional)' : ''}</span>
+                      <span className="block text-subhead text-ink-soft">{p.done} of {s.count} done</span>
                     </span>
                   </li>
                 );
@@ -974,10 +974,10 @@ export function Discover() {
             <Section id="last" title="Your last result">
               <div className="flex flex-wrap-reverse items-center justify-between gap-sm rounded-card bg-card p-md shadow-toy-soft">
                 <div className="min-w-0 flex-1 basis-[60%]">
-                  <p className="m-0 text-[14px] font-semibold text-ink-soft">
+                  <p className="m-0 text-subhead text-ink-soft">
                     {new Date(result.createdAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long', year: 'numeric' })}
                   </p>
-                  <p className="mt-xs m-0 text-[16px] font-bold">
+                  <p className="mt-xs m-0 text-headline">
                     {result.result.top.map((k) => DISCOVER_STRENGTHS[k].name).join(', ')}
                   </p>
                 </div>
@@ -989,7 +989,7 @@ export function Discover() {
                 <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
                   {data.history.map((h) => (
                     <li key={h.id} className="flex items-center justify-between gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-                      <span className="text-[14px] font-semibold">{new Date(h.createdAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' })}: {h.result.top.map((k) => DISCOVER_STRENGTHS[k].name).join(', ')}</span>
+                      <span className="text-subhead">{new Date(h.createdAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' })}: {h.result.top.map((k) => DISCOVER_STRENGTHS[k].name).join(', ')}</span>
                       <Button size="sm" variant="ghost" onClick={() => { setShown(h); setMode('result'); }}>
                         Open
                       </Button>

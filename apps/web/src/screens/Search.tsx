@@ -8,7 +8,7 @@ export function Search() {
     <Screen columns={false}>
       <header className="pt-lg">
         <BackLink to="/home">Home</BackLink>
-        <h1 className="text-[30px]">Search</h1>
+        <h1 className="text-large-title">Search</h1>
         <div className="mt-md">
           <SearchBox placeholder="Tasks, journals, knowledge, products, people" autoFocus />
         </div>

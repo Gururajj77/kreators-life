@@ -30,10 +30,10 @@ export function DayBlocks({ tasks, sessions }: { tasks: readonly Node[]; /** Tod
   for (const r of sessions ?? own.data?.rounds ?? []) if (r.nodeId) focused.set(r.nodeId, (focused.get(r.nodeId) ?? 0) + r.minutes);
   return (
     <div role="group" className="mt-md" aria-labelledby="blocks-heading">
-      <h3 id="blocks-heading" className="text-[16px]">
+      <h3 id="blocks-heading" className="text-headline">
         {COPY.title}
       </h3>
-      <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{COPY.lede}</p>
+      <p className="mt-xs m-0 text-caption text-ink-soft">{COPY.lede}</p>
       <ol className="mt-xs flex list-none flex-col gap-xs p-0 m-0" aria-label={COPY.title}>
         {d.blocks.map((b, i) => {
           const gap = i > 0 ? d.free.find((f) => f.end === b.start) : undefined;
@@ -41,17 +41,17 @@ export function DayBlocks({ tasks, sessions }: { tasks: readonly Node[]; /** Tod
           return (
             <li key={b.id} className="flex list-none flex-col gap-xs">
               {gap && (
-                <p className="m-0 rounded-tile border-2 border-dashed border-line px-sm py-xs text-[12px] font-bold text-ink-mute">
+                <p className="m-0 rounded-tile border-2 border-dashed border-line px-sm py-xs text-caption text-ink-mute">
                   {COPY.free} {minutesLabel2(gap.end - gap.start)}, {blockTimeLabel(gap.start)} to {blockTimeLabel(gap.end)}
                 </p>
               )}
               <div className="flex items-stretch gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                 <span className="w-[6px] shrink-0 self-stretch rounded-pill" style={{ background: rel.color }} aria-hidden="true" />
                 <div className="min-w-0 flex-1">
-                  <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
+                  <p className="m-0 text-eyebrow uppercase text-ink-soft">
                     {blockTimeLabel(b.start)} to {blockTimeLabel(b.end)}, {minutesLabel2(b.end - b.start)}
                   </p>
-                  <p className="m-0 text-[16px] font-bold leading-snug">
+                  <p className="m-0 text-headline">
                     <Inert text={b.title} />
                   </p>
                   {focused.has(b.id) && (
@@ -59,7 +59,7 @@ export function DayBlocks({ tasks, sessions }: { tasks: readonly Node[]; /** Tod
                       <span className="h-[6px] min-w-0 flex-1 overflow-hidden rounded-pill bg-line" aria-hidden="true">
                         <span className="block h-full rounded-pill opacity-50" style={{ width: `${Math.min(100, Math.round(((focused.get(b.id) ?? 0) / Math.max(1, b.end - b.start)) * 100))}%`, background: rel.color }} />
                       </span>
-                      <span className="shrink-0 text-[12px] font-bold text-ink-soft">Focused {minutesLabel2(focused.get(b.id) ?? 0)}</span>
+                      <span className="shrink-0 text-caption text-ink-soft">Focused {minutesLabel2(focused.get(b.id) ?? 0)}</span>
                     </div>
                   )}
                 </div>
@@ -69,7 +69,7 @@ export function DayBlocks({ tasks, sessions }: { tasks: readonly Node[]; /** Tod
           );
         })}
       </ol>
-      {d.untimed > 0 && <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{d.untimed === 1 ? '1 task has no time yet.' : `${d.untimed} tasks have no time yet.`}</p>}
+      {d.untimed > 0 && <p className="mt-xs m-0 text-caption text-ink-soft">{d.untimed === 1 ? '1 task has no time yet.' : `${d.untimed} tasks have no time yet.`}</p>}
     </div>
   );
 }

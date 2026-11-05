@@ -49,12 +49,12 @@ function TalkList({ onOpen }: { onOpen: (id: string) => void }) {
   const list = q.data?.talks ?? [];
   return (
     <div className="mt-md">
-      <p className="m-0 text-[14px] font-semibold text-ink-soft">One for each run you are part of, with only its runners and host.</p>
+      <p className="m-0 text-subhead text-ink-soft">One for each run you are part of, with only its runners and host.</p>
       {q.isError && <ErrorLine e={q.error} className="mt-xs" />}
       {q.isPending && <SkeletonList className="mt-md" count={3} lines={2} label="Loading discussions" />}
       {q.data && list.length === 0 && (
         <div className="mt-md rounded-card border-2 border-dashed border-line p-md">
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">No discussions yet. Join a club, and each of its runs opens one here.</p>
+          <p className="m-0 text-subhead text-ink-soft">No discussions yet. Join a club, and each of its runs opens one here.</p>
         </div>
       )}
       <ul className="mt-md flex list-none flex-col gap-xs p-0 m-0">
@@ -62,16 +62,16 @@ function TalkList({ onOpen }: { onOpen: (id: string) => void }) {
           <li key={t.runId}>
             <button type="button" onClick={() => onOpen(t.runId)} className="toy toy-soft block w-full rounded-tile bg-card p-sm text-left text-ink">
               <span className="flex items-start justify-between gap-xs">
-                <span className="min-w-0 text-[16px] font-bold">
+                <span className="min-w-0 text-headline">
                   {t.title}
                   <Dot n={t.unread} />
                 </span>
                 {!t.open && <StatusTag tone="neutral" fit>Closed</StatusTag>}
               </span>
-              <span className="block text-[14px] font-semibold text-ink-soft">
+              <span className="block text-subhead text-ink-soft">
                 {t.clubName}, {eventTime(t.startsAt)}
               </span>
-              <span className="block text-[12px] font-bold text-ink-soft">
+              <span className="block text-caption text-ink-soft">
                 {t.people} {t.people === 1 ? 'person' : 'people'}
                 {t.lastLineAt ? `, last line ${when(t.lastLineAt)}` : ', no lines yet'}
               </span>
@@ -247,7 +247,7 @@ function TalkView({ runId, onBack }: { runId: string; onBack: () => void }) {
         <Button variant="outline" size="sm" onClick={onBack}>
           All discussions
         </Button>
-        <p className="mt-md m-0 font-bold">That discussion is not open to you. Only a run's runners and its host are in it.</p>
+        <p className="mt-md m-0 font-semibold">That discussion is not open to you. Only a run's runners and its host are in it.</p>
       </div>
     );
 
@@ -259,11 +259,11 @@ function TalkView({ runId, onBack }: { runId: string; onBack: () => void }) {
       </Button>
       {t ? (
         <header className="mt-sm">
-          <h2 className="text-[24px]">{t.title}</h2>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+          <h2 className="text-title2">{t.title}</h2>
+          <p className="mt-xs m-0 text-subhead text-ink-soft">
             {t.clubName}, {eventTime(t.startsAt)}
           </p>
-          <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+          <p className="mt-xs m-0 text-caption text-ink-soft">
             {t.people} {t.people === 1 ? 'person' : 'people'}, {talkWhen(t)}
           </p>
         </header>
@@ -310,23 +310,23 @@ function TalkView({ runId, onBack }: { runId: string; onBack: () => void }) {
               <SkeletonList count={3} lines={1} label="Loading lines" />
             </li>
           )}
-          {status === 'ready' && lines.length === 0 && <li className="text-[14px] font-semibold text-ink-soft">Nothing here yet. Say hello, or ask where to meet.</li>}
+          {status === 'ready' && lines.length === 0 && <li className="text-subhead text-ink-soft">Nothing here yet. Say hello, or ask where to meet.</li>}
           {lines.map((l) => (
-            <li key={l.id} data-fresh={fresh.current.has(l.seq) ? '' : undefined} className={`rounded-tile p-sm text-[14px] ${l.mine ? 'bg-ink text-on-ink' : 'bg-card shadow-toy-soft'}`}>
+            <li key={l.id} data-fresh={fresh.current.has(l.seq) ? '' : undefined} className={`rounded-tile p-sm text-subhead ${l.mine ? 'bg-ink text-on-ink' : 'bg-card shadow-toy-soft'}`}>
               {l.replyTo && (
-                <span className={`mb-xs block truncate rounded-inner-sm px-xs text-[12px] font-bold ${l.mine ? 'bg-on-ink/15' : 'bg-paper text-ink-soft'}`}>
+                <span className={`mb-xs block truncate rounded-inner-sm px-xs text-caption ${l.mine ? 'bg-on-ink/15' : 'bg-paper text-ink-soft'}`}>
                   {l.replyTo.name}: <Inert text={l.replyTo.body} />
                 </span>
               )}
               <span className="flex flex-wrap items-baseline justify-between gap-xs">
-                <span className="font-extrabold">
+                <span className="font-bold">
                   {l.mine ? 'You' : l.name}
-                  {l.anonymous && <span className={`ml-xs rounded-pill px-xs text-[11px] leading-[18px] ${l.mine ? 'bg-on-ink/15' : 'bg-line text-ink-soft'}`}>{l.mine ? `Anonymous as ${l.name}` : 'Anonymous'}</span>}
+                  {l.anonymous && <span className={`ml-xs rounded-pill px-xs text-caption2 leading-[18px] ${l.mine ? 'bg-on-ink/15' : 'bg-line text-ink-soft'}`}>{l.mine ? `Anonymous as ${l.name}` : 'Anonymous'}</span>}
                   {l.host && <IconTag className="ml-xs" tone="warn" icon="Crown">Host</IconTag>}
                 </span>
-                <span className={`text-[12px] font-bold ${l.mine ? 'text-on-ink/70' : 'text-ink-soft'}`}>{when(l.createdAt)}</span>
+                <span className={`text-caption ${l.mine ? 'text-on-ink/70' : 'text-ink-soft'}`}>{when(l.createdAt)}</span>
               </span>
-              <span className="block whitespace-pre-wrap font-semibold">
+              <span className="block whitespace-pre-wrap">
                 <Inert text={l.body} />
               </span>
               <LineActions
@@ -353,15 +353,15 @@ function TalkView({ runId, onBack }: { runId: string; onBack: () => void }) {
       </div>
       <ErrorLine e={unsay.isError ? unsay.error : report.isError ? report.error : block.isError ? block.error : null} className="mt-xs" />
       {report.isSuccess && (
-        <p role="status" className="mt-xs m-0 text-[14px] font-bold text-ink-soft">
+        <p role="status" className="mt-xs m-0 text-subhead text-ink-soft">
           Thanks. The team has it.
         </p>
       )}
-      {t && !writable && <p className="mt-sm m-0 text-[14px] font-bold text-ink-soft">This discussion is closed. You can still read it.</p>}
+      {t && !writable && <p className="mt-sm m-0 text-subhead text-ink-soft">This discussion is closed. You can still read it.</p>}
       {writable && (
         <div className="mt-sm">
           {reply && (
-            <p className="mb-xs m-0 flex items-center justify-between gap-xs rounded-tile bg-paper p-xs text-[12px] font-bold text-ink-soft">
+            <p className="mb-xs m-0 flex items-center justify-between gap-xs rounded-tile bg-paper p-xs text-caption text-ink-soft">
               <span className="min-w-0 truncate">
                 Replying to {reply.mine ? 'yourself' : reply.name}: <Inert text={reply.body} />
               </span>
@@ -373,9 +373,9 @@ function TalkView({ runId, onBack }: { runId: string; onBack: () => void }) {
           <AnonToggle on={anonymous} onChange={setAnonymous} className="mb-xs" />
           <ChatComposer placeholder="Write to the runners" maxLength={MAX_CHANNEL_MESSAGE} disabled={say.isPending} onSend={(text) => say.mutate(text)} />
           {failed && (
-            <div role="alert" className="mt-xs rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+            <div role="alert" className="mt-xs rounded-tile bg-r1/15 p-sm text-subhead">
               <p className="m-0">That line did not send: {errorText(say.error, 'That did not work. Try again.')}</p>
-              <p className="mt-xs m-0 break-words font-semibold text-ink-soft">{failed}</p>
+              <p className="mt-xs m-0 break-words text-ink-soft">{failed}</p>
               <Button size="sm" variant="outline" className="mt-xs" disabled={say.isPending} onClick={() => say.mutate(failed)}>
                 Try again
               </Button>

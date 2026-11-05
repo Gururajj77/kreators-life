@@ -1,5 +1,5 @@
 import { money, type TodayAgency, type TodayEvent, LOCALE } from '@kreators/shared';
-import { ChevronRight, Footprints, PartyPopper, UsersRound, type LucideIcon } from 'lucide-react';
+import { ArrowUpRight, Footprints, PartyPopper, UsersRound, type LucideIcon } from 'lucide-react';
 import { Link } from 'react-router';
 import { Icon } from './Icon';
 import { StatusTag } from './StatusTag';
@@ -15,11 +15,11 @@ function Row({ to, title, meta, tag }: { to: string; title: string; meta: string
     <li>
       <Link to={to} className={ROW}>
         <span className="min-w-0 flex-1">
-          <span className="block text-[14px] font-extrabold">{title}</span>
-          <span className="block text-[12px] font-bold text-ink-soft">{meta}</span>
+          <span className="block text-subhead font-semibold">{title}</span>
+          <span className="block text-caption text-ink-soft">{meta}</span>
         </span>
         {tag}
-        <Icon icon={ChevronRight} size={16} className="shrink-0 text-ink-mute" />
+        <Icon icon={ArrowUpRight} size={16} className="shrink-0 text-ink-mute" />
       </Link>
     </li>
   );
@@ -36,14 +36,14 @@ export function AgencyToday({ agency }: { agency: TodayAgency }) {
   return (
     <section className="mt-lg" aria-labelledby="agency-today-heading">
       <div className="flex items-center justify-between gap-sm">
-        <h2 id="agency-today-heading" className="text-[18px]">
+        <h2 id="agency-today-heading" className="text-title2">
           Agency today
         </h2>
-        <Link to="/agency" className="flex min-h-[44px] shrink-0 items-center text-[14px] font-bold text-ink-soft underline underline-offset-4 hover:text-ink">
+        <Link to="/agency" className="flex min-h-[44px] shrink-0 items-center text-subhead text-ink-soft underline underline-offset-4 hover:text-ink">
           Open Agency
         </Link>
       </div>
-      <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">What your clients are waiting on. Tap a row to open it.</p>
+      <p className="mt-xs m-0 text-subhead text-ink-soft">What your clients are waiting on. Tap a row to open it.</p>
       <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
         {changeAsks > 0 && (
           <Row
@@ -70,7 +70,7 @@ export function AgencyToday({ agency }: { agency: TodayAgency }) {
         ))}
       </ul>
       {dueTotal > due.length && (
-        <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+        <p className="mt-xs m-0 text-subhead text-ink-soft">
           Showing {due.length} of {dueTotal} pieces due. Agency lists the rest.
         </p>
       )}
@@ -86,7 +86,7 @@ export function TodayEvents({ events }: { events: TodayEvent[] }) {
   if (events.length === 0) return null;
   return (
     <section className="mt-lg" aria-labelledby="events-today-heading">
-      <h2 id="events-today-heading" className="text-[18px]">
+      <h2 id="events-today-heading" className="text-title2">
         Today&rsquo;s events
       </h2>
       <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -97,12 +97,12 @@ export function TodayEvents({ events }: { events: TodayEvent[] }) {
                 <Icon icon={EVENT_ICON[e.kind]} size={16} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[14px] font-extrabold">{e.title}</span>
-                <span className="block text-[12px] font-bold text-ink-soft">
+                <span className="block text-subhead font-semibold">{e.title}</span>
+                <span className="block text-caption text-ink-soft">
                   {EVENT_KIND[e.kind]}, {new Date(e.at).toLocaleTimeString(LOCALE, { hour: 'numeric', minute: '2-digit' })}
                 </span>
               </span>
-              <Icon icon={ChevronRight} size={16} className="shrink-0 text-ink-mute" />
+              <Icon icon={ArrowUpRight} size={16} className="shrink-0 text-ink-mute" />
             </Link>
           </li>
         ))}

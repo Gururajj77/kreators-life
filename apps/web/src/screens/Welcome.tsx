@@ -68,17 +68,17 @@ export function Welcome() {
       <MorphShapes page />
       <div className="relative isolate flex flex-1 flex-col justify-center pt-xl">
         <Staircase />
-        <h1 className="mt-lg text-[clamp(36px,11vw,48px)]">
+        <h1 className="mt-lg text-display-2">
           <TextReveal parts={[{ text: 'Seven relationships.' }, { br: true }, { text: 'One you.' }]} />
         </h1>
-        <p className="mt-md text-[18px] font-semibold leading-snug text-ink-soft">
+        <p className="mt-md text-headline text-ink-soft">
           A daily game for the seven relationships, with the apps a creator or an agency needs. Answer a few questions and the apps that fit you switch on.
           <span className="hidden sm:inline"> The deeper strategy session waits in Pillars until you want it.</span>
         </p>
       </div>
       <div className="flex flex-col gap-sm pb-lg">
         {error && (
-          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {error}
           </p>
         )}
@@ -96,12 +96,13 @@ export function Welcome() {
             {busy ? 'Opening your chat' : resuming ? 'Carry on setting up' : 'Start with a short chat'}
           </Button>
         </LiquidMetal>
-        <p className="m-0 text-center text-[14px] font-semibold text-ink-mute">
+        <p className="m-0 text-center text-subhead text-ink-mute">
           Free to start. Your answers are saved on this device, so you can stop and come back. Add this page to your home screen to keep it close.
         </p>
-        <p className="m-0 text-center text-[14px] font-semibold">
+        <p className="m-0 text-center text-subhead">
           Already have an account?{' '}
-          <Link to="/signin" className="underline underline-offset-4">
+          {/* nowrap: "Sign" ended one line and "in" began the next on a phone. */}
+          <Link to="/signin" className="whitespace-nowrap underline underline-offset-4">
             Sign in
           </Link>
           {' '}or{' '}

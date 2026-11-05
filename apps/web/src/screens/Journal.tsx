@@ -48,7 +48,7 @@ export function Journal() {
     <Screen>
       <header className="pt-lg">
         <BackLink to="/wellbeing">Wellbeing</BackLink>
-        <h1 className="text-[30px]">Journal</h1>
+        <h1 className="text-large-title">Journal</h1>
       </header>
 
       {/* New entry is this screen's one solid button, so the glass tap is an outline here. */}
@@ -61,21 +61,21 @@ export function Journal() {
             <Avatar relationship="self" size={72} mood={stats.thisMonth > 0 ? 'happy' : 'sleepy'} decorative />
           </span>
           <div className="pr-xl">
-            <p className="m-0 font-display text-[60px] font-extrabold leading-none">{stats.total}</p>
-            <p className="mt-xs m-0 text-[16px] font-bold">{stats.total === 1 ? 'entry' : 'entries'} so far, {stats.thisMonth} this month</p>
+            <p className="m-0 text-figure-hero type-figure leading-none">{stats.total}</p>
+            <p className="mt-xs m-0 text-headline">{stats.total === 1 ? 'entry' : 'entries'} so far, {stats.thisMonth} this month</p>
           </div>
           <div className="mt-md flex gap-xs">
-            <span className="inline-flex items-center gap-xs rounded-pill bg-card px-sm py-xs text-[14px] font-extrabold text-ink">
+            <span className="inline-flex items-center gap-xs rounded-pill bg-card px-sm py-xs text-subhead font-medium text-ink">
               <span className="block size-[10px] rounded-pill bg-r4" aria-hidden="true" />
               {stats.positive} positive
             </span>
-            <span className="inline-flex items-center gap-xs rounded-pill bg-card px-sm py-xs text-[14px] font-extrabold text-ink">
+            <span className="inline-flex items-center gap-xs rounded-pill bg-card px-sm py-xs text-subhead font-medium text-ink">
               <span className="block size-[10px] rounded-pill bg-r2" aria-hidden="true" />
               {stats.negative} heavy
             </span>
           </div>
           <div className="mt-md rounded-tile bg-ink-fixed/20 p-sm">
-            <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide opacity-90">This month</p>
+            <p className="m-0 text-eyebrow uppercase opacity-90">This month</p>
             <div className="mt-xs">
               <CalendarGrid onFill month={month} today={todayLocal()} maxDate={todayLocal()} selected={day} onMonth={setMonth} onPick={setDay} marks={marks} label="Journal calendar. Tap a day to read, add or change its entries." />
             </div>
@@ -99,11 +99,11 @@ export function Journal() {
       <PeriodPanel id="journal-period" parts={['journal', 'wellbeing']} />
       <EmergenceSlot app="journal" max={2} />
       <section className="mt-lg" aria-labelledby="entries-heading">
-        <h2 id="entries-heading" className="text-[24px]">
+        <h2 id="entries-heading" className="text-title2">
           My journals
         </h2>
         {q.isPending && <SkeletonList className="mt-sm" count={3} lines={2} label="Opening your journal" />}
-        {!q.isPending && entries.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Nothing written yet. This page is only for you. Write what is on your mind.</p>}
+        {!q.isPending && entries.length === 0 && <p className="mt-xs m-0 text-subhead text-ink-soft">Nothing written yet. This page is only for you. Write what is on your mind.</p>}
         <ol className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {entries.map((e) => {
             const m = e.emotion ? MOODS.find((x) => x.value === e.emotion) : null;
@@ -118,14 +118,14 @@ export function Journal() {
                     </span>
                   )}
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[16px] font-bold">
+                    <span className="block truncate text-headline">
                       {e.title}
                     </span>
-                    <span className="block text-[14px] font-semibold text-ink-soft">
+                    <span className="block text-subhead text-ink-soft">
                       {new Date(e.createdAt).toLocaleString(LOCALE, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                       {e.stressors.length ? `. ${e.stressors.join(', ')}` : ''}
                     </span>
-                    <span className="mt-xs block text-[14px] font-semibold">{e.body.slice(0, 140)}{e.body.length > 140 ? '…' : ''}</span>
+                    <span className="mt-xs block text-subhead">{e.body.slice(0, 140)}{e.body.length > 140 ? '…' : ''}</span>
                   </span>
                 </button>
               </li>
@@ -174,7 +174,7 @@ function DaySheet({ date, onClose, onOpen, onNew }: { date: string | null; onClo
     <Sheet open={date !== null} onClose={onClose} title={pretty}>
       <div className="flex flex-col gap-sm pb-xl">
         {q.isPending && <SkeletonList count={1} lines={2} label="Opening" />}
-        {q.data && entries.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">Nothing written on this day yet.</p>}
+        {q.data && entries.length === 0 && <p className="m-0 text-subhead text-ink-soft">Nothing written on this day yet.</p>}
         <ul className="m-0 flex list-none flex-col gap-xs p-0">
           {entries.map((e) => {
             const m = e.emotion ? MOODS.find((x) => x.value === e.emotion) : null;
@@ -183,10 +183,10 @@ function DaySheet({ date, onClose, onOpen, onNew }: { date: string | null; onClo
                 <button type="button" onClick={() => onOpen(e)} className="toy toy-soft flex w-full items-center gap-sm rounded-tile bg-card p-sm text-left">
                   {m && <MoodFace value={m.value} size={36} />}
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[16px] font-bold">{e.title}</span>
-                    <span className="block truncate text-[14px] font-semibold text-ink-soft">{e.body}</span>
+                    <span className="block truncate text-headline">{e.title}</span>
+                    <span className="block truncate text-subhead text-ink-soft">{e.body}</span>
                   </span>
-                  <span className="text-[14px] font-bold text-ink-soft">Edit</span>
+                  <span className="text-subhead text-ink-soft">Edit</span>
                 </button>
               </li>
             );
@@ -247,21 +247,21 @@ function EntrySheet({ entry, date, start, onClose, onSaved }: { entry: JournalEn
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Title</span>
-          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Feeling good today" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+          <span className="block text-subhead font-semibold">Title</span>
+          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Feeling good today" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
         </label>
         <label className="block">
-          <span className="flex justify-between text-[14px] font-bold">
+          <span className="flex justify-between text-subhead">
             <span>Say anything that is on your mind</span>
             <span className="text-ink-soft">{words} words</span>
           </span>
-          <textarea value={body} onChange={(e) => setBody(e.target.value)} maxLength={5000} rows={6} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+          <textarea value={body} onChange={(e) => setBody(e.target.value)} maxLength={5000} rows={6} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
         </label>
         <fieldset className="m-0 border-0 p-0">
-          <legend className="text-[14px] font-bold">Emotion</legend>
+          <legend className="text-subhead font-semibold">Emotion</legend>
           <div className="mt-xs grid grid-cols-5 gap-xs">
             {MOODS.map((m) => (
-              <button key={m.value} type="button" aria-pressed={emotion === m.value} onClick={() => setEmotion(emotion === m.value ? null : m.value)} className="toy toy-soft flex min-h-[56px] flex-col items-center justify-center rounded-tile bg-card text-[12px] font-bold" style={emotion === m.value ? { background: m.color, color: m.text } : undefined}>
+              <button key={m.value} type="button" aria-pressed={emotion === m.value} onClick={() => setEmotion(emotion === m.value ? null : m.value)} className="toy toy-soft flex min-h-[56px] flex-col items-center justify-center rounded-tile bg-card text-caption" style={emotion === m.value ? { background: m.color, color: m.text } : undefined}>
                 <MoodFace value={m.value} size={28} />
                 {m.name}
               </button>
@@ -269,19 +269,19 @@ function EntrySheet({ entry, date, start, onClose, onSaved }: { entry: JournalEn
           </div>
         </fieldset>
         <label className="block">
-          <span className="flex justify-between text-[14px] font-bold">
+          <span className="flex justify-between text-subhead font-semibold">
             <span>Stress level</span>
             <span>{stress} of 5</span>
           </span>
           <input type="range" min={1} max={5} value={stress} onChange={(e) => setStress(Number(e.target.value))} className="mt-xs w-full accent-ink" />
         </label>
         <fieldset className="m-0 border-0 p-0">
-          <legend className="text-[14px] font-bold">Stressor</legend>
+          <legend className="text-subhead font-semibold">Stressor</legend>
           <div className="fill-row mt-xs flex flex-wrap gap-xs">
             {STRESSORS.map((s) => {
               const on = stressors.includes(s);
               return (
-                <button key={s} type="button" aria-pressed={on} onClick={() => setStressors((p) => (on ? p.filter((x) => x !== s) : [...p, s]))} className={`min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+                <button key={s} type="button" aria-pressed={on} onClick={() => setStressors((p) => (on ? p.filter((x) => x !== s) : [...p, s]))} className={`min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
                   {s}
                 </button>
               );
@@ -289,7 +289,7 @@ function EntrySheet({ entry, date, start, onClose, onSaved }: { entry: JournalEn
           </div>
         </fieldset>
         {save.isError && (
-          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {save.error instanceof Error ? save.error.message : 'Could not save.'}
           </p>
         )}
@@ -303,15 +303,15 @@ function EntrySheet({ entry, date, start, onClose, onSaved }: { entry: JournalEn
         )}
         {existing && asking && (
           <div className="grid gap-sm rounded-tile bg-card p-sm" role="group" aria-label="Delete this entry?">
-            <p className="m-0 text-[16px] font-bold">Delete this entry?</p>
-            <p className="m-0 text-[14px] font-semibold text-ink-soft">Its words are gone for good. This cannot be undone.</p>
-            {remove.isError && <p className="m-0 text-[14px] font-bold text-r1">That did not work. Try again.</p>}
+            <p className="m-0 text-headline">Delete this entry?</p>
+            <p className="m-0 text-subhead text-ink-soft">Its words are gone for good. This cannot be undone.</p>
+            {remove.isError && <p className="m-0 text-subhead text-r1">That did not work. Try again.</p>}
             <div className="flex flex-wrap gap-xs">
               <button
                 type="button"
                 disabled={remove.isPending}
                 onClick={() => remove.mutate()}
-                className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-[16px] font-semibold text-on-fill disabled:opacity-50"
+                className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill disabled:opacity-50"
               >
                 Yes, delete it
               </button>

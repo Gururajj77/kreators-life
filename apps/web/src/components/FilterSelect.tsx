@@ -9,7 +9,7 @@ export function FilterSelect<K extends string>({ label, value, items, onChange }
   const id = useId();
   return (
     <div className="flex min-w-0 items-center gap-xs">
-      <label htmlFor={id} className="w-[76px] shrink-0 text-[14px] font-bold text-ink-soft md:w-auto">
+      <label htmlFor={id} className="w-[76px] shrink-0 text-subhead text-ink-soft md:w-auto">
         {label}
       </label>
       <select id={id} value={value} onChange={(e) => onChange(e.target.value as K)} className={`${SELECT_SM} min-w-0 flex-1`}>

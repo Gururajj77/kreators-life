@@ -92,7 +92,7 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
         corner={<PriorityChip priority={task.priority} />}
         foot={
           pillarTag ? (
-            <span className="inline-flex min-h-[24px] items-center rounded-pill px-xs text-[12px] font-bold whitespace-nowrap" style={{ background: `var(--soft-${rel.key})`, color: `var(--deep-${rel.key})` }}>
+            <span className="inline-flex min-h-[24px] items-center rounded-pill px-xs text-caption font-medium whitespace-nowrap" style={{ background: `var(--soft-${rel.key})`, color: `var(--deep-${rel.key})` }}>
               {rel.name}
             </span>
           ) : null

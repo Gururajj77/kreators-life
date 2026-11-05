@@ -42,10 +42,10 @@ function ConfirmDelete({ open, title, body, pending, failed, onYes, onClose }: {
   return (
     <Sheet open={open} onClose={onClose} title={title}>
       <div className="grid gap-md pb-xl">
-        <p className="m-0 text-[16px] font-semibold text-ink-soft">{body}</p>
-        {failed && <p role="alert" className="m-0 text-[14px] font-bold text-r1">That did not work. Try again.</p>}
+        <p className="m-0 text-callout text-ink-soft">{body}</p>
+        {failed && <p role="alert" className="m-0 text-subhead text-r1">That did not work. Try again.</p>}
         <div className="flex flex-wrap gap-xs">
-          <button type="button" disabled={pending} onClick={onYes} className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-[16px] font-bold text-r1 hover:bg-r1/10 disabled:opacity-50">
+          <button type="button" disabled={pending} onClick={onYes} className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-headline text-r1 hover:bg-r1/10 disabled:opacity-50">
             Yes, delete it
           </button>
           <Button variant="outline" onClick={onClose}>
@@ -227,33 +227,33 @@ export function StudioProduct() {
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Title</span>
+          <span className="block text-subhead font-semibold">Title</span>
           <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Description</span>
+          <span className="block text-subhead font-semibold">Description</span>
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} rows={4} className={FIELD} />
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
-            <span className="block text-[14px] font-bold">Emoji cover</span>
+            <span className="block text-subhead font-semibold">Emoji cover</span>
             <input value={cover} onChange={(e) => setCover(e.target.value)} maxLength={8} className={FIELD} />
           </label>
           {priced && (
             <label className="block">
-              <span className="block text-[14px] font-bold">{pwyw ? 'Minimum points' : 'Points price'}</span>
+              <span className="block text-subhead font-semibold">{pwyw ? 'Minimum points' : 'Points price'}</span>
               <input type="number" min={0} value={pricePoints} onChange={(e) => setPricePoints(e.target.value)} className={FIELD} />
             </label>
           )}
         </div>
         {priced && (
           <label className="block">
-            <span className="block text-[14px] font-bold">Money price ({money(0, p.currency).replace(/0$/, '').trim()})</span>
+            <span className="block text-subhead font-semibold">Money price ({money(0, p.currency).replace(/0$/, '').trim()})</span>
             <input type="text" inputMode="decimal" value={priceCents} onChange={(e) => setPriceCents(e.target.value)} placeholder="1,299.50" className={FIELD} />
           </label>
         )}
         {priced && (
-          <p className="m-0 text-[12px] font-bold text-ink-soft">
+          <p className="m-0 text-caption text-ink-soft">
             {(() => {
               const w = productPayWays({ pricePoints: Number(pricePoints) || 0, priceCents: Math.max(0, typedCents(priceCents) || 0), pwyw });
               return w.free ? 'With both prices at 0 this is free.' : w.points && w.money ? 'Buyers can pay with points or with money.' : w.money ? 'Buyers pay with money only. Set a points price above 0 to let them pay with points too.' : 'Buyers pay with points only. Add a money price to let them pay with money too.';
@@ -261,19 +261,19 @@ export function StudioProduct() {
           </p>
         )}
         <fieldset className="m-0 rounded-tile border-2 border-line p-sm">
-          <legend className="px-xs text-[14px] font-bold">Who can buy</legend>
-          <p className="m-0 text-[12px] font-bold text-ink-soft">Empty means anyone can. Set any mix, and only people who earned it can buy.</p>
+          <legend className="px-xs text-subhead font-semibold">Who can buy</legend>
+          <p className="m-0 text-caption text-ink-soft">Empty means anyone can. Set any mix, and only people who earned it can buy.</p>
           <div className="mt-xs grid grid-cols-2 gap-xs">
             <label className="block">
-              <span className="block text-[14px] font-bold">Xp of at least</span>
+              <span className="block text-subhead font-semibold">Xp of at least</span>
               <input type="number" min={0} value={minXp} onChange={(e) => setMinXp(e.target.value)} className={FIELD} />
             </label>
             <label className="block">
-              <span className="block text-[14px] font-bold">Points balance of at least</span>
+              <span className="block text-subhead font-semibold">Points balance of at least</span>
               <input type="number" min={0} value={minPoints} onChange={(e) => setMinPoints(e.target.value)} className={FIELD} />
             </label>
             <label className="block">
-              <span className="block text-[14px] font-bold">Holds the badge</span>
+              <span className="block text-subhead font-semibold">Holds the badge</span>
               <select value={badge} onChange={(e) => setBadge(e.target.value)} className={FIELD}>
                 <option value="">Any badge or none</option>
                 {PUBLIC_BADGES.map((b) => (
@@ -291,125 +291,125 @@ export function StudioProduct() {
           </div>
         </fieldset>
         {(p.kind === 'payment' || p.kind === 'digital' || p.kind === 'locked') && (
-          <label className="flex min-h-[44px] items-center gap-sm text-[14px] font-bold">
+          <label className="flex min-h-[44px] items-center gap-sm text-subhead font-semibold">
             <input type="checkbox" checked={pwyw} onChange={(e) => setPwyw(e.target.checked)} className="size-[20px] accent-ink" />
             Pay what you want, this price is the minimum
           </label>
         )}
         {p.kind === 'digital' && (
-          <label className="flex min-h-[44px] items-center gap-sm text-[14px] font-bold">
+          <label className="flex min-h-[44px] items-center gap-sm text-subhead font-semibold">
             <input type="checkbox" checked={leadMagnet} onChange={(e) => setLeadMagnet(e.target.checked)} className="size-[20px] accent-ink" />
             <span>
               Capture the buyer as a lead
-              <span className="block text-[12px] font-semibold text-ink-soft">Works when the price is zero: a free download in exchange for an email.</span>
+              <span className="block text-caption text-ink-soft">Works when the price is zero: a free download in exchange for an email.</span>
             </span>
           </label>
         )}
         {(p.kind === 'digital' || p.kind === 'link') && (
           <label className="block">
-            <span className="block text-[14px] font-bold">{p.kind === 'link' ? 'Link' : 'Download link, shown after purchase'}</span>
+            <span className="block text-subhead font-semibold">{p.kind === 'link' ? 'Link' : 'Download link, shown after purchase'}</span>
             <input value={url} onChange={(e) => setUrl(e.target.value)} className={FIELD} placeholder="https://" />
           </label>
         )}
         {p.kind === 'locked' && (
           <label className="block">
-            <span className="block text-[14px] font-bold">The post, shown only after purchase</span>
+            <span className="block text-subhead">The post, shown only after purchase</span>
             <textarea value={lockedBody} onChange={(e) => setLockedBody(e.target.value)} rows={8} maxLength={20000} className={FIELD} placeholder="Text, links, a video address" />
           </label>
         )}
         {p.kind === 'bundle' && (
           <fieldset className="m-0 border-0 p-0">
-            <legend className="text-[14px] font-bold">Products in this bundle</legend>
-            {others.length === 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Make a few other products first.</p>}
+            <legend className="text-subhead font-semibold">Products in this bundle</legend>
+            {others.length === 0 && <p className="mt-xs m-0 text-subhead text-ink-soft">Make a few other products first.</p>}
             <div className="mt-xs flex flex-col gap-xs">
               {others.map((o) => {
                 const on = bundleIds.includes(o.id);
                 return (
-                  <label key={o.id} className="flex min-h-[44px] items-center gap-sm rounded-tile bg-paper p-xs text-[14px] font-bold">
+                  <label key={o.id} className="flex min-h-[44px] items-center gap-sm rounded-tile bg-paper p-xs text-subhead font-semibold">
                     <input type="checkbox" checked={on} onChange={(e) => setBundleIds((list) => (e.target.checked ? [...list, o.id] : list.filter((x) => x !== o.id)))} className="size-[20px] accent-ink" />
                     <span className="min-w-0 flex-1 truncate">
-                      {o.title} <span className="font-semibold text-ink-soft">{PRODUCT_KIND_META[o.kind].name}, {formatCount(o.pricePoints)} pts</span>
+                      {o.title} <span className="text-ink-soft">{PRODUCT_KIND_META[o.kind].name}, {formatCount(o.pricePoints)} pts</span>
                     </span>
                   </label>
                 );
               })}
             </div>
-            <span className="mt-xs block text-[12px] font-bold text-ink-soft">Buyers get every product inside at the bundle price.</span>
+            <span className="mt-xs block text-caption text-ink-soft">Buyers get every product inside at the bundle price.</span>
           </fieldset>
         )}
         {p.kind === 'dm' && (
           <label className="block">
-            <span className="block text-[14px] font-bold">Answer within this many days</span>
+            <span className="block text-subhead font-semibold">Answer within this many days</span>
             <input type="number" min={1} max={30} value={responseDays} onChange={(e) => setResponseDays(e.target.value)} className={FIELD} />
-            <span className="mt-xs block text-[12px] font-bold text-ink-soft">Questions arrive under Shop, Priority DMs.</span>
+            <span className="mt-xs block text-caption text-ink-soft">Questions arrive under Shop, Priority DMs.</span>
           </label>
         )}
         {p.kind === 'event' && (
           <>
             <label className="block">
-              <span className="block text-[14px] font-bold">Starts at</span>
+              <span className="block text-subhead font-semibold">Starts at</span>
               <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className={FIELD} />
             </label>
             <label className="block">
-              <span className="block text-[14px] font-bold">Capacity, blank for unlimited</span>
+              <span className="block text-subhead font-semibold">Capacity, blank for unlimited</span>
               <input type="number" min={1} value={capacity} onChange={(e) => setCapacity(e.target.value)} className={FIELD} />
             </label>
             <label className="block">
-              <span className="block text-[14px] font-bold">Recording link, shown to ticket holders afterwards</span>
+              <span className="block text-subhead">Recording link, shown to ticket holders afterwards</span>
               <input value={replayUrl} onChange={(e) => setReplayUrl(e.target.value)} className={FIELD} placeholder="https://" />
             </label>
             <label className="block">
-              <span className="block text-[14px] font-bold">Price for people who missed it, in points</span>
+              <span className="block text-subhead">Price for people who missed it, in points</span>
               <input type="number" min={0} value={replayPoints} onChange={(e) => setReplayPoints(e.target.value)} className={FIELD} />
-              <span className="mt-xs block text-[12px] font-bold text-ink-soft">Zero means the replay is not for sale.</span>
+              <span className="mt-xs block text-caption text-ink-soft">Zero means the replay is not for sale.</span>
             </label>
           </>
         )}
         {(p.kind === 'event' || p.kind === 'session') && (
           <label className="block">
-            <span className="block text-[14px] font-bold">Joining link, shown to ticket holders</span>
+            <span className="block text-subhead">Joining link, shown to ticket holders</span>
             <input value={meetingUrl} onChange={(e) => setMeetingUrl(e.target.value)} className={FIELD} placeholder="Zoom, Meet, anything" />
           </label>
         )}
         {p.kind === 'session' && (
           <>
             <label className="block">
-              <span className="block text-[14px] font-bold">Length in minutes</span>
+              <span className="block text-subhead font-semibold">Length in minutes</span>
               <input type="number" min={5} max={600} value={durationMin} onChange={(e) => setDurationMin(e.target.value)} className={FIELD} />
-              <span className="mt-xs block text-[12px] font-bold text-ink-soft">Slots come from your availability under Shop, Bookings.</span>
+              <span className="mt-xs block text-caption text-ink-soft">Slots come from your availability under Shop, Bookings.</span>
             </label>
             <div className="grid grid-cols-3 gap-xs">
               <label className="block">
-                <span className="block text-[14px] font-bold">Buffer, minutes</span>
+                <span className="block text-subhead font-semibold">Buffer, minutes</span>
                 <input type="number" min={0} max={120} step={5} value={bufferMin} onChange={(e) => setBufferMin(e.target.value)} className={FIELD} />
               </label>
               <label className="block">
-                <span className="block text-[14px] font-bold">Notice, hours</span>
+                <span className="block text-subhead font-semibold">Notice, hours</span>
                 <input type="number" min={0} max={720} value={noticeHours} onChange={(e) => setNoticeHours(e.target.value)} className={FIELD} />
               </label>
               <label className="block">
-                <span className="block text-[14px] font-bold">Book up to, days</span>
+                <span className="block text-subhead font-semibold">Book up to, days</span>
                 <input type="number" min={1} max={365} value={maxDaysAhead} onChange={(e) => setMaxDaysAhead(e.target.value)} className={FIELD} />
               </label>
             </div>
-            <span className="block text-[12px] font-bold text-ink-soft">Buffer keeps minutes free before and after each session. Notice is how soon someone can book. The last is how far ahead the calendar opens.</span>
+            <span className="block text-caption text-ink-soft">Buffer keeps minutes free before and after each session. Notice is how soon someone can book. The last is how far ahead the calendar opens.</span>
           </>
         )}
         {p.kind === 'membership' && (
           <label className="block">
-            <span className="block text-[14px] font-bold">Lasts this many months, blank for forever</span>
+            <span className="block text-subhead">Lasts this many months, blank for forever</span>
             <input type="number" min={1} max={36} value={periodMonths} onChange={(e) => setPeriodMonths(e.target.value)} className={FIELD} placeholder="Forever" />
-            <span className="mt-xs block text-[12px] font-bold text-ink-soft">When it runs out the member sees a Renew button and buys again.</span>
+            <span className="mt-xs block text-caption text-ink-soft">When it runs out the member sees a Renew button and buys again.</span>
           </label>
         )}
         <fieldset className="m-0 border-0 p-0">
-          <legend className="text-[14px] font-bold">Questions buyers ask (shown on the page)</legend>
-          <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">Answer the doubts that stop people buying: who it is for, what they get, how long it takes. Up to {MAX_FAQ}.</p>
+          <legend className="text-subhead">Questions buyers ask (shown on the page)</legend>
+          <p className="mt-xs m-0 text-caption text-ink-soft">Answer the doubts that stop people buying: who it is for, what they get, how long it takes. Up to {MAX_FAQ}.</p>
           <div className="mt-xs flex flex-col gap-xs">
             {faq.map((f, i) => (
               <div key={f.key} className="flex flex-col gap-xs rounded-tile bg-paper p-sm">
-                <input value={f.q} onChange={(e) => setFaq((list) => list.map((x) => (x.key === f.key ? { ...x, q: e.target.value } : x)))} maxLength={FAQ_Q_MAX} aria-label={`Question ${i + 1}`} placeholder="A question a buyer asks" className="rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px]" />
-                <textarea value={f.a} onChange={(e) => setFaq((list) => list.map((x) => (x.key === f.key ? { ...x, a: e.target.value } : x)))} maxLength={FAQ_A_MAX} rows={3} aria-label={`Answer ${i + 1}`} placeholder="Your answer, in plain words" className="rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px]" />
+                <input value={f.q} onChange={(e) => setFaq((list) => list.map((x) => (x.key === f.key ? { ...x, q: e.target.value } : x)))} maxLength={FAQ_Q_MAX} aria-label={`Question ${i + 1}`} placeholder="A question a buyer asks" className="rounded-tile border-2 border-line bg-card px-sm py-sm text-body" />
+                <textarea value={f.a} onChange={(e) => setFaq((list) => list.map((x) => (x.key === f.key ? { ...x, a: e.target.value } : x)))} maxLength={FAQ_A_MAX} rows={3} aria-label={`Answer ${i + 1}`} placeholder="Your answer, in plain words" className="rounded-tile border-2 border-line bg-card px-sm py-sm text-body" />
                 <Button variant="ghost" onClick={() => setFaq((list) => list.filter((x) => x.key !== f.key))} aria-label={`Remove question ${i + 1}`}>
                   Remove
                 </Button>
@@ -424,11 +424,11 @@ export function StudioProduct() {
         </fieldset>
         {(p.kind === 'session' || p.kind === 'dm') && (
           <fieldset className="m-0 border-0 p-0">
-            <legend className="text-[14px] font-bold">{p.kind === 'session' ? 'Questions to answer when booking' : 'Questions to answer at checkout'}</legend>
+            <legend className="text-subhead">{p.kind === 'session' ? 'Questions to answer when booking' : 'Questions to answer at checkout'}</legend>
             <div className="mt-xs flex flex-col gap-xs">
               {intake.map((qn, i) => (
                 <div key={qn.key} className="flex items-center gap-xs">
-                  <input value={qn.text} onChange={(e) => setIntakeAt(qn.key, e.target.value)} maxLength={200} aria-label={`Question ${i + 1}`} className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+                  <input value={qn.text} onChange={(e) => setIntakeAt(qn.key, e.target.value)} maxLength={200} aria-label={`Question ${i + 1}`} className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
                   <Button variant="ghost" onClick={() => setIntake((list) => list.filter((x) => x.key !== qn.key))} aria-label={`Remove question ${i + 1}`}>
                     Remove
                   </Button>
@@ -443,16 +443,16 @@ export function StudioProduct() {
           </fieldset>
         )}
         {p.kind === 'course' && (
-          <label className="flex min-h-[44px] items-center gap-sm text-[14px] font-bold">
+          <label className="flex min-h-[44px] items-center gap-sm text-subhead font-semibold">
             <input type="checkbox" checked={certificate} onChange={(e) => setCertificate(e.target.checked)} className="size-[20px] accent-ink" />
             <span>
               Issue a certificate on completion
-              <span className="block text-[12px] font-semibold text-ink-soft">Every lesson done and every gated quiz passed. Anyone can check the code at /c/code.</span>
+              <span className="block text-caption text-ink-soft">Every lesson done and every gated quiz passed. Anyone can check the code at /c/code.</span>
             </span>
           </label>
         )}
         {save.isError && (
-          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {save.error instanceof Error ? save.error.message : 'Could not save.'}
           </p>
         )}
@@ -464,7 +464,7 @@ export function StudioProduct() {
       {p.kind === 'course' && (
         <section className="mt-lg" aria-labelledby="lessons-heading">
           <div className="flex items-center justify-between gap-sm">
-            <h2 id="lessons-heading" className="text-[24px]">
+            <h2 id="lessons-heading" className="text-title2">
               Lessons
             </h2>
             <div className="flex flex-wrap justify-end gap-xs">
@@ -478,12 +478,12 @@ export function StudioProduct() {
             {d.lessons.map((l, i) => (
               <li key={l.id}>
                 <button type="button" onClick={() => setLesson(l)} className="toy toy-soft flex w-full items-center gap-sm rounded-tile bg-card p-sm text-left">
-                  <span className="flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-r3 font-display text-[14px] font-extrabold text-ink-fixed" aria-hidden="true">
+                  <span className="flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-r3 text-subhead font-medium text-ink-fixed" aria-hidden="true">
                     {i + 1}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[16px] font-bold">{l.title}</span>
-                    <span className="block text-[14px] font-semibold text-ink-soft">
+                    <span className="block truncate text-headline">{l.title}</span>
+                    <span className="block text-subhead text-ink-soft">
                       {l.dripDays > 0 ? `Unlocks ${l.dripDays} days after enrolling` : 'Available at once'}
                       {l.quiz.length > 0 ? `, quiz of ${l.quiz.length}${l.passScore > 0 ? `, pass at ${l.passScore}%` : ''}` : ''}
                     </span>
@@ -498,10 +498,10 @@ export function StudioProduct() {
       {p.kind === 'membership' && (
         <section className="mt-lg flex flex-wrap-reverse items-center justify-between gap-sm rounded-card bg-card p-md shadow-toy-soft">
           <div className="min-w-0 flex-1 basis-[60%]">
-            <h2 className="text-[24px]">Members feed</h2>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Members and you can post in a feed only they can see.</p>
+            <h2 className="text-title2">Members feed</h2>
+            <p className="mt-xs m-0 text-subhead text-ink-soft">Members and you can post in a feed only they can see.</p>
           </div>
-          <Link to={`/community?product=${p.id}`} className="toy toy-ink inline-flex min-h-[48px] items-center rounded-pill border-2 border-ink bg-card px-md font-bold">
+          <Link to={`/community?product=${p.id}`} className="toy toy-ink inline-flex min-h-[48px] items-center rounded-pill border-2 border-ink bg-card px-md font-semibold">
             Open members feed
           </Link>
         </section>
@@ -509,13 +509,13 @@ export function StudioProduct() {
 
       {priced && (
         <section className="mt-lg" aria-labelledby="coupon-heading">
-          <h2 id="coupon-heading" className="text-[24px]">
+          <h2 id="coupon-heading" className="text-title2">
             Coupons
           </h2>
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {mine.map((c) => (
               <li key={c.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-                <span className="flex-1 text-[16px] font-bold">
+                <span className="flex-1 text-headline">
                   {c.code}, {c.percentOff}% off{c.productId ? '' : ', all products'}, used {c.uses}
                   {c.maxUses ? ` of ${c.maxUses}` : ''}
                 </span>
@@ -533,30 +533,30 @@ export function StudioProduct() {
             }}
           >
             <label className="block min-w-0 flex-1">
-              <span className="block text-[12px] font-bold">Code</span>
+              <span className="block text-caption">Code</span>
               <input value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase())} maxLength={24} className={FIELD} placeholder="LAUNCH20" />
             </label>
             <label className="block w-[96px]">
-              <span className="block text-[12px] font-bold">% off</span>
+              <span className="block text-caption">% off</span>
               <input type="number" min={1} max={100} value={couponOff} onChange={(e) => setCouponOff(e.target.value)} className={FIELD} />
             </label>
             <Button type="submit" variant="outline" disabled={addCoupon.isPending}>
               Add
             </Button>
           </form>
-          {addCoupon.isError && <p className="mt-xs m-0 text-[14px] font-bold">{addCoupon.error instanceof Error ? addCoupon.error.message : 'Could not add.'}</p>}
+          {addCoupon.isError && <p className="mt-xs m-0 text-subhead">{addCoupon.error instanceof Error ? addCoupon.error.message : 'Could not add.'}</p>}
         </section>
       )}
 
       {(d.orders.length > 0 || d.bookings.length > 0) && (
         <section className="mt-lg" aria-labelledby="buyers-heading">
-          <h2 id="buyers-heading" className="text-[24px]">
+          <h2 id="buyers-heading" className="text-title2">
             {p.kind === 'event' ? 'Attendees' : p.kind === 'session' ? 'Sessions booked' : 'Buyers'}
           </h2>
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {d.orders.map((o) => (
-              <li key={o.id} className="rounded-tile bg-card p-sm text-[14px] font-semibold shadow-toy-soft">
-                <span className="font-bold">{o.buyerName}</span>, {o.points > 0 ? `${formatCount(o.points)} points` : `${money(o.cents, o.currency)}, ${o.status}`}
+              <li key={o.id} className="rounded-tile bg-card p-sm text-subhead shadow-toy-soft">
+                <span className="font-semibold">{o.buyerName}</span>, {o.points > 0 ? `${formatCount(o.points)} points` : `${money(o.cents, o.currency)}, ${o.status}`}
                 {o.variant === 'replay' ? ', replay' : ''}
                 {o.sourceLabel ? `, via ${o.sourceLabel}` : ''}, {longDate(o.createdAt)}
                 {o.intake.length > 0 && (
@@ -572,8 +572,8 @@ export function StudioProduct() {
               </li>
             ))}
             {d.bookings.map((b) => (
-              <li key={b.id} className="rounded-tile bg-card p-sm text-[14px] font-semibold shadow-toy-soft">
-                <span className="font-bold">{b.buyerName}</span>, {eventTime(b.startsAt)}, {b.status}
+              <li key={b.id} className="rounded-tile bg-card p-sm text-subhead shadow-toy-soft">
+                <span className="font-semibold">{b.buyerName}</span>, {eventTime(b.startsAt)}, {b.status}
                 {b.intake.length > 0 && (
                   <ul className="mt-xs list-none p-0 m-0 text-ink-soft">
                     {b.intake.map((a, i) => (
@@ -618,12 +618,12 @@ function DraftSheet({ productId, title, open, onClose, onSaved }: { productId: s
     <Sheet open={open} onClose={onClose} title="Draft lessons from your notes">
       <div className="flex flex-col gap-md">
         <label className="block">
-          <span className="block text-[14px] font-bold">Your notes, a transcript, or an outline</span>
+          <span className="block text-subhead">Your notes, a transcript, or an outline</span>
           <textarea value={source} onChange={(e) => setSource(e.target.value)} rows={8} maxLength={20000} className={FIELD} placeholder={'# Lesson one\nWhat it covers, in a few lines.\nWhich cut keeps the energy up?\n- Cut on action *\n- Cut at random'} />
-          <span className="mt-xs block text-[12px] font-bold text-ink-soft">Lessons and quizzes are written from your notes, or read from an outline.</span>
+          <span className="mt-xs block text-caption text-ink-soft">Lessons and quizzes are written from your notes, or read from an outline.</span>
         </label>
         <Fold title="How an outline reads">
-          <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-[12px] font-bold text-ink-soft">
+          <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-caption text-ink-soft">
             <li>A line starting with # is a lesson.</li>
             <li>A line ending with ? is a question.</li>
             <li>Lines starting with - are its options, and * marks the right one.</li>
@@ -633,23 +633,23 @@ function DraftSheet({ productId, title, open, onClose, onSaved }: { productId: s
           {preview.isPending ? 'Drafting' : 'Preview draft'}
         </Button>
         {preview.isError && (
-          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {preview.error instanceof Error ? preview.error.message : 'Could not draft that.'}
           </p>
         )}
         {draft && (
           <>
-            <p className="m-0 text-[14px] font-bold">
+            <p className="m-0 text-subhead font-semibold">
               {draft.lessons.length} {draft.lessons.length === 1 ? 'lesson' : 'lessons'}, {draft.source === 'ai' ? 'written by AI from your notes' : 'parsed from your outline'}
               {preview.data && !preview.data.aiAvailable && draft.source === 'outline' ? '. No AI on this server, so headings and questions came straight from the text.' : '.'}
             </p>
             <ol className="m-0 flex list-none flex-col gap-xs p-0">
               {draft.lessons.map((l, i) => (
                 <li key={i} className="rounded-tile bg-paper p-sm">
-                  <p className="m-0 text-[16px] font-bold">
+                  <p className="m-0 text-headline">
                     {i + 1}. {l.title}
                   </p>
-                  <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+                  <p className="mt-xs m-0 text-subhead text-ink-soft">
                     {l.body ? `${l.body.slice(0, 140)}${l.body.length > 140 ? '…' : ''}` : 'No text yet.'}
                     {l.quiz.length > 0 ? ` Quiz of ${l.quiz.length}.` : ''}
                   </p>
@@ -657,7 +657,7 @@ function DraftSheet({ productId, title, open, onClose, onSaved }: { productId: s
               ))}
             </ol>
             {save.isError && (
-              <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+              <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
                 {save.error instanceof Error ? save.error.message : 'Could not add them.'}
               </p>
             )}
@@ -719,37 +719,37 @@ function LessonSheet({ productId, lesson, onClose, onSaved }: { productId: strin
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Title</span>
+          <span className="block text-subhead font-semibold">Title</span>
           <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} required className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Lesson text</span>
+          <span className="block text-subhead font-semibold">Lesson text</span>
           <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Video link</span>
+          <span className="block text-subhead font-semibold">Video link</span>
           <input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} className={FIELD} placeholder="Optional" />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Drip: unlock this many days after enrolling</span>
+          <span className="block text-subhead">Drip: unlock this many days after enrolling</span>
           <input type="number" min={0} max={365} value={drip} onChange={(e) => setDrip(e.target.value)} className={FIELD} />
         </label>
 
         <fieldset className="m-0 border-0 p-0">
-          <legend className="text-[14px] font-bold">Quiz</legend>
-          <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">Multiple choice. Mark the right option. Passing marks the lesson done.</p>
+          <legend className="text-subhead font-semibold">Quiz</legend>
+          <p className="mt-xs m-0 text-caption text-ink-soft">Multiple choice. Mark the right option. Passing marks the lesson done.</p>
           <ol className="mt-xs flex list-none flex-col gap-sm p-0 m-0">
             {quiz.map((qn, i) => (
               <li key={qn.key} className="rounded-tile bg-paper p-sm">
                 <label className="block">
-                  <span className="block text-[12px] font-bold">Question {i + 1}</span>
+                  <span className="block text-caption">Question {i + 1}</span>
                   <input value={qn.q} onChange={(e) => setQ(i, { q: e.target.value })} maxLength={300} className={FIELD} />
                 </label>
                 <div className="mt-xs flex flex-col gap-xs" role="radiogroup" aria-label={`Right answer for question ${i + 1}`}>
                   {qn.options.map((o, k) => (
                     <div key={qn.optKeys[k] ?? k} className="flex items-center gap-xs">
                       <input type="radio" name={`q-${i}`} checked={qn.answer === k} onChange={() => setQ(i, { answer: k })} aria-label={`Option ${k + 1} is right`} className="size-[20px] accent-ink" />
-                      <input value={o} onChange={(e) => setOpt(i, k, e.target.value)} maxLength={200} placeholder={`Option ${k + 1}`} aria-label={`Option ${k + 1}`} className="min-w-0 flex-1 rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px]" />
+                      <input value={o} onChange={(e) => setOpt(i, k, e.target.value)} maxLength={200} placeholder={`Option ${k + 1}`} aria-label={`Option ${k + 1}`} className="min-w-0 flex-1 rounded-tile border-2 border-line bg-card px-sm py-sm text-body" />
                       {qn.options.length > 2 && (
                         <Button variant="ghost" aria-label={`Remove option ${k + 1}`} onClick={() => setQ(i, { options: qn.options.filter((_, m) => m !== k), optKeys: qn.optKeys.filter((_, m) => m !== k), answer: qn.answer >= k && qn.answer > 0 ? qn.answer - 1 : qn.answer })}>
                           Remove
@@ -778,14 +778,14 @@ function LessonSheet({ productId, lesson, onClose, onSaved }: { productId: strin
           )}
           {quiz.length > 0 && (
             <label className="mt-sm block">
-              <span className="block text-[14px] font-bold">Percent needed to pass, zero for no gate</span>
+              <span className="block text-subhead">Percent needed to pass, zero for no gate</span>
               <input type="number" min={0} max={100} value={passScore} onChange={(e) => setPassScore(e.target.value)} className={FIELD} />
             </label>
           )}
         </fieldset>
 
         {save.isError && (
-          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+          <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {save.error instanceof Error ? save.error.message : 'Could not save.'}
           </p>
         )}
@@ -793,7 +793,7 @@ function LessonSheet({ productId, lesson, onClose, onSaved }: { productId: strin
           {existing ? 'Save lesson' : 'Add lesson'}
         </Button>
         {existing && (
-          <button type="button" disabled={remove.isPending} onClick={() => setDeleting(true)} className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-[16px] font-bold text-r1 hover:bg-r1/10 disabled:opacity-50">
+          <button type="button" disabled={remove.isPending} onClick={() => setDeleting(true)} className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-headline text-r1 hover:bg-r1/10 disabled:opacity-50">
             Delete lesson
           </button>
         )}

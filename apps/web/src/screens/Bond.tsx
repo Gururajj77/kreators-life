@@ -95,7 +95,7 @@ export function Bond() {
       <Section id="bond-chats" title="Chats" lede="Every chat runs under two aliases. Nobody's name moves through it.">
         {chats.length === 0 ? (
           <div className="rounded-card border-2 border-dashed border-line p-md">
-            <p className="m-0 text-[14px] font-semibold text-ink-soft">No chats yet. Start one from a friend below, from someone at your circle table, or from a person's page.</p>
+            <p className="m-0 text-subhead text-ink-soft">No chats yet. Start one from a friend below, from someone at your circle table, or from a person's page.</p>
           </div>
         ) : (
           <ul className="flex list-none flex-col gap-xs p-0 m-0">
@@ -119,7 +119,7 @@ export function Bond() {
           <ul className="flex list-none flex-col gap-xs p-0 m-0">
             {blocked.data?.blocked.map((b) => (
               <li key={b.userId} className="flex items-center justify-between gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-                <span className="min-w-0 truncate text-[16px] font-bold">{b.name}{b.handle ? ` (@${b.handle})` : ''}</span>
+                <span className="min-w-0 text-balance text-headline [overflow-wrap:anywhere]">{b.name}{b.handle ? ` (@${b.handle})` : ''}</span>
                 <Button variant="outline" size="sm" onClick={() => unblock.mutate(b.userId)} disabled={unblock.isPending}>
                   Unblock
                 </Button>
@@ -133,9 +133,9 @@ export function Bond() {
       <Section id="bond-friends" title="Friends" lede="Add people with their friend code or from their page. A chat with a friend is anonymous too." action={<SeeAll to="/community">Community</SeeAll>}>
         <div className="mb-sm grid gap-sm rounded-tile bg-card p-sm shadow-toy-soft sm:grid-cols-2">
           <div>
-            <p className="m-0 text-[14px] font-bold">Your friend code</p>
+            <p className="m-0 text-subhead font-semibold">Your friend code</p>
             <div className="mt-xs flex items-center gap-xs">
-              <span className="rounded-tile bg-paper px-sm py-xs font-mono text-[20px] font-bold tracking-widest">{me.data?.user.friendCode ?? '…'}</span>
+              <span className="rounded-tile bg-paper px-sm py-xs font-mono text-title3 type-figure tracking-widest">{me.data?.user.friendCode ?? '…'}</span>
               <Button
                 variant="outline"
                 onClick={() => {
@@ -146,8 +146,8 @@ export function Bond() {
                 {said === 'Copied' ? 'Copied' : 'Copy'}
               </Button>
             </div>
-            {said && said !== 'Copied' && <p role="status" className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{said}</p>}
-            <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">Share it with someone you know. They type it here and you get a request. Your username is @{me.data?.user.handle ?? '…'}.</p>
+            {said && said !== 'Copied' && <p role="status" className="mt-xs m-0 text-caption text-ink-soft">{said}</p>}
+            <p className="mt-xs m-0 text-caption text-ink-soft">Share it with someone you know. They type it here and you get a request. Your username is @{me.data?.user.handle ?? '…'}.</p>
           </div>
           <form
             onSubmit={(e) => {
@@ -156,7 +156,7 @@ export function Bond() {
             }}
           >
             <label className="block">
-              <span className="block text-[14px] font-bold">Add a friend by code</span>
+              <span className="block text-subhead font-semibold">Add a friend by code</span>
               <input value={codeIn} onChange={(e) => setCodeIn(e.target.value.toUpperCase())} maxLength={12} autoCapitalize="characters" autoComplete="off" placeholder="Their code" className={FIELD} />
             </label>
             <div className="mt-xs">
@@ -165,7 +165,7 @@ export function Bond() {
                 Send request
               </Button>
             </div>
-            {addByCode.isSuccess && <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{addByCode.data.status === 'friends' ? 'You are friends now.' : 'Request sent. They will see it under Bond.'}</p>}
+            {addByCode.isSuccess && <p className="mt-xs m-0 text-caption text-ink-soft">{addByCode.data.status === 'friends' ? 'You are friends now.' : 'Request sent. They will see it under Bond.'}</p>}
             <ErrorLine e={addByCode.isError ? addByCode.error : null} />
           </form>
         </div>
@@ -173,8 +173,9 @@ export function Bond() {
           <ul className="mb-sm flex list-none flex-col gap-xs p-0 m-0" aria-label="Friend requests">
             {pending.map((f) => (
               <li key={f.requestId} data-pillar="parent_child" className="rounded-tile p-sm" style={{ background: 'var(--tint-yellow)' }}>
-                <p className="m-0 text-[16px] font-bold">{f.name} would like to be friends</p>
-                <div className="mt-xs flex flex-wrap gap-xs">
+                <p className="m-0 text-balance text-headline">{f.name} would like to be friends</p>
+                {/* The answer sits at the card's bottom right, like every card's main action. */}
+                <div className="mt-xs flex flex-wrap justify-end gap-xs">
                   <Button variant="outline" onClick={() => answerFriend.mutate({ id: f.requestId, status: 'accepted' })} disabled={answerFriend.isPending}>
                     Yes
                   </Button>
@@ -187,17 +188,17 @@ export function Bond() {
           </ul>
         )}
         {sent.length === 0 && friends.length === 0 ? (
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">No friends yet. Open someone's page from the community feed and tap Add friend. Chats stay anonymous.</p>
+          <p className="m-0 text-subhead text-ink-soft">No friends yet. Open someone's page from the community feed and tap Add friend. Chats stay anonymous.</p>
         ) : (
           <ul className="flex list-none flex-col gap-xs p-0 m-0">
             {[...sent, ...friends].map((f) => (
               <li key={f.requestId} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                 <Link to={f.handle ? `/u/${f.handle}` : `/people/${f.userId}`} className="min-w-0 flex-1">
-                  <span className="block text-[16px] font-bold">
+                  <span className="block text-headline">
                     {f.name}
-                    {f.handle ? <span className="font-semibold text-ink-soft"> @{f.handle}</span> : ''}
+                    {f.handle ? <span className="text-ink-soft"> @{f.handle}</span> : ''}
                   </span>
-                  <span className="block text-[14px] font-semibold text-ink-soft">{f.status === 'sent' ? 'Request sent, waiting' : 'Friends'}</span>
+                  <span className="block text-subhead text-ink-soft">{f.status === 'sent' ? 'Request sent, waiting' : 'Friends'}</span>
                 </Link>
                 {f.status === 'friends' && (
                   <Button variant="outline" className="shrink-0" onClick={() => openChat.mutate(f.userId)} disabled={openChat.isPending}>
@@ -219,7 +220,7 @@ export function Bond() {
         <ErrorLine e={optIn.isError ? optIn.error : null} />
         {q.isError && (
           <div className="mt-md rounded-card bg-card p-md shadow-toy-soft flex flex-wrap-reverse items-center justify-between gap-sm" role="alert">
-            <p className="m-0 font-bold min-w-0 flex-1 basis-[60%]">Could not load introductions.</p>
+            <p className="m-0 font-semibold min-w-0 flex-1 basis-[60%]">Could not load introductions.</p>
             <Button variant="outline" onClick={() => q.refetch()}>
               Try again
             </Button>
@@ -229,9 +230,9 @@ export function Bond() {
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0" aria-label="Would like to meet you">
             {incoming.map((i) => (
               <li key={i.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <p className="m-0 text-[16px] font-bold">{i.requesterName} would like to meet you</p>
-                {i.context && <p className="m-0 text-[14px] font-semibold text-ink-soft">{i.context}</p>}
-                <div className="mt-sm flex flex-wrap gap-xs">
+                <p className="m-0 text-headline">{i.requesterName} would like to meet you</p>
+                {i.context && <p className="m-0 text-subhead text-ink-soft">{i.context}</p>}
+                <div className="mt-sm flex flex-wrap justify-end gap-xs">
                   <Button variant="outline" onClick={() => answer.mutate({ id: i.id, status: 'accepted' })} disabled={answer.isPending}>
                     Yes, introduce us
                   </Button>
@@ -248,15 +249,15 @@ export function Bond() {
         )}
         {d && optedIn && (
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0" aria-label="People you met">
-            {d.suggestions.length === 0 && <li className="text-[14px] font-semibold text-ink-soft">Nobody yet. RSVP to an event in Party and tick "happy to be introduced".</li>}
+            {d.suggestions.length === 0 && <li className="text-subhead text-ink-soft">Nobody yet. RSVP to an event in Party and tick "happy to be introduced".</li>}
             {d.suggestions.map((s) => (
               <li key={s.userId} className="flex flex-wrap items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[16px] font-bold">
+                  <span className="block text-headline">
                     {s.name}
-                    {s.handle ? <span className="font-semibold text-ink-soft"> @{s.handle}</span> : ''}
+                    {s.handle ? <span className="text-ink-soft"> @{s.handle}</span> : ''}
                   </span>
-                  <span className="block text-[14px] font-semibold text-ink-soft">
+                  <span className="block text-subhead text-ink-soft">
                     {s.context}
                     {s.skills.length > 0 ? `. ${s.skills.join(', ')}` : ''}
                   </span>
@@ -282,11 +283,11 @@ export function Bond() {
               return (
                 <li key={i.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[16px] font-bold">
+                    <span className="block text-headline">
                       {p.name}{' '}
                       <StatusTag tone={i.status === 'accepted' ? 'good' : i.status === 'declined' ? 'bad' : 'warn'}>{i.status === 'proposed' ? 'waiting' : i.status}</StatusTag>
                     </span>
-                    <span className="block text-[14px] font-semibold text-ink-soft">
+                    <span className="block text-subhead text-ink-soft">
                       {outgoing ? 'You asked' : 'They asked'} on {longDate(i.createdAt)}
                       {i.status === 'accepted' ? '. Contact details are in your Inbox.' : ''}
                     </span>
@@ -315,10 +316,10 @@ function ChatRow({ c }: { c: BondChat }) {
         <Icon icon={c.source === 'circle' ? UsersRound : MessageCircle} size={20} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[16px] font-bold">{c.theirAlias}</span>
-        <span className="block truncate text-[14px] font-semibold text-ink-soft">{c.lastBody || 'No messages yet. Say hello.'}</span>
+        <span className="block text-headline">{c.theirAlias}</span>
+        <span className="block truncate text-subhead text-ink-soft">{c.lastBody || 'No messages yet. Say hello.'}</span>
       </span>
-      <span className="shrink-0 text-[12px] font-bold text-ink-soft">{c.lastMessageAt ? dateTime(c.lastMessageAt) : ''}</span>
+      <span className="shrink-0 text-caption text-ink-soft">{c.lastMessageAt ? dateTime(c.lastMessageAt) : ''}</span>
     </Link>
   );
 }
@@ -355,7 +356,7 @@ export function BondChatScreen() {
         <header className="pt-lg">
           <BackLink to="/bond">Bond</BackLink>
         </header>
-        <p className="mt-md font-bold">That chat is not yours.</p>
+        <p className="mt-md font-semibold">That chat is not yours.</p>
       </Screen>
     );
   if (!d) return null;
@@ -367,16 +368,16 @@ export function BondChatScreen() {
         title={d.chat.theirAlias}
         lede={
           <>
-            You are <span className="font-extrabold text-ink">{d.chat.myAlias}</span> here. Both of you stay an alias, for good.
+            You are <span className="font-bold text-ink">{d.chat.myAlias}</span> here. Both of you stay an alias, for good.
           </>
         }
         actions={<Avatar relationship="friendship" size={44} decorative />}
       />
       <div className="mt-md flex max-h-[480px] flex-col gap-xs overflow-y-auto rounded-card bg-paper p-sm">
-        {d.messages.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">Nobody has said anything yet. Say hello.</p>}
+        {d.messages.length === 0 && <p className="m-0 text-subhead text-ink-soft">Nobody has said anything yet. Say hello.</p>}
         {d.messages.map((m) => (
-          <div key={m.id} className={`max-w-[85%] rounded-card p-sm text-[14px] font-semibold leading-snug ${m.mine ? 'self-end rounded-br-[8px] bg-ink text-on-ink' : 'self-start rounded-bl-[8px] bg-card shadow-toy-soft'}`}>
-            {!m.mine && <span className="block text-[12px] font-extrabold text-ink-mute">{m.alias}</span>}
+          <div key={m.id} className={`max-w-[85%] rounded-card p-sm text-subhead ${m.mine ? 'self-end rounded-br-[8px] bg-ink text-on-ink' : 'self-start rounded-bl-[8px] bg-card shadow-toy-soft'}`}>
+            {!m.mine && <span className="block text-caption text-ink-mute">{m.alias}</span>}
             <Inert text={m.body} />
           </div>
         ))}
@@ -389,7 +390,7 @@ export function BondChatScreen() {
           if (text.trim()) say.mutate();
         }}
       >
-        <input value={text} onChange={(e) => setText(e.target.value)} maxLength={1000} placeholder={`Say something as ${d.chat.myAlias}`} aria-label="Message" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-[16px]" />
+        <input value={text} onChange={(e) => setText(e.target.value)} maxLength={1000} placeholder={`Say something as ${d.chat.myAlias}`} aria-label="Message" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-body" />
         <Button type="submit" disabled={say.isPending || !text.trim()}>
           Send
         </Button>
@@ -419,10 +420,10 @@ function AskSheet({ person, onClose, onDone }: { person: Person | null; onClose:
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Why you would like to meet</span>
+          <span className="block text-subhead">Why you would like to meet</span>
           <textarea autoFocus value={context} onChange={(e) => setContext(e.target.value)} maxLength={500} rows={3} placeholder="Where you met and what you could do together." className={FIELD} />
         </label>
-        <p className="m-0 text-[12px] font-bold text-ink-soft">They see your name and this note. Nothing else moves until they say yes.</p>
+        <p className="m-0 text-caption text-ink-soft">They see your name and this note. Nothing else moves until they say yes.</p>
         <ErrorLine e={ask.isError ? ask.error : null} />
         <Button type="submit" size="lg" full disabled={ask.isPending}>
           Send the request
@@ -451,9 +452,9 @@ function BlockSheet({ person, onClose, onDone }: { person: Person | null; onClos
           block.mutate();
         }}
       >
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">They cannot ask for introductions to you or show in your suggestions. They are not told.</p>
+        <p className="m-0 text-subhead text-ink-soft">They cannot ask for introductions to you or show in your suggestions. They are not told.</p>
         <label className="block">
-          <span className="block text-[14px] font-bold">Reason, for the team only</span>
+          <span className="block text-subhead font-semibold">Reason, for the team only</span>
           <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} className={FIELD} />
         </label>
         <ErrorLine e={block.isError ? block.error : null} />

@@ -72,14 +72,14 @@ export function MediaTile({ item, className = '', reserve = false }: { item: Med
         ) : (
           <video src={frame.src} controls preload="metadata" playsInline className="aspect-video w-full rounded-tile bg-paper" aria-label={item.caption || 'Video'} />
         )}
-        {item.caption && <figcaption className="mt-xs text-[12px] font-bold text-ink-soft">{item.caption}</figcaption>}
+        {item.caption && <figcaption className="mt-xs text-caption text-ink-soft">{item.caption}</figcaption>}
       </figure>
     );
   }
   return (
     <figure className={`m-0 ${className}`}>
       <FadeImage src={item.url} alt={item.caption} loading="lazy" decoding="async" referrerPolicy="no-referrer" frame="w-full rounded-tile bg-paper" className="w-full object-cover" reserve={reserve} />
-      {item.caption && <figcaption className="mt-xs text-[12px] font-bold text-ink-soft">{item.caption}</figcaption>}
+      {item.caption && <figcaption className="mt-xs text-caption text-ink-soft">{item.caption}</figcaption>}
     </figure>
   );
 }

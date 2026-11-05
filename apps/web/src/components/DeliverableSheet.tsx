@@ -156,7 +156,7 @@ function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | 
             </select>
           </FieldLabel>
         )}
-        {item && <p className="m-0 text-[14px] font-bold text-ink-soft">For {item.clientName}</p>}
+        {item && <p className="m-0 text-subhead text-ink-soft">For {item.clientName}</p>}
         <FieldLabel className="mt-sm" label="What is it called?">
           <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={AGENCY_TITLE_MAX} required className={FIELD} />
         </FieldLabel>
@@ -202,7 +202,7 @@ function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | 
         {showFee && (
           <FieldLabel className="mt-sm" label="Fee" hint={COPY.feeHint}>
             <input inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} aria-invalid={badFee || undefined} className={FIELD} />
-            {badFee && <p role="alert" className="mt-xs m-0 text-[14px] font-bold">Type the amount as a number, like 4000 or 4,000.50.</p>}
+            {badFee && <p role="alert" className="mt-xs m-0 text-subhead">Type the amount as a number, like 4000 or 4,000.50.</p>}
           </FieldLabel>
         )}
         {!member && (
@@ -212,7 +212,7 @@ function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | 
         )}
         </fieldset>
         {save.isError && (
-          <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+          <p role="alert" className="mt-sm m-0 text-subhead">
             {(save.error as Error).message || 'That did not save.'}
           </p>
         )}
@@ -230,7 +230,7 @@ function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | 
                 <Button variant="ghost" onClick={() => setConfirm(false)}>
                   Keep it
                 </Button>
-                <p className="m-0 basis-full text-[14px] font-semibold text-ink-soft">{COPY.removeAsk}</p>
+                <p className="m-0 basis-full text-subhead text-ink-soft">{COPY.removeAsk}</p>
               </>
             ) : (
               <Button variant="outline" onClick={() => setConfirm(true)}>
@@ -272,11 +272,11 @@ function Army({ item, link, onDone }: { item: AgencyDeliverable; link: string; o
   return (
     <section className="mt-md rounded-tile bg-paper p-sm" aria-label="Army">
       <CardHead tag={tag && <StatusTag fit tone={tag.tone}>{tag.name}</StatusTag>}>
-        <h3 className="m-0 text-[18px]">Army</h3>
+        <h3 className="m-0 text-headline">Army</h3>
       </CardHead>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{COPY.armyLede}</p>
+      <p className="mt-xs m-0 text-subhead text-ink-soft">{COPY.armyLede}</p>
       {item.army?.feedback && (
-        <p className="mt-xs m-0 whitespace-pre-wrap rounded-tile bg-card p-sm text-[14px] font-semibold">
+        <p className="mt-xs m-0 whitespace-pre-wrap rounded-tile bg-card p-sm text-subhead">
           <Inert text={item.army.feedback} />
         </p>
       )}
@@ -289,12 +289,12 @@ function Army({ item, link, onDone }: { item: AgencyDeliverable; link: string; o
         </Button>
       </div>
       {said && (
-        <p role="status" className="mt-xs m-0 text-[14px] font-bold">
+        <p role="status" className="mt-xs m-0 text-subhead">
           {said}
         </p>
       )}
       {err && (
-        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-xs m-0 text-subhead">
           {err.message}
         </p>
       )}
@@ -315,12 +315,12 @@ function Changes({ item, onDone, edit = true }: { item: AgencyDeliverable; onDon
   const left = Math.max(0, item.revisionsAllowed - item.revisions);
   return (
     <section className="mt-md rounded-tile bg-paper p-sm" aria-labelledby={`changes-${item.id}`}>
-      <h3 id={`changes-${item.id}`} className="m-0 text-[18px]">
+      <h3 id={`changes-${item.id}`} className="m-0 text-headline">
         Changes
       </h3>
-      <p className="mt-xs m-0 text-[14px] font-bold">{`${changesLabel(item.revisions, item.revisionsAllowed)}${left === 0 ? '. None left' : ''}`}</p>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{COPY.changesLede}</p>
-      <ul className="mt-xs m-0 flex list-disc flex-col gap-xs pl-md text-[12px] font-semibold text-ink-soft">
+      <p className="mt-xs m-0 text-subhead font-semibold">{`${changesLabel(item.revisions, item.revisionsAllowed)}${left === 0 ? '. None left' : ''}`}</p>
+      <p className="mt-xs m-0 text-subhead text-ink-soft">{COPY.changesLede}</p>
+      <ul className="mt-xs m-0 flex list-disc flex-col gap-xs pl-md text-caption text-ink-soft">
         {COPY.changesMore.map((l) => (
           <li key={l}>{l}</li>
         ))}
@@ -336,12 +336,12 @@ function Changes({ item, onDone, edit = true }: { item: AgencyDeliverable; onDon
         </div>
       )}
       {said && (
-        <p role="status" className="mt-xs m-0 text-[14px] font-bold">
+        <p role="status" className="mt-xs m-0 text-subhead">
           {said}
         </p>
       )}
       {change.isError && (
-        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-xs m-0 text-subhead">
           That did not save. Try again.
         </p>
       )}
@@ -376,30 +376,30 @@ function Thread({ itemId, onDone }: { itemId: string; onDone: () => void }) {
   const notes = q.data?.notes ?? [];
   return (
     <section className="mt-md" aria-labelledby={`thread-${itemId}`}>
-      <h3 id={`thread-${itemId}`} className="m-0 text-[18px]">
+      <h3 id={`thread-${itemId}`} className="m-0 text-headline">
         Notes
       </h3>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{COPY.threadLede}</p>
+      <p className="mt-xs m-0 text-subhead text-ink-soft">{COPY.threadLede}</p>
       <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
         {notes.map((n) => (
           <li key={n.id} className="rounded-tile bg-paper p-sm">
             <div className="flex flex-wrap items-center gap-xs">
               <StatusTag tone={AUTHOR_TONE[n.author]}>{n.author === 'team' && n.authorName ? (n.mine ? 'You, team note' : n.authorName) : n.author === 'client' && n.clientTeam ? "Client's team" : AGENCY_AUTHOR_NAME[n.author]}</StatusTag>
               {n.kind !== 'note' && <StatusTag tone={n.kind === 'change' ? 'warn' : n.kind === 'paid_change' ? 'bad' : 'neutral'}>{NOTE_KIND_NAME[n.kind]}</StatusTag>}
-              {n.author === 'me' && <span className="text-[12px] font-bold text-ink-soft">{n.shared ? 'Shared with the client' : 'Private'}</span>}
-              <span className="text-[12px] font-semibold text-ink-mute">{prettyDate(n.createdAt.slice(0, 10))}</span>
+              {n.author === 'me' && <span className="text-caption text-ink-soft">{n.shared ? 'Shared with the client' : 'Private'}</span>}
+              <span className="text-caption text-ink-mute">{prettyDate(n.createdAt.slice(0, 10))}</span>
               {(member ? n.author === 'team' && n.mine && can('pipeline', 'edit') : n.author === 'me' || n.author === 'team') && (
-                <button type="button" onClick={() => del.mutate(n.id)} className="ml-auto min-h-[44px] px-xs text-[12px] font-bold text-ink-soft underline-offset-4 hover:text-ink hover:underline">
+                <button type="button" onClick={() => del.mutate(n.id)} className="ml-auto min-h-[44px] px-xs text-caption text-ink-soft underline-offset-4 hover:text-ink hover:underline">
                   Remove
                 </button>
               )}
             </div>
-            <p className="mt-xs m-0 whitespace-pre-wrap text-[14px] font-semibold">
+            <p className="mt-xs m-0 whitespace-pre-wrap text-subhead">
               <Inert text={n.body} />
             </p>
           </li>
         ))}
-        {notes.length === 0 && !q.isPending && <li className="text-[14px] font-semibold text-ink-mute">No notes yet.</li>}
+        {notes.length === 0 && !q.isPending && <li className="text-subhead text-ink-mute">No notes yet.</li>}
       </ul>
       {(!member || can('pipeline', 'edit')) && (
       <form
@@ -409,15 +409,15 @@ function Thread({ itemId, onDone }: { itemId: string; onDone: () => void }) {
           if (text.trim()) add.mutate();
         }}
       >
-        <label className="block text-[14px] font-bold">
+        <label className="block text-subhead font-semibold">
           Write a note
           <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} maxLength={AGENCY_NOTE_MAX} className={FIELD} />
         </label>
         {!member && !forTeam && <Toggle compact on={shared} onChange={setShared} label="Share with the client" />}
         {!member && hasTeam && <Toggle compact on={forTeam} onChange={setForTeam} label="Share with your team" />}
-        {member && <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">Your team sees this note. The client never does.</p>}
+        {member && <p className="mt-xs m-0 text-caption text-ink-soft">Your team sees this note. The client never does.</p>}
         {add.isError && (
-          <p role="alert" className="m-0 text-[14px] font-bold">
+          <p role="alert" className="m-0 text-subhead">
             That did not save. Try again.
           </p>
         )}
@@ -451,10 +451,10 @@ function TimeLog({ item, onDone }: { item: AgencyDeliverable; onDone: () => void
   });
   return (
     <section className="mt-md" aria-labelledby={`time-${item.id}`}>
-      <h3 id={`time-${item.id}`} className="m-0 text-[18px]">
+      <h3 id={`time-${item.id}`} className="m-0 text-headline">
         Time
       </h3>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{COPY.timeLede}</p>
+      <p className="mt-xs m-0 text-subhead text-ink-soft">{COPY.timeLede}</p>
       <form
         onSubmit={(e: FormEvent) => {
           e.preventDefault();
@@ -475,12 +475,12 @@ function TimeLog({ item, onDone }: { item: AgencyDeliverable; onDone: () => void
         </FieldLabel>
         <Toggle compact on={billable} onChange={setBillable} label="Counts as billable" />
         {log.isError && (
-          <p role="alert" className="m-0 text-[14px] font-bold">
+          <p role="alert" className="m-0 text-subhead">
             That did not save. Try again.
           </p>
         )}
         {said && (
-          <p role="status" className="m-0 text-[14px] font-bold">
+          <p role="status" className="m-0 text-subhead">
             {said}
           </p>
         )}

@@ -33,17 +33,17 @@ function EntryRow({ e }: { e: CreditEntry }) {
   return (
     <li className="flex items-center gap-sm rounded-tile bg-card px-sm py-xs shadow-toy-soft">
       <span className="min-w-0 flex-1">
-        <span className="block text-[14px] font-bold">
+        <span className="block text-subhead">
           {REASON[e.reason]}
           {e.agent ? ` by the ${AGENT_META[e.agent].name.toLowerCase()}` : ''}
         </span>
-        <span className="block text-[12px] font-semibold text-ink-soft">
+        <span className="block text-caption text-ink-soft">
           {prettyDate(e.createdAt.slice(0, 10))}
           {e.note ? ` · ${e.note}` : ''}
           {e.tokens ? ` · ${n(e.tokens.input)} tokens in, ${n(e.tokens.output)} out` : ''}
         </span>
       </span>
-      <span className="shrink-0 font-display text-[18px] font-extrabold">
+      <span className="shrink-0 text-title3 type-figure">
         {e.amount > 0 ? '+' : ''}
         {n(e.amount)}
       </span>
@@ -82,13 +82,13 @@ export function Plans() {
       <PageHeader back={{ to: '/you', label: 'Profile' }} title="Plans and credits" lede="Typing to the assistant runs on credits. Its flows stay free for everyone." />
 
       {q.isPending && (
-        <p className="mt-md text-[14px] font-bold text-ink-soft" role="status">
+        <p className="mt-md text-subhead text-ink-soft" role="status">
           Adding up your credits
         </p>
       )}
       {q.isError && (
         <div className="mt-md rounded-card bg-card p-md shadow-toy-soft flex flex-wrap-reverse items-center justify-between gap-sm" role="alert">
-          <p className="m-0 font-bold min-w-0 flex-1 basis-[60%]">Could not load your credits.</p>
+          <p className="m-0 font-semibold min-w-0 flex-1 basis-[60%]">Could not load your credits.</p>
           <Button variant="outline" onClick={() => q.refetch()}>
             Try again
           </Button>
@@ -103,7 +103,7 @@ export function Plans() {
             <StatTile label="Used today" value={n(a.usedToday.assistant)} hint={a.limits ? `Of ${n(a.limits.assistant.perDay)} a day` : 'No plan yet'} />
             <StatTile label="Last 30 days" value={n(used30)} hint="Credits used" />
           </div>
-          <p className="mt-sm m-0 text-[12px] font-bold text-ink-soft">
+          <p className="mt-sm m-0 text-caption text-ink-soft">
             {a.plan === 'none'
               ? `${n(a.extraCredits)} extra credits wait for a plan. A typical message is about 12 credits.`
               : `${n(a.planCredits)} from ${a.planName}, used first and gone when the plan ends. ${n(a.extraCredits)} extra, kept until used.`}
@@ -126,15 +126,15 @@ export function Plans() {
           <Section id="plans-limits" title="Limits by plan" lede="What each agent may read and spend. Your plan's column is marked.">
             {AGENTS.map((agent) => (
               <div key={agent} className="overflow-x-auto rounded-card bg-card p-sm shadow-toy-soft">
-                <table className="w-full border-collapse text-left text-[14px]">
-                  <caption className="pb-xs text-left text-[14px] font-extrabold">{AGENT_META[agent].name}</caption>
+                <table className="w-full border-collapse text-left text-subhead">
+                  <caption className="pb-xs text-left text-subhead font-semibold">{AGENT_META[agent].name}</caption>
                   <thead>
                     <tr>
-                      <th scope="col" className="py-xs pr-sm text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
+                      <th scope="col" className="py-xs pr-sm text-eyebrow uppercase text-ink-soft">
                         Limit
                       </th>
                       {PAID_PLANS.map((k) => (
-                        <th key={k} scope="col" className={`py-xs pr-sm text-[12px] font-extrabold uppercase tracking-wide ${a.plan === k ? 'text-ink' : 'text-ink-soft'}`}>
+                        <th key={k} scope="col" className={`py-xs pr-sm text-eyebrow uppercase ${a.plan === k ? 'text-ink' : 'text-ink-soft'}`}>
                           <span className="inline-flex items-center gap-xs">
                             {PLANS[k].name}
                             {a.plan === k && <Icon icon={Check} size={14} strokeWidth={3} label="your plan" />}
@@ -146,11 +146,11 @@ export function Plans() {
                   <tbody>
                     {LIMIT_ROWS.map((row) => (
                       <tr key={row.key} className="border-t border-line">
-                        <th scope="row" className="py-xs pr-sm font-bold">
+                        <th scope="row" className="py-xs pr-sm font-semibold">
                           {row.label}
                         </th>
                         {PAID_PLANS.map((k) => (
-                          <td key={k} className={`py-xs pr-sm ${a.plan === k ? 'font-extrabold' : 'font-semibold text-ink-soft'}`}>
+                          <td key={k} className={`py-xs pr-sm ${a.plan === k ? 'font-bold' : 'text-ink-soft'}`}>
                             {row.say(AGENT_LIMITS[k][agent][row.key])}
                           </td>
                         ))}
@@ -169,19 +169,19 @@ export function Plans() {
                 const id = `plan:${p.key}`;
                 return (
                   <li key={p.key} className={`flex flex-col rounded-card bg-card p-md shadow-toy-soft ${mine ? 'border-2 border-ink' : 'border-2 border-transparent'}`}>
-                    <p className="m-0 text-[14px] font-extrabold uppercase tracking-wide text-ink-soft">{p.name}</p>
-                    <p className="mt-xs m-0 font-display text-[32px] font-extrabold leading-none">
-                      {applied[id] && applied[id]!.offCents > 0 && <s className="mr-xs text-[16px] font-bold text-ink-soft">{money(p.priceCents, PLAN_CURRENCY)}</s>}
+                    <p className="m-0 text-eyebrow uppercase text-ink-soft">{p.name}</p>
+                    <p className="mt-xs m-0 text-large-title type-figure leading-none">
+                      {applied[id] && applied[id]!.offCents > 0 && <s className="mr-xs text-headline text-ink-soft">{money(p.priceCents, PLAN_CURRENCY)}</s>}
                       {money(applied[id] ? applied[id]!.payCents : p.priceCents, PLAN_CURRENCY)}
-                      <span className="text-[14px] font-bold text-ink-soft"> a month</span>
+                      <span className="text-subhead text-ink-soft"> a month</span>
                     </p>
-                    <p className="mt-sm m-0 text-[14px] font-bold">
+                    <p className="mt-sm m-0 text-subhead font-semibold">
                       {n(p.credits)} credits, about {n(messagesFor(p.credits))} messages
                     </p>
                     {/* The blurb says the same credits and messages as the line above, so the card says the period instead. */}
-                    <p className="mt-xs m-0 flex-1 text-[14px] font-semibold text-ink-soft">For {PLAN_DAYS} days. Credits left at the end do not carry over.</p>
+                    <p className="mt-xs m-0 flex-1 text-subhead text-ink-soft">For {PLAN_DAYS} days. Credits left at the end do not carry over.</p>
                     {mine ? (
-                      <p className="mt-sm m-0 text-[14px] font-extrabold">Your plan</p>
+                      <p className="mt-sm m-0 text-subhead font-semibold">Your plan</p>
                     ) : (
                       <Button variant="outline" className="mt-sm" disabled={asking === id} onClick={() => void choose('plan', p.key)}>
                         Choose {p.name}
@@ -189,7 +189,7 @@ export function Plans() {
                     )}
                     {!mine && <DiscountField className="mt-xs" area="plan" itemId={p.key} value={applied[id]?.code ?? ''} check={applied[id] ?? null} onChange={(_c, check) => setApplied((a2) => ({ ...a2, [id]: check }))} />}
                     {said[id] && (
-                      <p role="status" className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+                      <p role="status" className="mt-xs m-0 text-caption text-ink-soft">
                         {said[id]}
                       </p>
                     )}
@@ -205,8 +205,9 @@ export function Plans() {
                 const id = `topup:${t.key}`;
                 return (
                   <li key={t.key} className="flex flex-col rounded-card bg-card p-md shadow-toy-soft">
-                    <p className="m-0 font-display text-[24px] font-extrabold leading-none">{n(t.credits)} credits</p>
-                    <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+                    <p className="m-0 text-title2 type-figure leading-none">{n(t.credits)} credits</p>
+                    {/* flex-1: the words take the room, so Top up sits level on all three cards however the line wraps. */}
+                    <p className="mt-xs m-0 flex-1 text-subhead text-ink-soft">
                       About {n(messagesFor(t.credits))} messages, for {applied[id] && applied[id]!.offCents > 0 && <s>{money(t.priceCents, PLAN_CURRENCY)}</s>} {money(applied[id] ? applied[id]!.payCents : t.priceCents, PLAN_CURRENCY)}
                     </p>
                     <Button variant="outline" className="mt-sm" disabled={asking === id} onClick={() => void choose('topup', t.key)}>
@@ -214,7 +215,7 @@ export function Plans() {
                     </Button>
                     <DiscountField className="mt-xs" area="topup" itemId={t.key} value={applied[id]?.code ?? ''} check={applied[id] ?? null} onChange={(_c, check) => setApplied((a2) => ({ ...a2, [id]: check }))} />
                     {said[id] && (
-                      <p role="status" className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+                      <p role="status" className="mt-xs m-0 text-caption text-ink-soft">
                         {said[id]}
                       </p>
                     )}
@@ -222,11 +223,11 @@ export function Plans() {
                 );
               })}
             </ul>
-            {!d.paymentsLive && <p className="mt-sm m-0 text-[12px] font-bold text-ink-soft">Payments are not live yet, so picking a plan or a top-up charges nothing. Until they are, the team can switch a plan on for you.</p>}
+            {!d.paymentsLive && <p className="mt-sm m-0 text-caption text-ink-soft">Payments are not live yet, so picking a plan or a top-up charges nothing. Until they are, the team can switch a plan on for you.</p>}
           </Section>
 
           <Section id="plans-history" title="History" lede="Every credit in and out, newest first.">
-            {ledger.data && ledger.data.entries.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">Nothing yet. When a plan starts or you type to the assistant, each move is listed here.</p>}
+            {ledger.data && ledger.data.entries.length === 0 && <p className="m-0 text-subhead text-ink-soft">Nothing yet. When a plan starts or you type to the assistant, each move is listed here.</p>}
             {ledger.data && ledger.data.entries.length > 0 && (
               <ul className="m-0 flex list-none flex-col gap-xs p-0">
                 {ledger.data.entries.map((e) => (

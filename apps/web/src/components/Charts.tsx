@@ -118,7 +118,7 @@ function Frame({ width, height, min, max, yFormat, labels, shown, onFill, axes, 
   return (
     <>
       {axes && (
-        <div className="relative shrink-0 text-right text-[12px] font-bold" style={{ height, minWidth: 24 }} aria-hidden="true">
+        <div className="relative shrink-0 text-right text-caption" style={{ height, minWidth: 24 }} aria-hidden="true">
           {/* Invisible copies in the flow give the column the widest label's width, so a long one (₹12,34,567) never spills past the card. */}
           {ticks.map((t, i) => (
             <span key={`w${i}`} className="invisible block h-0 overflow-hidden leading-none whitespace-nowrap">
@@ -143,14 +143,15 @@ function Frame({ width, height, min, max, yFormat, labels, shown, onFill, axes, 
           {children}
         </svg>
         {empty && (
-          <p className={`pointer-events-none absolute inset-x-0 m-0 px-lg text-center text-[14px] font-bold ${onFill ? 'text-on-fill' : 'text-ink-soft'}`} style={{ top: (PAD.t + height - PAD.b) / 2, transform: 'translateY(-50%)' }} aria-hidden="true">
+          // A small chart with no axes (inside a metric card) keeps only a little side room, so a short line like "No moods yet" never breaks.
+          <p className={`pointer-events-none absolute inset-x-0 m-0 ${axes ? 'px-lg' : 'px-xs'} text-center text-subhead ${onFill ? 'text-on-fill' : 'text-ink-soft'}`} style={{ top: (PAD.t + height - PAD.b) / 2, transform: 'translateY(-50%)' }} aria-hidden="true">
             {empty}
           </p>
         )}
         {labels && (
           <div className="mt-xs flex">
             {labels.map((l, i) => (
-              <span key={i} className={`flex-1 text-[12px] font-bold ${onFill ? 'text-on-fill opacity-85' : 'text-ink-soft'} ${i === 0 ? 'text-left' : i === labels.length - 1 ? 'text-right' : 'text-center'}`}>
+              <span key={i} className={`flex-1 text-caption ${onFill ? 'text-on-fill opacity-85' : 'text-ink-soft'} ${i === 0 ? 'text-left' : i === labels.length - 1 ? 'text-right' : 'text-center'}`}>
                 {shown.has(i) ? l : ''}
               </span>
             ))}
@@ -206,7 +207,7 @@ export function MultiLine({ series, max: maxIn, min = 0, labels, height = 160, l
   const any = series.some((s) => s.values.some((v) => v !== null));
   return (
     <div role="img" aria-label={label}>
-      <ul className="m-0 flex list-none flex-wrap gap-sm p-0 text-[12px] font-bold text-ink-soft">
+      <ul className="m-0 flex list-none flex-wrap gap-sm p-0 text-caption text-ink-soft">
         {series.map((s) => (
           <li key={s.label} className="flex items-center gap-xs">
             <span className="block h-[4px] w-[16px] rounded-pill" style={{ background: s.color }} aria-hidden="true" />
@@ -270,7 +271,7 @@ export function PillBars({ values, max, labels, colors, color, label, height = 1
       </div>
       <div className="mt-xs flex gap-xs">
         {values.map((_, i) => (
-          <span key={i} className={`flex min-w-0 flex-1 justify-center whitespace-nowrap text-[12px] font-bold ${onFill ? 'text-on-fill opacity-80' : 'text-ink-soft'}`}>
+          <span key={i} className={`flex min-w-0 flex-1 justify-center whitespace-nowrap text-caption ${onFill ? 'text-on-fill opacity-80' : 'text-ink-soft'}`}>
             {shown.has(i) ? labels[i] : ''}
           </span>
         ))}
@@ -287,8 +288,8 @@ export function HBars({ rows, label, stacked = false }: { rows: { key: string; l
         {rows.map((r) => (
           <li key={r.key}>
             <span className="flex items-baseline justify-between gap-sm">
-              <span className="min-w-0 text-balance text-[14px] font-bold leading-tight">{r.label}</span>
-              <span className="shrink-0 text-[14px] font-extrabold tabular-nums text-ink-soft">{r.text}</span>
+              <span className="min-w-0 text-balance text-subhead">{r.label}</span>
+              <span className="shrink-0 text-subhead tabular-nums text-ink-soft">{r.text}</span>
             </span>
             <span className="mt-xs block h-[12px] overflow-hidden rounded-pill bg-line">
               <span className="block h-full rounded-pill" style={{ width: `${Math.round(Math.max(0, Math.min(1, r.value)) * 100)}%`, background: r.color }} />
@@ -302,11 +303,12 @@ export function HBars({ rows, label, stacked = false }: { rows: { key: string; l
       {rows.map((r) => (
         <li key={r.key} className="flex items-center gap-sm">
           {r.lead}
-          <span className="w-[96px] shrink-0 text-balance break-words sm:w-[136px] text-[14px] font-bold leading-tight">{typeof r.label === 'string' ? tie(r.label) : r.label}</span>
+          <span className="w-[96px] shrink-0 text-balance break-words sm:w-[136px] text-subhead">{typeof r.label === 'string' ? tie(r.label) : r.label}</span>
           <span className="h-[12px] min-w-0 flex-1 overflow-hidden rounded-pill bg-line">
             <span className="block h-full rounded-pill" style={{ width: `${Math.round(Math.max(0, Math.min(1, r.value)) * 100)}%`, background: r.color }} />
           </span>
-          <span className="w-[64px] shrink-0 text-right text-[12px] font-extrabold text-ink-soft">{r.text}</span>
+          {/* The value keeps one line ("797 people"): at least 64px, wider when its words need it, so every row stays one height. */}
+          <span className="min-w-[64px] shrink-0 whitespace-nowrap text-right text-caption tabular-nums text-ink-soft">{r.text}</span>
         </li>
       ))}
     </ul>
@@ -368,7 +370,7 @@ export function Legend({ items }: { items: { color: string; label: string; text:
   return (
     <ul className="flex list-none flex-col gap-xs p-0 m-0">
       {items.map((it) => (
-        <li key={it.label} className="flex items-center gap-xs text-[14px] font-bold">
+        <li key={it.label} className="flex items-center gap-xs text-subhead">
           <span className="block size-[10px] shrink-0 rounded-pill" style={{ background: it.color }} aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate">{it.label}</span>
           <span className="shrink-0 text-ink-soft">{it.text}</span>
@@ -409,6 +411,9 @@ export function Bubbles({ items, size = 260, label, onFill = false }: { items: {
   const scale = Math.min(1, size / Math.max(1, maxX - minX, maxY - minY));
   const ox = size / 2 - ((minX + maxX) / 2) * scale;
   const oy = size / 2 - ((minY + maxY) / 2) * scale;
+  // Nothing to draw: one short line, never a tall empty square (2026-11-05).
+  if (placed.length === 0)
+    return <p className={`m-0 py-sm text-center text-subhead ${onFill ? 'text-on-fill' : 'text-ink-soft'}`}>Nothing named yet.</p>;
   return (
     <svg viewBox={`0 0 ${size} ${size}`} width="100%" height={size} role="img" aria-label={label} className="block">
       {placed.map((p) => {
@@ -416,22 +421,17 @@ export function Bubbles({ items, size = 260, label, onFill = false }: { items: {
         return (
           <g key={p.item.label} transform={`translate(${(ox + p.x * scale).toFixed(1)} ${(oy + p.y * scale).toFixed(1)})`}>
             <circle r={rr} fill={p.item.color} opacity={onFill ? 0.9 : 1} />
-            <text textAnchor="middle" dominantBaseline="central" fontSize={Math.max(11, Math.min(20, rr / 2.2))} fontWeight="800" fill="white" style={{ fontFamily: 'var(--font-display)' }}>
+            <text textAnchor="middle" dominantBaseline="central" fontSize={Math.max(11, Math.min(20, rr / 2.2))} fontWeight="600" fill="white" style={{ fontFamily: 'var(--font-display)' }}>
               {p.item.value}
             </text>
             {rr >= 30 && (
-              <text y={Math.max(14, rr / 2.2) + 2} textAnchor="middle" dominantBaseline="hanging" fontSize="11" fontWeight="700" fill="white" opacity="0.9">
+              <text y={Math.max(14, rr / 2.2) + 2} textAnchor="middle" dominantBaseline="hanging" fontSize="11" fontWeight="550" fill="white" opacity="0.9">
                 {p.item.label}
               </text>
             )}
           </g>
         );
       })}
-      {placed.length === 0 && (
-        <text x={size / 2} y={size / 2} textAnchor="middle" dominantBaseline="central" fontSize="14" fontWeight="700" fill={onFill ? 'white' : 'var(--color-ink-soft)'}>
-          nothing named yet
-        </text>
-      )}
     </svg>
   );
 }
@@ -483,7 +483,7 @@ export function CalendarGrid({
           <button type="button" className={arrow} onClick={() => onMonth(shift(-1))} aria-label="Previous month">
             <Icon icon={ChevronLeft} size={16} strokeWidth={3} />
           </button>
-          <span className={`text-[16px] font-extrabold ${onFill ? 'text-on-fill' : ''}`} aria-live="polite">{name}</span>
+          <span className={`text-headline ${onFill ? 'text-on-fill' : ''}`} aria-live="polite">{name}</span>
           <button type="button" className={arrow} onClick={() => onMonth(shift(1))} disabled={nextBlocked} aria-label="Next month">
             <Icon icon={ChevronRight} size={16} strokeWidth={3} />
           </button>
@@ -493,7 +493,7 @@ export function CalendarGrid({
           least 44px wide at 390px even inside a padded card; the gap comes back from sm. */}
       <div className="-mx-xs grid grid-cols-7 gap-y-xs sm:mx-0 sm:gap-x-xs">
         {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-          <span key={i} className={`text-center text-[12px] font-extrabold ${onFill ? 'text-on-fill opacity-80' : 'text-ink-soft'}`}>
+          <span key={i} className={`text-center text-caption ${onFill ? 'text-on-fill opacity-80' : 'text-ink-soft'}`}>
             {d}
           </span>
         ))}
@@ -507,7 +507,7 @@ export function CalendarGrid({
             </span>
           ) : (
             <span
-              className="flex size-[28px] items-center justify-center rounded-pill text-[12px] font-extrabold"
+              className={`flex size-[28px] items-center justify-center rounded-pill text-caption type-figure leading-none ${key === today ? 'font-semibold' : ''}`}
               style={{
                 background: mark ? mark.color : onFill ? 'rgba(0,0,0,0.2)' : 'var(--color-paper)',
                 color: mark ? 'white' : onFill ? 'white' : 'var(--color-ink-soft)',
@@ -555,29 +555,10 @@ export function EmojiRow({ items, onFill = false, size = 36 }: { items: { label:
           ) : (
             <span className="flex items-center justify-center rounded-pill" style={{ width: size, height: size, background: it.color ?? (onFill ? 'rgba(255,255,255,0.18)' : 'var(--color-paper)') }} aria-label="not logged" />
           )}
-          <span className={`text-[12px] font-bold ${onFill ? 'text-on-fill opacity-80' : 'text-ink-soft'}`}>{it.label}</span>
+          <span className={`text-caption ${onFill ? 'text-on-fill opacity-80' : 'text-ink-soft'}`}>{it.label}</span>
         </li>
       ))}
     </ul>
-  );
-}
-
-/** The kit's chain of pills with arrows between them, for the last few moods. */
-export function PillChain({ items }: { items: { text: string; color: string; textColor: string; mood?: number }[] }) {
-  return (
-    <span className="flex flex-wrap items-center gap-xs">
-      {items.map((it, i) => (
-        <span key={i} className="flex items-center gap-xs">
-          {i > 0 && (
-            <Icon icon={ArrowRight} size={12} strokeWidth={3} className="text-ink-mute" />
-          )}
-          <span className="inline-flex items-center gap-xs rounded-pill pr-xs pl-0 text-[12px] font-extrabold leading-[22px]" style={{ background: it.color, color: it.textColor }}>
-            {it.mood ? <MoodFace value={it.mood} size={18} /> : null}
-            {it.text}
-          </span>
-        </span>
-      ))}
-    </span>
   );
 }
 
@@ -585,9 +566,9 @@ export function PillChain({ items }: { items: { text: string; color: string; tex
 export function StatTile({ label, value, hint, tone, to, children, className = '', onClick, pressed }: { label: string; value: ReactNode; hint?: ReactNode; tone?: string; to?: string; children?: ReactNode; className?: string; onClick?: () => void; pressed?: boolean }) {
   const inner = (
     <>
-      <span className="block text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{label}</span>
-      <span className="mt-xs block font-display text-[28px] font-extrabold leading-none">{value}</span>
-      {hint && <span className="mt-xs block text-[12px] font-bold text-ink-soft">{hint}</span>}
+      <span className="block text-eyebrow uppercase text-ink-soft">{label}</span>
+      <span className="mt-xs block text-title1 type-figure leading-none">{value}</span>
+      {hint && <span className="mt-xs block text-caption text-ink-soft">{hint}</span>}
       {children}
     </>
   );

@@ -153,7 +153,7 @@ function InsightChartView({ chart, insight }: { chart: InsightChart; insight: In
   );
 }
 
-const ACTION = 'toy toy-ink btn-outline inline-flex min-h-[48px] min-w-0 flex-1 items-center justify-center rounded-pill border border-ink/30 bg-card-strong px-md text-center text-[16px] font-semibold text-ink';
+const ACTION = 'toy toy-ink btn-outline inline-flex min-h-[48px] min-w-0 flex-1 items-center justify-center rounded-pill border border-ink/30 bg-card-strong px-md text-center text-callout text-ink';
 
 /** One pattern: the number first, one sentence, a small chart, where it came from, and one outline action. */
 /** A card's foot: its one outline action (a link, Make it a habit, or Add to not to do), the More menu, and their sheets. */
@@ -163,7 +163,7 @@ function InsightActions({ insight, onHide, compact = false }: { insight: Insight
   const navigate = useNavigate();
   const a = insight.action;
   const tie = insight.tie;
-  const cls = compact ? ACTION.replace('min-h-[48px]', 'min-h-[44px]').replace('text-[16px]', 'text-[14px]') : ACTION;
+  const cls = compact ? ACTION.replace('min-h-[48px]', 'min-h-[44px]').replace('text-callout', 'text-subhead') : ACTION;
   // Tied back to the task: the card's More menu always opens where it lives, unless the main action already does.
   const openTie = tie && !(a?.kind === 'link' && a.to === tie.to) ? [{ key: 'open', label: tie.toLabel, icon: ListChecks, onSelect: () => navigate(tie.to) }] : [];
   const more = [
@@ -203,12 +203,17 @@ export function InsightCard({ insight, onHide }: { insight: Insight; onHide?: ()
   return (
     <article className="flex h-full w-full flex-col gap-sm rounded-tile bg-card p-md shadow-toy-soft" aria-label={insight.text}>
       <div className="flex items-start justify-between gap-sm">
-        <p className={`m-0 min-w-0 font-display font-extrabold leading-tight tabular-nums ${insight.headline.length > 10 ? 'text-[24px]' : 'text-[28px]'}`}>{insight.headline}</p>
+        <p className={`m-0 min-w-0 tabular-nums ${insight.headline.length > 10 ? 'text-title2' : 'text-title1'}`}>{insight.headline}</p>
         <StatusTag tone={tag.tone}>{tag.word}</StatusTag>
       </div>
-      <p className="m-0 text-balance text-[16px] font-semibold">{insight.text}</p>
-      {insight.chart && <InsightChartView chart={insight.chart} insight={insight} />}
-      {insight.basis && <p className="m-0 text-[12px] font-bold text-ink-soft">{insight.basis}</p>}
+      <p className="m-0 text-balance text-callout">{insight.text}</p>
+      {/* Beside a taller card the chart takes the room left and sits in its middle, so the card never ends in an empty band (2026-11-05). */}
+      {insight.chart && (
+        <div className="flex flex-1 flex-col justify-center">
+          <InsightChartView chart={insight.chart} insight={insight} />
+        </div>
+      )}
+      {insight.basis && <p className="m-0 text-caption text-ink-soft">{insight.basis}</p>}
       <InsightActions insight={insight} onHide={onHide} />
     </article>
   );
@@ -254,8 +259,8 @@ export function HabitSheet({ insight, onClose }: { insight: Insight; onClose: ()
     <Sheet open onClose={onClose} title="Make it a habit">
       <div className="flex flex-col gap-md pb-xl md:pb-0">
         <div>
-          <p className="m-0 text-[18px] font-extrabold">{h.title}</p>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+          <p className="m-0 text-headline">{h.title}</p>
+          <p className="mt-xs m-0 text-subhead text-ink-soft">
             {pillar.name} · {formatCount(h.ticks)} ticks in 4 weeks
           </p>
         </div>
@@ -270,7 +275,7 @@ export function HabitSheet({ insight, onClose }: { insight: Insight; onClose: ()
             <input type="time" className={FIELD} value={time} onChange={(e) => setTime(e.target.value)} />
           </label>
         </div>
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">{h.openTaskId ? 'Your open task gets this repeat.' : 'A new task is added under its project.'} Nothing changes until you tap Keep.</p>
+        <p className="m-0 text-subhead text-ink-soft">{h.openTaskId ? 'Your open task gets this repeat.' : 'A new task is added under its project.'} Nothing changes until you tap Keep.</p>
         {err ? <ErrorLine e={err} /> : null}
         <Button full onClick={keep} disabled={busy}>
           {busy ? 'Keeping…' : 'Keep'}
@@ -314,7 +319,7 @@ export function NotToDoSheet({ title, relationship, onClose }: { title: string; 
           <span className={LABEL}>Stay away from</span>
           <input className={FIELD} value={words} maxLength={NOT_TO_DO_TITLE_MAX} onChange={(e) => setWords(e.target.value)} />
         </label>
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">It goes on your not to do list on Daily. Tick it each day you stay away from it.</p>
+        <p className="m-0 text-subhead text-ink-soft">It goes on your not to do list on Daily. Tick it each day you stay away from it.</p>
         {err ? <ErrorLine e={err} /> : null}
         <Button full onClick={add} disabled={busy}>
           {busy ? 'Adding…' : 'Add it'}
@@ -371,10 +376,10 @@ export function HabitsBlock({ app, className = '' }: { app: InsightApp; classNam
           return (
             <li key={i.id} data-pillar={i.tie!.relationship ?? undefined} className="flex flex-col gap-xs rounded-tile bg-card p-sm shadow-toy-soft">
               <CardHead tag={<StatusTag fit tone={good ? 'good' : 'bad'}>{good ? 'Good habit' : 'Bad habit'}</StatusTag>}>
-                <p className="m-0 text-[16px] font-bold leading-snug">{i.tie!.title}</p>
+                <p className="m-0 text-headline">{i.tie!.title}</p>
               </CardHead>
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">{i.text}</p>
-              {i.basis && <p className="m-0 text-[12px] font-bold text-ink-soft">{i.basis}</p>}
+              <p className="m-0 text-subhead text-ink-soft">{i.text}</p>
+              {i.basis && <p className="m-0 text-caption text-ink-soft">{i.basis}</p>}
               <InsightActions insight={i} onHide={() => hide(i.id)} compact />
             </li>
           );

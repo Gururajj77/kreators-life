@@ -23,6 +23,8 @@ import { bento } from '../lib/bento';
 import { captureRef, useSession } from '../lib/store';
 import { Stars } from '../components/Stars';
 import { IconTag } from '../components/FactTag';
+import { CardHead } from '../components/CardHead';
+import '../components/fx/spotlight';
 import { useMe } from '../lib/queries';
 import { useSeedOnce } from '../lib/useSeed';
 import { FIELD } from '../lib/ui';
@@ -130,7 +132,7 @@ export function Public() {
             <BackLink to={signedIn ? '/apps' : '/'}>kreators.app</BackLink>
           </header>
           <div className="mt-md rounded-card bg-card p-md text-center shadow-toy-soft">
-            <p className="m-0 text-[18px] font-extrabold">No page with that name.</p>
+            <p className="m-0 text-headline">No page with that name.</p>
           </div>
         </>
       )}
@@ -156,14 +158,14 @@ export function Public() {
                 {d.avatarUrl ? (
                   <img src={d.avatarUrl} alt={`${d.name}, profile picture`} width={72} height={72} fetchPriority="high" decoding="async" className="size-[72px] shrink-0 rounded-pill bg-paper object-cover shadow-toy-soft" onError={(e) => (e.currentTarget.style.display = 'none')} />
                 ) : (
-                  <span className="flex size-[72px] shrink-0 items-center justify-center rounded-pill bg-card-strong font-display text-[30px] font-extrabold text-ink shadow-toy-soft" aria-hidden="true">
+                  <span className="flex size-[72px] shrink-0 items-center justify-center rounded-pill bg-card-strong font-display text-[30px] font-bold text-ink shadow-toy-soft" aria-hidden="true">
                     {d.name.slice(0, 1).toUpperCase()}
                   </span>
                 )}
                 <div className="min-w-0 text-right">
                   <h1 className="type-large break-words">{d.name}</h1>
                   {!d.isPrivate && (
-                    <p className="m-0 mt-xs text-[14px] font-bold text-ink-soft">
+                    <p className="m-0 mt-xs text-subhead text-ink-soft">
                       {d.handle ? `@${d.handle} · ` : ''}
                       {formatCount(d.followers)} {d.followers === 1 ? 'follower' : 'followers'}
                     </p>
@@ -176,14 +178,14 @@ export function Public() {
                 <p className="m-0">This page is private. {d.name.replace(/ /g, '\u00a0')} has switched it off.</p>
               ) : d.bio || friendLine ? (
                 <>
-                  {d.bio && <p className="m-0 text-[16px] text-ink">{d.bio}</p>}
+                  {d.bio && <p className="m-0 text-callout text-ink">{d.bio}</p>}
                   {friendLine && <p className="m-0 mt-xs">{friendLine}</p>}
                 </>
               ) : undefined
             }
             actions={
               d.isPrivate ? undefined : d.mine ? (
-                <Link to="/profile" className="toy btn-outline inline-flex min-h-[48px] items-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-md text-[16px] font-semibold text-ink">
+                <Link to="/profile" className="toy btn-outline inline-flex min-h-[48px] items-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-md text-callout text-ink">
                   <Icon icon={PenLine} size={18} />
                   Edit my page
                 </Link>
@@ -195,7 +197,7 @@ export function Public() {
                   {friendAction}
                 </>
               ) : (
-                <Link to="/" className="toy btn-primary inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md text-[16px] font-semibold text-on-ink">
+                <Link to="/" className="toy btn-primary inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md text-callout text-on-ink">
                   Join to follow
                 </Link>
               )
@@ -204,12 +206,12 @@ export function Public() {
             {(befriend.isError || chat.isError || accept.isError || follow.isError || d.mine || hasSocials) && (
               <>
             {(befriend.isError || chat.isError || accept.isError || follow.isError) && (
-              <p role="alert" className="m-0 text-[14px] font-bold text-ink-soft">
+              <p role="alert" className="m-0 text-subhead text-ink-soft">
                 That did not work. Try again.
               </p>
             )}
             {d.mine && (
-              <p className="m-0 text-[12px] font-bold text-ink-soft">
+              <p className="m-0 text-caption text-ink-soft">
                 This is how others see you. Change what shows under{' '}
                 <Link to="/profile" className="underline underline-offset-4">
                   Public page
@@ -222,7 +224,7 @@ export function Public() {
               <ul className="mt-xs grid list-none gap-xs p-0 m-0" style={{ gridTemplateColumns: `repeat(${socialKeys.length}, minmax(0, 1fr))` }} aria-label="Find them elsewhere">
                 {socialKeys.map((k) => (
                     <li key={k} className="flex">
-                      <a href={d.socials[k]} target="_blank" rel="noreferrer" aria-label={`${SOCIAL_LABEL[k]}, opens in a new tab`} className="toy toy-soft flex min-h-[56px] w-full flex-col items-center justify-center gap-xs rounded-tile bg-card px-xs py-xs text-[12px] font-semibold text-ink md:min-h-[48px] md:flex-row md:rounded-pill md:text-[14px]">
+                      <a href={d.socials[k]} target="_blank" rel="noreferrer" aria-label={`${SOCIAL_LABEL[k]}, opens in a new tab`} className="toy toy-soft flex min-h-[56px] w-full flex-col items-center justify-center gap-xs rounded-tile bg-card px-xs py-xs text-caption text-ink md:min-h-[48px] md:flex-row md:rounded-pill md:text-subhead">
                         <SocialIcon k={k} />
                         {SOCIAL_LABEL[k]}
                       </a>
@@ -238,7 +240,7 @@ export function Public() {
 
           {d.products.length > 0 && (
             <Reveal as="section" className="mt-lg" aria-labelledby="shop-heading">
-              <h2 id="shop-heading" className="text-[24px]">
+              <h2 id="shop-heading" className="text-title2">
                 From {d.name}
               </h2>
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -250,14 +252,14 @@ export function Public() {
                         {productHasOwnCover(p.kind, p.cover) ? p.cover : <AppIcon name={meta.icon} size={24} />}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block text-[16px] font-bold leading-snug">{p.title}</span>
-                        <span className="block text-[14px] font-semibold text-ink-soft">
+                        <span className="block text-headline">{p.title}</span>
+                        <span className="block text-subhead text-ink-soft">
                           {meta.name}
                           {p.kind === 'event' && p.startsAt ? `, ${new Date(p.startsAt).toLocaleString(LOCALE, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''}
                           {p.rating ? `, rated ${p.rating}` : ''}
                         </span>
                       </span>
-                      <span className="shrink-0 rounded-pill bg-paper px-sm py-xs text-[14px] font-extrabold text-ink">{p.kind === 'link' ? 'Open' : p.pricePoints === 0 && p.priceCents === 0 ? 'Free' : `${formatCount(p.pricePoints)} pts`}</span>
+                      <span className="shrink-0 rounded-pill bg-paper px-sm py-xs text-subhead font-medium text-ink">{p.kind === 'link' ? 'Open' : p.pricePoints === 0 && p.priceCents === 0 ? 'Free' : `${formatCount(p.pricePoints)} pts`}</span>
                     </>
                   );
                   const cls = 'toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm';
@@ -281,7 +283,7 @@ export function Public() {
 
           {d.activity && (
             <Reveal as="section" className="mt-lg" aria-labelledby="activity-heading">
-              <h2 id="activity-heading" className="text-[24px]">
+              <h2 id="activity-heading" className="text-title2">
                 Activity
               </h2>
               <ul className="mt-sm grid list-none grid-cols-3 gap-xs p-0 m-0">
@@ -295,22 +297,24 @@ export function Public() {
                   </li>
                 ))}
               </ul>
-              <p className="mt-sm m-0 text-[12px] font-bold text-ink-soft">Member since {new Date(d.activity.memberSince).toLocaleDateString(LOCALE, { month: 'short', year: 'numeric' })}.</p>
+              <p className="mt-sm m-0 text-caption text-ink-soft">Member since {new Date(d.activity.memberSince).toLocaleDateString(LOCALE, { month: 'short', year: 'numeric' })}.</p>
             </Reveal>
           )}
           {(d.badges.length > 0 || d.honors.length > 0) && (
             <Reveal as="section" className="mt-lg" aria-labelledby="badges-heading">
-              <h2 id="badges-heading" className="text-[24px]">
+              <h2 id="badges-heading" className="text-title2">
                 Badges
               </h2>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Earned here, or given by the kreators.app team.</p>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">Earned here, or given by the kreators.app team.</p>
               <ul className="mt-sm grid list-none grid-cols-2 gap-xs p-0 m-0 md:grid-cols-3">
                 {[...d.badges.map((k) => BADGES.find((b) => b.key === k)).filter((b) => b !== undefined), ...d.honors.map((k) => HONORS.find((h) => h.key === k)).filter((h) => h !== undefined)].map((b, i, all) => (
                   // bento: the first tiles take two columns until the last row is full, so the grid never ends in a lone tile or a hole.
-                  <li key={b.key} className={`rounded-tile bg-card p-sm shadow-toy-soft ${bento(i, all.length, 2, 3)}`}>
-                    <BadgeMedal k={b.key} size="sm" decorative />
-                    <p className="mt-xs m-0 text-[14px] font-extrabold">{b.name}</p>
-                    <p className="m-0 text-[12px] font-semibold text-ink-soft">{b.how}</p>
+                  // The name and how it is earned at the top left, the medal in the top right corner (the card rules, 2026-11-05).
+                  <li key={b.key} className={`fx-spot rounded-tile bg-card p-sm shadow-toy-soft ${bento(i, all.length, 2, 3)}`}>
+                    <CardHead tag={<BadgeMedal k={b.key} size="sm" decorative />}>
+                      <p className="m-0 text-balance text-subhead font-semibold">{b.name}</p>
+                      <p className="m-0 text-caption text-ink-soft">{b.how}</p>
+                    </CardHead>
                   </li>
                 ))}
               </ul>
@@ -319,7 +323,7 @@ export function Public() {
           {d.posts.length > 0 && (
             <Reveal as="section" className="mt-lg" aria-labelledby="posts-heading">
               <div className="flex items-start justify-between gap-sm">
-                <h2 id="posts-heading" className="text-[24px]">
+                <h2 id="posts-heading" className="text-title2">
                   Posts
                 </h2>
                 {signedIn && (
@@ -331,11 +335,11 @@ export function Public() {
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                 {d.posts.map((p) => (
                   <li key={p.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                    <p className="m-0 text-[12px] font-bold text-ink-soft">
+                    <p className="m-0 text-caption text-ink-soft">
                       {p.category}, {new Date(p.createdAt).toLocaleDateString(LOCALE, { month: 'short', day: 'numeric' })}
                     </p>
-                    <p className="mt-xs m-0 whitespace-pre-wrap text-[16px] font-semibold leading-relaxed"><Inert text={p.body} /></p>
-                    <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+                    <p className="mt-xs m-0 whitespace-pre-wrap text-prose"><Inert text={p.body} /></p>
+                    <p className="mt-xs m-0 text-caption text-ink-soft">
                       {formatCount(p.likes)} {p.likes === 1 ? 'like' : 'likes'}, {formatCount(p.replies)} {p.replies === 1 ? 'reply' : 'replies'}
                     </p>
                   </li>
@@ -346,16 +350,16 @@ export function Public() {
 
           {d.testimonials.length > 0 && (
             <Reveal as="section" className="mt-lg" aria-labelledby="say-heading">
-              <h2 id="say-heading" className="text-[24px]">
+              <h2 id="say-heading" className="text-title2">
                 What people say
               </h2>
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                 {d.testimonials.map((t) => (
                   <li key={t.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                    <p className="m-0 text-[14px] font-bold">
+                    <p className="m-0 text-subhead font-semibold">
                       <Stars n={t.rating} /> {t.authorName}, {t.productTitle}
                     </p>
-                    <p className="mt-xs m-0 text-[16px] font-semibold">{t.body}</p>
+                    <p className="mt-xs m-0 text-callout">{t.body}</p>
                   </li>
                 ))}
               </ul>
@@ -364,11 +368,11 @@ export function Public() {
 
           {!d.isPrivate && !d.mine && (
             <Reveal as="section" className="mt-lg rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="lead-heading">
-              <h2 id="lead-heading" className="text-[24px]">
+              <h2 id="lead-heading" className="text-title2">
                 Say hello
               </h2>
               {lead.isSuccess ? (
-                <p className="mt-xs m-0 text-[16px] font-bold">Sent. {d.name} will see it in their inbox.</p>
+                <p className="mt-xs m-0 text-headline">Sent. {d.name} will see it in their inbox.</p>
               ) : (
                 <form
                   className="mt-sm flex flex-col gap-md"
@@ -378,19 +382,19 @@ export function Public() {
                   }}
                 >
                   <label className="block">
-                    <span className="block text-[14px] font-bold">Name</span>
+                    <span className="block text-subhead font-semibold">Name</span>
                     <input value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} autoComplete="name" className={FIELD} />
                   </label>
                   <label className="block">
-                    <span className="block text-[14px] font-bold">Email</span>
+                    <span className="block text-subhead font-semibold">Email</span>
                     <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" className={FIELD} />
                   </label>
                   <label className="block">
-                    <span className="block text-[14px] font-bold">Message</span>
-                    <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={3} maxLength={1000} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+                    <span className="block text-subhead font-semibold">Message</span>
+                    <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={3} maxLength={1000} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
                   </label>
                   {lead.isError && (
-                    <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+                    <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
                       {lead.error instanceof Error ? lead.error.message : 'Could not send.'}
                     </p>
                   )}
@@ -413,7 +417,7 @@ export function Public() {
           </span>
           Made with kreators.app
         </Link>
-        <p className="m-0 text-[12px] font-semibold text-ink-soft">One page for everything you make. Start yours free.</p>
+        <p className="m-0 text-caption text-ink-soft">One page for everything you make. Start yours free.</p>
       </footer>
     </Screen>
   );

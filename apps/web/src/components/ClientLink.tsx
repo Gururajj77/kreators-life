@@ -1,6 +1,6 @@
 import { PORTAL_ACTIONS, PORTAL_NEVER, PORTAL_PARTS, type AgencyClient, type ClientLifecycle, type PortalActionKey, type PortalPartKey } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ExternalLink, Link2Off, RefreshCw } from 'lucide-react';
+import { ArrowUpRight, Link2Off, RefreshCw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { Button } from './Button';
@@ -62,8 +62,8 @@ export function ClientLink({ client, life }: { client: AgencyClient; life: Clien
     <div className="rounded-card bg-card p-md shadow-toy-soft">
       <div className="flex flex-wrap items-center gap-sm">
         <div className="min-w-0 flex-1">
-          <h3 className="m-0 text-[16px] font-extrabold">Client link</h3>
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">{summary}</p>
+          <h3 className="m-0 text-headline">Client link</h3>
+          <p className="m-0 text-subhead text-ink-soft">{summary}</p>
         </div>
         {on ? (
           <Button size="sm" onClick={copy}>
@@ -79,7 +79,7 @@ export function ClientLink({ client, life }: { client: AgencyClient; life: Clien
           items={[
             ...(on
               ? [
-                  { key: 'preview', label: 'Open preview', icon: ExternalLink, onSelect: () => window.open(url, '_blank', 'noopener') },
+                  { key: 'preview', label: 'Open preview', icon: ArrowUpRight, onSelect: () => window.open(url, '_blank', 'noopener') },
                   { key: 'fresh', label: 'Make a fresh link', icon: RefreshCw, onSelect: () => setSheet('fresh') },
                   { key: 'off', label: 'Switch the link off', icon: Link2Off, destructive: true, onSelect: () => send.mutate({ on: false }) },
                 ]
@@ -88,14 +88,14 @@ export function ClientLink({ client, life }: { client: AgencyClient; life: Clien
         />
       </div>
 
-      {!on && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{COPY.off}</p>}
+      {!on && <p className="mt-sm m-0 text-subhead text-ink-soft">{COPY.off}</p>}
 
       {on && manual && (
         <div className="mt-sm">
-          <label className="block text-[14px] font-bold" htmlFor={`link-${client.id}`}>
+          <label className="block text-subhead font-semibold" htmlFor={`link-${client.id}`}>
             Link to share
           </label>
-          <input id={`link-${client.id}`} readOnly autoFocus value={url} onFocus={(e) => e.currentTarget.select()} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm font-mono text-[14px]" />
+          <input id={`link-${client.id}`} readOnly autoFocus value={url} onFocus={(e) => e.currentTarget.select()} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm font-mono text-subhead" />
         </div>
       )}
 
@@ -105,7 +105,7 @@ export function ClientLink({ client, life }: { client: AgencyClient; life: Clien
         </Button>
       </div>
       {send.isError && (
-        <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-sm m-0 text-subhead">
           {COPY.failed}
         </p>
       )}
@@ -113,7 +113,7 @@ export function ClientLink({ client, life }: { client: AgencyClient; life: Clien
 
       <Sheet open={sheet === 'see'} onClose={() => setSheet(null)} title="What your client sees">
         <Toggle compact on={on} onChange={(v) => send.mutate({ on: v })} disabled={send.isPending} label="Client link" hint={on ? COPY.on : COPY.off} />
-        <h3 className="mt-md text-[16px]">What they can see</h3>
+        <h3 className="mt-md text-headline">What they can see</h3>
         <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
           {PORTAL_PARTS.map((p) => (
             <li key={p.key}>
@@ -121,7 +121,7 @@ export function ClientLink({ client, life }: { client: AgencyClient; life: Clien
             </li>
           ))}
         </ul>
-        <h3 className="mt-md text-[16px]">What they can do</h3>
+        <h3 className="mt-md text-headline">What they can do</h3>
         <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
           {PORTAL_ACTIONS.map((p) => (
             <li key={p.key}>
@@ -130,15 +130,15 @@ export function ClientLink({ client, life }: { client: AgencyClient; life: Clien
           ))}
         </ul>
         <Fold className="mt-md" title="Never shown">
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.never}</p>
-          <ul className="mt-xs m-0 list-disc pl-md text-[14px] font-semibold text-ink-soft">
+          <p className="m-0 text-subhead text-ink-soft">{COPY.never}</p>
+          <ul className="mt-xs m-0 list-disc pl-md text-subhead text-ink-soft">
             {PORTAL_NEVER.map((n) => (
               <li key={n}>{n}</li>
             ))}
           </ul>
         </Fold>
         {send.isError && (
-          <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+          <p role="alert" className="mt-sm m-0 text-subhead">
             {COPY.failed}
           </p>
         )}
@@ -148,7 +148,7 @@ export function ClientLink({ client, life }: { client: AgencyClient; life: Clien
       </Sheet>
 
       <Sheet open={sheet === 'fresh'} onClose={() => setSheet(null)} title={COPY.freshTitle}>
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.freshHint}</p>
+        <p className="m-0 text-subhead text-ink-soft">{COPY.freshHint}</p>
         <div className="mt-md flex flex-wrap gap-xs pb-xl">
           <Button
             onClick={() => {

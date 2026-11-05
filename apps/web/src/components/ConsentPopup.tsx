@@ -120,13 +120,13 @@ export function ConsentPopup() {
         >
           {step === 'terms' ? (
             <div className="flex flex-col gap-xs">
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">
-                <span className="font-extrabold text-ink">Our terms are in plain words now</span> (version {LEGAL_VERSION}). Please read the{' '}
-                <Link to="/terms" target="_blank" className="font-extrabold text-ink underline underline-offset-4">
+              <p className="m-0 text-subhead text-ink-soft">
+                <span className="font-bold text-ink">Our terms are in plain words now</span> (version {LEGAL_VERSION}). Please read the{' '}
+                <Link to="/terms" target="_blank" className="font-bold text-ink underline underline-offset-4">
                   terms of use
                 </Link>{' '}
                 and the{' '}
-                <Link to="/privacy" target="_blank" className="font-extrabold text-ink underline underline-offset-4">
+                <Link to="/privacy" target="_blank" className="font-bold text-ink underline underline-offset-4">
                   privacy policy
                 </Link>
                 .
@@ -141,11 +141,11 @@ export function ConsentPopup() {
             // On the public site's laptop width the words and the three choices share one short line, so the bar covers less of the page.
             <div className={`flex flex-col gap-sm ${token ? '' : 'md:mx-auto md:max-w-[1080px] md:flex-row md:items-center md:justify-between md:gap-md'}`}>
               <div className="min-w-0">
-                <p className={`m-0 flex items-center gap-xs text-[16px] font-extrabold text-ink ${token ? '' : 'md:hidden'}`}>
+                <p className={`m-0 flex items-center gap-xs text-headline text-ink ${token ? '' : 'md:hidden'}`}>
                   <Icon icon={ShieldCheck} size={18} />
                   Your privacy
                 </p>
-                <p className={`mt-xs m-0 text-[14px] font-semibold text-ink-soft ${token ? '' : 'md:mt-0'}`}>
+                <p className={`mt-xs m-0 text-subhead text-ink-soft ${token ? '' : 'md:mt-0'}`}>
                   A cookie, outside videos and email news stay off unless you say yes.{' '}
                   <Link to="/privacy" target="_blank" className="whitespace-nowrap underline underline-offset-4">
                     Privacy policy
@@ -155,7 +155,7 @@ export function ConsentPopup() {
               </div>
               {/* Two equal choices side by side, neither solid; "Choose" opens the three switches, as a quiet link above them. */}
               <div className={`grid grid-cols-2 gap-xs ${token ? '' : 'md:flex md:shrink-0 md:items-center'}`}>
-                <button type="button" onClick={() => setChoosing(true)} className="col-span-2 inline-flex min-h-[44px] items-center justify-self-start text-[14px] font-bold text-ink-soft underline underline-offset-4 hover:text-ink md:mr-xs">
+                <button type="button" onClick={() => setChoosing(true)} className="col-span-2 inline-flex min-h-[44px] items-center justify-self-start text-subhead text-ink-soft underline underline-offset-4 hover:text-ink md:mr-xs">
                   Choose for each
                 </button>
                 <Button variant="outline" full onClick={() => choose({ ...NO_CONSENT })} disabled={save.isPending} className="md:w-auto">
@@ -171,7 +171,7 @@ export function ConsentPopup() {
       )}
 
       <Sheet open={sheetOpen} onClose={closeSheet} title="Your privacy choices">
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">All three start off. You can change them any time under Profile, Privacy choices.</p>
+        <p className="m-0 text-subhead text-ink-soft">All three start off. You can change them any time under Profile, Privacy choices.</p>
         <GrievanceLine />
         <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
           {CONSENT_PURPOSES.map((p) => {
@@ -183,14 +183,14 @@ export function ConsentPopup() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <Toggle compact on={draft[p.key] && !off} disabled={off} onChange={(on) => setDraft((d) => ({ ...d, [p.key]: on }))} label={p.name} />
-                  <p className="m-0 text-[12px] font-semibold text-ink-soft">{off ? 'Your browser sent Global Privacy Control, so this stays off.' : p.line}</p>
+                  <p className="m-0 text-caption text-ink-soft">{off ? 'Your browser sent Global Privacy Control, so this stays off.' : p.line}</p>
                 </div>
               </li>
             );
           })}
         </ul>
         <div className="mt-md flex flex-wrap items-center justify-end gap-xs">
-          <Link to="/privacy" target="_blank" className="mr-auto text-[14px] font-bold text-ink-soft underline underline-offset-4">
+          <Link to="/privacy" target="_blank" className="mr-auto text-subhead text-ink-soft underline underline-offset-4">
             Privacy policy
           </Link>
           <Button onClick={() => choose(draft)} disabled={save.isPending}>
@@ -205,7 +205,7 @@ export function ConsentPopup() {
 /** The one quiet line on who to ask: taking a choice back is one tap, and a question goes to the Grievance Officer (DPDP Act). */
 function GrievanceLine() {
   return (
-    <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">
+    <p className="mt-xs m-0 text-caption text-ink-soft">
       You can change these any time. Questions go to our{' '}
       <Link to="/contact" className="underline underline-offset-4">
         Grievance Officer

@@ -68,7 +68,7 @@ function Mark({ c, size = 16 }: { c: { icon?: IconName; mood?: number }; size?: 
 export const typingTime = (line: string | { node: ReactNode }) => (typeof line === 'string' ? Math.min(1800, 450 + line.length * 14) : 500);
 
 /** A pill that is picked or not: soft until it is picked, then ink. */
-export const chip = (on: boolean) => `toy min-h-[44px] rounded-pill border-2 px-sm text-[14px] font-bold disabled:opacity-60 ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`;
+export const chip = (on: boolean) => `toy min-h-[44px] rounded-pill border-2 px-sm text-subhead font-medium disabled:opacity-60 ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`;
 
 /** The person's line opens a turn; the guide's lines after it belong to that turn. */
 function turnsOf(log: ChatLine[]): ChatLine[][] {
@@ -96,7 +96,7 @@ function Lines({ lines, voice }: { lines: ChatLine[]; voice?: ChatVoice }) {
         if (m.from === 'you') {
           return (
             <div key={m.id} data-msg className="mt-md flex justify-end">
-              <p className="m-0 max-w-[85%] whitespace-pre-wrap rounded-card bg-card px-md py-sm text-[16px] font-semibold leading-relaxed shadow-toy-soft">{m.text}</p>
+              <p className="m-0 max-w-[85%] whitespace-pre-wrap rounded-card bg-card px-md py-sm text-prose shadow-toy-soft">{m.text}</p>
             </div>
           );
         }
@@ -106,12 +106,12 @@ function Lines({ lines, voice }: { lines: ChatLine[]; voice?: ChatVoice }) {
         return (
           <div key={m.id} data-msg className={first ? 'mt-md' : 'mt-xs'}>
             {first && (
-              <p className="m-0 mb-xs flex items-center gap-xs text-[12px] font-bold text-ink-soft">
+              <p className="m-0 mb-xs flex items-center gap-xs text-caption text-ink-soft">
                 {own ? <Badge voice={voice} /> : <Avatar relationship={m.host ?? 'bumling'} size={24} decorative still />}
                 {own ? voice.name : characterTitle(m.host ?? 'bumling')}
               </p>
             )}
-            {m.text ? <p className="m-0 whitespace-pre-wrap text-[16px] font-semibold leading-relaxed">{m.text}</p> : m.node}
+            {m.text ? <p className="m-0 whitespace-pre-wrap text-prose">{m.text}</p> : m.node}
           </div>
         );
       })}
@@ -225,7 +225,7 @@ export function ChatComposer({
         data-autofocus
         aria-label={placeholder}
         placeholder={placeholder}
-        className="min-h-[48px] flex-1 resize-none rounded-card border-2 border-line bg-card px-md py-sm text-[16px] font-semibold leading-snug"
+        className="min-h-[48px] flex-1 resize-none rounded-card border-2 border-line bg-card px-md py-sm text-body"
       />
       {onStop ? (
         <button type="button" aria-label={stopping ? 'Stopping' : 'Stop'} title={stopping ? 'Stopping' : 'Stop'} onClick={onStop} disabled={stopping} className="toy flex size-[48px] shrink-0 items-center justify-center rounded-pill bg-ink text-on-ink disabled:opacity-40">
@@ -294,13 +294,13 @@ export function ChatActions({
   return (
     <div ref={row} className={`mt-sm flex gap-sm ${stacked ? 'flex-col' : 'flex-wrap items-center'}`}>
       {skip && (
-        <button type="button" onClick={onSkip} className={`toy toy-flat inline-flex min-h-[48px] max-w-full items-center justify-center whitespace-nowrap rounded-pill border-2 border-line px-md text-[16px] font-bold ${stacked ? 'w-full' : 'shrink-0'}`}>
+        <button type="button" onClick={onSkip} className={`toy toy-flat inline-flex min-h-[48px] max-w-full items-center justify-center whitespace-nowrap rounded-pill border-2 border-line px-md text-headline ${stacked ? 'w-full' : 'shrink-0'}`}>
           <span>{skip}</span>
         </button>
       )}
       <Button type={submit ? 'submit' : 'button'} size={full ? 'lg' : 'md'} disabled={!ready} onClick={onNext} className={`max-w-full whitespace-nowrap ${stacked ? 'w-full' : full ? 'min-w-fit flex-1' : 'ml-auto'}`}>
         <span>{next}</span>
-        {extra && <span className="text-[14px] font-semibold text-on-ink/70">· {extra}</span>}
+        {extra && <span className="text-subhead text-on-ink/70">· {extra}</span>}
         <Icon icon={ArrowRight} size={18} />
       </Button>
     </div>
@@ -318,7 +318,7 @@ export function ChoiceChips({ choices, onPick, wide = false, full = false }: { c
     return (
       <div role="group" aria-label="Your answer" className={numbers ? 'grid gap-xs' : 'flex flex-col gap-xs'} style={numbers ? { gridTemplateColumns: `repeat(${choices.length}, minmax(0, 1fr))` } : undefined}>
         {choices.map((c) => (
-          <button key={c.value} type="button" onClick={() => onPick(c)} className="toy toy-soft min-h-[48px] w-full rounded-pill border-2 border-line bg-card px-sm text-[16px] font-bold">
+          <button key={c.value} type="button" onClick={() => onPick(c)} className="toy toy-soft min-h-[48px] w-full rounded-pill border-2 border-line bg-card px-sm text-headline">
             <Mark c={c} />
             {c.label}
           </button>
@@ -331,14 +331,14 @@ export function ChoiceChips({ choices, onPick, wide = false, full = false }: { c
       {choices.map((c) =>
         cards ? (
           <button key={c.value} type="button" onClick={() => onPick(c)} className="toy toy-flat w-full rounded-tile border-2 border-line bg-card p-sm text-left">
-            <span className="block text-[16px] font-bold">
+            <span className="block text-headline">
               <Mark c={c} />
               {c.label}
             </span>
-            {c.blurb && <span className="block text-[14px] font-semibold text-ink-soft">{c.blurb}</span>}
+            {c.blurb && <span className="block text-subhead text-ink-soft">{c.blurb}</span>}
           </button>
         ) : (
-          <button key={c.value} type="button" onClick={() => onPick(c)} className="toy toy-soft min-h-[44px] rounded-pill border-2 border-line bg-card px-sm text-[14px] font-bold">
+          <button key={c.value} type="button" onClick={() => onPick(c)} className="toy toy-soft min-h-[44px] rounded-pill border-2 border-line bg-card px-sm text-subhead font-medium">
             <Mark c={c} />
             {c.label}
           </button>
@@ -387,7 +387,7 @@ export function ChoiceGroups({
       {groups.map((g, gi) => (
         <div key={g.label ?? gi} className={gi === 0 ? '' : 'mt-sm'}>
           {g.label && (
-            <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
+            <p className="m-0 text-eyebrow uppercase text-ink-soft">
               <Mark c={g} size={14} />
               {g.label}
             </p>
@@ -407,14 +407,14 @@ export function ChoiceGroups({
                 >
                   {on ? <Icon icon={Check} size={16} strokeWidth={3} className="mr-xs inline-block align-[-3px]" /> : <Mark c={c} />}
                   {c.label}
-                  {c.blurb && <span className={`ml-xs text-[12px] ${on ? 'text-on-ink/70' : 'text-ink-soft'}`}>{c.blurb}</span>}
+                  {c.blurb && <span className={`ml-xs text-caption ${on ? 'text-on-ink/70' : 'text-ink-soft'}`}>{c.blurb}</span>}
                 </button>
               );
             })}
           </div>
         </div>
       ))}
-      {atMax && max !== undefined && max < all.length && <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">That's {max}, the most. Untick one to swap it.</p>}
+      {atMax && max !== undefined && max < all.length && <p className="mt-xs m-0 text-caption text-ink-soft">That's {max}, the most. Untick one to swap it.</p>}
       <ChatActions
         skip={skip}
         onSkip={() => onDone([], [])}
@@ -434,7 +434,7 @@ export function ChatLinks({ items }: { items: { label: string; onClick: () => vo
   return (
     <div className="mt-sm flex flex-wrap items-center gap-md">
       {items.map((it) => (
-        <button key={it.label} type="button" onClick={it.onClick} className="inline-flex min-h-[44px] items-center text-[12px] font-bold text-ink-soft underline underline-offset-4">
+        <button key={it.label} type="button" onClick={it.onClick} className="inline-flex min-h-[44px] items-center text-caption font-medium text-ink-soft underline underline-offset-4">
           {it.label}
         </button>
       ))}
@@ -484,7 +484,7 @@ export function ChatTurns({
             <Lines lines={t} voice={voice} />
             {last && typing && <Typing who={typing} continued={continued} status={typingStatus} />}
             {last && notice && (
-              <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+              <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
                 {notice}
               </p>
             )}
@@ -601,11 +601,11 @@ export function ChatScreen({
             <FocusPill compact />
           </div>
           <div className="col-span-2 col-start-1 row-start-2 min-w-0 text-left md:col-span-1 md:col-start-2 md:row-start-1">
-            <p className="m-0 truncate text-[14px] font-extrabold">{title}</p>
-            {step && <p className="m-0 truncate text-[12px] font-bold text-ink-soft">{step}</p>}
+            <p className="m-0 truncate text-subhead font-semibold">{title}</p>
+            {step && <p className="m-0 truncate text-caption text-ink-soft">{step}</p>}
           </div>
           <div className="col-start-2 row-start-1 flex items-center justify-end gap-xs md:col-start-3">
-            <Link to={closeTo} className="toy toy-soft inline-flex min-h-[44px] min-w-[44px] shrink-0 justify-center items-center rounded-pill bg-card px-sm text-[14px] font-bold">
+            <Link to={closeTo} className="toy toy-soft inline-flex min-h-[44px] min-w-[44px] shrink-0 justify-center items-center rounded-pill bg-card px-sm text-subhead font-semibold">
               Close
             </Link>
             <ThemeToggle />

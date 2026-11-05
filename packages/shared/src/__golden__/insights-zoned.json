@@ -1,0 +1,2310 @@
+{
+ "all": [
+  {
+   "key": "habit",
+   "id": "habit:divine:reel|shoot",
+   "state": "ready",
+   "apps": [
+    "today",
+    "tower",
+    "pillar",
+    "home",
+    "insights"
+   ],
+   "reads": [
+    "tasks"
+   ],
+   "private": false,
+   "relationship": "divine",
+   "headline": "12 times",
+   "text": "You ticked “Shoot reel” 12 times in 4 weeks, mostly on Wednesdays, Fridays and Saturdays around 12:30 pm. It does not repeat yet.",
+   "basis": "From 12 ticks on 12 days in 4 weeks.",
+   "chart": {
+    "kind": "dots",
+    "days": [
+     {
+      "date": "2026-10-09",
+      "on": true
+     },
+     {
+      "date": "2026-10-10",
+      "on": true
+     },
+     {
+      "date": "2026-10-11",
+      "on": true
+     },
+     {
+      "date": "2026-10-12",
+      "on": false
+     },
+     {
+      "date": "2026-10-13",
+      "on": false
+     },
+     {
+      "date": "2026-10-14",
+      "on": false
+     },
+     {
+      "date": "2026-10-15",
+      "on": false
+     },
+     {
+      "date": "2026-10-16",
+      "on": true
+     },
+     {
+      "date": "2026-10-17",
+      "on": false
+     },
+     {
+      "date": "2026-10-18",
+      "on": false
+     },
+     {
+      "date": "2026-10-19",
+      "on": false
+     },
+     {
+      "date": "2026-10-20",
+      "on": true
+     },
+     {
+      "date": "2026-10-21",
+      "on": false
+     },
+     {
+      "date": "2026-10-22",
+      "on": true
+     },
+     {
+      "date": "2026-10-23",
+      "on": true
+     },
+     {
+      "date": "2026-10-24",
+      "on": true
+     },
+     {
+      "date": "2026-10-25",
+      "on": false
+     },
+     {
+      "date": "2026-10-26",
+      "on": true
+     },
+     {
+      "date": "2026-10-27",
+      "on": false
+     },
+     {
+      "date": "2026-10-28",
+      "on": true
+     },
+     {
+      "date": "2026-10-29",
+      "on": false
+     },
+     {
+      "date": "2026-10-30",
+      "on": false
+     },
+     {
+      "date": "2026-10-31",
+      "on": true
+     },
+     {
+      "date": "2026-11-01",
+      "on": false
+     },
+     {
+      "date": "2026-11-02",
+      "on": false
+     },
+     {
+      "date": "2026-11-03",
+      "on": false
+     },
+     {
+      "date": "2026-11-04",
+      "on": true
+     },
+     {
+      "date": "2026-11-05",
+      "on": false
+     }
+    ]
+   },
+   "action": {
+    "label": "Make it a habit",
+    "to": "/realm/divine",
+    "kind": "habit"
+   },
+   "need": null,
+   "strength": 90,
+   "habit": {
+    "title": "Shoot reel",
+    "relationship": "divine",
+    "projectId": "p6",
+    "openTaskId": "o6",
+    "repeat": {
+     "kind": "weekly",
+     "every": 1,
+     "days": [
+      3,
+      5,
+      6
+     ],
+     "until": null
+    },
+    "time": "12:30",
+    "firstDay": "2026-11-06",
+    "ticks": 12,
+    "days": [
+     "2026-10-09",
+     "2026-10-10",
+     "2026-10-11",
+     "2026-10-16",
+     "2026-10-20",
+     "2026-10-22",
+     "2026-10-23",
+     "2026-10-24",
+     "2026-10-26",
+     "2026-10-28",
+     "2026-10-31",
+     "2026-11-04"
+    ]
+   }
+  },
+  {
+   "key": "habit-tie",
+   "id": "habit-tie:ntd:ntd1",
+   "state": "ready",
+   "apps": [
+    "home",
+    "today",
+    "pillar",
+    "insights",
+    "mood",
+    "wellbeing",
+    "stress"
+   ],
+   "reads": [
+    "notToDo",
+    "wellbeing"
+   ],
+   "private": true,
+   "relationship": "self",
+   "headline": "2.5 vs 4.5",
+   "text": "On days you slipped on “Doomscroll after 11 pm”, your mood was 2.0 lower and your stress was 1.9 higher, on average.",
+   "basis": "From 21 slip days and 22 kept days in 8 weeks. Things that happen together, not causes.",
+   "chart": {
+    "kind": "pair",
+    "rows": [
+     {
+      "label": "Mood on slip days",
+      "value": 2.5,
+      "n": 21,
+      "unit": ""
+     },
+     {
+      "label": "Mood on kept days",
+      "value": 4.5,
+      "n": 22,
+      "unit": ""
+     },
+     {
+      "label": "Stress on slip days",
+      "value": 3.6,
+      "n": 22,
+      "unit": ""
+     },
+     {
+      "label": "Stress on kept days",
+      "value": 1.7,
+      "n": 20,
+      "unit": ""
+     }
+    ]
+   },
+   "action": {
+    "label": "Open your not to do list",
+    "to": "/today#ntd-heading",
+    "kind": "link"
+   },
+   "need": null,
+   "strength": 85,
+   "tie": {
+    "verdict": "bad",
+    "kind": "notToDo",
+    "title": "Doomscroll after 11 pm",
+    "key": "ntd1",
+    "relationship": "self",
+    "to": "/today#ntd-heading",
+    "toLabel": "Open your not to do list",
+    "repeats": false,
+    "canAddNotToDo": false
+   }
+  },
+  {
+   "key": "habit-tie",
+   "id": "habit-tie:task:friendship:late|night|run|snack",
+   "state": "ready",
+   "apps": [
+    "home",
+    "today",
+    "tower",
+    "pillar",
+    "insights",
+    "stress",
+    "wellbeing",
+    "mood"
+   ],
+   "reads": [
+    "tasks",
+    "wellbeing"
+   ],
+   "private": true,
+   "relationship": "friendship",
+   "headline": "3.6 vs 1.9",
+   "text": "On days you ticked “Late night snack run”, your stress was 1.8 higher and your mood was 1.7 lower, on average.",
+   "basis": "From 22 days with it and 26 days without, in 8 weeks. Things that happen together, not causes.",
+   "chart": {
+    "kind": "pair",
+    "rows": [
+     {
+      "label": "Stress with it",
+      "value": 3.6,
+      "n": 22,
+      "unit": ""
+     },
+     {
+      "label": "Stress without",
+      "value": 1.9,
+      "n": 26,
+      "unit": ""
+     },
+     {
+      "label": "Mood with it",
+      "value": 2.5,
+      "n": 21,
+      "unit": ""
+     },
+     {
+      "label": "Mood without",
+      "value": 4.2,
+      "n": 27,
+      "unit": ""
+     }
+    ]
+   },
+   "action": {
+    "label": "Add to not to do",
+    "to": "/today#ntd-heading",
+    "kind": "notToDo"
+   },
+   "need": null,
+   "strength": 80,
+   "tie": {
+    "verdict": "bad",
+    "kind": "task",
+    "title": "Late night snack run",
+    "key": "late|night|run|snack",
+    "relationship": "friendship",
+    "to": "/realm/friendship",
+    "toLabel": "Open the task",
+    "repeats": false,
+    "canAddNotToDo": true
+   }
+  },
+  {
+   "key": "sleep-mood",
+   "id": "sleep-mood",
+   "state": "ready",
+   "apps": [
+    "sleep",
+    "mood",
+    "wellbeing",
+    "insights"
+   ],
+   "reads": [
+    "wellbeing"
+   ],
+   "private": true,
+   "relationship": null,
+   "headline": "4.0 vs 2.4",
+   "text": "On days after 6.5 hours of sleep or more, your mood was 4.0 on average. On other days, 2.4.",
+   "basis": "From 28 days and 16 days. Things that happen together, not causes.",
+   "chart": {
+    "kind": "pair",
+    "rows": [
+     {
+      "label": "Mood after 6.5 h or more",
+      "value": 4,
+      "n": 28,
+      "unit": ""
+     },
+     {
+      "label": "Mood after less",
+      "value": 2.4,
+      "n": 16,
+      "unit": ""
+     }
+    ]
+   },
+   "action": {
+    "label": "Log last night",
+    "to": "/sleep",
+    "kind": "link"
+   },
+   "need": null,
+   "strength": 71
+  },
+  {
+   "key": "journal-mood",
+   "id": "journal-mood",
+   "state": "ready",
+   "apps": [
+    "journal",
+    "mood",
+    "insights"
+   ],
+   "reads": [
+    "journal",
+    "wellbeing"
+   ],
+   "private": true,
+   "relationship": null,
+   "headline": "4.3 vs 2.9",
+   "text": "On days you wrote in your journal, your mood was 4.3 on average. On other days, 2.9.",
+   "basis": "From 18 days and 30 days. Things that happen together, not causes.",
+   "chart": {
+    "kind": "pair",
+    "rows": [
+     {
+      "label": "Mood on journal days",
+      "value": 4.3,
+      "n": 18,
+      "unit": ""
+     },
+     {
+      "label": "Mood on other days",
+      "value": 2.9,
+      "n": 30,
+      "unit": ""
+     }
+    ]
+   },
+   "action": {
+    "label": "Write today",
+    "to": "/journal?new=1",
+    "kind": "link"
+   },
+   "need": null,
+   "strength": 68
+  },
+  {
+   "key": "habit-tie",
+   "id": "habit-tie:task:lover_partner:chapter|read",
+   "state": "ready",
+   "apps": [
+    "home",
+    "today",
+    "tower",
+    "pillar",
+    "insights",
+    "mood",
+    "wellbeing",
+    "mindful"
+   ],
+   "reads": [
+    "tasks",
+    "wellbeing",
+    "focus"
+   ],
+   "private": true,
+   "relationship": "lover_partner",
+   "headline": "2.9 vs 3.8",
+   "text": "On days you ticked “Read a chapter”, your mood was 0.9 lower and you focused 14 minutes less, on average.",
+   "basis": "From 19 days with it and 26 days without, in 8 weeks. Things that happen together, not causes.",
+   "chart": {
+    "kind": "pair",
+    "rows": [
+     {
+      "label": "Mood with it",
+      "value": 2.9,
+      "n": 19,
+      "unit": ""
+     },
+     {
+      "label": "Mood without",
+      "value": 3.8,
+      "n": 26,
+      "unit": ""
+     },
+     {
+      "label": "Focus with it",
+      "value": 30,
+      "n": 22,
+      "unit": "min"
+     },
+     {
+      "label": "Focus without",
+      "value": 44.1,
+      "n": 31,
+      "unit": "min"
+     }
+    ]
+   },
+   "action": {
+    "label": "Add to not to do",
+    "to": "/today#ntd-heading",
+    "kind": "notToDo"
+   },
+   "need": null,
+   "strength": 63,
+   "tie": {
+    "verdict": "bad",
+    "kind": "task",
+    "title": "Read a chapter",
+    "key": "chapter|read",
+    "relationship": "lover_partner",
+    "to": "/realm/lover_partner",
+    "toLabel": "Open the task",
+    "repeats": false,
+    "canAddNotToDo": true
+   }
+  },
+  {
+   "key": "pillar-balance",
+   "id": "pillar-balance",
+   "state": "ready",
+   "apps": [
+    "home",
+    "tower",
+    "life",
+    "reviews",
+    "insights"
+   ],
+   "reads": [
+    "xp",
+    "tasks"
+   ],
+   "private": false,
+   "relationship": null,
+   "headline": "0%",
+   "text": "Faith got 0% of your xp in 30 days. It is one of your focus pillars.",
+   "basis": "From 450 ticks and 2,815 xp in 30 days.",
+   "chart": {
+    "kind": "share",
+    "parts": [
+     {
+      "relationship": "servant_leader",
+      "value": 395
+     },
+     {
+      "relationship": "friendship",
+      "value": 435
+     },
+     {
+      "relationship": "parent_child",
+      "value": 420
+     },
+     {
+      "relationship": "lover_partner",
+      "value": 460
+     },
+     {
+      "relationship": "self",
+      "value": 565
+     },
+     {
+      "relationship": "guru",
+      "value": 540
+     },
+     {
+      "relationship": "divine",
+      "value": 0
+     }
+    ],
+    "mark": "divine"
+   },
+   "action": {
+    "label": "Add a task to Faith",
+    "to": "/realm/divine?add=1",
+    "kind": "link"
+   },
+   "need": null,
+   "strength": 60
+  },
+  {
+   "key": "slips-sleep",
+   "id": "slips-sleep",
+   "state": "ready",
+   "apps": [
+    "today",
+    "sleep",
+    "insights"
+   ],
+   "reads": [
+    "notToDo",
+    "wellbeing"
+   ],
+   "private": true,
+   "relationship": null,
+   "headline": "6.5 vs 7.5",
+   "text": "On days you slipped on your not to do list, you had slept 6.5 hours. On other days, 7.5.",
+   "basis": "From 32 days and 20 days. Things that happen together, not causes.",
+   "chart": {
+    "kind": "pair",
+    "rows": [
+     {
+      "label": "Sleep on slip days",
+      "value": 6.5,
+      "n": 32,
+      "unit": "h"
+     },
+     {
+      "label": "Sleep on kept days",
+      "value": 7.5,
+      "n": 20,
+      "unit": "h"
+     }
+    ]
+   },
+   "action": {
+    "label": "Set a lights-out reminder",
+    "to": "/today?remind=1#reminders",
+    "kind": "link"
+   },
+   "need": null,
+   "strength": 59
+  },
+  {
+   "key": "habit-tie",
+   "id": "habit-tie:ntd:ntd3",
+   "state": "ready",
+   "apps": [
+    "home",
+    "today",
+    "pillar",
+    "insights",
+    "sleep",
+    "wellbeing",
+    "stress"
+   ],
+   "reads": [
+    "notToDo",
+    "wellbeing"
+   ],
+   "private": true,
+   "relationship": "self",
+   "headline": "6.5 vs 7.1",
+   "text": "On days you slipped on “Late coffee”, you slept 0.5 hours less that night and your stress was 0.5 higher, on average.",
+   "basis": "From 10 slip days and 34 kept days in 8 weeks. Things that happen together, not causes.",
+   "chart": {
+    "kind": "pair",
+    "rows": [
+     {
+      "label": "Sleep that night on slip days",
+      "value": 6.5,
+      "n": 10,
+      "unit": "h"
+     },
+     {
+      "label": "Sleep that night on kept days",
+      "value": 7.1,
+      "n": 34,
+      "unit": "h"
+     },
+     {
+      "label": "Stress on slip days",
+      "value": 3.2,
+      "n": 10,
+      "unit": ""
+     },
+     {
+      "label": "Stress on kept days",
+      "value": 2.7,
+      "n": 31,
+      "unit": ""
+     }
+    ]
+   },
+   "action": {
+    "label": "Open your not to do list",
+    "to": "/today#ntd-heading",
+    "kind": "link"
+   },
+   "need": null,
+   "strength": 56,
+   "tie": {
+    "verdict": "bad",
+    "kind": "notToDo",
+    "title": "Late coffee",
+    "key": "ntd3",
+    "relationship": "self",
+    "to": "/today#ntd-heading",
+    "toLabel": "Open your not to do list",
+    "repeats": false,
+    "canAddNotToDo": false
+   }
+  },
+  {
+   "key": "habit-tie",
+   "id": "habit-tie:task:friendship:gym|session",
+   "state": "ready",
+   "apps": [
+    "home",
+    "today",
+    "tower",
+    "pillar",
+    "insights",
+    "sleep",
+    "wellbeing"
+   ],
+   "reads": [
+    "tasks",
+    "wellbeing"
+   ],
+   "private": true,
+   "relationship": "friendship",
+   "headline": "6.6 vs 7.1",
+   "text": "On days you ticked “Gym session”, you slept 0.5 hours less that night and you ticked 0.8 fewer other tasks, on average.",
+   "basis": "From 20 days with it and 30 days without, in 8 weeks. Things that happen together, not causes.",
+   "chart": {
+    "kind": "pair",
+    "rows": [
+     {
+      "label": "Sleep that night with it",
+      "value": 6.6,
+      "n": 20,
+      "unit": "h"
+     },
+     {
+      "label": "Sleep that night without",
+      "value": 7.1,
+      "n": 30,
+      "unit": "h"
+     },
+     {
+      "label": "Other tasks with it",
+      "value": 14,
+      "n": 21,
+      "unit": "tasks"
+     },
+     {
+      "label": "Other tasks without",
+      "value": 14.8,
+      "n": 34,
+      "unit": "tasks"
+     }
+    ]
+   },
+   "action": {
+    "label": "Add to not to do",
+    "to": "/today#ntd-heading",
+    "kind": "notToDo"
+   },
+   "need": null,
+   "strength": 55,
+   "tie": {
+    "verdict": "bad",
+    "kind": "task",
+    "title": "Gym session",
+    "key": "gym|session",
+    "relationship": "friendship",
+    "to": "/today?task=o1",
+    "toLabel": "Open the task",
+    "repeats": false,
+    "canAddNotToDo": true
+   }
+  },
+  {
+   "key": "stress-calm",
+   "id": "stress-calm",
+   "state": "ready",
+   "apps": [
+    "stress",
+    "mindful",
+    "wellbeing",
+    "insights"
+   ],
+   "reads": [
+    "wellbeing",
+    "water"
+   ],
+   "private": true,
+   "relationship": null,
+   "headline": "2.2 vs 2.9",
+   "text": "On days you met your water goal, your stress was 2.2 on average. On other days, 2.9.",
+   "basis": "From 16 days and 32 days. Things that happen together, not causes.",
+   "chart": {
+    "kind": "pair",
+    "rows": [
+     {
+      "label": "Stress on water goal days",
+      "value": 2.2,
+      "n": 16,
+      "unit": ""
+     },
+     {
+      "label": "Stress on other days",
+      "value": 2.9,
+      "n": 32,
+      "unit": ""
+     }
+    ]
+   },
+   "action": {
+    "label": "Add a glass",
+    "to": "/today#water",
+    "kind": "link"
+   },
+   "need": null,
+   "strength": 55
+  },
+  {
+   "key": "habit-tie",
+   "id": "habit-tie:task:friendship:draft|review",
+   "state": "ready",
+   "apps": [
+    "home",
+    "today",
+    "tower",
+    "pillar",
+    "insights",
+    "mood",
+    "wellbeing"
+   ],
+   "reads": [
+    "tasks",
+    "wellbeing"
+   ],
+   "private": true,
+   "relationship": "friendship",
+   "headline": "3.8 vs 3.2",
+   "text": "On days you ticked “Review draft”, your mood was 0.5 higher, on average.",
+   "basis": "From 21 days with it and 27 days without, in 8 weeks. Things that happen together, not causes.",
+   "chart": {
+    "kind": "pair",
+    "rows": [
+     {
+      "label": "Mood with it",
+      "value": 3.8,
+      "n": 21,
+      "unit": ""
+     },
+     {
+      "label": "Mood without",
+      "value": 3.2,
+      "n": 27,
+      "unit": ""
+     }
+    ]
+   },
+   "action": {
+    "label": "Make it a habit",
+    "to": "/realm/friendship",
+    "kind": "habit"
+   },
+   "need": null,
+   "strength": 51,
+   "habit": {
+    "title": "Review draft",
+    "relationship": "friendship",
+    "projectId": "p1",
+    "openTaskId": "o8",
+    "repeat": {
+     "kind": "weekly",
+     "every": 1,
+     "days": [
+      2,
+      3,
+      6
+     ],
+     "until": null
+    },
+    "time": "14:30",
+    "firstDay": "2026-11-07",
+    "ticks": 25,
+    "days": [
+     "2026-09-10",
+     "2026-09-11",
+     "2026-09-12",
+     "2026-09-15",
+     "2026-09-16",
+     "2026-09-17",
+     "2026-09-18",
+     "2026-09-19",
+     "2026-09-21",
+     "2026-09-22",
+     "2026-09-25",
+     "2026-10-08",
+     "2026-10-10",
+     "2026-10-13",
+     "2026-10-14",
+     "2026-10-16",
+     "2026-10-17",
+     "2026-10-18",
+     "2026-10-20",
+     "2026-10-24",
+     "2026-10-26",
+     "2026-10-28",
+     "2026-10-29",
+     "2026-10-30",
+     "2026-11-01"
+    ]
+   },
+   "tie": {
+    "verdict": "good",
+    "kind": "task",
+    "title": "Review draft",
+    "key": "draft|review",
+    "relationship": "friendship",
+    "to": "/today?task=o8",
+    "toLabel": "Open the task",
+    "repeats": false,
+    "canAddNotToDo": true
+   }
+  },
+  {
+   "key": "daytype-done",
+   "id": "daytype-done",
+   "state": "ready",
+   "apps": [
+    "today",
+    "insights"
+   ],
+   "reads": [
+    "dayTypes",
+    "tasks"
+   ],
+   "private": false,
+   "relationship": null,
+   "headline": "15.3 vs 14.8",
+   "text": "On Admin days you ticked 15.3 tasks, 17% of them Friends. On other days, 14.8.",
+   "basis": "From 10 days and 38 days. Things that happen together, not causes.",
+   "chart": {
+    "kind": "pair",
+    "rows": [
+     {
+      "label": "Rest and body days",
+      "value": 14.9,
+      "n": 17,
+      "unit": "tasks"
+     },
+     {
+      "label": "Admin days",
+      "value": 15.3,
+      "n": 10,
+      "unit": "tasks"
+     },
+     {
+      "label": "Other days",
+      "value": 14.8,
+      "n": 38,
+      "unit": "tasks"
+     }
+    ]
+   },
+   "action": {
+    "label": "Pick today's kind of day",
+    "to": "/today#day-type",
+    "kind": "link"
+   },
+   "need": null,
+   "strength": 41
+  },
+  {
+   "key": "best-hours",
+   "id": "best-hours",
+   "state": "ready",
+   "apps": [
+    "today",
+    "mindful",
+    "insights"
+   ],
+   "reads": [
+    "tasks"
+   ],
+   "private": false,
+   "relationship": null,
+   "headline": "40%",
+   "text": "Your ticks land most often in the morning: 40% of 848, most between 6 am and 8 am.",
+   "basis": "From 848 ticks on 57 days in 8 weeks.",
+   "chart": {
+    "kind": "hours",
+    "labels": [
+     "Morning",
+     "Afternoon",
+     "Evening",
+     "Night"
+    ],
+    "values": [
+     342,
+     285,
+     198,
+     23
+    ]
+   },
+   "action": {
+    "label": "Plan my week",
+    "to": "/today?plan=week",
+    "kind": "link"
+   },
+   "need": null,
+   "strength": 35
+  },
+  {
+   "key": "review-since",
+   "id": "review-since",
+   "state": "ready",
+   "apps": [
+    "reviews",
+    "home",
+    "insights"
+   ],
+   "reads": [
+    "reviews",
+    "wellbeing"
+   ],
+   "private": true,
+   "relationship": null,
+   "headline": "+22 tasks",
+   "text": "Since your week review of 20 to 26 Oct 2026: 62 tasks, up from 40.",
+   "basis": "From your saved week review and 7 days since.",
+   "chart": {
+    "kind": "pair",
+    "rows": [
+     {
+      "label": "Tasks then",
+      "value": 40,
+      "n": 7,
+      "unit": "tasks"
+     },
+     {
+      "label": "Tasks since",
+      "value": 62,
+      "n": 7,
+      "unit": "tasks"
+     },
+     {
+      "label": "Mood then",
+      "value": 3.4,
+      "n": 7,
+      "unit": ""
+     },
+     {
+      "label": "Mood since",
+      "value": 3.9,
+      "n": 7,
+      "unit": ""
+     }
+    ]
+   },
+   "action": {
+    "label": "Write this week's review",
+    "to": "/reviews?kind=week",
+    "kind": "link"
+   },
+   "need": null,
+   "strength": 25
+  },
+  {
+   "key": "discover-strength",
+   "id": "discover-strength",
+   "state": "ready",
+   "apps": [
+    "discover",
+    "pillar",
+    "insights"
+   ],
+   "reads": [
+    "discover",
+    "tasks"
+   ],
+   "private": false,
+   "relationship": "parent_child",
+   "headline": "13%",
+   "text": "Your quietest strength is Caring, the Family pillar. You already give Family 13% of your ticks.",
+   "basis": "From your Discover result and 450 ticks in 30 days.",
+   "chart": {
+    "kind": "share",
+    "parts": [
+     {
+      "relationship": "servant_leader",
+      "value": 71
+     },
+     {
+      "relationship": "friendship",
+      "value": 71
+     },
+     {
+      "relationship": "parent_child",
+      "value": 60
+     },
+     {
+      "relationship": "lover_partner",
+      "value": 60
+     },
+     {
+      "relationship": "self",
+      "value": 73
+     },
+     {
+      "relationship": "guru",
+      "value": 60
+     },
+     {
+      "relationship": "divine",
+      "value": 55
+     }
+    ],
+    "mark": "parent_child"
+   },
+   "action": {
+    "label": "Add a task to Family",
+    "to": "/realm/parent_child?add=1",
+    "kind": "link"
+   },
+   "need": null,
+   "strength": 20
+  },
+  {
+   "key": "agency-load",
+   "id": "agency-load",
+   "state": "ready",
+   "apps": [
+    "agency",
+    "today",
+    "insights"
+   ],
+   "reads": [
+    "agency",
+    "tasks"
+   ],
+   "private": false,
+   "relationship": null,
+   "headline": "14.8 vs 14.9",
+   "text": "You ticked about the same either way: 14.8 tasks with a client piece due, 14.9 without.",
+   "basis": "From 11 days and 45 days. Things that happen together, not causes.",
+   "chart": {
+    "kind": "pair",
+    "rows": [
+     {
+      "label": "A client piece due",
+      "value": 14.8,
+      "n": 11,
+      "unit": "tasks"
+     },
+     {
+      "label": "Nothing due",
+      "value": 14.9,
+      "n": 45,
+      "unit": "tasks"
+     }
+    ]
+   },
+   "action": null,
+   "need": null,
+   "strength": 0
+  },
+  {
+   "key": "routine-tasks",
+   "id": "routine-tasks",
+   "state": "ready",
+   "apps": [
+    "today",
+    "tower",
+    "insights"
+   ],
+   "reads": [
+    "routine",
+    "tasks"
+   ],
+   "private": false,
+   "relationship": null,
+   "headline": "14.8 vs 14.9",
+   "text": "You ticked about the same either way: 14.8 tasks with your routine done, 14.9 without.",
+   "basis": "From 20 days and 18 days. Things that happen together, not causes.",
+   "chart": {
+    "kind": "pair",
+    "rows": [
+     {
+      "label": "Routine done",
+      "value": 14.8,
+      "n": 20,
+      "unit": "tasks"
+     },
+     {
+      "label": "Routine not done",
+      "value": 14.9,
+      "n": 18,
+      "unit": "tasks"
+     }
+    ]
+   },
+   "action": null,
+   "need": null,
+   "strength": 0
+  },
+  {
+   "key": "habit-tie",
+   "id": "habit-tie:ntd:ntd2",
+   "state": "watching",
+   "apps": [
+    "insights"
+   ],
+   "reads": [
+    "notToDo"
+   ],
+   "private": false,
+   "relationship": null,
+   "headline": "",
+   "text": "Slips on “Skip breakfast” and how your days go",
+   "basis": "",
+   "chart": null,
+   "action": null,
+   "need": "Nothing clear yet between slip days and kept days.",
+   "strength": 0
+  },
+  {
+   "key": "focus-tasks",
+   "id": "focus-tasks",
+   "state": "watching",
+   "apps": [
+    "mindful",
+    "today",
+    "insights"
+   ],
+   "reads": [
+    "focus",
+    "tasks"
+   ],
+   "private": false,
+   "relationship": null,
+   "headline": "",
+   "text": "Focus and tasks",
+   "basis": "",
+   "chart": null,
+   "action": null,
+   "need": "Have 4 more days with and without a focus session of 25 minutes.",
+   "strength": 0
+  }
+ ],
+ "places": {
+  "home": [
+   "habit:divine:reel|shoot",
+   "habit-tie:ntd:ntd1",
+   "habit-tie:task:friendship:late|night|run|snack"
+  ],
+  "today": [
+   "habit-tie:ntd:ntd1",
+   "habit-tie:task:friendship:late|night|run|snack",
+   "habit-tie:task:lover_partner:chapter|read",
+   "habit-tie:ntd:ntd3",
+   "habit-tie:task:friendship:gym|session",
+   "habit:divine:reel|shoot",
+   "slips-sleep"
+  ],
+  "tower": [
+   "habit:divine:reel|shoot",
+   "habit-tie:task:friendship:late|night|run|snack",
+   "habit-tie:task:lover_partner:chapter|read"
+  ],
+  "mood": [
+   "habit-tie:ntd:ntd1",
+   "habit-tie:task:friendship:late|night|run|snack"
+  ],
+  "sleep": [
+   "sleep-mood",
+   "slips-sleep"
+  ],
+  "stress": [
+   "habit-tie:ntd:ntd1",
+   "habit-tie:task:friendship:late|night|run|snack"
+  ],
+  "mindful": [
+   "habit-tie:task:lover_partner:chapter|read",
+   "stress-calm"
+  ],
+  "wellbeing": [
+   "habit-tie:ntd:ntd1",
+   "habit-tie:task:friendship:late|night|run|snack"
+  ],
+  "life": [
+   "pillar-balance"
+  ],
+  "journal": [
+   "journal-mood"
+  ],
+  "finance": [],
+  "reviews": [
+   "pillar-balance",
+   "review-since"
+  ],
+  "discover": [
+   "discover-strength"
+  ],
+  "agency": [],
+  "insights": [
+   "habit:divine:reel|shoot",
+   "habit-tie:ntd:ntd1",
+   "habit-tie:task:friendship:late|night|run|snack",
+   "sleep-mood",
+   "journal-mood",
+   "habit-tie:task:lover_partner:chapter|read",
+   "pillar-balance",
+   "slips-sleep",
+   "habit-tie:ntd:ntd3",
+   "habit-tie:task:friendship:gym|session",
+   "stress-calm",
+   "habit-tie:task:friendship:draft|review",
+   "daytype-done",
+   "best-hours",
+   "review-since",
+   "discover-strength",
+   "agency-load",
+   "routine-tasks",
+   "habit-tie:ntd:ntd2",
+   "focus-tasks"
+  ],
+  "pillar:servant_leader": [
+   {
+    "key": "pillar-balance",
+    "id": "pillar-balance:servant_leader",
+    "state": "ready",
+    "apps": [
+     "pillar"
+    ],
+    "reads": [
+     "xp",
+     "tasks"
+    ],
+    "private": false,
+    "relationship": "servant_leader",
+    "headline": "14%",
+    "text": "Servitude: 71 ticks and 395 xp in 30 days, 14% of the total.",
+    "basis": "From 450 ticks and 2,815 xp in 30 days.",
+    "chart": {
+     "kind": "share",
+     "parts": [
+      {
+       "relationship": "servant_leader",
+       "value": 395
+      },
+      {
+       "relationship": "friendship",
+       "value": 435
+      },
+      {
+       "relationship": "parent_child",
+       "value": 420
+      },
+      {
+       "relationship": "lover_partner",
+       "value": 460
+      },
+      {
+       "relationship": "self",
+       "value": 565
+      },
+      {
+       "relationship": "guru",
+       "value": 540
+      },
+      {
+       "relationship": "divine",
+       "value": 0
+      }
+     ],
+     "mark": "servant_leader"
+    },
+    "action": null,
+    "need": null,
+    "strength": 30
+   }
+  ],
+  "full:servant_leader": [
+   "habit:divine:reel|shoot",
+   "habit-tie:ntd:ntd1",
+   "habit-tie:task:friendship:late|night|run|snack",
+   "sleep-mood",
+   "journal-mood",
+   "habit-tie:task:lover_partner:chapter|read",
+   "pillar-balance",
+   "slips-sleep",
+   "habit-tie:ntd:ntd3",
+   "habit-tie:task:friendship:gym|session",
+   "stress-calm",
+   "habit-tie:task:friendship:draft|review",
+   "daytype-done",
+   "best-hours",
+   "pillar-balance:servant_leader",
+   "review-since",
+   "discover-strength",
+   "agency-load",
+   "routine-tasks",
+   "habit-tie:ntd:ntd2",
+   "focus-tasks"
+  ],
+  "pillar:friendship": [
+   {
+    "key": "habit-tie",
+    "id": "habit-tie:task:friendship:late|night|run|snack",
+    "state": "ready",
+    "apps": [
+     "home",
+     "today",
+     "tower",
+     "pillar",
+     "insights",
+     "stress",
+     "wellbeing",
+     "mood"
+    ],
+    "reads": [
+     "tasks",
+     "wellbeing"
+    ],
+    "private": true,
+    "relationship": "friendship",
+    "headline": "3.6 vs 1.9",
+    "text": "On days you ticked “Late night snack run”, your stress was 1.8 higher and your mood was 1.7 lower, on average.",
+    "basis": "From 22 days with it and 26 days without, in 8 weeks. Things that happen together, not causes.",
+    "chart": {
+     "kind": "pair",
+     "rows": [
+      {
+       "label": "Stress with it",
+       "value": 3.6,
+       "n": 22,
+       "unit": ""
+      },
+      {
+       "label": "Stress without",
+       "value": 1.9,
+       "n": 26,
+       "unit": ""
+      },
+      {
+       "label": "Mood with it",
+       "value": 2.5,
+       "n": 21,
+       "unit": ""
+      },
+      {
+       "label": "Mood without",
+       "value": 4.2,
+       "n": 27,
+       "unit": ""
+      }
+     ]
+    },
+    "action": {
+     "label": "Add to not to do",
+     "to": "/today#ntd-heading",
+     "kind": "notToDo"
+    },
+    "need": null,
+    "strength": 80,
+    "tie": {
+     "verdict": "bad",
+     "kind": "task",
+     "title": "Late night snack run",
+     "key": "late|night|run|snack",
+     "relationship": "friendship",
+     "to": "/realm/friendship",
+     "toLabel": "Open the task",
+     "repeats": false,
+     "canAddNotToDo": true
+    }
+   },
+   {
+    "key": "habit-tie",
+    "id": "habit-tie:task:friendship:gym|session",
+    "state": "ready",
+    "apps": [
+     "home",
+     "today",
+     "tower",
+     "pillar",
+     "insights",
+     "sleep",
+     "wellbeing"
+    ],
+    "reads": [
+     "tasks",
+     "wellbeing"
+    ],
+    "private": true,
+    "relationship": "friendship",
+    "headline": "6.6 vs 7.1",
+    "text": "On days you ticked “Gym session”, you slept 0.5 hours less that night and you ticked 0.8 fewer other tasks, on average.",
+    "basis": "From 20 days with it and 30 days without, in 8 weeks. Things that happen together, not causes.",
+    "chart": {
+     "kind": "pair",
+     "rows": [
+      {
+       "label": "Sleep that night with it",
+       "value": 6.6,
+       "n": 20,
+       "unit": "h"
+      },
+      {
+       "label": "Sleep that night without",
+       "value": 7.1,
+       "n": 30,
+       "unit": "h"
+      },
+      {
+       "label": "Other tasks with it",
+       "value": 14,
+       "n": 21,
+       "unit": "tasks"
+      },
+      {
+       "label": "Other tasks without",
+       "value": 14.8,
+       "n": 34,
+       "unit": "tasks"
+      }
+     ]
+    },
+    "action": {
+     "label": "Add to not to do",
+     "to": "/today#ntd-heading",
+     "kind": "notToDo"
+    },
+    "need": null,
+    "strength": 55,
+    "tie": {
+     "verdict": "bad",
+     "kind": "task",
+     "title": "Gym session",
+     "key": "gym|session",
+     "relationship": "friendship",
+     "to": "/today?task=o1",
+     "toLabel": "Open the task",
+     "repeats": false,
+     "canAddNotToDo": true
+    }
+   }
+  ],
+  "full:friendship": [
+   "habit:divine:reel|shoot",
+   "habit-tie:ntd:ntd1",
+   "habit-tie:task:friendship:late|night|run|snack",
+   "sleep-mood",
+   "journal-mood",
+   "habit-tie:task:lover_partner:chapter|read",
+   "pillar-balance",
+   "slips-sleep",
+   "habit-tie:ntd:ntd3",
+   "habit-tie:task:friendship:gym|session",
+   "stress-calm",
+   "habit-tie:task:friendship:draft|review",
+   "daytype-done",
+   "best-hours",
+   "pillar-balance:friendship",
+   "review-since",
+   "discover-strength",
+   "agency-load",
+   "routine-tasks",
+   "habit-tie:ntd:ntd2",
+   "focus-tasks"
+  ],
+  "pillar:parent_child": [
+   {
+    "key": "pillar-balance",
+    "id": "pillar-balance:parent_child",
+    "state": "ready",
+    "apps": [
+     "pillar"
+    ],
+    "reads": [
+     "xp",
+     "tasks"
+    ],
+    "private": false,
+    "relationship": "parent_child",
+    "headline": "15%",
+    "text": "Family: 60 ticks and 420 xp in 30 days, 15% of the total.",
+    "basis": "From 450 ticks and 2,815 xp in 30 days.",
+    "chart": {
+     "kind": "share",
+     "parts": [
+      {
+       "relationship": "servant_leader",
+       "value": 395
+      },
+      {
+       "relationship": "friendship",
+       "value": 435
+      },
+      {
+       "relationship": "parent_child",
+       "value": 420
+      },
+      {
+       "relationship": "lover_partner",
+       "value": 460
+      },
+      {
+       "relationship": "self",
+       "value": 565
+      },
+      {
+       "relationship": "guru",
+       "value": 540
+      },
+      {
+       "relationship": "divine",
+       "value": 0
+      }
+     ],
+     "mark": "parent_child"
+    },
+    "action": null,
+    "need": null,
+    "strength": 30
+   },
+   {
+    "key": "discover-strength",
+    "id": "discover-strength",
+    "state": "ready",
+    "apps": [
+     "discover",
+     "pillar",
+     "insights"
+    ],
+    "reads": [
+     "discover",
+     "tasks"
+    ],
+    "private": false,
+    "relationship": "parent_child",
+    "headline": "13%",
+    "text": "Your quietest strength is Caring, the Family pillar. You already give Family 13% of your ticks.",
+    "basis": "From your Discover result and 450 ticks in 30 days.",
+    "chart": {
+     "kind": "share",
+     "parts": [
+      {
+       "relationship": "servant_leader",
+       "value": 71
+      },
+      {
+       "relationship": "friendship",
+       "value": 71
+      },
+      {
+       "relationship": "parent_child",
+       "value": 60
+      },
+      {
+       "relationship": "lover_partner",
+       "value": 60
+      },
+      {
+       "relationship": "self",
+       "value": 73
+      },
+      {
+       "relationship": "guru",
+       "value": 60
+      },
+      {
+       "relationship": "divine",
+       "value": 55
+      }
+     ],
+     "mark": "parent_child"
+    },
+    "action": {
+     "label": "Add a task to Family",
+     "to": "/realm/parent_child?add=1",
+     "kind": "link"
+    },
+    "need": null,
+    "strength": 20
+   }
+  ],
+  "full:parent_child": [
+   "habit:divine:reel|shoot",
+   "habit-tie:ntd:ntd1",
+   "habit-tie:task:friendship:late|night|run|snack",
+   "sleep-mood",
+   "journal-mood",
+   "habit-tie:task:lover_partner:chapter|read",
+   "pillar-balance",
+   "slips-sleep",
+   "habit-tie:ntd:ntd3",
+   "habit-tie:task:friendship:gym|session",
+   "stress-calm",
+   "habit-tie:task:friendship:draft|review",
+   "daytype-done",
+   "best-hours",
+   "pillar-balance:parent_child",
+   "review-since",
+   "discover-strength",
+   "agency-load",
+   "routine-tasks",
+   "habit-tie:ntd:ntd2",
+   "focus-tasks"
+  ],
+  "pillar:lover_partner": [
+   {
+    "key": "habit-tie",
+    "id": "habit-tie:task:lover_partner:chapter|read",
+    "state": "ready",
+    "apps": [
+     "home",
+     "today",
+     "tower",
+     "pillar",
+     "insights",
+     "mood",
+     "wellbeing",
+     "mindful"
+    ],
+    "reads": [
+     "tasks",
+     "wellbeing",
+     "focus"
+    ],
+    "private": true,
+    "relationship": "lover_partner",
+    "headline": "2.9 vs 3.8",
+    "text": "On days you ticked “Read a chapter”, your mood was 0.9 lower and you focused 14 minutes less, on average.",
+    "basis": "From 19 days with it and 26 days without, in 8 weeks. Things that happen together, not causes.",
+    "chart": {
+     "kind": "pair",
+     "rows": [
+      {
+       "label": "Mood with it",
+       "value": 2.9,
+       "n": 19,
+       "unit": ""
+      },
+      {
+       "label": "Mood without",
+       "value": 3.8,
+       "n": 26,
+       "unit": ""
+      },
+      {
+       "label": "Focus with it",
+       "value": 30,
+       "n": 22,
+       "unit": "min"
+      },
+      {
+       "label": "Focus without",
+       "value": 44.1,
+       "n": 31,
+       "unit": "min"
+      }
+     ]
+    },
+    "action": {
+     "label": "Add to not to do",
+     "to": "/today#ntd-heading",
+     "kind": "notToDo"
+    },
+    "need": null,
+    "strength": 63,
+    "tie": {
+     "verdict": "bad",
+     "kind": "task",
+     "title": "Read a chapter",
+     "key": "chapter|read",
+     "relationship": "lover_partner",
+     "to": "/realm/lover_partner",
+     "toLabel": "Open the task",
+     "repeats": false,
+     "canAddNotToDo": true
+    }
+   },
+   {
+    "key": "pillar-balance",
+    "id": "pillar-balance:lover_partner",
+    "state": "ready",
+    "apps": [
+     "pillar"
+    ],
+    "reads": [
+     "xp",
+     "tasks"
+    ],
+    "private": false,
+    "relationship": "lover_partner",
+    "headline": "16%",
+    "text": "Love: 60 ticks and 460 xp in 30 days, 16% of the total.",
+    "basis": "From 450 ticks and 2,815 xp in 30 days.",
+    "chart": {
+     "kind": "share",
+     "parts": [
+      {
+       "relationship": "servant_leader",
+       "value": 395
+      },
+      {
+       "relationship": "friendship",
+       "value": 435
+      },
+      {
+       "relationship": "parent_child",
+       "value": 420
+      },
+      {
+       "relationship": "lover_partner",
+       "value": 460
+      },
+      {
+       "relationship": "self",
+       "value": 565
+      },
+      {
+       "relationship": "guru",
+       "value": 540
+      },
+      {
+       "relationship": "divine",
+       "value": 0
+      }
+     ],
+     "mark": "lover_partner"
+    },
+    "action": null,
+    "need": null,
+    "strength": 30
+   }
+  ],
+  "full:lover_partner": [
+   "habit:divine:reel|shoot",
+   "habit-tie:ntd:ntd1",
+   "habit-tie:task:friendship:late|night|run|snack",
+   "sleep-mood",
+   "journal-mood",
+   "habit-tie:task:lover_partner:chapter|read",
+   "pillar-balance",
+   "slips-sleep",
+   "habit-tie:ntd:ntd3",
+   "habit-tie:task:friendship:gym|session",
+   "stress-calm",
+   "habit-tie:task:friendship:draft|review",
+   "daytype-done",
+   "best-hours",
+   "pillar-balance:lover_partner",
+   "review-since",
+   "discover-strength",
+   "agency-load",
+   "routine-tasks",
+   "habit-tie:ntd:ntd2",
+   "focus-tasks"
+  ],
+  "pillar:self": [
+   {
+    "key": "habit-tie",
+    "id": "habit-tie:ntd:ntd1",
+    "state": "ready",
+    "apps": [
+     "home",
+     "today",
+     "pillar",
+     "insights",
+     "mood",
+     "wellbeing",
+     "stress"
+    ],
+    "reads": [
+     "notToDo",
+     "wellbeing"
+    ],
+    "private": true,
+    "relationship": "self",
+    "headline": "2.5 vs 4.5",
+    "text": "On days you slipped on “Doomscroll after 11 pm”, your mood was 2.0 lower and your stress was 1.9 higher, on average.",
+    "basis": "From 21 slip days and 22 kept days in 8 weeks. Things that happen together, not causes.",
+    "chart": {
+     "kind": "pair",
+     "rows": [
+      {
+       "label": "Mood on slip days",
+       "value": 2.5,
+       "n": 21,
+       "unit": ""
+      },
+      {
+       "label": "Mood on kept days",
+       "value": 4.5,
+       "n": 22,
+       "unit": ""
+      },
+      {
+       "label": "Stress on slip days",
+       "value": 3.6,
+       "n": 22,
+       "unit": ""
+      },
+      {
+       "label": "Stress on kept days",
+       "value": 1.7,
+       "n": 20,
+       "unit": ""
+      }
+     ]
+    },
+    "action": {
+     "label": "Open your not to do list",
+     "to": "/today#ntd-heading",
+     "kind": "link"
+    },
+    "need": null,
+    "strength": 85,
+    "tie": {
+     "verdict": "bad",
+     "kind": "notToDo",
+     "title": "Doomscroll after 11 pm",
+     "key": "ntd1",
+     "relationship": "self",
+     "to": "/today#ntd-heading",
+     "toLabel": "Open your not to do list",
+     "repeats": false,
+     "canAddNotToDo": false
+    }
+   },
+   {
+    "key": "habit-tie",
+    "id": "habit-tie:ntd:ntd3",
+    "state": "ready",
+    "apps": [
+     "home",
+     "today",
+     "pillar",
+     "insights",
+     "sleep",
+     "wellbeing",
+     "stress"
+    ],
+    "reads": [
+     "notToDo",
+     "wellbeing"
+    ],
+    "private": true,
+    "relationship": "self",
+    "headline": "6.5 vs 7.1",
+    "text": "On days you slipped on “Late coffee”, you slept 0.5 hours less that night and your stress was 0.5 higher, on average.",
+    "basis": "From 10 slip days and 34 kept days in 8 weeks. Things that happen together, not causes.",
+    "chart": {
+     "kind": "pair",
+     "rows": [
+      {
+       "label": "Sleep that night on slip days",
+       "value": 6.5,
+       "n": 10,
+       "unit": "h"
+      },
+      {
+       "label": "Sleep that night on kept days",
+       "value": 7.1,
+       "n": 34,
+       "unit": "h"
+      },
+      {
+       "label": "Stress on slip days",
+       "value": 3.2,
+       "n": 10,
+       "unit": ""
+      },
+      {
+       "label": "Stress on kept days",
+       "value": 2.7,
+       "n": 31,
+       "unit": ""
+      }
+     ]
+    },
+    "action": {
+     "label": "Open your not to do list",
+     "to": "/today#ntd-heading",
+     "kind": "link"
+    },
+    "need": null,
+    "strength": 56,
+    "tie": {
+     "verdict": "bad",
+     "kind": "notToDo",
+     "title": "Late coffee",
+     "key": "ntd3",
+     "relationship": "self",
+     "to": "/today#ntd-heading",
+     "toLabel": "Open your not to do list",
+     "repeats": false,
+     "canAddNotToDo": false
+    }
+   }
+  ],
+  "full:self": [
+   "habit:divine:reel|shoot",
+   "habit-tie:ntd:ntd1",
+   "habit-tie:task:friendship:late|night|run|snack",
+   "sleep-mood",
+   "journal-mood",
+   "habit-tie:task:lover_partner:chapter|read",
+   "pillar-balance",
+   "slips-sleep",
+   "habit-tie:ntd:ntd3",
+   "habit-tie:task:friendship:gym|session",
+   "stress-calm",
+   "habit-tie:task:friendship:draft|review",
+   "daytype-done",
+   "best-hours",
+   "pillar-balance:self",
+   "review-since",
+   "discover-strength",
+   "agency-load",
+   "routine-tasks",
+   "habit-tie:ntd:ntd2",
+   "focus-tasks"
+  ],
+  "pillar:guru": [
+   {
+    "key": "pillar-balance",
+    "id": "pillar-balance:guru",
+    "state": "ready",
+    "apps": [
+     "pillar"
+    ],
+    "reads": [
+     "xp",
+     "tasks"
+    ],
+    "private": false,
+    "relationship": "guru",
+    "headline": "19%",
+    "text": "Teachers: 60 ticks and 540 xp in 30 days, 19% of the total.",
+    "basis": "From 450 ticks and 2,815 xp in 30 days.",
+    "chart": {
+     "kind": "share",
+     "parts": [
+      {
+       "relationship": "servant_leader",
+       "value": 395
+      },
+      {
+       "relationship": "friendship",
+       "value": 435
+      },
+      {
+       "relationship": "parent_child",
+       "value": 420
+      },
+      {
+       "relationship": "lover_partner",
+       "value": 460
+      },
+      {
+       "relationship": "self",
+       "value": 565
+      },
+      {
+       "relationship": "guru",
+       "value": 540
+      },
+      {
+       "relationship": "divine",
+       "value": 0
+      }
+     ],
+     "mark": "guru"
+    },
+    "action": null,
+    "need": null,
+    "strength": 30
+   }
+  ],
+  "full:guru": [
+   "habit:divine:reel|shoot",
+   "habit-tie:ntd:ntd1",
+   "habit-tie:task:friendship:late|night|run|snack",
+   "sleep-mood",
+   "journal-mood",
+   "habit-tie:task:lover_partner:chapter|read",
+   "pillar-balance",
+   "slips-sleep",
+   "habit-tie:ntd:ntd3",
+   "habit-tie:task:friendship:gym|session",
+   "stress-calm",
+   "habit-tie:task:friendship:draft|review",
+   "daytype-done",
+   "best-hours",
+   "pillar-balance:guru",
+   "review-since",
+   "discover-strength",
+   "agency-load",
+   "routine-tasks",
+   "habit-tie:ntd:ntd2",
+   "focus-tasks"
+  ],
+  "pillar:divine": [
+   {
+    "key": "habit",
+    "id": "habit:divine:reel|shoot",
+    "state": "ready",
+    "apps": [
+     "today",
+     "tower",
+     "pillar",
+     "home",
+     "insights"
+    ],
+    "reads": [
+     "tasks"
+    ],
+    "private": false,
+    "relationship": "divine",
+    "headline": "12 times",
+    "text": "You ticked “Shoot reel” 12 times in 4 weeks, mostly on Wednesdays, Fridays and Saturdays around 12:30 pm. It does not repeat yet.",
+    "basis": "From 12 ticks on 12 days in 4 weeks.",
+    "chart": {
+     "kind": "dots",
+     "days": [
+      {
+       "date": "2026-10-09",
+       "on": true
+      },
+      {
+       "date": "2026-10-10",
+       "on": true
+      },
+      {
+       "date": "2026-10-11",
+       "on": true
+      },
+      {
+       "date": "2026-10-12",
+       "on": false
+      },
+      {
+       "date": "2026-10-13",
+       "on": false
+      },
+      {
+       "date": "2026-10-14",
+       "on": false
+      },
+      {
+       "date": "2026-10-15",
+       "on": false
+      },
+      {
+       "date": "2026-10-16",
+       "on": true
+      },
+      {
+       "date": "2026-10-17",
+       "on": false
+      },
+      {
+       "date": "2026-10-18",
+       "on": false
+      },
+      {
+       "date": "2026-10-19",
+       "on": false
+      },
+      {
+       "date": "2026-10-20",
+       "on": true
+      },
+      {
+       "date": "2026-10-21",
+       "on": false
+      },
+      {
+       "date": "2026-10-22",
+       "on": true
+      },
+      {
+       "date": "2026-10-23",
+       "on": true
+      },
+      {
+       "date": "2026-10-24",
+       "on": true
+      },
+      {
+       "date": "2026-10-25",
+       "on": false
+      },
+      {
+       "date": "2026-10-26",
+       "on": true
+      },
+      {
+       "date": "2026-10-27",
+       "on": false
+      },
+      {
+       "date": "2026-10-28",
+       "on": true
+      },
+      {
+       "date": "2026-10-29",
+       "on": false
+      },
+      {
+       "date": "2026-10-30",
+       "on": false
+      },
+      {
+       "date": "2026-10-31",
+       "on": true
+      },
+      {
+       "date": "2026-11-01",
+       "on": false
+      },
+      {
+       "date": "2026-11-02",
+       "on": false
+      },
+      {
+       "date": "2026-11-03",
+       "on": false
+      },
+      {
+       "date": "2026-11-04",
+       "on": true
+      },
+      {
+       "date": "2026-11-05",
+       "on": false
+      }
+     ]
+    },
+    "action": {
+     "label": "Make it a habit",
+     "to": "/realm/divine",
+     "kind": "habit"
+    },
+    "need": null,
+    "strength": 90,
+    "habit": {
+     "title": "Shoot reel",
+     "relationship": "divine",
+     "projectId": "p6",
+     "openTaskId": "o6",
+     "repeat": {
+      "kind": "weekly",
+      "every": 1,
+      "days": [
+       3,
+       5,
+       6
+      ],
+      "until": null
+     },
+     "time": "12:30",
+     "firstDay": "2026-11-06",
+     "ticks": 12,
+     "days": [
+      "2026-10-09",
+      "2026-10-10",
+      "2026-10-11",
+      "2026-10-16",
+      "2026-10-20",
+      "2026-10-22",
+      "2026-10-23",
+      "2026-10-24",
+      "2026-10-26",
+      "2026-10-28",
+      "2026-10-31",
+      "2026-11-04"
+     ]
+    }
+   },
+   {
+    "key": "pillar-balance",
+    "id": "pillar-balance:divine",
+    "state": "ready",
+    "apps": [
+     "pillar"
+    ],
+    "reads": [
+     "xp",
+     "tasks"
+    ],
+    "private": false,
+    "relationship": "divine",
+    "headline": "0%",
+    "text": "Faith: 55 ticks and 0 xp in 30 days, 0% of the total.",
+    "basis": "From 450 ticks and 2,815 xp in 30 days.",
+    "chart": {
+     "kind": "share",
+     "parts": [
+      {
+       "relationship": "servant_leader",
+       "value": 395
+      },
+      {
+       "relationship": "friendship",
+       "value": 435
+      },
+      {
+       "relationship": "parent_child",
+       "value": 420
+      },
+      {
+       "relationship": "lover_partner",
+       "value": 460
+      },
+      {
+       "relationship": "self",
+       "value": 565
+      },
+      {
+       "relationship": "guru",
+       "value": 540
+      },
+      {
+       "relationship": "divine",
+       "value": 0
+      }
+     ],
+     "mark": "divine"
+    },
+    "action": null,
+    "need": null,
+    "strength": 50
+   }
+  ],
+  "full:divine": [
+   "habit:divine:reel|shoot",
+   "habit-tie:ntd:ntd1",
+   "habit-tie:task:friendship:late|night|run|snack",
+   "sleep-mood",
+   "journal-mood",
+   "habit-tie:task:lover_partner:chapter|read",
+   "pillar-balance",
+   "slips-sleep",
+   "habit-tie:ntd:ntd3",
+   "habit-tie:task:friendship:gym|session",
+   "stress-calm",
+   "habit-tie:task:friendship:draft|review",
+   "pillar-balance:divine",
+   "daytype-done",
+   "best-hours",
+   "review-since",
+   "discover-strength",
+   "agency-load",
+   "routine-tasks",
+   "habit-tie:ntd:ntd2",
+   "focus-tasks"
+  ]
+ }
+}

@@ -26,7 +26,7 @@ export function BackLink({ to, children, inherit = false, onBack }: { to: string
     }
   };
   return (
-    <Link to={to} onClick={back} data-back="" className={`back-link -ml-xs inline-flex min-h-[44px] items-center gap-xs rounded-pill pr-sm pl-xs text-[14px] font-bold transition-colors ${inherit ? '' : 'text-ink-soft hover:text-ink'}`}>
+    <Link to={to} onClick={back} data-back="" className={`back-link -ml-xs inline-flex min-h-[44px] items-center gap-xs rounded-pill pr-sm pl-xs text-subhead font-semibold transition-colors ${inherit ? '' : 'text-ink-soft hover:text-ink'}`}>
       <span className={`back-link-dot flex size-[32px] items-center justify-center rounded-pill shadow-toy-soft ${inherit ? 'bg-white/30' : 'bg-card text-ink'}`} aria-hidden="true">
         <Icon icon={ChevronLeft} size={18} className="back-link-chev" />
       </span>
@@ -63,14 +63,14 @@ export function PageHeader({ back, eyebrow, title, lede, aside, children }: Prop
   return (
     <header className="pt-lg">
       {back && <BackLink to={back.to}>{back.label}</BackLink>}
-      {eyebrow && <p className="m-0 text-[14px] font-bold text-ink-soft">{eyebrow}</p>}
+      {eyebrow && <p className="m-0 text-footnote text-ink-soft">{eyebrow}</p>}
       <div className="flex items-center justify-between gap-sm">
         <CondensedTitle className="min-w-0" title={typeof title === 'string' ? title : ''}>
-          <h1 className="type-large min-w-0">{title}</h1>
+          <h1 className="text-large-title min-w-0">{title}</h1>
         </CondensedTitle>
         {aside && <div className="shrink-0">{aside}</div>}
       </div>
-      {lede && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{lede}</p>}
+      {lede && <p className="mt-xs m-0 text-subhead text-ink-soft">{lede}</p>}
       {children}
     </header>
   );

@@ -36,7 +36,7 @@ function WaterNumber({ label, value, min, max, step, labelEvery, onSave }: { lab
   return (
     <div className="col-span-2">
       <label className="flex items-center justify-between gap-sm">
-        <span className="text-[12px] font-bold">{label}</span>
+        <span className="text-caption">{label}</span>
         <input
           value={text}
           inputMode="numeric"
@@ -49,7 +49,7 @@ function WaterNumber({ label, value, min, max, step, labelEvery, onSave }: { lab
               onSave(n);
             } else setText(String(v));
           }}
-          className="w-[96px] rounded-tile border-2 border-line bg-paper px-sm py-xs text-right text-[16px]"
+          className="w-[96px] rounded-tile border-2 border-line bg-paper px-sm py-xs text-right text-body"
         />
       </label>
       <RulerPicker
@@ -92,7 +92,7 @@ function Bar({ w }: { w: WaterState }) {
   return (
     <div>
       <WaterFill value={w.ml} max={w.goalMl} />
-      <p className="mt-xs m-0 text-[14px] font-bold">
+      <p className="mt-xs m-0 text-subhead font-semibold">
         {w.glasses} of {w.goalGlasses} glasses · {litres(w.ml)} of {litres(w.goalMl)}
         {w.ml >= w.goalMl && ' · goal met'}
       </p>
@@ -139,7 +139,7 @@ export function RemindersPanel({ bento = false, tasks = true }: { bento?: boolea
   const change = useMutation({ mutationFn: (v: { id: string; r: Partial<CustomReminder> }) => api.changeReminder(v.id, v.r), onSuccess: refresh });
   const remove = useMutation({ mutationFn: (id: string) => api.removeReminder(id), onSuccess: refresh });
   const failed = drink.error ?? undo.error ?? settle.error ?? add.error ?? change.error ?? remove.error ?? remember.error ?? forget.error;
-  if (!w) return <p className="m-0 text-[14px] font-bold text-ink-soft" role="status">{q.isError ? 'Could not load.' : 'Loading'}</p>;
+  if (!w) return <p className="m-0 text-subhead text-ink-soft" role="status">{q.isError ? 'Could not load.' : 'Loading'}</p>;
   const max = Math.max(w.goalMl, ...w.week.map((d) => d.ml));
 
   // As a bento (the wide card): two cells side by side, each a rounded tile whose curve is the card's, less the padding between them.
@@ -147,7 +147,7 @@ export function RemindersPanel({ bento = false, tasks = true }: { bento?: boolea
   return (
     <div className={bento ? 'grid gap-sm md:grid-cols-2' : 'flex flex-col gap-md'}>
       <section aria-label="Water" className={cell} data-pillar="lover_partner">
-        <h3 className="m-0 flex items-center gap-xs text-[16px] font-extrabold">
+        <h3 className="m-0 flex items-center gap-xs text-headline">
           <span className="text-r4"><Drop /></span> Water
         </h3>
         {!bento && (
@@ -188,14 +188,14 @@ export function RemindersPanel({ bento = false, tasks = true }: { bento?: boolea
         </div>
         <label className="toy toy-flat mt-sm flex min-h-[44px] cursor-pointer items-center gap-sm rounded-tile p-xs">
           <input type="checkbox" checked={w.on} onChange={(e) => settle.mutate({ on: e.target.checked })} disabled={settle.isPending} className="size-[22px] shrink-0" />
-          <span className="min-w-0 text-[14px] font-bold">
+          <span className="min-w-0 text-subhead">
             Remind me to drink
-            <span className="block text-[12px] font-bold text-ink-soft">
+            <span className="block text-caption text-ink-soft">
               Every {w.everyMin >= 60 ? `${w.everyMin / 60} h` : `${w.everyMin} min`} from {w.from} to {w.to}, until the goal is met. Notices land in your Inbox.
             </span>
           </span>
         </label>
-        <button type="button" aria-expanded={showSet} aria-controls="water-settings" onClick={() => setShowSet((v) => !v)} className="mt-xs inline-flex min-h-[44px] items-center gap-xs text-[12px] font-bold text-ink-soft underline underline-offset-4">
+        <button type="button" aria-expanded={showSet} aria-controls="water-settings" onClick={() => setShowSet((v) => !v)} className="mt-xs inline-flex min-h-[44px] items-center gap-xs text-caption text-ink-soft underline underline-offset-4">
           {showSet ? 'Hide water settings' : 'Water settings'}
           <ToggleChevron open={showSet} size={14} strokeWidth={3} />
         </button>
@@ -204,7 +204,7 @@ export function RemindersPanel({ bento = false, tasks = true }: { bento?: boolea
             <WaterNumber label="Daily goal (ml)" value={w.goalMl} min={WATER_GOAL_MIN} max={WATER_GOAL_MAX} step={100} labelEvery={500} onSave={(n) => settle.mutate({ goalMl: n })} />
             <WaterNumber label="A glass (ml)" value={w.glassMl} min={WATER_GLASS_MIN} max={WATER_GLASS_MAX} step={50} labelEvery={250} onSave={(n) => settle.mutate({ glassMl: n })} />
             <label className="block">
-              <span className="block text-[12px] font-bold">How often</span>
+              <span className="block text-caption">How often</span>
               <select value={w.everyMin} onChange={(e) => settle.mutate({ everyMin: Number(e.target.value) })} className={FIELD}>
                 {WATER_EVERY_CHOICES.map((m) => (
                   <option key={m} value={m}>
@@ -215,11 +215,11 @@ export function RemindersPanel({ bento = false, tasks = true }: { bento?: boolea
             </label>
             <div className="grid grid-cols-2 gap-xs">
               <label className="block">
-                <span className="block text-[12px] font-bold">From</span>
+                <span className="block text-caption">From</span>
                 <input type="time" defaultValue={w.from} onBlur={(e) => e.target.value && e.target.value !== w.from && settle.mutate({ from: e.target.value })} className={FIELD} />
               </label>
               <label className="block">
-                <span className="block text-[12px] font-bold">To</span>
+                <span className="block text-caption">To</span>
                 <input type="time" defaultValue={w.to} onBlur={(e) => e.target.value && e.target.value !== w.to && settle.mutate({ to: e.target.value })} className={FIELD} />
               </label>
             </div>
@@ -228,16 +228,16 @@ export function RemindersPanel({ bento = false, tasks = true }: { bento?: boolea
       </section>
 
       <section aria-label="Your reminders" className={cell}>
-        <h3 className="m-0 text-[16px] font-extrabold">Your reminders</h3>
-        {custom.length === 0 && !adding && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Add your own: stretch, take medicine, call someone. Each one lands in your Inbox at its time.</p>}
+        <h3 className="m-0 text-headline">Your reminders</h3>
+        {custom.length === 0 && !adding && <p className="mt-xs m-0 text-subhead text-ink-soft">Add your own: stretch, take medicine, call someone. Each one lands in your Inbox at its time.</p>}
         <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
           {custom.map((r) => (
             <li key={r.id} className="flex items-center gap-xs rounded-inner-sm bg-paper p-xs">
               <label className="toy toy-flat flex min-h-[44px] min-w-0 flex-1 cursor-pointer items-center gap-sm rounded-tile px-xs">
                 <input type="checkbox" checked={r.enabled} onChange={(e) => change.mutate({ id: r.id, r: { enabled: e.target.checked } })} className="size-[22px] shrink-0" />
                 <span className="min-w-0">
-                  <span className={`block truncate text-[14px] font-bold ${r.enabled ? '' : 'text-ink-soft line-through'}`}>{r.title}</span>
-                  <span className="block text-[12px] font-bold text-ink-soft">
+                  <span className={`block truncate text-subhead font-semibold ${r.enabled ? '' : 'text-ink-soft line-through'}`}>{r.title}</span>
+                  <span className="block text-caption text-ink-soft">
                     {r.time} · {weekdaysLabel(r.days)}
                   </span>
                 </span>
@@ -257,11 +257,11 @@ export function RemindersPanel({ bento = false, tasks = true }: { bento?: boolea
             }}
           >
             <label className="block">
-              <span className="block text-[12px] font-bold">Remind me to</span>
+              <span className="block text-caption">Remind me to</span>
               <input value={title} maxLength={REMINDER_TITLE_MAX} onChange={(e) => setTitle(e.target.value)} placeholder="Stretch for five minutes" className={FIELD} />
             </label>
             <label className="block">
-              <span className="block text-[12px] font-bold">At</span>
+              <span className="block text-caption">At</span>
               <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={FIELD} />
             </label>
             <div role="group" aria-label="Days" className="grid grid-cols-7 gap-xs">
@@ -269,7 +269,7 @@ export function RemindersPanel({ bento = false, tasks = true }: { bento?: boolea
                 const d = i + 1;
                 const on = days.includes(d);
                 return (
-                  <button key={n} type="button" aria-pressed={on} onClick={() => setDays((x) => (on ? x.filter((y) => y !== d) : [...x, d].sort()))} className={`min-h-[44px] min-w-0 rounded-pill border-2 px-0 text-[12px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+                  <button key={n} type="button" aria-pressed={on} onClick={() => setDays((x) => (on ? x.filter((y) => y !== d) : [...x, d].sort()))} className={`min-h-[44px] min-w-0 rounded-pill border-2 px-0 text-caption font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
                     <span className="sm:hidden">{n.slice(0, 2)}</span>
                     <span className="hidden sm:inline">{n}</span>
                   </button>
@@ -292,12 +292,12 @@ export function RemindersPanel({ bento = false, tasks = true }: { bento?: boolea
         )}
 
         <div role="group" aria-labelledby="from-daily" className="mt-sm">
-          <h4 id="from-daily" className="m-0 text-[14px] font-extrabold">
+          <h4 id="from-daily" className="m-0 text-subhead font-semibold">
             Tasks from Daily
           </h4>
-          <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">A task you ask to remember sends one note to your Inbox on its day.</p>
+          <p className="mt-xs m-0 text-caption text-ink-soft">A task you ask to remember sends one note to your Inbox on its day.</p>
           {!tasks ? (
-            remembered.some((t) => !t.day) && <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+            remembered.some((t) => !t.day) && <p className="mt-xs m-0 text-caption text-ink-soft">
               <a href="#remember-heading" className="inline-flex min-h-[44px] items-center underline underline-offset-4 hover:text-ink">Tasks to remember are under Tasks below</a>
             </p>
           ) : remembered.length > 0 && (
@@ -307,8 +307,8 @@ export function RemindersPanel({ bento = false, tasks = true }: { bento?: boolea
                   <label className="toy toy-flat flex min-h-[44px] cursor-pointer items-center gap-sm rounded-tile px-xs">
                     <input type="checkbox" checked onChange={() => forget.mutate(t.id)} disabled={forget.isPending} aria-label={`Stop reminding me about ${t.title}`} className="size-[22px] shrink-0" />
                     <span className="min-w-0">
-                      <span className="block truncate text-[14px] font-bold">{t.title}</span>
-                      <span className="block text-[12px] font-bold text-ink-soft">{t.day ? `${shortDay(t.day)} · ${t.time ?? '09:00'}` : 'No day yet, so no note'}</span>
+                      <span className="block truncate text-subhead font-semibold">{t.title}</span>
+                      <span className="block text-caption text-ink-soft">{t.day ? `${shortDay(t.day)} · ${t.time ?? '09:00'}` : 'No day yet, so no note'}</span>
                     </span>
                   </label>
                 </li>
@@ -324,7 +324,7 @@ export function RemindersPanel({ bento = false, tasks = true }: { bento?: boolea
               }}
             >
               <label className="block">
-                <span className="block text-[12px] font-bold">Task</span>
+                <span className="block text-caption">Task</span>
                 <select value={pickId} onChange={(e) => setPickId(e.target.value)} className={FIELD}>
                   <option value="">{open.isLoading ? 'Loading' : pickable.length === 0 ? 'No open tasks' : 'Pick a task'}</option>
                   {pickable.map((t) => (
@@ -336,13 +336,13 @@ export function RemindersPanel({ bento = false, tasks = true }: { bento?: boolea
               </label>
               {chosen && !chosen.dueDate && (
                 <label className="block">
-                  <span className="block text-[12px] font-bold">On</span>
+                  <span className="block text-caption">On</span>
                   <input type="date" value={pickDay} min={day} onChange={(e) => setPickDay(e.target.value)} className={FIELD} />
-                  <span className="mt-xs block text-[12px] font-semibold text-ink-soft">It will show on Daily from that day.</span>
+                  <span className="mt-xs block text-caption text-ink-soft">It will show on Daily from that day.</span>
                 </label>
               )}
               <label className="block">
-                <span className="block text-[12px] font-bold">At</span>
+                <span className="block text-caption">At</span>
                 <input type="time" value={pickTime} onChange={(e) => setPickTime(e.target.value)} className={FIELD} />
               </label>
               <div className="flex gap-xs">
@@ -361,7 +361,7 @@ export function RemindersPanel({ bento = false, tasks = true }: { bento?: boolea
           )}
         </div>
       </section>
-      {failed && <p role="alert" className={`m-0 text-[14px] font-bold ${bento ? 'md:col-span-2' : ''}`}>{msg(failed)}</p>}
+      {failed && <p role="alert" className={`m-0 text-subhead ${bento ? 'md:col-span-2' : ''}`}>{msg(failed)}</p>}
     </div>
   );
 }
@@ -385,8 +385,8 @@ export function RemindersSection({ always = false, tasks = true, quiet = false }
             <Drop size={24} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[16px] font-extrabold">Water and reminders</span>
-            <span className="block text-[14px] font-bold text-ink-soft">{w ? `${w.glasses} of ${w.goalGlasses} glasses today · ${litres(w.ml)} of ${litres(w.goalMl)}` : 'Loading'}</span>
+            <span className="block text-headline">Water and reminders</span>
+            <span className="block text-subhead text-ink-soft">{w ? `${w.glasses} of ${w.goalGlasses} glasses today · ${litres(w.ml)} of ${litres(w.goalMl)}` : 'Loading'}</span>
           </span>
           <ToggleChevron open={open} size={16} strokeWidth={3} />
         </button>
@@ -429,13 +429,13 @@ export function ReminderBubble() {
       {open && (
         <div ref={panel} className="mb-sm max-h-[70vh] w-[340px] overflow-y-auto rounded-card border border-line bg-card p-md shadow-toy-soft" role="dialog" aria-label="Water and reminders">
           <div className="mb-sm flex items-center justify-between">
-            <h2 className="m-0 text-[18px]">Water and reminders</h2>
+            <h2 className="m-0 text-title3">Water and reminders</h2>
             <CloseButton onClick={() => setOpen(false)} label="Close water and reminders" />
           </div>
           <RemindersPanel />
         </div>
       )}
-      <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} aria-label={w ? `Water and reminders, ${w.glasses} of ${w.goalGlasses} glasses` : 'Water and reminders'} className="toy toy-soft flex min-h-[48px] items-center gap-xs rounded-pill border-2 border-line bg-card-strong px-md text-[16px] font-extrabold">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} aria-label={w ? `Water and reminders, ${w.glasses} of ${w.goalGlasses} glasses` : 'Water and reminders'} className="toy toy-soft flex min-h-[48px] items-center gap-xs rounded-pill border-2 border-line bg-card-strong px-md text-headline">
         <span className="text-r4"><Drop size={22} /></span>
         Water {w ? `${w.glasses}/${w.goalGlasses}` : ''}
       </button>
@@ -459,7 +459,7 @@ export function WaterButton() {
         aria-haspopup="dialog"
         data-pillar="lover_partner"
         aria-label={w ? `Water and reminders, ${w.glasses} of ${w.goalGlasses} glasses` : 'Water and reminders'}
-        className="toy toy-soft hidden min-h-[44px] items-center gap-xs rounded-pill border border-line bg-card-strong px-sm text-[14px] font-bold text-ink md:flex"
+        className="toy toy-soft hidden min-h-[44px] items-center gap-xs rounded-pill border border-line bg-card-strong px-sm text-subhead font-medium text-ink md:flex"
       >
         <span className="text-r4">
           <Drop size={20} />

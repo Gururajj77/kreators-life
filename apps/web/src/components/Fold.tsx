@@ -44,8 +44,8 @@ export function Fold({
     <div className={className}>
       <button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)} className={`toy toy-flat flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile text-left ${fill}`}>
         <span className="min-w-0">
-          <span className="text-[16px] font-bold">{title}</span>
-          {hint !== undefined && hint !== '' && <span className="ml-xs whitespace-nowrap text-[16px] font-semibold text-ink-soft">{hint}</span>}
+          <span className="text-headline">{title}</span>
+          {hint !== undefined && hint !== '' && <span className="ml-xs whitespace-nowrap text-callout text-ink-soft">{hint}</span>}
         </span>
         {adds ? (
           <AnimatedIcon name="plusToX" size={16} active={open} className="text-ink-soft" />

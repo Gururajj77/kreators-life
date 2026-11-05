@@ -16,7 +16,7 @@ import { todayLocal } from '../lib/date';
 import { fillVar, ON_FILL } from '../lib/relFill';
 import { useAuthed, useMe } from '../lib/queries';
 import { Icon } from '../components/Icon';
-import { ChevronRight } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
 import { EmergenceSlot } from '../components/EmergenceSlot';
 
 /** One pillar card. With a strategy session behind it, the card carries the pillar's map line: floor to core, the Courage mark, and a focus tag. */
@@ -46,19 +46,19 @@ function Floor({ r, state, delay, placement, focus }: { r: Relationship; state: 
         <span className="flex items-center gap-sm">
           <Avatar relationship={r.key} size={52} mood={built ? 'happy' : 'sleepy'} stage={state?.stage ?? 1} still decorative className="avatar-hop" />
           <span className="min-w-0 flex-1">
-            <span className="block font-display text-[18px] font-extrabold leading-tight">
+            <span className="block text-title3 type-figure">
               {r.name}
-              {focus && <span className="ml-xs rounded-pill bg-[rgba(0,0,0,0.18)] px-xs text-[11px] font-extrabold uppercase tracking-wide align-middle">Focus</span>}
+              {focus && <span className="ml-xs rounded-pill bg-[rgba(0,0,0,0.18)] px-xs text-caption2 uppercase align-middle">Focus</span>}
             </span>
-            <span className="block text-[14px] font-bold">{line}</span>
+            <span className="block text-subhead">{line}</span>
           </span>
           <Ring value={lp.pct} size={48} stroke={5} color={ON_FILL} track="rgba(0,0,0,0.18)" label={`${r.name} level ${lp.level}`}>
-            <span className="font-display text-[14px] font-extrabold">{lp.level}</span>
+            <span className="text-subhead font-semibold">{lp.level}</span>
           </Ring>
         </span>
         {f && (
           <span className="mt-sm block">
-            <span className="flex items-center justify-between text-[12px] font-bold">
+            <span className="flex items-center justify-between text-caption">
               <span>On the map</span>
               <span>
                 {levelByValue(f.floor)?.name} to {levelByValue(f.core)?.name}
@@ -68,7 +68,7 @@ function Floor({ r, state, delay, placement, focus }: { r: Relationship; state: 
               <span className="absolute top-0 h-full w-px bg-current opacity-60" style={{ left: `${pct(COURAGE)}%` }} />
               <span className="absolute top-0 h-full rounded-pill bg-current" style={{ left: `${pct(f.floor)}%`, width: `${Math.max(2, pct(f.core) - pct(f.floor))}%` }} />
             </span>
-            {(f.required || f.volatile) && <span className="mt-xs block text-[12px] font-bold">{f.required ? 'The floor is under Courage: a good place to start.' : 'A big drop under stress: check it weekly.'}</span>}
+            {(f.required || f.volatile) && <span className="mt-xs block text-caption">{f.required ? 'The floor is under Courage: a good place to start.' : 'A big drop under stress: check it weekly.'}</span>}
           </span>
         )}
       </Link>
@@ -81,10 +81,10 @@ function StartSessionCard() {
   return (
     <Link to="/session" className="group toy toy-soft mt-md flex items-center gap-sm rounded-card bg-ink p-md text-on-ink">
       <span className="min-w-0 flex-1">
-        <span className="block font-display text-[18px] font-extrabold">Set up your pillars: the strategy session</span>
-        <span className="mt-xs block text-[14px] font-semibold text-on-ink/70">Leave with your map, a routine, a contract and your first pyramids.</span>
+        <span className="block text-headline">Set up your pillars: the strategy session</span>
+        <span className="mt-xs block text-subhead text-on-ink/70">Leave with your map, a routine, a contract and your first pyramids.</span>
       </span>
-      <Icon icon={ChevronRight} size={22} className="transition-transform motion-safe:group-hover:translate-x-xs row-chevron" />
+      <Icon icon={ArrowUpRight} size={22} className="transition-transform motion-safe:group-hover:translate-x-xs motion-safe:group-hover:-translate-y-xs row-chevron" />
     </Link>
   );
 }
@@ -107,13 +107,13 @@ export function Tower() {
   return (
     <Screen columns={false}>
       <header className="pt-lg">
-        <h1 className="text-[30px]">Your seven pillars</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+        <h1 className="text-large-title">Your seven pillars</h1>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">
           One pillar for each relationship in your life. Tap a pillar to set it up. A pillar that is set up sends its tasks to Daily.
         </p>
         <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
           <XpBar xp={user.xp} />
-          <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">
+          <p className="mt-sm m-0 text-subhead text-ink-soft">
             {builtCount} of {RELATIONSHIPS.length} pillars set up.{builtCount < RELATIONSHIPS.length ? ' Setting up all seven earns the All seven badge.' : ' That earned the All seven badge.'}
           </p>
         </div>
@@ -121,8 +121,8 @@ export function Tower() {
       </header>
       {assessment && (
         <div className="mt-md flex items-start justify-between gap-sm">
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">{focusNames.length ? `Month one: ${focusNames.join(' and ')}. ` : ''}Each card shows where that relationship lives on the map, and where it drops.</p>
-          <a href="#life-map" className="shrink-0 text-[14px] font-bold underline underline-offset-4">
+          <p className="m-0 text-subhead text-ink-soft">{focusNames.length ? `Month one: ${focusNames.join(' and ')}. ` : ''}Each card shows where that relationship lives on the map, and where it drops.</p>
+          <a href="#life-map" className="shrink-0 text-subhead font-semibold underline underline-offset-4">
             Life map below
           </a>
         </div>
@@ -139,12 +139,12 @@ export function Tower() {
       <section className="mt-lg rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="how-heading">
         <div>
           <div>
-            <h2 id="how-heading" className="text-[24px]">
+            <h2 id="how-heading" className="text-title2">
               How a pillar works
             </h2>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Every pillar is a pyramid, from the foundation at the top to today’s small task at the point. Tick the task and the whole pyramid gets stronger.</p>
+            <p className="mt-xs m-0 text-subhead text-ink-soft">Every pillar is a pyramid, from the foundation at the top to today’s small task at the point. Tick the task and the whole pyramid gets stronger.</p>
             <Fold title="Why start at the foundation" className="mt-xs">
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">Most apps start with tasks, and tasks fade in a week. This starts at the foundation, so each task has a reason to exist.</p>
+              <p className="m-0 text-subhead text-ink-soft">Most apps start with tasks, and tasks fade in a week. This starts at the foundation, so each task has a reason to exist.</p>
             </Fold>
           </div>
           <div className="mt-md">

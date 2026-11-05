@@ -23,7 +23,7 @@ function Ring({ value, color }: { value: number; color: string }) {
         <circle cx="28" cy="28" r={r} fill="none" stroke="var(--color-line)" strokeWidth="6" />
         <circle cx="28" cy="28" r={r} fill="none" stroke={color} strokeWidth="6" strokeLinecap="round" strokeDasharray={`${(c * value) / 100} ${c}`} />
       </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-[12px] font-extrabold">{value}</span>
+      <span className="absolute inset-0 flex items-center justify-center text-caption font-semibold">{value}</span>
     </div>
   );
 }
@@ -33,7 +33,7 @@ function Block({ item }: { item: BuildItem }) {
   const s = STATE[state];
   const mod = note ? MODULES.find((m) => m.path === note) : undefined;
   return (
-    <li className="flex items-start gap-xs rounded-tile border px-xs py-xs text-[14px] font-semibold" style={{ background: s.bg, borderColor: s.edge, borderStyle: state === 'off' ? 'dashed' : 'solid' }}>
+    <li className="flex items-start gap-xs rounded-tile border px-xs py-xs text-subhead" style={{ background: s.bg, borderColor: s.edge, borderStyle: state === 'off' ? 'dashed' : 'solid' }}>
       <span className="mt-[2px] flex w-[14px] shrink-0 justify-center" aria-hidden="true">
         {s.glyph && <Icon icon={s.glyph} size={14} strokeWidth={3} />}
       </span>
@@ -42,7 +42,7 @@ function Block({ item }: { item: BuildItem }) {
         {/* An item whose note is an app's path wears that app's icon (the labels hold no emoji). */}
         {mod && <AppIcon name={mod.icon} size={14} className="mr-xs inline-block align-[-2px]" />}
         {label}
-        {note && <span className="block text-balance text-[12px] font-bold text-ink-soft">{tie(note)}</span>}
+        {note && <span className="block text-balance text-caption text-ink-soft">{tie(note)}</span>}
       </span>
     </li>
   );
@@ -56,8 +56,8 @@ function Card({ card, color }: { card: BuildCard; color: string }) {
       <div className="flex items-center gap-sm">
         <Ring value={percentOf(all)} color={color} />
         <div className="min-w-0">
-          <h3 className="text-[18px] leading-tight">{tie(card.title)}</h3>
-          {card.route && <p className="m-0 flex flex-col break-words font-mono text-[12px] font-bold text-ink-mute">{card.route.split(", ").map((r) => <span key={r}>{r}</span>)}</p>}
+          <h3 className="text-headline">{tie(card.title)}</h3>
+          {card.route && <p className="m-0 flex flex-col break-words font-mono text-caption text-ink-mute">{card.route.split(", ").map((r) => <span key={r}>{r}</span>)}</p>}
         </div>
       </div>
       {pipe ? (
@@ -66,7 +66,7 @@ function Card({ card, color }: { card: BuildCard; color: string }) {
             const s = STATE[it[1]];
             return (
               <li key={`${it[0]}${i}`} className="flex items-center gap-xs">
-                <span className="rounded-pill border px-sm py-xs text-[12px] font-bold" style={{ background: s.bg, borderColor: s.edge, borderStyle: it[1] === 'off' ? 'dashed' : 'solid' }}>
+                <span className="rounded-pill border px-sm py-xs text-caption font-medium" style={{ background: s.bg, borderColor: s.edge, borderStyle: it[1] === 'off' ? 'dashed' : 'solid' }}>
                   <span className="sr-only">{s.name}: </span>
                   {it[0]}
                 </span>
@@ -119,14 +119,14 @@ export function BuildMap() {
             [MODULES.length, 'modules in the registry'],
           ].map(([b, l]) => (
             <div key={String(l)} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <span className="block font-display text-[24px] font-extrabold leading-none">{b}</span>
-              <span className="mt-xs block text-balance text-[12px] font-bold text-ink-soft">{tie(String(l))}</span>
+              <span className="block text-title2 type-figure leading-none">{b}</span>
+              <span className="mt-xs block text-balance text-caption text-ink-soft">{tie(String(l))}</span>
             </div>
           ))}
         </div>
         <ul className="fill-row-all mt-sm flex list-none flex-wrap gap-xs p-0 m-0" aria-label="What the colours mean">
           {(Object.keys(STATE) as BuildState[]).map((k) => (
-            <li key={k} className="rounded-pill border px-sm py-xs text-center text-[12px] font-extrabold" style={{ background: STATE[k].bg, borderColor: STATE[k].edge, borderStyle: k === 'off' ? 'dashed' : 'solid' }}>
+            <li key={k} className="rounded-pill border px-sm py-xs text-center text-caption font-medium" style={{ background: STATE[k].bg, borderColor: STATE[k].edge, borderStyle: k === 'off' ? 'dashed' : 'solid' }}>
               {STATE[k].name}
             </li>
           ))}
@@ -135,7 +135,7 @@ export function BuildMap() {
           {tower.map(({ s, all }) => {
             const p = percentOf(all);
             return (
-              <a key={s.id} href={`#build-${s.id}`} className={`toy relative flex min-h-[44px] items-center justify-between gap-sm overflow-hidden rounded-pill px-md text-[14px] font-extrabold ${RELATIONSHIPS[s.floor - 1]!.key === 'parent_child' ? 'text-on-yellow' : 'text-on-fill'}`} style={{ width: `${46 + (7 - s.floor) * 8}%`, background: colorOf(s.floor) }}>
+              <a key={s.id} href={`#build-${s.id}`} className={`toy relative flex min-h-[44px] items-center justify-between gap-sm overflow-hidden rounded-pill px-md text-subhead font-medium ${RELATIONSHIPS[s.floor - 1]!.key === 'parent_child' ? 'text-on-yellow' : 'text-on-fill'}`} style={{ width: `${46 + (7 - s.floor) * 8}%`, background: colorOf(s.floor) }}>
                 <span className="absolute inset-y-0 left-0 bg-white/25" style={{ width: `${p}%` }} aria-hidden="true" />
                 <span className="relative">{s.short}</span>
                 <span className="relative">{p}%</span>
@@ -147,11 +147,11 @@ export function BuildMap() {
 
       {rows.map(({ s, all }) => (
         <section key={s.id} id={`build-${s.id}`} className="mt-lg" aria-labelledby={`build-h-${s.id}`}>
-          <h2 id={`build-h-${s.id}`} className="flex items-center gap-xs text-[24px]">
+          <h2 id={`build-h-${s.id}`} className="flex items-center gap-xs text-title2">
             <span className="block size-[14px] rounded-pill" style={{ background: colorOf(s.floor) }} aria-hidden="true" />
-            {s.name} <span className="text-[16px] font-bold text-ink-mute">{percentOf(all)}%</span>
+            {s.name} <span className="text-headline text-ink-mute">{percentOf(all)}%</span>
           </h2>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{s.blurb}</p>
+          <p className="mt-xs m-0 text-subhead text-ink-soft">{s.blurb}</p>
           {/* Two columns that fill top down (masonry), so a short card is never paired beside a long one with a gap under it. */}
           <div className="mt-sm md:columns-2 md:gap-sm">
             {s.cards.map((c) => (
@@ -165,8 +165,8 @@ export function BuildMap() {
         <ul className="m-0 flex list-none flex-col gap-xs p-0">
           {BUILD_FILES.map((f) => (
             <li key={f.where} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <span className="block break-all font-mono text-[13px] font-extrabold">{f.where}</span>
-              <span className="block text-[14px] font-semibold text-ink-soft">{f.what}</span>
+              <span className="block break-all font-mono text-footnote font-semibold">{f.where}</span>
+              <span className="block text-subhead text-ink-soft">{f.what}</span>
             </li>
           ))}
         </ul>

@@ -76,6 +76,7 @@ import { AppIcon } from './AppIcon';
 import { FIELD } from '../lib/ui';
 import { StatusTag } from './StatusTag';
 import { CardHead } from './CardHead';
+import './fx/spotlight';
 import { TabRow } from './TabRow';
 import { Sheet } from './Sheet';
 
@@ -87,7 +88,7 @@ const when = (iso: string) => new Date(iso).toLocaleDateString(LOCALE, { day: 'n
 // from the tablet width up, so the meaning is the same and the phone reads less.
 function ShortBlurb({ text }: { text: string }) {
   const parts = text.match(/[^.!?]+[.!?]+(\s|$)/g)?.map((x) => x.trim()) ?? [text];
-  const cls = 'mt-xs m-0 flex-1 text-[14px] font-semibold text-ink-soft';
+  const cls = 'mt-xs m-0 flex-1 text-subhead text-ink-soft';
   // Two long sentences: the first says what it is on a phone, the second (the detail) joins it from the tablet width up.
   if (parts.length === 2 && text.split(/\s+/).length > 30)
     return (
@@ -117,18 +118,29 @@ export function MoreSection({ onOpen }: { onOpen: (k: ExtraKind) => void }) {
           const started = !done && (st?.progress.done ?? 0) > 0;
           const rel = RELATIONSHIP_BY_KEY[ACCENT[k.key]];
           return (
-            <li key={k.key} data-pillar={rel.key} className="flex flex-col rounded-card bg-card p-md shadow-toy-soft">
-              <span className="flex size-[48px] items-center justify-center rounded-pill" style={fillOf(rel.color)} aria-hidden="true">
-                <AppIcon name={k.icon} size={24} />
-              </span>
-              <h3 className="mt-sm text-[18px]">{k.name}</h3>
+            // Placed by the card rule (2026-11-05): the name at the top left, its icon in the top right corner in its pillar's colour, the
+            // blurb, then at the foot where it stands on the left and the one outline action at the right, level across the row.
+            <li key={k.key} data-pillar={rel.key} className="fx-spot flex flex-col rounded-card bg-card p-md shadow-toy-soft">
+              <CardHead
+                tag={
+                  <span className="flex size-[44px] items-center justify-center rounded-pill text-on-fill" style={fillOf(rel.color)} aria-hidden="true">
+                    <AppIcon name={k.icon} size={22} />
+                  </span>
+                }
+              >
+                <h3 className="text-balance text-headline">{k.name}</h3>
+              </CardHead>
               <ShortBlurb text={k.blurb} />
-              <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{done && st?.takenAt ? `Taken ${when(st.takenAt)}` : started ? `${st!.progress.done} of ${st!.progress.total} done` : 'Not taken yet'}</p>
-              {/* Outline on purpose: the main quiz's button is the one primary action on Discover. On hover it takes this card's colour
-                  (data-pillar on the card), the same as its icon. */}
-              <Button className="mt-sm" variant="outline" onClick={() => onOpen(k.key)}>
-                {done ? 'See my result' : started ? 'Carry on' : 'Start'}
-              </Button>
+              <div className="mt-sm flex flex-wrap-reverse items-center justify-between gap-sm">
+                <StatusTag fit tone={done ? 'good' : started ? 'info' : 'neutral'}>
+                  {done && st?.takenAt ? `Taken ${when(st.takenAt)}` : started ? `${st!.progress.done} of ${st!.progress.total} done` : 'Not taken yet'}
+                </StatusTag>
+                {/* Outline on purpose: the main quiz's button is the one primary action on Discover. On hover it takes this card's colour
+                    (data-pillar on the card), the same as its icon. */}
+                <Button variant="outline" onClick={() => onOpen(k.key)}>
+                  {done ? 'See my result' : started ? 'Carry on' : 'Start'}
+                </Button>
+              </div>
             </li>
           );
         })}
@@ -148,13 +160,13 @@ function RateScreen({ items, scale, value, onChange }: { items: readonly { text:
   };
   return (
     <div role="group" aria-label={`Rate each line from ${scale[0]!.toLowerCase()} to ${scale[4]!.toLowerCase()}`} className="flex flex-col gap-xs">
-      <div className="flex justify-between gap-sm px-xs text-[12px] font-extrabold text-ink-soft">
+      <div className="flex justify-between gap-sm px-xs text-caption text-ink-soft">
         <span>{scale[0]}</span>
         <span>{scale[4]}</span>
       </div>
       {items.map((it, k) => (
         <div key={it.text} className="rounded-tile bg-card p-sm shadow-toy-soft">
-          <p className="m-0 text-center text-[16px] font-semibold">{it.text}</p>
+          <p className="m-0 text-center text-callout">{it.text}</p>
           <div role="radiogroup" aria-label={it.text} className="mt-xs flex justify-center gap-xs">
             {scale.map((label, v) => (
               <button
@@ -164,7 +176,7 @@ function RateScreen({ items, scale, value, onChange }: { items: readonly { text:
                 aria-checked={rates[k] === v}
                 aria-label={`${label}: ${it.text}`}
                 onClick={() => rate(k, v)}
-                className="flex size-[44px] items-center justify-center rounded-pill border-2 text-[14px] font-extrabold transition-colors"
+                className="flex size-[44px] items-center justify-center rounded-pill border-2 text-subhead font-medium transition-colors"
                 style={{ borderColor: rates[k] === v ? 'var(--color-r4)' : 'var(--color-line)', background: rates[k] === v ? 'var(--color-r4)' : 'transparent', color: rates[k] === v ? 'var(--color-on-fill)' : 'var(--color-ink)' }}
               >
                 {v + 1}
@@ -189,7 +201,7 @@ function PairScreen({ dir, index, value, onPick }: { dir: 'receive' | 'give'; in
           role="radio"
           aria-checked={value === v}
           onClick={() => onPick(v as 0 | 1)}
-          className={`toy min-h-[72px] rounded-tile border-2 p-md text-left text-[16px] font-bold ${value === v ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+          className={`toy min-h-[72px] rounded-tile border-2 p-md text-left text-headline ${value === v ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
         >
           {text}
         </button>
@@ -202,8 +214,8 @@ function Bar({ label, value, max = 100, color, right }: { label: string; value: 
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
       <span className="flex items-baseline justify-between gap-sm">
-        <span className="text-[16px] font-bold">{label}</span>
-        <span className="shrink-0 font-display text-[18px] font-extrabold">{right ?? value}</span>
+        <span className="text-headline">{label}</span>
+        <span className="shrink-0 text-title3 type-figure">{right ?? value}</span>
       </span>
       <span className="mt-xs block h-[8px] rounded-pill" style={{ background: 'var(--color-line)' }}>
         <span className="block h-full rounded-pill" style={{ width: `${Math.round((value / max) * 100)}%`, background: color }} />
@@ -217,11 +229,11 @@ function Hero({ kind, title, line, big }: { kind: ExtraKind; title: string; line
   return (
     <section className="relative mt-md overflow-hidden rounded-card p-md text-on-fill" style={fillOf(rel.color)} aria-labelledby={`${kind}-hero`}>
       <HeroBlobs seed={kind} />
-      {big && <p className="relative m-0 font-display text-[44px] font-extrabold leading-none tracking-wide">{big}</p>}
-      <h2 id={`${kind}-hero`} className="relative mt-xs text-[24px]">
+      {big && <p className="relative m-0 text-figure-lg type-figure leading-none">{big}</p>}
+      <h2 id={`${kind}-hero`} className="relative mt-xs text-title2">
         {title}
       </h2>
-      <p className="relative mt-xs m-0 text-[14px] font-semibold">{line}</p>
+      <p className="relative mt-xs m-0 text-subhead">{line}</p>
     </section>
   );
 }
@@ -238,25 +250,25 @@ function TypeView({ result }: { result: TypeResult }) {
             return <Bar key={x.key} label={`${x.letterName} (${x.letter}), ${x.strength === 'slight' ? 'a slight lean' : x.strength === 'moderate' ? 'a fair lean' : 'a clear lean'}`} value={x.leaning} color={rel.color} right={`${x.leaning}% ${x.letter}`} />;
           })}
         </ul>
-        {a.close.length > 0 && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Close to the middle: {a.close.map((c) => TYPE_AXES.find((t) => t.key === c)!.name.toLowerCase()).join(', ')}. Either letter could be you on another day.</p>}
+        {a.close.length > 0 && <p className="mt-xs m-0 text-subhead text-ink-soft">Close to the middle: {a.close.map((c) => TYPE_AXES.find((t) => t.key === c)!.name.toLowerCase()).join(', ')}. Either letter could be you on another day.</p>}
       </Section>
       <Section id="type-read" title="What each letter means for you">
         <ul className="m-0 flex list-none flex-col gap-xs p-0">
           {a.axes.map((x) => (
             <li key={x.key} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <h3 className="text-[18px]">
+              <h3 className="text-headline">
                 {x.letterName} ({x.letter})
               </h3>
-              <p className="mt-xs m-0 text-[14px] font-semibold">{x.reading.line}</p>
-              <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">At your best: </span>{x.reading.best}</p>
-              <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">Watch for: </span>{x.reading.watch}</p>
-              <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">With people: </span>{x.reading.people}</p>
-              <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">Try this week: </span>{x.reading.tryThis}</p>
+              <p className="mt-xs m-0 text-subhead">{x.reading.line}</p>
+              <p className="mt-xs m-0 text-subhead"><span className="font-bold">At your best: </span>{x.reading.best}</p>
+              <p className="mt-xs m-0 text-subhead"><span className="font-bold">Watch for: </span>{x.reading.watch}</p>
+              <p className="mt-xs m-0 text-subhead"><span className="font-bold">With people: </span>{x.reading.people}</p>
+              <p className="mt-xs m-0 text-subhead"><span className="font-bold">Try this week: </span>{x.reading.tryThis}</p>
             </li>
           ))}
         </ul>
       </Section>
-      <p className="mt-sm m-0 text-[12px] font-semibold text-ink-soft">This is a free self-check built on four familiar pairs. It is not the official MBTI®, and no type is better than another. People are more than four letters.</p>
+      <p className="mt-sm m-0 text-caption text-ink-soft">This is a free self-check built on four familiar pairs. It is not the official MBTI®, and no type is better than another. People are more than four letters.</p>
     </>
   );
 }
@@ -285,15 +297,15 @@ function LoveView({ result }: { result: LoveResult }) {
             const l = LOVE_LANGUAGES[k];
             return (
               <li key={k} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <h3 className="flex items-center gap-xs text-[18px]">
+                <h3 className="flex items-center gap-xs text-headline">
                   <AppIcon name={l.icon} size={20} />
                   {l.name}
                 </h3>
-                <p className="mt-xs m-0 text-[14px] font-semibold">{l.blurb}</p>
-                <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">Ask for it: </span>{l.ask}</p>
-                <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">Give it well: </span>{l.give}</p>
-                <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">Watch for: </span>{l.watch}</p>
-                <Link to={`/realm/${l.helps}`} className="mt-xs inline-block text-[14px] font-bold underline underline-offset-4">
+                <p className="mt-xs m-0 text-subhead">{l.blurb}</p>
+                <p className="mt-xs m-0 text-subhead"><span className="font-bold">Ask for it: </span>{l.ask}</p>
+                <p className="mt-xs m-0 text-subhead"><span className="font-bold">Give it well: </span>{l.give}</p>
+                <p className="mt-xs m-0 text-subhead"><span className="font-bold">Watch for: </span>{l.watch}</p>
+                <Link to={`/realm/${l.helps}`} className="mt-xs inline-block text-subhead font-semibold underline underline-offset-4">
                   Work on it in {RELATIONSHIP_BY_KEY[l.helps].name.toLowerCase()}
                 </Link>
               </li>
@@ -301,7 +313,7 @@ function LoveView({ result }: { result: LoveResult }) {
           })}
         </ul>
       </Section>
-      <p className="mt-sm m-0 text-[12px] font-semibold text-ink-soft">The five languages are a popular way to talk about care, not a law. Everyone uses all five, and what you like can change with the person and the season of life.</p>
+      <p className="mt-sm m-0 text-caption text-ink-soft">The five languages are a popular way to talk about care, not a law. Everyone uses all five, and what you like can change with the person and the season of life.</p>
     </>
   );
 }
@@ -319,18 +331,18 @@ function MindView({ result }: { result: MindResult }) {
           {a.areas.map((x) => (
             <li key={x.key} className="rounded-tile bg-card p-sm shadow-toy-soft">
               <span className="flex items-baseline justify-between gap-sm">
-                <h3 className="text-[18px]">{x.name}</h3>
+                <h3 className="text-headline">{x.name}</h3>
                 <StatusTag tone="calm">{BAND_WORD[x.band]}</StatusTag>
               </span>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{x.blurb}</p>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">{x.blurb}</p>
               <span className="mt-xs block h-[8px] rounded-pill" style={{ background: 'var(--color-line)' }}>
                 <span className="block h-full rounded-pill" style={{ width: `${x.score}%`, background: color }} />
               </span>
-              <p className="mt-xs m-0 text-[14px] font-semibold">{x.reading}</p>
+              <p className="mt-xs m-0 text-subhead">{x.reading}</p>
               {x.band !== 'few' && (
                 <>
-                  <p className="mt-xs m-0 text-[14px] font-extrabold">What can help</p>
-                  <ul className="mt-xs m-0 list-disc pl-md text-[14px] font-semibold">
+                  <p className="mt-xs m-0 text-subhead font-semibold">What can help</p>
+                  <ul className="mt-xs m-0 list-disc pl-md text-subhead">
                     {x.helps.map((h) => (
                       <li key={h}>{h}</li>
                     ))}
@@ -342,7 +354,7 @@ function MindView({ result }: { result: MindResult }) {
         </ul>
       </Section>
       {a.talkToSomeone && (
-        <p className="mt-sm m-0 rounded-tile bg-card p-sm text-[14px] font-semibold shadow-toy-soft">
+        <p className="mt-sm m-0 rounded-tile bg-card p-sm text-subhead shadow-toy-soft">
           Several areas read as many signs, and they may be getting in your way. A doctor or a psychologist can talk it through with you. You do not need a label to ask for help, and many people find a plan for their day makes a big difference.
         </p>
       )}
@@ -467,7 +479,7 @@ function QuizScreen({ kind, onBack }: { kind: ExtraKind; onBack: () => void }) {
       <BackLink to="/discover" onBack={onBack}>
         Discover
       </BackLink>
-      <h1 className="text-[30px]">{meta.name}</h1>
+      <h1 className="text-large-title">{meta.name}</h1>
     </header>
   );
 
@@ -475,7 +487,7 @@ function QuizScreen({ kind, onBack }: { kind: ExtraKind; onBack: () => void }) {
     return (
       <>
         {head}
-        <p className="mt-md text-[14px] font-bold text-ink-soft" role="status">
+        <p className="mt-md text-subhead text-ink-soft" role="status">
           Opening it
         </p>
       </>
@@ -488,24 +500,24 @@ function QuizScreen({ kind, onBack }: { kind: ExtraKind; onBack: () => void }) {
     return (
       <>
         {head}
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{meta.blurb}</p>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">{meta.blurb}</p>
         {kind === 'mind' && <CareNote lead="A self-check, not a diagnosis.">{MIND_NOTE}</CareNote>}
         <div className="mt-md" data-pillar={ACCENT[kind]}>
           <div className="flex items-baseline justify-between gap-sm">
-            <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
+            <p className="m-0 text-eyebrow uppercase text-ink-soft">
               {kind === 'love' ? (at < LOVE_PAIRS.length ? 'Receiving love' : 'Showing love') : meta.name}, {at + 1} of {total}
             </p>
-            <p className="m-0 text-[12px] font-bold text-ink-soft">{doneNow} answered</p>
+            <p className="m-0 text-caption text-ink-soft">{doneNow} answered</p>
           </div>
           <div className="mt-xs h-[8px] overflow-hidden rounded-pill bg-line" aria-hidden="true">
             <div className="h-full rounded-pill bg-r4" style={{ width: `${Math.round(((at + 1) / total) * 100)}%` }} />
           </div>
-          <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">{intro}</p>
+          <p className="mt-sm m-0 text-subhead text-ink-soft">{intro}</p>
           <div className="mt-sm" data-answer>
             {body}
           </div>
           {error && (
-            <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+            <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
               {error}
             </p>
           )}
@@ -537,8 +549,8 @@ function QuizScreen({ kind, onBack }: { kind: ExtraKind; onBack: () => void }) {
   return (
     <>
       {head}
-      {st?.takenAt && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Taken {when(st.takenAt)}. Only you can see this.</p>}
-      {result ? kind === 'type' ? <TypeView result={result as TypeResult} /> : kind === 'love' ? <LoveView result={result as LoveResult} /> : <MindView result={result as MindResult} /> : <p className="mt-md text-[14px] font-semibold">No result yet.</p>}
+      {st?.takenAt && <p className="mt-xs m-0 text-subhead text-ink-soft">Taken {when(st.takenAt)}. Only you can see this.</p>}
+      {result ? kind === 'type' ? <TypeView result={result as TypeResult} /> : kind === 'love' ? <LoveView result={result as LoveResult} /> : <MindView result={result as MindResult} /> : <p className="mt-md text-subhead">No result yet.</p>}
       <UseSwitches kind={kind} />
       <div className="mt-md flex flex-wrap gap-xs" data-pillar={ACCENT[kind]}>
         <Button
@@ -681,7 +693,7 @@ function BodyGraph({ chart, selected, onPick }: { chart: DesignChart; selected: 
         return (
           <g key={c.key}>
             <path d={s.path} fill={on ? s.tone : 'var(--color-card-strong)'} stroke={on ? 'var(--color-ink)' : 'var(--color-line)'} strokeWidth="2" strokeLinejoin="round" />
-            <text x={s.label[0]} y={s.label[1]} textAnchor="middle" fontSize="9" fontWeight="800" fill={on ? (s.tone === 'var(--color-r3)' || s.tone === 'var(--color-r2)' ? 'var(--color-on-yellow)' : 'var(--color-on-fill)') : 'var(--color-ink-soft)'}>
+            <text x={s.label[0]} y={s.label[1]} textAnchor="middle" fontSize="9" fontWeight="600" fill={on ? (s.tone === 'var(--color-r3)' || s.tone === 'var(--color-r2)' ? 'var(--color-on-yellow)' : 'var(--color-on-fill)') : 'var(--color-ink-soft)'}>
               {c.key === 'g' ? 'G' : c.name.split(' ')[0]}
             </text>
           </g>
@@ -694,7 +706,7 @@ function BodyGraph({ chart, selected, onPick }: { chart: DesignChart; selected: 
         return (
           <g key={gate} opacity={dim(key)} style={{ transition: 'opacity 200ms' }} className={pickable ? 'cursor-pointer' : undefined} onClick={pickable ? () => onPick(key) : undefined}>
             <circle cx={x} cy={y} r="7" fill="var(--color-card-strong)" stroke={SIDE_INK[gateSide(chart, gate) === 'design' ? 'design' : 'personality']} strokeWidth="1.4" />
-            <text x={x} y={y + 3} textAnchor="middle" fontSize="8" fontWeight="800" fill="var(--color-ink)">
+            <text x={x} y={y + 3} textAnchor="middle" fontSize="8" fontWeight="600" fill="var(--color-ink)">
               {gate}
             </text>
           </g>
@@ -728,14 +740,14 @@ function ChannelCards({ chart, selected, onSelect }: { chart: DesignChart; selec
   return (
     <section aria-labelledby="design-channels" className="mt-md">
       <div className="flex min-h-[44px] items-center justify-between gap-sm">
-        <h3 id="design-channels" className="text-[18px]">{channels.length ? `Your channels (${channels.length})` : 'Gates without a partner'}</h3>
+        <h3 id="design-channels" className="text-headline">{channels.length ? `Your channels (${channels.length})` : 'Gates without a partner'}</h3>
         {selected !== null && (
-          <button type="button" onClick={() => onSelect(null)} className="min-h-[44px] shrink-0 text-[14px] font-bold underline underline-offset-4 hover:text-ink-soft">
+          <button type="button" onClick={() => onSelect(null)} className="min-h-[44px] shrink-0 text-subhead font-semibold underline underline-offset-4 hover:text-ink-soft">
             Show all
           </button>
         )}
       </div>
-      <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">
+      <p className="mt-xs m-0 text-caption text-ink-soft">
         {channels.length
           ? 'A channel joins two centers when both its gates are on. Tap one to see it on the graph.'
           : 'No channel is whole yet. Each of these gates is on, but the gate at its other end is off.'}
@@ -746,16 +758,16 @@ function ChannelCards({ chart, selected, onSelect }: { chart: DesignChart; selec
           return (
             <li key={c.key} id={`channel-${c.key}`} tabIndex={0} aria-current={selected === c.key ? 'true' : undefined} onFocus={() => onSelect(c.key)} onClick={() => onSelect(c.key)} className={card(c.key)}>
               <CardHead tag={<StatusTag tone="neutral" fit mark={<SideMark side={c.from} />}>{SIDE_WORD[c.from]}</StatusTag>}>
-                <p className="m-0 text-[16px] font-extrabold">
-                  {c.name} <span className="font-semibold text-ink-soft">{c.a}-{c.b}</span>
+                <p className="m-0 text-headline">
+                  {c.name} <span className="text-ink-soft">{c.a}-{c.b}</span>
                 </p>
               </CardHead>
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">{centerWord(c.centers[0])} to {centerWord(c.centers[1])}</p>
+              <p className="m-0 text-subhead text-ink-soft">{centerWord(c.centers[0])} to {centerWord(c.centers[1])}</p>
               <Fold title="What it means" className="mt-xs">
-                <p className="m-0 text-[14px] font-semibold">{m.what}</p>
-                <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">At your best: </span>{m.best}</p>
-                <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">Watch for: </span>{m.watch}</p>
-                <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">A small step: </span>{m.step}</p>
+                <p className="m-0 text-subhead">{m.what}</p>
+                <p className="mt-xs m-0 text-subhead"><span className="font-bold">At your best: </span>{m.best}</p>
+                <p className="mt-xs m-0 text-subhead"><span className="font-bold">Watch for: </span>{m.watch}</p>
+                <p className="mt-xs m-0 text-subhead"><span className="font-bold">A small step: </span>{m.step}</p>
               </Fold>
             </li>
           );
@@ -764,16 +776,16 @@ function ChannelCards({ chart, selected, onSelect }: { chart: DesignChart; selec
           hanging.map((h) => (
             <li key={h.gate} id={`channel-g${h.gate}`} tabIndex={0} aria-current={selected === `g${h.gate}` ? 'true' : undefined} onFocus={() => onSelect(`g${h.gate}`)} onClick={() => onSelect(`g${h.gate}`)} className={card(`g${h.gate}`)}>
               <CardHead tag={<StatusTag tone="neutral" fit mark={<SideMark side={h.side} />}>{SIDE_WORD[h.side]}</StatusTag>}>
-                <p className="m-0 text-[16px] font-extrabold">
-                  Gate {h.gate} <span className="font-semibold text-ink-soft">{GATE_NAMES[h.gate - 1]}</span>
+                <p className="m-0 text-headline">
+                  Gate {h.gate} <span className="text-ink-soft">{GATE_NAMES[h.gate - 1]}</span>
                 </p>
               </CardHead>
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">{centerWord(h.center)}, waiting for gate {h.partners.join(' or ')}</p>
+              <p className="m-0 text-subhead text-ink-soft">{centerWord(h.center)}, waiting for gate {h.partners.join(' or ')}</p>
             </li>
           ))}
       </ul>
       {channels.length > 0 && hanging.length > 0 && (
-        <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">Also on, without a partner: gates {hanging.map((h) => h.gate).join(', ')}.</p>
+        <p className="mt-xs m-0 text-caption text-ink-soft">Also on, without a partner: gates {hanging.map((h) => h.gate).join(', ')}.</p>
       )}
     </section>
   );
@@ -821,37 +833,37 @@ function DesignForm({ initial, birthDate, onDone }: { initial: DesignInput; birt
         if (!problem) submit.mutate();
       }}
     >
-      <p className="m-0 text-[14px] font-semibold text-ink-soft">Use the details on your birth record. The time matters: the Moon moves about half a degree an hour, so a few hours can change a line.</p>
+      <p className="m-0 text-subhead text-ink-soft">Use the details on your birth record. The time matters: the Moon moves about half a degree an hour, so a few hours can change a line.</p>
       <label className="block">
-        <span className="block text-[14px] font-bold">Birth date</span>
+        <span className="block text-subhead font-semibold">Birth date</span>
         <input type="date" value={input.date} max={todayLocal()} onChange={(e) => set({ date: e.target.value })} className={FIELD} required />
       </label>
       <label className="block">
-        <span className="block text-[14px] font-bold">Birth time</span>
+        <span className="block text-subhead font-semibold">Birth time</span>
         <input type="time" value={input.time} onChange={(e) => set({ time: e.target.value })} className={FIELD} required />
       </label>
       <label className="block">
-        <span className="block text-[14px] font-bold">Time zone of the place you were born</span>
+        <span className="block text-subhead">Time zone of the place you were born</span>
         <input list="design-zones" value={input.zone} onChange={(e) => set({ zone: e.target.value })} placeholder="Asia/Kolkata" className={FIELD} required />
         <datalist id="design-zones">
           {zoneList().map((z) => (
             <option key={z} value={z} />
           ))}
         </datalist>
-        <span className="mt-xs block text-[12px] font-semibold text-ink-soft">The zone then, not now: it sets summer time and old offsets right. Start typing a city, like Kolkata or Dubai.</span>
+        <span className="mt-xs block text-caption text-ink-soft">The zone then, not now: it sets summer time and old offsets right. Start typing a city, like Kolkata or Dubai.</span>
       </label>
       <label className="block">
-        <span className="block text-[14px] font-bold">Full name on your birth record (optional)</span>
+        <span className="block text-subhead">Full name on your birth record (optional)</span>
         <input value={input.name} maxLength={80} autoComplete="off" onChange={(e) => set({ name: e.target.value })} placeholder="Asha Devi Rao" className={FIELD} />
-        <span className="mt-xs block text-[12px] font-semibold text-ink-soft">For numerology: it gives your Expression, Soul urge and Personality numbers. Leave it empty and you still get the numbers from your birth date.</span>
+        <span className="mt-xs block text-caption text-ink-soft">For numerology: it gives your Expression, Soul urge and Personality numbers. Leave it empty and you still get the numbers from your birth date.</span>
       </label>
       <label className="block">
-        <span className="block text-[14px] font-bold">Place (optional)</span>
+        <span className="block text-subhead font-semibold">Place (optional)</span>
         <input value={input.place} maxLength={80} onChange={(e) => set({ place: e.target.value })} placeholder="Mumbai" className={FIELD} />
       </label>
-      <p className="m-0 rounded-tile bg-paper p-sm text-[12px] font-semibold text-ink-soft">Only you see your birth details. The assistant and your next steps only ever learn your type, strategy, authority and profile, and only if you allow them.</p>
+      <p className="m-0 rounded-tile bg-paper p-sm text-caption text-ink-soft">Only you see your birth details. The assistant and your next steps only ever learn your type, strategy, authority and profile, and only if you allow them.</p>
       {(error ?? (dirty.current ? problem : null)) && (
-        <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+        <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           {error ?? problem}
         </p>
       )}
@@ -883,7 +895,7 @@ function AddGoal({ pillar, title, step }: { pillar: RelationshipKey; title: stri
       <Button size="sm" variant="outline" onClick={() => add.mutate()} disabled={add.isPending || add.isSuccess}>
         {add.isSuccess ? 'Added' : 'Add as a task'}
       </Button>
-      {msg && <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{msg}</p>}
+      {msg && <p className="mt-xs m-0 text-caption text-ink-soft">{msg}</p>}
     </div>
   );
 }
@@ -913,21 +925,21 @@ function DesignView({ result, onEdit }: { result: DesignResult; onEdit: () => vo
   return (
     <>
       <Hero kind="design" big={`${t.name}`} title={`${chart.profile.text} profile, ${a.headline.split(', ')[1]}`} line={`Strategy: ${t.strategy}.`} />
-      <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">
+      <p className="mt-sm m-0 text-subhead text-ink-soft">
         {result.input.place ? `${result.input.place}. ` : ''}Born {when(result.birthUtc)} ({result.input.zone}). Your design moment, when the Sun stood 88° earlier, was {when(result.designUtc)} there.
       </p>
 
       <div className="mt-sm grid gap-xs md:grid-cols-2">
         <div role="group" aria-label="Zodiac" className="flex flex-wrap gap-xs">
           {ZODIACS.map((z) => (
-            <button key={z.key} type="button" aria-pressed={zodiac === z.key} onClick={() => setZodiac(z.key)} className={`toy min-h-[44px] rounded-pill border-2 px-md text-[14px] font-bold ${zodiac === z.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={z.key} type="button" aria-pressed={zodiac === z.key} onClick={() => setZodiac(z.key)} className={`toy min-h-[44px] rounded-pill border-2 px-md text-subhead font-medium ${zodiac === z.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {z.name}
             </button>
           ))}
         </div>
-        <p className="m-0 text-[12px] font-semibold text-ink-soft">{ZODIACS.find((z) => z.key === zodiac)!.blurb}</p>
+        <p className="m-0 text-caption text-ink-soft">{ZODIACS.find((z) => z.key === zodiac)!.blurb}</p>
       </div>
-      {zodiac === 'fagan' && <p className="mt-xs m-0 rounded-tile bg-paper p-sm text-[12px] font-semibold">Human design is drawn in the tropical zodiac. The sidereal reading is an experiment: every position moves back about {Math.round(result.ayanamsa.personality * 10) / 10}°, which is about four gates, so expect a different chart.</p>}
+      {zodiac === 'fagan' && <p className="mt-xs m-0 rounded-tile bg-paper p-sm text-caption">Human design is drawn in the tropical zodiac. The sidereal reading is an experiment: every position moves back about {Math.round(result.ayanamsa.personality * 10) / 10}°, which is about four gates, so expect a different chart.</p>}
 
       <TabRow
         className="mt-sm"
@@ -935,9 +947,9 @@ function DesignView({ result, onEdit }: { result: DesignResult; onEdit: () => vo
         items={DESIGN_DEPTHS.map((d) => ({ key: d.key, label: d.name }))}
         value={depth}
         onChange={setDepth}
-        pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-md text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+        pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-md text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
       />
-      <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{DESIGN_DEPTHS.find((d) => d.key === depth)!.blurb} {depth === 'num' ? 'Numerology is another way to reflect, and is not science.' : 'The three layers are the app’s own way to group a chart. They are not part of the old system.'}</p>
+      <p className="mt-xs m-0 text-caption text-ink-soft">{DESIGN_DEPTHS.find((d) => d.key === depth)!.blurb} {depth === 'num' ? 'Numerology is another way to reflect, and is not science.' : 'The three layers are the app’s own way to group a chart. They are not part of the old system.'}</p>
 
       {depth === 'num' && <NumerologyPanel result={result} onEdit={onEdit} />}
 
@@ -947,8 +959,8 @@ function DesignView({ result, onEdit }: { result: DesignResult; onEdit: () => vo
       <div className="mt-md grid gap-md md:grid-cols-[340px_1fr]">
         <div>
           <BodyGraph chart={chart} selected={picked} onPick={pickFromGraph} />
-          <p className="mt-xs m-0 text-center text-[12px] font-semibold text-ink-soft">{chart.defined.length} of 9 centers defined, {chart.channels.length} channels</p>
-          <p className="mt-xs m-0 flex flex-wrap items-center justify-center gap-sm text-[12px] font-semibold text-ink-soft">
+          <p className="mt-xs m-0 text-center text-caption text-ink-soft">{chart.defined.length} of 9 centers defined, {chart.channels.length} channels</p>
+          <p className="mt-xs m-0 flex flex-wrap items-center justify-center gap-sm text-caption text-ink-soft">
             <span className="inline-flex items-center gap-xs"><SideMark side="personality" /> Conscious</span>
             <span className="inline-flex items-center gap-xs"><SideMark side="design" /> Unconscious</span>
           </p>
@@ -957,10 +969,10 @@ function DesignView({ result, onEdit }: { result: DesignResult; onEdit: () => vo
         <ul className="m-0 flex list-none flex-col gap-xs p-0">
           {a.depths[depth].map((b) => (
             <li key={b.title} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <h3 className="text-[18px]">{b.title}</h3>
-              <p className="mt-xs m-0 text-[14px] font-semibold">{b.text}</p>
+              <h3 className="text-headline">{b.title}</h3>
+              <p className="mt-xs m-0 text-subhead">{b.text}</p>
               {b.items && b.items.length > 0 && (
-                <ul className="mt-xs m-0 list-disc pl-md text-[14px] font-semibold">
+                <ul className="mt-xs m-0 list-disc pl-md text-subhead">
                   {b.items.map((i) => (
                     <li key={i}>{i}</li>
                   ))}
@@ -975,16 +987,16 @@ function DesignView({ result, onEdit }: { result: DesignResult; onEdit: () => vo
         <ul className="m-0 flex list-none flex-col gap-xs p-0">
           {a.goals.map((g) => (
             <li key={g.title} data-pillar={g.pillar} className="rounded-tile p-sm shadow-toy-soft" style={{ background: `var(--soft-${g.pillar})` }}>
-              <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide" style={{ color: `var(--deep-${g.pillar})` }}>
+              <p className="m-0 text-eyebrow uppercase" style={{ color: `var(--deep-${g.pillar})` }}>
                 {RELATIONSHIP_BY_KEY[g.pillar].name}
               </p>
-              <h3 className="text-[18px]">{g.title}</h3>
-              <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{g.why}</p>
-              <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">First step: </span>{g.step}</p>
-              <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">How you will know: </span>{g.proof}</p>
+              <h3 className="text-headline">{g.title}</h3>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">{g.why}</p>
+              <p className="mt-xs m-0 text-subhead"><span className="font-bold">First step: </span>{g.step}</p>
+              <p className="mt-xs m-0 text-subhead"><span className="font-bold">How you will know: </span>{g.proof}</p>
               <div className="mt-xs flex flex-wrap items-center gap-xs">
                 <AddGoal pillar={g.pillar} title={g.title} step={g.step} />
-                <Link to={`/realm/${g.pillar}`} className="inline-flex min-h-[44px] items-center text-[14px] font-bold underline underline-offset-4">
+                <Link to={`/realm/${g.pillar}`} className="inline-flex min-h-[44px] items-center text-subhead font-semibold underline underline-offset-4">
                   Open this pillar
                 </Link>
               </div>
@@ -995,9 +1007,9 @@ function DesignView({ result, onEdit }: { result: DesignResult; onEdit: () => vo
 
       <Section id="design-planets" title={`Where each body stood (${zodiac === 'tropical' ? 'tropical' : 'sidereal'}, with the other beside it)`} lede="Conscious is the moment you were born. Unconscious is the design moment, 88° of the Sun earlier. Each shows its gate and line.">
         <div className="overflow-x-auto rounded-tile bg-card p-xs shadow-toy-soft">
-          <table className="w-full min-w-[520px] border-collapse text-left text-[14px] font-semibold">
+          <table className="w-full min-w-[520px] border-collapse text-left text-subhead">
             <thead>
-              <tr className="text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
+              <tr className="text-eyebrow uppercase text-ink-soft">
                 <th className="p-xs">Body</th>
                 <th className="p-xs">Conscious</th>
                 <th className="p-xs">Gate</th>
@@ -1013,25 +1025,25 @@ function DesignView({ result, onEdit }: { result: DesignResult; onEdit: () => vo
                 const dob = designChart(result, other).design[i]!;
                 return (
                   <tr key={b.key} className="border-t border-line">
-                    <td className="p-xs font-bold">{b.glyph} {b.name}</td>
-                    <td className="p-xs">{signOf(p.lon).text}<span className="block text-[12px] text-ink-soft">{signOf(po.lon).text}</span></td>
-                    <td className="p-xs">{p.gate}.{p.line}<span className="block text-[12px] text-ink-soft">{po.gate}.{po.line}</span></td>
-                    <td className="p-xs">{signOf(d.lon).text}<span className="block text-[12px] text-ink-soft">{signOf(dob.lon).text}</span></td>
-                    <td className="p-xs">{d.gate}.{d.line}<span className="block text-[12px] text-ink-soft">{dob.gate}.{dob.line}</span></td>
+                    <td className="p-xs font-semibold">{b.glyph} {b.name}</td>
+                    <td className="p-xs">{signOf(p.lon).text}<span className="block text-caption text-ink-soft">{signOf(po.lon).text}</span></td>
+                    <td className="p-xs">{p.gate}.{p.line}<span className="block text-caption text-ink-soft">{po.gate}.{po.line}</span></td>
+                    <td className="p-xs">{signOf(d.lon).text}<span className="block text-caption text-ink-soft">{signOf(dob.lon).text}</span></td>
+                    <td className="p-xs">{d.gate}.{d.line}<span className="block text-caption text-ink-soft">{dob.gate}.{dob.line}</span></td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
-        <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">The grey line under each number is the {other === 'fagan' ? 'sidereal (Fagan-Bradley)' : 'tropical'} reading of the same moment.</p>
-        {a.edges.length > 0 && <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">These sit very near the edge of a line, so another program may call the next line: {a.edges.join('; ')}.</p>}
+        <p className="mt-xs m-0 text-caption text-ink-soft">The grey line under each number is the {other === 'fagan' ? 'sidereal (Fagan-Bradley)' : 'tropical'} reading of the same moment.</p>
+        {a.edges.length > 0 && <p className="mt-xs m-0 text-caption text-ink-soft">These sit very near the edge of a line, so another program may call the next line: {a.edges.join('; ')}.</p>}
       </Section>
 
       <Section id="design-compare" title="Tropical and sidereal side by side">
         <ul className="m-0 flex list-none flex-col gap-xs p-0">
           {cmp.lines.map((l) => (
-            <li key={l} className="rounded-tile bg-card p-sm text-[14px] font-semibold shadow-toy-soft">
+            <li key={l} className="rounded-tile bg-card p-sm text-subhead shadow-toy-soft">
               {l}
             </li>
           ))}
@@ -1040,7 +1052,7 @@ function DesignView({ result, onEdit }: { result: DesignResult; onEdit: () => vo
         </>
       )}
       <CareNote lead="A system for reflection, not science. It cannot predict anything.">Human design is a system for self-reflection. It is not science and it cannot predict anything. Use it the way you would use a journal prompt: keep what helps, and leave the rest. Positions are worked out here to a few arc minutes, a little less exact for the outer planets.</CareNote>
-      <p className="m-0 text-[12px] font-semibold text-ink-soft" style={{ color: rel.deep }} aria-hidden="true" />
+      <p className="m-0 text-caption text-ink-soft" style={{ color: rel.deep }} aria-hidden="true" />
     </>
   );
 }
@@ -1096,14 +1108,14 @@ function NumerologyPanel({ result, onEdit }: { result: DesignResult; onEdit: () 
         </ul>
         {!n.expression && (
           <div className="mt-xs flex flex-wrap-reverse items-center justify-between gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-            <p className="m-0 min-w-0 flex-1 basis-[60%] text-[14px] font-semibold">Add the full name on your birth record to see your Expression, Soul urge, Personality and Maturity numbers.</p>
+            <p className="m-0 min-w-0 flex-1 basis-[60%] text-subhead">Add the full name on your birth record to see your Expression, Soul urge, Personality and Maturity numbers.</p>
             <Button size="sm" variant="outline" onClick={onEdit}>
               Add my name
             </Button>
           </div>
         )}
         <Fold title="How the sums work" className="mt-xs">
-          <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-[14px] font-semibold text-ink-soft">
+          <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-subhead text-ink-soft">
             <li>Each number settles to 1 to 9 or a master number.</li>
             <li>The sums on the way down are shown, since 10, 13, 14, 16 and 19 carry their own meaning.</li>
             <li>Your personal year turns over on 1 January.</li>
@@ -1118,14 +1130,14 @@ function NumerologyPanel({ result, onEdit }: { result: DesignResult; onEdit: () 
             const r = NUMBER_READINGS[v.value]!;
             return (
               <li key={k} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{NUMBER_LABELS[k].name}</p>
-                <h3 className="text-[18px]">
+                <p className="m-0 text-eyebrow uppercase text-ink-soft">{NUMBER_LABELS[k].name}</p>
+                <h3 className="text-headline">
                   {numText(v)}, {r.name}
                 </h3>
-                <p className="mt-xs m-0 text-[14px] font-semibold">{r.line}</p>
-                <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">Your gift: </span>{r.gift}</p>
-                <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">Watch for: </span>{r.shadow}</p>
-                <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">Try this week: </span>{r.tryThis}</p>
+                <p className="mt-xs m-0 text-subhead">{r.line}</p>
+                <p className="mt-xs m-0 text-subhead"><span className="font-bold">Your gift: </span>{r.gift}</p>
+                <p className="mt-xs m-0 text-subhead"><span className="font-bold">Watch for: </span>{r.shadow}</p>
+                <p className="mt-xs m-0 text-subhead"><span className="font-bold">Try this week: </span>{r.tryThis}</p>
               </li>
             );
           })}
@@ -1137,25 +1149,25 @@ function NumerologyPanel({ result, onEdit }: { result: DesignResult; onEdit: () 
           <ul className="m-0 flex list-none flex-col gap-xs p-0">
             {specials.map((sp) => (
               <li key={sp} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <h3 className="text-[18px]">
+                <h3 className="text-headline">
                   {sp}, {NUMBER_READINGS[sp]!.name}
                 </h3>
-                <p className="mt-xs m-0 text-[14px] font-semibold">{NUMBER_READINGS[sp]!.line}</p>
-                {[11, 22, 33].includes(sp) && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">A master number can be a heavy load. If it feels like too much, live the {NUMBER_READINGS[sp]!.line.match(/high (\d)/)?.[1]} first, and grow into the master a step at a time.</p>}
-                <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">Try this week: </span>{NUMBER_READINGS[sp]!.tryThis}</p>
+                <p className="mt-xs m-0 text-subhead">{NUMBER_READINGS[sp]!.line}</p>
+                {[11, 22, 33].includes(sp) && <p className="mt-xs m-0 text-subhead text-ink-soft">A master number can be a heavy load. If it feels like too much, live the {NUMBER_READINGS[sp]!.line.match(/high (\d)/)?.[1]} first, and grow into the master a step at a time.</p>}
+                <p className="mt-xs m-0 text-subhead"><span className="font-bold">Try this week: </span>{NUMBER_READINGS[sp]!.tryThis}</p>
               </li>
             ))}
             {debts.map((d) => (
               <li key={d} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <h3 className="text-[18px]">Karmic number {d}</h3>
-                <p className="mt-xs m-0 text-[14px] font-semibold">{KARMIC_DEBTS[d]}</p>
+                <h3 className="text-headline">Karmic number {d}</h3>
+                <p className="mt-xs m-0 text-subhead">{KARMIC_DEBTS[d]}</p>
               </li>
             ))}
             {n.lessons.length > 0 && (
               <li className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <h3 className="text-[18px]">Karmic lessons: {n.lessons.join(', ')}</h3>
-                <p className="mt-xs m-0 text-[14px] font-semibold">No letter in your name carries {n.lessons.length === 1 ? 'this number' : 'these numbers'}, so {n.lessons.length === 1 ? 'it is' : 'they are'} a place to practise.</p>
-                <ul className="mt-xs m-0 list-disc pl-md text-[14px] font-semibold">
+                <h3 className="text-headline">Karmic lessons: {n.lessons.join(', ')}</h3>
+                <p className="mt-xs m-0 text-subhead">No letter in your name carries {n.lessons.length === 1 ? 'this number' : 'these numbers'}, so {n.lessons.length === 1 ? 'it is' : 'they are'} a place to practise.</p>
+                <ul className="mt-xs m-0 list-disc pl-md text-subhead">
                   {n.lessons.map((l) => (
                     <li key={l}>
                       {l}, {NUMBER_READINGS[l]!.name}: {NUMBER_READINGS[l]!.tryThis}
@@ -1174,11 +1186,11 @@ function NumerologyPanel({ result, onEdit }: { result: DesignResult; onEdit: () 
             const y = YEAR_THEMES[v.value] ?? YEAR_THEMES[v.base]!;
             return (
               <li key={label} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <h3 className="text-[18px]">
+                <h3 className="text-headline">
                   {label} {numText(v)}
                 </h3>
-                <p className="mt-xs m-0 text-[14px] font-semibold">{y.theme.replace(/year/, label.toLowerCase())}</p>
-                <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">A good small step: </span>{y.step}</p>
+                <p className="mt-xs m-0 text-subhead">{y.theme.replace(/year/, label.toLowerCase())}</p>
+                <p className="mt-xs m-0 text-subhead"><span className="font-bold">A good small step: </span>{y.step}</p>
               </li>
             );
           })}
@@ -1187,19 +1199,19 @@ function NumerologyPanel({ result, onEdit }: { result: DesignResult; onEdit: () 
 
       <Section id="num-insights" title="What your numbers say next to your Discover results" lede={latest ? 'Where the numbers and your own answers agree, where they stretch you, and how they fit with your Human design. A number says what you may be here to build, not what you have built.' : 'Take the main Discover quiz to see how your numbers line up with your own answers. Until then, here is how they fit with your Human design.'}>
         {insights.length === 0 ? (
-          <p className="m-0 rounded-tile bg-card p-sm text-[14px] font-semibold shadow-toy-soft">Nothing lines up strongly yet. Your answers sit near the middle on the traits your numbers lean on.</p>
+          <p className="m-0 rounded-tile bg-card p-sm text-subhead shadow-toy-soft">Nothing lines up strongly yet. Your answers sit near the middle on the traits your numbers lean on.</p>
         ) : (
           <ul className="m-0 flex list-none flex-col gap-xs p-0">
             {insights.map((x) => (
               <li key={x.title} data-pillar={x.pillar ?? undefined} className="rounded-tile p-sm shadow-toy-soft" style={{ background: x.pillar ? `var(--soft-${x.pillar})` : 'var(--color-card)' }}>
-                <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{KIND[x.kind]}</p>
-                <h3 className="text-[18px]">{x.title}</h3>
-                <p className="mt-xs m-0 text-[14px] font-semibold">{x.text}</p>
-                <p className="mt-xs m-0 text-[14px] font-semibold"><span className="font-extrabold">A small step: </span>{x.step}</p>
+                <p className="m-0 text-eyebrow uppercase text-ink-soft">{KIND[x.kind]}</p>
+                <h3 className="text-headline">{x.title}</h3>
+                <p className="mt-xs m-0 text-subhead">{x.text}</p>
+                <p className="mt-xs m-0 text-subhead"><span className="font-bold">A small step: </span>{x.step}</p>
                 {x.pillar && (
                   <div className="mt-xs flex flex-wrap items-center gap-xs">
                     <AddGoal pillar={x.pillar} title={x.step.slice(0, 140)} step={x.text} />
-                    <Link to={`/realm/${x.pillar}`} className="text-[14px] font-bold underline underline-offset-4">
+                    <Link to={`/realm/${x.pillar}`} className="text-subhead font-semibold underline underline-offset-4">
                       Open this pillar
                     </Link>
                   </div>
@@ -1208,7 +1220,7 @@ function NumerologyPanel({ result, onEdit }: { result: DesignResult; onEdit: () 
             ))}
           </ul>
         )}
-        {latest && <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">Your strengths: {latest.result.top.map((k) => DISCOVER_STRENGTHS[k].name).join(', ')}.</p>}
+        {latest && <p className="mt-xs m-0 text-caption text-ink-soft">Your strengths: {latest.result.top.map((k) => DISCOVER_STRENGTHS[k].name).join(', ')}.</p>}
       </Section>
       <CareNote lead="A system for reflection, not science. It cannot predict anything.">Numerology is a system for self-reflection. It is not science, it cannot predict anything, and different schools add the numbers in slightly different ways. Use it like a journal prompt.</CareNote>
     </>
@@ -1237,14 +1249,14 @@ function DesignScreen({ onBack }: { onBack: () => void }) {
       <BackLink to="/discover" onBack={onBack}>
         Discover
       </BackLink>
-      <h1 className="text-[30px]">Human design</h1>
+      <h1 className="text-large-title">Human design</h1>
     </header>
   );
   if (q.isPending || mode === null || !st) {
     return (
       <>
         {head}
-        <p className="mt-md text-[14px] font-bold text-ink-soft" role="status">
+        <p className="mt-md text-subhead text-ink-soft" role="status">
           Opening it
         </p>
       </>
@@ -1254,7 +1266,7 @@ function DesignScreen({ onBack }: { onBack: () => void }) {
     return (
       <>
         {head}
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Your birth chart, read as a map of how you work, decide and give.</p>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">Your birth chart, read as a map of how you work, decide and give.</p>
         <DesignForm initial={parseDesignInput(st.draft)} birthDate={me.data?.user.birthDate ?? ''} onDone={() => setMode('result')} />
       </>
     );
@@ -1262,7 +1274,7 @@ function DesignScreen({ onBack }: { onBack: () => void }) {
   return (
     <>
       {head}
-      {st.takenAt && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Worked out {new Date(st.takenAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long', year: 'numeric' })}. Only you can see this.</p>}
+      {st.takenAt && <p className="mt-xs m-0 text-subhead text-ink-soft">Worked out {new Date(st.takenAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long', year: 'numeric' })}. Only you can see this.</p>}
       <DesignView result={st.result as DesignResult} onEdit={() => setMode('form')} />
       <UseSwitches kind="design" />
       <div className="mt-md flex flex-wrap gap-xs" data-pillar={ACCENT.design}>
@@ -1282,9 +1294,9 @@ function DesignScreen({ onBack }: { onBack: () => void }) {
 function CareNote({ lead, children }: { lead: string; children: ReactNode }) {
   return (
     <div role="note" className="mt-sm">
-      <p className="m-0 text-[14px] font-bold">{lead}</p>
+      <p className="m-0 text-subhead font-semibold">{lead}</p>
       <Fold title="More" className="mt-xs">
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">{children}</p>
+        <p className="m-0 text-subhead text-ink-soft">{children}</p>
       </Fold>
     </div>
   );
@@ -1295,14 +1307,14 @@ export function AskDelete({ open, title, line, pending, failed, onYes, onClose }
   return (
     <Sheet open={open} onClose={onClose} title={title}>
       <div className="grid gap-md pb-xl">
-        <p className="m-0 text-[16px] font-semibold text-ink-soft">{line}</p>
-        {failed && <p className="m-0 text-[14px] font-bold text-r1">That did not work. Try again.</p>}
+        <p className="m-0 text-callout text-ink-soft">{line}</p>
+        {failed && <p className="m-0 text-subhead text-r1">That did not work. Try again.</p>}
         <div className="flex flex-wrap gap-xs">
           <button
             type="button"
             disabled={pending}
             onClick={onYes}
-            className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-[16px] font-semibold text-on-fill disabled:opacity-50"
+            className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill disabled:opacity-50"
           >
             Yes, delete it
           </button>

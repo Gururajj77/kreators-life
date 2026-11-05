@@ -16,7 +16,7 @@ const day = (iso: string) => new Date(iso).toLocaleDateString(LOCALE, { day: 'nu
 /** A person in a coaching list: the first letter of their name, with their badge on it. */
 export function CoachFace({ name, badge, size = 40 }: { name: string; badge: CoachLink['coach']['badge']; size?: number }) {
   return (
-    <span className="relative inline-flex shrink-0 items-center justify-center rounded-pill bg-paper font-display font-extrabold text-ink" style={{ width: size, height: size, fontSize: Math.round(size * 0.45) }} aria-hidden="true">
+    <span className="relative inline-flex shrink-0 items-center justify-center rounded-pill bg-paper font-display font-bold text-ink" style={{ width: size, height: size, fontSize: Math.round(size * 0.45) }} aria-hidden="true">
       {(name.trim()[0] ?? '?').toUpperCase()}
       <RoleBadge role={badge} size={Math.round(size * 0.45)} className="absolute -right-[4px] -bottom-[4px]" />
     </span>
@@ -51,18 +51,18 @@ export function MyCoachSection({ id = 'coach', title = 'Your life coach', inCoac
   const error = answer.error ?? share.error ?? end.error;
   return (
     <section id={id} className="mt-lg scroll-mt-[64px]" aria-labelledby={`${id}-heading`}>
-      <h2 id={`${id}-heading`} className="text-[24px]">
+      <h2 id={`${id}-heading`} className="text-title2">
         {title}
       </h2>
       {!inCoaching && (
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+        <p className="mt-xs m-0 text-subhead text-ink-soft">
           A coach the team chose sees only what you switch on, never your journal. End it any time.
         </p>
       )}
       {q.data && links.length === 0 && (
-        <p className="mt-sm m-0 text-[14px] font-semibold">
+        <p className="mt-sm m-0 text-subhead">
           No life coach yet.{' '}
-          <Link to={inCoaching ? '#directory-heading' : '/coaching'} className="font-bold underline underline-offset-4">
+          <Link to={inCoaching ? '#directory-heading' : '/coaching'} className="font-semibold underline underline-offset-4">
             {inCoaching ? 'Find one below' : 'Find one in Coaching'}
           </Link>
           .
@@ -77,11 +77,11 @@ export function MyCoachSection({ id = 'coach', title = 'Your life coach', inCoac
               <div className="flex items-center gap-sm">
                 <CoachFace name={l.coach.name} badge={l.coach.badge} />
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[16px] font-extrabold">
+                  <span className="block text-headline">
                     {l.coach.name}
                     {l.coach.handle ? <span className="text-ink-soft"> @{l.coach.handle}</span> : null}
                   </span>
-                  <span className="block text-[14px] font-semibold text-ink-soft">
+                  <span className="block text-subhead text-ink-soft">
                     {BADGE_META[l.coach.badge].name}.{' '}
                     {waiting ? (mineToAnswer ? (l.askedBy === 'admin' ? 'The team suggests them as your coach.' : 'They would like to be your coach.') : 'You asked them. Waiting for their yes.') : `Your coach since ${day(l.answeredAt ?? l.createdAt)}.`}
                   </span>
@@ -89,7 +89,7 @@ export function MyCoachSection({ id = 'coach', title = 'Your life coach', inCoac
               </div>
               {(l.status === 'active' || mineToAnswer) && (
                 <fieldset className="m-0 mt-sm border-0 p-0">
-                  <legend className="text-[14px] font-bold">{waiting ? 'What they would see' : 'What they see'}</legend>
+                  <legend className="text-subhead font-semibold">{waiting ? 'What they would see' : 'What they see'}</legend>
                   <div className="mt-xs flex flex-col gap-xs">
                     {COACH_SHARE_PARTS.map((part) => (
                       <Toggle key={part} on={l.share[part]} disabled={share.isPending} onChange={(on) => share.mutate({ id: l.id, part, on })} label={COACH_SHARE_META[part].name} hint={COACH_SHARE_META[part].blurb} />
@@ -125,15 +125,15 @@ export function MyCoachSection({ id = 'coach', title = 'Your life coach', inCoac
       </ul>
       <Pager page={q.data?.linksPage} prefix="coach" label="coaches" />
       {error && (
-        <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+        <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           {error instanceof Error ? error.message : 'That did not work. Check your connection and try again.'}
         </p>
       )}
       <Nudge className="mt-xs" text={`Up to ${MAX_COACHES} coaches at once. Every change is logged ${inCoaching ? 'further down this page' : 'under Coaching'}.`} />
       <Sheet open={Boolean(ending)} onClose={() => setEnding(null)} title={`End coaching with ${ending?.coach.name ?? 'your coach'}?`}>
-        <p className="m-0 text-[16px] font-semibold">They stop seeing your progress at once and are told. Their notes and the change log stay with you.</p>
+        <p className="m-0 text-callout">They stop seeing your progress at once and are told. Their notes and the change log stay with you.</p>
         <div className="mt-md flex flex-col gap-xs">
-          <button type="button" disabled={end.isPending} onClick={() => ending && end.mutate(ending.id)} className="toy min-h-[48px] rounded-pill bg-r1 px-md text-[16px] font-bold text-on-fill">
+          <button type="button" disabled={end.isPending} onClick={() => ending && end.mutate(ending.id)} className="toy min-h-[48px] rounded-pill bg-r1 px-md text-headline text-on-fill">
             Yes, end it
           </button>
           <Button variant="outline" full onClick={() => setEnding(null)}>

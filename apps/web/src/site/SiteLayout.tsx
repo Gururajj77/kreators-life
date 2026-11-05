@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router';
 import { BrandMark } from '../components/BrandMark';
-import { Ornament, Posy } from '../components/Hero';
 import { useSession } from '../lib/store';
 import { useFocusSession } from '../lib/focusSession';
 import { FocusPill } from '../components/FocusPill';
@@ -38,7 +37,7 @@ export function SiteLayout({ children, wide = true, minimal = false }: { childre
   const setThemeMode = useTheme((s) => s.setMode);
   // Two classes, because Tailwind 4 orders `inline-flex` after `hidden`: a link that carries both would always show.
   const navBase =
-    'relative min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-pill px-sm text-[16px] font-bold text-ink-soft transition-colors hover:text-ink aria-[current=page]:text-ink';
+    'relative min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-pill px-sm text-callout font-medium text-ink-soft transition-colors hover:text-ink aria-[current=page]:text-ink';
   // Phones keep only the logo, "Go to app" and the theme button; the rest comes back from the laptop breakpoint.
   const navWide = `hidden lg:inline-flex ${navBase}`;
   // The header frosts once the page has moved: a one-pixel marker at the very top tells us when it has left the screen (no scroll listener).
@@ -103,96 +102,87 @@ export function SiteLayout({ children, wide = true, minimal = false }: { childre
         </div>
       </header>
       <main className={`mx-auto ${wide ? 'max-w-[1080px]' : 'max-w-[720px]'} px-md md:px-lg lg:px-xl pb-xl`}>{children}</main>
-      <footer
-        className="relative mt-xl overflow-hidden rounded-t-card bg-card shadow-toy-soft"
-        // Like land under a dusk sky: indigo and sky blue above, then green, then the brown earth at the bottom, so the page ends on something solid.
-        style={{
-          backgroundImage:
-            'linear-gradient(180deg, color-mix(in oklab, var(--color-r6) 14%, transparent), color-mix(in oklab, var(--color-r5) 12%, transparent) 30%, color-mix(in oklab, var(--color-r4) 12%, transparent) 62%, color-mix(in oklab, var(--color-earth) 20%, transparent))',
-        }}
-      >
-        <Posy tone="ink" kind="lotus" className="right-0 bottom-0" />
-        {/* A row only from lg: on a tablet the four link columns, the words and the theme switch did not fit side by side. */}
-        <div className="relative mx-auto flex max-w-[1080px] flex-col gap-md px-md py-lg lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <Logo />
-            <p className="mt-xs m-0 max-w-[420px] text-[14px] font-semibold text-ink-soft">
-              A daily game for the seven relationships, with a creator’s tools built in. One small act a day, for all seven. Free to start, free to stay.
-            </p>
+      {/* The footer (2026-11-05, laid out after the founder's FyndFlow footer): the brand and a glass card on the left, the links in three
+          headed columns on the right, a hairline, then a bottom bar (who built it on the left, the main policies on the right), the
+          privacy line, and the wordmark rising out of the foot behind fluted glass, over the four-colour ground. */}
+      <footer className="site-footer relative mt-xl overflow-hidden rounded-t-card">
+        <div className="relative mx-auto max-w-[1080px] px-md pt-xl md:px-lg lg:px-xl">
+          <div className="grid gap-lg lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] lg:gap-xl">
+            <div>
+              <Logo />
+              <div className="mt-sm rounded-tile bg-card-strong p-md shadow-toy-soft">
+                <p className="m-0 text-subhead font-medium text-ink">One small act a day, for all seven.</p>
+                <p className="mt-xs m-0 text-subhead text-ink-soft">A daily game for the seven relationships, with a creator’s tools built in. Free to start, free to stay.</p>
+                <Segmented
+                  label="Theme"
+                  value={themeMode}
+                  onChange={setThemeMode}
+                  className="mt-md"
+                  options={[
+                    { value: 'system', label: 'Auto' },
+                    { value: 'light', label: 'Light' },
+                    { value: 'dark', label: 'Dark' },
+                  ]}
+                />
+              </div>
+            </div>
+            {/* Three columns, each with its heading; on a phone the first two side by side and Legal across both, its links in two columns. */}
+            <nav aria-label="Footer" className="grid grid-cols-2 gap-x-md gap-y-lg sm:grid-cols-3">
+              <FooterGroup title="Explore">
+                <FooterLink to="/explore">Explore</FooterLink>
+                <FooterLink to="/7rp">7RP</FooterLink>
+                <FooterLink to="/features">Features</FooterLink>
+                <FooterLink to="/features/books">Books</FooterLink>
+                <FooterLink href="/#brands">For brands</FooterLink>
+              </FooterGroup>
+              <FooterGroup title="Get started">
+                {/* Like the header: sign-in without a session, the app (Home) with one. */}
+                <FooterLink to={entry}>{token ? 'Go to app' : 'Sign in'}</FooterLink>
+                <FooterLink to="/pricing">Pricing</FooterLink>
+                <FooterLink to="/features/help">Help</FooterLink>
+                <FooterLink to="/contact">Contact</FooterLink>
+              </FooterGroup>
+              <FooterGroup title="Legal" className="col-span-2 sm:col-span-1" listClassName="grid grid-cols-2 gap-x-md sm:grid-cols-1">
+                <FooterLink to="/refunds">Refunds</FooterLink>
+                <FooterLink to="/subprocessors">Subprocessors</FooterLink>
+                <FooterLink to="/copyright">Copyright</FooterLink>
+                <FooterLink to="/licences">Licences</FooterLink>
+              </FooterGroup>
+            </nav>
           </div>
-          {/* Columns as wide as their words, each link on one line: equal columns ran "Subprocessors" into "Copyright" and left "choices" alone. */}
-          <nav aria-label="Footer" className="grid grid-cols-2 gap-xs whitespace-nowrap text-[14px] font-bold text-ink-soft sm:grid-cols-[repeat(4,max-content)] sm:gap-x-md">
-            <Link to="/explore" className="min-h-[44px] hover:text-ink">
-              Explore
-            </Link>
-            <Link to="/7rp" className="min-h-[44px] hover:text-ink">
-              7RP
-            </Link>
-            <Link to="/features" className="min-h-[44px] hover:text-ink">
-              Features
-            </Link>
-            <Link to="/features/books" className="min-h-[44px] hover:text-ink">
-              Books
-            </Link>
-            <a href="/#brands" className="min-h-[44px] hover:text-ink">
-              For brands
-            </a>
-            <Link to="/features/help" className="min-h-[44px] hover:text-ink">
-              Help
-            </Link>
-            {/* Like the header: sign-in without a session, the app (Home) with one. */}
-            <Link to={entry} className="min-h-[44px] hover:text-ink">
-              {token ? 'Go to app' : 'Sign in'}
-            </Link>
-            <Link to="/pricing" className="min-h-[44px] hover:text-ink">
-              Pricing
-            </Link>
-            <Link to="/terms" className="min-h-[44px] hover:text-ink">
-              Terms
-            </Link>
-            <Link to="/privacy" className="min-h-[44px] hover:text-ink">
-              Privacy
-            </Link>
-            <Link to="/refunds" className="min-h-[44px] hover:text-ink">
-              Refunds
-            </Link>
-            <Link to="/contact" className="min-h-[44px] hover:text-ink">
-              Contact
-            </Link>
-            <Link to="/subprocessors" className="min-h-[44px] hover:text-ink">
-              Subprocessors
-            </Link>
-            <Link to="/copyright" className="min-h-[44px] hover:text-ink">
-              Copyright
-            </Link>
-            <Link to="/licences" className="min-h-[44px] hover:text-ink">
-              Licences
-            </Link>
-            <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('kreators:open-consent'))} className="flex min-h-[44px] items-start text-left hover:text-ink">
-              Privacy choices
-            </button>
-          </nav>
-          <Segmented
-            label="Theme"
-            value={themeMode}
-            onChange={setThemeMode}
-            options={[
-              { value: 'system', label: 'Auto' },
-              { value: 'light', label: 'Light' },
-              { value: 'dark', label: 'Dark' },
-            ]}
-          />
+          <div className="mt-xl flex flex-wrap-reverse items-center justify-between gap-x-lg gap-y-xs border-t border-line pt-sm text-subhead text-ink-soft">
+            <p className="m-0 py-xs">
+              © {new Date().getFullYear()} kreators.app. Built <span className="whitespace-nowrap">with ❤️</span> in India by{' '}
+              <a href="https://brandingbum.com" target="_blank" rel="noopener noreferrer" className="font-semibold text-ink underline underline-offset-4 hover:text-ink-soft">
+                BrandingBum
+              </a>
+            </p>
+            <ul className="m-0 flex list-none flex-wrap gap-x-md p-0 font-semibold">
+              <li>
+                <Link to="/terms" className="flex min-h-[44px] min-w-[44px] items-center hover:text-ink">
+                  Terms
+                </Link>
+              </li>
+              <li>
+                <Link to="/privacy" className="flex min-h-[44px] min-w-[44px] items-center hover:text-ink">
+                  Privacy
+                </Link>
+              </li>
+              <li>
+                <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('kreators:open-consent'))} className="flex min-h-[44px] min-w-[44px] items-center hover:text-ink">
+                  Privacy choices
+                </button>
+              </li>
+            </ul>
+          </div>
+          <p className="mt-xs m-0 text-caption text-ink-mute">Your journal and wellbeing are never shown to brands, staff, the leaderboard or Club selection.</p>
+          <p className="mt-xs m-0 text-caption text-ink-mute">
+            kreators.app cannot help in an emergency. If you might hurt yourself, call your local emergency number or go to the nearest hospital, and tell someone you trust. In India, call Tele-MANAS on 14416, day or night.
+          </p>
         </div>
-        <Ornament className="mt-xs" />
-        <p className="relative m-0 px-md text-center text-[12px] font-semibold text-ink-mute">
-          Your journal and wellbeing are never shown to brands, staff, the leaderboard or Club selection.
-        </p>
-        <p className="relative m-0 px-md pb-lg text-center text-[12px] font-semibold text-ink-mute">
-          Built with ❤️ by{' '}
-          <a href="https://brandingbum.com" target="_blank" rel="noopener noreferrer" className="font-bold underline underline-offset-4 hover:text-ink">
-            BrandingBum
-          </a>
-        </p>
+        {/* The wordmark, as big as the footer is wide, seen through fluted glass and cut by the ground: drawn by CSS (::before), so it is
+            decoration only, never read twice and never a text node. */}
+        <div className="site-footer-mark" aria-hidden="true" />
         <div className="relative flex h-[8px]" aria-hidden="true" data-footer-ground>
           <span className="flex-1" style={{ background: 'var(--color-r6)' }} />
           <span className="flex-1" style={{ background: 'var(--color-r5)' }} />
@@ -202,4 +192,20 @@ export function SiteLayout({ children, wide = true, minimal = false }: { childre
       </footer>
     </div>
   );
+}
+
+/** A footer column: a small heading over its links. */
+function FooterGroup({ title, children, className = '', listClassName = '' }: { title: string; children: ReactNode; className?: string; listClassName?: string }) {
+  return (
+    <div className={className}>
+      <h2 className="m-0 type-eyebrow text-ink-mute">{title}</h2>
+      <ul className={`mt-xs m-0 list-none p-0 ${listClassName}`}>{children}</ul>
+    </div>
+  );
+}
+
+/** One footer link: on its own line, 44px tall, its words never wrapped. */
+function FooterLink({ to, href, children }: { to?: string; href?: string; children: ReactNode }) {
+  const cls = 'flex min-h-[44px] items-center whitespace-nowrap text-subhead text-ink-soft hover:text-ink';
+  return <li>{href ? <a href={href} className={cls}>{children}</a> : <Link to={to ?? '/'} className={cls}>{children}</Link>}</li>;
 }

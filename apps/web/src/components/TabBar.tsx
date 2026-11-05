@@ -120,7 +120,7 @@ export function TabBar() {
   }, [loc.pathname, here]);
   const badge = (to: string) =>
     to === '/apps' && unread > 0 ? (
-      <span className="absolute -top-[2px] -right-[2px] flex min-w-[18px] items-center justify-center rounded-pill bg-r1 px-[4px] text-[11px] font-extrabold leading-[18px] text-on-fill" aria-label={`${unread} unread`}>
+      <span className="absolute -top-[2px] -right-[2px] flex min-w-[18px] items-center justify-center rounded-pill bg-r1 px-[4px] text-caption2 font-semibold leading-[18px] text-on-fill" aria-label={`${unread} unread`}>
         {unread > 9 ? '9+' : unread}
       </span>
     ) : null;
@@ -134,7 +134,7 @@ export function TabBar() {
               <NavLink
                 to={t.to}
                 className={({ isActive }) =>
-                  `tab flex min-h-[72px] flex-col items-center justify-center gap-[6px] pt-sm pb-xs text-[12px] font-bold transition-colors ${isActive ? 'text-ink' : 'text-ink-soft hover:text-ink'}`
+                  `tab flex min-h-[72px] flex-col items-center justify-center gap-[6px] pt-sm pb-xs text-caption2 transition-colors ${isActive ? 'text-ink' : 'text-ink-soft hover:text-ink'}`
                 }
               >
                 {({ isActive }) => (
@@ -156,7 +156,7 @@ export function TabBar() {
         {focusActive ? (
           <FocusPill compact />
         ) : (
-          <Link to="/home" aria-label="kreators.app, home" className="toy toy-soft flex min-h-[44px] min-w-[44px] items-center justify-center gap-xs whitespace-nowrap rounded-pill bg-card-strong px-sm font-display text-[16px] font-extrabold tracking-tight">
+          <Link to="/home" aria-label="kreators.app, home" className="toy toy-soft flex min-h-[44px] min-w-[44px] items-center justify-center gap-xs whitespace-nowrap rounded-pill bg-card-strong px-sm font-display text-[16px] font-bold tracking-tight">
             <BrandMark compact />
           </Link>
         )}
@@ -175,12 +175,12 @@ export function TabBar() {
       </div>
       <Sheet open={menu} onClose={() => setMenu(false)} title="Your apps">
         {me.data && (
-          <p className="m-0 flex items-center gap-xs text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
+          <p className="m-0 flex items-center gap-xs text-eyebrow uppercase text-ink-soft">
             <RoleBadge role={badgeRoleOf(me.data.user)} size={20} />
             {BADGE_META[badgeRoleOf(me.data.user)].name}
           </p>
         )}
-        {sidebarApps.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing switched on yet. Pick apps under Apps.</p>}
+        {sidebarApps.length === 0 && <p className="mt-sm m-0 text-footnote text-ink-soft">Nothing switched on yet. Pick apps under Apps.</p>}
         {groupOrder.map((g) => {
           const list = appsOf(g);
           if (list.length === 0) return null;
@@ -190,12 +190,12 @@ export function TabBar() {
                 tone="plain"
                 open={openGroups[g] ?? groupStartsOpen(prefs, g)}
                 onOpenChange={(o) => setOpenGroups((s) => ({ ...s, [g]: o }))}
-                title={<span className="text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{MODULE_GROUPS[g]}</span>}
+                title={<span className="text-eyebrow uppercase text-ink-soft">{MODULE_GROUPS[g]}</span>}
               >
                 <ul className="flex list-none flex-col p-0 m-0">
                   {list.map((m) => (
                     <li key={m.key}>
-                      <NavLink to={m.path} className={({ isActive }) => `toy flex min-h-[48px] items-center gap-sm rounded-pill px-sm text-[16px] font-bold transition-colors ${isActive ? 'bg-ink text-on-ink' : 'text-ink hover:bg-paper'}`}>
+                      <NavLink to={m.path} className={({ isActive }) => `toy flex min-h-[48px] items-center gap-sm rounded-pill px-sm text-callout transition-colors ${isActive ? 'bg-ink text-on-ink' : 'text-ink hover:bg-paper'}`}>
                         {({ isActive }) => (
                           <>
                             <NavAppIcon name={m.icon} size={20} on={isActive} />
@@ -212,7 +212,7 @@ export function TabBar() {
           );
         })}
         <div className="mt-lg flex items-center justify-between gap-sm">
-          <Link to="/" className="text-[12px] font-bold text-ink-soft hover:text-ink">
+          <Link to="/" className="text-caption text-ink-soft hover:text-ink">
             About kreators.app
           </Link>
           <SignOut />
@@ -229,7 +229,7 @@ export function TabBar() {
         ) : (
           // The safe area takes the sidebar's own top padding, so the logo keeps its room from the top and left edges itself.
           <div className={`mt-sm flex items-center gap-xs ${mini ? 'justify-center' : ''}`}>
-            <Link to="/home" aria-label="kreators.app, home" className={`flex min-h-[44px] items-center gap-xs font-display text-[18px] font-extrabold ${mini ? 'justify-center' : 'px-sm'}`}>
+            <Link to="/home" aria-label="kreators.app, home" className={`flex min-h-[44px] items-center gap-xs font-display text-[18px] font-bold ${mini ? 'justify-center' : 'px-sm'}`}>
               {mini ? (
                 <span aria-hidden="true" className="flex items-baseline text-[22px] leading-none">
                   k<span className="brand-dot" />
@@ -247,7 +247,7 @@ export function TabBar() {
               const role = badgeRoleOf(me.data.user);
               const rel = RELATIONSHIP_BY_KEY[BADGE_META[role].accent];
               return (
-                <span className="inline-flex min-h-[32px] items-center gap-xs rounded-pill py-[4px] pr-sm pl-[4px] text-[12px] font-extrabold tracking-wide" style={{ background: `var(--soft-${rel.key})`, color: `var(--deep-${rel.key})` }}>
+                <span className="inline-flex min-h-[32px] items-center gap-xs rounded-pill py-[4px] pr-sm pl-[4px] text-caption font-medium" style={{ background: `var(--soft-${rel.key})`, color: `var(--deep-${rel.key})` }}>
                   <RoleBadge role={role} size={24} />
                   {BADGE_META[role].name}
                 </span>
@@ -261,7 +261,7 @@ export function TabBar() {
         <ul ref={side.ref} className="fx-slide mt-md flex list-none flex-col gap-xs p-0 m-0">
           {TABS.map((t) => (
             <li key={t.to}>
-              <NavLink to={t.to} aria-label={mini ? t.label : undefined} title={mini ? t.label : undefined} className={({ isActive }) => `tab relative flex min-h-[48px] items-center gap-sm rounded-pill text-[16px] font-bold transition-colors ${mini ? 'justify-center px-0' : 'px-sm'} ${isActive ? (side.ready ? 'text-on-ink' : 'bg-ink text-on-ink') : 'text-ink-soft hover:bg-paper hover:text-ink'}`}>
+              <NavLink to={t.to} aria-label={mini ? t.label : undefined} title={mini ? t.label : undefined} className={({ isActive }) => `tab relative flex min-h-[48px] items-center gap-sm rounded-pill text-callout font-medium transition-colors ${mini ? 'justify-center px-0' : 'px-sm'} ${isActive ? (side.ready ? 'text-on-ink' : 'bg-ink text-on-ink') : 'text-ink-soft hover:bg-paper hover:text-ink'}`}>
                 {({ isActive }) => (
                   <>
                     <span className="relative flex size-[28px] items-center justify-center">
@@ -288,12 +288,12 @@ export function TabBar() {
                 tone="plain"
                 open={openGroups[g] ?? groupStartsOpen(prefs, g)}
                 onOpenChange={(o) => setOpenGroups((s) => ({ ...s, [g]: o }))}
-                title={<span className="text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{MODULE_GROUPS[g]}</span>}
+                title={<span className="text-eyebrow uppercase text-ink-soft">{MODULE_GROUPS[g]}</span>}
               >
                 <ul className="flex list-none flex-col gap-xs p-0 pb-xs m-0">
                   {list.map((m) => (
                     <li key={m.key}>
-                      <NavLink to={m.path} className={({ isActive }) => `tab flex min-h-[44px] items-center gap-xs rounded-pill px-sm text-[14px] font-bold transition-colors ${isActive ? 'bg-line text-ink' : 'text-ink-soft hover:bg-paper hover:text-ink'}`}>
+                      <NavLink to={m.path} className={({ isActive }) => `tab flex min-h-[44px] items-center gap-xs rounded-pill px-sm text-subhead transition-colors ${isActive ? 'bg-line text-ink' : 'text-ink-soft hover:bg-paper hover:text-ink'}`}>
                         {({ isActive }) => (
                           <>
                             <NavAppIcon name={m.icon} size={18} on={isActive} />
@@ -312,7 +312,7 @@ export function TabBar() {
         <div className={`mt-auto flex flex-col gap-xs pt-md ${mini ? 'items-center' : 'px-xs'}`}>
           <SignOut className={mini ? '' : 'w-full'} iconOnly={mini} />
           {!mini && (
-            <Link to="/" className="inline-flex min-h-[44px] items-center text-[12px] font-bold text-ink-soft hover:text-ink">
+            <Link to="/" className="inline-flex min-h-[44px] items-center text-caption text-ink-soft hover:text-ink">
               About kreators.app
             </Link>
           )}

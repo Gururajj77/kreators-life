@@ -80,17 +80,17 @@ export function DiscountField({ area, itemId, points, value, onChange, check, cl
   if (value) {
     return (
       <div className={`rounded-tile bg-paper p-sm ${className}`} role="status">
-        <p className="m-0 text-[14px] font-bold">
+        <p className="m-0 text-subhead font-semibold">
           Code <span className="font-mono">{value}</span> is on{check ? `: ${check.label}` : ''}.
         </p>
         {check && (
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">
+          <p className="mt-xs m-0 text-subhead text-ink-soft">
             You save {savingText(check)}.
             {check.offCents > 0 && check.listCents > 0 && ` New total ${money(check.payCents, check.currency)}.`}
             {check.offPoints > 0 && check.offCents === 0 && ` New total ${check.payPoints} ${check.payPoints === 1 ? 'point' : 'points'}.`}
           </p>
         )}
-        <button type="button" onClick={() => onChange('', null)} className="mt-xs inline-flex min-h-[44px] items-center text-[14px] font-bold underline underline-offset-4 hover:text-ink-soft">
+        <button type="button" onClick={() => onChange('', null)} className="mt-xs inline-flex min-h-[44px] items-center text-subhead font-semibold underline underline-offset-4 hover:text-ink-soft">
           Take the code off
         </button>
       </div>
@@ -100,11 +100,11 @@ export function DiscountField({ area, itemId, points, value, onChange, check, cl
   if (!open) {
     return (
       <div className={className}>
-        <button type="button" onClick={() => setOpen(true)} aria-expanded="false" className="inline-flex min-h-[44px] items-center text-[14px] font-bold underline underline-offset-4 hover:text-ink-soft">
+        <button type="button" onClick={() => setOpen(true)} aria-expanded="false" className="inline-flex min-h-[44px] items-center text-subhead font-semibold underline underline-offset-4 hover:text-ink-soft">
           Have a discount code?
         </button>
         {problem && (
-          <p role="alert" className="m-0 text-[12px] font-bold text-ink-soft">
+          <p role="alert" className="m-0 text-caption text-ink-soft">
             {problem}
           </p>
         )}
@@ -120,7 +120,7 @@ export function DiscountField({ area, itemId, points, value, onChange, check, cl
         void apply();
       }}
     >
-      <label htmlFor={id} className="block text-[14px] font-bold">
+      <label htmlFor={id} className="block text-subhead font-semibold">
         Discount code
       </label>
       <div className="mt-xs flex gap-xs">
@@ -134,7 +134,7 @@ export function DiscountField({ area, itemId, points, value, onChange, check, cl
           autoComplete="off"
           spellCheck={false}
           aria-describedby={problem ? `${id}-err` : undefined}
-          className="min-h-[44px] min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm text-[16px]"
+          className="min-h-[44px] min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm text-body"
         />
         <Button type="submit" variant="outline" disabled={busy || !text.trim()}>
           Apply
@@ -144,7 +144,7 @@ export function DiscountField({ area, itemId, points, value, onChange, check, cl
         </Button>
       </div>
       {problem && (
-        <p id={`${id}-err`} role="alert" className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+        <p id={`${id}-err`} role="alert" className="mt-xs m-0 text-caption text-ink-soft">
           {problem}
         </p>
       )}

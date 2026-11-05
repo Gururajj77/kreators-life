@@ -41,7 +41,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
 import { useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowRight, Check, CircleAlert, CircleQuestionMark, Minus, Undo2, X, type LucideIcon } from 'lucide-react';
+import { ArrowUpRight, Check, CircleAlert, CircleQuestionMark, Minus, Undo2, X, type LucideIcon } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { ChatActions, ChatComposer, ChatLinks, ChatTurns, ChoiceChips, ChoiceGroups, chip, countTurns, typingTime, useChatMotion } from './Chat';
 import { AppIcon } from './AppIcon';
@@ -174,7 +174,7 @@ function TaskForm({ projects, today, onSend }: { projects: Node[]; today: string
     <CardShell send="Add the task" disabled={!title.trim() || !parentId} onSubmit={() => onSend({ parentId, title: title.trim(), due, time, minutes: Number(minutes) > 0 ? Number(minutes) : null }, `${title.trim()}, due ${prettyDate(due)}${time ? ` at ${time}` : ''}`)}>
       {projects.length > 1 && (
         <label className="block">
-          <span className="block text-[14px] font-bold">Which project does it move?</span>
+          <span className="block text-subhead font-semibold">Which project does it move?</span>
           <select value={parentId} onChange={(e) => setParentId(e.target.value)} className={FIELD}>
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
@@ -185,20 +185,20 @@ function TaskForm({ projects, today, onSend }: { projects: Node[]; today: string
         </label>
       )}
       <label className="block">
-        <span className="block text-[14px] font-bold">The task</span>
+        <span className="block text-subhead font-semibold">The task</span>
         <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} placeholder={KIND_META.task.prompt} className={FIELD} />
       </label>
       <div className="grid grid-cols-1 gap-sm sm:grid-cols-3">
         <label className="block">
-          <span className="block text-[14px] font-bold">Due</span>
+          <span className="block text-subhead font-semibold">Due</span>
           <input type="date" value={due} min={today} onChange={(e) => setDue(e.target.value)} className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Time, if any</span>
+          <span className="block text-subhead font-semibold">Time, if any</span>
           <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Minutes, if any</span>
+          <span className="block text-subhead font-semibold">Minutes, if any</span>
           <input type="number" min={5} max={600} step={5} value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder="20" className={FIELD} />
         </label>
       </div>
@@ -214,13 +214,13 @@ function LayerForm({ kind, parents, onSend }: { kind: NodeKind; parents: Node[];
   return (
     <CardShell send={`Add the ${meta.label.toLowerCase()}`} disabled={!title.trim() || Boolean(up && !parentId)} onSubmit={() => onSend({ parentId: up ? parentId : null, title: title.trim() }, title.trim())}>
       <label className="block">
-        <span className="block text-[14px] font-bold">{meta.hint}</span>
+        <span className="block text-subhead">{meta.hint}</span>
         <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} placeholder={meta.prompt} className={FIELD} />
-        <span className="mt-xs block text-[12px] font-semibold text-ink-soft">For example: {meta.example}</span>
+        <span className="mt-xs block text-caption text-ink-soft">For example: {meta.example}</span>
       </label>
       {up && parents.length > 1 && (
         <label className="block">
-          <span className="block text-[14px] font-bold">Which {KIND_META[up].label.toLowerCase()} does it hold up?</span>
+          <span className="block text-subhead font-semibold">Which {KIND_META[up].label.toLowerCase()} does it hold up?</span>
           <select value={parentId} onChange={(e) => setParentId(e.target.value)} className={FIELD}>
             {parents.map((p) => (
               <option key={p.id} value={p.id}>
@@ -240,11 +240,11 @@ function NotToDoForm({ onSend }: { onSend: (v: { title: string; relationship: Re
   return (
     <CardShell send="Add it to the list" disabled={!title.trim()} onSubmit={() => onSend({ title: title.trim(), relationship: rel || null }, title.trim())}>
       <label className="block">
-        <span className="block text-[14px] font-bold">What will you stay away from?</span>
+        <span className="block text-subhead">What will you stay away from?</span>
         <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={NOT_TO_DO_TITLE_MAX} placeholder="Phone in bed" className={FIELD} />
       </label>
       <label className="block">
-        <span className="block text-[14px] font-bold">Which pillar does it protect? Optional.</span>
+        <span className="block text-subhead">Which pillar does it protect? Optional.</span>
         <select value={rel} onChange={(e) => setRel(e.target.value as RelationshipKey | '')} className={FIELD}>
           <option value="">No pillar</option>
           {RELATIONSHIPS.map((r) => (
@@ -267,7 +267,7 @@ function NotToDoDayForm({ items, onSend }: { items: NotToDo[]; onSend: (v: Recor
       <ul className="m-0 flex list-none flex-col gap-sm p-0">
         {items.map((i) => (
           <li key={i.id}>
-            <p className="m-0 text-[16px] font-bold">{i.title}</p>
+            <p className="m-0 text-headline">{i.title}</p>
             <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label={i.title}>
               {(['kept', 'slipped'] as const).map((s) => (
                 <button key={s} type="button" aria-pressed={marks[i.id] === s} className={chip(marks[i.id] === s)} onClick={() => setMarks((m) => ({ ...m, [i.id]: s }))}>
@@ -289,14 +289,14 @@ function SleepForm({ onSend }: { onSend: (v: { hours: number; quality: number },
   return (
     <CardShell send="Log my sleep" onSubmit={() => onSend({ hours, quality }, `${hours} hours, ${QUALITY[quality - 1]!.toLowerCase()}`)}>
       <label className="block">
-        <span className="flex items-baseline justify-between text-[14px] font-bold">
+        <span className="flex items-baseline justify-between text-subhead font-semibold">
           <span>Hours slept</span>
-          <span className="font-display text-[20px] font-extrabold">{hours}</span>
+          <span className="text-title3 type-figure">{hours}</span>
         </span>
         <input type="range" min={0} max={14} step={0.5} value={hours} onChange={(e) => setHours(Number(e.target.value))} className="mt-xs w-full accent-ink" />
       </label>
       <div>
-        <p className="m-0 text-[14px] font-bold">How it felt</p>
+        <p className="m-0 text-subhead font-semibold">How it felt</p>
         <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label="Sleep quality">
           {QUALITY.map((q, i) => (
             <button key={q} type="button" aria-pressed={quality === i + 1} className={chip(quality === i + 1)} onClick={() => setQuality(i + 1)}>
@@ -320,11 +320,11 @@ function JournalForm({ onSend }: { onSend: (v: { title: string; body: string; em
   return (
     <CardShell send="Save the entry" disabled={!body.trim()} onSubmit={() => onSend({ title: title.trim(), body: body.trim(), emotion }, title.trim() || `${body.trim().slice(0, 60)}${body.trim().length > 60 ? '…' : ''}`)}>
       <label className="block">
-        <span className="block text-[14px] font-bold">A title. Optional.</span>
+        <span className="block text-subhead font-semibold">A title. Optional.</span>
         <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Today" className={FIELD} />
       </label>
       <label className="block">
-        <span className="block text-[14px] font-bold">What is on your mind?</span>
+        <span className="block text-subhead font-semibold">What is on your mind?</span>
         <textarea
           value={body}
           rows={4}
@@ -337,7 +337,7 @@ function JournalForm({ onSend }: { onSend: (v: { title: string; body: string; em
         />
       </label>
       <div>
-        <p className="m-0 text-[14px] font-bold">How does it feel? Optional.</p>
+        <p className="m-0 text-subhead font-semibold">How does it feel? Optional.</p>
         <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label="Emotion">
           {MOODS.map((m) => (
             <button key={m.value} type="button" aria-pressed={emotion === m.value} className={`${chip(emotion === m.value)} inline-flex items-center gap-xs`} onClick={() => setEmotion(emotion === m.value ? null : m.value)}>
@@ -379,11 +379,11 @@ function MoneyForm({ onSend }: { onSend: (v: { kind: 'income' | 'expense'; cents
       </div>
       <div className="grid grid-cols-1 gap-sm sm:grid-cols-2">
         <label className="block">
-          <span className="block text-[14px] font-bold">How much</span>
+          <span className="block text-subhead font-semibold">How much</span>
           <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="1250" className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">What for</span>
+          <span className="block text-subhead font-semibold">What for</span>
           <select value={category} onChange={(e) => setCategory(e.target.value)} className={FIELD}>
             {cats.map((c) => (
               <option key={c} value={c}>
@@ -393,11 +393,11 @@ function MoneyForm({ onSend }: { onSend: (v: { kind: 'income' | 'expense'; cents
           </select>
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Who, if anyone</span>
+          <span className="block text-subhead font-semibold">Who, if anyone</span>
           <input value={counterparty} onChange={(e) => setCounterparty(e.target.value)} maxLength={80} placeholder={kind === 'income' ? 'A brand' : 'A shop'} className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">A note, if any</span>
+          <span className="block text-subhead font-semibold">A note, if any</span>
           <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} className={FIELD} />
         </label>
       </div>
@@ -418,7 +418,7 @@ function ReviewForm({ prompts, start, onSend }: { prompts: string[]; start: { an
     <CardShell send="Save the review" disabled={filled === 0 && !highlight.trim()} onSubmit={() => onSend({ answers: answers.map((a) => a.trim()), rating, highlight: highlight.trim() }, `${filled} of ${prompts.length} answered${rating ? `, felt ${MOODS[rating - 1]!.name.toLowerCase()}` : ''}`)}>
       {prompts.map((p, i) => (
         <label key={i} className="block">
-          <span className="block text-[14px] font-bold">{p}</span>
+          <span className="block text-subhead font-semibold">{p}</span>
           <textarea
             value={answers[i]}
             rows={2}
@@ -436,7 +436,7 @@ function ReviewForm({ prompts, start, onSend }: { prompts: string[]; start: { an
         </label>
       ))}
       <div>
-        <p className="m-0 text-[14px] font-bold">How did the period feel? Optional.</p>
+        <p className="m-0 text-subhead">How did the period feel? Optional.</p>
         <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label="How it felt">
           {MOODS.map((m) => (
             <button key={m.value} type="button" aria-pressed={rating === m.value} className={`${chip(rating === m.value)} inline-flex items-center gap-xs`} onClick={() => setRating(rating === m.value ? null : m.value)}>
@@ -447,7 +447,7 @@ function ReviewForm({ prompts, start, onSend }: { prompts: string[]; start: { an
         </div>
       </div>
       <label className="block">
-        <span className="block text-[14px] font-bold">The one thing worth keeping. Optional.</span>
+        <span className="block text-subhead">The one thing worth keeping. Optional.</span>
         <input value={highlight} onChange={(e) => setHighlight(e.target.value)} maxLength={REVIEW_HIGHLIGHT_MAX} placeholder="Shipped the first video" className={FIELD} />
       </label>
     </CardShell>
@@ -472,19 +472,19 @@ function DueForm({ today, onSend }: { today: string; onSend: (v: { direction: 'o
       </div>
       <div className="grid grid-cols-1 gap-sm sm:grid-cols-2">
         <label className="block">
-          <span className="block text-[14px] font-bold">Who</span>
+          <span className="block text-subhead font-semibold">Who</span>
           <input value={counterparty} onChange={(e) => setCounterparty(e.target.value)} maxLength={80} placeholder="A brand or a friend" className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">How much</span>
+          <span className="block text-subhead font-semibold">How much</span>
           <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="5000" className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Due by, if any</span>
+          <span className="block text-subhead font-semibold">Due by, if any</span>
           <input type="date" value={dueDate} min={today} onChange={(e) => setDueDate(e.target.value)} className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">A note, if any</span>
+          <span className="block text-subhead font-semibold">A note, if any</span>
           <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} className={FIELD} />
         </label>
       </div>
@@ -509,15 +509,15 @@ function GoalForm({ today, onSend }: { today: string; onSend: (v: { title: strin
       </div>
       <div className="grid grid-cols-1 gap-sm sm:grid-cols-3">
         <label className="block">
-          <span className="block text-[14px] font-bold">What for</span>
+          <span className="block text-subhead font-semibold">What for</span>
           <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} placeholder="A new camera" className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">How much</span>
+          <span className="block text-subhead font-semibold">How much</span>
           <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="60000" className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">By when, if any</span>
+          <span className="block text-subhead font-semibold">By when, if any</span>
           <input type="date" value={deadline} min={today} onChange={(e) => setDeadline(e.target.value)} className={FIELD} />
         </label>
       </div>
@@ -531,7 +531,7 @@ function AmountForm({ send, onSend }: { send: string; onSend: (cents: number, la
   return (
     <CardShell send={send} disabled={cents === null} onSubmit={() => cents !== null && onSend(cents, money(cents))}>
       <label className="block">
-        <span className="block text-[14px] font-bold">How much</span>
+        <span className="block text-subhead font-semibold">How much</span>
         <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="2000" className={FIELD} />
       </label>
     </CardShell>
@@ -543,7 +543,7 @@ function Landed({ meta }: { meta: FlowMeta }) {
   const here = useLocation().pathname === meta.to;
   if (here)
     return (
-      <p className="m-0 flex items-center gap-sm rounded-tile bg-card p-sm text-[14px] font-bold shadow-toy-soft">
+      <p className="m-0 flex items-center gap-sm rounded-tile bg-card p-sm text-subhead shadow-toy-soft">
         <AppIcon name={meta.icon} size={22} />
         <span>Saved. It is on this page now.</span>
       </p>
@@ -552,10 +552,10 @@ function Landed({ meta }: { meta: FlowMeta }) {
     <Link to={meta.to} className="toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm text-ink shadow-toy-soft">
       <AppIcon name={meta.icon} size={22} />
       <span className="min-w-0 flex-1">
-        <span className="block text-[14px] font-bold">Saved. It shows up on {meta.lands.split('. ')[0]}.</span>
-        <span className="block text-[12px] font-semibold text-ink-soft">Tap to see it there.</span>
+        <span className="block text-subhead font-semibold">Saved. It shows up on {meta.lands.split('. ')[0]}.</span>
+        <span className="block text-caption text-ink-soft">Tap to see it there.</span>
       </span>
-      <Icon icon={ArrowRight} size={18} />
+      <Icon icon={ArrowUpRight} size={18} />
     </Link>
   );
 }
@@ -585,7 +585,7 @@ function CloseButton({ onClose }: { onClose: () => void }) {
       aria-label="Close"
       className="toy toy-soft inline-flex h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-pill bg-card px-sm text-ink-soft hover:text-ink"
     >
-      <span ref={label} className="block overflow-hidden whitespace-nowrap text-[14px] font-bold" style={{ width: 0, opacity: 0 }}>
+      <span ref={label} className="block overflow-hidden whitespace-nowrap text-subhead font-semibold" style={{ width: 0, opacity: 0 }}>
         Close
       </span>
       <Icon icon={X} size={16} strokeWidth={2.8} />
@@ -640,10 +640,10 @@ function Receipts({ scope, ids }: { scope: string; ids: string[] }) {
       {rows.map((r) =>
         r.status === 'pending' ? (
           <li key={r.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-            <p className="m-0 text-[14px] font-bold">{r.label}?</p>
+            <p className="m-0 text-subhead font-semibold">{r.label}?</p>
             <ChatActions skip="Cancel" onSkip={() => void act(r.id, () => api.assistantCancel(r.id))} next="Confirm" ready={busy !== r.id} onNext={() => void act(r.id, () => api.assistantConfirm(r.id, todayLocal()))} />
             {said[r.id] && (
-              <p role="alert" className="mt-xs m-0 text-[12px] font-bold text-ink-soft">
+              <p role="alert" className="mt-xs m-0 text-caption text-ink-soft">
                 {said[r.id]}
               </p>
             )}
@@ -654,22 +654,22 @@ function Receipts({ scope, ids }: { scope: string; ids: string[] }) {
               <Icon icon={MARK[r.status]} size={14} strokeWidth={3} />
             </span>
             <span className="min-w-0 flex-1">
-              <span className={`block text-[14px] font-bold ${r.status === 'undone' || r.status === 'cancelled' ? 'text-ink-soft line-through' : ''}`}>{r.label}</span>
-              {r.status === 'failed' && <span className="block text-[12px] font-semibold text-ink-soft">Not done. {r.error}</span>}
-              {r.status === 'cancelled' && <span className="block text-[12px] font-semibold text-ink-soft">Cancelled. Nothing changed.</span>}
+              <span className={`block text-subhead font-semibold ${r.status === 'undone' || r.status === 'cancelled' ? 'text-ink-soft line-through' : ''}`}>{r.label}</span>
+              {r.status === 'failed' && <span className="block text-caption text-ink-soft">Not done. {r.error}</span>}
+              {r.status === 'cancelled' && <span className="block text-caption text-ink-soft">Cancelled. Nothing changed.</span>}
               {said[r.id] && (
-                <span role="alert" className="block text-[12px] font-semibold text-ink-soft">
+                <span role="alert" className="block text-caption text-ink-soft">
                   {said[r.id]}
                 </span>
               )}
             </span>
             {r.undo && (
-              <button type="button" disabled={busy === r.id} onClick={() => void act(r.id, () => api.assistantUndo(r.id, todayLocal()))} className="toy toy-soft inline-flex min-h-[44px] shrink-0 items-center gap-xs rounded-pill border-2 border-line bg-paper px-sm text-[12px] font-bold disabled:opacity-60">
+              <button type="button" disabled={busy === r.id} onClick={() => void act(r.id, () => api.assistantUndo(r.id, todayLocal()))} className="toy toy-soft inline-flex min-h-[44px] shrink-0 items-center gap-xs rounded-pill border-2 border-line bg-paper px-sm text-caption font-medium disabled:opacity-60">
                 {busy === r.id && <AnimatedIcon name="loading" size={14} />}
                 Undo
               </button>
             )}
-            {r.status === 'undone' && <span className="shrink-0 text-[12px] font-bold text-ink-soft">Undone</span>}
+            {r.status === 'undone' && <span className="shrink-0 text-caption text-ink-soft">Undone</span>}
           </li>
         ),
       )}
@@ -1487,7 +1487,7 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
     }
     if (ask.kind === 'wait') {
       return (
-        <p role="status" className="m-0 text-[14px] font-bold text-ink-soft">
+        <p role="status" className="m-0 text-subhead text-ink-soft">
           {ask.text}
         </p>
       );
@@ -1535,8 +1535,8 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
       <header className="flex items-center gap-xs border-b-2 border-line py-xs pr-sm pl-md">
         {/* The name and the line under it wrap on a narrow phone rather than being cut short. */}
         <div className="min-w-0 flex-1 break-words">
-          <p className="m-0 text-[14px] font-extrabold leading-snug">Bumling AI assistant</p>
-          <p className="m-0 text-[12px] font-bold leading-snug text-ink-soft">{flow ? FLOWS[flow].label : credits}</p>
+          <p className="m-0 text-subhead font-semibold">Bumling AI assistant</p>
+          <p className="m-0 text-caption text-ink-soft">{flow ? FLOWS[flow].label : credits}</p>
         </div>
         {log.length > 2 && <StartOver onConfirm={startOver} />}
         <CloseButton onClose={onClose} />

@@ -82,9 +82,9 @@ export function RoutinePanel({ general, exceptional, date }: { general: RoutineB
           <ol className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
             {blocks.map((b) => (
               <li key={b.key} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <p className="m-0 flex items-baseline justify-between gap-sm text-[14px] font-bold">
+                <p className="m-0 flex items-baseline justify-between gap-sm text-subhead font-semibold">
                   <span>{b.name}</span>
-                  <span className="shrink-0 text-[12px] text-ink-soft">
+                  <span className="shrink-0 text-caption text-ink-soft">
                     {b.start} to {b.end} · {minutesLabel(blockMinutes(b))}
                   </span>
                 </p>
@@ -92,43 +92,43 @@ export function RoutinePanel({ general, exceptional, date }: { general: RoutineB
                   <>
                     <ul className="mt-xs m-0 flex list-none flex-col gap-[2px] p-0">
                       {b.steps.map((st, i) => (
-                        <li key={st} className="flex items-baseline justify-between gap-sm text-[12px] font-semibold text-ink-soft">
+                        <li key={st} className="flex items-baseline justify-between gap-sm text-caption text-ink-soft">
                           <span>{st}</span>
                           {b.minutes?.[i] ? <span className="shrink-0">{minutesLabel(b.minutes[i]!)}</span> : null}
                         </li>
                       ))}
                     </ul>
-                    {stepsMinutes(b) > 0 && <p className="mt-xs m-0 text-[12px] font-bold">The steps take {minutesLabel(stepsMinutes(b))} in all.</p>}
+                    {stepsMinutes(b) > 0 && <p className="mt-xs m-0 text-caption">The steps take {minutesLabel(stepsMinutes(b))} in all.</p>}
                   </>
                 )}
-                {b.note && <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{b.note}</p>}
+                {b.note && <p className="mt-xs m-0 text-caption text-ink-soft">{b.note}</p>}
               </li>
             ))}
           </ol>
         </>
       ) : (
         <>
-          <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Change the times, add or remove morning steps, and say how many minutes each one takes. Then save.</p>
+          <p className="mt-sm m-0 text-subhead text-ink-soft">Change the times, add or remove morning steps, and say how many minutes each one takes. Then save.</p>
           <ol className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
             {draft.map((b) => (
               <li key={b.key} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <p className="m-0 flex items-baseline justify-between gap-sm text-[14px] font-bold">
+                <p className="m-0 flex items-baseline justify-between gap-sm text-subhead font-semibold">
                   <span>{b.name}</span>
-                  <span className="shrink-0 text-[12px] text-ink-soft">Runs {minutesLabel(blockMinutes(b))}</span>
+                  <span className="shrink-0 text-caption text-ink-soft">Runs {minutesLabel(blockMinutes(b))}</span>
                 </p>
                 <div className="mt-xs grid grid-cols-2 gap-xs">
-                  <label className="block text-[12px] font-bold text-ink-soft">
+                  <label className="block text-caption text-ink-soft">
                     Starts
                     <input type="time" value={b.start} onChange={(e) => edit(b.key, { start: e.target.value })} className={`${FIELD} text-ink`} />
                   </label>
-                  <label className="block text-[12px] font-bold text-ink-soft">
+                  <label className="block text-caption text-ink-soft">
                     Ends
                     <input type="time" value={b.end} onChange={(e) => edit(b.key, { end: e.target.value })} className={`${FIELD} text-ink`} />
                   </label>
                 </div>
                 {b.key === 'morning' ? (
                   <div className="mt-sm">
-                    <p className="m-0 text-[12px] font-bold text-ink-soft">The steps, and the minutes each one takes</p>
+                    <p className="m-0 text-caption text-ink-soft">The steps, and the minutes each one takes</p>
                     <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
                       {b.steps.map((st, i) => (
                         <li key={i} className="flex items-center gap-xs">
@@ -142,7 +142,7 @@ export function RoutinePanel({ general, exceptional, date }: { general: RoutineB
                             maxLength={ROUTINE_STEP_MAX}
                             placeholder="A step, like a glass of water"
                             aria-label={`Step ${i + 1}`}
-                            className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px] text-ink"
+                            className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-body text-ink"
                           />
                           <input
                             type="number"
@@ -156,9 +156,9 @@ export function RoutinePanel({ general, exceptional, date }: { general: RoutineB
                               })
                             }
                             aria-label={`Minutes for step ${i + 1}`}
-                            className="w-[64px] shrink-0 rounded-tile border-2 border-line bg-paper px-xs py-sm text-center text-[16px] text-ink"
+                            className="w-[64px] shrink-0 rounded-tile border-2 border-line bg-paper px-xs py-sm text-center text-body text-ink"
                           />
-                          <span className="shrink-0 text-[12px] font-bold text-ink-soft" aria-hidden="true">
+                          <span className="shrink-0 text-caption text-ink-soft" aria-hidden="true">
                             min
                           </span>
                           <button
@@ -193,10 +193,10 @@ export function RoutinePanel({ general, exceptional, date }: { general: RoutineB
                         Add a step
                       </Button>
                     )}
-                    <p className="mt-xs m-0 text-[12px] font-bold">The steps take {minutesLabel(stepsMinutes(b))} in all.</p>
+                    <p className="mt-xs m-0 text-caption">The steps take {minutesLabel(stepsMinutes(b))} in all.</p>
                   </div>
                 ) : (
-                  <label className="mt-sm block text-[12px] font-bold text-ink-soft">
+                  <label className="mt-sm block text-caption text-ink-soft">
                     What happens here
                     <input value={b.note} onChange={(e) => edit(b.key, { note: e.target.value })} maxLength={ROUTINE_NOTE_MAX} className={`${FIELD} text-ink`} />
                   </label>
@@ -205,7 +205,7 @@ export function RoutinePanel({ general, exceptional, date }: { general: RoutineB
             ))}
           </ol>
           {save.isError && (
-            <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+            <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead font-semibold">
               That did not save. {errorText(save.error, 'Try again.')}
             </p>
           )}

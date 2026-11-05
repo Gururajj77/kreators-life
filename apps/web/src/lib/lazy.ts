@@ -40,8 +40,8 @@ function ChunkFailed() {
   return createElement(
     'div',
     { className: 'mx-auto flex min-h-[50dvh] max-w-[480px] flex-col items-center justify-center gap-sm px-md text-center', role: 'alert' },
-    createElement('p', { className: 'm-0 text-[18px] font-extrabold' }, 'This page could not load.'),
-    createElement('p', { className: 'm-0 text-[14px] font-semibold text-ink-soft' }, 'Check your connection, then reload the page.'),
+    createElement('p', { className: 'm-0 text-headline' }, 'This page could not load.'),
+    createElement('p', { className: 'm-0 text-subhead text-ink-soft' }, 'Check your connection, then reload the page.'),
   );
 }
 

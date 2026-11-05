@@ -11,7 +11,7 @@ import { Toggle } from '../components/Toggle';
 import { api } from '../lib/api';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
 import { Icon } from '../components/Icon';
-import { ChevronRight, ShoppingBag, UserRound, type LucideIcon } from 'lucide-react';
+import { ArrowUpRight, ShoppingBag, UserRound, type LucideIcon } from 'lucide-react';
 import { FIELD } from '../lib/ui';
 import { ErrorLine } from '../components/ErrorLine';
 import { useCopy } from '../lib/clipboard';
@@ -25,17 +25,17 @@ function Chips({ legend, options, value, onChange, max, hint }: { legend: string
   };
   return (
     <fieldset className="m-0 border-0 p-0">
-      <legend className="text-[14px] font-bold">
+      <legend className="text-subhead">
         {legend}
-        {max ? <span className="font-semibold text-ink-soft"> (up to {max})</span> : ''}
+        {max ? <span className="text-ink-soft"> (up to {max})</span> : ''}
       </legend>
-      {hint && <p className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{hint}</p>}
+      {hint && <p className="mt-xs m-0 text-caption text-ink-soft">{hint}</p>}
       <div className="fill-row-all mt-xs flex flex-wrap gap-xs">
         {options.map((o) => {
           const on = value.includes(o);
           const full = Boolean(max && value.length >= max && !on);
           return (
-            <button key={o} type="button" aria-pressed={on} disabled={full} onClick={() => toggle(o)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold disabled:opacity-50 ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={o} type="button" aria-pressed={on} disabled={full} onClick={() => toggle(o)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium disabled:opacity-50 ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {o}
             </button>
           );
@@ -48,10 +48,10 @@ function Chips({ legend, options, value, onChange, max, hint }: { legend: string
 function OneOf({ legend, options, value, onChange }: { legend: string; options: readonly string[]; value: string; onChange: (next: string) => void }) {
   return (
     <fieldset className="m-0 border-0 p-0">
-      <legend className="text-[14px] font-bold">{legend}</legend>
+      <legend className="text-subhead font-semibold">{legend}</legend>
       <div className="fill-row-all mt-xs flex flex-wrap gap-xs">
         {options.map((o) => (
-          <button key={o} type="button" aria-pressed={value === o} onClick={() => onChange(value === o ? '' : o)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${value === o ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+          <button key={o} type="button" aria-pressed={value === o} onClick={() => onChange(value === o ? '' : o)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${value === o ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
             {o}
           </button>
         ))}
@@ -113,20 +113,20 @@ function ProfileView({ user }: { user: User }) {
       >
         {link ? (
           <div className="rounded-tile bg-card p-sm shadow-toy-soft">
-            <p className="m-0 text-[14px] font-bold">Your public page</p>
-            <p className="m-0 break-all text-[16px] font-semibold">{link}</p>
+            <p className="m-0 text-subhead font-semibold">Your public page</p>
+            <p className="m-0 break-all text-callout">{link}</p>
             <div className="mt-sm flex flex-wrap gap-xs">
               <Button variant="outline" onClick={() => void copier.copy(link)}>
                 {copier.said === 'Copied' ? 'Copied' : 'Copy'}
               </Button>
-              {copier.said && copier.said !== 'Copied' && <p role="status" className="m-0 basis-full text-[14px] font-bold text-ink-soft">{copier.said}</p>}
-              <Link to={`/u/${user.handle}`} className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+              {copier.said && copier.said !== 'Copied' && <p role="status" className="m-0 basis-full text-subhead text-ink-soft">{copier.said}</p>}
+              <Link to={`/u/${user.handle}`} className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
                 Open
               </Link>
             </div>
           </div>
         ) : (
-          <p className="m-0 rounded-tile bg-r3 p-sm text-[14px] font-bold text-ink-fixed">Pick a page name below so people can find you.</p>
+          <p className="m-0 rounded-tile bg-r3 p-sm text-subhead text-ink-fixed">Pick a page name below so people can find you.</p>
         )}
       </AppCover>
 
@@ -138,27 +138,27 @@ function ProfileView({ user }: { user: User }) {
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Username</span>
+          <span className="block text-subhead font-semibold">Username</span>
           <div className="mt-xs flex items-center gap-xs">
-            <span className="text-[16px] font-bold text-ink-soft">/u/</span>
-            <input value={handle} onChange={(e) => setHandle(e.target.value.toLowerCase())} maxLength={20} pattern="[a-z0-9_]{3,20}" placeholder="yourname" className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+            <span className="text-headline text-ink-soft">/u/</span>
+            <input value={handle} onChange={(e) => setHandle(e.target.value.toLowerCase())} maxLength={20} pattern="[a-z0-9_]{3,20}" placeholder="yourname" className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
           </div>
-          <span className="mt-xs block text-[12px] font-bold text-ink-soft">Yours alone, and it is your page address. Three to twenty characters: letters, numbers, underscore.</span>
+          <span className="mt-xs block text-caption text-ink-soft">Yours alone, and it is your page address. Three to twenty characters: letters, numbers, underscore.</span>
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Bio</span>
+          <span className="block text-subhead font-semibold">Bio</span>
           <textarea value={bio} onChange={(e) => setBio(e.target.value)} maxLength={200} rows={3} className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Photo link</span>
+          <span className="block text-subhead font-semibold">Photo link</span>
           <div className="mt-xs flex items-center gap-sm">
             {avatarUrl && <img src={avatarUrl} alt="Your profile picture, as it will show" width={64} height={64} decoding="async" className="size-[64px] shrink-0 rounded-pill object-cover" />}
-            <input type="url" value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} maxLength={500} placeholder="https://… a square image" className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+            <input type="url" value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} maxLength={500} placeholder="https://… a square image" className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
           </div>
-          <span className="mt-xs block text-[12px] font-bold text-ink-soft">Shown on your page in place of the first letter of your name.</span>
+          <span className="mt-xs block text-caption text-ink-soft">Shown on your page in place of the first letter of your name.</span>
         </label>
         <fieldset className="m-0 border-0 p-0">
-          <legend className="text-[14px] font-bold">Links</legend>
+          <legend className="text-subhead font-semibold">Links</legend>
           <div className="mt-xs grid grid-cols-2 gap-xs md:grid-cols-4">
             {(
               [
@@ -169,14 +169,14 @@ function ProfileView({ user }: { user: User }) {
               ] as [keyof Socials, string][]
             ).map(([k, label]) => (
               <label key={k} className="block">
-                <span className="block text-[12px] font-bold text-ink-soft">{label}</span>
-                <input type="url" value={socials[k]} onChange={(e) => setSocials({ ...socials, [k]: e.target.value })} maxLength={200} placeholder="https://" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+                <span className="block text-caption text-ink-soft">{label}</span>
+                <input type="url" value={socials[k]} onChange={(e) => setSocials({ ...socials, [k]: e.target.value })} maxLength={200} placeholder="https://" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
               </label>
             ))}
           </div>
         </fieldset>
         <label className="block">
-          <span className="block text-[14px] font-bold">Time zone</span>
+          <span className="block text-subhead font-semibold">Time zone</span>
           <select value={timezone} onChange={(e) => setTimezone(e.target.value)} className={FIELD}>
             {(TIMEZONES.includes(timezone as (typeof TIMEZONES)[number]) ? TIMEZONES : [timezone, ...TIMEZONES]).map((z) => (
               <option key={z} value={z}>
@@ -184,10 +184,10 @@ function ProfileView({ user }: { user: User }) {
               </option>
             ))}
           </select>
-          <span className="mt-xs block text-[12px] font-bold text-ink-soft">Your availability and bookings are written in this zone. Buyers see the same slots in their own.</span>
+          <span className="mt-xs block text-caption text-ink-soft">Your availability and bookings are written in this zone. Buyers see the same slots in their own.</span>
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Currency</span>
+          <span className="block text-subhead font-semibold">Currency</span>
           <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={FIELD}>
             {CURRENCIES.map((k) => (
               <option key={k} value={k}>
@@ -195,7 +195,7 @@ function ProfileView({ user }: { user: User }) {
               </option>
             ))}
           </select>
-          <span className="mt-xs block text-[12px] font-bold text-ink-soft">Money you add in Finance is kept in this currency unless you pick another. Rupees unless you change it.</span>
+          <span className="mt-xs block text-caption text-ink-soft">Money you add in Finance is kept in this currency unless you pick another. Rupees unless you change it.</span>
         </label>
         <div>
           <Chips legend="Skills" options={SKILLS} value={skills} onChange={setSkills} max={12} hint="What you can be hired for." />
@@ -213,11 +213,11 @@ function ProfileView({ user }: { user: User }) {
         </div>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
-            <span className="block text-[14px] font-bold">City</span>
+            <span className="block text-subhead font-semibold">City</span>
             <input value={city} onChange={(e) => setCity(e.target.value)} maxLength={80} placeholder="Bengaluru" className={FIELD} />
           </label>
           <label className="block">
-            <span className="block text-[14px] font-bold">Area</span>
+            <span className="block text-subhead font-semibold">Area</span>
             <input value={area} onChange={(e) => setArea(e.target.value)} maxLength={80} placeholder="Indiranagar" className={FIELD} />
           </label>
         </div>
@@ -240,21 +240,21 @@ function ProfileView({ user }: { user: User }) {
               { timeout: 8000 },
             );
           }}
-          className="toy toy-soft inline-flex min-h-[48px] items-center justify-center rounded-pill bg-card px-md text-[14px] font-bold disabled:opacity-60"
+          className="toy toy-soft inline-flex min-h-[48px] items-center justify-center rounded-pill bg-card px-md text-subhead font-medium disabled:opacity-60"
         >
           {locating ? 'Finding you' : coords ? 'Position ready to save; tap to clear' : coords === null ? 'Position will be removed on save' : user.hasLocation ? 'Position saved; tap to remove' : 'Use my position for nearby matching'}
         </button>
         <label className="block">
-          <span className="block text-[14px] font-bold">Location on your page</span>
+          <span className="block text-subhead font-semibold">Location on your page</span>
           <input value={location} onChange={(e) => setLocation(e.target.value)} maxLength={80} placeholder="City, country" className={FIELD} />
         </label>
-        <label className="flex min-h-[44px] cursor-pointer items-center gap-sm text-[14px] font-bold">
+        <label className="flex min-h-[44px] cursor-pointer items-center gap-sm text-subhead font-semibold">
           <input type="checkbox" checked={openToIntros} onChange={(e) => setOpenToIntros(e.target.checked)} className="size-[20px] accent-ink" />
           Open to introductions from people I meet at events
         </label>
         <fieldset className="m-0 border-0 p-0">
-          <legend className="text-[16px] font-bold">What is public</legend>
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Off shows a part only to you. Your journal and wellbeing are never here.</p>
+          <legend className="text-headline">What is public</legend>
+          <p className="mt-xs m-0 text-subhead text-ink-soft">Off shows a part only to you. Your journal and wellbeing are never here.</p>
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {PUBLIC_SETTING_META.map((m) => (
               <li key={m.key} className={m.key !== 'pagePublic' && !pub.pagePublic ? 'opacity-60' : ''}>
@@ -267,7 +267,7 @@ function ProfileView({ user }: { user: User }) {
         {(dirty || saved || save.isError) && (
           <div className="sticky bottom-[calc(var(--spacing-xl)+var(--spacing-md)+env(safe-area-inset-bottom))] z-10 -mx-xs flex flex-wrap items-center justify-between gap-sm rounded-tile border-2 border-line bg-card-strong p-sm shadow-toy-soft md:bottom-md" role="region" aria-label="Save your profile">
             <div className="min-w-0 flex-1">
-              {save.isError ? <ErrorLine e={save.error} /> : <p className="m-0 text-[14px] font-bold text-ink-soft" aria-live="polite">{saved && !dirty ? 'Saved.' : 'You have changes that are not saved yet.'}</p>}
+              {save.isError ? <ErrorLine e={save.error} /> : <p className="m-0 text-subhead text-ink-soft" aria-live="polite">{saved && !dirty ? 'Saved.' : 'You have changes that are not saved yet.'}</p>}
             </div>
             <Button type="submit" disabled={save.isPending || (!dirty && !save.isError)}>
               {save.isPending ? 'Saving' : saved && !dirty ? 'Saved' : 'Save profile'}
@@ -279,17 +279,17 @@ function ProfileView({ user }: { user: User }) {
       <Portfolio />
 
       <section className="mt-lg" aria-labelledby="links-heading">
-        <h2 id="links-heading" className="text-[24px]">
+        <h2 id="links-heading" className="text-title2">
           Links
         </h2>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Stack links, text, pictures and videos, best first. Each change saves on its own.</p>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">Stack links, text, pictures and videos, best first. Each change saves on its own.</p>
         <div className="mt-sm">
           <LinksEditor key={user.id} initial={user.links} />
         </div>
       </section>
 
       <section className="mt-lg" aria-labelledby="more-heading">
-        <h2 id="more-heading" className="text-[24px]">
+        <h2 id="more-heading" className="text-title2">
           More of your page
         </h2>
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -305,10 +305,10 @@ function ProfileView({ user }: { user: User }) {
                   <Icon icon={glyph} size={24} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[16px] font-bold leading-tight">{title}</span>
-                  <span className="mt-xs block text-[14px] font-semibold leading-snug text-ink-soft">{blurb}</span>
+                  <span className="block text-headline">{title}</span>
+                  <span className="mt-xs block text-subhead text-ink-soft">{blurb}</span>
                 </span>
-                <Icon icon={ChevronRight} size={20} strokeWidth={3} className="transition-transform motion-safe:group-hover:translate-x-xs row-chevron text-ink-mute" />
+                <Icon icon={ArrowUpRight} size={20} strokeWidth={3} className="transition-transform motion-safe:group-hover:translate-x-xs motion-safe:group-hover:-translate-y-xs row-chevron text-ink-mute" />
               </Link>
             </li>
           ))}
@@ -337,20 +337,20 @@ function Portfolio() {
   const items = q.data?.items ?? [];
   return (
     <section className="mt-lg" aria-labelledby="portfolio-heading">
-      <h2 id="portfolio-heading" className="text-[24px]">
+      <h2 id="portfolio-heading" className="text-title2">
         Portfolio
       </h2>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Your best work, as links. Public ones show on your page, and up to five go with each application.</p>
-      {q.data && items.length === 0 && <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Nothing here yet. Add the piece you are proudest of.</p>}
+      <p className="mt-xs m-0 text-subhead text-ink-soft">Your best work, as links. Public ones show on your page, and up to five go with each application.</p>
+      {q.data && items.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">Nothing here yet. Add the piece you are proudest of.</p>}
       <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
         {items.map((it) => (
           <li key={it.id} className="flex items-start gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
             <span className="min-w-0 flex-1">
-              <a href={it.url} target="_blank" rel="noreferrer" className="block truncate text-[16px] font-bold underline-offset-4 hover:underline">
+              <a href={it.url} target="_blank" rel="noreferrer" className="block truncate text-headline underline-offset-4 hover:underline">
                 {it.title}
               </a>
-              {it.description && <span className="block text-[14px] font-semibold text-ink-soft">{it.description}</span>}
-              <span className="block text-[12px] font-bold text-ink-mute">{it.visibility === 'public' ? 'Public' : 'Only you'}</span>
+              {it.description && <span className="block text-subhead text-ink-soft">{it.description}</span>}
+              <span className="block text-caption text-ink-mute">{it.visibility === 'public' ? 'Public' : 'Only you'}</span>
             </span>
             <Button variant="ghost" className="shrink-0" aria-label={`Remove ${it.title}`} onClick={() => remove.mutate(it.id)} disabled={remove.isPending}>
               Remove
@@ -366,19 +366,19 @@ function Portfolio() {
         }}
       >
         <label className="block">
-          <span className="block text-[14px] font-bold">Title</span>
+          <span className="block text-subhead font-semibold">Title</span>
           <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">Link</span>
+          <span className="block text-subhead font-semibold">Link</span>
           <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} maxLength={500} required placeholder="https://" className={FIELD} />
         </label>
         <label className="block">
-          <span className="block text-[14px] font-bold">One line about it</span>
+          <span className="block text-subhead font-semibold">One line about it</span>
           <input value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} className={FIELD} />
         </label>
         <fieldset className="m-0 border-0 p-0">
-          <legend className="text-[14px] font-bold">Who sees it</legend>
+          <legend className="text-subhead font-semibold">Who sees it</legend>
           <div className="mt-xs flex flex-wrap gap-xs">
             {(
               [
@@ -386,7 +386,7 @@ function Portfolio() {
                 ['private', 'Only you'],
               ] as [PortfolioItem['visibility'], string][]
             ).map(([v, label]) => (
-              <button key={v} type="button" aria-pressed={visibility === v} onClick={() => setVisibility(v)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-[14px] font-bold ${visibility === v ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+              <button key={v} type="button" aria-pressed={visibility === v} onClick={() => setVisibility(v)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${visibility === v ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                 {label}
               </button>
             ))}

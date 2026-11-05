@@ -1,7 +1,7 @@
 import { MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, RELATIONSHIP_BY_KEY, RELATIONSHIPS, type NotToDo, type NotToDoStatus, type RelationshipKey } from '@kreators/shared';
 import { useState, type FormEvent } from 'react';
 import { api } from '../lib/api';
-import { useRefreshAll, useToday } from '../lib/queries';
+import { useRefreshAll, useRefreshInsights, useToday } from '../lib/queries';
 import { useActionQueue } from '../lib/useActionQueue';
 import { Button } from './Button';
 import { useCelebrate } from './Celebration';
@@ -42,6 +42,8 @@ export function NotToDoList({ items, date, queue }: Props) {
   const [title, setTitle] = useState('');
   const [area, setArea] = useState<RelationshipKey | ''>('');
   const [menu, setMenu] = useState<NotToDo | null>(null);
+  // Adding or removing an item changes what a Bad habit card offers (Add to not to do), so Emerging is read again at once.
+  const refreshInsights = useRefreshInsights();
   const full = items.length >= MAX_NOT_TO_DO;
   const keptToday = items.filter((i) => i.today === 'kept').length;
 
@@ -59,6 +61,7 @@ export function NotToDoList({ items, date, queue }: Props) {
     if (!t) return;
     queue.run('ntd-add', async () => {
       await api.notToDoAdd(t, area || null);
+      void refreshInsights();
       setTitle('');
       setArea('');
       setAdding(false);
@@ -70,22 +73,25 @@ export function NotToDoList({ items, date, queue }: Props) {
   };
   const remove = (item: NotToDo) => {
     setMenu(null);
-    queue.run(`ntd-${item.id}`, () => api.notToDoRemove(item.id));
+    queue.run(`ntd-${item.id}`, async () => {
+      await api.notToDoRemove(item.id);
+      void refreshInsights();
+    });
   };
 
   return (
     <section className="mt-lg" aria-labelledby="ntd-heading">
       <div className="flex items-baseline justify-between gap-sm">
-        <h2 id="ntd-heading" className="text-[18px]">
+        <h2 id="ntd-heading" className="text-title2">
           Not to do
         </h2>
         {items.length > 0 && (
-          <span className="text-[14px] font-bold text-ink-soft">
+          <span className="text-subhead text-ink-soft">
             {keptToday} of {items.length} kept today
           </span>
         )}
       </div>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Things you are staying away from. Tick each one you kept today. Every day in a row grows its streak; a slip or a missed day starts it over.</p>
+      <p className="mt-xs m-0 text-subhead text-ink-soft">Things you are staying away from. Tick each one you kept today. Every day in a row grows its streak; a slip or a missed day starts it over.</p>
 
       {items.length > 0 && (
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -127,17 +133,17 @@ export function NotToDoList({ items, date, queue }: Props) {
 
       {items.length === 0 && !adding && (
         <div className="mt-sm rounded-card border-2 border-dashed border-line p-md">
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">Late scrolling, the snooze button, sugar after dinner. Name one thing to stay away from and keep a streak for it.</p>
+          <p className="m-0 text-subhead text-ink-soft">Late scrolling, the snooze button, sugar after dinner. Name one thing to stay away from and keep a streak for it.</p>
         </div>
       )}
 
       {adding ? (
         <form onSubmit={add} className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
-          <label className="block text-[14px] font-bold" htmlFor="ntd-title">
+          <label className="block text-subhead font-semibold" htmlFor="ntd-title">
             Not to do
           </label>
           <input id="ntd-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={NOT_TO_DO_TITLE_MAX} placeholder="No phone in bed" autoFocus className={FIELD} />
-          <label className="mt-sm block text-[14px] font-bold" htmlFor="ntd-area">
+          <label className="mt-sm block text-subhead font-semibold" htmlFor="ntd-area">
             Pillar
           </label>
           <select id="ntd-area" value={area} onChange={(e) => setArea(e.target.value as RelationshipKey | '')} className={FIELD}>
@@ -149,7 +155,7 @@ export function NotToDoList({ items, date, queue }: Props) {
             ))}
           </select>
           {queue.hint('ntd-add') && (
-            <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+            <p role="alert" className="mt-sm m-0 text-subhead">
               {queue.hint('ntd-add')}
             </p>
           )}
@@ -165,7 +171,7 @@ export function NotToDoList({ items, date, queue }: Props) {
       ) : (
         <div className="mt-sm">
           {full ? (
-            <p className="m-0 text-[14px] font-semibold text-ink-soft">{MAX_NOT_TO_DO} is plenty. Remove one to add another.</p>
+            <p className="m-0 text-subhead text-ink-soft">{MAX_NOT_TO_DO} is plenty. Remove one to add another.</p>
           ) : (
             <Button variant="outline" onClick={() => setAdding(true)}>
               Add one
@@ -177,7 +183,7 @@ export function NotToDoList({ items, date, queue }: Props) {
       <Sheet open={menu !== null} onClose={() => setMenu(null)} title={menu?.title ?? ''}>
         {menu && (
           <div className="flex flex-col gap-sm pb-xl">
-            <p className="m-0 text-[14px] font-semibold text-ink-soft">
+            <p className="m-0 text-subhead text-ink-soft">
               {menu.streak > 0 ? `${menu.streak} ${menu.streak === 1 ? 'day' : 'days'} in a row, best ${menu.bestStreak}.` : `Best run so far: ${menu.bestStreak} ${menu.bestStreak === 1 ? 'day' : 'days'}.`}
             </p>
             <Button variant="outline" onClick={() => slipped(menu)} disabled={menu.today === 'slipped'}>

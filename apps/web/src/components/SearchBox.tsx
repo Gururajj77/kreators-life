@@ -92,7 +92,7 @@ export function SearchBox({ placeholder = 'Search anything', autoFocus = false, 
           autoComplete="off"
           aria-controls={`${id}-results`}
           aria-expanded={live}
-          className="min-w-0 flex-1 bg-transparent py-sm text-[16px] font-semibold text-ink outline-none placeholder:text-ink-soft"
+          className="min-w-0 flex-1 bg-transparent py-sm text-body text-ink outline-none placeholder:text-ink-soft"
         />
       </div>
       {shown && (
@@ -104,8 +104,8 @@ export function SearchBox({ placeholder = 'Search anything', autoFocus = false, 
               ))}
             </Group>
           )}
-          {res.isPending && apps.length === 0 && <p className="m-0 px-xs py-xs text-[14px] font-semibold text-ink-soft">Looking</p>}
-          {d && total === 0 && <p className="m-0 px-xs py-xs text-[14px] font-semibold text-ink-soft">Nothing matches "{view}".</p>}
+          {res.isPending && apps.length === 0 && <p className="m-0 px-xs py-xs text-subhead text-ink-soft">Looking</p>}
+          {d && total === 0 && <p className="m-0 px-xs py-xs text-subhead text-ink-soft">Nothing matches "{view}".</p>}
           {d && d.tasks.length > 0 && (
             <Group title={KIND_META.task.plural}>
               {d.tasks.slice(0, 5).map((t) => (
@@ -355,7 +355,7 @@ function useGooPour({ live, gooOk, shown, onDrained, refs }: { live: boolean; go
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mt-xs first:mt-0">
-      <h2 className="m-0 px-xs text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{title}</h2>
+      <h2 className="m-0 px-xs text-eyebrow uppercase text-ink-soft">{title}</h2>
       <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">{children}</ul>
     </section>
   );
@@ -369,8 +369,8 @@ function Row({ to, title, sub, icon }: { to: string; title: string; sub: string;
           <Icon icon={icon} size={18} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[16px] font-bold">{title}</span>
-          <span className="block text-[12px] font-bold text-ink-soft">{sub}</span>
+          <span className="block truncate text-headline">{title}</span>
+          <span className="block text-caption text-ink-soft">{sub}</span>
         </span>
       </Link>
     </li>

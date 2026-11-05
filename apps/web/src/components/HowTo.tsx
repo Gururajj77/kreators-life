@@ -44,11 +44,11 @@ function Reveal({ children }: { children: ReactNode }) {
 function Fold({ id, title, hint, open, onToggle, children }: { id: string; title: string; hint: string; open: boolean; onToggle: () => void; children: ReactNode }) {
   return (
     <div>
-      <h3 className="m-0 text-[16px]">
+      <h3 className="m-0 text-headline">
         <button type="button" aria-expanded={open} aria-controls={id} onClick={onToggle} className="toy toy-flat flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile bg-paper px-sm text-left aria-expanded:bg-line">
           <span className="min-w-0">
-            <span className="text-[16px] font-bold">{title}</span>
-            <span className="ml-xs text-[14px] font-semibold text-ink-soft">{hint}</span>
+            <span className="text-headline">{title}</span>
+            <span className="ml-xs text-subhead text-ink-soft">{hint}</span>
           </span>
           <Chevron open={open} />
         </button>
@@ -101,8 +101,8 @@ export function HowItWorks({ page }: { /** A core page that is not an app (Emerg
           className="toy toy-soft flex w-full items-center justify-between gap-sm rounded-card bg-card p-md text-left text-ink hover:bg-paper aria-expanded:bg-paper"
         >
           <span className="min-w-0">
-            <span className="block font-display text-[24px] font-extrabold leading-tight">How it works</span>
-            <span className="mt-xs block text-[14px] font-semibold text-ink-soft">{open ? `${count} for ${meta.name}. Tap to fold them away.` : `${count} for ${meta.name}. Tap to open them.`}</span>
+            <span className="block text-title3">How it works</span>
+            <span className="mt-xs block text-subhead text-ink-soft">{open ? `${count} for ${meta.name}. Tap to fold them away.` : `${count} for ${meta.name}. Tap to open them.`}</span>
           </span>
           <span className="flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-ink text-on-ink" aria-hidden="true">
             <Chevron open={open} />
@@ -116,10 +116,10 @@ export function HowItWorks({ page }: { /** A core page that is not an app (Emerg
               <ol className="m-0 flex list-none flex-col gap-xs p-0">
                 {how.steps.map((t, i) => (
                   <li key={t} className="flex gap-sm rounded-tile bg-paper p-sm">
-                    <span className="flex size-[28px] shrink-0 items-center justify-center rounded-pill bg-ink text-[14px] font-extrabold text-on-ink" aria-hidden="true">
+                    <span className="flex size-[28px] shrink-0 items-center justify-center rounded-pill bg-ink text-subhead font-medium text-on-ink" aria-hidden="true">
                       {i + 1}
                     </span>
-                    <span className="text-[14px] font-semibold">{t}</span>
+                    <span className="text-subhead">{t}</span>
                   </li>
                 ))}
               </ol>
@@ -128,15 +128,15 @@ export function HowItWorks({ page }: { /** A core page that is not an app (Emerg
               <Fold id="how-words" title="Words we use" hint={`${how.terms.length}`} open={words} onToggle={() => setWords((v) => !v)}>
                 <dl className="m-0 flex flex-col gap-xs">
                   {how.terms.map((t) => (
-                    <div key={t} className="m-0 rounded-tile bg-paper p-sm text-[14px]">
-                      <dt className="inline font-bold">{t}</dt>
-                      <dd className="ml-xs inline font-semibold text-ink-soft">{TERMS[t]}</dd>
+                    <div key={t} className="m-0 rounded-tile bg-paper p-sm text-subhead">
+                      <dt className="inline font-semibold">{t}</dt>
+                      <dd className="ml-xs inline text-ink-soft">{TERMS[t]}</dd>
                     </div>
                   ))}
                 </dl>
               </Fold>
             )}
-            <p className="m-0 text-[12px] font-bold text-ink-soft">
+            <p className="m-0 text-caption text-ink-soft">
               <Link to="/help#words" className="underline underline-offset-4 hover:text-ink">
                 Every word we use
               </Link>

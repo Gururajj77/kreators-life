@@ -33,11 +33,11 @@ function BotLine({ m, fallback }: { m: ChatMessage; fallback?: Fallback }) {
   const model = m.model ?? '';
   return (
     <div>
-      {BUILT_IN_LINES.has(model) ? <Markdown text={m.body} className="text-[16px] font-semibold leading-relaxed" /> : <ModelReply text={m.body} model={model} />}
-      {fallback === 'error' && <p className="m-0 mt-xs text-[12px] font-semibold text-ink-soft">The model could not answer, so the built-in companion did.</p>}
+      {BUILT_IN_LINES.has(model) ? <Markdown text={m.body} className="text-prose" /> : <ModelReply text={m.body} model={model} />}
+      {fallback === 'error' && <p className="m-0 mt-xs text-caption text-ink-soft">The model could not answer, so the built-in companion did.</p>}
       {(fallback === 'credits' || fallback === 'day') && (
         <div className="mt-xs grid gap-xs">
-          <p className="m-0 text-[12px] font-semibold text-ink-soft">{fallback === 'credits' ? 'Your credits ran out, so the built-in companion answered.' : "Today's limit is used, so the built-in companion answered."}</p>
+          <p className="m-0 text-caption text-ink-soft">{fallback === 'credits' ? 'Your credits ran out, so the built-in companion answered.' : "Today's limit is used, so the built-in companion answered."}</p>
           <PlanCard reason={fallback} />
         </div>
       )}
@@ -131,11 +131,11 @@ export function Companion() {
     <Screen>
       <header className="pt-lg">
         <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Companion</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Talk about your day. Not a therapist.</p>
+        <h1 className="text-large-title">Companion</h1>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">Talk about your day. Not a therapist, and not for emergencies.</p>
         {/* Founder (2026-11-04): an app opens with a hero that says something about the person. Here, the streak the Companion knows about. */}
         <Hero color="var(--color-r6)" deep="var(--deep-guru)" className="mt-md" character="guru" mood={streak >= 7 ? 'excited' : streak > 0 ? 'happy' : 'sleepy'}>
-          <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide opacity-90">Your streak</p>
+          <p className="m-0 text-eyebrow uppercase opacity-90">Your streak</p>
           <HeroNumber value={streak} unit={streak === 1 ? 'day' : 'days'} label={streak === 0 ? 'Check in on Daily and it starts today.' : streak >= 7 ? 'A full week or more. Tell it how it feels.' : 'Keep it going. Tell it about today.'} />
         </Hero>
       </header>
@@ -144,8 +144,8 @@ export function Companion() {
       <section aria-label="Companion chat" className="mt-md rounded-card border-2 border-line bg-card-strong">
         <div className="flex items-center gap-xs border-b-2 border-line py-xs pr-sm pl-md">
           <div className="min-w-0 flex-1 break-words">
-            <p className="m-0 text-[14px] font-extrabold leading-snug">Companion</p>
-            <p className="m-0 text-[12px] font-bold leading-snug text-ink-soft">{credits}</p>
+            <p className="m-0 text-subhead font-semibold">Companion</p>
+            <p className="m-0 text-caption text-ink-soft">{credits}</p>
           </div>
           {messages.length > 0 && (
             <button type="button" onClick={() => setAsking(true)} disabled={running} aria-label="Clear this conversation" title="Clear" className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1 disabled:opacity-50">
@@ -174,14 +174,14 @@ export function Companion() {
 
       <Sheet open={asking} onClose={() => setAsking(false)} title="Clear this conversation?">
         <div className="grid gap-md pb-xl">
-          <p className="m-0 text-[16px] font-semibold text-ink-soft">Every line here is gone for good. This cannot be undone.</p>
-          {clear.isError && <p className="m-0 text-[14px] font-bold text-r1">That did not work. Try again.</p>}
+          <p className="m-0 text-callout text-ink-soft">Every line here is gone for good. This cannot be undone.</p>
+          {clear.isError && <p className="m-0 text-subhead text-r1">That did not work. Try again.</p>}
           <div className="flex flex-wrap gap-xs">
             <button
               type="button"
               disabled={clear.isPending}
               onClick={() => clear.mutate()}
-              className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-[16px] font-semibold text-on-fill disabled:opacity-50"
+              className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill disabled:opacity-50"
             >
               Yes, clear it
             </button>

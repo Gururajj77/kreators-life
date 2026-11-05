@@ -27,22 +27,22 @@ function InvoiceSummary({ invoice: inv, canWrite }: { invoice: PublicInvoice['in
   return (
     <section className="no-print rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="inv-sum">
       <div className="flex flex-wrap items-start justify-between gap-sm">
-        <h2 id="inv-sum" className="m-0 min-w-0 text-[24px]">{`${inv.doc.title || 'Invoice'} ${inv.number}`}</h2>
+        <h2 id="inv-sum" className="m-0 min-w-0 text-title2">{`${inv.doc.title || 'Invoice'} ${inv.number}`}</h2>
         <StatusTag tone={tone}>{word}</StatusTag>
       </div>
-      <p className="mt-sm m-0 font-display text-[32px] font-extrabold leading-none tabular-nums">{money(pay, inv.currency)}</p>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{t.tdsDeducted > 0 ? `${inv.status === 'paid' ? 'After TDS' : 'To pay after TDS'}, of ${money(t.total, inv.currency)} in all` : inv.status === 'paid' ? 'Total' : 'Total to pay'}</p>
-      {inv.doc.show.words && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{amountInWords(pay, inv.currency)}</p>}
+      <p className="mt-sm m-0 text-large-title type-figure leading-none tabular-nums">{money(pay, inv.currency)}</p>
+      <p className="mt-xs m-0 text-subhead text-ink-soft">{t.tdsDeducted > 0 ? `${inv.status === 'paid' ? 'After TDS' : 'To pay after TDS'}, of ${money(t.total, inv.currency)} in all` : inv.status === 'paid' ? 'Total' : 'Total to pay'}</p>
+      {inv.doc.show.words && <p className="mt-xs m-0 text-subhead text-ink-soft">{amountInWords(pay, inv.currency)}</p>}
       {inv.status === 'paid' ? (
-        <p className="mt-sm m-0 text-[16px] font-bold">{inv.paidAt ? `Paid on ${invoiceDate(inv.paidAt.slice(0, 10))}. Thank you.` : 'Paid. Thank you.'}</p>
+        <p className="mt-sm m-0 text-headline">{inv.paidAt ? `Paid on ${invoiceDate(inv.paidAt.slice(0, 10))}. Thank you.` : 'Paid. Thank you.'}</p>
       ) : overdue && inv.dueDate ? (
-        <p className="mt-sm m-0 rounded-inner p-sm text-[16px] font-bold" style={{ background: 'var(--tint-orange)' }}>
+        <p className="mt-sm m-0 rounded-inner p-sm text-headline" style={{ background: 'var(--tint-orange)' }}>
           {`This was due on ${invoiceDate(inv.dueDate)}. If it is already on its way, thank you, and you can ignore this.${canWrite ? ' If something is holding it up, write below.' : ''}`}
         </p>
       ) : inv.dueDate ? (
-        <p className="mt-sm m-0 text-[16px] font-bold">{`Due by ${invoiceDate(inv.dueDate)}`}</p>
+        <p className="mt-sm m-0 text-headline">{`Due by ${invoiceDate(inv.dueDate)}`}</p>
       ) : null}
-      {inv.status !== 'paid' && inv.status !== 'void' && inv.doc.show.bank && (inv.doc.bank.account || inv.doc.bank.upi) && <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">How to pay is on the invoice below, under the bank details.</p>}
+      {inv.status !== 'paid' && inv.status !== 'void' && inv.doc.show.bank && (inv.doc.bank.account || inv.doc.bank.upi) && <p className="mt-xs m-0 text-subhead text-ink-soft">How to pay is on the invoice below, under the bank details.</p>}
     </section>
   );
 }
@@ -87,20 +87,20 @@ export function InvoicePage() {
               <CopyTextButton text={() => invoiceAsText(inv)} />
             </div>
             <InvoiceView invoice={inv} />
-            {inv.revisedAt && <p className="no-print mt-sm m-0 text-[14px] font-semibold text-ink-soft">This invoice was changed after it was first sent. What you see is the latest version.</p>}
+            {inv.revisedAt && <p className="no-print mt-sm m-0 text-subhead text-ink-soft">This invoice was changed after it was first sent. What you see is the latest version.</p>}
 
             {(d.canComment || d.comments.length > 0) && (
               <section className="no-print mt-lg rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="inv-ask">
-                <h2 id="inv-ask" className="text-[24px]">
+                <h2 id="inv-ask" className="text-title2">
                   Questions about this invoice
                 </h2>
-                <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Spot a mistake, or need a PO number on it? Write here. The invoice does not change until the sender changes it.</p>
+                <p className="mt-xs m-0 text-subhead text-ink-soft">Spot a mistake, or need a PO number on it? Write here. The invoice does not change until the sender changes it.</p>
                 {d.comments.length > 0 && (
                   <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
                     {d.comments.map((c) => (
                       <li key={c.id} className={`rounded-tile p-sm ${c.author === 'client' ? 'bg-paper' : 'bg-card-strong'}`}>
-                        <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">{c.author === 'client' ? 'You' : inv.ownerName}</p>
-                        <p className="m-0 whitespace-pre-wrap text-[14px] font-semibold">
+                        <p className="m-0 text-eyebrow uppercase text-ink-soft">{c.author === 'client' ? 'You' : inv.ownerName}</p>
+                        <p className="m-0 whitespace-pre-wrap text-subhead">
                           <Inert text={c.body} />
                         </p>
                       </li>
@@ -113,7 +113,7 @@ export function InvoicePage() {
                       Ask for a change
                     </Button>
                     {done && (
-                      <p role="status" className="m-0 text-[14px] font-bold">
+                      <p role="status" className="m-0 text-subhead">
                         {done}
                       </p>
                     )}
@@ -121,11 +121,11 @@ export function InvoicePage() {
                 )}
                 {d.canComment && asking && (
                   <>
-                    <label htmlFor="inv-ask-text" className="mt-sm block text-[14px] font-bold">
+                    <label htmlFor="inv-ask-text" className="mt-sm block text-subhead font-semibold">
                       Your note
                     </label>
                     {/* Opened by a tap, so the keyboard lands in it at once. */}
-                    <textarea id="inv-ask-text" autoFocus rows={3} maxLength={600} value={text} onChange={(e) => setText(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-[16px]" />
+                    <textarea id="inv-ask-text" autoFocus rows={3} maxLength={600} value={text} onChange={(e) => setText(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
                     <div className="mt-xs flex flex-wrap items-center gap-sm">
                       <Button onClick={() => send.mutate()} disabled={!text.trim() || send.isPending}>
                         {send.isPending ? 'Sending' : 'Send'}
@@ -134,7 +134,7 @@ export function InvoicePage() {
                         Cancel
                       </Button>
                       {done && (
-                        <p role="status" className="m-0 text-[14px] font-bold">
+                        <p role="status" className="m-0 text-subhead">
                           {done}
                         </p>
                       )}
@@ -143,7 +143,7 @@ export function InvoicePage() {
                 )}
               </section>
             )}
-            <p className="no-print mt-md m-0 text-[12px] font-semibold text-ink-mute">Sent with kreators.app.</p>
+            <p className="no-print mt-md m-0 text-caption text-ink-mute">Sent with kreators.app.</p>
           </>
         )}
       </div>

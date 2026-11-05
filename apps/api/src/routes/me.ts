@@ -334,6 +334,8 @@ me.get('/export', async (c) => {
     ['privacyChoiceLog', 'SELECT * FROM consent_records WHERE user_id = ?'],
     ['companionChat', 'SELECT * FROM chat_messages WHERE user_id = ?'],
     ['portfolio', 'SELECT * FROM portfolio_items WHERE user_id = ?'],
+    // The product events kept against you (checkout started, paid, failed, refunded), so the export covers what delete removes.
+    ['productEvents', 'SELECT name, props_json, created_at FROM analytics_events WHERE user_id = ?'],
     ['payoutDetails', 'SELECT user_id, status, legal_name, pan_last4, bank_last4, ifsc, address, submitted_at, decided_at FROM kyc_profiles WHERE user_id = ?'],
     ['posts', 'SELECT * FROM community_posts WHERE user_id = ?'],
     ['replies', 'SELECT * FROM community_replies WHERE user_id = ?'],

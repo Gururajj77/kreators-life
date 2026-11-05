@@ -143,7 +143,7 @@ export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clie
       </div>
 
       {note && (
-        <p role="status" className="mt-sm m-0 rounded-tile p-sm text-[14px] font-bold" style={{ background: 'var(--tint-yellow)' }}>
+        <p role="status" className="mt-sm m-0 rounded-tile p-sm text-subhead" style={{ background: 'var(--tint-yellow)' }}>
           {note}
         </p>
       )}
@@ -152,7 +152,7 @@ export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clie
         <div className="mt-sm">
           {board.isPending && <PaperLoading label="Loading agreements" />}
           {board.isError && (
-            <p role="alert" className="m-0 text-[14px] font-bold">
+            <p role="alert" className="m-0 text-subhead">
               Could not load the board. Try again in a moment.
             </p>
           )}
@@ -194,19 +194,19 @@ export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clie
             </div>
           )}
           {list.isError && (
-            <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+            <p role="alert" className="mt-sm m-0 text-subhead">
               Could not load the agreements. Try again in a moment.
             </p>
           )}
-          {list.data && list.data.contracts.length === 0 && <p className="mt-sm m-0 rounded-tile bg-card p-sm text-[14px] font-semibold text-ink-soft shadow-toy-soft">No agreements here yet. Start one from a template.</p>}
+          {list.data && list.data.contracts.length === 0 && <p className="mt-sm m-0 rounded-tile bg-card p-sm text-subhead text-ink-soft shadow-toy-soft">No agreements here yet. Start one from a template.</p>}
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {list.data?.contracts.map((c) => (
               <li key={c.id} className="rounded-tile bg-card shadow-toy-soft">
                 <div className="flex items-center gap-xs pr-xs">
                   <Link to={`/agency/contracts/${c.id}`} className="toy flex min-w-0 flex-1 flex-wrap items-center justify-between gap-sm rounded-tile p-sm text-ink no-underline">
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[16px] font-extrabold">{tie(c.title)}</span>
-                      <span className="block text-[14px] font-semibold text-ink-soft">
+                      <span className="block text-headline">{tie(c.title)}</span>
+                      <span className="block text-subhead text-ink-soft">
                         {[c.clientName || 'No client yet', TEMPLATE_NAME[c.templateKey] ?? 'Your own', c.signedAt ? `Signed ${day(c.signedAt)}` : c.sentAt ? `Sent ${day(c.sentAt)}` : `Changed ${day(c.updatedAt)}`].join(' · ')}
                       </span>
                     </span>
@@ -224,7 +224,7 @@ export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clie
                   />
                 </div>
                 {rowNote?.id === c.id && (
-                  <p role="status" className="m-0 px-sm pb-sm text-[12px] font-bold">
+                  <p role="status" className="m-0 px-sm pb-sm text-caption">
                     {rowNote.text}
                   </p>
                 )}
@@ -236,9 +236,9 @@ export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clie
       )}
 
       <Sheet open={adding} onClose={() => setAdding(false)} title="New agreement">
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">Pick a place to start. Your details and the client's fill in for you, and every part can be changed.</p>
+        <p className="m-0 text-subhead text-ink-soft">Pick a place to start. Your details and the client's fill in for you, and every part can be changed.</p>
         {!clientId && (
-          <label className="mt-sm block text-[14px] font-bold" htmlFor="new-agreement-client">
+          <label className="mt-sm block text-subhead font-semibold" htmlFor="new-agreement-client">
             For which client
             <select id="new-agreement-client" value={pickClient} onChange={(e) => setPickClient(e.target.value)} className={FIELD}>
               <option value="">No client yet</option>
@@ -250,7 +250,7 @@ export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clie
             </select>
           </label>
         )}
-        <h3 className="mt-md text-[16px]">Built in</h3>
+        <h3 className="mt-md text-headline">Built in</h3>
         <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0" role="radiogroup" aria-label="Built-in templates">
           {CONTRACT_TEMPLATES.map((t) => (
             <li key={t.key}>
@@ -258,9 +258,9 @@ export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clie
             </li>
           ))}
         </ul>
-        <h3 className="mt-md text-[16px]">Your templates</h3>
+        <h3 className="mt-md text-headline">Your templates</h3>
         {mine.length === 0 ? (
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">None yet. Open any agreement and tap "Save as template" to keep it as a starting point.</p>
+          <p className="mt-xs m-0 text-subhead text-ink-soft">None yet. Open any agreement and tap "Save as template" to keep it as a starting point.</p>
         ) : (
           <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0" role="radiogroup" aria-label="Your templates">
             {mine.map((t) => (
@@ -270,9 +270,9 @@ export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clie
             ))}
           </ul>
         )}
-        <h3 className="mt-md text-[16px]">House templates</h3>
+        <h3 className="mt-md text-headline">House templates</h3>
         {house.length === 0 ? (
-          <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">No house templates yet.</p>
+          <p className="mt-xs m-0 text-subhead text-ink-soft">No house templates yet.</p>
         ) : (
           <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0" role="radiogroup" aria-label="House templates">
             {house.map((t) => (
@@ -283,7 +283,7 @@ export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clie
           </ul>
         )}
         {create.isError && (
-          <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+          <p role="alert" className="mt-sm m-0 text-subhead">
             {create.error instanceof ApiError ? create.error.message : 'That did not work. Try again.'}
           </p>
         )}
@@ -305,9 +305,9 @@ function Choice({ on, onPick, name, blurb, house = false }: { on: boolean; onPic
   return (
     <button type="button" role="radio" aria-checked={on} onClick={onPick} className={`toy w-full rounded-tile border-2 p-sm text-left ${on ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
       <CardHead tag={house && <StatusTag fit tone="info">House template</StatusTag>}>
-        <span className="block text-[16px] font-extrabold">{tie(name)}</span>
+        <span className="block text-headline">{tie(name)}</span>
       </CardHead>
-      <span className="block text-[14px] font-semibold text-ink-soft">{blurb}</span>
+      <span className="block text-subhead text-ink-soft">{blurb}</span>
     </button>
   );
 }
@@ -340,18 +340,18 @@ export function AgreementTemplates() {
   };
   return (
     <div>
-      <p className="m-0 text-[14px] font-semibold text-ink-soft">Make one from any agreement: open it and tap "Save as template". It keeps the sections, not the names filled in.</p>
+      <p className="m-0 text-subhead text-ink-soft">Make one from any agreement: open it and tap "Save as template". It keeps the sections, not the names filled in.</p>
       {q.isPending && (
         <div className="mt-xs">
           <PaperLoading label="Loading your templates" />
         </div>
       )}
       {q.isError && (
-        <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-xs m-0 text-subhead">
           Could not load your templates. Try again.
         </p>
       )}
-      {q.data && templates.length === 0 && <p className="mt-xs m-0 rounded-tile bg-card p-sm text-[14px] font-semibold text-ink-soft shadow-toy-soft">No templates of your own yet.</p>}
+      {q.data && templates.length === 0 && <p className="mt-xs m-0 rounded-tile bg-card p-sm text-subhead text-ink-soft shadow-toy-soft">No templates of your own yet.</p>}
       <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
         {templates.map((t) => (
           <li key={t.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
@@ -363,7 +363,7 @@ export function AgreementTemplates() {
                   if (name.trim()) rename.mutate({ id: t.id, to: name.trim() });
                 }}
               >
-                <input value={name} maxLength={60} onChange={(e) => setName(e.target.value)} aria-label="Template name" className="min-h-[44px] min-w-0 flex-1 rounded-pill border-2 border-line bg-paper px-sm text-[16px]" />
+                <input value={name} maxLength={60} onChange={(e) => setName(e.target.value)} aria-label="Template name" className="min-h-[44px] min-w-0 flex-1 rounded-pill border-2 border-line bg-paper px-sm text-body" />
                 <Button type="submit" size="sm" disabled={rename.isPending || !name.trim()}>
                   Save
                 </Button>
@@ -374,8 +374,8 @@ export function AgreementTemplates() {
             ) : (
               <div className="flex flex-wrap items-center justify-between gap-xs">
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[16px] font-extrabold">{tie(t.name)}</span>
-                  <span className="block text-[14px] font-semibold text-ink-soft">{t.summary}</span>
+                  <span className="block text-headline">{tie(t.name)}</span>
+                  <span className="block text-subhead text-ink-soft">{t.summary}</span>
                 </span>
                 <span className="flex gap-xs">
                   <Button
@@ -405,12 +405,12 @@ export function AgreementTemplates() {
 function Card({ c }: { c: ContractListItem }) {
   return (
     <div>
-      <Link to={`/agency/contracts/${c.id}`} className="block text-[16px] font-extrabold underline-offset-4 hover:underline">
+      <Link to={`/agency/contracts/${c.id}`} className="block text-headline underline-offset-4 hover:underline">
         {/* The Move button sits at the card's foot (moveAtFoot), so the title has the card's whole width and a tail in capitals as long
             as "ENGAGEMENT AGREEMENT" (20 letters) stays on one line instead of leaving "AGREEMENT" alone. */}
         {tie(c.title, 20)}
       </Link>
-      <p data-kfoot="" className="mt-xs m-0 text-[12px] font-bold text-ink-soft">{tie(`${c.clientName || 'No client yet'}, ${c.signedAt ? `signed ${day(c.signedAt)}` : c.sentAt ? `sent ${day(c.sentAt)}` : `changed ${day(c.updatedAt)}`}`)}</p>
+      <p data-kfoot="" className="mt-xs m-0 text-caption text-ink-soft">{tie(`${c.clientName || 'No client yet'}, ${c.signedAt ? `signed ${day(c.signedAt)}` : c.sentAt ? `sent ${day(c.sentAt)}` : `changed ${day(c.updatedAt)}`}`)}</p>
     </div>
   );
 }

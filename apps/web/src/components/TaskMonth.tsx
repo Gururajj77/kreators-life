@@ -56,12 +56,12 @@ export function TaskMonth({ today }: { today: string }) {
 
   return (
     <div className="rounded-card bg-card p-md shadow-toy-soft">
-      <p className="m-0 text-balance text-[14px] font-semibold text-ink-soft">{COPY.lede}</p>
+      <p className="m-0 text-balance text-subhead text-ink-soft">{COPY.lede}</p>
       <div className="mt-sm flex items-center justify-between gap-xs">
         <button type="button" className={arrow} onClick={() => setMonth(monthShift(month, -1))} aria-label="Previous month">
           <Icon icon={ChevronLeft} size={16} strokeWidth={3} />
         </button>
-        <span className="text-center text-[16px] font-extrabold" aria-live="polite">
+        <span className="text-center text-headline" aria-live="polite">
           {monthName(month)}
         </span>
         <button type="button" className={arrow} onClick={() => setMonth(monthShift(month, 1))} aria-label="Next month">
@@ -72,7 +72,7 @@ export function TaskMonth({ today }: { today: string }) {
       {q.isPending && <Skeleton className="mt-sm h-[320px]" />}
       {q.isError && (
         <div role="alert" className="mt-sm flex flex-wrap-reverse items-center justify-between gap-sm">
-          <p className="m-0 min-w-0 flex-1 basis-[60%] text-[14px] font-bold">The calendar did not load.</p>
+          <p className="m-0 min-w-0 flex-1 basis-[60%] text-subhead font-semibold">The calendar did not load.</p>
           <Button variant="outline" size="sm" onClick={() => q.refetch()}>
             Try again
           </Button>
@@ -83,7 +83,7 @@ export function TaskMonth({ today }: { today: string }) {
         <>
           <div role="group" aria-label={`Tasks in ${monthName(month)}`} className="mt-sm grid grid-cols-7 gap-xs">
             {weeks[0]?.map((day) => (
-              <span key={day} className="text-center text-[12px] font-extrabold text-ink-soft" aria-hidden="true">
+              <span key={day} className="text-center text-caption text-ink-soft" aria-hidden="true">
                 <span className="sm:hidden">{weekday(day, 'narrow')}</span>
                 <span className="hidden sm:inline">{weekday(day, 'short')}</span>
               </span>
@@ -103,9 +103,9 @@ export function TaskMonth({ today }: { today: string }) {
                   className={`toy toy-flat flex min-w-0 flex-col items-stretch gap-xs rounded-tile bg-paper p-xs text-left ${cellHeight}`}
                 >
                   <span className="flex items-center justify-between gap-xs">
-                    <span className="text-[14px] font-extrabold">{dayNumber(day)}</span>
+                    <span className="text-subhead font-semibold">{dayNumber(day)}</span>
                     {open > 0 ? (
-                      <span className="rounded-pill bg-ink px-xs text-[12px] font-extrabold leading-[20px] text-on-ink">{open}</span>
+                      <span className="rounded-pill bg-ink px-xs text-caption font-medium leading-[20px] text-on-ink">{open}</span>
                     ) : done > 0 ? (
                       <span className="flex size-[20px] items-center justify-center rounded-pill bg-card text-ink-soft">
                         <Icon icon={Check} size={12} strokeWidth={3} />
@@ -116,17 +116,17 @@ export function TaskMonth({ today }: { today: string }) {
                     {list.slice(0, 2).map((t) => (
                       <span key={t.id} className={`flex min-w-0 items-center gap-xs ${t.priority === null ? '' : `pri-${t.priority}`}`}>
                         <span aria-hidden="true" className="size-[8px] shrink-0 rounded-pill" style={{ background: 'var(--pri, var(--color-ink-mute))' }} />
-                        <span className={`min-w-0 truncate text-[12px] font-semibold ${t.status === 'done' ? 'text-ink-soft line-through' : ''}`}>{t.title}</span>
+                        <span className={`min-w-0 truncate text-caption ${t.status === 'done' ? 'text-ink-soft line-through' : ''}`}>{t.title}</span>
                       </span>
                     ))}
-                    {list.length > 2 && <span className="text-[12px] font-bold text-ink-soft">+{list.length - 2} more</span>}
+                    {list.length > 2 && <span className="text-caption text-ink-soft">+{list.length - 2} more</span>}
                   </span>
                 </button>
               );
             })}
           </div>
-          <p className="mt-sm m-0 text-[12px] font-semibold text-ink-soft">{COPY.legend}</p>
-          {d.more && <p className="mt-xs m-0 text-[12px] font-bold">{COPY.more}</p>}
+          <p className="mt-sm m-0 text-caption text-ink-soft">{COPY.legend}</p>
+          {d.more && <p className="mt-xs m-0 text-caption">{COPY.more}</p>}
           <div className="mt-sm flex flex-wrap items-center gap-xs">
             <Button variant="outline" size="sm" onClick={print}>
               Print this month
@@ -203,7 +203,7 @@ function DaySheet({ day, tasks, projects, today, queue, onClose }: { day: string
       {day && (
         <div className="flex flex-col gap-md pb-xl">
           {tasks.length === 0 ? (
-            <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.empty}</p>
+            <p className="m-0 text-subhead text-ink-soft">{COPY.empty}</p>
           ) : (
             <ul className="m-0 flex list-none flex-col gap-xs p-0">
               {tasks.map((t) => (
@@ -232,7 +232,8 @@ export function AddTaskForm({ today, onAdded, autoFocus = false }: { today: stri
 
 /** The add form: a title, the project it holds up, and the ordinary task plan with the do date set to the day. It goes through the same route the pillar page uses. */
 function AddOnDay({ day, today, projects, onAdded, autoFocus = false }: { day: string; today: string; projects: MonthProject[]; onAdded?: (title: string, doDate: string | null) => void; autoFocus?: boolean }) {
-  const refresh = useRefreshAll();
+  // A new task (perhaps repeating) changes what an Emerging card offers, so it is read again at once.
+  const refresh = useRefreshAll({ insights: true });
   const [title, setTitle] = useState('');
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '');
   const [plan, setPlan] = useState<Plan>(() => planOf(null, day));
@@ -253,8 +254,8 @@ function AddOnDay({ day, today, projects, onAdded, autoFocus = false }: { day: s
   if (projects.length === 0) {
     return (
       <div className="flex flex-wrap-reverse items-center justify-between gap-sm rounded-tile bg-paper p-sm">
-        <p className="m-0 min-w-0 flex-1 basis-[60%] text-[14px] font-semibold text-ink-soft">{COPY.noProject}</p>
-        <Link to="/tower" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-bold text-on-ink">
+        <p className="m-0 min-w-0 flex-1 basis-[60%] text-subhead text-ink-soft">{COPY.noProject}</p>
+        <Link to="/tower" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
           Set up a pillar
         </Link>
       </div>
@@ -269,12 +270,12 @@ function AddOnDay({ day, today, projects, onAdded, autoFocus = false }: { day: s
       }}
     >
       <label className="block">
-        <span className="block text-[14px] font-bold">What is the task?</span>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus={autoFocus} maxLength={140} required placeholder="One clear thing you can finish" className="mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px]" />
+        <span className="block text-subhead font-semibold">What is the task?</span>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus={autoFocus} maxLength={140} required placeholder="One clear thing you can finish" className="mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-body" />
       </label>
       <label className="block">
-        <span className="block text-[14px] font-bold">Which project does it hold up?</span>
-        <select value={project?.id ?? ''} onChange={(e) => setProjectId(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-[16px]">
+        <span className="block text-subhead">Which project does it hold up?</span>
+        <select value={project?.id ?? ''} onChange={(e) => setProjectId(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-body">
           {projects.map((p) => (
             <option key={p.id} value={p.id}>
               {p.title} ({RELATIONSHIP_BY_KEY[p.relationship].name})
@@ -290,9 +291,9 @@ function AddOnDay({ day, today, projects, onAdded, autoFocus = false }: { day: s
         }}
         today={today}
       />
-      {day < today && <p className="m-0 text-balance text-[12px] font-semibold text-ink-soft">{COPY.past}</p>}
+      {day < today && <p className="m-0 text-balance text-caption text-ink-soft">{COPY.past}</p>}
       {create.isError && (
-        <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+        <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           {create.error instanceof Error ? create.error.message : 'Could not add it. Try again.'}
         </p>
       )}

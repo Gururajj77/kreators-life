@@ -72,7 +72,7 @@ export function OnboardingTroupe({ floors, current, step, steps }: { floors: Rel
         {current && (
           <div ref={walker} className="absolute bottom-sm left-0 will-change-transform">
             <Avatar relationship={current} size={64} mood={step >= steps ? 'excited' : 'happy'} decorative className="avatar-hop" />
-            <span className="mt-xs block text-center text-[12px] font-extrabold" style={{ color: `var(--deep-${current})` }}>
+            <span className="mt-xs block text-center text-caption font-semibold" style={{ color: `var(--deep-${current})` }}>
               {characterTitle(current)}
             </span>
           </div>

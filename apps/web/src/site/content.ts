@@ -31,7 +31,7 @@ export const FEATURES: Record<string, FeatureCopy> = {
   today: {
     tagline: 'Three small boxes. One better day.',
     pitch: 'Check in, do one small act, tick one task: that is the whole daily ask. Every tick pays xp, and the check-in pays points you can spend.',
-    more: ['A task has a do date, an optional due date and a priority from P0 (do now) to P3 (whenever).', 'Say what kind of day it is, like deep work, family or low energy. Sort by context and, inside each priority, that day’s pillar comes first.', 'The kinds of day come from Shubham Aggarwal’s books, and each one says why its pillar leads.', 'It can have a time and a length, repeat, hold subtasks, remind you and start a focus timer.', 'Plan my week suggests a day for each task that has none, spread so no day is overloaded, and says how strong the week looks. Nothing changes until you keep it.', 'Tasks with a time show as blocks, with the free time between.', 'Flag a task to bring it to your next review.', 'A private link can show your tasks in your own calendar.', 'A not to do list keeps a streak for each thing you stay away from.'],
+    more: ['A task has a do date, an optional due date and a priority from P0 (do now) to P3 (whenever).', 'Say what kind of day it is, like deep work, family or low energy. Sort by context and, inside each priority, that day’s pillar comes first.', 'The kinds of day come from Shubham Aggarwal’s books, and each one says why its pillar leads.', 'It can have a time and a length, repeat, hold subtasks, remind you and start a focus timer.', 'Plan my week suggests a day for each task that has none, spread so no day is overloaded, and says how strong the week looks. Nothing changes until you keep it.', 'Tasks with a time show as blocks, with the free time between.', 'Flag a task to bring it to your next review.', 'A private link can show your tasks in your own calendar.', 'A not to do list keeps a streak for each thing you stay away from. Seeing what you don’t want makes what you do want clearer.'],
     steps: ['Open the app and check in.', 'Do the small act for your weakest pillar.', 'Plan a task or the whole week, then tick each on its day and watch the pyramid light up.'],
     relationships: ['servant_leader', 'friendship', 'parent_child', 'lover_partner', 'self', 'guru', 'divine'],
   },
@@ -97,7 +97,7 @@ export const FEATURES: Record<string, FeatureCopy> = {
   community: {
     tagline: 'A kind room to ask and share.',
     pitch: 'You want a place to ask without being judged. Community is a calm room, split by topic, where guides keep it kind.',
-    more: ['Post, reply, react, and follow the threads you care about.'],
+    more: ['Post, reply, react, and follow the threads you care about.', 'Share real days, not highlight reels, under your name or a made-up one.'],
     steps: ['Pick a topic.', 'Post a question or reply to one.', 'React to what helps, and follow the threads you care about.'],
     relationships: ['friendship', 'parent_child', 'guru', 'divine'],
   },
@@ -117,7 +117,7 @@ export const FEATURES: Record<string, FeatureCopy> = {
   circles: {
     tagline: 'Five strangers who fit. One table.',
     pitch: 'Circles run every week in your city. Two days before, you are seated at a table of people nearby whose interests complement yours.',
-    more: ['Join this week’s circle to get a seat: the writer with the editor, the one on camera with the one behind it.', 'Show up in red if you are single, white if you are committed, so the table reads itself.', 'Everyone has an alias. The group chat opens a day before you meet, and everyone keeps their alias.'],
+    more: ['Join this week’s circle to get a seat: the writer with the editor, the one on camera with the one behind it.', 'Show up in red if you are single, white if you are committed, so the table reads itself.', 'Everyone has an alias. The group chat opens a day before you meet, and everyone keeps their alias.', 'New to the city, or quiet in a crowd? A small table is an easier start than a big room.'],
     steps: ['Pick your interests and your city.', 'Join this week\'s circle. Tables are set two days before.', 'Wear red if single, white if committed. Plan in the chat, then meet.'],
     relationships: ['friendship', 'lover_partner', 'divine'],
     listing: 'circle',
@@ -358,19 +358,23 @@ export const BRAND_PITCH = {
 /** The doubts a first-time visitor has, most common first. Each answer accepts the worry, then answers it. */
 export const SITE_FAQ: { q: string; a: string }[] = [
   { q: 'What’s the catch?', a: 'Fair question. The daily game and every app are free to start and free to stay, Agency included: we take nothing from what you invoice. Two things cost money. Typing to the assistant needs a plan, because the model costs us money; plans are not on sale yet. The Shop takes 5% of each sale. Partner links in the Store may earn us a share, and every card says so.' },
+  { q: 'How is this different from self-help?', a: 'Most self-help picks one part of your life. kreators.app works on all seven relationships at once, because each one holds up the others. And you do not only read a plan: you tick it, one small act and one task a day, on pyramids you built.' },
   { q: 'I run a small agency. Is this for me?', a: 'Yes. Agency is for a content agency or a freelance creator. Each client gets a dashboard with their deliverables moving from idea to published, your time, invoices and agreements. You can share one page with a client, and they can approve or send back what is waiting. It is switched off until you want it.' },
   { q: 'What can my client see?', a: 'Only what you switch on. You pick the parts (what is waiting, what is coming, what is live, the month so far) and whether they can approve, send back or write a note. They never see your fees, your private notes, your time line by line or your other clients. You can preview the page first, and a fresh link closes the old one.' },
   { q: 'Can I see my tasks in my own calendar?', a: 'Yes. Under Profile, switch on the calendar link and subscribe to it in Google, Apple or Outlook Calendar. It shows each open task that has a day, and the reviews you planned. It carries only a title, a pillar and a priority, never your notes or your journal. It shows your tasks there; it does not change them.' },
   { q: 'Can it block other apps while I focus?', a: 'No. A web app cannot block other apps. It can time your focus sessions, play a quiet sound and let you rate how focused you were. Use your phone’s own focus mode beside it.' },
   { q: 'Can I use it on my phone and my laptop?', a: 'Yes. One account can be signed in on up to three devices at once. A fourth signs out the oldest, and it tells that device why.' },
-  { q: 'I don’t have time for another app.', a: 'That is the point of it. The daily ask is three moves: check in, do one small act, tick one task. It takes a few minutes. The rest is there when you want it, and switched off when you don’t.' },
+  { q: 'I don’t have time for another app.', a: 'That is the point of it. The daily ask is three moves: check in, do one small act, tick one task. It takes a few minutes. It counts reps, not hours. The rest is there when you want it, and switched off when you don’t.' },
   { q: 'Who sees my Discover results?', a: 'Only you. Your answers never reach brands, staff, the leaderboard or a life coach. You choose whether your results shape your next steps and whether the assistant may read a short summary. It is not an IQ test or a diagnosis: it is a self-discovery quiz that compares you only with your own scale.' },
   { q: 'Who sees my journal?', a: 'Only you. Your journal and wellbeing numbers never reach brands, staff, the leaderboard or Club selection. The assistant reads the journal only when you ask it to, and only through models that keep nothing. A life coach never sees it.' },
   { q: 'I’m not a creator. Is it for me?', a: 'Yes, if you are 18 or over. The seven relationships are for everyone: servitude, friends, family, love, yourself, teachers and faith. The creator apps, like the Shop and Win, stay off until you want them.' },
+  { q: 'I’m doing fine. Is it still for me?', a: 'Yes. It is not only for fixing what hurts. Your pillars keep the good parts strong, and reviews show what is working, so you keep doing it.' },
   { q: 'Apps like this never stick for me.', a: 'That isn’t you. Most apps track one part of life and forget the other six. Here each tick climbs a pillar you chose, toward a foundation you wrote. And a task can only be ticked from its do date, so the plan stays honest.' },
   { q: 'Won’t it be too many apps?', a: 'Only a few are on at the start. A short chat asks what you want and switches on up to five more that fit you. You can switch any of them on or off later, under the Profile tab.' },
   { q: 'Is the pay real?', a: 'It is real, and it is careful. Win pays per verified view, not per follower, and a reviewer checks before anything pays. Everything that pays out has a wait or a person who checks it. Points work today; money checkout turns on when payments go live.' },
   { q: 'Will I be on my own?', a: 'No. Bumling, the app’s own guide, and seven characters walk with you. Every app ends with a How it works section, Help answers questions, and you can work with a life coach if you want one.' },
+  { q: 'I’m not ready for groups or events.', a: 'Start on your own. Circles, Run, Party and Community stay off until you or the setup chat switch them on, and your journal and Discover results are yours alone. Join people when you are ready.' },
+  { q: 'Is there proof it works?', a: 'We will not show you a rating or a study we cannot point to. What we can show is how it works: the rules on this page are the rules the app keeps. Try it for a week and see what your first review says.' },
   { q: 'Can I leave?', a: 'Any time. From the Profile tab you can export everything, erase your progress, or delete your account. Switching an app off is one tap.' },
   { q: 'Why do you ask for my phone and birthday?', a: 'So that everyone here is 18 or over. Nobody under 18 gets an account. Neither your phone number nor your birthday is ever shown to anyone else, and you can change the phone number under the Profile tab.' },
 ];

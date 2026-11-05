@@ -130,7 +130,7 @@ function Loading() {
           <Avatar key={r.key} relationship={r.key} size={36} />
         ))}
       </div>
-      <p className="m-0 text-[14px] font-bold text-ink-soft">Setting things up</p>
+      <p className="m-0 text-subhead text-ink-soft">Setting things up</p>
     </div>
   );
 }
@@ -175,8 +175,8 @@ function Shell() {
     return (
       <div className="mx-auto flex min-h-dvh max-w-[480px] flex-col items-center justify-center gap-md px-md text-center" role="alert">
         <Avatar relationship="self" size={72} mood="sleepy" />
-        <p className="m-0 text-[18px] font-extrabold">Could not reach the server.</p>
-        <p className="m-0 text-[14px] font-semibold text-ink-soft">Check your connection, then try again.</p>
+        <p className="m-0 text-headline">Could not reach the server.</p>
+        <p className="m-0 text-subhead text-ink-soft">Check your connection, then try again.</p>
         <Button onClick={() => me.refetch()}>Try again</Button>
       </div>
     );

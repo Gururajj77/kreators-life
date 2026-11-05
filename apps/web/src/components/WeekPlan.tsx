@@ -104,17 +104,17 @@ export function WeekPlanButton() {
         {COPY.button}
       </Button>
       {said && (
-        <p role="status" className="m-0 basis-full text-right text-[12px] font-bold text-ink-soft">
+        <p role="status" className="m-0 basis-full text-right text-caption text-ink-soft">
           {said}
         </p>
       )}
       <Sheet open={open} onClose={() => setOpen(false)} title={COPY.title}>
         <div className="pb-md">
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.lede}</p>
+          <p className="m-0 text-subhead text-ink-soft">{COPY.lede}</p>
           <div className="mt-sm rounded-tile bg-paper p-sm">
             <div className="flex items-baseline justify-between gap-sm">
-              <span className="text-[14px] font-bold">{COPY.hours}</span>
-              <span className="font-display text-[20px] font-extrabold" aria-hidden="true">
+              <span className="text-subhead">{COPY.hours}</span>
+              <span className="text-title3" aria-hidden="true">
                 {draftHours} h
               </span>
             </div>
@@ -123,22 +123,22 @@ export function WeekPlanButton() {
           </div>
           <div className="mt-md">
             {q.isPending && (
-              <p role="status" className="m-0 text-[14px] font-bold text-ink-soft">
+              <p role="status" className="m-0 text-subhead text-ink-soft">
                 {COPY.loading}
               </p>
             )}
             {q.isError && (
-              <p role="alert" className="m-0 text-[14px] font-bold">
+              <p role="alert" className="m-0 text-subhead">
                 {COPY.failed}
               </p>
             )}
             {plan && plan.suggestions.length === 0 && plan.days.every((d) => d.tasks === 0) && plan.noRoom.length === 0 ? (
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.empty}</p>
+              <p className="m-0 text-subhead text-ink-soft">{COPY.empty}</p>
             ) : (
               plan && (
                 <Suspense
                   fallback={
-                    <p role="status" className="m-0 text-[14px] font-bold text-ink-soft">
+                    <p role="status" className="m-0 text-subhead text-ink-soft">
                       {COPY.loading}
                     </p>
                   }

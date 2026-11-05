@@ -35,7 +35,7 @@ export function RepeatPicker({ value, anchor, onChange, onAnchor, note = '' }: {
   return (
     <div>
       <label className="block">
-        <span className="block text-[14px] font-bold">Repeat</span>
+        <span className="block text-subhead font-semibold">Repeat</span>
         <select
           value={rule?.kind ?? 'none'}
           onChange={(e) => onChange(e.target.value === 'none' ? null : { kind: e.target.value as RepeatKind, every: rule?.every ?? 1, days: [], until: rule?.until ?? null })}
@@ -52,33 +52,33 @@ export function RepeatPicker({ value, anchor, onChange, onAnchor, note = '' }: {
       {rule && (
         <div className="mt-xs flex flex-col gap-xs">
           {rule.kind !== 'weekdays' && (
-            <label className="flex items-center gap-xs text-[14px] font-bold">
+            <label className="flex items-center gap-xs text-subhead font-semibold">
               Every
-              <input type="number" min={1} max={MAX_REPEAT_EVERY} value={rule.every} onChange={(e) => setRule({ every: Math.min(MAX_REPEAT_EVERY, Math.max(1, Math.round(Number(e.target.value)) || 1)) })} className="w-[72px] rounded-tile border-2 border-line bg-paper px-sm py-xs text-[16px]" />
+              <input type="number" min={1} max={MAX_REPEAT_EVERY} value={rule.every} onChange={(e) => setRule({ every: Math.min(MAX_REPEAT_EVERY, Math.max(1, Math.round(Number(e.target.value)) || 1)) })} className="w-[72px] rounded-tile border-2 border-line bg-paper px-sm py-xs text-body" />
               {REPEAT_KINDS.find((k) => k.key === rule.kind)?.unit}
               {rule.every === 1 ? '' : 's'}
             </label>
           )}
           {rule.kind === 'weekly' && (
             <div>
-              <span className="block text-[14px] font-bold">On these days</span>
+              <span className="block text-subhead font-semibold">On these days</span>
               <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label="Days of the week">
                 {WEEKDAYS.map((d, i) => {
                   const n = i + 1;
                   const on = rule.days.includes(n);
                   return (
-                    <button key={d} type="button" aria-pressed={on} onClick={() => setRule({ days: on ? rule.days.filter((x) => x !== n) : [...rule.days, n].sort() })} className={`toy min-h-[44px] min-w-[44px] rounded-pill border-2 px-xs text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                    <button key={d} type="button" aria-pressed={on} onClick={() => setRule({ days: on ? rule.days.filter((x) => x !== n) : [...rule.days, n].sort() })} className={`toy min-h-[44px] min-w-[44px] rounded-pill border-2 px-xs text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                       {d}
                     </button>
                   );
                 })}
               </div>
-              <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">None picked means the day of the first date.</p>
+              <p className="mt-xs m-0 text-caption text-ink-soft">None picked means the day of the first date.</p>
             </div>
           )}
           {rule.kind === 'monthly' && onAnchor && valid && (
             <label className="block">
-              <span className="block text-[14px] font-bold">Day of the month</span>
+              <span className="block text-subhead font-semibold">Day of the month</span>
               <select value={Number(anchor.slice(8, 10))} onChange={(e) => onAnchor(anchorOnDay(anchor, Number(e.target.value)))} className={FIELD}>
                 {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
                   <option key={d} value={d}>
@@ -86,15 +86,15 @@ export function RepeatPicker({ value, anchor, onChange, onAnchor, note = '' }: {
                   </option>
                 ))}
               </select>
-              <span className="mt-xs block text-[12px] font-semibold text-ink-soft">A day past the end of a short month falls on its last day.</span>
+              <span className="mt-xs block text-caption text-ink-soft">A day past the end of a short month falls on its last day.</span>
             </label>
           )}
-          {rule.kind === 'yearly' && valid && <p className="m-0 text-[14px] font-bold">On {new Date(`${anchor}T00:00:00`).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long' })}</p>}
+          {rule.kind === 'yearly' && valid && <p className="m-0 text-subhead font-semibold">On {new Date(`${anchor}T00:00:00`).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long' })}</p>}
           <label className="block">
-            <span className="block text-[14px] font-bold">Stop after (optional)</span>
+            <span className="block text-subhead font-semibold">Stop after (optional)</span>
             <input type="date" value={rule.until ?? ''} onChange={(e) => setRule({ until: e.target.value || null })} className={FIELD} />
           </label>
-          <p className="m-0 text-[12px] font-semibold text-ink-soft">
+          <p className="m-0 text-caption text-ink-soft">
             {repeatLabel(rule, valid ? anchor : null)}.{note ? ` ${note}` : ''}
           </p>
         </div>

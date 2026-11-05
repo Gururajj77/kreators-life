@@ -99,16 +99,16 @@ export function Reviews() {
     <Screen columns={false}>
       <header className="pt-lg">
         <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-[30px]">Reviews</h1>
-        <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Pick a week, a month, a quarter or half a year. The numbers come from every app you use. The words are yours. Only you see this.</p>
+        <h1 className="text-large-title">Reviews</h1>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">Pick a week, a month, a quarter or half a year. The numbers come from every app you use. The words are yours. Only you see this.</p>
         <div className="mt-md">
           <PeriodFilter period={period} onChange={setPeriod} today={today} />
         </div>
         {s && (
           <Hero color="var(--color-r5)" deep="var(--deep-self)" className="mt-md" character="self" mood={rating ? (rating >= 4 ? 'excited' : rating >= 3 ? 'happy' : 'sleepy') : 'happy'}>
-            <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide opacity-90">{meta.name}</p>
-            <p className="mt-xs m-0 font-display text-[28px] font-extrabold leading-tight">{periodLabel(period)}</p>
-            <p className="mt-xs m-0 text-[14px] font-semibold opacity-90">
+            <p className="m-0 text-eyebrow uppercase opacity-90">{meta.name}</p>
+            <p className="mt-xs m-0 text-title1">{periodLabel(period)}</p>
+            <p className="mt-xs m-0 text-subhead opacity-90">
               {d?.review ? `Written ${prettyDate(d.review.updatedAt.slice(0, 10))}${ratingMeta ? `, felt ${ratingMeta.name.toLowerCase()}` : ''}.` : meta.blurb}
             </p>
             <div className="mt-sm flex flex-wrap gap-md">
@@ -118,8 +118,8 @@ export function Reviews() {
                 ['Check-ins', `${s.now.checkins} of ${s.now.days}`],
               ].map(([k, v]) => (
                 <span key={k} className="min-w-0">
-                  <span className="block font-display text-[24px] font-extrabold leading-none">{v}</span>
-                  <span className="block text-[12px] font-bold opacity-90">{k}</span>
+                  <span className="block text-title2 type-figure leading-none">{v}</span>
+                  <span className="block text-caption opacity-90">{k}</span>
                 </span>
               ))}
             </div>
@@ -128,7 +128,7 @@ export function Reviews() {
       </header>
 
       {q.isError && (
-        <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-[14px] font-bold">
+        <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           Could not load this period. Try again in a moment.
         </p>
       )}
@@ -138,10 +138,10 @@ export function Reviews() {
       {s && (
         <>
           <section className="mt-lg" aria-labelledby="numbers-heading">
-            <h2 id="numbers-heading" className="text-[24px]">
+            <h2 id="numbers-heading" className="text-title2">
               The numbers
             </h2>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Each one next to {meta.previous}. Tap a tile to go where it comes from.</p>
+            <p className="mt-xs m-0 text-subhead text-ink-soft">Each one next to {meta.previous}. Tap a tile to go where it comes from.</p>
             <div className="mt-sm">
               <SummaryTiles summary={s} parts={PARTS} />
             </div>
@@ -149,10 +149,10 @@ export function Reviews() {
 
           {flagged.length > 0 && (
             <section className="mt-lg" aria-labelledby="brought-heading">
-              <h2 id="brought-heading" className="text-[24px]">
+              <h2 id="brought-heading" className="text-title2">
                 Tasks you brought
               </h2>
-              <p className="mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">Tick &quot;Bring it to my review&quot; on a task in Daily and it shows up here.</p>
+              <p className="mt-xs m-0 text-balance text-subhead text-ink-soft">Tick &quot;Bring it to my review&quot; on a task in Daily and it shows up here.</p>
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                 {flagged.map((f) => {
                   const added = Boolean(prompts.length) && (answers[slotFor(f)] ?? '').includes(lineFor(f));
@@ -160,10 +160,10 @@ export function Reviews() {
                     <li key={f.id} data-pillar={f.relationship} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                       <span aria-hidden="true" className="size-[12px] shrink-0 rounded-pill" style={{ background: RELATIONSHIP_BY_KEY[f.relationship]?.color }} />
                       <span className="min-w-0 flex-1">
-                        <span className="block text-[16px] font-bold">
+                        <span className="block text-headline">
                           <Inert text={f.title} />
                         </span>
-                        <span className="mt-xs flex flex-wrap items-center gap-xs text-[12px] font-bold text-ink-soft">
+                        <span className="mt-xs flex flex-wrap items-center gap-xs text-caption text-ink-soft">
                           <StatusTag tone={f.status === 'done' ? 'good' : 'warn'}>{f.status === 'done' ? 'Done' : 'Open'}</StatusTag>
                           {f.day ? prettyDate(f.day) : 'No day yet'}
                         </span>
@@ -181,7 +181,7 @@ export function Reviews() {
           <BusinessMetrics kind={period.kind} date={period.start} />
 
           <section className="mt-lg" aria-labelledby="trend-heading">
-            <h2 id="trend-heading" className="text-[24px]">
+            <h2 id="trend-heading" className="text-title2">
               Day by day
             </h2>
             <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
@@ -190,7 +190,7 @@ export function Reviews() {
             {areaSegments.length > 0 && (
               <div className="mt-sm flex items-center gap-md rounded-card bg-card p-md shadow-toy-soft">
                 <Donut segments={areaSegments} size={120} stroke={18} label="Xp by pillar">
-                  <span className="font-display text-[20px] font-extrabold">{s.now.xp}</span>
+                  <span className="text-title3 type-figure">{s.now.xp}</span>
                 </Donut>
                 <div className="min-w-0 flex-1">
                   <Legend items={areaSegments.map((a) => ({ color: a.color, label: a.label, text: `${a.value} xp` }))} />
@@ -200,10 +200,10 @@ export function Reviews() {
           </section>
 
           <section className="mt-lg" aria-labelledby="review-heading">
-            <h2 id="review-heading" className="text-[24px]">
+            <h2 id="review-heading" className="text-title2">
               Your review
             </h2>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">{d?.review ? 'Saved with the numbers as they were. Change anything and save again.' : 'A few questions. Short answers are fine.'}</p>
+            <p className="mt-xs m-0 text-subhead text-ink-soft">{d?.review ? 'Saved with the numbers as they were. Change anything and save again.' : 'A few questions. Short answers are fine.'}</p>
             <form
               className="mt-sm rounded-card bg-card p-md shadow-toy-soft"
               onSubmit={(e: FormEvent) => {
@@ -213,7 +213,7 @@ export function Reviews() {
             >
               {d && d.templates.length > 1 && (
                 <>
-                  <label className="block text-[14px] font-bold" htmlFor="review-template">
+                  <label className="block text-subhead font-semibold" htmlFor="review-template">
                     Questions from
                   </label>
                   <select id="review-template" value={template?.id ?? ''} onChange={(e) => setTemplateId(e.target.value)} className={FIELD}>
@@ -228,7 +228,7 @@ export function Reviews() {
               <ol className="mt-sm flex list-none flex-col gap-sm p-0 m-0">
                 {prompts.map((p, i) => (
                   <li key={`${template?.id ?? 'r'}-${i}`}>
-                    <label className="block text-[16px] font-bold" htmlFor={`answer-${i}`}>
+                    <label className="block text-headline" htmlFor={`answer-${i}`}>
                       {p}
                     </label>
                     <textarea
@@ -242,7 +242,7 @@ export function Reviews() {
                   </li>
                 ))}
               </ol>
-              <p className="mt-md m-0 text-[14px] font-bold">How did it go?</p>
+              <p className="mt-md m-0 text-subhead font-semibold">How did it go?</p>
               <div role="radiogroup" aria-label="How did it go" className="mt-xs flex gap-xs">
                 {MOODS.map((m) => (
                   <button
@@ -258,12 +258,12 @@ export function Reviews() {
                   </button>
                 ))}
               </div>
-              <label className="mt-md block text-[14px] font-bold" htmlFor="review-highlight">
+              <label className="mt-md block text-subhead font-semibold" htmlFor="review-highlight">
                 The one thing to remember
               </label>
               <input id="review-highlight" value={highlight} onChange={(e) => setHighlight(e.target.value)} maxLength={REVIEW_HIGHLIGHT_MAX} placeholder="One line" className={FIELD} />
               {save.isError && (
-                <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+                <p role="alert" className="mt-sm m-0 text-subhead">
                   That did not save. Try again.
                 </p>
               )}
@@ -282,20 +282,20 @@ export function Reviews() {
 
           <section className="mt-lg" aria-labelledby="templates-heading">
             <div className="flex items-baseline justify-between gap-sm">
-              <h2 id="templates-heading" className="text-[24px]">
+              <h2 id="templates-heading" className="text-title2">
                 Templates
               </h2>
               <Button variant="outline" size="sm" plusToX onClick={() => setEditing('new')}>
                 New template
               </Button>
             </div>
-            <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">The questions a {meta.short.toLowerCase()} review asks. The built-in one stays; add your own for a cadence and it comes back every time.</p>
+            <p className="mt-xs m-0 text-subhead text-ink-soft">The questions a {meta.short.toLowerCase()} review asks. The built-in one stays; add your own for a cadence and it comes back every time.</p>
             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
               {d?.templates.map((t) => (
                 <li key={t.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[16px] font-bold">{t.name}</span>
-                    <span className="block text-[14px] font-semibold text-ink-soft">
+                    <span className="block text-headline">{t.name}</span>
+                    <span className="block text-subhead text-ink-soft">
                       {t.prompts.length} {t.prompts.length === 1 ? 'question' : 'questions'}
                       {t.builtIn ? ' · built in' : ''}
                     </span>
@@ -312,7 +312,7 @@ export function Reviews() {
 
           {d && (d.recent.length > 0 || (d.recentPage?.page ?? 1) > 1) && (
             <section className="mt-lg" aria-labelledby="past-heading">
-              <h2 id="past-heading" className="text-[24px]">
+              <h2 id="past-heading" className="text-title2">
                 Past reviews
               </h2>
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -321,10 +321,10 @@ export function Reviews() {
                   return (
                     <li key={r.id}>
                       <button type="button" onClick={() => setPeriod({ kind: r.kind, start: r.start, end: r.end })} className="toy toy-soft flex w-full items-center gap-sm rounded-tile bg-card p-sm text-left text-ink">
-                        {m ? <MoodFace value={m.value} size={36} /> : <span className="flex size-[36px] items-center justify-center rounded-pill bg-paper text-[14px] font-extrabold text-ink-soft">·</span>}
+                        {m ? <MoodFace value={m.value} size={36} /> : <span className="flex size-[36px] items-center justify-center rounded-pill bg-paper text-subhead font-medium text-ink-soft">·</span>}
                         <span className="min-w-0 flex-1">
-                          <span className="block text-[16px] font-bold">{periodLabel({ kind: r.kind, start: r.start, end: r.end })}</span>
-                          <span className="block truncate text-[14px] font-semibold text-ink-soft">{r.highlight || PERIOD_META[r.kind].name}</span>
+                          <span className="block text-headline">{periodLabel({ kind: r.kind, start: r.start, end: r.end })}</span>
+                          <span className="block truncate text-subhead text-ink-soft">{r.highlight || PERIOD_META[r.kind].name}</span>
                         </span>
                         <FactTag kind="when">{PERIOD_META[r.kind].short}</FactTag>
                       </button>
@@ -384,13 +384,13 @@ function TemplateEditor({ editing, kind, onClose, onSaved }: { editing: ReviewTe
           save.mutate();
         }}
       >
-        <label className="block text-[14px] font-bold" htmlFor="tpl-name">
+        <label className="block text-subhead font-semibold" htmlFor="tpl-name">
           Name
         </label>
         <input id="tpl-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={REVIEW_NAME_MAX} placeholder="Money month" className={FIELD} />
         {!existing && (
           <>
-            <label className="mt-sm block text-[14px] font-bold" htmlFor="tpl-kind">
+            <label className="mt-sm block text-subhead font-semibold" htmlFor="tpl-kind">
               Comes back every
             </label>
             <select id="tpl-kind" value={cadence} onChange={(e) => setCadence(e.target.value as PeriodKind)} className={FIELD}>
@@ -402,12 +402,12 @@ function TemplateEditor({ editing, kind, onClose, onSaved }: { editing: ReviewTe
             </select>
           </>
         )}
-        <label className="mt-sm block text-[14px] font-bold" htmlFor="tpl-prompts">
+        <label className="mt-sm block text-subhead font-semibold" htmlFor="tpl-prompts">
           Questions, one per line
         </label>
         <textarea id="tpl-prompts" value={text} onChange={(e) => setText(e.target.value)} rows={6} placeholder={'What did you earn?\nWhat did you waste?'} className={FIELD} />
         {(save.isError || remove.isError) && (
-          <p role="alert" className="m-0 text-[14px] font-bold">
+          <p role="alert" className="m-0 text-subhead">
             That did not save. Try again.
           </p>
         )}

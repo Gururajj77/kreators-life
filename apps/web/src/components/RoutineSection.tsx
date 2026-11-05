@@ -25,7 +25,7 @@ export function RoutineSection({ date }: { date: string }) {
   if (!d.routine) {
     return (
       <section className="mt-lg" aria-labelledby="routine-heading">
-        <h2 id="routine-heading" className="text-[18px]">
+        <h2 id="routine-heading" className="text-title2">
           Your routine
         </h2>
         <Link to="/session" className="toy toy-soft mt-sm flex items-center gap-sm rounded-tile bg-card p-sm text-ink">
@@ -33,8 +33,8 @@ export function RoutineSection({ date }: { date: string }) {
             <Icon icon={Compass} size={20} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[16px] font-bold">Run the strategy session</span>
-            <span className="block text-[14px] font-semibold text-ink-soft">A few minutes: the map, your day, a routine and a contract.</span>
+            <span className="block text-headline">Run the strategy session</span>
+            <span className="block text-subhead text-ink-soft">A few minutes: the map, your day, a routine and a contract.</span>
           </span>
         </Link>
       </section>
@@ -54,21 +54,21 @@ export function RoutineSection({ date }: { date: string }) {
   return (
     <section className="mt-lg" aria-labelledby="routine-heading">
       <div className="flex items-center justify-between gap-sm">
-        <h2 id="routine-heading" className="text-[18px]">
+        <h2 id="routine-heading" className="text-title2">
           Your routine
         </h2>
-        <span className="text-[12px] font-bold text-ink-soft">
+        <span className="text-caption text-ink-soft">
           {d.week.done} of 7 this week{d.contract ? `, ${d.contract.minDays} is the deal` : ''}
         </span>
       </div>
       <ul className="mt-xs flex list-none gap-xs p-0 m-0" aria-label="This week">
         {d.week.days.map((v, i) => (
-          <li key={i} className={`flex size-[28px] items-center justify-center rounded-pill text-[11px] font-extrabold ${v === true ? 'bg-r4 text-on-fill' : v === false ? 'bg-line text-ink-soft' : 'bg-paper text-ink-mute'}`} title={v === true ? 'done' : v === false ? 'not all steps' : 'nothing yet'}>
+          <li key={i} className={`flex size-[28px] items-center justify-center rounded-pill text-caption2 font-semibold ${v === true ? 'bg-r4 text-on-fill' : v === false ? 'bg-line text-ink-soft' : 'bg-paper text-ink-mute'}`} title={v === true ? 'done' : v === false ? 'not all steps' : 'nothing yet'}>
             {labels[(new Date(`${date}T00:00:00`).getDay() + 6 + i - 6 + 7) % 7]}
           </li>
         ))}
       </ul>
-      {d.routine.practices.affirmation && <p className="mt-sm m-0 rounded-tile bg-paper p-sm text-[14px] font-bold">“{d.routine.practices.affirmation}”</p>}
+      {d.routine.practices.affirmation && <p className="mt-sm m-0 rounded-tile bg-paper p-sm text-subhead font-semibold">“{d.routine.practices.affirmation}”</p>}
       <div className="mt-sm flex gap-xs">
         {(['general', 'exceptional'] as const).map((t) => (
           <button key={t} type="button" className={chip(dayType === t)} onClick={() => mark.mutate({ dayType: t, steps: [...ticked] })} disabled={mark.isPending}>
@@ -78,7 +78,7 @@ export function RoutineSection({ date }: { date: string }) {
       </div>
       {morning && (
         <div className="mt-sm flex flex-col gap-xs">
-          <p className="m-0 text-[14px] font-bold">
+          <p className="m-0 text-subhead font-semibold">
             Morning routine, {morning.start} to {morning.end}
             {stepsMinutes(morning) > 0 ? `, ${minutesLabel(stepsMinutes(morning))} of steps` : ''}
             {d.today?.done ? '. Done.' : ''}
@@ -93,12 +93,12 @@ export function RoutineSection({ date }: { date: string }) {
           .filter((b) => b.key !== 'morning')
           .map((b) => (
             <li key={b.key} className="flex items-start gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-              <span className="w-[100px] shrink-0 text-[12px] font-bold text-ink-soft">
+              <span className="w-[100px] shrink-0 text-caption text-ink-soft">
                 {b.start} to {b.end}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[14px] font-bold">{b.name}</span>
-                <span className="block text-[12px] font-semibold text-ink-soft">{b.note}</span>
+                <span className="block text-subhead font-semibold">{b.name}</span>
+                <span className="block text-caption text-ink-soft">{b.note}</span>
               </span>
             </li>
           ))}

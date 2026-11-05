@@ -1218,10 +1218,11 @@ section('Admin');
   await admin('DELETE', `/admin/flags/overrides/${override.json.override.id}`);
   const reviewsBack = await api('GET', '/reviews', undefined, B.token);
   check('and the door opens again when it is removed', reviewsBack.status === 200, reviewsBack.status);
-  // The audit log is paged now, so walk the pages: the flag change is recent, the founder promotion may be far back.
+  // The audit log is paged now, so walk the pages: the flag change is recent, the founder promotion may be far back (the smoke database
+  // keeps every run's rows, so it passed 2,000 on 2026-11-05; the walk stops as soon as both are found or there is no next page).
   let auditText = '';
   let auditStatus = 0;
-  for (let page = 1; page <= 20; page += 1) {
+  for (let page = 1; page <= 200; page += 1) {
     const r = await admin('GET', `/admin/audit?page=${page}&size=100`);
     auditStatus = r.status;
     auditText += JSON.stringify(r.json);
@@ -3011,7 +3012,7 @@ section('Security: headers, origin, exposed files, errors, addresses, alerts');
   const wrangler = readFileSync(new URL('../../apps/api/wrangler.jsonc', import.meta.url), 'utf8');
   const { BLOCKED_PATTERNS } = await import('../../apps/api/src/headers.ts');
   check('wrangler sends every blocked pattern to the Worker and leaves /.well-known alone', BLOCKED_PATTERNS.every((x) => wrangler.includes(`"${x}"`)) && wrangler.includes('"!/.well-known/*"'), BLOCKED_PATTERNS.filter((x) => !wrangler.includes(`"${x}"`)));
-  check('app screens and /.well-known are not caught by the hidden-file rule', ['/admin', '/settings', '/signin/reset', '/today', '/.well-known/security.txt', '/assets/index-abc.js', '/fonts/inter-latin.woff2', '/resources/x.md', '/u/someone.name'].every((p) => !blockedPath(p)) && blockedPath('/.env') && blockedPath('/a/.git/config') && blockedPath('/%2eenv'));
+  check('app screens and /.well-known are not caught by the hidden-file rule', ['/admin', '/settings', '/signin/reset', '/today', '/.well-known/security.txt', '/assets/index-abc.js', '/fonts/google-sans-flex-latin.woff2', '/resources/x.md', '/u/someone.name'].every((p) => !blockedPath(p)) && blockedPath('/.env') && blockedPath('/a/.git/config') && blockedPath('/%2eenv'));
 
   // Errors: a body that is not JSON and a path that does not exist answer plainly.
   const bad = await fetch(`${API}/auth/signin`, { method: 'POST', headers: { 'content-type': 'application/json', ...SEC }, body: '{"email": "a@b.co", "password": "hunter2-secret' });
@@ -3046,6 +3047,8 @@ section('Security: headers, origin, exposed files, errors, addresses, alerts');
   check('after a role change the admins are told in the inbox, and two cron runs in an hour tell them once', roleAfter >= 1 && roleAfter - roleBefore <= 1, [roleBefore, roleAfter]);
 }
 
+import { execFileSync as deleteExec } from 'node:child_process';
+import { existsSync as deleteStateExists } from 'node:fs';
 section('Export and delete');
 {
   const exp = await api('GET', '/me/export', undefined, B.token);
@@ -3053,10 +3056,30 @@ section('Export and delete');
   check('export is one JSON file', exp.status === 200 && text.length > 500, exp.status);
   check('export carries the not-to-do list and the journal', /Stay away 0/.test(text) && /Smoke entry/.test(text), '');
   check('export carries the strategy session', Array.isArray(exp.json.assessments) && exp.json.assessments.length >= 1 && exp.json.placements?.length === 7 && exp.json.contracts?.length >= 1, Object.keys(exp.json ?? {}).filter((k) => /assess|placem|contract/.test(k)));
+  // Events about the person (a product event they sent, a tap on their public page) go with the account. Read straight from the
+  // smoke database, so only against the smoke server on 8788.
+  const delState = new URL('./state', import.meta.url).pathname;
+  const delOwnServer = ORIGIN === 'http://127.0.0.1:8788' && deleteStateExists(delState) && /^[\w-]+$/.test(B.user?.id ?? '');
+  const eventRows = () => {
+    const out = deleteExec('npx', ['--no-install', 'wrangler', 'd1', 'execute', 'kreators-life', '--local', '--persist-to', delState, '--json', '--command', `SELECT (SELECT COUNT(*) FROM analytics_events WHERE user_id = '${B.user.id}') AS a, (SELECT COUNT(*) FROM page_events WHERE owner_id = '${B.user.id}') AS p`], { cwd: new URL('../../apps/api', import.meta.url).pathname, stdio: 'pipe' }).toString();
+    return JSON.parse(out)[0]?.results?.[0] ?? {};
+  };
+  let eventsBefore = null;
+  if (delOwnServer) {
+    await api('POST', '/me/events', { name: 'profile_viewed' }, B.token);
+    const bHandle = (await me(B.token))?.handle;
+    if (bHandle) await api('POST', `/public/${bHandle}/click`, { ref: 'block:smoke' });
+    eventsBefore = eventRows();
+  }
   const noConfirm = await api('DELETE', '/me', {}, B.token);
   check('delete needs the word', noConfirm.status === 400, noConfirm.json);
   const del = await api('DELETE', '/me', { confirm: 'DELETE' }, B.token);
   check('an account can be deleted', del.status === 200, del.json);
+  if (!delOwnServer) console.log('  (skipped the event rows check: it reads the smoke database, and this is not the smoke server on 8788)');
+  else {
+    const after = eventRows();
+    check('the product events and public page events about them go with the account', eventsBefore.a >= 1 && eventsBefore.p >= 1 && after.a === 0 && after.p === 0, { before: eventsBefore, after });
+  }
   const gone = await api('GET', '/me', undefined, B.token);
   check('the session is gone with it', gone.status === 401, gone.status);
   const signin = await api('POST', '/auth/signin', { email: `buyer-${stamp}@smoke.test`, password: `Lantern-${stamp}-new` });

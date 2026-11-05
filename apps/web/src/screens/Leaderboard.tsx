@@ -47,7 +47,7 @@ function Entry({ e, stat }: { e: LeaderboardEntry; stat: string }) {
   return (
     <li className={`flex items-center gap-sm rounded-tile p-sm shadow-toy-soft ${e.isMe ? 'bg-ink text-on-ink' : 'bg-card'}`}>
       <span
-        className="flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-paper text-[14px] font-extrabold text-ink"
+        className="flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-paper text-subhead font-medium text-ink"
         role="img"
         aria-label={`Rank ${e.rank}`}
       >
@@ -55,17 +55,17 @@ function Entry({ e, stat }: { e: LeaderboardEntry; stat: string }) {
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-xs">
-          <span className="truncate text-[16px] font-bold">
+          <span className="truncate text-headline">
             {e.name}
             {e.isMe ? ' (you)' : ''}
           </span>
           {e.isPro && <IconTag tone="deep" icon="Crown">Pro</IconTag>}
         </span>
-        <span className={`block text-[14px] font-semibold ${e.isMe ? 'text-on-ink/80' : 'text-ink-soft'}`}>
+        <span className={`block text-subhead ${e.isMe ? 'text-on-ink/80' : 'text-ink-soft'}`}>
           {stage?.name ?? 'Seed'}, level {e.level}
         </span>
       </span>
-      <span className="shrink-0 text-[14px] font-extrabold">{stat}</span>
+      <span className="shrink-0 text-subhead font-semibold">{stat}</span>
     </li>
   );
 }
@@ -76,23 +76,23 @@ const SCOPE_LABEL: Record<LeaderboardScope, string> = { all: '', goal: 'Goal', p
 function BlockCard({ b, onOpen, className = '' }: { b: LeaderboardBlock; onOpen: () => void; className?: string }) {
   return (
     <li className={`flex flex-col rounded-tile bg-card p-sm shadow-toy-soft ${className}`}>
-      <p className="m-0 text-[16px] font-extrabold">
+      <p className="m-0 text-headline">
         {b.icon && <AppIcon name={b.icon} size={16} className="mr-xs inline-block align-[-2px] text-ink-soft" />}
         {b.label}
       </p>
-      <p className="m-0 text-[12px] font-bold text-ink-soft">
+      <p className="m-0 text-caption text-ink-soft">
         {b.people === 0 ? 'Nobody here yet' : `${b.people}${b.people >= LEADERBOARD_POOL ? '+' : ''} ${b.people === 1 ? 'person' : 'people'}`}
         {b.myRank ? ` · you are #${b.myRank}` : ''}
       </p>
       {b.top.length > 0 && (
         <ol className="mt-xs mb-sm flex list-none flex-col gap-xs p-0 m-0">
           {b.top.map((t) => (
-            <li key={t.rank} className="flex items-baseline justify-between gap-xs text-[14px] font-semibold">
+            <li key={t.rank} className="flex items-baseline justify-between gap-xs text-subhead">
               <span className="min-w-0 truncate">
                 <PlaceMark place={t.rank} /> {t.name}
                 {t.isMe ? ' (you)' : ''}
               </span>
-              <span className="shrink-0 font-extrabold">{formatCount(t.xp)} xp</span>
+              <span className="shrink-0 font-bold">{formatCount(t.xp)} xp</span>
             </li>
           ))}
         </ol>
@@ -149,7 +149,7 @@ export function Leaderboard() {
   return (
     <Screen>
       <AppCover back={{ to: '/apps', label: 'Apps' }} title="Leaderboard" lede="See where you stand by goal, pillar, city and more.">
-        <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-[12px] font-bold text-ink-soft">
+        <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-caption text-ink-soft">
           <li>Each month is a season, and its top three get the Season top three honor.</li>
           <li>You show only after you opt in under Profile.</li>
           <li>Journal and wellbeing never count.</li>
@@ -173,13 +173,13 @@ export function Leaderboard() {
       </section>
 
       {q.isPending && q.fetchStatus !== 'idle' && (
-        <p className="mt-md text-[14px] font-bold text-ink-soft" role="status">
+        <p className="mt-md text-subhead text-ink-soft" role="status">
           Counting the pillars
         </p>
       )}
       {q.isError && (
         <div className="mt-md flex flex-wrap-reverse items-center justify-between gap-sm rounded-card bg-card p-md shadow-toy-soft" role="alert">
-          <p className="m-0 min-w-0 flex-1 basis-[60%] font-bold">Could not load the leaderboard.</p>
+          <p className="m-0 min-w-0 flex-1 basis-[60%] font-semibold">Could not load the leaderboard.</p>
           <Button variant="outline" onClick={() => q.refetch()}>
             Try again
           </Button>
@@ -189,7 +189,7 @@ export function Leaderboard() {
       {q.data && (
         <>
           <section className="mt-lg" aria-labelledby="lb-now">
-            <h2 id="lb-now" className="text-[24px]">
+            <h2 id="lb-now" className="text-title2">
               {q.data.label}
             </h2>
             <div className="mt-sm grid grid-cols-2 gap-xs sm:grid-cols-4">
@@ -199,7 +199,7 @@ export function Leaderboard() {
               <StatTile label="Season ends" value={daysLeft === null ? '·' : `${daysLeft}d`} hint={q.data.season.label} />
             </div>
             {!q.data.optedIn && (
-              <p className="mt-sm m-0 rounded-tile bg-card p-sm text-[14px] font-semibold shadow-toy-soft">
+              <p className="mt-sm m-0 rounded-tile bg-card p-sm text-subhead shadow-toy-soft">
                 You are hidden from every board. Turn it on under{' '}
                 <Link to="/you" className="underline underline-offset-4">
                   Profile
@@ -209,8 +209,8 @@ export function Leaderboard() {
             )}
             {q.data.entries.length === 0 ? (
               <div className="mt-md rounded-card border-2 border-dashed border-line p-md text-center">
-                <p className="m-0 font-bold">Nobody on this board yet.</p>
-                <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Set up a pillar and tick a task, then opt in. You will be first.</p>
+                <p className="m-0 font-semibold">Nobody on this board yet.</p>
+                <p className="mt-xs m-0 text-subhead text-ink-soft">Set up a pillar and tick a task, then opt in. You will be first.</p>
               </div>
             ) : (
               <ol className="mt-md flex list-none flex-col gap-xs p-0 m-0">
@@ -221,7 +221,7 @@ export function Leaderboard() {
             )}
             <Pager page={q.data.page} label="people" />
             {by === 'season' && (
-              <p className="mt-sm m-0 text-[14px] font-bold text-ink-soft">
+              <p className="mt-sm m-0 text-subhead text-ink-soft">
                 {q.data.season.label}, ends {new Date(q.data.season.endsAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' })}.
               </p>
             )}
@@ -236,7 +236,7 @@ export function Leaderboard() {
               </ul>
               {goalBlocks.some((b) => b.people === 0) && (
                 <Fold className="mt-sm" title="Boards with no one yet" hint={String(goalBlocks.filter((b) => b.people === 0).length)}>
-                  <p className="m-0 text-[12px] font-bold text-ink-soft">{goalBlocks.filter((b) => b.people === 0).map((b) => b.label).join(', ')}.</p>
+                  <p className="m-0 text-caption text-ink-soft">{goalBlocks.filter((b) => b.people === 0).map((b) => b.label).join(', ')}.</p>
                 </Fold>
               )}
             </Section>
@@ -252,14 +252,14 @@ export function Leaderboard() {
           )}
           {q.data.past.length > 0 && (
             <section className="mt-lg" aria-labelledby="seasons-heading">
-              <h2 id="seasons-heading" className="text-[24px]">
+              <h2 id="seasons-heading" className="text-title2">
                 Past seasons
               </h2>
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                 {q.data.past.map((p) => (
                   <li key={p.season} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                    <p className="m-0 text-[14px] font-extrabold">{p.label}</p>
-                    <p className="m-0 text-[14px] font-semibold text-ink-soft">
+                    <p className="m-0 text-subhead font-semibold">{p.label}</p>
+                    <p className="m-0 text-subhead text-ink-soft">
                       {p.top.map((t) => `${placeWord(t.place)} ${t.name}${t.isMe ? ' (you)' : ''}, ${formatCount(t.xp)} xp`).join(' · ')}
                     </p>
                   </li>

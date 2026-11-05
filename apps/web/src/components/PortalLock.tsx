@@ -45,7 +45,7 @@ export function PasswordAsk({ kind, token, agencyName }: { kind: AskKind; token:
   const who = agencyName || 'They';
   if (done) {
     return (
-      <p role="status" className="no-print mt-sm m-0 text-[14px] font-bold">
+      <p role="status" className="no-print mt-sm m-0 text-subhead">
         {`Requested. ${who} will send you a new one.`}
       </p>
     );
@@ -65,19 +65,19 @@ export function PasswordAsk({ kind, token, agencyName }: { kind: AskKind; token:
   };
   return (
     <div className="no-print mt-sm">
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls={`${id}-ask`} className="inline-flex min-h-[44px] items-center gap-xs bg-transparent p-0 text-left text-[14px] font-semibold text-ink-soft underline underline-offset-4 hover:text-ink">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls={`${id}-ask`} className="inline-flex min-h-[44px] items-center gap-xs bg-transparent p-0 text-left text-subhead text-ink-soft underline underline-offset-4 hover:text-ink">
         {COPY.ask}
         <ToggleChevron open={open} size={14} />
       </button>
       {open && (
         <form id={`${id}-ask`} onSubmit={send} className="mt-xs rounded-tile bg-paper p-sm">
-          <p className="m-0 text-[14px] font-semibold text-ink-soft">{COPY.askLede}</p>
-          <label htmlFor={`${id}-r`} className="mt-sm block text-[14px] font-bold">
+          <p className="m-0 text-subhead text-ink-soft">{COPY.askLede}</p>
+          <label htmlFor={`${id}-r`} className="mt-sm block text-subhead font-semibold">
             {COPY.reasonLabel}
           </label>
-          <input id={`${id}-r`} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={PASSWORD_REQUEST_REASON_MAX} placeholder={COPY.reasonHint} className="mt-xs min-h-[44px] w-full rounded-tile border-2 border-line bg-card px-sm text-[16px]" />
+          <input id={`${id}-r`} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={PASSWORD_REQUEST_REASON_MAX} placeholder={COPY.reasonHint} className="mt-xs min-h-[44px] w-full rounded-tile border-2 border-line bg-card px-sm text-body" />
           {error && (
-            <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+            <p role="alert" className="mt-xs m-0 text-subhead">
               {error}
             </p>
           )}
@@ -99,7 +99,7 @@ export function AgencyMark({ name, logo, size = 'md' }: { name: string; logo: st
   return (
     <div className="flex min-w-0 items-center gap-sm">
       {logo && <img src={`/api/public/media/${encodeURIComponent(logo)}`} alt={name ? `${name} logo` : 'Logo'} className={`${box} w-auto shrink-0 rounded-inner object-contain`} />}
-      {name && <p className={`m-0 min-w-0 font-display font-extrabold leading-tight ${size === 'sm' ? 'text-[16px]' : 'text-[18px]'}`}>{name}</p>}
+      {name && <p className={`m-0 min-w-0 font-display font-bold leading-tight ${size === 'sm' ? 'text-callout' : 'text-headline'}`}>{name}</p>}
     </div>
   );
 }
@@ -140,11 +140,11 @@ export function PortalLock({ clientName, agencyName = '', agencyLogo = '', ended
       <form onSubmit={submit} className="mx-auto max-w-[480px] rounded-card bg-card p-md shadow-toy-soft" aria-labelledby={`${id}-h`}>
         <AgencyMark name={agencyName} logo={agencyLogo} />
         <p className={`${agencyName || agencyLogo ? 'mt-md' : 'mt-0'} mb-0 type-eyebrow text-ink-mute`}>A private page</p>
-        <h1 id={`${id}-h`} className="mt-xs text-[30px]">
+        <h1 id={`${id}-h`} className="mt-xs text-large-title">
           {clientName ? `For ${clientName}` : 'Type your password'}
         </h1>
-        <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">{ended ? COPY.ended : COPY.lede}</p>
-        <label htmlFor={`${id}-p`} className="mt-md block text-[14px] font-bold">
+        <p className="mt-xs m-0 text-callout text-ink-soft">{ended ? COPY.ended : COPY.lede}</p>
+        <label htmlFor={`${id}-p`} className="mt-md block text-subhead font-semibold">
           Password
         </label>
         <div className="mt-xs flex gap-xs">
@@ -163,7 +163,7 @@ export function PortalLock({ clientName, agencyName = '', agencyLogo = '', ended
             maxLength={200}
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? `${id}-e` : undefined}
-            className="min-h-[48px] min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm text-[16px]"
+            className="min-h-[48px] min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm text-body"
           />
           <Button type="button" variant="outline" size="sm" className="min-w-[96px]" onClick={() => setShown((s) => !s)} aria-pressed={shown} aria-controls={`${id}-p`}>
             <AnimatedIcon name="visibility" size={20} active={shown} />
@@ -171,7 +171,7 @@ export function PortalLock({ clientName, agencyName = '', agencyLogo = '', ended
           </Button>
         </div>
         {error && (
-          <p id={`${id}-e`} role="alert" className="mt-xs m-0 text-[14px] font-bold">
+          <p id={`${id}-e`} role="alert" className="mt-xs m-0 text-subhead">
             {error}
           </p>
         )}
@@ -180,7 +180,7 @@ export function PortalLock({ clientName, agencyName = '', agencyLogo = '', ended
             {busy ? 'Checking' : 'Open the page'}
           </Button>
         </div>
-        <p className="mt-sm m-0 text-[12px] font-semibold text-ink-soft">{COPY.stuck}</p>
+        <p className="mt-sm m-0 text-caption text-ink-soft">{COPY.stuck}</p>
       </form>
       {ask && (
         <div className="mx-auto max-w-[480px] px-sm">
@@ -207,13 +207,13 @@ export function LinkTrouble({ error, what = 'page', onRetry }: { error: unknown;
       : 'Check that the whole link was copied. If it still does not open, ask the person who sent it for a new link.';
   return (
     <div role="alert" className="rounded-card bg-card p-md shadow-toy-soft">
-      <h1 className="text-[30px]">{title}</h1>
-      <p className="mt-xs m-0 text-[16px] font-semibold text-ink-soft">{line}</p>
+      <h1 className="text-large-title">{title}</h1>
+      <p className="mt-xs m-0 text-callout text-ink-soft">{line}</p>
       {(email || (broke && onRetry)) && (
         <div className="mt-md flex flex-wrap gap-sm">
           {broke && onRetry && <Button onClick={onRetry}>Try again</Button>}
           {email && (
-            <a href={`mailto:${email}`} className="toy toy-ink inline-flex min-h-[44px] items-center justify-center rounded-pill border border-ink/30 bg-card-strong px-sm text-[14px] font-semibold text-ink hover:border-ink">
+            <a href={`mailto:${email}`} className="toy toy-ink inline-flex min-h-[44px] items-center justify-center rounded-pill border border-ink/30 bg-card-strong px-sm text-subhead text-ink hover:border-ink">
               {`Email ${agency || 'them'}`}
             </a>
           )}
@@ -233,7 +233,7 @@ export function CopyTextButton({ text }: { text: () => string }) {
         Copy text
       </Button>
       {said && (
-        <span role="status" className="text-[14px] font-bold">
+        <span role="status" className="text-subhead">
           {said}
         </span>
       )}
@@ -274,7 +274,7 @@ export function PortalDocGate({ kind, children }: { kind: LockedLink; children: 
   if (q.isPending) {
     return (
       <SiteLayout wide={false} minimal>
-        <p className="pt-lg m-0 text-[16px] font-semibold text-ink-soft">Loading.</p>
+        <p className="pt-lg m-0 text-callout text-ink-soft">Loading.</p>
       </SiteLayout>
     );
   }

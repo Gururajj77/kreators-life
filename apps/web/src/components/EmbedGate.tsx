@@ -31,8 +31,8 @@ export function EmbedGate({ url, title, children, className = '' }: { url: strin
   const line = CONSENT_PURPOSES.find((p) => p.key === 'embeds')?.line ?? '';
   return (
     <div className={`flex aspect-video w-full flex-col items-center justify-center gap-xs rounded-tile bg-paper p-md text-center ${className}`}>
-      <p className="m-0 text-[16px] font-extrabold">{title || `Video from ${host}`}</p>
-      <p className="m-0 max-w-[420px] text-[12px] font-semibold text-ink-soft">This video is hosted by {host}, which sees your visit once it loads. {line}</p>
+      <p className="m-0 text-headline">{title || `Video from ${host}`}</p>
+      <p className="m-0 max-w-[420px] text-caption text-ink-soft">This video is hosted by {host}, which sees your visit once it loads. {line}</p>
       <div className="mt-xs flex flex-wrap justify-center gap-xs">
         <Button size="sm" onClick={() => setOnce(true)}>
           Play this video

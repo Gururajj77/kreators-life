@@ -22,7 +22,7 @@ import { SiteArrow, SITE_CHIP, SITE_CHIP_BASE, SITE_LINK, SITE_PRIMARY, SITE_SEC
 /** The rest of a feature's story: one short fact a line, as a list (CopyOS: lists for features, paragraphs only for a story). */
 function MoreList({ items }: { items: string[] }) {
   return (
-    <ul className="m-0 grid list-disc gap-xs pl-md text-[16px] font-semibold leading-snug text-ink-soft">
+    <ul className="m-0 grid list-disc gap-xs pl-md text-callout text-ink-soft">
       {items.map((t) => (
         <li key={t}>{t}</li>
       ))}
@@ -64,7 +64,7 @@ function FeaturePage() {
         data-pillar={lead.key}
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="wash mt-lg grid gap-md rounded-card bg-card p-md shadow-toy-soft md:grid-cols-[3fr_2fr] md:items-center md:p-lg"
+        className="wash mt-lg grid gap-md rounded-card bg-card p-md shadow-toy-soft lg:grid-cols-[3fr_2fr] lg:items-center md:p-lg"
         style={{ '--wash': lead.color } as CSSProperties}
       >
         <div>
@@ -72,8 +72,8 @@ function FeaturePage() {
           <p className="m-0 flex" style={{ color: `var(--deep-${lead.key})` }}>
             <AppIcon name={module.icon} size={40} />
           </p>
-          <h1 className="type-hook mt-xs text-[clamp(40px,9vw,80px)]">{module.name}</h1>
-          <p className="mt-sm m-0 max-w-[560px] text-[16px] font-semibold leading-snug text-ink-soft">{copy.pitch}</p>
+          <h1 className="type-hook mt-xs text-display-1">{module.name}</h1>
+          <p className="mt-sm m-0 max-w-[560px] text-callout text-ink-soft">{copy.pitch}</p>
           {copy.more && copy.more.length > 0 && (
             <>
               {/* A phone keeps the first screen light: the rest of the story waits under a fold. A laptop shows it open, under the buttons. */}
@@ -113,25 +113,26 @@ function FeaturePage() {
         </GuideLine>
       </motion.header>
 
-      <section className="bento mt-lg" aria-label="How it goes">
+      {/* Three equal steps (every app has three): the old wide first step held one line in a box its neighbours stretched to four. */}
+      <section className="mt-lg grid gap-sm sm:grid-cols-3" aria-label="How it goes">
         {copy.steps.map((s, i) => (
           // Only the lift animates; a step is never hidden, so a step below the fold (or a screenshot) never shows an empty card.
           <motion.div
             key={s}
             {...rise}
-            className={`rounded-tile bg-card p-md shadow-toy-soft ${i === 0 ? 'bento-w2' : ''}`}
+            className="rounded-tile bg-card p-md shadow-toy-soft"
           >
             {/* The deep token, not the raw relationship colour: the raw colour reads too faint on a thin glass card in dark mode. */}
-            <p className="m-0 type-hook text-[32px] leading-none" style={{ color: `var(--deep-${lead.key})` }}>
+            <p className="m-0 type-hook text-display-3 leading-none" style={{ color: `var(--deep-${lead.key})` }}>
               {i + 1}
             </p>
-            <p className="mt-xs m-0 text-[16px] font-bold leading-snug">{keepTail(s)}</p>
+            <p className="mt-xs m-0 text-headline">{keepTail(s)}</p>
           </motion.div>
         ))}
       </section>
 
       <section className="mt-lg" aria-labelledby="serves">
-        <h2 id="serves" className="text-[24px]">
+        <h2 id="serves" className="text-title2 font-medium">
           Which pillars it serves
         </h2>
         <ul className="fill-row-all mt-sm flex list-none flex-wrap gap-xs p-0 m-0">
@@ -153,15 +154,15 @@ function FeaturePage() {
       {listingType && (
         <section className="mt-lg" aria-labelledby="open-now">
           <div className="flex flex-wrap items-end justify-between gap-sm">
-            <h2 id="open-now" className="text-[24px]">
+            <h2 id="open-now" className="text-title2 font-medium">
               {LISTING_TYPE_META[listingType].plural} open now
             </h2>
-            <Link to={`/explore?type=${listingType}`} className={`${SITE_LINK} text-[14px]`}>
+            <Link to={`/explore?type=${listingType}`} className={`${SITE_LINK} text-subhead`}>
               See all in Explore
             </Link>
           </div>
           {listings.data && listings.data.listings.length === 0 && (
-            <p className="mt-sm m-0 rounded-tile bg-card p-md text-[16px] font-semibold text-ink-soft shadow-toy-soft">
+            <p className="mt-sm m-0 rounded-tile bg-card p-md text-callout text-ink-soft shadow-toy-soft">
               None listed at the moment. New ones appear here the moment they are published.
             </p>
           )}
@@ -177,7 +178,7 @@ function FeaturePage() {
 
       {others.length > 0 && (
         <section className="mt-lg" aria-labelledby="more" data-pillar={MODULE_GROUP_ACCENT[module.group]}>
-          <h2 id="more" className="text-[24px]">
+          <h2 id="more" className="text-title2 font-medium">
             More in this group
           </h2>
           <ul className="fill-row-all mt-sm flex list-none flex-wrap gap-xs p-0 m-0">

@@ -54,17 +54,17 @@ function Tile({ b, held, count, fresh, onOpen }: { b: Badge; held: HeldBadge | u
   return (
     <button type="button" onClick={onOpen} className="toy toy-soft flex min-h-[44px] w-full flex-col items-center gap-xs rounded-tile bg-card p-sm text-center">
       <BadgeArt name={b.name} icon={b.icon} tier={b.tier} shape={BADGE_FAMILY_META[b.family].shape} earned={earned} size="md" shine={fresh} decorative />
-      <span className="text-[14px] font-extrabold">{b.name}</span>
-      <span className="text-[12px] font-bold text-ink-soft">
+      <span className="text-subhead font-semibold">{b.name}</span>
+      <span className="text-caption text-ink-soft">
         {earned ? (held?.at ? `Earned ${day(held.at)}` : held?.given ? 'Given by the team' : 'Earned') : 'Locked'} · {BADGE_TIER_LABEL[b.tier]}
       </span>
-      {!earned && wide && <span className="text-balance text-[12px] font-semibold text-ink-soft">{keepTail(b.how)}</span>}
-      {!earned && p.countable && (
-        <span className="mt-auto flex w-full flex-col gap-xs">
-          <Bar pct={p.pct} label={`${b.name}: ${p.label}`} />
-          <span className="text-[12px] font-bold text-ink-soft">{p.label}</span>
-        </span>
-      )}
+      {!earned && wide && <span className="text-balance text-caption text-ink-soft">{keepTail(b.how)}</span>}
+      {/* Every tile ends in the same foot (2026-11-05), so the bars line up across a row: the count toward a locked badge (a one-step
+          badge reads "0 of 1"), or a full bar and Done for one earned. */}
+      <span className="mt-auto flex w-full flex-col gap-xs">
+        <Bar pct={earned ? 100 : p.pct} label={`${b.name}: ${earned ? 'done' : p.label}`} />
+        <span className="text-caption text-ink-soft">{earned ? 'Done' : p.label}</span>
+      </span>
     </button>
   );
 }
@@ -77,20 +77,20 @@ function Detail({ b, held, count, onClose }: { b: Badge | null; held: HeldBadge 
       {b && p && (
         <div className="flex flex-col items-center gap-sm text-center">
           <BadgeArt name={b.name} icon={b.icon} tier={b.tier} shape={BADGE_FAMILY_META[b.family].shape} earned={earned} size="lg" decorative />
-          <p className="m-0 text-[14px] font-bold text-ink-soft">
+          <p className="m-0 text-subhead text-ink-soft">
             {BADGE_TIER_LABEL[b.tier]} · {b.family}
           </p>
-          <p className="m-0 text-[16px] font-semibold">{b.how}.</p>
-          <p className="m-0 text-[14px] font-extrabold">{earned ? 'Earned' : 'Locked'}</p>
+          <p className="m-0 text-callout">{b.how}.</p>
+          <p className="m-0 text-subhead font-semibold">{earned ? 'Earned' : 'Locked'}</p>
           {earned ? (
-            <p className="m-0 text-[14px] font-semibold text-ink-soft">{held?.at ? `Earned on ${day(held.at)}.` : held?.given ? 'Given by the kreators.app team.' : 'Earned before dates were kept.'}</p>
+            <p className="m-0 text-subhead text-ink-soft">{held?.at ? `Earned on ${day(held.at)}.` : held?.given ? 'Given by the kreators.app team.' : 'Earned before dates were kept.'}</p>
           ) : (
             <div className="flex w-full flex-col gap-xs">
               {p.countable && <Bar pct={p.pct} label={`${b.name}: ${p.label}`} />}
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">{p.countable ? p.label : 'Not earned yet.'}</p>
+              <p className="m-0 text-subhead text-ink-soft">{p.countable ? p.label : 'Not earned yet.'}</p>
             </div>
           )}
-          {BADGE_FAMILY_META[b.family].private && <p className="m-0 text-[12px] font-semibold text-ink-soft">Only you see this one. It never shows on your page or the leaderboard.</p>}
+          {BADGE_FAMILY_META[b.family].private && <p className="m-0 text-caption text-ink-soft">Only you see this one. It never shows on your page or the leaderboard.</p>}
         </div>
       )}
     </Sheet>
@@ -125,16 +125,16 @@ export function BadgeGallery() {
   return (
     <section aria-labelledby="badges-heading">
       <div className="flex flex-wrap items-baseline justify-between gap-xs">
-        <h2 id="badges-heading" className="text-[24px]">
+        <h2 id="badges-heading" className="text-title2">
           Badges
         </h2>
         {q.data && (
-          <p className="m-0 text-[14px] font-extrabold" aria-live="polite">
+          <p className="m-0 text-subhead font-semibold" aria-live="polite">
             {have} of {total} earned
           </p>
         )}
       </div>
-      <p className="mt-xs m-0 text-[14px] font-semibold text-ink-soft">Medals the app earns for you by its own count. Tap one for the next step.</p>
+      <p className="mt-xs m-0 text-subhead text-ink-soft">Medals the app earns for you by its own count. Tap one for the next step.</p>
 
       <TabRow
         className="mt-sm"
@@ -142,7 +142,7 @@ export function BadgeGallery() {
         items={TIER_ITEMS}
         value={tier ?? 'all'}
         onChange={setTierPick}
-        pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-md text-[14px] font-bold ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+        pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-md text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
       />
 
       {q.isLoading && (
@@ -154,7 +154,7 @@ export function BadgeGallery() {
           </div>
         </Busy>
       )}
-      {q.isError && <p className="mt-md text-[14px] font-semibold text-ink-soft">Could not load your badges. Try again in a moment.</p>}
+      {q.isError && <p className="mt-md text-subhead text-ink-soft">Could not load your badges. Try again in a moment.</p>}
 
       {q.data &&
         BADGE_FAMILIES.map((f) => {
@@ -166,7 +166,7 @@ export function BadgeGallery() {
           const all = BADGES.filter((b) => b.family === f).length;
           const body = (
             <>
-              <p className="mt-xs m-0 text-[12px] font-semibold text-ink-soft">{BADGE_FAMILY_META[f].blurb}</p>
+              <p className="mt-xs m-0 text-caption text-ink-soft">{BADGE_FAMILY_META[f].blurb}</p>
               <ul className="mt-sm grid list-none grid-cols-2 gap-sm p-0 m-0 md:grid-cols-4">
                 {ordered.map((b, i) => (
                   <li key={b.key} className={bento(i, ordered.length, 2, 4)}>
@@ -186,10 +186,10 @@ export function BadgeGallery() {
           return (
             <section key={f} className="mt-md" aria-labelledby={`badge-family-${f.replace(/\s+/g, '-')}`}>
               <div className="flex flex-wrap items-baseline justify-between gap-xs">
-                <h3 id={`badge-family-${f.replace(/\s+/g, '-')}`} className="text-[16px]">
+                <h3 id={`badge-family-${f.replace(/\s+/g, '-')}`} className="text-headline">
                   {f}
                 </h3>
-                <p className="m-0 text-[12px] font-extrabold text-ink-soft">
+                <p className="m-0 text-caption text-ink-soft">
                   {got} of {all}
                 </p>
               </div>

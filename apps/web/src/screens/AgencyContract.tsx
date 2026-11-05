@@ -87,11 +87,11 @@ export function useSaid(): [string, (s: string) => void] {
 export function SaveLine({ words, canUndo, onUndo }: { words: string; canUndo: boolean; onUndo: () => void }) {
   return (
     <span className="inline-flex min-h-[24px] items-center gap-xs">
-      <span role="status" className="text-[12px] font-semibold text-ink-mute">
+      <span role="status" className="text-caption text-ink-mute">
         {words}
       </span>
       {canUndo && words === 'Saved' && (
-        <button type="button" onClick={onUndo} className="min-h-[24px] rounded-pill px-xs text-[12px] font-bold text-ink-soft underline underline-offset-2 hover:text-ink">
+        <button type="button" onClick={onUndo} className="min-h-[24px] rounded-pill px-xs text-caption font-medium text-ink-soft underline underline-offset-2 hover:text-ink">
           Undo
         </button>
       )}
@@ -106,7 +106,7 @@ export function DocHeader({ back, backLabel, title, tone, status, save, primary,
     <AppCover
       // A document's title is long ("TRIAL ENGAGEMENT AGREEMENT"): on a phone it keeps the old header's 24px with its last two words
       // tied, so no word stands alone and none breaks; from md it is the cover's large title. A string, so the condensed bar keeps it.
-      className="no-print [&_h1]:text-[24px]! md:[&_h1]:text-[length:var(--text-large-title)]!"
+      className="no-print [&_h1]:text-title2! md:[&_h1]:text-large-title!"
       back={{ to: back, label: backLabel }}
       title={tie(title)}
       lede={
@@ -132,7 +132,7 @@ export function DocHeader({ back, backLabel, title, tone, status, save, primary,
       }
     >
       {Boolean(error) && (
-        <p role="alert" className="m-0 rounded-tile p-sm text-[14px] font-bold" style={{ background: 'var(--tint-red)' }}>
+        <p role="alert" className="m-0 rounded-tile p-sm text-subhead" style={{ background: 'var(--tint-red)' }}>
           {error instanceof ApiError ? error.message : 'That did not work. Try again.'}
         </p>
       )}
@@ -144,7 +144,7 @@ export function DocHeader({ back, backLabel, title, tone, status, save, primary,
 export function ClientSheet({ open, onClose, value, onChange, clients }: { open: boolean; onClose: () => void; value: string | null; onChange: (id: string | null) => void; clients: { id: string; name: string }[] }) {
   return (
     <Sheet open={open} onClose={onClose} title="Client">
-      <label className="block text-[14px] font-bold" htmlFor="paper-client">
+      <label className="block text-subhead font-semibold" htmlFor="paper-client">
         Who it is for
         <select id="paper-client" value={value ?? ''} onChange={(e) => onChange(e.target.value || null)} className={FIELD}>
           <option value="">No client</option>
@@ -186,23 +186,23 @@ export function TemplateSheet({ open, onClose, defaultName, kind, fromId, before
   });
   return (
     <Sheet open={open} onClose={onClose} title="Save as template">
-      <p className="m-0 text-balance text-[14px] font-semibold text-ink-soft">It keeps the sections and the look, not the names filled in.</p>
-      <label className="mt-sm block text-[14px] font-bold" htmlFor="tpl-name">
+      <p className="m-0 text-balance text-subhead text-ink-soft">It keeps the sections and the look, not the names filled in.</p>
+      <label className="mt-sm block text-subhead font-semibold" htmlFor="tpl-name">
         Name
       </label>
       <input id="tpl-name" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} className={FIELD} />
       {same && (
-        <p className="mt-sm m-0 rounded-tile p-sm text-[14px] font-bold" style={{ background: 'var(--tint-yellow)' }}>
+        <p className="mt-sm m-0 rounded-tile p-sm text-subhead" style={{ background: 'var(--tint-yellow)' }}>
           You already have a template called "{same.name}".
         </p>
       )}
       {done && (
-        <p role="status" className="mt-sm m-0 text-[14px] font-bold">
+        <p role="status" className="mt-sm m-0 text-subhead">
           {done}
         </p>
       )}
       {save.error && (
-        <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+        <p role="alert" className="mt-sm m-0 text-subhead">
           {save.error instanceof ApiError ? save.error.message : 'That did not work. Try again.'}
         </p>
       )}
@@ -227,14 +227,14 @@ export function TemplateSheet({ open, onClose, defaultName, kind, fromId, before
 export function ThreadSheet({ open, onClose, type, id, comments, reply, setReply, onSend, sending, fieldId }: { open: boolean; onClose: () => void; type: 'contract' | 'doc'; id: string; comments: readonly DocComment[]; reply: string; setReply: (v: string) => void; onSend: () => void; sending: boolean; fieldId: string }) {
   return (
     <Sheet open={open} onClose={onClose} title="Comments and activity">
-      {comments.length === 0 && <p className="m-0 text-[14px] font-semibold text-ink-soft">No comments yet. When the client asks for a change at their link, it shows here.</p>}
+      {comments.length === 0 && <p className="m-0 text-subhead text-ink-soft">No comments yet. When the client asks for a change at their link, it shows here.</p>}
       <ul className="flex list-none flex-col gap-xs p-0 m-0">
         {comments.map((m) => (
           <li key={m.id} className={`rounded-tile p-sm shadow-toy-soft ${m.author === 'client' ? 'bg-card-strong' : 'bg-card'}`}>
-            <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
+            <p className="m-0 text-eyebrow uppercase text-ink-soft">
               {m.author === 'client' ? 'Client' : 'You'} · {paperDate(m.createdAt)}
             </p>
-            <p className="mt-xs m-0 whitespace-pre-wrap text-[16px] font-semibold">
+            <p className="mt-xs m-0 whitespace-pre-wrap text-prose">
               <Inert text={m.body} />
             </p>
           </li>
@@ -247,7 +247,7 @@ export function ThreadSheet({ open, onClose, type, id, comments, reply, setReply
           if (reply.trim()) onSend();
         }}
       >
-        <label className="block text-[14px] font-bold" htmlFor={fieldId}>
+        <label className="block text-subhead font-semibold" htmlFor={fieldId}>
           Reply
         </label>
         <textarea id={fieldId} value={reply} onChange={(e) => setReply(e.target.value)} rows={3} maxLength={600} className={FIELD} />
@@ -257,7 +257,7 @@ export function ThreadSheet({ open, onClose, type, id, comments, reply, setReply
           </Button>
         </div>
       </form>
-      <h3 className="mt-md mb-xs text-[16px]">Activity</h3>
+      <h3 className="mt-md mb-xs text-headline">Activity</h3>
       <DocLog type={type} id={id} />
       <div className="mt-md pb-xl">
         <Button onClick={onClose}>Done</Button>
@@ -484,7 +484,7 @@ export function AgencyContract() {
       <ClientSheet open={open === 'client'} onClose={close} value={clientId} onChange={(v) => setState((s) => (s ? { ...s, clientId: v } : s))} clients={pick} />
       <Sheet open={open === 'can'} onClose={close} title="Client permissions">
         <Toggle on={doc.show.comments} onChange={(on) => edit((d) => ({ ...d, show: { ...d.show, comments: on } }))} label="Write comments" hint="They can ask for a change at their link." />
-        <p className="mt-sm m-0 text-[14px] font-semibold text-ink-soft">Once it is sent, they can always read it, answer the brief, accept and download it.</p>
+        <p className="mt-sm m-0 text-subhead text-ink-soft">Once it is sent, they can always read it, answer the brief, accept and download it.</p>
         <div className="mt-md pb-xl">
           <Button onClick={close}>Done</Button>
         </div>

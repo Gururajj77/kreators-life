@@ -64,7 +64,7 @@ export function DocPublic() {
         {d && (
           <>
             <div className="no-print mb-md flex flex-wrap items-center justify-between gap-sm">
-              <p className="m-0 text-[14px] font-semibold text-ink-soft">
+              <p className="m-0 text-subhead text-ink-soft">
                 From <strong className="text-ink">{d.ownerName}</strong>
                 {d.revisedAt ? ` · Revised ${paperDate(d.revisedAt)}` : ''}
               </p>
@@ -87,7 +87,7 @@ export function DocPublic() {
             />
 
             {d.status === 'approved' && d.acceptance && (
-              <p role="status" className="mt-md m-0 rounded-tile p-sm text-[16px] font-bold" style={{ background: 'var(--tint-green)' }}>
+              <p role="status" className="mt-md m-0 rounded-tile p-sm text-headline" style={{ background: 'var(--tint-green)' }}>
                 Approved electronically by {d.acceptance.name}
                 {d.acceptance.title ? `, ${d.acceptance.title}` : ''} on {docDateTime(d.acceptance.at)}. Typed approval, not a certified e-signature.
               </p>
@@ -102,24 +102,24 @@ export function DocPublic() {
                   if (name.trim() && agree) accept.mutate();
                 }}
               >
-                <h2 id="approve-heading" className="text-[22px]">
+                <h2 id="approve-heading" className="text-title2">
                   Approve this document
                 </h2>
-                <p className="mt-xs m-0 text-balance text-[14px] font-semibold text-ink-soft">Answer the questions above first if it has any. {COPY.typed}</p>
-                <label className="mt-sm block text-[14px] font-bold" htmlFor="k-name">
+                <p className="mt-xs m-0 text-balance text-subhead text-ink-soft">Answer the questions above first if it has any. {COPY.typed}</p>
+                <label className="mt-sm block text-subhead font-semibold" htmlFor="k-name">
                   Your full name
                 </label>
                 <input id="k-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoComplete="name" className={FIELD} />
-                <label className="mt-sm block text-[14px] font-bold" htmlFor="k-title">
+                <label className="mt-sm block text-subhead font-semibold" htmlFor="k-title">
                   Your title
                 </label>
                 <input id="k-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} autoComplete="organization-title" className={FIELD} />
-                <label className="mt-sm flex min-h-[44px] cursor-pointer items-center gap-xs text-[16px] font-bold">
+                <label className="mt-sm flex min-h-[44px] cursor-pointer items-center gap-xs text-headline">
                   <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="size-[20px] shrink-0 accent-[var(--color-ink)]" />
                   {COPY.agree}
                 </label>
                 {accept.isError && (
-                  <p role="alert" className="mt-sm m-0 text-[14px] font-bold">
+                  <p role="alert" className="mt-sm m-0 text-subhead">
                     {accept.error instanceof ApiError ? accept.error.message : 'That did not work. Try again.'}
                   </p>
                 )}
@@ -135,16 +135,16 @@ export function DocPublic() {
 
             {d.doc.show.comments && (
               <section className="no-print mt-lg" aria-labelledby="ask-heading">
-                <h2 id="ask-heading" className="text-[22px]">
+                <h2 id="ask-heading" className="text-title2">
                   Ask for a change
                 </h2>
                 <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                   {d.comments.map((m) => (
                     <li key={m.id} className={`rounded-tile p-sm shadow-toy-soft ${m.author === 'client' ? 'bg-card-strong' : 'bg-card'}`}>
-                      <p className="m-0 text-[12px] font-extrabold uppercase tracking-wide text-ink-soft">
+                      <p className="m-0 text-eyebrow uppercase text-ink-soft">
                         {m.author === 'client' ? 'You' : d.ownerName} · {paperDate(m.createdAt)}
                       </p>
-                      <p className="mt-xs m-0 whitespace-pre-wrap text-[16px] font-semibold">
+                      <p className="mt-xs m-0 whitespace-pre-wrap text-prose">
                         <Inert text={m.body} />
                       </p>
                     </li>
@@ -157,16 +157,16 @@ export function DocPublic() {
                     if (ask.trim()) comment.mutate();
                   }}
                 >
-                  <label className="block text-[14px] font-bold" htmlFor="k-ask">
+                  <label className="block text-subhead font-semibold" htmlFor="k-ask">
                     What would you like changed?
                   </label>
                   <textarea id="k-ask" value={ask} onChange={(e) => { setAsk(e.target.value); setSent(false); }} rows={3} maxLength={600} className={FIELD} />
                   {comment.isError && (
-                    <p role="alert" className="mt-xs m-0 text-[14px] font-bold">
+                    <p role="alert" className="mt-xs m-0 text-subhead">
                       {comment.error instanceof ApiError ? comment.error.message : 'That did not send. Try again.'}
                     </p>
                   )}
-                  {sent && <p role="status" className="mt-xs m-0 text-[14px] font-bold">Sent. They have been told.</p>}
+                  {sent && <p role="status" className="mt-xs m-0 text-subhead font-semibold">Sent. They have been told.</p>}
                   <div className="mt-xs">
                     <Button type="submit" size="sm" variant="outline" disabled={comment.isPending || !ask.trim()}>
                       {comment.isPending ? 'Sending' : 'Send'}
@@ -175,7 +175,7 @@ export function DocPublic() {
                 </form>
               </section>
             )}
-            <p className="no-print mt-md m-0 text-[12px] font-semibold text-ink-mute">Made with kreators.app</p>
+            <p className="no-print mt-md m-0 text-caption text-ink-mute">Made with kreators.app</p>
           </>
         )}
       </div>
