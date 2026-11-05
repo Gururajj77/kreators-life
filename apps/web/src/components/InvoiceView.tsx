@@ -27,9 +27,8 @@ import {
   type InvoiceTotals,
   type TdsMode,
 } from '@kreators/shared';
-import { ArrowDown, ArrowUp, ChevronRight, GripVertical, Package, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, GripVertical, Package, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useId, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Button } from './Button';
 import { Icon } from './Icon';
 import { invoiceStamp, PrintSheet } from './PrintSheet';
 import { Sheet } from './Sheet';

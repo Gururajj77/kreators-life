@@ -3,7 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
-import { useWide } from '../components/ViewToggle';
+import { useWide } from '../lib/useWide';
 import { Nudge } from '../components/Nudge';
 import { useCelebrate } from '../components/Celebration';
 import { BackLink } from '../components/PageHeader';
@@ -105,8 +105,8 @@ export function Rewards() {
                   return (
                     <li key={x.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                       <span className="min-w-0 flex-1">
-                        <span className="block text-balance text-headline">{tie(r?.name ?? x.rewardKey)}</span>
-                        <span className="block text-subhead text-ink-soft">
+                        <span className="block text-balance text-card-title">{tie(r?.name ?? x.rewardKey)}</span>
+                        <span className="block text-card-note text-ink-soft">
                           {formatCount(x.points)} points, {r?.kind === 'unlock' ? 'unlocked' : x.status}
                           {/* A game's row already says unlocked; its stored note is the same word, so it is not said twice. */}
                           {x.note && r?.kind !== 'unlock' ? `. ${x.note}` : ''}
@@ -157,9 +157,9 @@ export function Rewards() {
                             {r.emoji}
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block text-balance text-headline">{tie(r.name)}</span>
+                            <span className="block text-balance text-card-title">{tie(r.name)}</span>
                             {/* On a phone the name, the price and what is still to go are enough; the line about the item shows from the `md` width up (`useWide`). */}
-                            <span className="block text-subhead text-ink-soft">
+                            <span className="block text-card-note text-ink-soft">
                               {wide && `${r.blurb} `}
                               {can ? '' : `${formatCount(r.cost - data.points)} more points to go.`}
                             </span>

@@ -532,10 +532,10 @@ function PersonalityTab({ result }: { result: DiscoverResult }) {
           {a.personality.map((p) => (
             <li key={p.trait} className="rounded-card bg-card p-md shadow-toy-soft">
               <div className="flex items-baseline justify-between gap-sm">
-                <h3 className="text-headline">{p.name}</h3>
+                <h3 className="text-card-title">{p.name}</h3>
                 <span className="text-title2 type-figure">{p.score}</span>
               </div>
-              <p className="m-0 text-subhead text-ink-soft">{p.reading.title}</p>
+              <p className="m-0 text-card-note text-ink-soft">{p.reading.title}</p>
               <div className="relative mt-xs h-[8px] rounded-pill" style={{ background: 'var(--color-line)' }} role="img" aria-label={`${p.name}: ${p.score} out of 100, ${p.band === 'mid' ? 'in the middle' : p.band}`}>
                 <span className="absolute inset-y-0 left-0 rounded-pill" style={{ width: `${p.score}%`, background: 'var(--color-r4)' }} />
               </div>
@@ -589,10 +589,10 @@ function EqTab({ result }: { result: DiscoverResult }) {
             return (
               <li key={d.dim} className="rounded-card bg-card p-md shadow-toy-soft">
                 <div className="flex items-baseline justify-between gap-sm">
-                  <h3 className="text-headline">{d.name}</h3>
+                  <h3 className="text-card-title">{d.name}</h3>
                   <span className="text-title2 type-figure">{d.score}</span>
                 </div>
-                <p className="m-0 text-subhead text-ink-soft">{d.reading.title}</p>
+                <p className="m-0 text-card-note text-ink-soft">{d.reading.title}</p>
                 <div className="relative mt-xs h-[8px] rounded-pill" style={{ background: 'var(--color-line)' }} role="img" aria-label={`${d.name}: ${d.score} out of 100`}>
                   <span className="absolute inset-y-0 left-0 rounded-pill" style={{ width: `${d.score}%`, background: rel.color }} />
                 </div>
@@ -786,10 +786,10 @@ function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, 
             const s = DISCOVER_STRENGTHS[key];
             return (
               <li key={key} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <h3 className="text-headline">{s.name}</h3>
-                <p className="mt-xs m-0 text-subhead"><span className="font-bold">Use it: </span>{s.use}</p>
-                <p className="mt-xs m-0 text-subhead"><span className="font-bold">Watch for: </span>{s.watch}</p>
-                <p className="mt-xs m-0 text-subhead"><span className="font-bold">Try this week: </span>{s.tryThis}</p>
+                <h3 className="text-card-title">{s.name}</h3>
+                <p className="mt-xs m-0 text-card-prose"><span className="font-semibold">Use it: </span>{s.use}</p>
+                <p className="mt-xs m-0 text-card-prose"><span className="font-semibold">Watch for: </span>{s.watch}</p>
+                <p className="mt-xs m-0 text-card-prose"><span className="font-semibold">Try this week: </span>{s.tryThis}</p>
               </li>
             );
           })}
@@ -801,8 +801,8 @@ function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, 
           <div className="flex items-center gap-sm">
             <Avatar relationship={result.growth} size={48} decorative still mood="sleepy" />
             <div>
-              <h3 className="text-headline">{growth.name}</h3>
-              <p className="m-0 text-subhead" style={{ color: `var(--deep-${result.growth})` }}>{growthRel.role}</p>
+              <h3 className="text-card-title">{growth.name}</h3>
+              <p className="m-0 text-card-note" style={{ color: `var(--deep-${result.growth})` }}>{growthRel.role}</p>
             </div>
           </div>
           <p className="mt-sm m-0 text-subhead">This is your quietest strength today. That does not make it weak. It is the easiest place to start a small habit.</p>
@@ -961,8 +961,8 @@ export function Discover() {
                   <li key={s.key} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                     <span className="flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-paper text-subhead font-medium">{k + 1}</span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-headline">{s.name}{s.optional ? ' (optional)' : ''}</span>
-                      <span className="block text-subhead text-ink-soft">{p.done} of {s.count} done</span>
+                      <span className="block text-card-title">{s.name}{s.optional ? ' (optional)' : ''}</span>
+                      <span className="block text-card-note text-ink-soft">{p.done} of {s.count} done</span>
                     </span>
                   </li>
                 );

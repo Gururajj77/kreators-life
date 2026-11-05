@@ -1,5 +1,6 @@
 import { BADGE_FAMILIES, BADGE_FAMILY_META, BADGE_TIER_LABEL, BADGE_TIERS, BADGES, badgeProgress, type Badge, type BadgeTier, type HeldBadge, LOCALE } from '@kreators/shared';
-import { useWide } from './ViewToggle';
+import { keepTail } from '../lib/textNodes';
+import { useWide } from '../lib/useWide';
 import { Fold } from './Fold';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
@@ -54,7 +55,8 @@ function Tile({ b, held, count, fresh, onOpen }: { b: Badge; held: HeldBadge | u
   return (
     <button type="button" onClick={onOpen} className="toy toy-soft flex min-h-[44px] w-full flex-col items-center gap-xs rounded-tile bg-card p-sm text-center">
       <BadgeArt name={b.name} icon={b.icon} tier={b.tier} shape={BADGE_FAMILY_META[b.family].shape} earned={earned} size="md" shine={fresh} decorative />
-      <span className="text-subhead font-semibold">{b.name}</span>
+      {/* The name keeps its last two words together, so a narrow phone tile reads "Ten / projects cleared", never a lone "cleared". */}
+      <span className="text-subhead font-semibold">{keepTail(b.name)}</span>
       <span className="text-caption text-ink-soft">
         {earned ? (held?.at ? `Earned ${day(held.at)}` : held?.given ? 'Given by the team' : 'Earned') : 'Locked'} · {BADGE_TIER_LABEL[b.tier]}
       </span>
@@ -200,16 +202,5 @@ export function BadgeGallery() {
 
       <Detail b={openBadge} held={openBadge ? held.get(openBadge.key) : undefined} count={openBadge ? (q.data?.progress[openBadge.stat] ?? 0) : 0} onClose={() => setOpen(null)} />
     </section>
-  );
-}
-
-/** The last two words stay on one line, hyphens included ("twenty-five posts"), so a goal never ends on a word alone. */
-function keepTail(text: string) {
-  const words = text.trim().split(/\s+/);
-  if (words.length < 3) return text;
-  return (
-    <>
-      {words.slice(0, -2).join(' ')} <span className="whitespace-nowrap">{words.slice(-2).join(' ')}</span>
-    </>
   );
 }

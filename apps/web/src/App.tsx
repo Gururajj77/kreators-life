@@ -1,9 +1,10 @@
 import { RELATIONSHIPS } from '@kreators/shared';
 import { Suspense, useEffect, type ReactNode } from 'react';
-import { createBrowserRouter, Navigate, Outlet, RouterProvider, ScrollRestoration, useLocation } from 'react-router';
+import { createBrowserRouter, Link, Navigate, Outlet, RouterProvider, ScrollRestoration, useLocation } from 'react-router';
 import { Avatar } from './components/Avatar';
 import { Button } from './components/Button';
 import { ThemeToggle } from './components/ThemeToggle';
+import { BrandMark } from './components/BrandMark';
 import { Gate } from './components/Gate';
 import { HowTo } from './components/HowTo';
 import { TabBar } from './components/TabBar';
@@ -208,6 +209,18 @@ const explained = (key: string, el: ReactNode) => (
 /** A new page starts at the top and a hash lands on its element; Back and Forward return to where you were. */
 function Root() {
   const token = useSession((s) => s.token);
+  // Every block of text reads as a rectangle: the fixer for blocks CSS cannot balance, downloaded after the first paint.
+  useEffect(() => {
+    let stop: (() => void) | undefined;
+    let gone = false;
+    void import('./lib/rectText').then((m) => {
+      if (!gone) stop = m.startRectText();
+    });
+    return () => {
+      gone = true;
+      stop?.();
+    };
+  }, []);
   return (
     <>
       <ScrollRestoration />
@@ -229,13 +242,26 @@ function Root() {
  * phone (where the first header starts 64px down to clear the corners; never pinned, it scrolls away with the page), and beside the theme switch at the top right on a laptop, where
  * the top left holds these pages' own BackLink (Admin, a public page, a product page).
  */
+const DOORS = new Set(['/signin', '/signup', '/forgot', '/signin/reset', '/start']);
+
 function Standalone() {
   const token = useSession((s) => s.token);
   // The vibe check carries the pill beside its own Close button.
-  const vibe = useLocation().pathname.startsWith('/vibe-check');
+  const { pathname } = useLocation();
+  const vibe = pathname.startsWith('/vibe-check');
   const clock = useFocusSession((s) => s.snap.active) && Boolean(token) && !vibe;
+  // The doors in (sign-in, sign-up, a lost password, Welcome) carry the mark back to the site; the other pages here keep their own
+  // BackLink in that corner. On a phone a running clock takes the corner instead, as in the app.
+  const door = DOORS.has(pathname);
   return (
     <>
+      {door && (
+        <div className={`safe-top absolute top-sm left-md z-30 no-print ${clock ? 'hidden md:block' : ''}`}>
+          <Link to="/" aria-label="kreators.app, the site" className="toy toy-soft flex min-h-[44px] min-w-[44px] items-center justify-center whitespace-nowrap rounded-pill bg-card-strong px-sm font-display text-[16px] font-bold tracking-tight">
+            <BrandMark compact />
+          </Link>
+        </div>
+      )}
       <div className="safe-top fixed top-sm right-md z-30 flex items-center gap-xs">
         {clock && (
           <span className="no-print hidden md:flex">

@@ -116,10 +116,10 @@ export function StudioAudience() {
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {leads.data?.leads.map((l) => (
             <li key={l.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <p className="m-0 text-headline">
+              <p className="m-0 text-card-title">
                 {l.name} <span className="text-ink-soft">{l.email}</span>
               </p>
-              {l.message && <p className="mt-xs m-0 text-subhead">{l.message}</p>}
+              {l.message && <p className="mt-xs m-0 whitespace-pre-wrap text-card-prose">{l.message}</p>}
               <p className="m-0 text-caption text-ink-mute">{dateTime(l.createdAt)}</p>
             </li>
           ))}
@@ -156,8 +156,8 @@ export function StudioAudience() {
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {d.broadcasts.map((b) => (
               <li key={b.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <p className="m-0 text-headline">{b.title}</p>
-                <p className="m-0 text-subhead text-ink-soft">
+                <p className="m-0 text-card-title">{b.title}</p>
+                <p className="m-0 text-card-note text-ink-soft">
                   To {b.sent} {b.audience}, {longDate(b.createdAt)}
                 </p>
               </li>

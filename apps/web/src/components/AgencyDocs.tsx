@@ -35,9 +35,9 @@ export function PickCard({ on, onPick, name, blurb, house = false }: { on: boole
   return (
     <button type="button" role="radio" aria-checked={on} onClick={onPick} className={`toy w-full rounded-tile border-2 p-sm text-left ${on ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
       <CardHead tag={house && <StatusTag fit tone="info">House template</StatusTag>}>
-        <span className="block text-headline">{tie(name)}</span>
+        <span className="block text-card-title">{tie(name)}</span>
       </CardHead>
-      <span className="mt-xs block text-subhead text-ink-soft">{blurb}</span>
+      <span className="mt-xs block text-card-note text-ink-soft">{blurb}</span>
     </button>
   );
 }
@@ -123,7 +123,7 @@ export function NewDocSheet({ open, onClose, clientId, retainer }: { open: boole
             <textarea id="new-doc-lines" rows={3} value={lines} onChange={(e) => setLines(e.target.value)} maxLength={1200} className="w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
           </div>
         )}
-        <h3 className="m-0 text-headline">Your templates</h3>
+        <h3 className="m-0 mt-xs text-headline">Your templates</h3>
         {own.length === 0 ? (
           <p className="m-0 text-subhead text-ink-soft">None yet. Open any document and tap "Save as template".</p>
         ) : (
@@ -135,7 +135,7 @@ export function NewDocSheet({ open, onClose, clientId, retainer }: { open: boole
             ))}
           </ul>
         )}
-        <h3 className="m-0 text-headline">House templates</h3>
+        <h3 className="m-0 mt-xs text-headline">House templates</h3>
         {house.length === 0 ? (
           <p className="m-0 text-subhead text-ink-soft">No house templates yet.</p>
         ) : (

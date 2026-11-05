@@ -1,4 +1,4 @@
-import { AGENCY_CHANNELS, AGENCY_CLIENT_STATUSES, AGENCY_HEALTH, AGENCY_HEALTH_NAME, AGENCY_NAME_MAX, AGENCY_NOTES_MAX, AGENCY_STATUS_NAME, type AgencyClient, type AgencyClientStatus, type AgencyHealth, type BusinessProfile, type InvoiceParty, INDIAN_STATES, PHONE_HINT, pinCodeProblem, portalPasswordProblem, REVISIONS_MAX, typedCents } from '@kreators/shared';
+import { AGENCY_CHANNELS, AGENCY_CLIENT_STATUSES, AGENCY_HEALTH, AGENCY_HEALTH_NAME, AGENCY_NAME_MAX, AGENCY_NOTES_MAX, AGENCY_STATUS_NAME, type AgencyClient, type AgencyClientStatus, type AgencyHealth, type BusinessProfile, type InvoiceParty, INDIAN_STATES, PHONE_HINT, pinCodeProblem, portalPasswordProblem, REVISIONS_MAX } from '@kreators/shared';
 import { emptyEmailVars, fillEmail } from '@kreators/shared/agencyEmail';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
@@ -8,7 +8,7 @@ import { useAuthed } from '../lib/queries';
 import { Button } from './Button';
 import { Fold } from './Fold';
 import { Sheet } from './Sheet';
-import { FIELD } from '../lib/ui';
+import { feeCents, FIELD } from '../lib/ui';
 import { FieldLabel } from './Field';
 import { useCopy } from '../lib/clipboard';
 import { PasswordField, ShownOnce } from './ClientPassword';
@@ -55,11 +55,6 @@ const GST_LABEL = 'GSTIN';
 const sentence = (m: string): string => `${m.charAt(0).toUpperCase()}${m.slice(1)}${/[.!?]$/.test(m) ? '' : '.'}`;
 
 const toMajor = (cents: number): string => (cents === 0 ? '' : cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2));
-/** A typed amount in cents (`typedCents`: "30,000" and "₹30,000" read as 30000); NaN for junk or a minus, so the form can say so. Blank is 0. */
-const toCents = (v: string): number => {
-  const c = typedCents(v);
-  return Number.isInteger(c) && c >= 0 ? c : Number.NaN;
-};
 const whole = (v: string): number => {
   const n = Math.round(Number(v));
   return Number.isFinite(n) && n > 0 ? n : 0;
@@ -141,7 +136,7 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
   const revisionCount = Math.min(REVISIONS_MAX, Math.max(0, Math.round(Number(revisions || '0'))));
   const invalidate = () => qc.invalidateQueries({ queryKey: ['agency'] });
 
-  const badRetainer = Number.isNaN(toCents(retainer));
+  const badRetainer = Number.isNaN(feeCents(retainer));
   const body = () => ({
     name: name.trim(),
     contactName: contactName.trim(),
@@ -149,7 +144,7 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
     status,
     health,
     channels,
-    retainerCents: toCents(retainer),
+    retainerCents: feeCents(retainer),
     piecesPerMonth: whole(pieces),
     hoursPerMonth: whole(hours),
     renewalDate: renewal || null,

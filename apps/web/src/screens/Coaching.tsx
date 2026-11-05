@@ -124,9 +124,9 @@ function RosterRow({ r }: { r: CoachRosterRow }) {
         <CoachFace name={r.student.name} badge={r.student.badge} />
         <span className="min-w-0 flex-1">
           <CardHead tag={r.redWeek ? <StatusTag tone="bad" fit>Below the plan last week</StatusTag> : r.focus?.[0] && focusPill(r.focus[0])}>
-            <span className="block truncate text-headline">{r.student.name}</span>
+            <span className="block truncate text-card-title">{r.student.name}</span>
           </CardHead>
-          <span className="block text-subhead text-ink-soft">
+          <span className="block text-card-note text-ink-soft">
             {r.streak !== null ? `Streak ${r.streak}, last check-in ${r.lastCheckin ?? 'never'}. ` : ''}
             Since {day(r.since)}.
           </span>
@@ -329,7 +329,7 @@ function Directory() {
                 )
               }
             >
-              {k.about && <span className="mt-xs block text-subhead">{k.about}</span>}
+              {k.about && <span className="mt-xs block text-card-note">{k.about}</span>}
             </RowCard>
           </Reveal>
         ))}

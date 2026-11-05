@@ -645,7 +645,7 @@ export function Admin() {
                   {preview && (
                     <>
                       <p className="mt-sm m-0 text-caption text-ink-soft">Tick to allow, untick to block. Struck through means not allowed, and locked apps cannot be blocked. Reset returns an app to the usual rules.</p>
-                      <ul className="mt-xs grid list-none grid-cols-1 gap-xs p-0 m-0 sm:grid-cols-2 md:grid-cols-3">
+                      <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 sm:grid-cols-2 md:grid-cols-3">
                         {MODULES.map((m) => {
                           const a = preview.access[m.key];
                           const allowed = Boolean(a?.available);

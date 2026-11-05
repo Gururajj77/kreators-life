@@ -260,8 +260,8 @@ function MemberRow({ m, onRole, onSaid }: { m: TeamMember; onRole: (m: TeamMembe
       <div className="flex items-start gap-sm">
         <Face name={m.person.name} url={m.person.avatarUrl} />
         <div className="min-w-0 flex-1">
-          <p className="m-0 text-headline">{m.person.name}</p>
-          <p className="m-0 text-subhead text-ink-soft">{[m.person.handle ? `@${m.person.handle}` : '', m.client ? `for ${m.client.name}` : '', since].filter(Boolean).join(', ')}</p>
+          <p className="m-0 text-card-title">{m.person.name}</p>
+          <p className="m-0 text-card-note text-ink-soft">{[m.person.handle ? `@${m.person.handle}` : '', m.client ? `for ${m.client.name}` : '', since].filter(Boolean).join(', ')}</p>
           <div className="mt-xs flex flex-wrap items-center gap-xs">
             <IconTag tone={ROLE_TONE[m.role]} icon={TEAM_ROLE_META[m.role].icon}>
               {TEAM_ROLE_META[m.role].name}
@@ -413,8 +413,8 @@ export function ClientMemberView({ teamId, agencyName }: { teamId: string; agenc
             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0" aria-label="Waiting on you">
               {v.waitingOn.map((w) => (
                 <ViewCard key={w.key}>
-                  <p className="m-0 text-headline">{w.title}</p>
-                  {w.line && <p className="m-0 text-subhead text-ink-soft">{w.line}</p>}
+                  <p className={`m-0 ${w.line ? 'text-card-title' : 'text-headline'}`}>{w.title}</p>
+                  {w.line && <p className="m-0 text-card-note text-ink-soft">{w.line}</p>}
                 </ViewCard>
               ))}
             </ul>
@@ -439,10 +439,10 @@ export function ClientMemberView({ teamId, agencyName }: { teamId: string; agenc
               {v.published.map((p) => (
                 <ViewCard key={p.id}>
                   <div className="flex items-start justify-between gap-sm">
-                    <p className="m-0 min-w-0 text-headline">{p.title}</p>
+                    <p className={`m-0 min-w-0 ${p.publishedAt ? 'text-card-title' : 'text-headline'}`}>{p.title}</p>
                     <StatusTag tone={DELIVERABLE_STAGE_TONE.published}>{DELIVERABLE_STAGE_META.published.name}</StatusTag>
                   </div>
-                  {p.publishedAt && <p className="m-0 text-subhead text-ink-soft">{`Live ${prettyDate(p.publishedAt.slice(0, 10))}`}</p>}
+                  {p.publishedAt && <p className="m-0 text-card-note text-ink-soft">{`Live ${prettyDate(p.publishedAt.slice(0, 10))}`}</p>}
                 </ViewCard>
               ))}
             </ul>
@@ -459,8 +459,8 @@ export function ClientMemberView({ teamId, agencyName }: { teamId: string; agenc
                 <li key={d.key}>
                   <Link to={d.href} className="toy toy-soft flex min-h-[44px] items-center gap-sm rounded-tile bg-card p-sm">
                     <span className="min-w-0 flex-1">
-                      <span className="block text-headline">{d.title}</span>
-                      <span className="block text-subhead text-ink-soft">{d.line}</span>
+                      <span className="block text-card-title">{d.title}</span>
+                      <span className="block text-card-note text-ink-soft">{d.line}</span>
                     </span>
                     <StatusTag tone={d.tone}>{d.status}</StatusTag>
                   </Link>

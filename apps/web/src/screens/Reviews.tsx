@@ -294,8 +294,8 @@ export function Reviews() {
               {d?.templates.map((t) => (
                 <li key={t.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                   <span className="min-w-0 flex-1">
-                    <span className="block text-headline">{t.name}</span>
-                    <span className="block text-subhead text-ink-soft">
+                    <span className="block text-card-title">{t.name}</span>
+                    <span className="block text-card-note text-ink-soft">
                       {t.prompts.length} {t.prompts.length === 1 ? 'question' : 'questions'}
                       {t.builtIn ? ' · built in' : ''}
                     </span>
@@ -323,8 +323,8 @@ export function Reviews() {
                       <button type="button" onClick={() => setPeriod({ kind: r.kind, start: r.start, end: r.end })} className="toy toy-soft flex w-full items-center gap-sm rounded-tile bg-card p-sm text-left text-ink">
                         {m ? <MoodFace value={m.value} size={36} /> : <span className="flex size-[36px] items-center justify-center rounded-pill bg-paper text-subhead font-medium text-ink-soft">·</span>}
                         <span className="min-w-0 flex-1">
-                          <span className="block text-headline">{periodLabel({ kind: r.kind, start: r.start, end: r.end })}</span>
-                          <span className="block truncate text-subhead text-ink-soft">{r.highlight || PERIOD_META[r.kind].name}</span>
+                          <span className="block text-card-title">{periodLabel({ kind: r.kind, start: r.start, end: r.end })}</span>
+                          <span className="block truncate text-card-note text-ink-soft">{r.highlight || PERIOD_META[r.kind].name}</span>
                         </span>
                         <FactTag kind="when">{PERIOD_META[r.kind].short}</FactTag>
                       </button>

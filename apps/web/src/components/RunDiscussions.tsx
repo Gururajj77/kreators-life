@@ -62,13 +62,13 @@ function TalkList({ onOpen }: { onOpen: (id: string) => void }) {
           <li key={t.runId}>
             <button type="button" onClick={() => onOpen(t.runId)} className="toy toy-soft block w-full rounded-tile bg-card p-sm text-left text-ink">
               <span className="flex items-start justify-between gap-xs">
-                <span className="min-w-0 text-headline">
+                <span className="min-w-0 text-card-title">
                   {t.title}
                   <Dot n={t.unread} />
                 </span>
                 {!t.open && <StatusTag tone="neutral" fit>Closed</StatusTag>}
               </span>
-              <span className="block text-subhead text-ink-soft">
+              <span className="block text-card-note text-ink-soft">
                 {t.clubName}, {eventTime(t.startsAt)}
               </span>
               <span className="block text-caption text-ink-soft">

@@ -2,7 +2,7 @@ import { knowledgeKindIcon, RELATIONSHIP_BY_KEY, RELATIONSHIPS, type Resource } 
 import { AppIcon } from '../components/AppIcon';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { useParams } from 'react-router';
 import { Button } from '../components/Button';
 import { BackLink } from '../components/PageHeader';
 import { AppCover } from '../components/AppCover';
@@ -108,7 +108,7 @@ function List() {
                   !r.published ? <StatusTag key="draft" tone="neutral">Draft</StatusTag> : null,
                 ]}
               >
-                <span className="mt-xs block text-subhead text-ink-soft">{r.summary}</span>
+                <span className="mt-xs block text-card-note text-ink-soft">{r.summary}</span>
               </RowCard>
             </Reveal>
           );

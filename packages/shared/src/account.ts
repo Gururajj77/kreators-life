@@ -61,7 +61,7 @@ export function birthDateProblem(birthDate: string, today = new Date().toISOStri
 }
 
 /** The line under a phone field. */
-export const PHONE_HINT = 'Your mobile number. Without a country code we read it as Indian (+91).';
+export const PHONE_HINT = 'Without a country code we read it as Indian (+91).';
 
 /**
  * Digits only, with a leading plus kept: "+91 98765-43210" becomes "+919876543210". India first: a bare Indian mobile (ten digits

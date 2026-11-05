@@ -10,7 +10,7 @@ import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api, errorText } from '../lib/api';
-import { todayLocal, clockTime, longDate, toDate, dateTime } from '../lib/date';
+import { todayLocal, clockTime, longDate, dateTime } from '../lib/date';
 import { useAuthed, useLibrary, useRefreshAll } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { Icon } from '../components/Icon';
@@ -66,8 +66,8 @@ function Mine() {
                 {productHasOwnCover(p.kind, p.cover) ? p.cover : <AppIcon name={PRODUCT_KIND_META[p.kind].icon} size={22} />}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-balance text-headline [overflow-wrap:anywhere]">{p.title}</span>
-                <span className="block text-subhead text-ink-soft">
+                <span className="block text-balance text-card-title [overflow-wrap:anywhere]">{p.title}</span>
+                <span className="block text-card-note text-ink-soft">
                   {PRODUCT_KIND_META[p.kind].name} by {p.ownerName}
                   {p.kind === 'membership' && (() => {
                     const o = latestOrder(d.orders, p.id);
@@ -89,10 +89,10 @@ function Mine() {
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {d.bookings.map((b) => (
               <li key={b.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <p className="m-0 text-headline">
+                <p className="m-0 text-card-title">
                   {b.productTitle} with {b.ownerName}
                 </p>
-                <p className="m-0 text-subhead text-ink-soft">
+                <p className="m-0 text-card-note text-ink-soft">
                   {dateTime(b.startsAt)} in your zone, {b.status}
                 </p>
                 {b.meetingUrl && b.status === 'confirmed' && (
@@ -144,8 +144,8 @@ function Mine() {
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {certs.data.certificates.map((c) => (
               <li key={c.code} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <p className="m-0 text-headline">{c.productTitle}</p>
-                <p className="m-0 text-subhead text-ink-soft">
+                <p className="m-0 text-card-title">{c.productTitle}</p>
+                <p className="m-0 text-card-note text-ink-soft">
                   By {c.ownerName}, issued {longDate(c.issuedAt)}. Code {c.code}.
                 </p>
                 <Link to={`/c/${c.code}`} className="mt-xs inline-flex min-h-[44px] items-center font-semibold underline underline-offset-4">
@@ -237,8 +237,8 @@ function Owned({ id }: { id: string }) {
       {q.isError && lapsed && myOrder && (
         <div className="mt-md flex flex-wrap-reverse items-center justify-between gap-sm rounded-card bg-card p-md shadow-toy-soft">
           <div className="min-w-0 flex-1 basis-[60%]">
-            <p className="m-0 text-headline">Your membership ended on {day(myOrder.expiresAt ?? myOrder.createdAt)}.</p>
-            <p className="mt-xs m-0 text-subhead text-ink-soft">Renew to open the members feed again. Nothing you posted is lost.</p>
+            <p className="m-0 text-card-title">Your membership ended on {day(myOrder.expiresAt ?? myOrder.createdAt)}.</p>
+            <p className="mt-xs m-0 text-card-note text-ink-soft">Renew to open the members feed again. Nothing you posted is lost.</p>
           </div>
           <Link to={`/p/${id}`} className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
             Renew
@@ -255,8 +255,8 @@ function Owned({ id }: { id: string }) {
           )}
           {p.kind === 'digital' && !p.url && (
             <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-              <p className="m-0 text-headline">{p.ownerName} has not added the file yet.</p>
-              <p className="mt-xs m-0 text-subhead text-ink-soft">You will see it here when they do. Questions about it go through Help.</p>
+              <p className="m-0 text-card-title">{p.ownerName} has not added the file yet.</p>
+              <p className="mt-xs m-0 text-card-note text-ink-soft">You will see it here when they do. Questions about it go through Help.</p>
               <Link to="/help" className="mt-xs inline-flex min-h-[44px] items-center text-subhead font-semibold underline underline-offset-4">
                 Open Help
               </Link>
@@ -264,8 +264,8 @@ function Owned({ id }: { id: string }) {
           )}
           {p.kind === 'payment' && (
             <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-              <p className="m-0 text-headline">Thank you. {p.ownerName} has your payment.</p>
-              {p.description && <p className="mt-xs m-0 whitespace-pre-wrap text-subhead text-ink-soft">{p.description}</p>}
+              <p className="m-0 text-card-title">Thank you. {p.ownerName} has your payment.</p>
+              {p.description && <p className="mt-xs m-0 whitespace-pre-wrap text-card-prose text-ink-soft">{p.description}</p>}
             </div>
           )}
           {p.kind === 'locked' && (
@@ -286,8 +286,8 @@ function Owned({ id }: { id: string }) {
                         {productHasOwnCover(x.kind, x.cover) ? x.cover : <AppIcon name={PRODUCT_KIND_META[x.kind].icon} size={22} />}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block text-balance text-headline [overflow-wrap:anywhere]">{x.title}</span>
-                        <span className="block text-subhead text-ink-soft">{PRODUCT_KIND_META[x.kind].name}</span>
+                        <span className="block text-balance text-card-title [overflow-wrap:anywhere]">{x.title}</span>
+                        <span className="block text-card-note text-ink-soft">{PRODUCT_KIND_META[x.kind].name}</span>
                       </span>
                     </Link>
                   </li>
@@ -316,13 +316,13 @@ function Owned({ id }: { id: string }) {
           )}
           {p.kind === 'event' && (
             <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-              <p className="m-0 text-headline">{p.startsAt ? dateTime(p.startsAt) : 'Date to be announced'}</p>
+              <p className="m-0 text-card-title">{p.startsAt ? dateTime(p.startsAt) : 'Date to be announced'}</p>
               {p.meetingUrl ? (
                 <a href={p.meetingUrl} target="_blank" rel="noreferrer" className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
                   Join the event
                 </a>
               ) : (
-                <p className="mt-xs m-0 text-subhead text-ink-soft">The joining link appears here once the host adds it.</p>
+                <p className="mt-xs m-0 text-card-note text-ink-soft">The joining link appears here once the host adds it.</p>
               )}
               {p.replayUrl && (
                 <a href={p.replayUrl} target="_blank" rel="noreferrer" className="toy toy-ink mt-sm ml-xs inline-flex min-h-[48px] items-center rounded-pill border-2 border-ink bg-card px-md font-semibold">
@@ -381,9 +381,9 @@ function Owned({ id }: { id: string }) {
               </ol>
               {p.certificate && (
                 <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-                  <h3 className="text-headline">Certificate</h3>
+                  <h3 className="text-card-title">Certificate</h3>
                   {q.data?.certificateCode ? (
-                    <p className="mt-xs m-0 text-subhead">
+                    <p className="mt-xs m-0 text-card-note">
                       Yours. Code {q.data.certificateCode}.{' '}
                       <Link to={`/c/${q.data.certificateCode}`} className="font-semibold underline underline-offset-4">
                         Open the certificate page
@@ -391,7 +391,7 @@ function Owned({ id }: { id: string }) {
                     </p>
                   ) : (
                     <>
-                      <p className="mt-xs m-0 text-subhead text-ink-soft">{allDone ? 'Every lesson is done. Claim it.' : 'Finish every lesson and pass every gated quiz, then claim it here.'}</p>
+                      <p className="mt-xs m-0 text-card-note text-ink-soft">{allDone ? 'Every lesson is done. Claim it.' : 'Finish every lesson and pass every gated quiz, then claim it here.'}</p>
                       {claim.isError && (
                         <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
                           {errorText(claim.error, 'Not yet.')}

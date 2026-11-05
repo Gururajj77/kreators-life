@@ -3,12 +3,12 @@ import { BOOK_AUTHOR, BOOKS, type Book } from '@kreators/shared';
 import { BackLink } from '../components/PageHeader';
 import { Link } from 'react-router';
 import { Fold } from '../components/Fold';
-import { Icon } from '../components/Icon';
 import { useSession } from '../lib/store';
+import { tie } from '../lib/text';
 import { BOOK_CHAPTERS, BOOK_PAGE } from './content';
 import { GuideLine } from './GuideLine';
 import { SiteLayout } from './SiteLayout';
-import { SiteArrow, SITE_CHIP_BASE, SITE_LINK_INLINE, SITE_PRIMARY, SITE_SECONDARY } from './buttons';
+import { SiteArrow, SITE_CHIP_BASE, SITE_LINK_INLINE, SITE_PRIMARY } from './buttons';
 
 /** Where "Read the course in the app" goes: the Book page for someone signed in, through sign-in for a visitor. */
 export function useBookEntry(): string {
@@ -83,19 +83,20 @@ export function Books() {
   const course = useBookEntry();
   return (
     <SiteLayout>
+      {/* The guide sits beside the words only from 1200px, where it stands in the margin; narrower, a 128px guide beside them left its
+          line a word or two wide, so it sits under them, at the right. */}
       <header
         data-pillar="guru"
-        className="wash mt-lg grid gap-md rounded-card bg-card p-md shadow-toy-soft lg:grid-cols-[3fr_2fr] lg:items-center md:p-lg"
+        className="wash mt-lg grid gap-md rounded-card bg-card p-md shadow-toy-soft min-[1200px]:grid-cols-[3fr_2fr] min-[1200px]:items-center md:p-lg"
         style={{ '--wash': 'var(--color-r6)' } as CSSProperties}
       >
         <div>
           <BackLink to="/features">All features</BackLink>
-          <p className="m-0 type-eyebrow text-ink-mute">Books</p>
           <h1 className="type-hook mt-xs text-display-1">
             Three books, <em>three courses</em>
           </h1>
           <p className="mt-sm m-0 max-w-[560px] text-callout text-ink-soft">
-            {BOOK_AUTHOR}, who builds kreators.app, wrote all three. He left college to live as a monk, and came back with the idea this app is built on: seven relationships make a life. Each book is a course in School.
+            {BOOK_AUTHOR}, the founder of kreators.app, wrote all three. He left college to live as a monk and came back with the idea behind this app: seven relationships make a life.
           </p>
           {/* One main action (site/buttons.ts): Start free for a visitor, the courses for someone signed in. */}
           <div className="mt-md flex flex-wrap items-center gap-sm">
@@ -104,20 +105,14 @@ export function Books() {
                 Read the courses in the app
               </Link>
             ) : (
-              <>
-                <Link to="/start" className={SITE_PRIMARY}>
-                  Start free
-                </Link>
-                <Link to={course} className={SITE_SECONDARY}>
-                  Read the courses in the app
-                  <SiteArrow />
-                </Link>
-              </>
+              <Link to="/start" className={SITE_PRIMARY}>
+                Start free
+              </Link>
             )}
           </div>
         </div>
         <GuideLine host="guru" side="right" mood="excited" size={128} className="justify-self-stretch">
-          Read a lesson, then try one thing from it today.
+          Read a lesson, then try one thing today.
         </GuideLine>
       </header>
 
@@ -132,13 +127,12 @@ export function Books() {
                   in a lone link under the folds with an empty band below it. */}
               <div className="flex min-w-0 flex-col">
                 <h2 id={`${b.slug}-title`} className="type-hook m-0 text-display-3">
-                  {b.title}
+                  {tie(b.title)}
                 </h2>
                 <p className="mt-xs m-0 text-callout text-ink-soft">{b.subtitle}</p>
-                <p className="mt-xs m-0 text-subhead text-ink-mute">by {b.author}</p>
                 {b.slug === 'the-relationship-method' && (
                   <p className="mt-sm m-0 text-callout text-ink">
-                    The book behind the seven relationships this app is built on.{' '}
+                    Where the seven relationships come from.{' '}
                     <Link to="/7rp" className={SITE_LINK_INLINE}>
                       Meet the seven
                     </Link>
@@ -169,7 +163,7 @@ export function Books() {
       </ul>
 
       <p className="type-measure mt-lg m-0 text-subhead text-ink-soft">
-        The courses teach from the books in plain words. Each lesson marks what comes from the book, and anything it adds is the app’s own.
+        Each lesson marks what comes from the book, and anything it adds is the app’s own.
       </p>
     </SiteLayout>
   );

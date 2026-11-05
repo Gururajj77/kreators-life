@@ -60,15 +60,24 @@ export function Assistant() {
     }
     // Once in, the inline transform goes, so the button's own hover lift (the toy class) works again.
     gsap.fromTo(el, { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.35, ease: 'back.out(2.2)', onComplete: () => void gsap.set(el, { clearProps: 'transform,opacity' }) });
-    const idle = gsap
-      .timeline({ repeat: -1, repeatDelay: 5, delay: 2 })
+    // One hop, played from a plain timer: a repeating timeline stays active through its wait and keeps GSAP's ticker awake on every
+    // page, while between these hops nothing is running and the ticker sleeps.
+    const hop = gsap
+      .timeline({ paused: true })
       .to(him, { y: -7, duration: 0.18, ease: 'power2.out' })
       .to(him, { y: 0, duration: 0.32, ease: 'bounce.out' })
       .to(him, { rotation: -10, duration: 0.1, ease: 'sine.inOut' }, '-=0.1')
       .to(him, { rotation: 8, duration: 0.12, ease: 'sine.inOut' })
       .to(him, { rotation: 0, duration: 0.14, ease: 'sine.out' });
+    let timer = 0;
+    const next = () => {
+      hop.restart();
+      timer = window.setTimeout(next, 5000 + hop.duration() * 1000);
+    };
+    timer = window.setTimeout(next, 2000);
     return () => {
-      idle.kill();
+      window.clearTimeout(timer);
+      hop.kill();
     };
   }, [open, reduce]);
 

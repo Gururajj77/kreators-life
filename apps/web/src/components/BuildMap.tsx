@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { MODULES, RELATIONSHIPS } from '@kreators/shared';
 import { BUILD_FILES, BUILD_SECTIONS, itemsOf, percentOf, type BuildCard, type BuildItem, type BuildState } from '../lib/buildMap';
 import { tie } from '../lib/text';
@@ -41,7 +42,15 @@ function Block({ item }: { item: BuildItem }) {
         <span className="sr-only">{s.name}: </span>
         {/* An item whose note is an app's path wears that app's icon (the labels hold no emoji). */}
         {mod && <AppIcon name={mod.icon} size={14} className="mr-xs inline-block align-[-2px]" />}
-        {label}
+        {/* A label of two clauses ("White on colour everywhere; yellow takes brown") keeps each whole, so it breaks at the semicolon. */}
+        {label.includes('; ')
+          ? label.split(/(?<=;) /).map((part, i) => (
+              <Fragment key={i}>
+                {i > 0 && ' '}
+                <span className="inline-block">{part}</span>
+              </Fragment>
+            ))
+          : label}
         {note && <span className="block text-balance text-caption text-ink-soft">{tie(note)}</span>}
       </span>
     </li>
@@ -78,14 +87,16 @@ function Card({ card, color }: { card: BuildCard; color: string }) {
           })}
         </ol>
       ) : (
-        <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 sm:grid-cols-2">
+        // Two columns of items on a tablet; inside a half-width card (the masonry from md) one, so each item's words have the room to make
+        // a rectangle.
+        <ul className={`mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 sm:grid-cols-2 ${card.wide ? '' : 'md:grid-cols-1'}`}>
           {card.items.map((it, i) => (
             <Block key={`${it[0]}${i}`} item={it} />
           ))}
         </ul>
       )}
       {card.extra && (
-        <ul className="mt-xs grid list-none grid-cols-1 gap-xs p-0 m-0 sm:grid-cols-2">
+        <ul className={`mt-xs grid list-none grid-cols-1 gap-xs p-0 m-0 sm:grid-cols-2 ${card.wide ? '' : 'md:grid-cols-1'}`}>
           {card.extra.map((it, i) => (
             <Block key={`${it[0]}${i}`} item={it} />
           ))}

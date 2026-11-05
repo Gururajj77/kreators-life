@@ -13,7 +13,7 @@ import {
   type TeamLinkView,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { nameOf, newId, notify, nowIso, oneOf, randomCode, str } from '../db';
+import { nameOf, newId, notify, nowIso, oneOf, randomCode, str, utcToday } from '../db';
 import { clientRow } from './agency';
 import { closePasswordRequest, logStmt } from '../lifecycle';
 import { agencyFace, closedLinkAnswer, newPortalPassword, passwordColumns, retirePortalLink } from '../portalAccess';
@@ -34,7 +34,6 @@ export const teamLinkOwner = new Hono<AppEnv>();
 export const teamLinkPublic = new Hono<AppEnv>();
 
 const bodyOf = (c: { req: { json: <T>() => Promise<T> } }) => c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
-const utcToday = () => new Date().toISOString().slice(0, 10);
 
 /** The saved switches, read by the one reader in shared; anything unreadable is the defaults. */
 export function teamShowOf(raw: string | null | undefined): TeamLinkShow {

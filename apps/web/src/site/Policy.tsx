@@ -7,7 +7,7 @@ type Kind = 'terms' | 'privacy' | 'refunds' | 'contact' | 'pricing';
 const PLAN_PRICES = PAID_PLANS.map((k) => `${PLANS[k].name} ${money(PLANS[k].priceCents, PLAN_CURRENCY)}`).join(', ');
 const RUPEE_LINE = 'Prices are in Indian rupees. GST is added where it applies and shown before you pay.';
 
-const VERSION_LINE = `Version ${LEGAL_VERSION}, in force from ${versionDate()}. Earlier versions are available if you write to the contact address.`;
+const VERSION_LINE = `Version ${LEGAL_VERSION}, in force from ${versionDate()}.`;
 
 /** Each page's title, a one-line lede, the version line where there is one, its one action, and whether it is a reading page. */
 const TITLES: Record<Kind, { title: string; lede: string; note?: string; action: [string, string] | null; reading: boolean }> = {
@@ -27,7 +27,7 @@ const BASES: [string, string, string, string][] = [
   ['Your date of birth and phone number', 'To keep anyone under eighteen out, and to reach you about your account.', 'Consent, given when you sign up', 'Legitimate interests, and the law where it sets an age'],
   ['Orders, bookings, payouts, invoices and money records', 'To take payment, pay creators and keep the books.', 'A use you asked for, and a legal duty for the records', 'Contract, and legal duty for the records'],
   ['Emails you need: receipts, password resets, payout notices', 'To do what you asked.', 'A use you asked for', 'Contract'],
-  ['Sign-in sessions, device limit, rate limits and the app log', 'To keep accounts safe, stop abuse and find faults.', 'Consent, given when you sign up', 'Legitimate interests'],
+  ['Sign-in sessions, device limit, rate limits and the app log', 'To keep accounts safe, to stop abuse and to find faults.', 'Consent, given when you sign up', 'Legitimate interests'],
   ['The assistant and the writing in Content, when you use them', 'To do the job you typed. Only what the job needs is sent.', 'A use you asked for', 'Contract'],
   ['Click counts on tracked links (an address hash, never the address)', 'So a creator can see which link worked.', 'Consent', 'Legitimate interests'],
   ['The tracked-link cookie, videos from YouTube and Vimeo, and news and offers by email', 'These are your choices, and none is needed to use the app.', 'Consent', 'Consent'],
@@ -77,7 +77,7 @@ export function Policy({ kind }: { kind: Kind }) {
           <H>Money tools, not advice</H>
           <P>Finance, the tax sums in Agency and the money numbers in reviews help you keep track. They are not financial, tax or investment advice. Check with an accountant or another adviser before you rely on them.</P>
           <H>Invoices and agreements</H>
-          <P>Agency lets you make invoices and agreements for your own clients. They are your documents, not ours, and you are responsible for what is in them and for the tax on them. The agreement templates are a starting point, not legal advice: have a lawyer read one before you rely on it. When a client types their name to accept, that is typed acceptance, not a certified electronic signature. We take no part of what you invoice.</P>
+          <P>Agency lets you make invoices and agreements for your own clients. They are your documents, not ours, and you are responsible for what is in them and for the tax on them. The agreement templates are a starting point, not legal advice: have a lawyer read one before you rely on it. When a client types their name to accept, that is typed acceptance, not a certified electronic signature. We take nothing from what you invoice.</P>
           <H>Acceptable use</H>
           <P>No farming points, no fake views, no scraping, no impersonation, no posting what you do not have the right to post, no harassing people and no breaking the law. If these rules are broken we may remove content, hold payouts for review, or close the account, and we tell you why. If you think we got it wrong, write to the team through Help inside the app and a person will look again.</P>
           <P>Posts, replies, chat lines and coach notes are the views of the people who wrote them, not of kreators.app. Do not post anything meant to put down a religion, a community, a company or a person.</P>
@@ -108,13 +108,17 @@ export function Policy({ kind }: { kind: Kind }) {
             </P>
           ) : (
             <P>
-              {loading ? 'Loading the business details.' : 'The legal name and address of the business that runs kreators.app are not set yet. They will be listed on the contact page.'} Until then, for anything about your data, write to <Mail address={email} />, which is also our privacy contact.
+              {/* While the details load, the not-set sentence holds its box unseen (screen readers hear Loading), so the sections under it do not move. */}
+              {loading && <span className="sr-only">Loading the business details.</span>}
+              <span className={loading ? 'invisible' : undefined} aria-hidden={loading || undefined}>
+                The legal name and address of the business that runs kreators.app are not set yet. They will be listed on the contact page. Until then, for anything about your data, write to <Mail address={email} />, which is also our privacy contact.
+              </span>
             </P>
           )}
           <H>What we keep</H>
           <P>Your profile (name, page name, bio, skills, interests, city), your date of birth and phone number, your pillars and daily logs, wellbeing and journal entries, orders, bookings, finance entries, the clients, deliverables, time, invoices and agreements you keep in Agency, the reviews you write and plan, messages in circles, and the events your device sends while you use the app.</P>
           <H>Why we use it, and on what ground</H>
-          <P>The law asks us to name a ground for each use. In India, under the Digital Personal Data Protection Act 2023, a use rests on your consent or on a use the Act allows, such as one you asked for or a legal duty. The last column is only for people in the EU and the UK.</P>
+          <P>The law asks us to name a ground for each use. In India, under the Digital Personal Data Protection Act 2023, a use rests on your consent or on a use the Act allows, such as one you asked for or a legal duty.</P>
           <Grid label="Why we use your data" head={['What', 'Why', 'Ground in India', 'Ground in the EU and UK']} rows={BASES.map(([a, b, c, d]) => [a, b, c, d])} />
           <H>Who sees what</H>
           <P>Your journal and wellbeing numbers are never shown to brands, staff, the leaderboard or Club selection. Your public page shows only what you put on it. Staff see what their permission covers. A circle sees your alias until you choose to reveal.</P>
@@ -124,9 +128,9 @@ export function Policy({ kind }: { kind: Kind }) {
             We use a few companies to run the service, such as our hosting, email and payment providers. Each one is listed, with what it does, what data it gets and where, on the <A to="/subprocessors">subprocessors page</A>. They act on our instructions. We do not give your data to anyone else, except when the law makes us or when you ask us to, for example when you share a page.
           </P>
           <H>Where your data is held</H>
-          <P>Your data is held and processed in India and abroad, by the companies on the <A to="/subprocessors">subprocessors page</A>, which says where each one works. India's government may bar sending data to some countries, and we follow that. For people in the EU and the UK, when data leaves, we rely on contract terms such as the EU standard contractual clauses. We do not claim any certification, for ourselves or for them.</P>
+          <P>Your data is held and processed in India and abroad, by the companies on the <A to="/subprocessors">subprocessors page</A>. India's government may bar sending data to some countries, and we follow that. For people in the EU and the UK, when data leaves, we rely on contract terms such as the EU standard contractual clauses. We do not claim any certification, for ourselves or for them.</P>
           <H>How long we keep it</H>
-          <P>This is how long we keep each kind of thing. A daily tidy-up removes what has expired.</P>
+          <P>A daily tidy-up removes what has expired.</P>
           <Grid label="How long we keep each kind of data" head={['What', 'How long', 'Why']} rows={RETENTION.map((r) => [r.category, r.keep, r.why])} />
           <H>If you live in India</H>
           <P>Under the Digital Personal Data Protection Act 2023 you are the data principal, and we are the data fiduciary. This page is our notice to you, in English: it says what we collect, why, and how to use your rights.</P>
@@ -283,9 +287,9 @@ export function Policy({ kind }: { kind: Kind }) {
               cell), with the Assistant and Brands each across the row; three across on a laptop. */}
           <div className="mt-lg grid gap-sm md:grid-cols-2 lg:grid-cols-3">
             {[
-              ['Play', 'Free', 'The daily game, your seven pillars and every app you switch on, Agency included. Free to start, free to stay.'],
-              ['Sell', '5% of each sale', `Taken from each sale in the shop, with nothing up front. Refer a creator and earn ${Math.round(AFFILIATE_SHARE * 100)}% of their referred sales.`],
-              ['Assistant', `From ${money(PLANS.pro.priceCents, PLAN_CURRENCY)}`, `Typing to it needs a plan: ${PLAN_PRICES}, each for ${PLAN_DAYS} days. Its tap flows stay free${PAYMENTS_LIVE ? '.' : ', and plans are not on sale yet, so nothing is charged.'}`],
+              ['Play', 'Free', 'The daily game, your seven pillars and every app you switch on, Agency included.'],
+              ['Sell', '5% of each sale', `In the shop, with nothing up front. Refer a creator and earn ${Math.round(AFFILIATE_SHARE * 100)}% of their referred sales.`],
+              ['Assistant', `From ${money(PLANS.pro.priceCents, PLAN_CURRENCY)}`, `Typing to it needs a plan: ${PLAN_PRICES}, each for ${PLAN_DAYS} days. Tapping its ready-made choices stays free.${PAYMENTS_LIVE ? '' : ' Plans are not on sale yet.'}`],
               ['Brands', 'Per campaign', `Campaigns and content-reward pools are priced per brief. Write to ${email}.`],
             ].map(([name, price, blurb], i) => (
               <div key={name} className={`rounded-card bg-card p-md shadow-toy-soft ${['', '', 'md:col-span-2 lg:col-span-1', 'md:col-span-2 lg:col-span-3'][i]}`}>
@@ -303,7 +307,7 @@ export function Policy({ kind }: { kind: Kind }) {
               `${RUPEE_LINE} The price shown is the price charged.`,
               'Money checkout runs in test mode until payments are switched on; points work today.',
               'Taxes on our fee are shown on every creator invoice.',
-              'Agency is free, and we take nothing from the invoices you make in it.',
+              'We take nothing from the invoices you make in Agency.',
               <>
                 See also <A to="/refunds" hit>Refunds</A>.
               </>,

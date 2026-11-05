@@ -8,6 +8,7 @@ import { mmss, useTicker } from '../lib/focusClocks';
 import { useFocusPortal } from '../lib/focusPortal';
 import { snapshotLeftMs, useFocusSession, type FocusSnapshot } from '../lib/focusSession';
 import { Icon } from './Icon';
+import { useModule } from '../lib/modules';
 
 /** Spoken time for the label: "18 minutes 20 seconds", so a screen reader hears words, not "18:20". */
 function spoken(ms: number): string {
@@ -39,6 +40,7 @@ export function FocusPill({ compact = false, dot = false }: { compact?: boolean;
   const snap = useFocusSession((s) => s.snap);
   // Mindful showing: its own Stop sheet asks whether to keep a part. Anywhere else the clock is parked out of sight, so the pill asks itself.
   const onMindful = useFocusPortal((s) => s.target !== null);
+  const mindfulOn = useModule('mindful')?.on ?? false;
   const [asking, setAsking] = useState(false);
   // A re-render once a second while something is active, so the seconds keep counting even with nothing else on the page changing.
   const [, bump] = useState(0);
@@ -51,7 +53,10 @@ export function FocusPill({ compact = false, dot = false }: { compact?: boolean;
   const shown = mmss(ms, !counting);
   const { fill, urgent } = stage(snap, ms);
   const when = counting ? `${spoken(ms)} so far` : paused ? `paused with ${spoken(ms)} left` : `${spoken(ms)} left`;
-  const aria = `${snap.label}${snap.taskTitle ? `, ${snap.taskTitle}` : ''}, ${when}. Back to Mindfulness.`;
+  // Back to where the panel lives for this person: Mindfulness when its switch is on, else Home, which also shows Breathe and focus
+  // (a new account starts with Mindfulness off, and its page then only says so).
+  const back = mindfulOn ? '/mindful' : '/home';
+  const aria = `${snap.label}${snap.taskTitle ? `, ${snap.taskTitle}` : ''}, ${when}. Back to ${mindfulOn ? 'Mindfulness' : 'Home'}.`;
   const send = useFocusSession.getState().send;
   const control = 'focus-pill-btn flex size-[44px] shrink-0 items-center justify-center rounded-pill text-on-fill';
   // A Timer or a Pomodoro focus part past a whole minute asks first: keep the minutes so far, or throw them away.
@@ -66,7 +71,7 @@ export function FocusPill({ compact = false, dot = false }: { compact?: boolean;
     const minutes = counting ? Math.floor(ms / 60_000) : Math.ceil(ms / 60_000);
     const sec = Math.floor(ms / 1000);
     return (
-      <Link to="/mindful" aria-label={aria.replace(/\s+/g, ' ').trim()} title={shown} className={`focus-dot toy relative flex size-[44px] items-center justify-center rounded-pill text-on-fill ${fill} ${paused ? 'is-paused' : ''}`} data-urgent={urgent && !paused ? '' : undefined}>
+      <Link to={back} aria-label={aria.replace(/\s+/g, ' ').trim()} title={shown} data-rect-quiet="" className={`focus-dot toy relative flex size-[44px] items-center justify-center rounded-pill text-on-fill ${fill} ${paused ? 'is-paused' : ''}`} data-urgent={urgent && !paused ? '' : undefined}>
         {!paused && <span key={sec} className="focus-dot-ripple" aria-hidden="true" />}
         {paused ? <Icon icon={Pause} size={16} /> : <span className="relative text-headline tabular-nums">{minutes}</span>}
       </Link>
@@ -75,9 +80,9 @@ export function FocusPill({ compact = false, dot = false }: { compact?: boolean;
   return (
     // With a mouse over it (or the keyboard inside it), the pill opens three controls beside the time: restart this part, stop, and
     // pause or resume, left to right. On a touch screen a tap opens Mindful, where the full controls are.
-    <div className={`focus-pill-wrap ${fill} flex items-center rounded-pill ${paused ? 'is-paused' : ''}`} data-urgent={urgent && !paused ? '' : undefined}>
+    <div data-rect-quiet="" className={`focus-pill-wrap ${fill} flex items-center rounded-pill ${paused ? 'is-paused' : ''}`} data-urgent={urgent && !paused ? '' : undefined}>
       <Link
-        to="/mindful"
+        to={back}
         aria-label={aria.replace(/\s+/g, ' ').trim()}
         className={`focus-pill toy flex min-h-[44px] min-w-[44px] flex-1 items-center justify-center gap-xs whitespace-nowrap rounded-pill px-sm text-on-fill ${compact ? '' : 'text-headline'}`}
       >

@@ -9,6 +9,7 @@ import { ThemeToggle } from '../components/ThemeToggle';
 import { Segmented } from '../components/fx/Segmented';
 import { useSlider } from '../components/fx/useSlider';
 import { SITE_PRIMARY_SM } from './buttons';
+import { setConsentSlot } from '../lib/consentSlot';
 
 /** Where "Go to app" goes: straight in for people with a session, to sign in for everyone else. */
 export function useAppEntry(): string {
@@ -58,7 +59,7 @@ export function SiteLayout({ children, wide = true, minimal = false }: { childre
       <div ref={top} aria-hidden="true" className="pointer-events-none absolute top-0 left-0 h-xs w-xs" />
       <header data-scrolled={scrolled ? '' : undefined} className="fx-header safe-top relative z-30 md:sticky md:top-0">
         {/* The header and the footer are the same width on every page, like the home page; only the reading column narrows. */}
-        <div className="mx-auto flex min-w-0 max-w-[1080px] items-center justify-between gap-sm px-md py-xs">
+        <div className="mx-auto flex min-w-0 max-w-[1080px] items-center justify-between gap-sm px-md py-xs md:px-lg lg:px-xl">
           {clock ? (
             <span className="flex min-w-0 items-center gap-xs">
               <span className="hidden md:flex">
@@ -85,11 +86,6 @@ export function SiteLayout({ children, wide = true, minimal = false }: { childre
               <a href="/#brands" className={navWide}>
                 For brands
               </a>
-              {!token && (
-                <Link to="/signin" className={navWide}>
-                  Sign in
-                </Link>
-              )}
               <Link
                 to={entry}
                 className={`${SITE_PRIMARY_SM} shrink-0 whitespace-nowrap max-[380px]:px-sm`}
@@ -101,6 +97,8 @@ export function SiteLayout({ children, wide = true, minimal = false }: { childre
           )}
         </div>
       </header>
+      {/* On a phone the privacy card, while it asks, sits here in the page's flow (ConsentPopup portals into it), so it covers nothing. */}
+      <div ref={setConsentSlot} className="mx-auto max-w-[720px] px-md empty:hidden md:hidden" />
       <main className={`mx-auto ${wide ? 'max-w-[1080px]' : 'max-w-[720px]'} px-md md:px-lg lg:px-xl pb-xl`}>{children}</main>
       {/* The footer (2026-11-05, laid out after the founder's FyndFlow footer): the brand and a glass card on the left, the links in three
           headed columns on the right, a hairline, then a bottom bar (who built it on the left, the main policies on the right), the
@@ -181,8 +179,9 @@ export function SiteLayout({ children, wide = true, minimal = false }: { childre
           </p>
         </div>
         {/* The wordmark, as big as the footer is wide, seen through fluted glass and cut by the ground: drawn by CSS (::before), so it is
-            decoration only, never read twice and never a text node. */}
-        <div className="site-footer-mark" aria-hidden="true" />
+            never read twice and never a text node. It is a link home (the founder, 2026-11-05): its name is the aria-label, and on
+            hover or keyboard focus it rises a little and its fade lessens (".site-footer-mark" in app.css). */}
+        <Link to="/" className="site-footer-mark" aria-label="kreators.app, back to the home page" />
         <div className="relative flex h-[8px]" aria-hidden="true" data-footer-ground>
           <span className="flex-1" style={{ background: 'var(--color-r6)' }} />
           <span className="flex-1" style={{ background: 'var(--color-r5)' }} />

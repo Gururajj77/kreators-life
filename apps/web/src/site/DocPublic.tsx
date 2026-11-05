@@ -16,7 +16,7 @@ import { FIELD } from '../lib/ui';
 
 const COPY = {
   typed: 'Typing your name is your approval of this document. It is typed approval, not a certified e-signature.',
-  agree: 'I have read this document and I approve it.',
+  agree: ['I have read this document,', 'and I approve it.'],
 };
 
 /** The client's document: read it, answer any questions in it, ask for a change, and approve it by typing a name. */
@@ -116,7 +116,10 @@ export function DocPublic() {
                 <input id="k-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} autoComplete="organization-title" className={FIELD} />
                 <label className="mt-sm flex min-h-[44px] cursor-pointer items-center gap-xs text-headline">
                   <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="size-[20px] shrink-0 accent-[var(--color-ink)]" />
-                  {COPY.agree}
+                  {/* In a span of its own, so the label's words are a block the rectangle rule reaches; kept whole up to the comma. */}
+                  <span>
+                    <span className="inline-block">{COPY.agree[0]}</span> <span className="inline-block">{COPY.agree[1]}</span>
+                  </span>
                 </label>
                 {accept.isError && (
                   <p role="alert" className="mt-sm m-0 text-subhead">

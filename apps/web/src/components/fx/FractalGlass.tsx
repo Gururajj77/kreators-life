@@ -7,6 +7,11 @@ const PERIOD = 16;
 /** How far the colour follows a mouse, in px at the card's edge. */
 const FOLLOW = 48;
 
+/** The glass's colour. Navy is the public home's (the default); the others are drawn from the pillar colours in app.css
+ * (FractalGlass colours), each on its own deep base so white words and the white button keep AA: teal (green and sky blue) on
+ * /features, wine (red, orange and the faith violet) on /7rp. */
+export type FractalHue = 'navy' | 'teal' | 'wine';
+
 /**
  * Fractal (fluted) glass: a glow of electric blue, violet and white-lavender on deep navy, seen through narrow upright ribs, each with a
  * dark edge and a bright streak (the look the founder picked, 2026-11-05). Four still layers in CSS (app.css, FractalGlass); GSAP only
@@ -18,7 +23,7 @@ const FOLLOW = 48;
  * pauses off screen and in a hidden tab; reduced motion shows one still frame; reduced transparency or more contrast hides the
  * glass and leaves the solid slate.
  */
-export function FractalGlass({ className = '' }: { className?: string }) {
+export function FractalGlass({ className = '', hue = 'navy' }: { className?: string; hue?: FractalHue }) {
   const root = useRef<HTMLDivElement>(null);
   const running = useRunning(root);
   const drift = useRef<{ pause: () => void; resume: () => void } | null>(null);
@@ -51,6 +56,8 @@ export function FractalGlass({ className = '' }: { className?: string }) {
         unhook = () => {
           host.removeEventListener('pointermove', move);
           host.removeEventListener('pointerleave', leave);
+          // A quickTo tween is paused, never done, so GSAP keeps it (and the element) until it is killed.
+          follow.tween.kill();
         };
       }
       off = () => {
@@ -73,7 +80,7 @@ export function FractalGlass({ className = '' }: { className?: string }) {
   }, [running]);
 
   return (
-    <div ref={root} aria-hidden="true" data-run={running} className={`fx-fglass ${className}`}>
+    <div ref={root} aria-hidden="true" data-run={running} data-hue={hue} className={`fx-fglass ${className}`}>
       <div className="fx-fglass-field" />
       <div className="fx-fglass-ribs" />
       <div className="fx-fglass-shine" />

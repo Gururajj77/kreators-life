@@ -1,5 +1,5 @@
 import { anonAliasFrom, normalizeCode, DEFAULT_ZONE, isCurrency, parseAppPrefs, isRealDay, pageSizeOf, parseIdentities, parseRepeat, parsePriority, parseIntake, parseLinkBlocks, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
-import { BADGE_STATS, BADGES, badgesFrom, communityRankOf, type CommunityRank, EMPTY_SOCIALS, isPrivateBadge, parsePublicSettings, HONORS, isStaffFor, levelFromXp, PERMISSIONS, RELATIONSHIPS, roleRank, taskReadyAt, timeHonors, type BadgeFacts, type BadgesResponse, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
+import { BADGE_STATS, BADGES, badgesFrom, communityRankOf, type CommunityRank, EMPTY_SOCIALS, isPrivateBadge, parsePublicSettings, HONORS, isStaffFor, levelFromXp, PERMISSIONS, roleRank, taskReadyAt, timeHonors, type BadgeFacts, type BadgesResponse, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
 import type { Context, Next } from 'hono';
 import type { AppEnv } from './env';
 import type { UserRow } from './env';
@@ -36,6 +36,8 @@ export interface NodeRow {
 
 export const newId = () => crypto.randomUUID();
 export const nowIso = () => new Date().toISOString();
+/** Today's date in UTC, YYYY-MM-DD: a fallback only, since a person's day comes from their device (`dayFromDevice`). */
+export const utcToday = () => new Date().toISOString().slice(0, 10);
 
 /** When a task written now can first be ticked. */
 export const readyFromNow = () => new Date(Date.now() + WAIT.taskMinAgeMinutes * 60_000).toISOString();

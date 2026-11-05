@@ -15,12 +15,12 @@ export function versionDate(version: string = LEGAL_VERSION): string {
 
 /**
  * Whether the text sits on a reading page (terms, privacy, refunds, copyright, subprocessors, licences). There a paragraph is long reading
- * text: `prose-long` keeps full-width lines (CLAUDE.md, no orphan words) and the density check leaves it alone. Pricing and Contact are
+ * text: `prose-long` marks it as reading text and the density check leaves it alone. Pricing and Contact are
  * not reading pages, so their paragraphs are held to the short-copy rules.
  */
 const Reading = createContext(false);
 const LONG = 'prose-long';
-const READ = (on: boolean) => (on ? LONG : 'text-pretty');
+const READ = (on: boolean) => (on ? LONG : '');
 
 export function H({ children, id }: { children: ReactNode; id?: string }) {
   return (
@@ -69,23 +69,28 @@ const keepTail = (s: string): string => {
 };
 
 export function Grid({ head, rows, label }: { head: string[]; rows: ReactNode[][]; label: string }) {
+  // Five columns never fit the 720px reading column: at a tablet each cell was 40 to 100px and wrapped a word a line. A table that
+  // wide stays as stacked cards at every width; up to four columns turn into a table from the tablet width.
+  const t = head.length > 4 ? STACKED : AS_TABLE;
   return (
-    <table aria-label={label} className="mt-sm block w-full border-collapse text-left text-subhead text-ink-soft md:table">
-      <thead className="hidden md:table-header-group">
+    // Fixed columns on a laptop: a cell's width never follows its words, so lib/rectText.ts can even out a cell's lines inside it.
+    <table aria-label={label} className={`mt-sm block w-full border-collapse text-left text-subhead text-ink-soft ${t.table}`}>
+      <thead className={t.head}>
         <tr>
-          {head.map((h) => (
-            <th key={h} scope="col" className="border-b border-line px-sm py-xs text-eyebrow uppercase text-ink-mute">
+          {head.map((h, j) => (
+            // The first column names the thing and holds the longest words, so it gets a little more than its share.
+            <th key={h} scope="col" className={`border-b border-line px-sm py-xs text-eyebrow uppercase text-ink-mute ${j === 0 ? 'w-[28%]' : ''}`}>
               {h}
             </th>
           ))}
         </tr>
       </thead>
-      <tbody className="block md:table-row-group">
+      <tbody className={t.body}>
         {rows.map((cells, i) => (
-          <tr key={i} className="mb-sm block rounded-tile bg-card p-sm md:mb-0 md:table-row md:rounded-none md:bg-transparent md:p-0">
+          <tr key={i} className={`mb-sm block rounded-tile bg-card p-sm ${t.row}`}>
             {cells.map((cell, j) => (
-              <td key={j} className="block py-xs md:table-cell md:border-b md:border-line md:px-sm md:py-sm md:align-top">
-                <span className="block text-eyebrow uppercase text-ink-mute md:hidden">{head[j]}</span>
+              <td key={j} className={`block py-xs ${t.cell}`}>
+                <span className={`block text-eyebrow uppercase text-ink-mute ${t.label}`}>{head[j]}</span>
                 <span className={j === 0 ? 'font-bold text-ink' : ''}>{typeof cell === 'string' ? keepTail(cell) : cell}</span>
               </td>
             ))}
@@ -96,8 +101,19 @@ export function Grid({ head, rows, label }: { head: string[]; rows: ReactNode[][
   );
 }
 
+/** Whole class names, so Tailwind sees each one: the table from the tablet width, or cards at every width. */
+const AS_TABLE = {
+  table: 'md:table md:table-fixed',
+  head: 'hidden md:table-header-group',
+  body: 'block md:table-row-group',
+  row: 'md:mb-0 md:table-row md:rounded-none md:bg-transparent md:p-0',
+  cell: 'md:table-cell md:border-b md:border-line md:px-sm md:py-sm md:align-top',
+  label: 'md:hidden',
+};
+const STACKED = { table: '', head: 'hidden', body: 'block', row: '', cell: '', label: '' };
+
 /**
- * The page frame every legal page shares: the eyebrow, the title, a one-line lede, the version in small type, and the one action people
+ * The page frame every legal page shares: the title, a one-line lede, the version in small type, and the one action people
  * come for (write to us, send a notice) before the reading body. `reading` (on unless said) marks the body as a reading page.
  */
 export function LegalPage({
@@ -122,8 +138,7 @@ export function LegalPage({
   return (
     <SiteLayout wide={wide}>
       <header className="pt-lg">
-        <p className="m-0 type-eyebrow text-ink-mute">kreators.app</p>
-        <h1 className="type-hook mt-sm text-display-1">{tie(title)}</h1>
+        <h1 className="type-hook m-0 text-display-1">{tie(title)}</h1>
         <p className="mt-xs m-0 text-prose text-ink-soft">{lede}</p>
         {note && <p className="mt-xs m-0 text-subhead text-ink-mute">{note}</p>}
         {action && <div className="mt-sm flex flex-wrap gap-sm">{action}</div>}

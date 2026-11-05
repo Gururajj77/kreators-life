@@ -9,6 +9,8 @@ let bad = 0;
 for (const [w, h] of [[1280, 900], [1600, 1000], [1100, 800]]) {
   const page = await browser.newPage();
   await page.setViewport({ width: w, height: h });
+  // Reduced motion shows the cards that rise in on scroll (Reveal) where they rest, so a card still on its way never reads as short.
+  await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
   await page.evaluateOnNewDocument((t) => localStorage.setItem('kreators.session', JSON.stringify({ state: { token: t }, version: 0 })), token);
   await page.goto(`${ORIGIN}/home`, { waitUntil: 'networkidle0' });
   await new Promise((r) => setTimeout(r, 600));
@@ -34,7 +36,9 @@ for (const [w, h] of [[1280, 900], [1600, 1000], [1100, 800]]) {
         for (const c of cards) byTop.set(Math.round(c.top), [...(byTop.get(Math.round(c.top)) ?? []), c]);
         for (const [, g] of byTop) if (g.length > 1 && Math.max(...g.map((c) => c.height)) - Math.min(...g.map((c) => c.height)) > 1) out.push(`${s.getAttribute('aria-labelledby')}: cards in one row are ${g.map((c) => Math.round(c.height)).join(' and ')} tall`);
         // the cards fill the half: the last row ends where the section does
-        if (cards.length && Math.abs(Math.max(...cards.map((c) => c.bottom)) - ul.getBoundingClientRect().bottom) > 1) out.push(`${s.getAttribute('aria-labelledby')}: the cards stop short of the bottom of the half`);
+        // (a list that is itself the card, like Life's rows, is measured to the inside of its padding)
+        const foot = ul.getBoundingClientRect().bottom - parseFloat(getComputedStyle(ul).paddingBottom || '0');
+        if (cards.length && Math.abs(Math.max(...cards.map((c) => c.bottom)) - foot) > 1) out.push(`${s.getAttribute('aria-labelledby')}: the cards stop short of the bottom of the half`);
       }
     }
     // The Daily card's two buttons are one height and sit at the foot of the card, whatever height the row gives it.

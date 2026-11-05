@@ -252,8 +252,8 @@ export function Public() {
                         {productHasOwnCover(p.kind, p.cover) ? p.cover : <AppIcon name={meta.icon} size={24} />}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block text-headline">{p.title}</span>
-                        <span className="block text-subhead text-ink-soft">
+                        <span className="block text-card-title">{p.title}</span>
+                        <span className="block text-card-note text-ink-soft">
                           {meta.name}
                           {p.kind === 'event' && p.startsAt ? `, ${new Date(p.startsAt).toLocaleString(LOCALE, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''}
                           {p.rating ? `, rated ${p.rating}` : ''}
@@ -312,8 +312,8 @@ export function Public() {
                   // The name and how it is earned at the top left, the medal in the top right corner (the card rules, 2026-11-05).
                   <li key={b.key} className={`fx-spot rounded-tile bg-card p-sm shadow-toy-soft ${bento(i, all.length, 2, 3)}`}>
                     <CardHead tag={<BadgeMedal k={b.key} size="sm" decorative />}>
-                      <p className="m-0 text-balance text-subhead font-semibold">{b.name}</p>
-                      <p className="m-0 text-caption text-ink-soft">{b.how}</p>
+                      <p className="m-0 text-balance text-card-title">{b.name}</p>
+                      <p className="m-0 text-card-note text-ink-soft">{b.how}</p>
                     </CardHead>
                   </li>
                 ))}

@@ -369,10 +369,11 @@ export function CoachStudent() {
             <ol className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
               {d.routine.general.map((b) => (
                 <li key={b.key} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                  <p className="m-0 text-subhead font-semibold">
-                    {b.name}, {b.start} to {b.end}
+                  <p className="m-0 text-card-title">{b.name}</p>
+                  <p className="m-0 text-card-note text-ink-soft">
+                    {b.start} to {b.end}
+                    {b.steps.length > 0 ? `. ${b.steps.join(', ')}` : ''}
                   </p>
-                  {b.steps.length > 0 && <p className="m-0 text-subhead text-ink-soft">{b.steps.join(', ')}</p>}
                 </li>
               ))}
             </ol>

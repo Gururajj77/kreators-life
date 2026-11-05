@@ -29,16 +29,14 @@ Seven relationships as a daily game, with a creator super app around it.
 
 ## State of the project (5 November 2026)
 
-Everything described in 01 to 09 is built and tested locally: 83 migrations (0001 to 0083), 46 modules, 553 shared test cases and 1,609 smoke checks. These figures are date-stamped and change every slice. The work up to the "first launch" and "mini edit" commits, early on 5 November, is committed; it carries migrations up to 0082. The rest of 5 November is not committed yet: 269 changed or deleted files and 8 new ones. Whether any of it has been deployed is not recorded in the repo.
+Everything described in 01 to 09 is built and tested locally: 83 migrations (0001 to 0083), 46 modules, 553 shared test cases and 1,610 smoke checks. These figures are date-stamped and change every slice. The work up to the two "fonts" commits of 5 November (the type pass, the footer and fractal glass, Emerging's one request, migration 0083 and the cleanup) is committed. The rest of 5 November is not committed yet: 94 changed files and 4 new ones (the second weights pass after umbrel and tighter leading, the card title roles, the rectangle text rule, the new home hero, the copy cuts and the sign-in redirect guard). Whether any of it has been deployed is not recorded in the repo.
 
 These new files are not yet tracked by git, and must be added before a deploy:
-- `apps/web/public/fonts/google-sans-flex-latin.woff2` and `google-sans-flex-latin-ext.woff2`.
-- `apps/web/src/components/fx/FractalGlass.tsx`.
-- `apps/web/src/components/RowCard.tsx`.
-- `packages/shared/src/insights.golden.test.ts`, `insights.golden.fixtures.ts` and the three files in `packages/shared/src/__golden__/` (`insights-heavy.json`, `insights-light.json`, `insights-zoned.json`).
-- `apps/api/migrations/0083_agency_due_index.sql`.
+- `apps/web/src/components/fx/SevenKnot.tsx` and `apps/web/src/components/fx/knotDraw.ts` (the home hero's knot).
+- `apps/web/src/lib/rectText.ts` (the rectangle text fixer).
+- `scripts/smoke/rag-probe.js` (its probe).
 
-The old font files (Geist, Geist Mono, Inter) are deleted in the working tree; that deletion must be committed too. 09 §6 gives the deploy order (migrate first, then deploy; the deploy has a second cron trigger for water), the Worker variables to set (`PUBLIC_URL`, `BUSINESS_*`, `DMCA_*`) and the checks to make on the live site. `LEGAL_VERSION` is now 2026-11-05, so every account sees the one-time terms notice again.
+09 §6 gives the deploy order (migrate first, then deploy; the deploy has a second cron trigger for water), the Worker variables to set (`PUBLIC_URL`, `BUSINESS_*`, `DMCA_*`) and the checks to make on the live site. `LEGAL_VERSION` is now 2026-11-05, so every account sees the one-time terms notice again.
 
 The three launch checklists of 1 November still stand: legal and privacy (07 §17 and 08 §14), security (`docs/security/`, 08 §14) and performance (`docs/performance.md`). The performance budget holds: the entry is 467 kB of 480, the first download 1,454 kB of 1,500, and the shared chunk 395 kB of 400. What is not built is listed under "Known gaps" at the end of each doc. The main ones: no report button on posts and replies (a line in a chat channel or a run discussion can be reported, and becomes a help ticket), no email or phone verification, no payments for plans and top-ups yet (`PAYMENTS_LIVE` is false), no staging step, no CI, no second factor, alerts only in the inbox, and the restore drill not yet done. What only the owner can do (rotate keys, two-factor, spending caps, mail records, the Worker variables) is at the end of 08 §14.
 
@@ -105,13 +103,14 @@ Waves 8 to 21 changed names, layout and a few rules; each is in DECISIONS.md and
 
 ## 2026-11-05
 
-The pack is version 0.6. The figures are now 83 migrations (0001 to 0083), 46 modules, 553 shared test cases and 1,609 smoke checks. What changed in the app, and where it is described:
-- **Type.** One family, Google Sans Flex, self-hosted, with Apple's text styles as one scale and two weights (400 and 500, after umbrel.com). Geist, Geist Mono and Inter are gone. Caveat stays for a guide's handwritten line on the public site. Only the two wordmarks are rounded. See 06.
+The pack is version 0.6. The figures are now 83 migrations (0001 to 0083), 46 modules, 553 shared test cases and 1,610 smoke checks. What changed in the app, and where it is described:
+- **Type.** One family, Google Sans Flex, self-hosted, with Apple's text styles as one scale and weights after umbrel.com that follow the surface (titles 600, labels 550, tags 480, reading 450 on light surfaces, each 50 lighter on dark). Geist, Geist Mono and Inter are gone. Caveat stays for a guide's handwritten line on the public site. Only the two wordmarks are rounded. See 06.
 - **Public site.** The last call to action and the Features close are fractal glass (`FractalGlass`), which replaced `GradientStripes`. The footer follows the founder's FyndFlow footer and ends with an emergency line. Every link shows the 45-degree arrow. Copy from FyndFlow was taken only where it is true of the app. See 06 and 02.
 - **Terms.** Two new sections ("Wellbeing, not medical care" and "Money tools, not advice") and a line under Acceptable use. `LEGAL_VERSION` is 2026-11-05. See 07 and 08.
 - **Emerging.** One `GET /insights` a day for every screen, a new limit (`insights`, 120 an hour), migration 0083 for the agency-load read, and golden tests that pin the output. See 02, 03, 04 and 05.
 - **Delete and export.** Deleting an account now also deletes its `analytics_events` and `page_events` rows, and the export carries the person's `analytics_events` as `productEvents`. See 04 and 08.
 - **New sections.** 05 gained §5b (Agency team members) and §12 (app groups and a person's app prefs), 07 gained §18 (discount codes) and 08 gained §15 (the changes from 2 to 5 November).
+- **Text and the home hero.** Tighter leading and tracking after umbrel; card and row titles 3px larger over a line 2px smaller (`text-card-title`, `text-row-title`, `text-card-note`, `text-card-prose`); every block of text kept a rectangle (`lib/rectText.ts`, measured by `rag-probe.js`); the home hero rebuilt with no panel and a seven-colour knot reaching a little over the hook; about sixty lines of copy cut or made plainer. See 06.
 - **Cards and forms.** `RowCard` is the one list card on the work and social screens. Agreements and documents gained Fill in the details. The team link needs a password. Inline toggles show their state with a turning chevron or a cross. See 02 and 06.
 - **Cleanup.** Removed as unused: `Marquee`, `GradientStripes`, `Ornament`, `flowerShape`, `Book3D`, `PillChain`, `SummaryCard`, `docStyleSummary`, the `BentoSize` type and old smoke screenshots. `legal.ts` loads as its own chunk, `shared-legal`.
 

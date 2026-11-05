@@ -3,9 +3,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
 import { Link2, Mail, ShieldCheck, Video, type LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router';
 import { api } from '../lib/api';
 import { globalPrivacyControl, useConsent } from '../lib/consent';
+import { useConsentSlot } from '../lib/consentSlot';
+import { useWide } from '../lib/useWide';
 import { useMe } from '../lib/queries';
 import { useSession } from '../lib/store';
 import { Button } from './Button';
@@ -77,12 +80,23 @@ export function ConsentPopup() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sheetOpen]);
 
+  // On a public page on a phone the card takes its own place under the header (`consentSlot`), in the flow, so it covers nothing. The
+  // slot is there on every public page (hidden from the tablet up), so it also says the card is on the public site rather than in the app,
+  // whoever is signed in. Nothing shows until the first effect has run, so a phone never sees the card flash at the bottom before the
+  // slot is known.
+  const slot = useConsentSlot();
+  const wide = useWide();
+  const inFlow = Boolean(slot) && !wide;
+  const inApp = Boolean(token) && !slot;
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
+
   useEffect(() => {
     const el = root.current;
     if (!showCard || !el) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) gsap.set(el, { opacity: 1, y: 0 });
     else gsap.fromTo(el, { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.4, ease: 'expo.out' });
-  }, [showCard, step]);
+  }, [showCard, step, inFlow, ready]);
 
   // The footer's "Privacy choices" button.
   useEffect(() => {
@@ -101,77 +115,81 @@ export function ConsentPopup() {
   };
 
   // On a phone: a floating glass card with room around it, above the tab bar inside the app and just above the bottom edge on the
-  // public site. Inside the app on a laptop (a sidebar, no hero under it), a small card docked beside the sidebar. On the public site's
+  // public site. Inside the app on a laptop (a sidebar, no hero under it), a small card docked beside the sidebar, 12px above the water
+  // bubble's place (48px tall, 16px up), so the bubble stays in reach while the card asks. On the public site's
   // laptop width, a full-width bar along the very bottom edge, which covers less of the hero than a card.
   // The tab bar is 82px tall (a 72px tab under its padding and edge), so the card sits 96px up: 14px clear of it, level with the assistant.
-  const place = token ? 'bottom-[calc(var(--spacing-xl)+var(--spacing-lg)+env(safe-area-inset-bottom))]' : 'bottom-[calc(var(--spacing-sm)+env(safe-area-inset-bottom))]';
-  const laptop = token
-    ? 'md:bottom-md md:left-[calc(var(--nav-w)+var(--spacing-md))] md:right-auto md:w-[360px]'
+  const place = inApp ? 'bottom-[calc(var(--spacing-xl)+var(--spacing-lg)+env(safe-area-inset-bottom))]' : 'bottom-[calc(var(--spacing-sm)+env(safe-area-inset-bottom))]';
+  const laptop = inApp
+    ? 'md:bottom-[calc(var(--spacing-xl)+var(--spacing-sm))] md:left-[calc(var(--nav-w)+var(--spacing-md))] md:right-auto md:w-[360px]'
     : 'md:inset-x-0 md:bottom-0 md:rounded-none md:border-x-0 md:border-b-0 md:border-t-2 md:px-md md:py-sm md:pb-[calc(var(--spacing-sm)+env(safe-area-inset-bottom))]';
+
+  const card = () => (
+    <div
+      ref={root}
+      role="dialog"
+      aria-label={step === 'terms' ? 'Our terms and privacy policy' : 'Your privacy choices'}
+      className={`rounded-card border border-line bg-card-strong p-md text-ink shadow-toy-soft ${inFlow ? 'relative mt-sm' : `fixed inset-x-sm z-[45] ${place} ${laptop}`}`}
+    >
+      {step === 'terms' ? (
+        <div className="flex flex-col gap-xs">
+          <p className="m-0 text-subhead text-ink-soft">
+            <span className="font-bold text-ink">Our terms are in plain words now</span> (version {LEGAL_VERSION}). Please read the{' '}
+            <Link to="/terms" target="_blank" className="font-bold text-ink underline underline-offset-4">
+              terms of use
+            </Link>{' '}
+            and the{' '}
+            <Link to="/privacy" target="_blank" className="font-bold text-ink underline underline-offset-4">
+              privacy policy
+            </Link>
+            .
+          </p>
+          <div className="flex justify-end">
+            <Button onClick={() => accept.mutate()} disabled={accept.isPending}>
+              I agree
+            </Button>
+          </div>
+        </div>
+      ) : (
+        // On the public site's laptop width the words and the three choices share one short line, so the bar covers less of the page.
+        <div className={`flex flex-col gap-sm ${inApp ? '' : 'md:mx-auto md:max-w-[1080px] md:flex-row md:items-center md:justify-between md:gap-md'}`}>
+          <div className="min-w-0">
+            <p className={`m-0 flex items-center gap-xs text-headline text-ink ${inApp ? '' : 'md:hidden'}`}>
+              <Icon icon={ShieldCheck} size={18} />
+              Your privacy
+            </p>
+            <p className={`mt-xs m-0 text-subhead text-ink-soft ${inApp ? '' : 'md:mt-0'}`}>
+              A cookie, outside videos and email news stay off unless you say yes.{' '}
+              <Link to="/privacy" target="_blank" className="whitespace-nowrap underline underline-offset-4">
+                Privacy policy
+              </Link>
+            </p>
+            <GrievanceLine />
+          </div>
+          {/* Two equal choices side by side, neither solid; "Choose" opens the three switches, as a quiet link above them. */}
+          <div className={`grid grid-cols-2 gap-xs ${inApp ? '' : 'md:flex md:shrink-0 md:items-center'}`}>
+            <button type="button" onClick={() => setChoosing(true)} className="col-span-2 inline-flex min-h-[44px] items-center justify-self-start text-subhead text-ink-soft underline underline-offset-4 hover:text-ink md:mr-xs">
+              Choose for each
+            </button>
+            <Button variant="outline" full onClick={() => choose({ ...NO_CONSENT })} disabled={save.isPending} className="md:w-auto">
+              Reject all
+            </Button>
+            <Button variant="outline" full onClick={() => choose({ attribution: true, embeds: true, marketing: true })} disabled={save.isPending} className="md:w-auto">
+              Accept all
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <>
-      {showCard && (
-        <div
-          ref={root}
-          role="dialog"
-          aria-label={step === 'terms' ? 'Our terms and privacy policy' : 'Your privacy choices'}
-          className={`fixed inset-x-sm z-[45] rounded-card border border-line bg-card-strong p-md text-ink shadow-toy-soft ${place} ${laptop}`}
-        >
-          {step === 'terms' ? (
-            <div className="flex flex-col gap-xs">
-              <p className="m-0 text-subhead text-ink-soft">
-                <span className="font-bold text-ink">Our terms are in plain words now</span> (version {LEGAL_VERSION}). Please read the{' '}
-                <Link to="/terms" target="_blank" className="font-bold text-ink underline underline-offset-4">
-                  terms of use
-                </Link>{' '}
-                and the{' '}
-                <Link to="/privacy" target="_blank" className="font-bold text-ink underline underline-offset-4">
-                  privacy policy
-                </Link>
-                .
-              </p>
-              <div className="flex justify-end">
-                <Button onClick={() => accept.mutate()} disabled={accept.isPending}>
-                  I agree
-                </Button>
-              </div>
-            </div>
-          ) : (
-            // On the public site's laptop width the words and the three choices share one short line, so the bar covers less of the page.
-            <div className={`flex flex-col gap-sm ${token ? '' : 'md:mx-auto md:max-w-[1080px] md:flex-row md:items-center md:justify-between md:gap-md'}`}>
-              <div className="min-w-0">
-                <p className={`m-0 flex items-center gap-xs text-headline text-ink ${token ? '' : 'md:hidden'}`}>
-                  <Icon icon={ShieldCheck} size={18} />
-                  Your privacy
-                </p>
-                <p className={`mt-xs m-0 text-subhead text-ink-soft ${token ? '' : 'md:mt-0'}`}>
-                  A cookie, outside videos and email news stay off unless you say yes.{' '}
-                  <Link to="/privacy" target="_blank" className="whitespace-nowrap underline underline-offset-4">
-                    Privacy policy
-                  </Link>
-                </p>
-                <GrievanceLine />
-              </div>
-              {/* Two equal choices side by side, neither solid; "Choose" opens the three switches, as a quiet link above them. */}
-              <div className={`grid grid-cols-2 gap-xs ${token ? '' : 'md:flex md:shrink-0 md:items-center'}`}>
-                <button type="button" onClick={() => setChoosing(true)} className="col-span-2 inline-flex min-h-[44px] items-center justify-self-start text-subhead text-ink-soft underline underline-offset-4 hover:text-ink md:mr-xs">
-                  Choose for each
-                </button>
-                <Button variant="outline" full onClick={() => choose({ ...NO_CONSENT })} disabled={save.isPending} className="md:w-auto">
-                  Reject all
-                </Button>
-                <Button variant="outline" full onClick={() => choose({ attribution: true, embeds: true, marketing: true })} disabled={save.isPending} className="md:w-auto">
-                  Accept all
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      {ready && showCard && inFlow && slot && createPortal(card(), slot)}
+      {ready && showCard && !inFlow && card()}
 
       <Sheet open={sheetOpen} onClose={closeSheet} title="Your privacy choices">
-        <p className="m-0 text-subhead text-ink-soft">All three start off. You can change them any time under Profile, Privacy choices.</p>
+        <p className="m-0 text-subhead text-ink-soft">All three start off. They also live under Profile, Privacy choices.</p>
         <GrievanceLine />
         <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
           {CONSENT_PURPOSES.map((p) => {

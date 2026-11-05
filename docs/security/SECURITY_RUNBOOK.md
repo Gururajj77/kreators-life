@@ -25,7 +25,7 @@ The cron (every fifteen minutes) looks at the last fifteen minutes and tells eve
 | Many failed sign-ins | 20 or more in 15 minutes | password guessing, or a user who forgot | Logs, area `auth`, status 401; how many different times; the per-address and per-email limits are already slowing it |
 | Many requests were slowed down | 100 or more answers of 429 | a script hammering the app, or a bug that retries | Logs, status 429, which area |
 | Many server errors | 20 or more answers of 5xx | a bad deploy, D1 trouble, a provider outage | Logs, level error, the repeated message and its `requestId`; `pnpm cf:logs` |
-| A role or permission was changed | any | you did it, or someone got admin | Audit trail, who did it; if it was not you, treat as an emergency |
+| A role or a permission changed | any | you did it, or someone got admin | Audit trail, who did it; if it was not you, treat as an emergency |
 
 ## First three actions when one fires
 

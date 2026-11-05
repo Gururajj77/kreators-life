@@ -297,8 +297,8 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
                   <label className="toy flex min-h-[44px] cursor-pointer items-start gap-sm rounded-tile bg-paper p-sm">
                     <input type="checkbox" checked={form.areas.includes(a)} onChange={() => toggleArea(a)} className="mt-xs size-[20px] accent-ink" />
                     <span>
-                      <span className="block text-subhead font-semibold">{DISCOUNT_AREA_META[a].name}</span>
-                      <span className="block text-caption text-ink-soft">{DISCOUNT_AREA_META[a].blurb}</span>
+                      <span className="block text-row-title">{DISCOUNT_AREA_META[a].name}</span>
+                      <span className="block text-card-note text-ink-soft">{DISCOUNT_AREA_META[a].blurb}</span>
                     </span>
                   </label>
                 </li>

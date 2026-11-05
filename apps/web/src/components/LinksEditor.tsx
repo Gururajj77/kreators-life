@@ -104,12 +104,12 @@ export function LinksEditor({ initial }: { initial: LinkBlock[] }) {
                   <AppIcon name={LINK_BLOCK_META[b.type].icon} size={20} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-headline">
+                  <span className="block text-balance text-card-title [overflow-wrap:anywhere]">
                     {b.title || LINK_BLOCK_META[b.type].name}
                     {b.featured ? ' · featured' : ''}
                     {b.on ? '' : ' · hidden'}
                   </span>
-                  <span className="block truncate text-caption text-ink-soft">{summary(b)}</span>
+                  <span className="block truncate text-card-note text-ink-soft">{summary(b)}</span>
                 </span>
                 {(b.type === 'link' || b.type === 'image' || b.type === 'video' || b.type === 'carousel') && (
                   <StatusTag tone="info">{clicks.data?.clicks[b.id] ?? 0} {(clicks.data?.clicks[b.id] ?? 0) === 1 ? 'tap' : 'taps'}</StatusTag>

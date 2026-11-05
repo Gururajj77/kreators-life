@@ -1,9 +1,8 @@
+import { errorText } from '../lib/errors';
 import { AnimatedIcon } from './AnimatedIcon';
 
-/** The plain words for any error: an Error's own message, else a line that says what to do. */
-export function errorText(e: unknown, fallback = 'That did not work. Check your connection and try again.'): string {
-  return e instanceof Error && e.message ? e.message : fallback;
-}
+/** The plain words for any error (lib/errors.ts), re-exported where the line that shows it lives. */
+export { errorText };
 
 /**
  * An error under a form or an action, read out at once. Renders nothing when there is no error.

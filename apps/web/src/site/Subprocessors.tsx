@@ -1,5 +1,5 @@
 import { LEGAL_VERSION, SUBPROCESSORS } from '@kreators/shared';
-import { A, ActionLink, Grid, H, LegalPage, Mail, P, contactEmail, useBusiness, versionDate } from './legalBits';
+import { ActionLink, Grid, H, LegalPage, Mail, P, contactEmail, useBusiness, versionDate } from './legalBits';
 
 /** Everyone who handles personal data for us. The list is in the shared package, so this page, the privacy page and the docs never disagree. */
 export function Subprocessors() {
@@ -15,7 +15,7 @@ export function Subprocessors() {
     >
       <H>Who they are</H>
       <P>
-        We use these companies to run kreators.app. They act on our instructions and for no purpose of their own. Most only handle your data when you use the feature that needs them, as the last column shows. The <A to="/privacy">privacy page</A> explains the rest.
+        We use these companies to run kreators.app. They act on our instructions and for no purpose of their own. Most only handle your data when you use the feature that needs them, as the last column shows.
       </P>
       <Grid label="Subprocessors" head={['Company', 'What it does', 'What data', 'Where', 'When']} rows={SUBPROCESSORS.map((s) => [s.name, s.does, s.data, s.where, s.when])} />
       <H>When the list changes</H>

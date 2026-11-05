@@ -266,7 +266,7 @@ export function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: 
           {COPY.strength}
         </h3>
         <p className="mt-xs m-0 text-caption text-ink-soft">{COPY.strengthLede}</p>
-        <div className="mt-xs flex flex-col gap-xs md:flex-row">
+        <div className="mt-sm flex flex-col gap-xs md:flex-row">
           <Strength title={COPY.now} s={plan.strengthNow} />
           <Strength title={COPY.with} s={plan.strengthWith} />
         </div>
@@ -313,10 +313,10 @@ export function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: 
                     <span className="inline-block size-[10px] rounded-pill" style={{ background: RELATIONSHIP_BY_KEY[s.relationship].color }} aria-hidden="true" />
                   </span>
                   <div className="min-w-0">
-                    <p className="m-0 text-headline">
+                    <p className="m-0 text-row-title">
                       <Inert text={s.title} />
                     </p>
-                    <p className="m-0 text-caption text-ink-soft">
+                    <p className="m-0 text-card-note text-ink-soft">
                       {minutesLabel2(s.estimateMin)}, {s.reason.toLowerCase()}
                     </p>
                   </div>
@@ -342,7 +342,7 @@ export function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: 
             {COPY.look}
           </h3>
           <p className="mt-xs m-0 text-caption text-ink-soft">{COPY.lookLede}</p>
-          <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+          <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {plan.attention.map((a, i) => {
               const fixable = a.tasks.length > 0 || a.kind === 'empty';
               const done = handled(a, i);
@@ -385,17 +385,17 @@ export function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: 
         </h3>
         <p className="mt-xs m-0 text-caption text-ink-soft">{COPY.ownLede}</p>
         {own.length > 0 && (
-          <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+          <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {own.map((o) => (
               <li key={o.id} data-pillar={o.relationship} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                 <div className="min-w-0 flex-1">
-                  <p className="m-0 flex items-center gap-xs text-headline">
+                  <p className="m-0 flex items-center gap-xs text-card-title">
                     <span className="inline-block size-[10px] shrink-0 rounded-pill" style={{ background: RELATIONSHIP_BY_KEY[o.relationship].color }} aria-hidden="true" />
                     <span className="min-w-0">
                       <Inert text={o.title} />
                     </span>
                   </p>
-                  <p className="m-0 text-caption text-ink-soft">
+                  <p className="m-0 text-card-note text-ink-soft">
                     {[o.plan.doDate ? dayOption(o.plan.doDate) : 'No day', Number(o.plan.minutes) > 0 ? minutesLabel2(Number(o.plan.minutes)) : '', o.plan.time ? o.plan.time : '', o.plan.priority !== null ? `P${o.plan.priority}` : ''].filter(Boolean).join(', ')}
                   </p>
                 </div>

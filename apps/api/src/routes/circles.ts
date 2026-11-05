@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { ALIAS_WORDS, attendeeXpLocked, CIRCLE_MINUTES, codeWindow, isCircleStatus, matchCircles, nextWeek, RELATIONSHIPS, RUN_CODE_WINDOW, type CircleEvent, type CircleGroup, type CircleMember, type CircleMessage, type CircleStatus, type MatchCandidate, type RelationshipKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { audit, can, newId, notify, notifyMany, nowIso, num, pageOf, paged, parseList, randomCode, str } from '../db';
+import { audit, can, newId, notifyMany, nowIso, num, pageOf, paged, parseList, randomCode, str } from '../db';
 import { claimEventCode, codeOf, guestView, hostView, setEventCode } from '../attendee';
 
 /**

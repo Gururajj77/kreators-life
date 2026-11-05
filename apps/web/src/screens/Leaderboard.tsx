@@ -76,11 +76,11 @@ const SCOPE_LABEL: Record<LeaderboardScope, string> = { all: '', goal: 'Goal', p
 function BlockCard({ b, onOpen, className = '' }: { b: LeaderboardBlock; onOpen: () => void; className?: string }) {
   return (
     <li className={`flex flex-col rounded-tile bg-card p-sm shadow-toy-soft ${className}`}>
-      <p className="m-0 text-headline">
+      <p className="m-0 text-card-title">
         {b.icon && <AppIcon name={b.icon} size={16} className="mr-xs inline-block align-[-2px] text-ink-soft" />}
         {b.label}
       </p>
-      <p className="m-0 text-caption text-ink-soft">
+      <p className="m-0 text-card-note text-ink-soft">
         {b.people === 0 ? 'Nobody here yet' : `${b.people}${b.people >= LEADERBOARD_POOL ? '+' : ''} ${b.people === 1 ? 'person' : 'people'}`}
         {b.myRank ? ` · you are #${b.myRank}` : ''}
       </p>
@@ -258,8 +258,8 @@ export function Leaderboard() {
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                 {q.data.past.map((p) => (
                   <li key={p.season} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                    <p className="m-0 text-subhead font-semibold">{p.label}</p>
-                    <p className="m-0 text-subhead text-ink-soft">
+                    <p className="m-0 text-card-title">{p.label}</p>
+                    <p className="m-0 text-card-note text-ink-soft">
                       {p.top.map((t) => `${placeWord(t.place)} ${t.name}${t.isMe ? ' (you)' : ''}, ${formatCount(t.xp)} xp`).join(' · ')}
                     </p>
                   </li>

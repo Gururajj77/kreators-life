@@ -39,7 +39,8 @@ export function Fold({
     onOpenChange?.(next);
   };
   const id = useId();
-  const fill = tone === 'plain' ? 'px-xs hover:bg-line' : 'px-sm bg-paper aria-expanded:bg-line';
+  // A title on two lines keeps the same inner margin a one-line row has inside its 44px (py-xs leaves a one-line row as it was).
+  const fill = tone === 'plain' ? 'px-xs hover:bg-line' : 'px-sm py-xs bg-paper aria-expanded:bg-line';
   return (
     <div className={className}>
       <button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)} className={`toy toy-flat flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile text-left ${fill}`}>

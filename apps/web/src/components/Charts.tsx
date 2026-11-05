@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { LOCALE } from '@kreators/shared';
 import type React from 'react';
 import { Link } from 'react-router';
-import { ChevronLeft, ChevronRight, type LucideIcon, ArrowRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
 import { Icon } from './Icon';
 import { MoodFace } from './MoodFace';
 import { tie } from '../lib/text';

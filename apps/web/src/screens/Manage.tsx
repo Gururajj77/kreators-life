@@ -127,9 +127,10 @@ export function Manage() {
               {/* The name at the top left, the role in the corner of every row (Creator too), the numbers as tags at the foot. */}
               <RowCard
                 title={
+                  // The name over the @handle, each its own line, so a narrow row never leaves the handle short under a long name.
                   <span className="[overflow-wrap:anywhere]">
-                    {m.name}
-                    {m.handle ? <span className="text-ink-soft"> @{m.handle}</span> : ''}
+                    <span className="block">{m.name}</span>
+                    {m.handle && <span className="block text-ink-soft">@{m.handle}</span>}
                   </span>
                 }
                 corner={<StatusTag tone={m.role === 'user' ? 'neutral' : 'calm'} fit>{ROLE_META[m.role].name}</StatusTag>}

@@ -305,9 +305,9 @@ function Choice({ on, onPick, name, blurb, house = false }: { on: boolean; onPic
   return (
     <button type="button" role="radio" aria-checked={on} onClick={onPick} className={`toy w-full rounded-tile border-2 p-sm text-left ${on ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
       <CardHead tag={house && <StatusTag fit tone="info">House template</StatusTag>}>
-        <span className="block text-headline">{tie(name)}</span>
+        <span className="block text-card-title">{tie(name)}</span>
       </CardHead>
-      <span className="block text-subhead text-ink-soft">{blurb}</span>
+      <span className="block text-card-note text-ink-soft">{blurb}</span>
     </button>
   );
 }
@@ -352,7 +352,7 @@ export function AgreementTemplates() {
         </p>
       )}
       {q.data && templates.length === 0 && <p className="mt-xs m-0 rounded-tile bg-card p-sm text-subhead text-ink-soft shadow-toy-soft">No templates of your own yet.</p>}
-      <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+      <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
         {templates.map((t) => (
           <li key={t.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
             {editing === t.id ? (
@@ -374,8 +374,8 @@ export function AgreementTemplates() {
             ) : (
               <div className="flex flex-wrap items-center justify-between gap-xs">
                 <span className="min-w-0 flex-1">
-                  <span className="block text-headline">{tie(t.name)}</span>
-                  <span className="block text-subhead text-ink-soft">{t.summary}</span>
+                  <span className="block text-card-title">{tie(t.name)}</span>
+                  <span className="block text-card-note text-ink-soft">{t.summary}</span>
                 </span>
                 <span className="flex gap-xs">
                   <Button
@@ -405,7 +405,8 @@ export function AgreementTemplates() {
 function Card({ c }: { c: ContractListItem }) {
   return (
     <div>
-      <Link to={`/agency/contracts/${c.id}`} className="block text-headline underline-offset-4 hover:underline">
+      {/* Two lines of the headline are 42px since the tighter leading: an invisible ::before takes the tap area to 44 without moving anything. */}
+      <Link to={`/agency/contracts/${c.id}`} className="relative block text-headline underline-offset-4 before:absolute before:inset-x-0 before:-inset-y-[2px] before:content-[''] hover:underline">
         {/* The Move button sits at the card's foot (moveAtFoot), so the title has the card's whole width and a tail in capitals as long
             as "ENGAGEMENT AGREEMENT" (20 letters) stays on one line instead of leaving "AGREEMENT" alone. */}
         {tie(c.title, 20)}

@@ -7,7 +7,7 @@ import { Button } from '../components/Button';
 import { AnimatedIcon } from '../components/AnimatedIcon';
 import { Sheet } from '../components/Sheet';
 import { AreaLine, Bubbles, Gauge, PillBars } from '../components/Charts';
-import { Hero, HeroNumber } from '../components/Hero';
+import { Hero } from '../components/Hero';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
@@ -143,10 +143,10 @@ export function Stress() {
           {logs.data?.logs.map((l) => (
             <li key={l.id} className={`flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft`}>
               <span className="min-w-0 flex-1">
-                <span className="block text-headline">
+                <span className="block text-card-title">
                   {STRESS_LEVELS[Math.round(l.value) - 1]}
                 </span>
-                <span className="block text-subhead text-ink-soft">
+                <span className="block text-card-note text-ink-soft">
                   {new Date(`${l.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', month: 'short', day: 'numeric' })}
                   {Array.isArray(l.extra.stressors) && l.extra.stressors.length > 0 ? `. ${(l.extra.stressors as string[]).join(', ')}` : ''}
                 </span>

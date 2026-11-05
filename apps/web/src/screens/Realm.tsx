@@ -248,11 +248,11 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                               {meta.rung}
                             </span>
                             <span className="min-w-0 flex-1">
-                              <span className="block text-headline">
+                              <span className="block text-card-title">
                                 {meta.plural}
                                 {items.length > 0 && <span className="text-ink-mute"> {items.length}</span>}
                               </span>
-                              <span className="block truncate text-subhead text-ink-soft">{summary}</span>
+                              <span className="block truncate text-card-note text-ink-soft">{summary}</span>
                             </span>
                           </span>
                         }
@@ -268,11 +268,11 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                                     <button type="button" onClick={() => setEditing(n)} className="toy toy-flat flex w-full items-center gap-sm rounded-tile bg-paper p-sm text-left">
                                       <span className="w-[6px] self-stretch rounded-pill" style={{ background: n.status === 'done' ? rel.deep : rel.color }} aria-hidden="true" />
                                       <span className="min-w-0 flex-1">
-                                        <span className="block truncate text-headline">
+                                        <span className="block truncate text-card-title">
                                           {n.title}
                                           {n.status === 'done' && <span className="text-ink-mute"> (cleared)</span>}
                                         </span>
-                                        {parentNode && <span className="block truncate text-subhead text-ink-soft">Holds up: {parentNode.title}</span>}
+                                        {parentNode && <span className="block truncate text-card-note text-ink-soft">Holds up: {parentNode.title}</span>}
                                         {n.kind === 'project' && n.status === 'active' && (
                                           <PaceTag
                                             created={n.createdAt}

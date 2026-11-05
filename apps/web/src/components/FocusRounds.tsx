@@ -17,6 +17,7 @@ import { BreathFour } from './BreathFour';
 import { useFocus, useSession } from '../lib/store';
 import { Button } from './Button';
 import { ChipSelect, type ChipOption } from './ChipSelect';
+import { RoundButton as RoundButtonBase } from './RoundButton';
 import { useSlider } from './fx/useSlider';
 import { RulerPicker } from './RulerPicker';
 import { Sheet } from './Sheet';
@@ -132,9 +133,9 @@ function RoundGlyph({ name, active = false }: { name: 'gear' | 'sound' | 'mute' 
 /** A round glass button that floats by the panel: a name for screen readers, and the same name as a tooltip on hover and keyboard focus. */
 function RoundButton({ at, label, icon, onClick, opens = false, pressed }: { at: 'tl' | 'tr' | 'br' | 'bc'; label: string; icon: 'gear' | 'sound' | 'mute' | 'music' | 'task' | 'full'; onClick: () => void; /** It opens a dialog. */ opens?: boolean; /** A switch that stays on (full screen). */ pressed?: boolean }) {
   return (
-    <button type="button" className="mf-round toy" data-at={at} data-tip={label} aria-label={label} aria-haspopup={opens ? 'dialog' : undefined} aria-pressed={pressed} onClick={onClick}>
+    <RoundButtonBase at={at} label={label} onClick={onClick} opens={opens} pressed={pressed}>
       <RoundGlyph name={icon} active={pressed} />
-    </button>
+    </RoundButtonBase>
   );
 }
 
@@ -364,8 +365,10 @@ export function FocusRounds({
   const [stopAsk, setStopAsk] = useState<{ minutes: number; mode: 'timer' | 'pomodoro' } | null>(null);
   // A finished session being changed, or 'new' for one added afterwards.
   const [edit, setEdit] = useState<FocusRoundRow | 'new' | null>(null);
-  // Mindful is the screen showing (the panel sits in its slot, not parked): only then do the shortcut keys and full screen act.
+  // The panel sits in a page's slot (Mindful or Home), not parked: it can be seen, so its own sheets ask and full screen holds.
   const onMindful = useFocusPortal((st) => st.target !== null);
+  // Only Mindful takes the laptop's shortcut keys; on Home Space must not start a clock.
+  const keysHere = useFocusPortal((st) => st.page === 'mindful');
   const fullOn = useFocus((st) => st.on);
   const setFull = useFocus((st) => st.set);
   // Another tab already runs the clock this tab was copied with: this one shows that clock and runs nothing itself.
@@ -988,7 +991,7 @@ export function FocusRounds({
   // does), K skips to the next Pomodoro part, ? lists them. Space on a focused button or slider is left to that control.
   const onKey = useRef<(e: KeyboardEvent) => void>(() => undefined);
   onKey.current = (e: KeyboardEvent) => {
-    if (!onMindful || elsewhere || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
+    if (!keysHere || elsewhere || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
     // Only a modal sheet holds the keys: the privacy card (a dialog that is not modal) must not.
     if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
     const control = e.target instanceof HTMLElement && e.target.closest('button, a, [role="slider"], [role="tab"]');
@@ -1143,7 +1146,8 @@ export function FocusRounds({
 
           {/* Breathe before a session: the seconds a count lasts on the left and the whole length on the right are both buttons; the
               slider between them sets whichever is picked. */}
-          <div className={`mf-dial ${mode === 'breathe' && breathe.atFull ? 'mf-dial-breathe' : ''}`}>
+          {/* data-rect-quiet: the dial ticks every second (the time, the breath, the seconds strip); the text balancer leaves it alone. */}
+          <div data-rect-quiet="" className={`mf-dial ${mode === 'breathe' && breathe.atFull ? 'mf-dial-breathe' : ''}`}>
             {mode === 'breathe' && breathe.atFull && (
               <button type="button" className="mf-time-btn mf-pace" aria-pressed={breathRuler === 'count'} onClick={() => setBreathRuler('count')} aria-label={`Seconds per count, ${settings.breathPace.toFixed(1)}. Set it with the slider.`}>
                 <span className="mf-time">{settings.breathPace.toFixed(1)}s</span>

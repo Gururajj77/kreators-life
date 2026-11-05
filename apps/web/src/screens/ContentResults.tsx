@@ -4,6 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
 import { Button } from '../components/Button';
+import { ConfirmDelete, DELETE_BTN } from '../components/ConfirmDelete';
 import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
@@ -109,29 +110,6 @@ export function ContentResults() {
         }}
       />
     </Screen>
-  );
-}
-
-/** The pale red outline a delete wears (the Sign out button's look), never solid until the sheet asks. */
-const DELETE_BTN = 'toy inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-headline text-r1 hover:bg-r1/10 disabled:opacity-50';
-
-/** Asks before a delete, the Mindful session pattern: a red "Yes, delete it" and a quiet "Keep it". */
-function ConfirmDelete({ open, title, body, pending, failed, onYes, onClose }: { open: boolean; title: string; body: string; pending: boolean; failed: boolean; onYes: () => void; onClose: () => void }) {
-  return (
-    <Sheet open={open} onClose={onClose} title={title}>
-      <div className="grid gap-md pb-xl">
-        <p className="m-0 text-callout text-ink-soft">{body}</p>
-        {failed && <p role="alert" className="m-0 text-subhead text-r1">That did not work. Try again.</p>}
-        <div className="flex flex-wrap gap-xs">
-          <button type="button" disabled={pending} onClick={onYes} className={DELETE_BTN}>
-            Yes, delete it
-          </button>
-          <Button variant="outline" onClick={onClose}>
-            Keep it
-          </Button>
-        </div>
-      </div>
-    </Sheet>
   );
 }
 
@@ -251,9 +229,9 @@ function LinkCard({ link, goBase, onChange }: { link: TrackedLink; goBase: strin
   };
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <p className="m-0 text-headline">{link.label || `Link ${link.code}`}</p>
-      <p className="mt-xs m-0 break-all text-subhead">{url}</p>
-      <p className="m-0 text-subhead text-ink-soft">
+      <p className="m-0 text-card-title">{link.label || `Link ${link.code}`}</p>
+      <p className="mt-xs m-0 break-all text-card-note">{url}</p>
+      <p className="m-0 text-card-note text-ink-soft">
         Opens {link.productTitle ?? 'your page'}, from {link.sourceType}. {link.clicks} clicks, {link.checkouts} checkouts, {link.sales} sales, {link.revenuePoints} points.
       </p>
       <div className="mt-sm flex flex-wrap gap-xs fill-row">

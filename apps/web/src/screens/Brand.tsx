@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '../components/Button';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 import { IconButton } from '../components/IconButton';
 import { Markdown } from '../components/Markdown';
 import { AppCover } from '../components/AppCover';
@@ -37,29 +38,6 @@ type Tab = (typeof TABS)[number]['key'];
 type Preset = { research?: ResearchKind; piece?: PieceKind; query?: string; at: number };
 
 /** The way from "who is this for" to a month of posts: eight steps, done by doing them. The next one is the one to tap. */
-/** The pale red outline a delete wears (the Sign out button's look), never solid until the sheet asks. */
-const DELETE_BTN = 'toy inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-headline text-r1 hover:bg-r1/10 disabled:opacity-50';
-
-/** Asks before a delete, the Mindful session pattern: a red "Yes, delete it" and a quiet "Keep it". */
-function ConfirmDelete({ open, title, body, pending, failed, onYes, onClose }: { open: boolean; title: string; body: string; pending: boolean; failed: boolean; onYes: () => void; onClose: () => void }) {
-  return (
-    <Sheet open={open} onClose={onClose} title={title}>
-      <div className="grid gap-md pb-xl">
-        <p className="m-0 text-callout text-ink-soft">{body}</p>
-        {failed && <p role="alert" className="m-0 text-subhead text-r1">That did not work. Try again.</p>}
-        <div className="flex flex-wrap gap-xs">
-          <button type="button" disabled={pending} onClick={onYes} className={DELETE_BTN}>
-            Yes, delete it
-          </button>
-          <Button variant="outline" onClick={onClose}>
-            Keep it
-          </Button>
-        </div>
-      </div>
-    </Sheet>
-  );
-}
-
 function StrategyPath({ brand, counts, onGo }: { brand: { niche: string; voice: string }; counts: Parameters<typeof strategyPath>[1]; onGo: (go: ReturnType<typeof strategyPath>[number]['go']) => void }) {
   const steps = strategyPath(brand, counts);
   const done = steps.filter((s) => s.done).length;
@@ -83,8 +61,8 @@ function StrategyPath({ brand, counts, onGo }: { brand: { niche: string; voice: 
                 {s.done ? <Icon icon={Check} size={14} strokeWidth={3} /> : i + 1}
               </span>
               <span className="min-w-0">
-                <span className={`block text-headline ${s.done ? 'text-ink-soft' : ''}`}>{s.title}</span>
-                <span className="block text-caption text-ink-soft">{s.why}</span>
+                <span className={`block text-card-title ${s.done ? 'text-ink-soft' : ''}`}>{s.title}</span>
+                <span className="block text-card-note text-ink-soft">{s.why}</span>
               </span>
             </button>
           </li>
@@ -247,7 +225,7 @@ function SourcesTab({ id, sources, onChange, onOpenRun }: { id: string; sources:
                 <AppIcon name={BRAND_SOURCE_META[s.kind].icon} size={20} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-balance text-headline [overflow-wrap:anywhere]">{s.label || s.url}</span>
+                <span className="block text-balance text-card-title [overflow-wrap:anywhere]">{s.label || s.url}</span>
                 <a href={s.url} target="_blank" rel="noreferrer" className="block truncate text-caption text-ink-soft underline-offset-4 hover:underline">
                   {s.url}
                 </a>
@@ -255,7 +233,7 @@ function SourcesTab({ id, sources, onChange, onOpenRun }: { id: string; sources:
                   {BRAND_SOURCE_META[s.kind].name}
                   {s.lastReadAt ? `, read ${when(s.lastReadAt)}` : ', not read yet'}
                 </span>
-                {s.summary && <span className="mt-xs block text-subhead text-ink-soft">{s.summary.slice(0, 220)}{s.summary.length > 220 ? '…' : ''}</span>}
+                {s.summary && <span className="mt-xs block text-card-prose text-ink-soft">{s.summary.slice(0, 220)}{s.summary.length > 220 ? '…' : ''}</span>}
               </span>
             </div>
             <div className="mt-sm flex flex-wrap gap-xs">
@@ -341,11 +319,11 @@ function ResearchTab({ id, runs, preset, reach, onChange, onOpen }: { id: string
         {runs.map((r) => (
           <li key={r.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
             <button type="button" onClick={() => onOpen(r)} className="toy toy-flat min-w-0 flex-1 rounded-tile p-xs text-left">
-              <span className="block text-balance text-headline [overflow-wrap:anywhere]">
+              <span className="block text-balance text-card-title [overflow-wrap:anywhere]">
                 {RESEARCH_META[r.kind].name}
                 {r.query ? `: ${r.query}` : ''}
               </span>
-              <span className="block text-caption text-ink-soft">
+              <span className="block text-card-note text-ink-soft">
                 {r.status === 'done' ? `${r.items.length} ${r.items.length === 1 ? 'item' : 'items'} via ${r.backend}` : `Failed: ${r.error}`}, {when(r.createdAt)}
               </span>
             </button>
@@ -396,8 +374,8 @@ function CreateTab({ id, runs, preset, writer, onMade }: { id: string; runs: Res
                 <AppIcon name={PIECE_META[k].icon} size={20} />
               </span>
               <span className="min-w-0">
-                <span className="block text-headline">{PIECE_META[k].name}</span>
-                <span className="block text-subhead text-ink-soft">{PIECE_META[k].blurb}</span>
+                <span className="block text-card-title">{PIECE_META[k].name}</span>
+                <span className="block text-card-note text-ink-soft">{PIECE_META[k].blurb}</span>
               </span>
             </button>
           </li>
@@ -463,8 +441,8 @@ function PiecesTab({ pieces, onOpen }: { pieces: BrandPiece[]; onOpen: (p: Brand
                 <AppIcon name={PIECE_META[p.kind].icon} size={20} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-balance text-headline [overflow-wrap:anywhere]">{p.title}</span>
-                <span className="block text-caption text-ink-soft">
+                <span className="block text-balance text-card-title [overflow-wrap:anywhere]">{p.title}</span>
+                <span className="block text-card-note text-ink-soft">
                   {p.writer === 'claude' ? 'Written by Claude' : p.writer === 'workers-ai' ? 'Written by a small model' : 'Research digest, no model'}
                   {p.status === 'kept' ? ', kept' : ''}, {when(p.createdAt)}
                 </span>
@@ -484,14 +462,14 @@ function ItemRow({ it }: { it: ResearchItem }) {
     .join(', ');
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <p className="m-0 text-headline">{it.title || it.url}</p>
-      <p className="m-0 text-caption text-ink-soft">{[it.author, it.publishedAt, stats].filter(Boolean).join(' · ')}</p>
+      <p className="m-0 text-card-title">{it.title || it.url}</p>
+      <p className="m-0 text-card-note text-ink-soft">{[it.author, it.publishedAt, stats].filter(Boolean).join(' · ')}</p>
       {it.url && (
         <a href={it.url} target="_blank" rel="noreferrer" className="block truncate text-caption underline-offset-4 hover:underline">
           {it.url}
         </a>
       )}
-      {it.text && <p className="mt-xs m-0 whitespace-pre-wrap text-subhead text-ink-soft">{it.text.slice(0, 600)}{it.text.length > 600 ? '…' : ''}</p>}
+      {it.text && <p className="mt-xs m-0 whitespace-pre-wrap text-card-prose text-ink-soft">{it.text.slice(0, 600)}{it.text.length > 600 ? '…' : ''}</p>}
     </li>
   );
 }

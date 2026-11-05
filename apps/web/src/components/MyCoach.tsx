@@ -77,11 +77,11 @@ export function MyCoachSection({ id = 'coach', title = 'Your life coach', inCoac
               <div className="flex items-center gap-sm">
                 <CoachFace name={l.coach.name} badge={l.coach.badge} />
                 <span className="min-w-0 flex-1">
-                  <span className="block text-headline">
+                  <span className="block text-card-title">
                     {l.coach.name}
                     {l.coach.handle ? <span className="text-ink-soft"> @{l.coach.handle}</span> : null}
                   </span>
-                  <span className="block text-subhead text-ink-soft">
+                  <span className="block text-card-note text-ink-soft">
                     {BADGE_META[l.coach.badge].name}.{' '}
                     {waiting ? (mineToAnswer ? (l.askedBy === 'admin' ? 'The team suggests them as your coach.' : 'They would like to be your coach.') : 'You asked them. Waiting for their yes.') : `Your coach since ${day(l.answeredAt ?? l.createdAt)}.`}
                   </span>

@@ -47,9 +47,9 @@ function Ticket({ t, agent, onChange }: { t: SupportTicket; agent: boolean; onCh
           </span>
         }
       >
-        <p className="m-0 text-headline">{t.subject}</p>
+        <p className="m-0 text-card-title">{t.subject}</p>
       </CardHead>
-      <p className="m-0 text-subhead text-ink-soft">
+      <p className="text-card-note text-ink-soft">
         {agent ? `${t.userName}, ` : ''}
         {longDate(t.createdAt)}
       </p>

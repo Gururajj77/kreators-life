@@ -4,8 +4,8 @@ export function AnonToggle({ on, onChange, className = '' }: { on: boolean; onCh
     <label className={`toy toy-flat flex min-h-[44px] cursor-pointer items-start gap-sm rounded-tile p-xs ${className}`}>
       <input type="checkbox" checked={on} onChange={(e) => onChange(e.target.checked)} className="mt-[2px] size-[22px] shrink-0" />
       <span className="min-w-0">
-        <span className="block text-subhead font-semibold">Post anonymously</span>
-        <span className="block text-caption text-ink-soft">You get a made-up name, the same all through this conversation. Others cannot see who you are. Staff can, if it is reported.</span>
+        <span className="block text-row-title">Post anonymously</span>
+        <span className="block text-card-note text-ink-soft">You get a made-up name, the same all through this conversation. Others cannot see who you are. Staff can, if it is reported.</span>
       </span>
     </label>
   );

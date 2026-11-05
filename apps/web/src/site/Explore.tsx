@@ -1,11 +1,12 @@
-import { LISTING_TYPE_META, LISTING_TYPES, type ListingType } from '@kreators/shared';
+import { LISTING_TYPE_META, LISTING_TYPES, MODULE_BY_KEY, formatCount, type ListingType } from '@kreators/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { AppIcon } from '../components/AppIcon';
 import { Pager, usePage } from '../components/Pager';
 import { publicApi } from '../lib/api';
 import { chip } from '../lib/ui';
+import { SITE_LINK } from './buttons';
 import { ListingCard } from './ListingCard';
 import { SiteLayout } from './SiteLayout';
 import { TabRow } from '../components/TabRow';
@@ -54,6 +55,7 @@ export function Explore() {
     queryFn: () => publicApi.explore({ q: debounced, type, pq: pg.query }),
   });
   const list = results.data?.listings ?? [];
+  const about = type ? MODULE_BY_KEY[LISTING_TYPE_META[type].moduleKey] : undefined;
 
   const setType = (t: ListingType | undefined) => {
     const next = new URLSearchParams(params);
@@ -68,7 +70,7 @@ export function Explore() {
       <header className="pt-lg">
         <h1 className="type-hook text-display-1">Explore</h1>
         <p className="mt-xs m-0 max-w-[640px] text-callout text-ink-soft">
-          Content rewards, opportunities, events, programs, tools and campaigns. Search here, then sign in to join, apply or submit. You come straight back to the one you picked.
+          Search here, then sign in to join, apply or submit. You come straight back to the one you picked.
         </p>
         <label className="mt-md block">
           <span className="sr-only">Search listings</span>
@@ -101,14 +103,22 @@ export function Explore() {
         )}
         {results.data && list.length === 0 && (
           <p className="m-0 rounded-tile bg-card p-md text-callout text-ink-soft shadow-toy-soft">
-            Nothing matches yet. {debounced ? 'Try fewer words, or a different type.' : 'The team adds listings from the admin console; check back soon.'}
+            {debounced ? 'Nothing matches. Try fewer words, or a different type.' : 'Nothing here yet. The team adds new listings; check back soon.'}
           </p>
         )}
         {list.length > 0 && (
           <>
-            <p className="m-0 text-subhead text-ink-soft">
-              {list.length} {list.length === 1 ? 'listing' : 'listings'}
-            </p>
+            {/* The count on the left; with one kind picked, the way to read about its app on the right (each card's icon links there too). */}
+            <div className="flex flex-wrap items-center justify-between gap-x-sm">
+              <p className="m-0 text-subhead text-ink-soft">
+                {formatCount(list.length)} {list.length === 1 ? 'listing' : 'listings'}
+              </p>
+              {about && (
+                <Link to={`/features/${about.key}`} className={`${SITE_LINK} text-subhead`}>
+                  About {about.name}
+                </Link>
+              )}
+            </div>
             <ul className="mt-sm grid list-none gap-sm p-0 m-0 md:grid-cols-2 lg:grid-cols-3">
               {list.map((l) => (
                 <ListingCard key={`${l.type}-${l.id}`} listing={l} />

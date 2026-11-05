@@ -1,4 +1,4 @@
-import { MODULE_GROUP_ACCENT, MODULE_GROUPS, MODULE_BY_KEY, RELATIONSHIP_BY_KEY, ROLE_META, ROLES, type ObservedUser, type Role } from '@kreators/shared';
+import { formatCount, MODULE_GROUP_ACCENT, MODULE_GROUPS, MODULE_BY_KEY, RELATIONSHIP_BY_KEY, ROLE_META, ROLES, type ObservedUser, type Role } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
@@ -59,7 +59,7 @@ export function Observability() {
             key: a.key,
             label: a.name,
             value: data.totals.users ? a.on / data.totals.users : 0,
-            text: `${a.on} ${a.on === 1 ? 'person' : 'people'}`,
+            text: `${formatCount(a.on)} ${a.on === 1 ? 'person' : 'people'}`,
             color: rel.color,
           };
         })
@@ -100,7 +100,7 @@ export function Observability() {
           <Section id="obs-games" title="Games" lede="How many people unlocked each game. Counts only, never who played what.">
             <div className="rounded-card bg-card p-md shadow-toy-soft">
               <HBars
-                rows={data.additions.games.map((g) => ({ key: g.key, label: g.name, value: data.totals.users ? g.unlocked / data.totals.users : 0, text: `${g.unlocked} ${g.unlocked === 1 ? 'person' : 'people'}`, color: RELATIONSHIP_BY_KEY.friendship.color }))}
+                rows={data.additions.games.map((g) => ({ key: g.key, label: g.name, value: data.totals.users ? g.unlocked / data.totals.users : 0, text: `${formatCount(g.unlocked)} ${g.unlocked === 1 ? 'person' : 'people'}`, color: RELATIONSHIP_BY_KEY.friendship.color }))}
                 label="People per game"
               />
             </div>
@@ -109,7 +109,7 @@ export function Observability() {
           <Section id="obs-discover" title="Discover" lede="Quizzes taken and what people allowed. Counts only: no answers, no results, no names.">
             <div className="grid grid-cols-2 gap-xs md:grid-cols-3">
               {[
-                { label: "Quizzes", value: data.additions.discover.results, hint: `${data.additions.discover.people} ${data.additions.discover.people === 1 ? 'person' : 'people'}` },
+                { label: "Quizzes", value: data.additions.discover.results, hint: `${formatCount(data.additions.discover.people)} ${data.additions.discover.people === 1 ? 'person' : 'people'}` },
                 { label: "With EQ", value: data.additions.discover.withEq, hint: "emotional intelligence added" },
                 { label: "Assistant on", value: data.additions.discover.assistantOn, hint: "allowed a short summary" },
                 { label: "Steps off", value: data.additions.discover.stepsOff, hint: "switched next steps off" },
@@ -143,7 +143,7 @@ export function Observability() {
             <div className="grid grid-cols-3 gap-xs">
               <StatTile label="Errors" value={data.additions.logs.errors} hint="server and browser" />
               <StatTile label="Refused" value={data.additions.logs.warnings} hint="400s and rate limits" />
-              <StatTile label="Changes" value={data.additions.logs.changes} hint="things people changed" />
+              <StatTile label="Changes" value={data.additions.logs.changes} hint="made by people" />
             </div>
             {isAdmin ? (
               <Link to="/internal/logs" className="toy mt-sm inline-flex min-h-[48px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
@@ -154,7 +154,7 @@ export function Observability() {
             )}
           </Section>
 
-          <Section id="obs-people" title="People" lede={`${data.total} ${data.total === 1 ? 'account' : 'accounts'}, newest first, with the apps each one has on.${isAdmin ? ' Change a role from the menu on a row.' : ' Only an admin changes roles.'}`}>
+          <Section id="obs-people" title="People" lede={`${formatCount(data.total)} ${data.total === 1 ? 'account' : 'accounts'}, newest first, with the apps each one has on.${isAdmin ? ' Change a role from the menu on a row.' : ' Only an admin changes roles.'}`}>
             <label className="block">
               <span className="sr-only">Search people by name or page name</span>
               <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or page name" autoComplete="off" className={FIELD_FILTER} />
@@ -170,8 +170,8 @@ export function Observability() {
                       <RoleBadge role={u.role} size={20} className="absolute right-0 bottom-0" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-balance text-headline [overflow-wrap:anywhere]">{u.name}</span>
-                      <span className="block text-caption text-ink-soft">
+                      <span className="block text-balance text-card-title [overflow-wrap:anywhere]">{u.name}</span>
+                      <span className="block text-card-note text-ink-soft">
                         {u.handle ? `/u/${u.handle} · ` : ''}
                         since {longDate(u.createdAt)}
                         {u.onboarded ? '' : ' · not set up yet'}
@@ -224,8 +224,8 @@ export function Observability() {
             <div className="flex items-center gap-sm">
               <RoleBadge role={asking.role} size={40} />
               <div className="min-w-0">
-                <p className="m-0 text-headline">{ROLE_META[asking.role].name}</p>
-                <p className="m-0 text-subhead text-ink-soft">{ROLE_META[asking.role].blurb}</p>
+                <p className="m-0 text-card-title">{ROLE_META[asking.role].name}</p>
+                <p className="m-0 text-card-note text-ink-soft">{ROLE_META[asking.role].blurb}</p>
               </div>
             </div>
             <p className="mt-md m-0 text-subhead text-ink-soft">

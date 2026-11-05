@@ -96,8 +96,8 @@ export function EventPanel({ app, id, talk = true }: { app: EventApp; id: string
             {d.people.map((p) => (
               <li key={p.userId} className="flex items-center justify-between gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                 <span className="min-w-0">
-                  <span className="block text-balance text-headline [overflow-wrap:anywhere]">{p.name}</span>
-                  {p.handle && <span className="block text-caption text-ink-soft">@{p.handle}</span>}
+                  <span className="block text-balance text-card-title [overflow-wrap:anywhere]">{p.name}</span>
+                  {p.handle && <span className="block text-card-note text-ink-soft">@{p.handle}</span>}
                 </span>
                 {p.friend === 'none' || p.friend === 'pending' ? (
                   <Button variant="outline" size="sm" onClick={() => connect.mutate(p.userId)} disabled={connect.isPending}>

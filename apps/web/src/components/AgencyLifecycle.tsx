@@ -45,8 +45,8 @@ function LifeCard({ title, children, action }: { title: string; children: ReactN
   return (
     <li className="flex items-start justify-between gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="min-w-0 flex-1">
-        <h3 className="m-0 text-headline">{title}</h3>
-        <div className="mt-xs text-subhead text-ink-soft">{children}</div>
+        <h3 className="m-0 text-card-title">{title}</h3>
+        <div className="mt-xs text-card-note text-ink-soft">{children}</div>
       </div>
       {action}
     </li>
@@ -112,9 +112,9 @@ export function LifecycleCard({ client, life, compact = false }: { client: Agenc
   );
   const trialRules = life.stage === 'trial' && (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <h3 className="m-0 text-headline">The trial rules</h3>
-      <p className="mt-xs m-0 text-subhead text-ink-soft">The client sees these at their link. They are quoted from the Trial and pilot agreement; if you changed your copy of it, yours wins.</p>
-      <ul className="mt-xs m-0 list-disc pl-md text-subhead">
+      <h3 className="m-0 text-card-title">The trial rules</h3>
+      <p className="mt-xs m-0 text-card-note text-ink-soft">The client sees these at their link. They are quoted from the Trial and pilot agreement; if you changed your copy of it, yours wins.</p>
+      <ul className="mt-sm m-0 list-disc pl-md text-subhead">
         {TRIAL_RULES.map((r) => (
           <li key={r.key}>
             {r.text} <span className="text-caption text-ink-soft">{`(${r.source})`}</span>

@@ -138,8 +138,8 @@ export function Cohort() {
             <li key={s.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
               <div className="flex items-start justify-between gap-sm">
                 <div className="min-w-0">
-                  <p className="m-0 text-balance text-headline [overflow-wrap:anywhere]">{s.title}</p>
-                  <p className="m-0 text-subhead text-ink-soft">
+                  <p className="m-0 text-balance text-card-title [overflow-wrap:anywhere]">{s.title}</p>
+                  <p className="m-0 text-card-note text-ink-soft">
                     {fmtWhen(s.startsAt)} to {new Date(s.endsAt).toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
@@ -312,8 +312,8 @@ function AssignmentCard({ a, cohortId, mine, all, canRun, enrolled, onChange }: 
     <div className="rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="flex items-start justify-between gap-sm">
         <div className="min-w-0">
-          <p className="m-0 text-balance text-headline [overflow-wrap:anywhere]">{a.title}</p>
-          <p className="m-0 text-subhead text-ink-soft">Due {a.dueDays} days in</p>
+          <p className="m-0 text-balance text-card-title [overflow-wrap:anywhere]">{a.title}</p>
+          <p className="m-0 text-card-note text-ink-soft">Due {a.dueDays} days in</p>
         </div>
         {!canRun && (
           <StatusTag tone={tone}>

@@ -34,9 +34,9 @@ function ToolRow({ t, reviewer, onChange }: { t: Tool; reviewer: boolean; onChan
     // left and Open or Get it at the bottom right with the More beside it (2026-11-05, the founder's card rules).
     <li className={`fx-spot flex h-full flex-col rounded-tile bg-card p-sm ${featured ? 'border-2 border-r3 shadow-toy' : 'border-2 border-transparent shadow-toy-soft'}`}>
       <CardHead tag={t.verified ? <FactTag kind="verified">Verified</FactTag> : <StatusTag tone="warn">Waiting for review</StatusTag>}>
-        <span className="block text-balance text-headline">{t.name}</span>
+        <span className="block text-balance text-card-title">{t.name}</span>
       </CardHead>
-      {t.description && <span className="mt-xs block text-subhead text-ink-soft">{t.description}</span>}
+      {t.description && <span className="mt-xs block text-card-note text-ink-soft">{t.description}</span>}
       {!t.unlock.ok && (
         <div className="mt-sm">
           <LockedButton unlock={t.unlock} />
@@ -249,7 +249,7 @@ function SuggestSheet({ open, onClose, onDone, categories, reviewer }: { open: b
               <input type="number" min={0} value={minXp} onChange={(e) => setMinXp(e.target.value)} className={FIELD} />
             </label>
             <label className="block">
-              <span className="block text-subhead font-semibold">Points balance of at least</span>
+              <span className="block text-subhead font-semibold">Points of at least</span>
               <input type="number" min={0} value={minPoints} onChange={(e) => setMinPoints(e.target.value)} className={FIELD} />
             </label>
             <label className="block">

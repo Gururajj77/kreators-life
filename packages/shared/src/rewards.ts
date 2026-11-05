@@ -121,7 +121,7 @@ export interface Reward {
 
 /** The shelves of the catalog, in the order they are shown. */
 export const REWARD_GROUPS: readonly { key: RewardGroup; name: string; icon: IconName; blurb: string }[] = [
-  { key: 'books', name: 'Books', icon: 'BookOpen', blurb: 'Three books by Shubham Aggarwal, who builds kreators.app.' },
+  { key: 'books', name: 'Books', icon: 'BookOpen', blurb: 'Three books by Shubham Aggarwal, the founder of kreators.app.' },
   { key: 'games', name: 'Games', icon: 'Spade', blurb: 'Unlock a game once with points and play it in the app: shuffle, flip and draw. Nothing is posted to you.' },
   { key: 'apparel', name: 'Apparel and wearables', icon: 'Shirt', blurb: 'Wear it, and people ask what it is.' },
   { key: 'tech', name: 'Tech accessories', icon: 'Smartphone', blurb: 'Small things you use every day.' },

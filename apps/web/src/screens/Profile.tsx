@@ -305,8 +305,8 @@ function ProfileView({ user }: { user: User }) {
                   <Icon icon={glyph} size={24} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-headline">{title}</span>
-                  <span className="mt-xs block text-subhead text-ink-soft">{blurb}</span>
+                  <span className="block text-card-title">{title}</span>
+                  <span className="mt-xs block text-card-note text-ink-soft">{blurb}</span>
                 </span>
                 <Icon icon={ArrowUpRight} size={20} strokeWidth={3} className="transition-transform motion-safe:group-hover:translate-x-xs motion-safe:group-hover:-translate-y-xs row-chevron text-ink-mute" />
               </Link>
@@ -346,10 +346,10 @@ function Portfolio() {
         {items.map((it) => (
           <li key={it.id} className="flex items-start gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
             <span className="min-w-0 flex-1">
-              <a href={it.url} target="_blank" rel="noreferrer" className="block truncate text-headline underline-offset-4 hover:underline">
+              <a href={it.url} target="_blank" rel="noreferrer" className="block truncate text-card-title underline-offset-4 hover:underline">
                 {it.title}
               </a>
-              {it.description && <span className="block text-subhead text-ink-soft">{it.description}</span>}
+              {it.description && <span className="block text-card-note text-ink-soft">{it.description}</span>}
               <span className="block text-caption text-ink-mute">{it.visibility === 'public' ? 'Public' : 'Only you'}</span>
             </span>
             <Button variant="ghost" className="shrink-0" aria-label={`Remove ${it.title}`} onClick={() => remove.mutate(it.id)} disabled={remove.isPending}>

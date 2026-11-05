@@ -95,7 +95,13 @@ export function MorphShapes({ className = '', page = false }: { className?: stri
     return () => {
       window.removeEventListener('pointermove', move);
       document.documentElement.removeEventListener('pointerleave', leave);
-      leave();
+      // A quickTo tween is paused, never done, so GSAP keeps it (and the element) until it is killed; this effect makes new ones each
+      // time the layer comes back on screen. The shapes still glide home, on one tween that ends and is let go.
+      lean.forEach((l) => (l.x.tween.kill(), l.y.tween.kill()));
+      gx?.tween.kill();
+      gy?.tween.kill();
+      gsap.to(els, { x: 0, y: 0, duration: 1.6, ease: 'power3.out', overwrite: 'auto' });
+      if (spot) delete spot.dataset.on;
     };
   }, [running]);
 

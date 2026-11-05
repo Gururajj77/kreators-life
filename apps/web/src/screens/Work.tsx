@@ -1,4 +1,4 @@
-import { formatCount, OPPORTUNITY_TYPES, SKILLS, type Application, type ApplicationStatus, type Opportunity as OpportunityT } from '@kreators/shared';
+import { money, OPPORTUNITY_TYPES, SKILLS, type Application, type ApplicationStatus, type Opportunity as OpportunityT } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
@@ -26,8 +26,10 @@ const typeName = (t: string) => t.replace('_', ' ');
 const locationText = (o: OpportunityT) => (o.locationMode === 'remote' ? 'Remote' : o.locationText || (o.locationMode === 'on_site' ? 'On site' : 'Hybrid'));
 const payText = (o: OpportunityT) => {
   if (o.compensationMin === null && o.compensationMax === null) return null;
-  if (o.compensationMin !== null && o.compensationMax !== null) return `${o.currency} ${formatCount(o.compensationMin)} to ${formatCount(o.compensationMax)}`;
-  return `${o.currency} ${formatCount(o.compensationMin ?? o.compensationMax ?? 0)}`;
+  // Whole units, shown through money() from cents, so the rupee sign and lakh grouping match the rest of the app.
+  const u = (n: number) => money(Math.round(n) * 100, o.currency);
+  if (o.compensationMin !== null && o.compensationMax !== null) return `${u(o.compensationMin)} to ${u(o.compensationMax)}`;
+  return u(o.compensationMin ?? o.compensationMax ?? 0);
 };
 
 const STATUS_TONE: Record<ApplicationStatus, TagTone> = {
@@ -146,10 +148,10 @@ export function Work() {
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {d.drafts.map((o) => (
               <li key={o.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <Link to={`/work/${o.id}`} className="block min-h-[44px] text-headline underline-offset-4 hover:underline">
+                <Link to={`/work/${o.id}`} className="block min-h-[44px] text-card-title underline-offset-4 hover:underline">
                   {o.title}
                 </Link>
-                <p className="m-0 text-subhead text-ink-soft">
+                <p className="m-0 text-card-note text-ink-soft">
                   {o.status}, {o.applications} application{o.applications === 1 ? '' : 's'}
                   {o.clubOnly ? ', Club only' : ''}
                 </p>
@@ -320,8 +322,8 @@ function PostSheet({ open, onClose, onPosted }: { open: boolean; onClose: () => 
         <label className="toy flex min-h-[48px] cursor-pointer items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
           <input type="checkbox" checked={clubOnly} onChange={(e) => setClubOnly(e.target.checked)} className="size-[20px] accent-ink" />
           <span>
-            <span className="block text-headline">Club only</span>
-            <span className="block text-subhead text-ink-soft">Only Club members see it and can apply. Their first look.</span>
+            <span className="block text-row-title">Club only</span>
+            <span className="block text-card-note text-ink-soft">Only Club members see it and can apply. Their first look.</span>
           </span>
         </label>
         <ErrorLine e={create.error} />
@@ -405,10 +407,10 @@ export function Opportunity() {
           {mine ? (
             <div className="mt-sm rounded-tile bg-card p-sm shadow-toy-soft">
               <div className="flex items-center justify-between gap-sm">
-                <p className="m-0 text-headline">Sent {fmtDate(mine.submittedAt)}</p>
+                <p className="m-0 text-card-title">Sent {fmtDate(mine.submittedAt)}</p>
                 <StatusPill status={mine.status} />
               </div>
-              {mine.coverNote && <p className="mt-xs m-0 whitespace-pre-wrap text-subhead text-ink-soft">{mine.coverNote}</p>}
+              {mine.coverNote && <p className="mt-xs m-0 whitespace-pre-wrap text-card-prose text-ink-soft">{mine.coverNote}</p>}
               {!['withdrawn', 'rejected', 'completed', 'selected'].includes(mine.status) && (
                 <Button variant="ghost" className="mt-sm" onClick={() => setApp.mutate({ aid: mine.id, status: 'withdrawn' })} disabled={setApp.isPending}>
                   Withdraw
@@ -466,8 +468,8 @@ export function Opportunity() {
             <label className="toy mt-sm flex min-h-[48px] cursor-pointer items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
               <input type="checkbox" checked={o.clubOnly} onChange={(e) => setClubFlag.mutate(e.target.checked)} disabled={setClubFlag.isPending} className="size-[20px] accent-ink" />
               <span>
-                <span className="block text-headline">Club only</span>
-                <span className="block text-subhead text-ink-soft">Only Club members see it and can apply.</span>
+                <span className="block text-row-title">Club only</span>
+                <span className="block text-card-note text-ink-soft">Only Club members see it and can apply.</span>
               </span>
             </label>
             <ErrorLine e={setStatus.error} />
@@ -504,7 +506,7 @@ function ApplicantCard({ a, onDecide, busy }: { a: Application; onDecide: (statu
   return (
     <div className="rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="flex items-center justify-between gap-sm">
-        <p className="m-0 text-headline">
+        <p className="m-0 text-card-title">
           {a.creatorHandle ? (
             <Link to={`/u/${a.creatorHandle}`} className="underline-offset-4 hover:underline">
               {a.creatorName}
@@ -515,8 +517,8 @@ function ApplicantCard({ a, onDecide, busy }: { a: Application; onDecide: (statu
         </p>
         <StatusPill status={a.status} />
       </div>
-      <p className="m-0 text-subhead text-ink-soft">Applied {fmtDate(a.submittedAt)}</p>
-      {a.coverNote && <p className="mt-xs m-0 whitespace-pre-wrap text-subhead">{a.coverNote}</p>}
+      <p className="m-0 text-card-note text-ink-soft">Applied {fmtDate(a.submittedAt)}</p>
+      {a.coverNote && <p className="mt-xs m-0 whitespace-pre-wrap text-card-prose">{a.coverNote}</p>}
       {a.portfolioSnapshot && (
         <Fold className="mt-xs" title="Skills and portfolio at the time">
           <p className="m-0 whitespace-pre-wrap break-all text-subhead text-ink-soft">{a.portfolioSnapshot}</p>

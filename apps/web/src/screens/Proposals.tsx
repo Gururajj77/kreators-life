@@ -88,11 +88,12 @@ function ProposalCard({ p, reviewer, mine, onChange, onEdit, onWithdraw }: { p: 
       <div className="flex items-start gap-xs">
       <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="toy-flat flex min-h-[44px] min-w-0 flex-1 items-start gap-sm text-left">
         <span className="min-w-0 flex-1">
-          <span className="block text-balance text-headline">{p.title}</span>
-          <span className="block text-subhead text-ink-soft">
-            {reviewer ? `${p.userName}, ` : ''}
-            {p.budgetAmount > 0 ? `${money(Math.round(p.budgetAmount * 100), p.currency)}, ` : ''}
-            updated {longDate(p.updatedAt)}
+          <span className="block text-balance text-card-title">{p.title}</span>
+          {/* Each part kept whole, so a narrow card breaks at a comma and never leaves "2026" short under it. */}
+          <span className="block text-card-note text-ink-soft">
+            {reviewer && <span className="inline-block">{p.userName},</span>}{reviewer && ' '}
+            {p.budgetAmount > 0 && <span className="inline-block">{money(Math.round(p.budgetAmount * 100), p.currency)},</span>}{p.budgetAmount > 0 && ' '}
+            <span className="inline-block">updated {longDate(p.updatedAt)}</span>
           </span>
         </span>
         <span className="flex shrink-0 items-center gap-xs">

@@ -84,7 +84,7 @@ export function FocusDashboard() {
                   </>
                 )
               }
-              hint={d.totals.rated > 0 ? `${d.totals.rated} ${d.totals.rated === 1 ? 'session' : 'sessions'} rated` : 'Rate a session to see it'}
+              hint={d.totals.rated > 0 ? `${d.totals.rated} ${d.totals.rated === 1 ? 'session' : 'sessions'} rated` : 'Rate a session first'}
             />
             <StatTile className={bento(2, tiles, 2, cols)} label="Tasks ticked" value={d.totals.tasksDone} hint="in the same stretch" />
             <StatTile className={bento(3, tiles, 2, cols)} label="Active" value={`${d.totals.activeBuckets} of ${d.buckets.length}`} hint={view === 'day' ? 'days with a session' : view === 'week' ? 'weeks with a session' : 'months with a session'} />

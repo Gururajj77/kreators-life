@@ -85,7 +85,7 @@ export function Customers() {
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {customers.data?.customers.map((c) => (
             <li key={c.userId} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <p className="m-0 text-headline">
+              <p className="m-0 text-card-title">
                 {c.handle ? (
                   <Link to={`/u/${c.handle}`} className="underline underline-offset-4">
                     {c.name}
@@ -95,7 +95,7 @@ export function Customers() {
                 )}
                 {c.email && <span className="text-ink-soft"> {c.email}</span>}
               </p>
-              <p className="m-0 text-subhead text-ink-soft">
+              <p className="m-0 text-card-note text-ink-soft">
                 {formatCount(c.orders)} {c.orders === 1 ? 'order' : 'orders'}, {formatCount(c.points)} points{c.cents > 0 ? `, ${money(c.cents)}${live ? '' : ' test'}` : ''}. First {longDate(c.firstAt)}, last {longDate(c.lastAt)}. Came from {c.source}.
               </p>
             </li>
@@ -129,10 +129,10 @@ export function Customers() {
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {p?.rows.map((r) => (
             <li key={r.orderId} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <p className="m-0 text-headline">
+              <p className="m-0 text-card-title">
                 {r.buyerName}, {r.productTitle}
               </p>
-              <p className="m-0 text-subhead text-ink-soft">
+              <p className="m-0 text-card-note text-ink-soft">
                 {formatCount(r.points)} points, fee {formatCount(r.fee)}, affiliate {formatCount(r.affiliate)}, net {formatCount(r.net)}. {r.status}, {longDate(r.createdAt)}.
               </p>
               {r.status !== 'refunded' && r.status !== 'pending' && r.status !== 'failed' && r.status !== 'expired' && (

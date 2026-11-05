@@ -376,9 +376,9 @@ export function HabitsBlock({ app, className = '' }: { app: InsightApp; classNam
           return (
             <li key={i.id} data-pillar={i.tie!.relationship ?? undefined} className="flex flex-col gap-xs rounded-tile bg-card p-sm shadow-toy-soft">
               <CardHead tag={<StatusTag fit tone={good ? 'good' : 'bad'}>{good ? 'Good habit' : 'Bad habit'}</StatusTag>}>
-                <p className="m-0 text-headline">{i.tie!.title}</p>
+                <p className="m-0 text-card-title">{i.tie!.title}</p>
               </CardHead>
-              <p className="m-0 text-subhead text-ink-soft">{i.text}</p>
+              <p className="m-0 text-card-note text-ink-soft">{i.text}</p>
               {i.basis && <p className="m-0 text-caption text-ink-soft">{i.basis}</p>}
               <InsightActions insight={i} onHide={() => hide(i.id)} compact />
             </li>

@@ -217,10 +217,10 @@ function FrameCard() {
         <li key={r.key} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
           <Avatar relationship={r.key} size={36} decorative still />
           <span className="min-w-0 flex-1">
-            <span className="block text-headline">
+            <span className="block text-card-title">
               {r.name} <span className="text-ink-soft">· {r.character}</span>
             </span>
-            <span className="block text-subhead text-ink-soft">{coversLine(r)}</span>
+            <span className="block text-card-note text-ink-soft">{coversLine(r)}</span>
           </span>
         </li>
       ))}
@@ -341,7 +341,7 @@ function MapForm({ initial, initialAway, onSend }: { initial: Partial<Record<Rel
   return (
     <div ref={top} className="scroll-mt-[120px]">
       {/* The seven, as a row of faces: where you are, and which are done. */}
-      <ol className="m-0 grid list-none grid-cols-7 gap-xs p-0" aria-label="The seven relationships">
+      <ol className="m-0 grid list-none grid-cols-7 gap-y-xs p-0 sm:gap-x-xs" aria-label="The seven relationships">
         {RELATIONSHIPS.map((x, i) => (
           <li key={x.key} data-pillar={x.key}>
             <button type="button" onClick={() => go(i)} aria-current={i === at ? 'step' : undefined} aria-label={`${x.name}${done(x.key) ? ', done' : ''}`} className={`toy toy-flat relative flex min-h-[48px] w-full items-center justify-center rounded-tile border-2 ${i === at ? 'border-ink bg-card' : 'border-transparent'}`}>
@@ -360,8 +360,8 @@ function MapForm({ initial, initialAway, onSend }: { initial: Partial<Record<Rel
         <div className="flex items-center gap-sm">
           <Avatar relationship={r.key} size={40} decorative still />
           <span className="min-w-0 flex-1">
-            <span className="block text-headline">{r.name}</span>
-            <span className="block text-subhead text-ink-soft">{coversLine(r)}</span>
+            <span className="block text-card-title">{r.name}</span>
+            <span className="block text-card-note text-ink-soft">{coversLine(r)}</span>
           </span>
         </div>
         {isOptionalPillar(r.key) && (
@@ -374,11 +374,12 @@ function MapForm({ initial, initialAway, onSend }: { initial: Partial<Record<Rel
         ) : (
           <>
             <p className="mt-sm m-0 text-subhead">Pick all that you feel here, on good days and on bad ones.</p>
+            {/* Each band: its name and its line, then 12px of room before the list it introduces (the founder, 2026-11-05). */}
             {[...MAP_BANDS].reverse().map((b) => (
-              <div key={b} className="mt-sm">
+              <div key={b} className="mt-md">
                 <p className="m-0 text-eyebrow uppercase text-ink-soft">{MAP_BAND_META[b].name}</p>
                 <p className="m-0 text-caption text-ink-soft">{BAND_STATEMENTS[r.key][b]}</p>
-                <ul className="fx-inset mt-xs">
+                <ul className="fx-inset mt-sm">
                   {MAP_LEVELS.filter((l) => l.band === b)
                     .slice()
                     .reverse()
@@ -391,8 +392,8 @@ function MapForm({ initial, initialAway, onSend }: { initial: Partial<Record<Rel
                               {on && <Icon icon={Check} size={16} strokeWidth={3} />}
                             </span>
                             <span className="min-w-0 flex-1">
-                              <span className="block text-headline">{l.name}</span>
-                              <span className="block text-subhead text-ink-soft">“{l.sounds}”</span>
+                              <span className="block text-row-title">{l.name}</span>
+                              <span className="block text-card-note text-ink-soft">“{l.sounds}”</span>
                             </span>
                           </button>
                         </li>
@@ -564,7 +565,7 @@ function WayForm({ onSend }: { onSend: Send }) {
       )}
       <p className="mt-md m-0 text-subhead">Insecurities. What do you worry people see?</p>
       <p className="mt-xs m-0 text-caption text-ink-soft">Common ones: being awkward around people, looks, little experience with relationships, overthinking. Leave it empty if nothing comes.</p>
-      <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
+      <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
         {ins.map((it, i) => (
           <li key={i} className="rounded-tile bg-card p-sm shadow-toy-soft">
             <input value={it.text} onChange={(e) => setIns(ins.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))} maxLength={120} placeholder="In a few words" className="w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
@@ -719,8 +720,8 @@ function PracticesForm({ focus, onSend }: { focus: RelationshipKey[]; onSend: Se
   const [p, setP] = useState<Practices>({ mantra: 'none', ownMantra: '', breathing: 'box', affirmation: affirmationFor(focus), reading: '' });
   const option = (m: (typeof MANTRAS)[number]) => (
     <button type="button" aria-pressed={p.mantra === m.key} onClick={() => setP({ ...p, mantra: m.key })} className={`${card(p.mantra === m.key)} h-full`}>
-      <span className="block text-headline">{m.name}</span>
-      <span className="block text-subhead text-ink-soft">{m.blurb}</span>
+      <span className="block text-card-title">{m.name}</span>
+      <span className="block text-card-note text-ink-soft">{m.blurb}</span>
     </button>
   );
   const own = p.mantra === 'own';
@@ -794,8 +795,8 @@ function ContractForm({ initial, placeholder, onSend }: { initial: Data['contrac
         {PENALTIES.map((p) => (
           <li key={p.key}>
             <button type="button" aria-pressed={c.penalty === p.key} onClick={() => setC({ ...c, penalty: p.key })} className={card(c.penalty === p.key)}>
-              <span className="block text-headline">{p.name}</span>
-              <span className="block text-subhead text-ink-soft">{p.blurb}</span>
+              <span className="block text-card-title">{p.name}</span>
+              <span className="block text-card-note text-ink-soft">{p.blurb}</span>
             </button>
           </li>
         ))}
@@ -900,11 +901,11 @@ function NextStepsCard({ order, focus }: { order: { key: RelationshipKey; why: s
           <span className="w-[24px] shrink-0 text-center text-headline text-ink-soft">{i + 1}</span>
           <Avatar relationship={o.key} size={32} decorative still />
           <span className="min-w-0 flex-1">
-            <span className="block text-subhead font-semibold">
+            <span className="block text-card-title">
               {RELATIONSHIP_BY_KEY[o.key].name}
               {focus.includes(o.key) ? <span className="ml-xs rounded-pill bg-ink px-xs text-caption2 uppercase text-on-ink">month one</span> : null}
             </span>
-            <span className="block text-caption text-ink-soft">{o.why}</span>
+            <span className="block text-card-note text-ink-soft">{o.why}</span>
           </span>
         </li>
       ))}

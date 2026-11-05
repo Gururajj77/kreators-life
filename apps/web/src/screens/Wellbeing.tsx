@@ -5,7 +5,6 @@ import { PeriodPanel } from '../components/PeriodPanel';
 import { Donut, EmojiRow, Gauge, Legend, Sparkline } from '../components/Charts';
 import { Hero } from '../components/Hero';
 import { MoodFace } from '../components/MoodFace';
-import { Ring } from '../components/Ring';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { useMe, useWellbeing } from '../lib/queries';
@@ -114,8 +113,8 @@ export function Wellbeing() {
                       </span>
                     )}
                     <span className="min-w-0 flex-1">
-                      <span className="block text-headline">{r.name}</span>
-                      <span className="block text-subhead text-ink-soft">{r.format(p?.latest ?? null)}</span>
+                      <span className="block text-card-title">{r.name}</span>
+                      <span className="block text-card-note text-ink-soft">{r.format(p?.latest ?? null)}</span>
                     </span>
                     <Sparkline values={series} max={r.max} color={r.color} width={96} height={40} />
                   </Link>
@@ -138,10 +137,10 @@ export function Wellbeing() {
                     </span>
                   }
                 >
-                  <span className="block text-headline">{t.name}</span>
+                  <span className="block text-card-title">{t.name}</span>
                 </CardHead>
                 <span className="mt-auto flex items-end justify-between gap-xs pt-sm">
-                  <span className="min-w-0 text-subhead text-ink-soft">{t.line}</span>
+                  <span className="min-w-0 text-card-note text-ink-soft">{t.line}</span>
                   <Icon icon={ArrowUpRight} size={16} className="read-arrow mb-[2px] shrink-0 text-ink-mute" />
                 </span>
               </Link>

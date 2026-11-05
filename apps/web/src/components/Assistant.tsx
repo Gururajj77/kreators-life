@@ -41,6 +41,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
 import { useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { isWide } from '../lib/useWide';
 import { ArrowUpRight, Check, CircleAlert, CircleQuestionMark, Minus, Undo2, X, type LucideIcon } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { ChatActions, ChatComposer, ChatLinks, ChatTurns, ChoiceChips, ChoiceGroups, chip, countTurns, typingTime, useChatMotion } from './Chat';
@@ -48,6 +49,7 @@ import { AppIcon } from './AppIcon';
 import { Icon } from './Icon';
 import { AnimatedIcon } from './AnimatedIcon';
 import { api, ApiError } from '../lib/api';
+import { errorText } from '../lib/errors';
 import { prettyDate, todayLocal } from '../lib/date';
 import { explainTyped, isQuestion } from '../lib/explain';
 import { useModules } from '../lib/modules';
@@ -129,7 +131,7 @@ const ORIGIN: Record<TalkOrigin, { name: string; to: string; host: Host }> = {
   other: { name: 'this screen', to: '', host: 'bumling' },
 };
 const who = hostName;
-const errorText = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong.');
+const errorFor = (e: unknown) => errorText(e, 'Something went wrong.');
 
 interface Msg {
   id: number;
@@ -628,7 +630,7 @@ function Receipts({ scope, ids }: { scope: string; ids: string[] }) {
     } catch (e) {
       const receipt = e instanceof ApiError ? (e.data.receipt as AssistantReceipt | undefined) : undefined;
       if (receipt) setMap((m) => ({ ...m, [id]: receipt }));
-      setSaid((s) => ({ ...s, [id]: errorText(e) }));
+      setSaid((s) => ({ ...s, [id]: errorFor(e) }));
     } finally {
       setBusy(null);
     }
@@ -681,10 +683,53 @@ function Receipts({ scope, ids }: { scope: string; ids: string[] }) {
 // The panel.
 // ---------------------------------------------------------------------------
 
+
+/**
+ * The visible area while a phone's keyboard is up, or null. A phone's keyboard shrinks only the visual viewport: iOS Safari keeps a
+ * fixed box on the layout viewport, so the panel would hang behind the keyboard with the tab bar across its middle and the page
+ * scrolling under it (the founder, 2026-11-06). While the keyboard is up the panel takes exactly this area, over the tab bar, and the
+ * page under it is held still.
+ */
+function useKeyboardArea(): { top: number; height: number } | null {
+  const [area, setArea] = useState<{ top: number; height: number } | null>(null);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const read = () => {
+      // The layout viewport's height does not change with the keyboard; a visual viewport well short of it means the keyboard is up.
+      const up = !isWide() && vv.height < document.documentElement.clientHeight - 120;
+      setArea((was) => {
+        if (!up) return null;
+        const next = { top: Math.round(vv.offsetTop), height: Math.round(vv.height) };
+        return was && was.top === next.top && was.height === next.height ? was : next;
+      });
+    };
+    read();
+    vv.addEventListener('resize', read);
+    vv.addEventListener('scroll', read);
+    return () => {
+      vv.removeEventListener('resize', read);
+      vv.removeEventListener('scroll', read);
+    };
+  }, []);
+  // The page under the panel stays where it was while the keyboard is up.
+  useEffect(() => {
+    if (!area) return;
+    const root = document.documentElement;
+    const was = root.style.overflow;
+    root.style.overflow = 'hidden';
+    return () => {
+      root.style.overflow = was;
+    };
+  }, [Boolean(area)]);
+  return area;
+}
+
 export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focusIn: boolean }) {
   const nav = useNavigate();
   const loc = useLocation();
   const panel = useRef<HTMLElement>(null);
+  const keyboard = useKeyboardArea();
   // Keyboard: focus goes to the typing box when the person opens it, Tab wraps at its ends, Escape folds it away. The page beside it stays usable.
   useDialogFocus(panel, true, { modal: false, focusIn, onEscape: onClose });
   const box = useRef<HTMLDivElement>(null);
@@ -839,7 +884,7 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
 
   /** A save that failed says why and offers the flow again. */
   const failed = (f: Flow, e: unknown) =>
-    say(FLOWS[f].host, [`That did not save. ${errorText(e)}`], {
+    say(FLOWS[f].host, [`That did not save. ${errorFor(e)}`], {
       kind: 'chips',
       chips: [
         { label: 'Try again', value: 'again' },
@@ -1397,7 +1442,7 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
       const paywall = e instanceof ApiError ? (e.data.paywall as AssistantPaywall | undefined) : undefined;
       setLog((l) => [
         ...l,
-        line({ from: 'bot', host: 'bumling', text: paywall ? errorText(e) : `That did not go through. ${errorText(e)}` }),
+        line({ from: 'bot', host: 'bumling', text: paywall ? errorFor(e) : `That did not go through. ${errorFor(e)}` }),
         ...(paywall ? [line({ from: 'bot', host: 'bumling', node: <PlanCard reason={paywall} /> })] : []),
       ]);
     } finally {
@@ -1446,10 +1491,25 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
 
   // On a phone the panel ends at the top of the tab bar, whatever height the bar has (its labels can make it taller
   // than the class above assumes); on a laptop the bar is hidden and the md: classes place the card.
+  // While a phone's keyboard is up the same effect owns the panel's place instead: exactly the visible area, over the tab bar
+  // (useKeyboardArea). One owner for top, height and bottom, so neither placement wipes the other's.
   useLayoutEffect(() => {
     const el = panel.current;
+    if (!el) return;
+    if (keyboard) {
+      el.style.top = `${keyboard.top}px`;
+      el.style.height = `${keyboard.height}px`;
+      el.style.bottom = 'auto';
+      el.style.zIndex = '50';
+      return () => {
+        el.style.top = '';
+        el.style.height = '';
+        el.style.bottom = '';
+        el.style.zIndex = '';
+      };
+    }
     const bar = document.querySelector<HTMLElement>('nav.fx-bar[aria-label="Main"]');
-    if (!el || !bar) return;
+    if (!bar) return;
     const place = () => {
       const shown = getComputedStyle(bar).display !== 'none';
       el.style.bottom = shown ? `${Math.max(0, window.innerHeight - bar.getBoundingClientRect().top)}px` : '';
@@ -1463,7 +1523,7 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
       window.removeEventListener('resize', place);
       el.style.bottom = '';
     };
-  }, []);
+  }, [keyboard]);
 
   // The small link is only for asks that do not already offer the list as a choice.
   const offersMenu = Boolean(ask && ask.kind === 'chips' && ask.chips.some((c) => c.value === 'menu' || c.value === 'more' || c.value === 'all'));
@@ -1532,7 +1592,7 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
       // through (the card colour laid over the page's own base); on a laptop it is the 400px card in the corner.
       className="fixed inset-x-0 top-[calc(var(--spacing-xl)+env(safe-area-inset-top))] bottom-[calc(var(--spacing-xl)+1px+env(safe-area-inset-bottom))] z-40 flex h-auto flex-col overflow-hidden rounded-none border-x-0 border-t-2 border-b-0 border-line shadow-none [background:linear-gradient(var(--card-strong),var(--card-strong)),var(--page-base-a)] md:inset-x-auto md:top-auto md:right-md md:bottom-md md:h-[min(640px,calc(100dvh-32px))] md:w-[400px] md:rounded-card md:border-2 md:bg-card-strong md:shadow-toy-soft"
     >
-      <header className="flex items-center gap-xs border-b-2 border-line py-xs pr-sm pl-md">
+      <header className="flex shrink-0 items-center gap-xs border-b-2 border-line py-xs pr-sm pl-md">
         {/* The name and the line under it wrap on a narrow phone rather than being cut short. */}
         <div className="min-w-0 flex-1 break-words">
           <p className="m-0 text-subhead font-semibold">Bumling AI assistant</p>
@@ -1541,13 +1601,14 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
         {log.length > 2 && <StartOver onConfirm={startOver} />}
         <CloseButton onClose={onClose} />
       </header>
-      {status.data?.connected && models.length > 1 && model && (
+      {/* With a phone's keyboard up on a short screen, the model picker steps aside so the conversation keeps its room. */}
+      {status.data?.connected && models.length > 1 && model && !(keyboard && keyboard.height < 420) && (
         <ModelPicker models={models} model={model} onPick={setPicked} disabled={thinking} note={`${!canType ? 'Needs a plan. ' : ''}${model.private ? 'Keeps nothing you send.' : 'May keep what you type, so your journal stays out.'}`} />
       )}
       <div ref={box} className="min-h-0 flex-1 overflow-y-auto px-md" aria-live="polite">
         <ChatTurns log={log} typing={typing} answer={answer} answerKey={`${log.filter((m) => m.from === 'you').length}:${ask?.kind ?? ''}`} room={`${room}px`} lastTurn={lastTurn} typingStatus={thinking ? <WorkingLine key={since} label={stopping ? 'Bumling is stopping' : 'Bumling is working'} phrases={stopping ? ['Stopping after this step'] : WORKING_PHRASES} since={since || undefined} /> : undefined} />
       </div>
-      <div className="border-t-2 border-line p-xs">
+      <div className="shrink-0 border-t-2 border-line p-xs">
         <ChatComposer placeholder={canType ? 'Add or change something' : status.data?.connected ? 'Needs a plan' : 'Ask what something means'} onStop={thinking ? stop : undefined} stopping={stopping} onSend={(t) => void send(t)} disabled={thinking || ask?.kind === 'wait'} maxLength={2000} />
       </div>
     </section>

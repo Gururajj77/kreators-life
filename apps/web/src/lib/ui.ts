@@ -1,3 +1,5 @@
+import { typedCents } from '@kreators/shared';
+
 // The class strings every form shares, defined once (they were copied into 53 screens). Change a field's look here.
 
 /** A full-width text field under its label: the common one. */
@@ -21,3 +23,9 @@ export const LABEL = 'block text-subhead font-semibold';
 
 /** A pill that picks one of a few (a filter, a sort): solid only once it is picked. 44px tall. */
 export const chip = (on: boolean) => `toy inline-flex min-h-[44px] shrink-0 items-center rounded-pill border-2 px-sm text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card text-ink'}`;
+
+/** A typed amount in cents (`typedCents`: "30,000" and "₹30,000" read as 30000); NaN for junk or a minus, so the form can say so. Blank is 0. */
+export const feeCents = (v: string): number => {
+  const c = typedCents(v);
+  return Number.isInteger(c) && c >= 0 ? c : Number.NaN;
+};

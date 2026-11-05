@@ -36,8 +36,8 @@ export function PrivacyChoices() {
                   className="mt-xs size-[24px] shrink-0"
                 />
                 <span>
-                  <span className="block text-headline">{p.name}</span>
-                  <span className="block text-caption text-ink-soft">{off ? 'Your browser sent Global Privacy Control, so this stays off.' : p.line}</span>
+                  <span className="block text-row-title">{p.name}</span>
+                  <span className="block text-card-note text-ink-soft">{off ? 'Your browser sent Global Privacy Control, so this stays off.' : p.line}</span>
                 </span>
               </label>
             </li>

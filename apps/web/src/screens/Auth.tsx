@@ -47,7 +47,7 @@ function SignedOutNote() {
   if (!shown) return null;
   return (
     <p role="status" className="mt-md m-0 flex items-start justify-between gap-sm rounded-tile bg-card p-sm text-subhead shadow-toy-soft">
-      <span>You were signed out here because your account was signed in on {MAX_DEVICES} other devices. An account can be signed in on {MAX_DEVICES} at a time, and the oldest one gives way. Sign in again to carry on.</span>
+      <span>You were signed out here. An account can be open on {MAX_DEVICES} devices at once, and this was the oldest. Sign in again to carry on.</span>
       <button
         type="button"
         aria-label="Dismiss"
@@ -72,7 +72,13 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
   const loc = useLocation();
   const next = (() => {
     const n = new URLSearchParams(loc.search).get('next') ?? '';
-    return n.startsWith('/') && !n.startsWith('//') ? n : null;
+    // Only a path on this site: the URL parser reads a backslash as a slash and drops tabs and newlines, so `/\evil.com` would leave it.
+    try {
+      const u = new URL(n, window.location.origin);
+      return n.startsWith('/') && !n.startsWith('//') && !n.includes('\\') && u.origin === window.location.origin ? u.pathname + u.search + u.hash : null;
+    } catch {
+      return null;
+    }
   })();
   const refresh = useRefreshAll();
   const setToken = useSession((s) => s.setToken);
@@ -182,11 +188,13 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
           </>
         )}
       </p>
-      <p className="mt-sm m-0 text-center text-subhead">
-        <Link to={hasSession ? (next ?? '/home') : '/start'} className="inline-flex min-h-[44px] min-w-[44px] items-center underline underline-offset-4">
-          {hasSession ? 'Back to the app' : 'Continue without an account'}
-        </Link>
-      </p>
+      {(hasSession || mode === 'signup') && (
+        <p className="mt-sm m-0 text-center text-subhead">
+          <Link to={hasSession ? (next ?? '/home') : '/start'} className="inline-flex min-h-[44px] min-w-[44px] items-center underline underline-offset-4">
+            {hasSession ? 'Back to the app' : 'Continue without an account'}
+          </Link>
+        </p>
+      )}
     </Screen>
   );
 }

@@ -50,7 +50,7 @@ import {
   stageIndex,
 } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { dayFromDevice, liveUser, newId, nameOf, notify, nowIso, num, oneOf, pageOf, paged, randomCode, shiftDate, str } from '../db';
+import { dayFromDevice, liveUser, newId, nameOf, notify, nowIso, num, oneOf, pageOf, paged, randomCode, shiftDate, str, utcToday } from '../db';
 import { dateOrNull, moneyIn } from '../agencyUtil';
 import { resolveAccess } from '../access';
 import { uploadVersion } from './army';
@@ -66,8 +66,6 @@ import { agencyFace, clearPortalSessions, closedLinkAnswer, newPortalPassword, p
 export const agency = new Hono<AppEnv>();
 /** What a client sees at their link, mounted at /public/agency. */
 export const agencyPublic = new Hono<AppEnv>();
-
-const utcToday = () => new Date().toISOString().slice(0, 10);
 
 // ---- rows
 

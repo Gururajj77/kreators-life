@@ -297,8 +297,8 @@ function TrackingTab({ t }: { t: RunTracking }) {
               <li key={key} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                 <BadgeMedal k={key} earned={earned} size="sm" decorative />
                 <span className="min-w-0 flex-1">
-                  <span className="block text-headline">{b.name}</span>
-                  <span className="block text-subhead text-ink-soft">{earned ? 'Earned' : need.runs > 0 ? `${t.runs} of ${need.runs} runs` : `${kmLabel(t.metres)} of ${kmLabel(need.metres)}`}</span>
+                  <span className="block text-card-title">{b.name}</span>
+                  <span className="block text-card-note text-ink-soft">{earned ? 'Earned' : need.runs > 0 ? `${t.runs} of ${need.runs} runs` : `${kmLabel(t.metres)} of ${kmLabel(need.metres)}`}</span>
                   <span className="mt-xs block h-[8px] overflow-hidden rounded-pill bg-line" aria-hidden="true">
                     <span className="block h-full rounded-pill" style={{ width: `${Math.round(pct * 100)}%`, background: REL.color }} />
                   </span>
@@ -325,11 +325,11 @@ function CollabCard({ k, myClubs, onApply, onChange }: { k: RunCollab; myClubs: 
           {k.brand}
           {k.city ? `, ${k.city}` : ''}
         </p>
-        <h3 className="m-0 text-balance text-title3">{k.title}</h3>
+        <h3 className="m-0 text-balance text-card-title">{k.title}</h3>
       </CardHead>
-      {k.brief && <p className="mt-sm m-0 whitespace-pre-wrap text-subhead">{k.brief}</p>}
+      {k.brief && <p className="mt-sm m-0 whitespace-pre-wrap text-card-prose">{k.brief}</p>}
       {k.asks && (
-        <p className="mt-xs m-0 text-subhead text-ink-soft">
+        <p className="mt-xs m-0 text-card-note text-ink-soft">
           <span className="text-ink">The brand asks: </span>
           {k.asks}
         </p>
@@ -365,13 +365,13 @@ function ApplicationRow({ a, onChange }: { a: RunCollabApplication & { collabTit
   const decide = useMutation({ mutationFn: (status: 'accepted' | 'declined') => api.decideRunCollab(a.collabId, a.id, status), onSuccess: onChange });
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <p className="m-0 text-headline">
+      <p className="m-0 text-card-title">
         <Link to={`/run/clubs/${a.clubId}`} className="underline underline-offset-4">
           {a.clubName}
         </Link>{' '}
         <span className="text-subhead text-ink-soft">by {a.hostName}, for {a.collabTitle}</span>
       </p>
-      {a.note && <p className="mt-xs m-0 text-subhead">{a.note}</p>}
+      {a.note && <p className="mt-xs m-0 whitespace-pre-wrap text-card-prose">{a.note}</p>}
       <div className="mt-sm flex flex-wrap items-center gap-xs">
         {a.status === 'applied' ? (
           <>
@@ -715,13 +715,13 @@ function RunCard({ r, host, member, onLog, onRecode, onStatus, busy }: { r: RunI
     <li className="rounded-card bg-card p-md shadow-toy-soft">
       {/* The run at the top left and how many logged it in the corner of every run, like the Coming up rows. */}
       <CardHead tag={<StatusTag tone="neutral">{`${r.entries} logged`}</StatusTag>}>
-        <p className="m-0 text-balance text-headline">{r.title}</p>
+        <p className="m-0 text-balance text-card-title">{r.title}</p>
       </CardHead>
-      <p className="m-0 text-subhead text-ink-soft">
+      <p className="m-0 text-card-note text-ink-soft">
         {eventTime(r.startsAt)} to {new Date(r.endsAt).toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' })}, {kmLabel(r.metres)}
         {r.meetingPoint ? `, ${r.meetingPoint}` : ''}
       </p>
-      <p className="mt-xs m-0 text-subhead text-ink-soft">{stateLine(r)}.</p>
+      <p className="mt-xs m-0 text-card-note text-ink-soft">{stateLine(r)}.</p>
       {r.collab && (
         <p className="mt-sm m-0">
           <Giveaway giveaway={r.collab.giveaway} brand={r.collab.brand} />
@@ -1039,13 +1039,13 @@ export function RunClubPage() {
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {d.collabs.map((c) => (
               <li key={c.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <p className="m-0 text-headline">
+                <p className="m-0 text-card-title">
                   {c.title} <span className="text-subhead text-ink-soft">by {c.brand}</span>
                 </p>
                 <p className="mt-xs m-0">
                   <Giveaway giveaway={c.giveaway} count={c.giveawayCount} />
                 </p>
-                {c.asks && <p className="mt-xs m-0 text-subhead text-ink-soft">The brand asks: {c.asks}</p>}
+                {c.asks && <p className="mt-xs m-0 text-card-note text-ink-soft">The brand asks: {c.asks}</p>}
               </li>
             ))}
           </ul>
@@ -1077,8 +1077,8 @@ export function RunClubPage() {
             {d.entries.map((e) => (
               <li key={e.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                 <span className="min-w-0 flex-1">
-                  <span className="block text-headline">{e.name}</span>
-                  <span className="block text-subhead text-ink-soft">
+                  <span className="block text-card-title">{e.name}</span>
+                  <span className="block text-card-note text-ink-soft">
                     {eventTime(e.loggedAt)}, {kmLabel(e.metres)}
                     {e.minutes > 0 ? `, ${e.minutes} min` : ''}
                     {e.status === 'void' ? ', voided' : ''}
@@ -1104,8 +1104,8 @@ export function RunClubPage() {
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {d.past.map((r) => (
               <li key={r.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <span className="block text-headline">{r.title}</span>
-                <span className="block text-subhead text-ink-soft">
+                <span className="block text-card-title">{r.title}</span>
+                <span className="block text-card-note text-ink-soft">
                   {eventTime(r.startsAt)}, {kmLabel(r.metres)}, {r.entries} {r.entries === 1 ? 'runner' : 'runners'}
                   {r.status !== 'published' ? `, ${r.status}` : ''}
                   {r.mine ? `, you ran ${kmLabel(r.mine.metres)}` : ''}

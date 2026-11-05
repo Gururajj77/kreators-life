@@ -48,27 +48,3 @@ export function useParamState(key: string, fallback: string): [string, (v: strin
   const set = useCallback((v: string) => writeParams(setParams, { [key]: v === fallback ? null : v }), [key, fallback, setParams]);
   return [value, set];
 }
-
-/**
- * Several keys read and written together. `set({ status: 'open', page: null })` changes the filter and drops the
- * page in one navigation. A value equal to its fallback is left out of the URL.
- */
-export function useParamsState<K extends string>(fallbacks: Record<K, string>): [Record<K, string>, (changes: Partial<Record<K, string | null>>) => void] {
-  const [params, setParams] = useSearchParams();
-  const values = {} as Record<K, string>;
-  for (const k of Object.keys(fallbacks) as K[]) values[k] = params.get(k) ?? fallbacks[k];
-  const set = useCallback(
-    (changes: Partial<Record<K, string | null>>) => {
-      const out: Record<string, string | null> = {};
-      for (const [k, v] of Object.entries(changes) as [K, string | null | undefined][]) {
-        if (v === undefined) continue;
-        out[k] = v === null || v === fallbacks[k] ? null : v;
-      }
-      writeParams(setParams, out);
-    },
-    // The fallbacks are written inline by callers; their values, not the object, decide.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [setParams, JSON.stringify(fallbacks)],
-  );
-  return [values, set];
-}

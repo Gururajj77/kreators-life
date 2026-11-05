@@ -69,10 +69,10 @@ export function Army() {
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {offers.map((a) => (
               <li key={a.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <p className="m-0 text-headline">
+                <p className="m-0 text-card-title">
                   {a.role} on a campaign{a.feeAmount > 0 ? `, ${a.currency} ${a.feeAmount}` : ''}
                 </p>
-                <p className="mt-xs m-0 text-subhead text-ink-soft">Accepting means you agree to the brief, usage rights and exclusivity terms shown on the campaign.</p>
+                <p className="mt-xs m-0 text-card-note text-ink-soft">Accepting means you agree to the brief, usage rights and exclusivity terms shown on the campaign.</p>
                 <div className="mt-sm flex flex-wrap gap-xs">
                   <Button onClick={() => answer.mutate({ id: a.id, status: 'accepted' })} disabled={answer.isPending}>
                     Accept
@@ -181,8 +181,8 @@ function OrgCard({ org }: { org: Organization }) {
     <div className="rounded-tile bg-card p-sm shadow-toy-soft">
       <button type="button" aria-expanded={open} aria-controls={`org-people-${org.id}`} onClick={() => setOpen((v) => !v)} className="toy toy-flat flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile text-left">
         <span className="min-w-0">
-          <span className="block text-balance text-headline [overflow-wrap:anywhere]">{org.name}</span>
-          <span className="block text-subhead text-ink-soft">
+          <span className="block text-balance text-card-title [overflow-wrap:anywhere]">{org.name}</span>
+          <span className="block text-card-note text-ink-soft">
             {org.type}, you are {org.myRole ?? 'a guest'}
           </span>
         </span>
@@ -197,8 +197,8 @@ function OrgCard({ org }: { org: Organization }) {
             {members.data?.members.map((m) => (
               <li key={m.userId} className="flex items-center gap-sm rounded-tile bg-paper p-sm">
                 <span className="min-w-0 flex-1">
-                  <span className="block text-balance text-headline [overflow-wrap:anywhere]">{m.name}</span>
-                  <span className="block text-subhead text-ink-soft [overflow-wrap:anywhere]">
+                  <span className="block text-balance text-card-title [overflow-wrap:anywhere]">{m.name}</span>
+                  <span className="block text-card-note text-ink-soft [overflow-wrap:anywhere]">
                     {m.role}
                     {m.email ? `, ${m.email}` : ''}
                   </span>
@@ -546,10 +546,10 @@ export function Campaign() {
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {d.assignments.map((a) => (
             <li key={a.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <p className="m-0 text-headline">
+              <p className="m-0 text-card-title">
                 {a.creatorName}, {a.role}
               </p>
-              <p className="m-0 text-subhead text-ink-soft">
+              <p className="m-0 text-card-note text-ink-soft">
                 {a.status}
                 {a.feeAmount > 0 && who !== 'brand' ? `, ${a.currency} ${a.feeAmount}` : ''}
                 {a.termsAcceptedAt ? `, terms accepted ${fmtDate(a.termsAcceptedAt)}` : ''}
@@ -585,10 +585,10 @@ export function Campaign() {
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {d.events.map((e) => (
             <li key={e.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <p className="m-0 text-subhead font-semibold">
+              <p className="m-0 text-card-title">
                 {e.actorName}, {e.eventType}
               </p>
-              <p className="m-0 text-subhead text-ink-soft">
+              <p className="m-0 text-card-note text-ink-soft">
                 {e.note ? `${e.note}. ` : ''}
                 {fmtWhen(e.createdAt)}
               </p>
@@ -646,8 +646,8 @@ function DeliverableCard({ deliverable: del, who, onChange }: { deliverable: Del
     <div className="rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="flex items-start justify-between gap-sm">
         <div className="min-w-0">
-          <p className="m-0 text-balance text-headline [overflow-wrap:anywhere]">{del.title}</p>
-          <p className="m-0 text-subhead text-ink-soft">
+          <p className="m-0 text-balance text-card-title [overflow-wrap:anywhere]">{del.title}</p>
+          <p className="m-0 text-card-note text-ink-soft">
             {[del.format, del.platform].filter(Boolean).join(', ') || 'any format'}
             {del.dueAt ? `, due ${fmtDate(del.dueAt)}` : ''}
           </p>

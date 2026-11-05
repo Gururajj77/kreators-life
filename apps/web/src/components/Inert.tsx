@@ -13,7 +13,7 @@ export function Inert({ text }: { text: string }): ReactNode {
     <>
       {parts.map((part, i) =>
         i % 2 === 1 ? (
-          <span key={i} data-inert-link="" title="Links are not clickable here" className="break-all font-mono text-[0.92em]">
+          <span key={i} data-inert-link="" title="Links are not clickable here" className="[overflow-wrap:anywhere] font-mono text-[0.92em]">
             {part}
           </span>
         ) : (

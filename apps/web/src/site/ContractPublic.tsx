@@ -16,7 +16,7 @@ import { FIELD } from '../lib/ui';
 
 const COPY = {
   typed: 'Typing your name is your acceptance of this agreement. It is typed acceptance, not a certified e-signature.',
-  agree: 'I have read this agreement and I agree to it.',
+  agree: ['I have read this agreement,', 'and I agree to it.'],
 };
 
 /** The client's agreement: read it, answer the brief, ask for a change, and accept by typing a name. */
@@ -123,7 +123,10 @@ export function ContractPublic() {
                 <input id="k-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} autoComplete="organization-title" className={FIELD} />
                 <label className="mt-sm flex min-h-[44px] cursor-pointer items-center gap-xs text-headline">
                   <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="size-[20px] shrink-0 accent-[var(--color-ink)]" />
-                  {COPY.agree}
+                  {/* In a span of its own, so the label's words are a block the rectangle rule reaches; kept whole up to the comma. */}
+                  <span>
+                    <span className="inline-block">{COPY.agree[0]}</span> <span className="inline-block">{COPY.agree[1]}</span>
+                  </span>
                 </label>
                 {accept.isError && (
                   <p role="alert" className="mt-sm m-0 text-subhead">

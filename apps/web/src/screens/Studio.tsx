@@ -232,12 +232,12 @@ function SalesSection() {
         {orders.map((o) => (
           <li key={o.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
             <div className="flex items-start justify-between gap-sm">
-              <p className="m-0 min-w-0 text-headline">
+              <p className="m-0 min-w-0 text-card-title">
                 {o.buyerName} got {o.productTitle}
               </p>
               <span className={`shrink-0 rounded-pill px-xs text-caption font-medium leading-[20px] ${STATUS_PILL[o.status]}`}>{o.status}</span>
             </div>
-            <p className="m-0 text-subhead text-ink-soft">
+            <p className="m-0 text-card-note text-ink-soft">
               {longDate(o.createdAt)}. {o.points > 0 ? `${o.points} points` : `${money(o.cents, o.currency)}${o.provider === 'razorpay' ? '' : ', test'}`}
               {o.couponCode ? `, coupon ${o.couponCode}` : ''}
               {o.affiliateCode ? ', via affiliate' : ''}
@@ -442,10 +442,10 @@ function BookingsTab() {
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {q.data?.bookings.map((b) => (
             <li key={b.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <p className="m-0 text-headline">
+              <p className="m-0 text-card-title">
                 {b.buyerName}, {b.productTitle}
               </p>
-              <p className="m-0 text-subhead text-ink-soft">
+              <p className="m-0 text-card-note text-ink-soft">
                 {dateTime(b.startsAt)}, {b.status}
                 {b.note ? `. ${b.note}` : ''}
               </p>

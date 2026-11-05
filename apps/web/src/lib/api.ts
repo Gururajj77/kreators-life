@@ -208,10 +208,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** The words of an error for a person to read: the server's own line when there is one, else the fallback. */
-export function errorText(e: unknown, fallback: string): string {
-  return e instanceof Error && e.message ? e.message : fallback;
-}
+/** The words of an error for a person to read: the server's own line when there is one, else the fallback (lib/errors.ts). */
+export { errorText } from './errors';
 
 /**
  * Fetch a file the server builds for the signed-in person (a CSV) and hand it to the browser as a download.

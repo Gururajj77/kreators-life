@@ -11,6 +11,7 @@ import { Segmented } from '../components/fx/Segmented';
 import { TextReveal } from '../components/fx/TextReveal';
 import '../components/fx/spotlight';
 import { useParamState } from '../lib/useParamState';
+import { tie } from '../lib/text';
 import { featuresForLifeArea, featuresForRelationship } from './content';
 import { SiteLayout, useAppEntry } from './SiteLayout';
 import { AppIcon } from '../components/AppIcon';
@@ -18,7 +19,8 @@ import { Icon } from '../components/Icon';
 import { ArrowUpRight } from 'lucide-react';
 import { TabRow } from '../components/TabRow';
 import { BookCover } from './Books';
-import { SITE_PRIMARY_ON_INK } from './buttons';
+import { SITE_PRIMARY_ON_GLASS } from './buttons';
+import { FractalGlass } from '../components/fx/FractalGlass';
 
 /** A gentle lift into place the first time a section scrolls into view. The content is always visible (opacity
  * never hides it); only the small upward delta animates, so a full-page shot taken before the observer fires never
@@ -186,8 +188,8 @@ function Explorer({ picks, value, onPick, label }: { picks: Choice[]; value: str
               >
                 <Avatar relationship={p.relationship.key} size={32} decorative />
                 <span className="min-w-0 flex-1">
-                  <span className="block text-headline">{p.name}</span>
-                  <span className="block text-caption text-ink-mute">{p.short}</span>
+                  <span className="block text-card-title">{p.name}</span>
+                  <span className="block text-card-note text-ink-mute">{p.short}</span>
                 </span>
               </button>
             </li>
@@ -215,7 +217,7 @@ function Explorer({ picks, value, onPick, label }: { picks: Choice[]; value: str
         {current.features.length > 0 && (
           <div className="mt-md">
             <h3 className="m-0 text-subhead font-semibold" style={{ color: `var(--deep-${r.key})` }}>
-              {current.features.length} {current.features.length === 1 ? 'app' : 'apps'} for this {current.isArea ? 'area' : 'pillar'}
+              Apps for this {current.isArea ? 'area' : 'pillar'}
             </h3>
             <div className="mt-xs">
               <AppGrid items={shown} />
@@ -259,9 +261,9 @@ export function SevenRP() {
   const sevenPicks: Choice[] = RELATIONSHIPS.map((r) => ({
     key: r.key,
     name: r.name,
-    short: `Pillar ${r.floor} of 7`,
+    short: `${featuresForRelationship(r.key).length} apps`,
     relationship: r,
-    eyebrow: `Pillar ${r.floor} of 7, with ${r.character}, ${r.role}`,
+    eyebrow: `${r.character}, ${r.role}`,
     headline: r.name,
     quote: r.greeting,
     line: r.question,
@@ -293,10 +295,11 @@ export function SevenRP() {
         <div>
           <p className="m-0 type-eyebrow text-ink-mute">7RP: the seven relationships</p>
           <h1 className="type-hook mt-sm text-display-1">
-            <TextReveal parts={[{ text: 'Seven relationships' }, { text: 'make a life', em: true }]} />
+            {/* The touchstone, broken after its comma: "Seven relationships" over a short "make a life" left a stub on a phone. */}
+            <TextReveal parts={[{ text: 'Seven relationships,' }, { text: 'one life.', em: true }]} />
           </h1>
           <p className="mt-md m-0 max-w-[520px] text-balance text-headline text-ink-soft">
-            Life comes down to one thing: to relate and be related. Each relationship is a pillar with its own guide. Pick one to see the apps that serve it.
+            Each relationship is a pillar with its own guide. Pick one to see the apps that serve it.
           </p>
           <Segmented
             className="mt-md"
@@ -330,11 +333,12 @@ export function SevenRP() {
             </span>
             <span className="min-w-0 flex-1">
               <span className="block type-eyebrow text-ink-mute">The book</span>
-              <span id="seven-book" className="mt-xs block text-title3 text-balance">
-                {BOOK_BY_SLUG['the-relationship-method'].title}
+              <span id="seven-book" className="mt-xs block text-card-title text-balance">
+                {/* Its last two words kept together: beside the cover on a phone, "Method" alone was half the line above it. */}
+                {tie(BOOK_BY_SLUG['the-relationship-method'].title)}
               </span>
-              <span className="mt-xs block text-subhead text-ink-soft text-balance">
-                The book behind the seven relationships this app is built on, by {BOOK_BY_SLUG['the-relationship-method'].author}.
+              <span className="mt-xs block text-card-note text-ink-soft text-balance">
+                Where the seven relationships come from, by {BOOK_BY_SLUG['the-relationship-method'].author}.
               </span>
             </span>
             {/* The arrow at the bottom right says the card opens the book's page. */}
@@ -343,18 +347,20 @@ export function SevenRP() {
         </section>
       )}
 
-      <section className="mt-2xl text-center">
-        <motion.div {...rise} className="rounded-card bg-ink p-lg text-on-ink">
-          <h2 className="type-hook text-display-2 text-on-ink [&_em]:text-on-ink/70!">
-            Find out where <em>yours stand</em>
-          </h2>
-          <p className="mt-xs m-0 text-balance text-callout text-on-ink/80">A short chat places all seven, then builds a pillar for the ones that need you most.</p>
-          <Link
-            to={entry === '/home' ? '/home' : '/start'}
-            className={`${SITE_PRIMARY_ON_INK} mt-md`}
-          >
-            {entry === '/home' ? 'Go to app' : 'Start free'}
-          </Link>
+      <section className="mt-2xl">
+        {/* Fractal glass (FractalGlass) in wine, the same card as /features in its own colour (the home's is navy, /features' teal):
+            deep in both themes, the glow rising from the right through narrow ribs; the words and Start free sit on its dark left. */}
+        <motion.div {...rise} className="fx-fglass-host relative overflow-hidden rounded-card p-lg pb-xl text-on-fill shadow-toy-soft">
+          <FractalGlass hue="wine" />
+          <div className="relative z-10">
+            <h2 className="type-hook text-display-2">
+              Find out where <em>yours stand</em>
+            </h2>
+            <p className="type-measure m-0 mt-sm text-callout text-on-fill">A short chat maps all seven, then builds a plan for the ones that need you most.</p>
+            <Link to={entry === '/home' ? '/home' : '/start'} className={`${SITE_PRIMARY_ON_GLASS} mt-md`}>
+              {entry === '/home' ? 'Go to app' : 'Start free'}
+            </Link>
+          </div>
         </motion.div>
       </section>
     </SiteLayout>

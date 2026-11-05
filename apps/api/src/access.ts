@@ -58,6 +58,8 @@ export const MODULE_FOR_PREFIX: Record<string, readonly string[]> = {
   tools: ['tools'],
   proposals: ['tv', 'fund'],
   manage: ['manage'],
+  // A guide's tools (hide, pin, held first posts) belong to Community, so a creator who holds Moderation reaches them (2026-11-05).
+  'manage/community': ['community'],
   internal: ['observability'],
   // Not listed on purpose: `discounts` (a signed-in person asking whether a code works) is core. It serves plans and top-ups, which belong to no
   // module, and it only prices an item; each area's own checkout (store, school, party, credits) is gated like any other route.

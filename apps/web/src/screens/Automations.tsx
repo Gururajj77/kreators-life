@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { Icon } from '../components/Icon';
 import { Pager, usePage } from '../components/Pager';
 import { Button } from '../components/Button';
+import { ConfirmDelete, DELETE_BTN } from '../components/ConfirmDelete';
 import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
@@ -147,29 +148,6 @@ export function Automations() {
   );
 }
 
-/** The pale red outline a delete wears (the Sign out button's look), never solid until the sheet asks. */
-const DELETE_BTN = 'toy inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-headline text-r1 hover:bg-r1/10 disabled:opacity-50';
-
-/** Asks before a delete, the Mindful session pattern: a red "Yes, delete it" and a quiet "Keep it". */
-function ConfirmDelete({ open, title, body, pending, failed, onYes, onClose }: { open: boolean; title: string; body: string; pending: boolean; failed: boolean; onYes: () => void; onClose: () => void }) {
-  return (
-    <Sheet open={open} onClose={onClose} title={title}>
-      <div className="grid gap-md pb-xl">
-        <p className="m-0 text-callout text-ink-soft">{body}</p>
-        {failed && <p role="alert" className="m-0 text-subhead text-r1">That did not work. Try again.</p>}
-        <div className="flex flex-wrap gap-xs">
-          <button type="button" disabled={pending} onClick={onYes} className={DELETE_BTN}>
-            Yes, delete it
-          </button>
-          <Button variant="outline" onClick={onClose}>
-            Keep it
-          </Button>
-        </div>
-      </div>
-    </Sheet>
-  );
-}
-
 function AutomationCard({ a, onChange }: { a: DmAutomation; onChange: () => void }) {
   const [comment, setComment] = useState('');
   const toggle = useMutation({ mutationFn: (active: boolean) => api.setAutomation(a.id, active), onSuccess: onChange });
@@ -178,8 +156,8 @@ function AutomationCard({ a, onChange }: { a: DmAutomation; onChange: () => void
   const test = useMutation({ mutationFn: () => api.simulateComment(a.id, { comment }), onSuccess: onChange });
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <p className="m-0 text-headline">Keywords: {a.keywords.join(', ')}</p>
-      <p className="mt-xs m-0 text-subhead text-ink-soft">
+      <p className="m-0 text-card-title">Keywords: {a.keywords.join(', ')}</p>
+      <p className="mt-xs m-0 text-card-note text-ink-soft">
         {a.contentCaption ? `On "${a.contentCaption}"` : 'On every post'}. Sends {a.productTitle ? `the link to ${a.productTitle}` : 'your page link'} as /go/{a.linkCode}.
       </p>
       <p className="mt-xs m-0 whitespace-pre-wrap rounded-tile bg-paper p-sm text-subhead">{a.dmMessage}</p>
@@ -275,11 +253,11 @@ function SequenceCard({ s, onChange }: { s: Sequence; onChange: () => void }) {
   const [deleting, setDeleting] = useState(false);
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <p className="m-0 text-headline">{s.title}</p>
-      <p className="mt-xs m-0 text-subhead text-ink-soft">
+      <p className="m-0 text-card-title">{s.title}</p>
+      <p className="mt-xs m-0 text-card-note text-ink-soft">
         {s.productTitle ?? 'Every product'}, {s.delayDays} {s.delayDays === 1 ? 'day' : 'days'} after purchase, sent {s.sent} {s.sent === 1 ? 'time' : 'times'}.
       </p>
-      <p className="mt-xs m-0 whitespace-pre-wrap text-subhead">{s.body}</p>
+      <p className="mt-xs m-0 whitespace-pre-wrap text-card-prose">{s.body}</p>
       <div className="mt-sm">
         <Toggle on={s.active} onChange={(on) => toggle.mutate(on)} label={s.active ? 'Active' : 'Paused'} />
       </div>

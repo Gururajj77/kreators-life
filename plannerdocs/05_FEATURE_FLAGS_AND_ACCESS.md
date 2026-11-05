@@ -244,7 +244,7 @@ A new app slots into its group by context, after any apps a person has placed in
 
 ## 11. Required tests, with status
 
-As of 2026-11-05 the shared suite has 553 tests passing and the smoke test 1,609 checks.
+As of 2026-11-05 the shared suite has 553 tests passing and the smoke test 1,610 checks.
 
 - A disabled module cannot be reached through the UI: holds (`Gate`).
 - A disabled module cannot be reached through the API: holds ("a switched-off app refuses its API" demands a 403 and "the core stays open while an app is off"). An override is refused the same way ("an override refuses the API too", "and the door opens again when it is removed"), and so is a rollout the person falls outside.
@@ -297,6 +297,6 @@ The groups are display, not access. Nothing here changes what is available or on
   - §6: the client link password and portal sessions, client onboarding, documents, the team link, the password ask and closed links.
   - §7: People's other powers, the newer audit actions, the extra checks on discount codes and house templates.
   - §9: the Apps page lists every available app with its switch.
-  - §11: team, team link, guide and app prefs checks; 553 shared tests and 1,609 smoke checks.
+  - §11: team, team link, guide and app prefs checks; 553 shared tests and 1,610 smoke checks.
   - New §12: app groups, their order and a person's app prefs.
   - Known gaps: the guide rule mismatch and the files to add to git.

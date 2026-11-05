@@ -79,8 +79,8 @@ export function Content() {
             <Icon icon={TrendingUp} size={24} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-headline">Posts and tracked links</span>
-            <span className="block text-subhead text-ink-soft">Which post made money: clicks, sales and revenue per piece of content.</span>
+            <span className="block text-card-title">Posts and tracked links</span>
+            <span className="block text-card-note text-ink-soft">Which post made money: clicks, sales and revenue per piece of content.</span>
           </span>
         </Link>
       </section>
@@ -97,8 +97,8 @@ function BrandCard({ b }: { b: Brand }) {
         <Icon icon={Folder} size={24} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-balance text-headline [overflow-wrap:anywhere]">{b.name}</span>
-        <span className="block text-subhead text-ink-soft">{b.niche || 'No niche yet'}</span>
+        <span className="block text-balance text-card-title [overflow-wrap:anywhere]">{b.name}</span>
+        <span className="block text-card-note text-ink-soft">{b.niche || 'No niche yet'}</span>
         <span className="mt-xs block text-caption text-ink-mute">
           {b.sources} {b.sources === 1 ? 'link' : 'links'}, {b.runs} {b.runs === 1 ? 'run' : 'runs'}, {b.pieces} {b.pieces === 1 ? 'piece' : 'pieces'}
         </span>

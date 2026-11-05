@@ -1,4 +1,4 @@
-import { canMute, communityRankOf, isStaffFor, FEED_FILTER_META, FEED_FILTERS, FEED_SORT_META, FEED_SORTS, MAX_PINNED, POST_CATEGORIES, REACTION_META, REACTIONS, SOCIAL_REWARDS, type CommunityPost, type CommunityReply, type FeedFilter, type FeedSort, type ReactionCounts, type ReactionKind, DEFAULT_PAGE_SIZE, pageQuery, type PageSize, LOCALE } from '@kreators/shared';
+import { canModerate, canMute, communityRankOf, isStaffFor, FEED_FILTER_META, FEED_FILTERS, FEED_SORT_META, FEED_SORTS, MAX_PINNED, POST_CATEGORIES, REACTION_META, REACTIONS, SOCIAL_REWARDS, type CommunityPost, type CommunityReply, type FeedFilter, type FeedSort, type ReactionCounts, type ReactionKind, DEFAULT_PAGE_SIZE, pageQuery, type PageSize, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Inert } from '../components/Inert';
 import { useState } from 'react';
@@ -98,8 +98,8 @@ function MutedList() {
         {list.map((m) => (
           <li key={m.userId} className="flex items-center justify-between gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
             <span className="min-w-0">
-              <span className="block text-balance text-headline [overflow-wrap:anywhere]">{m.name}</span>
-              <span className="block text-caption text-ink-soft">Muted by {m.by}{m.reason ? `: ${m.reason}` : ''}</span>
+              <span className="block text-balance text-card-title [overflow-wrap:anywhere]">{m.name}</span>
+              <span className="block text-card-note text-ink-soft">Muted by {m.by}{m.reason ? `: ${m.reason}` : ''}</span>
             </span>
             <Button variant="outline" size="sm" onClick={() => unmute.mutate(m.userId)} disabled={unmute.isPending}>
               Lift
@@ -205,7 +205,7 @@ function CommunityFeed() {
   // By post, so an anonymous author can be blocked without anyone learning who they are.
   const block = useMutation({ mutationFn: (postId: string) => api.blockPostAuthor(postId), onSuccess: () => refresh() });
   const mute = useMutation({ mutationFn: (id: string) => api.mute(id), onSuccess: () => refresh() });
-  const modFailed = block.error ?? mute.error;
+  const modFailed = block.error ?? mute.error ?? hide.error;
 
   return (
     <Screen>
@@ -307,7 +307,7 @@ function CommunityFeed() {
                   ...(p.mine ? [{ key: 'delete', label: 'Delete', icon: Trash2, destructive: true, onSelect: () => setAsk({ title: 'Delete your post?', body: 'It and its replies go from the feed. This cannot be undone.', action: 'Yes, delete it', run: () => remove.mutate(p.id) }) }] : []),
                   ...(!p.mine ? [{ key: 'block', label: 'Block', destructive: true, onSelect: () => setAsk({ title: `Block ${p.authorName}?`, body: "You will not see each other's posts, and any friendship ends. You can undo it under Bond.", action: 'Yes, block', run: () => block.mutate(p.id) }) }] : []),
                   ...(me.data && me.data.user.id !== p.authorId && canMute(myRank, p.authorRank) ? [{ key: 'mute', label: 'Mute', destructive: true, onSelect: () => setAsk({ title: `Mute ${p.authorName} in Community?`, body: 'They can still read but cannot post or reply.', action: 'Yes, mute', run: () => mute.mutate(p.authorId) }) }] : []),
-                  ...(isMod && me.data?.user.id !== p.authorId ? [{ key: 'hide', label: p.hidden ? 'Unhide' : 'Hide', onSelect: () => hide.mutate({ id: p.id, hidden: !p.hidden }) }] : []),
+                  ...(isMod && me.data?.user.id !== p.authorId && canModerate(myRank, p.authorRank) ? [{ key: 'hide', label: p.hidden ? 'Unhide' : 'Hide', onSelect: () => hide.mutate({ id: p.id, hidden: !p.hidden }) }] : []),
                 ]}
               />
             </div>

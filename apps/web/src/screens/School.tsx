@@ -8,7 +8,7 @@ import { Fold } from '../components/Fold';
 import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
-import { api, errorText } from '../lib/api';
+import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { money } from '@kreators/shared';
@@ -106,7 +106,7 @@ function ProgramCard({ program: p, staff, myIds, onChange }: { program: Program;
     // the words, the cohorts and the team's tools.
     <div className="fx-spot rounded-tile bg-card p-sm shadow-toy-soft">
       <CardHead tag={p.published ? <StatusTag tone="good">Live</StatusTag> : <StatusTag tone="neutral">Draft</StatusTag>}>
-        <p className="m-0 text-balance text-headline">{p.name}</p>
+        <p className="m-0 text-balance text-card-title">{p.name}</p>
       </CardHead>
       <div className="mt-xs flex">
         <span className="fill-row-all flex min-w-0 flex-wrap gap-xs">
@@ -114,7 +114,7 @@ function ProgramCard({ program: p, staff, myIds, onChange }: { program: Program;
           <FactTag kind={p.pricePoints > 0 || p.priceCents > 0 ? 'price' : 'free'}>{priceText(p)}</FactTag>
         </span>
       </div>
-      {p.description && <p className="prose-long mt-xs m-0 whitespace-pre-wrap text-prose">{p.description}</p>}
+      {p.description && <p className="prose-long mt-xs m-0 whitespace-pre-wrap text-card-prose">{p.description}</p>}
       {(p.outcomes || p.prerequisites) && (
         <Fold className="mt-xs" title="More about it">
           {p.outcomes && (
@@ -129,14 +129,14 @@ function ProgramCard({ program: p, staff, myIds, onChange }: { program: Program;
           )}
         </Fold>
       )}
-      {open.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">No cohort dates are set yet. Come back after the team adds one.</p>}
+      {open.length === 0 && <p className="mt-sm m-0 text-card-note text-ink-soft">No cohort dates are set yet. Come back after the team adds one.</p>}
       {open.length > 0 && p.pricePoints > 0 && p.published && <DiscountField className="mt-sm" area="program" itemId={p.id} value={discount?.code ?? ''} check={discount} onChange={(_c, check) => setDiscount(check)} />}
       <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
         {open.map((k) => (
           <li key={k.id} className="flex flex-wrap items-end justify-between gap-sm rounded-tile bg-paper p-sm">
             <span className="min-w-0 flex-1">
-              <span className="block text-balance text-headline">{k.name}</span>
-              <span className="block text-subhead text-ink-soft">
+              <span className="block text-balance text-card-title">{k.name}</span>
+              <span className="block text-card-note text-ink-soft">
                 {fmtDate(k.startAt)} to {fmtDate(k.endAt)}, {Math.max(0, k.capacity - k.enrolled)} of {k.capacity} seats left
               </span>
             </span>

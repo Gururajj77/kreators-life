@@ -1,4 +1,4 @@
-import { FOCUS_OPTIONS, HONORS, IDENTITY_BY_KEY, OWN_TAG_ICON, IDENTITY_STAGES, identityLabel, identityLine, levelFromXp, matchSetup, passwordProblem, MODULE_GROUP_ACCENT, MODULE_GROUP_BLURB, MODULE_GROUPS, POINTS, RELATIONSHIP_BY_KEY, RELATIONSHIPS, BADGE_META, badgeRoleOf, setupSwitchable, type MeResponse, MODULE_GROUP_ORDER, nextBadge, LOCALE } from '@kreators/shared';
+import { FOCUS_OPTIONS, HONORS, IDENTITY_BY_KEY, OWN_TAG_ICON, IDENTITY_STAGES, identityLabel, identityLine, levelFromXp, matchSetup, passwordProblem, POINTS, RELATIONSHIPS, BADGE_META, badgeRoleOf, setupSwitchable, type MeResponse, MODULE_GROUP_ORDER, nextBadge, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Suspense, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -13,7 +13,6 @@ import { RoleBadge } from '../components/RoleBadge';
 import { SignOut } from '../components/SignOut';
 import { AppCover } from '../components/AppCover';
 import { EvolutionReveal } from '../components/EvolutionReveal';
-import { Toggle } from '../components/Toggle';
 import { AppGroups } from '../components/AppGroups';
 import { useModules } from '../lib/modules';
 import { useSession } from '../lib/store';
@@ -23,6 +22,7 @@ import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useMe, useRefreshAll } from '../lib/queries';
 import { tie } from '../lib/text';
+import { bento } from '../lib/bento';
 import { lazyNamed } from '../lib/lazy';
 import { CalendarLink } from '../components/CalendarLink';
 import { PrivacyChoices } from '../components/PrivacyChoices';
@@ -51,7 +51,6 @@ function YouView({ data }: { data: MeResponse }) {
   const featureGroups = MODULE_GROUP_ORDER;
   const themeMode = useTheme((s) => s.mode);
   const setThemeMode = useTheme((s) => s.setMode);
-  const toggle = useMutation({ mutationFn: ({ key, on }: { key: string; on: boolean }) => api.setModule(key, on), onSuccess: () => refresh() });
   const [deleting, setDeleting] = useState(false);
   const [erasing, setErasing] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
@@ -243,8 +242,8 @@ function YouView({ data }: { data: MeResponse }) {
         </h2>
         {user.email ? (
           <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
-            <p className="m-0 text-headline">{user.email}</p>
-            <p className="mt-xs m-0 text-subhead text-ink-soft">
+            <p className="m-0 text-card-title">{user.email}</p>
+            <p className="mt-xs m-0 text-card-note text-ink-soft">
               Your pillars are saved to this account. Sign in on any phone to pick them up.
             </p>
             <div className="mt-sm flex flex-wrap gap-xs">
@@ -257,8 +256,8 @@ function YouView({ data }: { data: MeResponse }) {
         ) : (
           <div data-pillar="parent_child" className="mt-sm flex flex-wrap-reverse items-center justify-between gap-sm rounded-card p-md" style={{ background: 'var(--tint-yellow)' }}>
             <div className="min-w-0 flex-1 basis-[60%]">
-              <p className="m-0 text-headline">Only on this device so far.</p>
-              <p className="mt-xs m-0 text-subhead">Add an email and password and everything here comes with you to a new phone.</p>
+              <p className="m-0 text-card-title">Only on this device so far.</p>
+              <p className="mt-xs m-0 text-card-note">Add an email and password and everything here comes with you to a new phone.</p>
             </div>
             <Link to="/onboarding" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
               Create an account
@@ -266,8 +265,8 @@ function YouView({ data }: { data: MeResponse }) {
           </div>
         )}
         <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
-          <p className="m-0 text-headline">Your data</p>
-          <p className="mt-xs m-0 text-subhead text-ink-soft">Everything we hold about you as one file, or the whole account gone.</p>
+          <p className="m-0 text-card-title">Your data</p>
+          <p className="mt-xs m-0 text-card-note text-ink-soft">Everything we hold about you as one file, or the whole account gone.</p>
           <div className="mt-sm fill-row flex flex-wrap gap-xs">
             <Button variant="outline" onClick={() => exportData.mutate()} disabled={exportData.isPending}>
               {exportData.isPending ? 'Preparing' : 'Export my data'}
@@ -466,14 +465,26 @@ function YouView({ data }: { data: MeResponse }) {
         <h3 className="mt-md text-headline">Awarded</h3>
         <p className="mt-xs m-0 text-subhead text-ink-soft">Given by the kreators.app team, or unlocked by time in the app. These count on the leaderboard too.</p>
         <ul className="mt-sm grid list-none grid-cols-2 gap-sm p-0 m-0 md:grid-cols-3">
-          {HONORS.map((h) => {
+          {HONORS.map((h, i) => {
             const on = awarded.has(h.key);
             return (
-              <li key={h.key} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+              // On a phone the seal sits over the words, so the words keep the tile's width instead of a column of short lines. The first
+              // tiles widen until the last row is full (bento), so no tile is left alone on it.
+              <li key={h.key} className={`flex flex-col items-start gap-sm rounded-tile bg-card p-sm shadow-toy-soft sm:flex-row sm:items-center ${bento(i, HONORS.length, 2, 3)}`}>
                 <BadgeArt name={h.name} icon={h.icon} tier={h.tier} shape="seal" earned={on} size="sm" decorative />
                 <span className="min-w-0">
-                  <span className="block text-subhead font-semibold">{h.name}</span>
-                  <span className="block text-balance text-caption text-ink-soft">{on ? (h.source === 'time' ? 'Unlocked' : 'Awarded') : tie(`Locked · ${h.how}`)}</span>
+                  <span className="block text-card-title">{h.name}</span>
+                  {/* Locked on a line of its own and the how under it, so the narrow tile never ends on a short line. */}
+                  <span className="block text-balance text-card-note text-ink-soft">
+                    {on ? (
+                      h.source === 'time' ? 'Unlocked' : 'Awarded'
+                    ) : (
+                      <>
+                        <span className="block">Locked</span>
+                        <span className="block">{tie(h.how)}</span>
+                      </>
+                    )}
+                  </span>
                 </span>
               </li>
             );

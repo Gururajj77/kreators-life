@@ -10,7 +10,7 @@ import { useLogs, useWellbeing } from '../lib/queries';
 import { useFocusPortal } from '../lib/focusPortal';
 import { Icon } from '../components/Icon';
 import { Wind } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { AnimatedIcon } from '../components/AnimatedIcon';
 import { Button } from '../components/Button';
@@ -22,7 +22,10 @@ import { EmergenceSlot } from '../components/EmergenceSlot';
 export function Mindful() {
   const wb = useWellbeing();
   const logs = useLogs('mindful', 30);
-  const setFocusSlot = useFocusPortal((s) => s.setTarget);
+  const setTarget = useFocusPortal((s) => s.setTarget);
+  const focusHeight = useFocusPortal((s) => s.height);
+  // A steady ref callback: a new one each render would clear and set the slot every time, moving the clock out and back.
+  const setFocusSlot = useCallback((el: HTMLDivElement | null) => setTarget(el, 'mindful'), [setTarget]);
   const total = wb.data?.parts.find((p) => p.kind === 'mindful')?.latest ?? 0;
   const buckets = [
     { label: 'One minute', color: 'var(--color-r3)', test: (m: number) => m <= 1 },
@@ -54,7 +57,7 @@ export function Mindful() {
 
       {/* One panel for breathing and focus (Breathe is its first tab). FocusRounds itself lives in FocusRoundsHost, mounted once so a
           running clock survives leaving this page; this slot is where it draws while Mindful is the screen showing (lib/focusPortal.ts). */}
-      <div ref={setFocusSlot} />
+      <div ref={setFocusSlot} style={{ minHeight: focusHeight || undefined }} />
 
       <FocusDashboard />
 
@@ -75,8 +78,8 @@ export function Mindful() {
         </div>
       </section>
 
-      <section className="mt-lg" aria-labelledby="how-heading">
-        <h2 id="how-heading" className="text-title2">
+      <section className="mt-lg" aria-labelledby="mindful-how-heading">
+        <h2 id="mindful-how-heading" className="text-title2">
           How you breathe
         </h2>
         <div className="mt-sm flex items-center gap-md rounded-card bg-card p-md shadow-toy-soft">
@@ -107,10 +110,10 @@ export function Mindful() {
                 <Icon icon={Wind} size={18} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-headline">
+                <span className="block text-card-title">
                   {l.value} {l.value === 1 ? 'minute' : 'minutes'}
                 </span>
-                <span className="block text-subhead text-ink-soft">{when(l.createdAt)}</span>
+                <span className="block text-card-note text-ink-soft">{when(l.createdAt)}</span>
               </span>
               <button
                 type="button"

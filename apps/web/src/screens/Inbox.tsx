@@ -127,14 +127,15 @@ export function Inbox() {
                   <Icon icon={iconFor(n.kind)} size={18} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className={`block ${n.readAt ? 'text-body' : 'text-headline'}`}>{n.title}</span>
-                  {n.body && <span className="block text-subhead text-ink-soft"><Inert text={n.body} /></span>}
+                  <span className={`block ${n.readAt ? 'text-row-title' : 'text-card-title pr-xs'}`}>{n.title}</span>
+                  {n.body && <span className="block text-card-note text-ink-soft"><Inert text={n.body} /></span>}
                   <span className="block text-caption text-ink-mute">{new Date(n.createdAt).toLocaleString(LOCALE, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
                 </span>
-                {!n.readAt && <span className="size-[10px] shrink-0 rounded-pill bg-r1" aria-label="Unread" />}
+                {/* In the corner, out of the flow, so the words keep the row's width on a phone. */}
+                {!n.readAt && <span className="absolute top-xs right-xs size-[10px] rounded-pill bg-r1" aria-label="Unread" />}
               </>
             );
-            const cls = 'toy toy-soft flex w-full items-start gap-sm rounded-tile bg-card p-sm text-left';
+            const cls = 'toy toy-soft relative flex w-full items-start gap-sm rounded-tile bg-card p-sm text-left';
             return (
               <li key={n.id} className="flex items-stretch gap-xs">
                 <span className="min-w-0 flex-1">

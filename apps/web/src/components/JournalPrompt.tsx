@@ -1,5 +1,5 @@
 import { RELATIONSHIPS } from '@kreators/shared';
-import { JOURNAL_PROMPT_CATEGORIES, JOURNAL_PROMPT_COUNT, JOURNAL_PROMPT_CREDIT, JOURNAL_PROMPT_SAFETY, nextPrompt, promptBody, promptById, promptCategory, promptRound, promptTitle, type JournalPrompt as Prompt, type JournalPromptCategoryKey } from '@kreators/shared/journalPrompts';
+import { JOURNAL_PROMPT_CATEGORIES, JOURNAL_PROMPT_COUNT, JOURNAL_PROMPT_CREDIT, JOURNAL_PROMPT_SAFETY, nextPrompt, promptBody, promptById, promptCategory, promptRound, promptTitle, type JournalPromptCategoryKey } from '@kreators/shared/journalPrompts';
 import gsap from 'gsap';
 import { useEffect, useRef, useState } from 'react';
 import { fillVar, ON_FILL } from '../lib/relFill';

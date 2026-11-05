@@ -74,8 +74,9 @@ export function Journal() {
               {stats.negative} heavy
             </span>
           </div>
-          <div className="mt-md rounded-tile bg-ink-fixed/20 p-sm">
-            <p className="m-0 text-eyebrow uppercase opacity-90">This month</p>
+          <div className="mt-md rounded-tile bg-ink-fixed/20 p-sm max-[380px]:px-0">
+            {/* Under 380px the tile gives its sides to the calendar, so each day stays a 44px target; the eyebrow keeps its inset. */}
+            <p className="m-0 text-eyebrow uppercase opacity-90 max-[380px]:px-sm">This month</p>
             <div className="mt-xs">
               <CalendarGrid onFill month={month} today={todayLocal()} maxDate={todayLocal()} selected={day} onMonth={setMonth} onPick={setDay} marks={marks} label="Journal calendar. Tap a day to read, add or change its entries." />
             </div>
@@ -118,14 +119,14 @@ export function Journal() {
                     </span>
                   )}
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-headline">
+                    <span className="block truncate text-card-title">
                       {e.title}
                     </span>
-                    <span className="block text-subhead text-ink-soft">
+                    <span className="block text-card-note text-ink-soft">
                       {new Date(e.createdAt).toLocaleString(LOCALE, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                       {e.stressors.length ? `. ${e.stressors.join(', ')}` : ''}
                     </span>
-                    <span className="mt-xs block text-subhead">{e.body.slice(0, 140)}{e.body.length > 140 ? '…' : ''}</span>
+                    <span className="mt-xs block text-card-prose">{e.body.slice(0, 140)}{e.body.length > 140 ? '…' : ''}</span>
                   </span>
                 </button>
               </li>
@@ -183,8 +184,8 @@ function DaySheet({ date, onClose, onOpen, onNew }: { date: string | null; onClo
                 <button type="button" onClick={() => onOpen(e)} className="toy toy-soft flex w-full items-center gap-sm rounded-tile bg-card p-sm text-left">
                   {m && <MoodFace value={m.value} size={36} />}
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-headline">{e.title}</span>
-                    <span className="block truncate text-subhead text-ink-soft">{e.body}</span>
+                    <span className="block truncate text-card-title">{e.title}</span>
+                    <span className="block truncate text-card-note text-ink-soft">{e.body}</span>
                   </span>
                   <span className="text-subhead text-ink-soft">Edit</span>
                 </button>

@@ -33,6 +33,9 @@ export function Magnet({ children, strength = 0.3, className = '' }: { children:
         el.removeEventListener('pointermove', move);
         el.removeEventListener('pointerleave', leave);
         el.removeEventListener('focusout', leave);
+        // A quickTo tween is paused, never done, so GSAP keeps it (and the element) until it is killed.
+        x.tween.kill();
+        y.tween.kill();
         gsap.set(el, { clearProps: 'transform' });
       };
     });

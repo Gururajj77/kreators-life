@@ -22,8 +22,6 @@ export const TIMEOUT = {
   reach: 120_000,
 } as const;
 
-type TimeoutName = keyof typeof TIMEOUT;
-
 /** True when an error is a clock running out (or a caller's abort), however the runtime spells it. */
 export function isTimeout(e: unknown): boolean {
   const name = (e as { name?: string } | null)?.name;

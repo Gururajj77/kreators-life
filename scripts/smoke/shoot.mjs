@@ -114,12 +114,16 @@ try {
       );
       await page.goto(`${ORIGIN}${shot.path}`, { waitUntil: 'networkidle0' });
       await new Promise((r) => setTimeout(r, MOTION ? 1200 : 400));
+      // lib/rectText.ts evens out the text after the first paint; wait until it has had every block (it marks the page busy until then).
+      await page.waitForFunction(() => !document.documentElement.hasAttribute('data-rect-busy'), { timeout: 5000 }).catch(() => {});
       if (shot.before) await page.evaluate(shot.before);
       const name = shot.name ?? (shot.path.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'site');
       const file = path.join(OUT, `${name}-${shot.desktop ? `${width}x${height}` : 'phone'}-${theme}.png`);
       await page.screenshot({ path: file, fullPage: !shot.viewport });
       console.log(`shot ${file}`);
       if (PROBE) {
+        // The screenshot may have set off another measure (a resize, the fonts): the probe waits for that one too.
+        await page.waitForFunction(() => !document.documentElement.hasAttribute('data-rect-busy'), { timeout: 5000 }).catch(() => {});
         const hits = await page.evaluate(PROBE);
         for (const h of hits ?? []) probeHits.push({ shot: `${shot.path} ${shot.desktop ? 'laptop' : 'phone'} ${theme}`, ...h });
       }

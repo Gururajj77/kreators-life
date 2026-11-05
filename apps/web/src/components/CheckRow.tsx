@@ -127,10 +127,10 @@ export function CheckRow({
             )}
           </span>
           <span className="min-w-0 flex-1">
-            <span className={`block text-body ${checked && strike ? 'text-ink-mute line-through' : ''}`}>{title}</span>
+            <span className={`block ${subtitle ? 'text-row-title' : 'text-body'} ${checked && strike ? 'text-ink-mute line-through' : ''}`}>{title}</span>
             {(subtitle || badge) && (
               <span className="flex flex-wrap items-center gap-x-xs">
-                {subtitle && <span className="text-subhead text-ink-soft">{subtitle}</span>}
+                {subtitle && <span className="text-card-note text-ink-soft">{subtitle}</span>}
                 {badge}
               </span>
             )}

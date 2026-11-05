@@ -191,8 +191,8 @@ export function Mood() {
                 <li key={l.id} className={`flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft`}>
                   <MoodFace value={m.value} size={40} />
                   <span className="min-w-0 flex-1">
-                    <span className="block text-headline">{m.name}</span>
-                    <span className="block truncate text-subhead text-ink-soft">
+                    <span className="block text-card-title">{m.name}</span>
+                    <span className="block truncate text-card-note text-ink-soft">
                       {new Date(`${l.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', month: 'short', day: 'numeric' })}
                       {l.note ? `. ${l.note}` : ''}
                     </span>

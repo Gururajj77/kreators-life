@@ -56,10 +56,10 @@ function OpenRequest({ r, onDone }: { r: DmRequest; onDone: () => void }) {
   const overdue = new Date(r.dueAt).getTime() < Date.now();
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <p className="m-0 text-headline">
+      <p className="m-0 text-card-title">
         {r.buyerName}, {r.productTitle}
       </p>
-      <p className={`m-0 text-subhead ${overdue ? 'text-r1' : 'text-ink-soft'}`}>
+      <p className={`m-0 text-card-note ${overdue ? 'text-r1' : 'text-ink-soft'}`}>
         {overdue ? 'Overdue, promised by' : 'Answer by'} {longDate(r.dueAt)}. Asked {longDate(r.createdAt)}.
       </p>
       <p className="mt-sm m-0 whitespace-pre-wrap rounded-tile bg-paper p-sm text-prose">{r.question}</p>

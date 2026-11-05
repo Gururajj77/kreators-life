@@ -3,10 +3,10 @@ import { EMAIL_NOTE_MAX, EMAIL_SUBJECT_MAX, EMAIL_TEMPLATES, emailTemplate, emai
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useId, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../lib/api';
-import { copyPlain, useCopy } from '../lib/clipboard';
+import { copyPlain } from '../lib/clipboard';
 import { printAs } from '../lib/printDoc';
 import { useAuthed } from '../lib/queries';
-import { FIELD, LABEL, SELECT_SM } from '../lib/ui';
+import { FIELD, LABEL } from '../lib/ui';
 import { AnimatedIcon } from './AnimatedIcon';
 import { Button } from './Button';
 import { Field } from './InvoiceView';
@@ -202,59 +202,6 @@ function AddOnceLines({ missing, clientId, settings }: { missing: EmailGap[]; cl
       {missing.map((g) => (
         <AddOnce key={g.key} gap={g} clientId={clientId} settings={settings} />
       ))}
-    </div>
-  );
-}
-
-/**
- * The email that goes with a document, written and ready: the note this moment needs (by the kind of document and where the client stands),
- * every part filled from the client, the document and the business profile, shown as "Subject:" and the words, and one Copy that copies
- * exactly that. Another note can be picked from the small list. What no record holds is asked once, never left as a blank.
- */
-export function ReadyEmail({ ctx, onCopied }: { ctx: EmailContext; onCopied?: (ok: boolean) => void }) {
-  const f = useEmailFacts(ctx);
-  const pickId = useId();
-  const [key, setKey] = useState<string | null>(null);
-  const { copy, said } = useCopy();
-  const chosen = key ?? f.suggested;
-  const mail = fillEmail(chosen, f.vars);
-  const all = `Subject: ${mail.subject}\n\n${mail.body}`;
-  if (!f.ready) return <p className="m-0 text-subhead text-ink-soft">Writing the email from your records.</p>;
-  return (
-    <div className="grid gap-sm">
-      <div className="flex flex-wrap items-center gap-xs">
-        <label htmlFor={pickId} className="text-subhead font-semibold">
-          Note
-        </label>
-        <select id={pickId} value={chosen} onChange={(e) => setKey(e.target.value)} className={`${SELECT_SM} min-w-0 max-w-full flex-1`}>
-          {EMAIL_TEMPLATES.map((t) => (
-            <option key={t.key} value={t.key}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <AddOnceLines missing={f.missing} clientId={ctx.clientId} settings={f.settings} />
-      <pre className="legal-text" tabIndex={0} aria-label="The email, ready to paste">
-        {all}
-      </pre>
-      <div className="flex flex-wrap items-center gap-xs">
-        <Button
-          size="sm"
-          onClick={async () => {
-            const ok = await copy(all);
-            onCopied?.(ok);
-          }}
-        >
-          <AnimatedIcon name="copy" size={18} active={Boolean(said)} />
-          Copy the email
-        </Button>
-        {said && (
-          <span role="status" className="text-subhead">
-            {said}
-          </span>
-        )}
-      </div>
     </div>
   );
 }

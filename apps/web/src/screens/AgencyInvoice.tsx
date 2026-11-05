@@ -402,8 +402,8 @@ export function AgencyInvoice() {
             <div role="group" aria-label="Design" className="mt-xs grid gap-xs md:grid-cols-2">
               {INVOICE_DESIGNS.map((d) => (
                 <button key={d} type="button" aria-pressed={draft.doc.design === d} onClick={() => setDoc({ design: d })} className={`toy rounded-tile border-2 p-sm text-left ${draft.doc.design === d ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
-                  <span className="block text-headline">{INVOICE_DESIGN_META[d].name}</span>
-                  <span className="mt-xs block text-subhead text-ink-soft">{INVOICE_DESIGN_META[d].blurb}</span>
+                  <span className="block text-card-title">{INVOICE_DESIGN_META[d].name}</span>
+                  <span className="mt-xs block text-card-note text-ink-soft">{INVOICE_DESIGN_META[d].blurb}</span>
                 </button>
               ))}
             </div>

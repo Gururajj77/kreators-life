@@ -206,18 +206,23 @@ export function AgencyInvoices({ clientId, adding: outside, onAdding }: { client
               <li key={inv.id} className="rounded-tile bg-card shadow-toy-soft">
                 <div className="flex items-center gap-xs pr-xs">
                   <Link to={`/agency/invoices/${inv.id}`} className="toy flex min-w-0 flex-1 flex-wrap items-center gap-sm rounded-tile p-sm text-ink no-underline">
-                    <span className="min-w-0 flex-1">
+                    {/* At least 60% of the row, so on a narrow phone the tags and the total wrap under it instead of squeezing it into
+                        a column of short lines. */}
+                    <span className="min-w-[60%] flex-1">
                       <span className="block text-headline">{inv.number}</span>
                       <span className="block text-subhead text-ink-soft">
                         <Inert text={inv.clientName} />, {shortDate(inv.issueDate)}
                         {inv.dueDate ? `, due ${shortDate(inv.dueDate)}` : ''}
                       </span>
                     </span>
-                    <span className="flex items-center gap-xs">
-                      {inv.revisedAt && <StatusTag tone="warn">Revised</StatusTag>}
-                      <StatusTag tone={INVOICE_STATUS_TONE[inv.status]}>{INVOICE_STATUS_NAME[inv.status]}</StatusTag>
+                    {/* The tags and the total wrap together, so the total never sits alone on a line of its own. */}
+                    <span className="flex items-center gap-sm">
+                      <span className="flex items-center gap-xs">
+                        {inv.revisedAt && <StatusTag tone="warn">Revised</StatusTag>}
+                        <StatusTag tone={INVOICE_STATUS_TONE[inv.status]}>{INVOICE_STATUS_NAME[inv.status]}</StatusTag>
+                      </span>
+                      <span className="text-title3 type-figure">{money(inv.totalCents, inv.currency)}</span>
                     </span>
-                    <span className="text-title3 type-figure">{money(inv.totalCents, inv.currency)}</span>
                   </Link>
                   <PaperRowMenu
                     path={`/agency/invoices/${inv.id}`}
@@ -292,13 +297,13 @@ function NewInvoice({ open, clientId, onClose, onMade }: { open: boolean; client
         <p className="m-0 text-subhead text-ink-soft">Pick a starting point. Every one starts from your business details, and you set the amounts in the designer.</p>
         <div role="group" aria-label="Starting points" className="grid gap-xs md:grid-cols-2">
           <button type="button" disabled={!id || make.isPending} onClick={() => make.mutate({})} className={card}>
-            <span className="block text-headline">Blank</span>
-            <span className="mt-xs block text-subhead text-ink-soft">One line, from your profile.</span>
+            <span className="block text-card-title">Blank</span>
+            <span className="mt-xs block text-card-note text-ink-soft">One line, from your profile.</span>
           </button>
           {INVOICE_STARTERS.map((t) => (
             <button key={t.key} type="button" disabled={!id || make.isPending} onClick={() => make.mutate({ starter: t.key })} className={card}>
-              <span className="block text-headline">{t.name}</span>
-              <span className="mt-xs block text-subhead text-ink-soft">{t.blurb}</span>
+              <span className="block text-card-title">{t.name}</span>
+              <span className="mt-xs block text-card-note text-ink-soft">{t.blurb}</span>
             </button>
           ))}
         </div>
@@ -307,21 +312,21 @@ function NewInvoice({ open, clientId, onClose, onMade }: { open: boolean; client
         <div role="group" aria-label="Your templates" className="grid gap-xs md:grid-cols-2">
           {(mine.data?.templates ?? []).filter((t) => t.scope === 'own').map((t) => (
             <button key={t.id} type="button" disabled={!id || make.isPending} onClick={() => make.mutate({ templateId: t.id })} className={card}>
-              <span className="block text-headline">{t.name}</span>
-              <span className="mt-xs block text-subhead text-ink-soft">{t.summary}</span>
+              <span className="block text-card-title">{t.name}</span>
+              <span className="mt-xs block text-card-note text-ink-soft">{t.summary}</span>
             </button>
           ))}
         </div>
-        <h3 className="m-0 text-headline">House templates</h3>
+        <h3 className="m-0 mt-xs text-headline">House templates</h3>
         {mine.data && mine.data.templates.filter((t) => t.scope === 'house').length === 0 && <p className="m-0 text-subhead text-ink-soft">No house templates yet.</p>}
         <div role="group" aria-label="House templates" className="grid gap-xs md:grid-cols-2">
           {(mine.data?.templates ?? []).filter((t) => t.scope === 'house').map((t) => (
             <button key={t.id} type="button" disabled={!id || make.isPending} onClick={() => make.mutate({ houseId: t.id })} className={card}>
-              <span className="flex flex-wrap items-center gap-xs text-headline">
+              <span className="flex flex-wrap items-center gap-xs text-card-title">
                 {t.name}
                 <StatusTag tone="info">House template</StatusTag>
               </span>
-              <span className="mt-xs block text-subhead text-ink-soft">{t.summary}</span>
+              <span className="mt-xs block text-card-note text-ink-soft">{t.summary}</span>
             </button>
           ))}
         </div>
@@ -381,7 +386,7 @@ export function InvoiceTemplates() {
         </p>
       )}
       {q.data && list.length === 0 && <p className="mt-xs m-0 text-subhead font-semibold">You have none yet.</p>}
-      <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+      <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
         {list.map((t) => (
           <li key={t.id} className="rounded-tile bg-paper p-sm">
             {renaming?.id === t.id ? (
@@ -399,8 +404,8 @@ export function InvoiceTemplates() {
             ) : (
               <div className="flex flex-wrap items-center justify-between gap-sm">
                 <div className="min-w-0">
-                  <p className="m-0 text-headline">{t.name}</p>
-                  <p className="m-0 text-subhead text-ink-soft">{t.summary}</p>
+                  <p className="m-0 text-card-title">{t.name}</p>
+                  <p className="m-0 text-card-note text-ink-soft">{t.summary}</p>
                 </div>
                 <div className="flex gap-xs">
                   <Button

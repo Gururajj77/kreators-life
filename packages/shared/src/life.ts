@@ -19,8 +19,8 @@ export const LIFE_AREAS: Record<LifeAreaKey, { name: string; icon: IconName; blu
   physical: { name: 'Physical', icon: 'Activity', blurb: 'Sleep, movement and breath.', path: '/wellbeing', relationship: 'self' },
   financial: { name: 'Financial', icon: 'Wallet', blurb: 'What comes in, what goes out, where you are heading.', path: '/finance', relationship: 'servant_leader' },
   mental: { name: 'Mental', icon: 'Brain', blurb: 'Stress, focus, and what you are learning.', path: '/stress', relationship: 'guru' },
-  emotional: { name: 'Emotional', icon: 'Heart', blurb: 'Mood, what you wrote, and the people pillars.', path: '/mood', relationship: 'lover_partner' },
-  spiritual: { name: 'Spiritual', icon: 'Sparkles', blurb: 'Stillness, awe, and the top two pillars.', path: '/mindful', relationship: 'divine' },
+  emotional: { name: 'Emotional', icon: 'Heart', blurb: 'Mood, what you wrote, and the people close to you.', path: '/mood', relationship: 'lover_partner' },
+  spiritual: { name: 'Spiritual', icon: 'Sparkles', blurb: 'Stillness, awe, teachers and faith.', path: '/mindful', relationship: 'divine' },
 };
 
 export interface LifePart {

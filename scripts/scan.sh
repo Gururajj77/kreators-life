@@ -54,7 +54,7 @@ echo "wording: the old names that must not come back"
 out=$(grep -rnwiE "Kreators Life" screens site components ../index.html ../../api/src 2>/dev/null | grep -v "kreators-life" || true)
 if [ -n "$out" ]; then echo "$out"; hits=$((hits + $(echo "$out" | wc -l | tr -d ' '))); fi
 
-echo "type: two weights, 400 and 500 as on umbrel.com (font-extrabold only on printed paper and the client's .print-doc pages; 2026-11-05)"
+echo "type: weights after umbrel.com by surface (font-extrabold only on printed paper and the client's .print-doc pages; 2026-11-05)"
 out=$(grep -rnw "font-extrabold" --include='*.tsx' --include='*.ts' screens site components lib App.tsx \
   | grep -vE "^components/(InvoiceView|ContractView|PrintSheet|PaperEdit)\.tsx:" \
   | grep -vE "^site/ClientPortal\.tsx:" || true)

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { latestExtras, latestProfile, settingsOf } from './discover';
-import { briefFor, LOCALE, gettingStarted, isAutoHandle, levelProgress, nudgeFor, parseCoachShare, periodFor, RELATIONSHIPS, type BriefLine, type DailyBrief, type HomeFloor, type HomeResponse, type HomeUpNext, type RelationshipKey } from '@kreators/shared';
+import { briefFor, formatCount, LOCALE, gettingStarted, isAutoHandle, levelProgress, nudgeFor, parseCoachShare, periodFor, RELATIONSHIPS, type BriefLine, type DailyBrief, type HomeFloor, type HomeResponse, type HomeUpNext, type RelationshipKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { can, liveUser, nameOf, nowIso, parseList, shiftDate } from '../db';
 import { resolveAccess } from '../access';
@@ -383,10 +383,10 @@ home.get('/brief', async (c) => {
       )
       .bind(`${week}T00:00:00`)
       .first<{ coach_asks: number; held: number; tickets: number; joined: number }>();
-    if (user.role === 'admin' && t?.coach_asks) team.push({ key: 'coach-asks', tone: 'neutral', text: `${t.coach_asks} ${t.coach_asks === 1 ? 'person asks' : 'people ask'} to be a life coach.`, to: '/admin?tab=coaches' });
-    if (t?.held) team.push({ key: 'held', tone: 'watch', text: `${t.held} first ${t.held === 1 ? 'post waits' : 'posts wait'} for a guide’s okay.`, to: '/community' });
-    if (can(user, 'support') && t?.tickets) team.push({ key: 'tickets', tone: 'watch', text: `${t.tickets} help ${t.tickets === 1 ? 'request is' : 'requests are'} open.`, to: '/help' });
-    if (t?.joined) team.push({ key: 'joined', tone: 'good', text: `${t.joined} people joined in the last seven days.`, to: '/manage' });
+    if (user.role === 'admin' && t?.coach_asks) team.push({ key: 'coach-asks', tone: 'neutral', text: `${formatCount(t.coach_asks)} ${t.coach_asks === 1 ? 'person asks' : 'people ask'} to be a life coach.`, to: '/admin?tab=coaches' });
+    if (t?.held) team.push({ key: 'held', tone: 'watch', text: `${formatCount(t.held)} first ${t.held === 1 ? 'post waits' : 'posts wait'} for a guide’s okay.`, to: '/community' });
+    if (can(user, 'support') && t?.tickets) team.push({ key: 'tickets', tone: 'watch', text: `${formatCount(t.tickets)} help ${t.tickets === 1 ? 'request is' : 'requests are'} open.`, to: '/help' });
+    if (t?.joined) team.push({ key: 'joined', tone: 'good', text: `${formatCount(t.joined)} people joined in the last seven days.`, to: '/manage' });
     team = team.slice(0, 3);
   }
 

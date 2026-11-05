@@ -28,7 +28,7 @@
   };
   for (const row of document.querySelectorAll('body *')) {
     if (hits.length > 40) break;
-    if (row.closest('[aria-hidden="true"], .act-scroll, .fx-marquee, .legal-doc, .print-doc, table')) continue;
+    if (row.closest('[aria-hidden="true"], .act-scroll, .legal-doc, .print-doc, table')) continue;
     const cs = getComputedStyle(row);
     if (cs.display !== 'flex' && cs.display !== 'inline-flex') continue;
     if (cs.flexWrap !== 'nowrap' || cs.flexDirection.startsWith('column')) continue;

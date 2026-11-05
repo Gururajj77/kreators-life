@@ -1,8 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { hasFinePointer, prefersReducedMotion, useRunning } from './env';
 
-type Rim = 2 | 3 | 4;
-
 /**
  * A ring of flowing chrome round one pill button or link: bright metal stripes pour round its edge, with a faint coloured sheen
  * turning the other way where they meet. Our own build from the description of a "liquid metal button"; no package, no copied code.
@@ -12,7 +10,7 @@ type Rim = 2 | 3 | 4;
  * keyboard is on the child, surges for a moment on a press, and pauses off screen and in a hidden tab (`data-run`). Reduced motion
  * shows a still ring at a fixed angle. Used only on the site's two Start free links and Welcome's start button.
  */
-export function LiquidMetal({ children, rim = 3, className = '' }: { children: ReactNode; rim?: Rim; className?: string }) {
+export function LiquidMetal({ children, className = '' }: { children: ReactNode; className?: string }) {
   const box = useRef<HTMLSpanElement>(null);
   const ring = useRef<HTMLSpanElement>(null);
   const sheen = useRef<HTMLSpanElement>(null);
@@ -98,7 +96,7 @@ export function LiquidMetal({ children, rim = 3, className = '' }: { children: R
   }, []);
 
   return (
-    <span ref={box} data-run={running} className={`fx-metal fx-metal-rim-${rim} ${className}`}>
+    <span ref={box} data-run={running} className={`fx-metal ${className}`}>
       <span className="fx-metal-clip" aria-hidden="true">
         <span ref={ring} className="fx-metal-ring" />
         <span ref={sheen} className="fx-metal-sheen" />

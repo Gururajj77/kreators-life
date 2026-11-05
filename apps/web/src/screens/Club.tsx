@@ -69,8 +69,8 @@ export function Club() {
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {CLUB_BENEFITS.map((b) => (
             <li key={b.key} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <p className="m-0 text-headline">{b.name}</p>
-              <p className="m-0 text-subhead text-ink-soft">{b.blurb}</p>
+              <p className="m-0 text-card-title">{b.name}</p>
+              <p className="text-card-note text-ink-soft">{b.blurb}</p>
             </li>
           ))}
         </ul>
@@ -83,12 +83,12 @@ export function Club() {
           </h2>
           {mine && (
             <div className="mt-sm rounded-card p-md" style={{ background: STATUS_COPY[mine.status].tint }}>
-              <p className="m-0 text-headline">{STATUS_COPY[mine.status].title}</p>
-              <p className="mt-xs m-0 text-subhead">{STATUS_COPY[mine.status].blurb}</p>
-              {mine.decisionNote && <p className="mt-xs m-0 text-subhead">Note from the reviewer: {mine.decisionNote}</p>}
-              {mine.endsAt && (mine.status === 'approved' || mine.status === 'active') && <p className="mt-xs m-0 text-subhead">Runs until {longDate(mine.endsAt)}.</p>}
+              <p className="m-0 text-card-title">{STATUS_COPY[mine.status].title}</p>
+              <p className="mt-xs m-0 text-card-note">{STATUS_COPY[mine.status].blurb}</p>
+              {mine.decisionNote && <p className="mt-xs m-0 text-card-note">Note from the reviewer: {mine.decisionNote}</p>}
+              {mine.endsAt && (mine.status === 'approved' || mine.status === 'active') && <p className="mt-xs m-0 text-card-note">Runs until {longDate(mine.endsAt)}.</p>}
               {(mine.status === 'approved' || mine.status === 'active') && (
-                <p className="mt-xs m-0 text-subhead">{mine.managerName ? `Your manager: ${mine.managerName}. Write to the team under Help to reach them.` : 'A manager on staff will be named for you soon.'}</p>
+                <p className="mt-xs m-0 text-card-note">{mine.managerName ? `Your manager: ${mine.managerName}. Write to the team under Help to reach them.` : 'A manager on staff will be named for you soon.'}</p>
               )}
             </div>
           )}
@@ -138,9 +138,9 @@ function ReviewQueue({ queue, staff, page, onChange }: { queue: Membership[]; st
           </span>
         }
       >
-        <p className="m-0 text-headline">{m.userName}</p>
+        <p className="m-0 text-card-title">{m.userName}</p>
       </CardHead>
-      <p className="m-0 text-subhead text-ink-soft">Applied {longDate(m.createdAt)}</p>
+      <p className="text-card-note text-ink-soft">Applied {longDate(m.createdAt)}</p>
       {m.note && <p className="mt-xs m-0 whitespace-pre-wrap text-subhead">{m.note}</p>}
       <label className="mt-sm block">
         <span className="block text-caption">Note to them</span>

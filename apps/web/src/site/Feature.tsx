@@ -8,13 +8,13 @@ import { Link, Navigate, useParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { publicApi } from '../lib/api';
 import { useSession } from '../lib/store';
+import { keepTail } from '../lib/textNodes';
 import { featureFor, SITE_FEATURES } from './content';
 import { ListingCard } from './ListingCard';
 import { GuideLine } from './GuideLine';
 import { useRise } from './SevenRP';
 import { SiteLayout } from './SiteLayout';
 import { AppIcon } from '../components/AppIcon';
-import { Icon } from '../components/Icon';
 import { Fold } from '../components/Fold';
 import { Books } from './Books';
 import { SiteArrow, SITE_CHIP, SITE_CHIP_BASE, SITE_LINK, SITE_PRIMARY, SITE_SECONDARY } from './buttons';
@@ -60,11 +60,13 @@ function FeaturePage() {
 
   return (
     <SiteLayout>
+      {/* The guide sits beside the words only from 1200px, where it stands in the margin; narrower, a 128px guide beside them left its
+          line a word or two wide, so it sits under them, at the right. */}
       <motion.header
         data-pillar={lead.key}
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="wash mt-lg grid gap-md rounded-card bg-card p-md shadow-toy-soft lg:grid-cols-[3fr_2fr] lg:items-center md:p-lg"
+        className="wash mt-lg grid gap-md rounded-card bg-card p-md shadow-toy-soft min-[1200px]:grid-cols-[3fr_2fr] min-[1200px]:items-center md:p-lg"
         style={{ '--wash': lead.color } as CSSProperties}
       >
         <div>
@@ -109,7 +111,13 @@ function FeaturePage() {
         </div>
         {/* The guide of the app's first pillar says what it is for, in one line: the tagline, in their voice. */}
         <GuideLine host={lead.key} side="right" mood="excited" size={128} className="justify-self-stretch">
-          {copy.tagline}
+          {/* Each part up to a comma or full stop kept whole, so a line breaks there on purpose ("Seven pillars," / "one life."). */}
+          {copy.tagline.split(/(?<=[,.]) /).map((part, i) => (
+            <span key={i}>
+              {i > 0 && ' '}
+              <span className="inline-block">{part}</span>
+            </span>
+          ))}
         </GuideLine>
       </motion.header>
 
@@ -143,7 +151,6 @@ function FeaturePage() {
                 <Link to={`/7rp?pillar=${k}`} className={`${SITE_CHIP_BASE} min-h-[48px] w-full pr-md pl-xs`}>
                   <Avatar relationship={k} size={32} decorative />
                   {r.name}
-                  <span className="text-ink-soft">pillar {r.floor}</span>
                 </Link>
               </li>
             );
@@ -163,7 +170,7 @@ function FeaturePage() {
           </div>
           {listings.data && listings.data.listings.length === 0 && (
             <p className="mt-sm m-0 rounded-tile bg-card p-md text-callout text-ink-soft shadow-toy-soft">
-              None listed at the moment. New ones appear here the moment they are published.
+              None listed right now.
             </p>
           )}
           {listings.data && listings.data.listings.length > 0 && (
@@ -194,16 +201,5 @@ function FeaturePage() {
         </section>
       )}
     </SiteLayout>
-  );
-}
-
-/** The last two words of a step stay on one line, hyphens included ("week-on-week trend."), so no step ends on a word alone. */
-function keepTail(text: string) {
-  const words = text.trim().split(/\s+/);
-  if (words.length < 3) return text;
-  return (
-    <>
-      {words.slice(0, -2).join(' ')} <span className="whitespace-nowrap">{words.slice(-2).join(' ')}</span>
-    </>
   );
 }

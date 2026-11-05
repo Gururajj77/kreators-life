@@ -1,7 +1,7 @@
 import { bountyPayout, detectPlatform, SOCIAL_PLATFORM_META, type Bounty, type BountySubmission, LOCALE, formatCount } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import { MediaSection } from '../components/MediaSection';
 import { Button } from '../components/Button';
 import { AppCover } from '../components/AppCover';
@@ -186,9 +186,9 @@ function SubmissionRow({ s, rule, reviewer, finance, onDone, showPerson }: { s: 
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
       <CardHead tag={<StatusPill status={s.status} />}>
-        <p className="m-0 text-headline">{showPerson ? s.userName : s.bountyTitle}</p>
+        <p className="m-0 text-card-title">{showPerson ? s.userName : s.bountyTitle}</p>
       </CardHead>
-      <p className="m-0 text-subhead text-ink-soft">
+      <p className="m-0 text-card-note text-ink-soft">
         {SOCIAL_PLATFORM_META[s.platform].name}, {n(s.latestViews)} views, {n(s.latestEngagement)} engagement
         {s.evidenceViews !== null ? `, ${n(s.evidenceViews)} confirmed` : ''}
         {s.status === 'paid' ? `, paid ${n(s.payoutPoints)} pts` : s.estimatedPoints > 0 ? `, about ${n(s.estimatedPoints)} pts` : ''}
@@ -196,8 +196,8 @@ function SubmissionRow({ s, rule, reviewer, finance, onDone, showPerson }: { s: 
       <a href={s.url} target="_blank" rel="noreferrer" className="mt-xs inline-flex min-h-[44px] items-center text-subhead font-semibold underline underline-offset-4">
         Open the post
       </a>
-      {s.evidenceNote && <p className="m-0 text-subhead text-ink-soft">Reviewer: {s.evidenceNote}</p>}
-      {s.disputeNote && <p className="m-0 text-subhead text-ink-soft">Dispute: {s.disputeNote}</p>}
+      {s.evidenceNote && <p className="m-0 text-card-note text-ink-soft">Reviewer: {s.evidenceNote}</p>}
+      {s.disputeNote && <p className="m-0 text-card-note text-ink-soft">Dispute: {s.disputeNote}</p>}
       {(reviewer || finance) && <ReviewBox s={s} rule={rule} reviewer={reviewer} finance={finance} onDone={onDone} />}
     </li>
   );

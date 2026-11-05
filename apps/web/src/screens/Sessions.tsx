@@ -27,8 +27,8 @@ export function Sessions() {
                 {productHasOwnCover(p.kind, p.cover) ? p.cover : <AppIcon name={PRODUCT_KIND_META[p.kind].icon} size={22} />}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-headline">{p.title}</span>
-                <span className="block text-subhead text-ink-soft">
+                <span className="block truncate text-card-title">{p.title}</span>
+                <span className="block text-card-note text-ink-soft">
                   {p.ownerName}
                   {p.kind === 'session' ? `, ${p.durationMin} min` : p.startsAt ? `, ${new Date(p.startsAt).toLocaleDateString(LOCALE, { month: 'short', day: 'numeric' })}` : ''}
                 </span>

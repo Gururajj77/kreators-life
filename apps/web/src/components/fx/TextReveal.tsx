@@ -1,8 +1,11 @@
 import { Fragment, useEffect, useState, type CSSProperties } from 'react';
 import { prefersReducedMotion } from './env';
 
-/** One stretch of the line. `em` renders it in an <em> (the quiet half of a headline), `br` ends the line. */
-export type RevealPart = { text: string; em?: boolean; br?: never } | { br: true; text?: never; em?: never };
+/**
+ * One stretch of the line. `em` renders it in an <em> (the quiet half of a headline), `br` ends the line. A `br` with a `className`
+ * (`hidden md:inline`) breaks only where that class shows it, with a space before it so the words still part where it is hidden.
+ */
+export type RevealPart = { text: string; em?: boolean; br?: never; className?: never } | { br: true; text?: never; em?: never; className?: string };
 
 /**
  * A headline whose words (or letters) rise in one after another. The text stays real text in the page for screen readers, search and
@@ -49,7 +52,7 @@ export function TextReveal({ parts, by = 'word', delay = 0, step = 55, className
     <span className={`fx-text ${className}`} data-on={on ? '' : undefined}>
       {parts.map((p, i) => {
         const gap = i > 0 && !parts[i - 1]?.br && !p.br ? ' ' : '';
-        if (p.br) return <br key={i} />;
+        if (p.br) return p.className ? <Fragment key={i}>{' '}<br className={p.className} /></Fragment> : <br key={i} />;
         return (
           <Fragment key={i}>
             {gap}

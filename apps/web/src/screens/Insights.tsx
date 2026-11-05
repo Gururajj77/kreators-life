@@ -102,8 +102,8 @@ export function Insights() {
               <ul className="m-0 flex list-none flex-col gap-xs p-0">
                 {watching.map((i) => (
                   <li key={i.id} className="rounded-tile bg-card p-sm">
-                    <p className="m-0 text-headline">{i.text}</p>
-                    {i.need && <p className="mt-xs m-0 text-subhead text-ink-soft">{i.need}</p>}
+                    <p className="m-0 text-card-title">{i.text}</p>
+                    {i.need && <p className="mt-xs m-0 text-card-note text-ink-soft">{i.need}</p>}
                   </li>
                 ))}
               </ul>

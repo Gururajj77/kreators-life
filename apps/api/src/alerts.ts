@@ -4,7 +4,7 @@
  *   - 20 or more failed sign-ins,
  *   - 100 or more answers of 429 (a limit was hit),
  *   - 20 or more server errors (5xx),
- *   - a role or permission was changed.
+ *   - a role or a permission changed.
  * Each alert is sent at most once an hour per admin: the inbox row's id carries the kind and the hour, and INSERT OR IGNORE does the rest.
  * The text holds counts only, never a person's name, address or a request.
  */
@@ -46,7 +46,7 @@ export function alertsFor(f: AlertFacts): { kind: string; title: string; body: s
   if (f.failedSignins >= ALERT_LEVELS.failedSignins) out.push({ kind: 'signins', title: 'Many failed sign-ins', body: `${f.failedSignins} failed sign-ins in the last ${mins} minutes. Someone may be guessing passwords. Open the log and look at the Auth area.` });
   if (f.tooMany >= ALERT_LEVELS.tooMany) out.push({ kind: 'limits', title: 'Many requests were slowed down', body: `${f.tooMany} requests were told to wait in the last ${mins} minutes (${f.refusals} refused in all). Something may be hammering the app.` });
   if (f.serverErrors >= ALERT_LEVELS.serverErrors) out.push({ kind: 'errors', title: 'Many server errors', body: `${f.serverErrors} server errors in the last ${mins} minutes. Open the log, filter by errors, and look for one repeated line.` });
-  if (f.roleChanges > 0) out.push({ kind: 'roles', title: 'A role or permission was changed', body: `${f.roleChanges} role or permission change${f.roleChanges === 1 ? '' : 's'} in the last ${mins} minutes. If you did not make ${f.roleChanges === 1 ? 'it' : 'them'}, open the log and the audit trail now.` });
+  if (f.roleChanges > 0) out.push({ kind: 'roles', title: 'A role or a permission changed', body: `${f.roleChanges} role or permission change${f.roleChanges === 1 ? '' : 's'} in the last ${mins} minutes. If you did not make ${f.roleChanges === 1 ? 'it' : 'them'}, open the log and the audit trail now.` });
   return out;
 }
 

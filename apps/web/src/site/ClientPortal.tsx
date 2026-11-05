@@ -39,6 +39,7 @@ import { forgetPortalSessions, forgetTeamLinkSessions, hadPortalSession, hadTeam
 import { SiteLayout } from './SiteLayout';
 import { FIELD } from '../lib/ui';
 import { ToggleChevron } from '../components/ToggleMark';
+import { tie } from '../lib/text';
 
 const COPY = {
   loading: 'Loading.',
@@ -288,10 +289,10 @@ function NextStep({ view, todo }: { view: PortalView; todo: PortalView['waitingO
       </h2>
       {first ? (
         <>
-          <p className="mt-xs m-0 text-headline">
-            <Inert text={first.title} />
+          <p className="mt-xs m-0 text-card-title">
+            <Inert text={tie(first.title)} />
           </p>
-          <p className="mt-xs m-0 text-subhead text-ink-soft">{first.line}</p>
+          <p className="mt-xs m-0 text-card-note text-ink-soft">{first.line}</p>
           {first.href && (
             <div className="mt-sm no-print">
               <ActionLink href={first.href} className={primaryLink}>
@@ -302,8 +303,8 @@ function NextStep({ view, todo }: { view: PortalView; todo: PortalView['waitingO
         </>
       ) : (
         <>
-          <p className="mt-xs m-0 text-headline">{COPY.nothingWaiting}</p>
-          <p className="mt-xs m-0 text-subhead text-ink-soft">{fill(words.next, view.agencyName)}</p>
+          <p className="mt-xs m-0 text-card-title">{COPY.nothingWaiting}</p>
+          <p className="mt-xs m-0 text-card-note text-ink-soft">{fill(words.next, view.agencyName)}</p>
         </>
       )}
       {rest.length > 0 && (
@@ -315,10 +316,10 @@ function NextStep({ view, todo }: { view: PortalView; todo: PortalView['waitingO
               // (it used to squeeze "One piece to review" into a narrow column on a phone).
               <li key={w.key} className="flex flex-wrap items-center justify-end gap-sm rounded-inner bg-paper p-sm">
                 <span className="min-w-[60%] flex-1">
-                  <span className="block text-headline">
-                    <Inert text={w.title} />
+                  <span className="block text-card-title">
+                    <Inert text={tie(w.title)} />
                   </span>
-                  <span className="block text-subhead text-ink-soft">{w.line}</span>
+                  <span className="block text-card-note text-ink-soft">{w.line}</span>
                 </span>
                 {w.href && (
                   <span className="no-print shrink-0">
@@ -485,12 +486,12 @@ function PieceSections({ view: v, doors, nothingWaiting, onDone, team = false }:
                 return (
                   <Card key={w.id}>
                     <div className="flex items-start justify-between gap-sm">
-                      <p className="m-0 min-w-0 text-headline">
-                        <Inert text={w.title} />
+                      <p className="m-0 min-w-0 text-card-title">
+                        <Inert text={tie(w.title)} />
                       </p>
                       <StatusTag tone={DELIVERABLE_STAGE_TONE.review}>{DELIVERABLE_STAGE_META.review.name}</StatusTag>
                     </div>
-                    <p className="mt-xs m-0 text-subhead text-ink-soft">{meta}</p>
+                    <p className="mt-xs m-0 text-card-note text-ink-soft">{meta}</p>
                     {safe(w.link) && (
                       <p className="mt-sm m-0 no-print">
                         <a href={w.link} target="_blank" rel="noopener noreferrer" className={linkButton}>
@@ -545,10 +546,10 @@ function PieceSections({ view: v, doors, nothingWaiting, onDone, team = false }:
                 <Card key={c.id}>
                   <div className="flex items-start justify-between gap-sm">
                     <div className="min-w-0">
-                      <p className="m-0 text-headline">
+                      <p className="m-0 text-card-title">
                         <Inert text={c.title} />
                       </p>
-                      <p className="m-0 text-subhead text-ink-soft">{[DELIVERABLE_KIND_NAME[c.kind], c.platform, c.publishDate ? `goes live ${dot(c.publishDate)}` : ''].filter(Boolean).join(', ')}</p>
+                      <p className="m-0 text-card-note text-ink-soft">{[DELIVERABLE_KIND_NAME[c.kind], c.platform, c.publishDate ? `goes live ${dot(c.publishDate)}` : ''].filter(Boolean).join(', ')}</p>
                     </div>
                     <StatusTag tone={DELIVERABLE_STAGE_TONE[c.stage]}>{DELIVERABLE_STAGE_META[c.stage].name}</StatusTag>
                   </div>
@@ -569,10 +570,10 @@ function PieceSections({ view: v, doors, nothingWaiting, onDone, team = false }:
             <ul className="mt-sm flex flex-col gap-xs p-0 m-0">
               {v.published.map((p) => (
                 <Card key={p.id}>
-                  <p className="m-0 text-headline">
+                  <p className="m-0 text-card-title">
                     <Inert text={p.title} />
                   </p>
-                  <p className="m-0 text-subhead text-ink-soft">{[DELIVERABLE_KIND_NAME[p.kind], p.platform, p.publishedAt ? dot(p.publishedAt) : ''].filter(Boolean).join(', ')}</p>
+                  <p className="m-0 text-card-note text-ink-soft">{[DELIVERABLE_KIND_NAME[p.kind], p.platform, p.publishedAt ? dot(p.publishedAt) : ''].filter(Boolean).join(', ')}</p>
                   {safe(p.link) && (
                     <p className="mt-sm m-0 no-print">
                       <a href={p.link} target="_blank" rel="noopener noreferrer" className={linkButton}>
@@ -792,10 +793,10 @@ export function ClientPortal() {
                         <div className="flex flex-wrap items-center justify-between gap-sm">
                           <Link to={d.href} className="flex min-h-[44px] min-w-0 flex-[1_1_220px] items-center gap-xs text-ink">
                             <span className="min-w-0">
-                              <span className="block text-headline">
-                                <Inert text={d.title} />
+                              <span className={`block ${d.line !== d.title ? 'text-card-title' : 'text-headline'}`}>
+                                <Inert text={tie(d.title)} />
                               </span>
-                              {d.line !== d.title && <span className="block text-subhead text-ink-soft">{d.line}</span>}
+                              {d.line !== d.title && <span className="block text-card-note text-ink-soft">{d.line}</span>}
                             </span>
                           </Link>
                           <span className="flex shrink-0 items-center gap-xs">

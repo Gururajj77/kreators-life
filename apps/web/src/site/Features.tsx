@@ -1,4 +1,4 @@
-import { BOOK_AUTHOR, BOOKS, BUMLING, inGroupOrder, MODULE_GROUP_ACCENT, MODULE_GROUPS, type ModuleGroup } from '@kreators/shared';
+import { BOOK_AUTHOR, BUMLING, inGroupOrder, MODULE_GROUP_ACCENT, MODULE_GROUPS, type ModuleGroup } from '@kreators/shared';
 import { Link } from 'react-router';
 import { FEATURES, SITE_FEATURES } from './content';
 import { FractalGlass } from '../components/fx/FractalGlass';
@@ -35,22 +35,23 @@ export function Features() {
   const groups: ModuleGroup[] = inGroupOrder(['earn', 'wellbeing', 'community', 'creator', 'core']);
   return (
     <SiteLayout>
-      <header className="pt-lg md:pt-xl">
-        <p className="m-0 type-eyebrow text-ink-mute">Features</p>
-        <h1 className="type-hook mt-sm text-display-1">Everything a creator needs, <em>one switch at a time</em></h1>
-        {/* The problem and the fix in four short lines, one sentence each (copy brief: a lead in four short paragraphs). */}
-        <div className="type-measure mt-md grid gap-xs text-lede text-ink-soft">
-          <p className="type-context m-0">Courses in one app, gigs in another, money in a sheet.</p>
-          <p className="type-context m-0">It adds up to ten logins and no plan.</p>
-          <p className="type-context m-0">Here every app is a switch in one place, so you keep only what you use.</p>
+      {/* One composition: the words as one block on the left (the hook and one line), and from the laptop width Bumling beside it, the
+          blob's foot level with the last line of the lede (the founder, 2026-11-05: bottom-aligned, not centred), so the right side carries
+          weight and nothing floats on its own. A phone stacks. Less text (the founder, 2026-11-05): the problem and the answer in one line,
+          and Bumling's line says the chat switches apps on. */}
+      <header className="grid gap-md pt-lg md:pt-xl lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-end lg:gap-lg">
+        <div>
+          <p className="m-0 type-eyebrow text-ink-mute">Features</p>
+          <h1 className="type-hook mt-sm text-display-1">Everything a creator needs, <em>one switch at a time</em></h1>
+          {/* Two sentences, each kept whole: where they wrap, the break falls after the full stop. */}
+          <p className="type-context type-measure mt-md m-0 text-lede text-ink-soft">
+            <span className="inline-block">Courses, gigs and money in one place.</span> <span className="inline-block">Keep only the apps you use.</span>
+          </p>
         </div>
-        <div className="mt-md grid gap-md lg:grid-cols-[3fr_2fr] lg:items-center">
-          <p className="type-measure m-0 text-callout text-ink-soft">A short chat switches on the ones that fit you. Tap any app to see how it works.</p>
-          {/* Bumling, the app's own guide, keeps the header from sitting all on the left. */}
-          <GuideLine host={BUMLING.key} side="right" mood="excited" size={96}>
-            Tell me what you want, and I’ll switch on just those apps.
-          </GuideLine>
-        </div>
+        {/* Bumling, the app's own guide, keeps the header from sitting all on the left. */}
+        <GuideLine host={BUMLING.key} side="right" mood="excited" size={96} hang className="justify-self-stretch">
+          Tell me what you want, and I’ll switch on just those apps.
+        </GuideLine>
       </header>
       {groups.map((g) => {
         const list = SITE_FEATURES.filter((m) => m.group === g);
@@ -73,8 +74,8 @@ export function Features() {
                         </span>
                       }
                     >
-                      <span className="block text-headline">{m.name}</span>
-                      <span className="mt-xs block text-balance text-subhead text-ink-soft">{FEATURES[m.key]?.tagline ?? m.blurb}</span>
+                      <span className="block text-card-title">{m.name}</span>
+                      <span className="mt-xs block text-balance text-card-note text-ink-soft">{FEATURES[m.key]?.tagline ?? m.blurb}</span>
                     </CardHead>
                     <span className="mt-auto flex justify-end pt-xs text-ink-mute" aria-hidden="true">
                       <Icon icon={ArrowUpRight} size={18} className="read-arrow" />
@@ -101,12 +102,12 @@ export function Features() {
         <BookShelf className="mt-md" href={(b) => `/features/books#${b.slug}`} />
       </section>
       <section className="mt-2xl">
-        {/* Fractal glass (FractalGlass): deep navy in both themes, the glow rising from the right through narrow ribs; the words and Start free sit on its dark left. */}
+        {/* Fractal glass (FractalGlass) in teal, its own colour (the home's is navy, /7rp's wine): deep in both themes, the glow rising
+            from the right through narrow ribs; the words and Start free sit on its dark left. */}
         <div className="fx-fglass-host relative overflow-hidden rounded-card p-lg pb-xl text-on-fill shadow-toy-soft">
-          <FractalGlass />
+          <FractalGlass hue="teal" />
           <div className="relative z-10">
             <h2 className="type-hook text-display-2">Switch on only <em>what you need</em></h2>
-            <p className="type-context mt-sm m-0 text-lede text-on-fill/85">Answer a few questions and we switch on the apps that fit you. Change them any time, free.</p>
             <Link to={entry === '/home' ? '/home' : '/start'} className={`${SITE_PRIMARY_ON_GLASS} mt-md`}>
               {entry === '/home' ? 'Go to app' : 'Start free'}
             </Link>

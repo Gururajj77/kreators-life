@@ -1,7 +1,7 @@
 import { EVENT_TYPE_META, EVENT_TYPES, type DiscountCheck, type EventRegistration, type EventType, type PartyEvent, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 import { MediaSection } from '../components/MediaSection';
 import { EventPanel } from '../components/EventPanel';
 import { Button } from '../components/Button';
@@ -389,8 +389,8 @@ export function EventPage() {
       {/* The day at the top left with the price in the corner, where, the seats as tags under it, then the words. */}
       <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-label="Details">
         <CardHead tag={e.pricePoints > 0 ? <FactTag kind="price">{`${e.pricePoints} points a ticket`}</FactTag> : <FactTag kind="free">Free</FactTag>}>
-          <p className="m-0 text-headline">{when(e.startsAt)}</p>
-          <p className="m-0 text-subhead text-ink-soft">
+          <p className="m-0 text-card-title">{when(e.startsAt)}</p>
+          <p className="m-0 text-card-note text-ink-soft">
             Until {when(e.endsAt)} ({e.timezone})
           </p>
         </CardHead>
@@ -438,7 +438,7 @@ export function EventPage() {
             <div className="mt-sm flex flex-col gap-sm rounded-card bg-card p-md shadow-toy-soft">
               <label className="flex min-h-[44px] cursor-pointer items-center gap-sm text-subhead font-semibold">
                 <input type="checkbox" checked={networking} onChange={(ev) => setNetworking(ev.target.checked)} className="size-[20px] accent-ink" />
-                Happy to be introduced to other guests
+                <span>Introduce me to other guests</span>
               </label>
               {e.pricePoints > 0 && <DiscountField area="event" itemId={id} value={discount?.code ?? ''} check={discount} onChange={(_c, check) => setDiscount(check)} />}
               <ErrorLine e={rsvp.isError ? rsvp.error : null} />
@@ -448,8 +448,8 @@ export function EventPage() {
             </div>
           ) : (
             <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
-              <p className="m-0 text-headline">{mine.status === 'waitlisted' ? 'You are on the waitlist.' : 'You are registered.'}</p>
-              <p className="mt-xs m-0 text-subhead text-ink-soft">{mine.networkingOptIn ? 'Open to introductions at this event.' : 'Not open to introductions at this event.'}</p>
+              <p className="m-0 text-card-title">{mine.status === 'waitlisted' ? 'You are on the waitlist.' : 'You are registered.'}</p>
+              <p className="mt-xs m-0 text-card-note text-ink-soft">{mine.networkingOptIn ? 'Open to introductions at this event.' : 'Not open to introductions at this event.'}</p>
               <ErrorLine e={cancel.isError ? cancel.error : null} />
               <Button variant="outline" className="mt-sm" onClick={() => cancel.mutate()} disabled={cancel.isPending}>
                 Cancel my RSVP
@@ -547,8 +547,8 @@ export function EventPage() {
             {d.registrations.map((r) => (
               <li key={r.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                 <span className="min-w-0 flex-1">
-                  <span className="block text-headline">{r.name}</span>
-                  <span className="block text-subhead text-ink-soft">
+                  <span className="block text-card-title">{r.name}</span>
+                  <span className="block text-card-note text-ink-soft">
                     {r.status}
                     {r.networkingOptIn ? ', open to intros' : ''}
                     {r.checkedInAt ? `, checked in ${new Date(r.checkedInAt).toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' })}` : ''}

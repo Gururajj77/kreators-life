@@ -138,10 +138,10 @@ export function Circles() {
                     ))}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-balance text-headline [overflow-wrap:anywhere]">
+                    <span className="block text-balance text-card-title [overflow-wrap:anywhere]">
                       {g.eventTitle}, {g.name}
                     </span>
-                    <span className="block text-subhead text-ink-soft">
+                    <span className="block text-card-note text-ink-soft">
                       {when(g.startsAt)}, {g.members.length} people. {g.chatOpen ? 'Chat is open.' : `Chat opens ${when(g.chatOpensAt)}.`}
                     </span>
                   </span>
@@ -207,10 +207,10 @@ function JoinSheet({ event, onClose, busy, error, onJoin }: { event: CircleEvent
                   {on && <Icon icon={Check} size={18} strokeWidth={3.5} color={k === 'single' ? 'var(--color-on-ink)' : 'var(--color-ink-fixed)'} />}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-headline">
+                  <span className="block text-row-title">
                     {m.name}, wear {m.wear}
                   </span>
-                  <span className="block text-subhead text-ink-soft">{m.blurb}</span>
+                  <span className="block text-card-note text-ink-soft">{m.blurb}</span>
                 </span>
               </label>
             </li>
@@ -236,8 +236,8 @@ function HostCard({ e, busy, onMatch, onCode }: { e: CircleEvent; busy: boolean;
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="flex items-start justify-between gap-sm">
         <div className="min-w-0">
-          <p className="m-0 text-headline">{e.title}</p>
-          <p className="m-0 text-subhead text-ink-soft">
+          <p className="m-0 text-card-title">{e.title}</p>
+          <p className="m-0 text-card-note text-ink-soft">
             {when(e.startsAt)}, {[e.area, e.city].filter(Boolean).join(', ')}. {e.signups} signed up{seated !== undefined ? `, ${seated} seated` : ''}.
           </p>
           {e.repeat === 'weekly' && <p className="m-0 text-caption text-ink-mute">{weekly(e.startsAt)}</p>}
@@ -264,12 +264,18 @@ function EventCard({ e, ready, busy, onJoin, onLeave }: { e: CircleEvent; ready:
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="flex items-start justify-between gap-sm">
         <div className="min-w-0">
-          <p className="m-0 text-headline">{e.title}</p>
-          <p className="m-0 text-subhead text-ink-soft">
-            {when(e.startsAt)}, {[e.area, e.city].filter(Boolean).join(', ')}. Tables of {e.groupSize}. {e.signups} signed up.
+          <p className="m-0 text-card-title">{e.title}</p>
+          <p className="m-0 text-card-note text-ink-soft">
+            {/* When and where, then the tables: two parts kept whole, so the line breaks at the full stop. */}
+            <span className="inline-block">
+              {when(e.startsAt)}, {[e.area, e.city].filter(Boolean).join(', ')}.
+            </span>{' '}
+            <span className="inline-block">
+              Tables of {e.groupSize}. {e.signups} signed up.
+            </span>
           </p>
           {e.repeat === 'weekly' && <p className="m-0 text-caption text-ink-mute">{weekly(e.startsAt)}. The next one opens once this week&rsquo;s tables are set.</p>}
-          {e.venueHint && <p className="m-0 text-subhead text-ink-soft">{e.venueHint}</p>}
+          {e.venueHint && <p className="m-0 text-card-note text-ink-soft">{e.venueHint}</p>}
           {e.attendeeXp ? <p className="m-0 mt-xs text-caption text-ink-soft">+{e.attendeeXp} xp for the people seated, with the code at the meetup</p> : null}
         </div>
         <StatusTag tone={e.status === 'matched' ? 'good' : open ? 'warn' : 'neutral'}>{e.status === 'matched' ? 'tables set' : open ? `closes in ${countdown(new Date(closes).toISOString(), now)}` : 'closed'}</StatusTag>
@@ -467,11 +473,11 @@ export function CircleGroup() {
             <li key={m.alias} data-pillar={m.character} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
               <Avatar relationship={m.character} size={40} decorative still />
               <span className="min-w-0 flex-1">
-                <span className="block text-headline">
+                <span className="block text-card-title">
                   {m.alias}
                   {m.isMe ? ' (you)' : ''}
                 </span>
-                <span className="block text-balance text-subhead text-ink-soft">{m.interests.join(', ') || 'interests hidden'}</span>
+                <span className="block text-balance text-card-note text-ink-soft">{m.interests.join(', ') || 'interests hidden'}</span>
               </span>
               {!m.isMe && (
                 <button type="button" onClick={() => chat.mutate(m.alias)} disabled={chat.isPending} className="toy toy-soft inline-flex min-h-[44px] shrink-0 items-center rounded-pill bg-paper px-sm text-subhead font-medium">

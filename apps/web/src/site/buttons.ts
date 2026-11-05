@@ -6,7 +6,8 @@ import { Icon } from '../components/Icon';
  * The public site's buttons: three looks, one job each, the same on every page (the 2026-11-04 founder rule).
  *
  * 1. `SITE_PRIMARY`: the one main action of a page or a band (Start free, Go to app, Open an app for someone signed in). Solid ink.
- *    Only the home page's hero and its last call to action wrap it in `LiquidMetal`. On an ink band it flips (`SITE_PRIMARY_ON_INK`).
+ *    Only the home page's hero wraps it in `LiquidMetal`; the last call to action, on the fractal glass, wraps `SITE_PRIMARY_ON_GLASS`
+ *    in it instead. On an ink band it flips (`SITE_PRIMARY_ON_INK`).
  * 2. `SITE_SECONDARY`: every other action button, one look everywhere: no fill, a visible hairline edge, semibold words, and
  *    `SiteArrow` after the words when it goes to another page. It lifts on hover (`toy`). It is never a filled surface, so it can never be
  *    mistaken for a guide's speech bubble (`GuideLine`: a soft tint with a tail, no edge, no lift). `SITE_CHIP` is its small size,

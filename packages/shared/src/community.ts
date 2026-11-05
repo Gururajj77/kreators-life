@@ -484,6 +484,11 @@ export const communityRankOf = (u: { role: Role; permissions: readonly string[] 
   u.role === 'admin' ? 'admin' : u.role === 'sub_admin' ? 'staff' : u.permissions.includes('moderation') ? 'guide' : 'member';
 /** Muting someone from Community: a guide or above, and only someone of a lower rank. */
 export const canMute = (actor: CommunityRank, target: CommunityRank): boolean => COMMUNITY_RANKS[actor] >= COMMUNITY_RANKS.guide && COMMUNITY_RANKS[actor] > COMMUNITY_RANKS[target];
+/** Hiding a post or a reply, or taking down a channel line, that someone else wrote: the same ladder as muting (the founder, 2026-11-05),
+ * so a guide acts only on members, staff on guides and members, an admin on everyone but another admin. */
+export const canModerate = (actor: CommunityRank, target: CommunityRank): boolean => canMute(actor, target);
+/** Undoing what a moderator did (unhiding, unpinning, lifting a mute): the same rank as theirs or a higher one. */
+export const canUndo = (actor: CommunityRank, by: CommunityRank): boolean => COMMUNITY_RANKS[actor] >= COMMUNITY_RANKS.guide && COMMUNITY_RANKS[actor] >= COMMUNITY_RANKS[by];
 
 export interface BlockedPerson {
   userId: string;

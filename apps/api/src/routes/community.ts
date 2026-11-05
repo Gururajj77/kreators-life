@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono';
-import { canMute, communityRankOf, FEED_FILTERS, MAX_REPLY_DEPTH, threadOrder, FEED_SORTS, isReaction, MAX_PINNED, mentionsIn, POST_CATEGORIES, type CommunityPost, type CommunityReply, type FeedFilter, type FeedSort, type ReactionCounts, type ReactionKind } from '@kreators/shared';
+import { canModerate, canMute, canUndo, communityRankOf, FEED_FILTERS, MAX_REPLY_DEPTH, threadOrder, FEED_SORTS, isReaction, MAX_PINNED, mentionsIn, POST_CATEGORIES, type CommunityPost, type CommunityRank, type CommunityReply, type FeedFilter, type FeedSort, type ReactionCounts, type ReactionKind } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
 import { anonAlias, audit, isGuide, isStaff, nameOf, newId, notify, notifyMany, nowIso, oneOf, parseList, rankOf, pageOf, paged } from '../db';
 import { rewardSocial } from '../rewards';
@@ -437,7 +437,7 @@ community.delete('/members/:userId/mute', async (c) => {
   const row = await db.prepare('SELECT muter_rank FROM community_mutes WHERE user_id = ?').bind(c.req.param('userId')).first<{ muter_rank: 'member' | 'guide' | 'staff' | 'admin' }>();
   if (!row) return c.json({ ok: true });
   // Whoever lifts it must outrank, or equal, whoever set it, and hold the power at all.
-  if (!canMute(rankOf(me), 'member') || (({ member: 0, guide: 1, staff: 2, admin: 3 })[rankOf(me)] < ({ member: 0, guide: 1, staff: 2, admin: 3 })[row.muter_rank])) return c.json({ error: 'only the rank that muted them, or a higher one, can lift it' }, 403);
+  if (!canUndo(rankOf(me), row.muter_rank)) return c.json({ error: 'only the rank that muted them, or a higher one, can lift it' }, 403);
   await db.prepare('DELETE FROM community_mutes WHERE user_id = ?').bind(c.req.param('userId')).run();
   await audit(c.env.DB, me.id, 'community.unmute', 'user', c.req.param('userId'));
   return c.json({ ok: true });
@@ -452,13 +452,25 @@ moderate.use('*', async (c, next) => {
   await next();
 });
 
+// The rank of the person who wrote something, or who hid or pinned it: the one ladder (`canModerate`, `canUndo` in shared).
+const rankOfId = async (db: D1Database, id: string | null): Promise<CommunityRank> => {
+  if (!id) return 'member';
+  const u = await db.prepare('SELECT role, permissions FROM users WHERE id = ?').bind(id).first<Pick<UserRow, 'role' | 'permissions'>>();
+  return u ? rankOf(u) : 'member';
+};
+// One answer whatever the reason, so a refusal never says that an anonymous writer is a guide, staff or an admin.
+const OUTRANKED = { error: 'You cannot change this one. Report it and the team will look.' };
+
 moderate.post('/posts/:id', async (c) => {
   const db = c.env.DB;
   const mod = c.get('user');
   const body = await c.req.json<{ hidden?: boolean; reason?: string }>().catch(() => ({}) as { hidden?: boolean; reason?: string });
-  const post = await db.prepare('SELECT id, user_id FROM community_posts WHERE id = ?').bind(c.req.param('id')).first<{ id: string; user_id: string }>();
+  const post = await db.prepare('SELECT id, user_id, hidden_by FROM community_posts WHERE id = ?').bind(c.req.param('id')).first<{ id: string; user_id: string; hidden_by: string | null }>();
   if (!post) return c.json({ error: 'not found' }, 404);
   const hide = body.hidden !== false;
+  const me = rankOf(mod);
+  if (!canModerate(me, await rankOfId(db, post.user_id))) return c.json(OUTRANKED, 403);
+  if (!hide && post.hidden_by && !canUndo(me, await rankOfId(db, post.hidden_by))) return c.json(OUTRANKED, 403);
   await db.prepare('UPDATE community_posts SET hidden_at = ?, hidden_by = ? WHERE id = ?').bind(hide ? nowIso() : null, hide ? mod.id : null, post.id).run();
   if (hide) await notify(db, post.user_id, 'moderation', 'A post of yours was hidden', typeof body.reason === 'string' ? body.reason.slice(0, 200) : 'A guide hid it from the community.', null);
   const row = await db.prepare(`${POST_SELECT} WHERE p.id = ?2`).bind(mod.id, post.id).first<PostRow>();
@@ -466,8 +478,12 @@ moderate.post('/posts/:id', async (c) => {
 });
 
 moderate.post('/replies/:id', async (c) => {
+  const db = c.env.DB;
   const body = await c.req.json<{ hidden?: boolean }>().catch(() => ({}) as { hidden?: boolean });
-  await c.env.DB.prepare('UPDATE community_replies SET hidden_at = ? WHERE id = ?').bind(body.hidden === false ? null : nowIso(), c.req.param('id')).run();
+  const reply = await db.prepare('SELECT id, user_id FROM community_replies WHERE id = ?').bind(c.req.param('id')).first<{ id: string; user_id: string }>();
+  if (!reply) return c.json({ error: 'not found' }, 404);
+  if (!canModerate(rankOf(c.get('user')), await rankOfId(db, reply.user_id))) return c.json(OUTRANKED, 403);
+  await db.prepare('UPDATE community_replies SET hidden_at = ? WHERE id = ?').bind(body.hidden === false ? null : nowIso(), reply.id).run();
   return c.json({ ok: true });
 });
 
@@ -475,10 +491,12 @@ moderate.post('/replies/:id', async (c) => {
 moderate.post('/posts/:id/pin', async (c) => {
   const db = c.env.DB;
   const mod = c.get('user');
-  const post = await db.prepare('SELECT id, category, product_id, pinned_at FROM community_posts WHERE id = ? AND hidden_at IS NULL AND held_at IS NULL').bind(c.req.param('id')).first<{ id: string; category: string; product_id: string | null; pinned_at: string | null }>();
+  const post = await db.prepare('SELECT id, category, product_id, pinned_at, pinned_by FROM community_posts WHERE id = ? AND hidden_at IS NULL AND held_at IS NULL').bind(c.req.param('id')).first<{ id: string; category: string; product_id: string | null; pinned_at: string | null; pinned_by: string | null }>();
   if (!post) return c.json({ error: 'not found' }, 404);
   const body = await c.req.json<{ pinned?: boolean }>().catch(() => ({}) as { pinned?: boolean });
   const pin = body.pinned !== false;
+  // Anyone's post can be pinned; a pin comes off only by the rank that put it there or a higher one.
+  if (!pin && post.pinned_by && !canUndo(rankOf(mod), await rankOfId(db, post.pinned_by))) return c.json(OUTRANKED, 403);
   if (pin && !post.pinned_at) {
     const n = await db.prepare('SELECT COUNT(*) AS n FROM community_posts WHERE category = ? AND product_id IS ? AND pinned_at IS NOT NULL AND hidden_at IS NULL').bind(post.category, post.product_id).first<{ n: number }>();
     if ((n?.n ?? 0) >= MAX_PINNED) return c.json({ error: `${post.category} already has ${MAX_PINNED} pinned posts. Unpin one first.` }, 409);
@@ -518,6 +536,9 @@ moderate.put('/settings', async (c) => {
   const mod = c.get('user');
   const body = await c.req.json<{ holdFirstPosts?: unknown }>().catch(() => ({}) as { holdFirstPosts?: unknown });
   if (typeof body.holdFirstPosts !== 'boolean') return c.json({ error: 'say holdFirstPosts: true or false' }, 400);
+  // A guide does not undo what staff or an admin set.
+  const last = await db.prepare("SELECT updated_by FROM community_settings WHERE key = 'hold_first_posts'").first<{ updated_by: string | null }>();
+  if (last?.updated_by && !canUndo(rankOf(mod), await rankOfId(db, last.updated_by))) return c.json({ error: 'Staff set this. Ask them to change it.' }, 403);
   await db
     .prepare("INSERT INTO community_settings (key, value, updated_by, updated_at) VALUES ('hold_first_posts', ?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at")
     .bind(body.holdFirstPosts ? '1' : '0', mod.id, nowIso())

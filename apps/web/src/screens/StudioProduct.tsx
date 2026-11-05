@@ -4,6 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { Button } from '../components/Button';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 import { MoreMenu, type MoreMenuItem } from '../components/MoreMenu';
 import { Fold } from '../components/Fold';
 import { MediaSection, useMediaMenuItem } from '../components/MediaSection';
@@ -36,26 +37,6 @@ type FaqRow = ProductFaq & { key: string };
 type IntakeRow = { key: string; text: string };
 type QuizRow = QuizQuestion & { key: string; optKeys: string[] };
 const quizRow = (qn: QuizQuestion): QuizRow => ({ ...qn, key: rowKey(), optKeys: qn.options.map(() => rowKey()) });
-
-/** Asks before a delete, the Mindful session pattern: a red "Yes, delete it" and a quiet "Keep it". */
-function ConfirmDelete({ open, title, body, pending, failed, onYes, onClose }: { open: boolean; title: string; body: string; pending: boolean; failed: boolean; onYes: () => void; onClose: () => void }) {
-  return (
-    <Sheet open={open} onClose={onClose} title={title}>
-      <div className="grid gap-md pb-xl">
-        <p className="m-0 text-callout text-ink-soft">{body}</p>
-        {failed && <p role="alert" className="m-0 text-subhead text-r1">That did not work. Try again.</p>}
-        <div className="flex flex-wrap gap-xs">
-          <button type="button" disabled={pending} onClick={onYes} className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-headline text-r1 hover:bg-r1/10 disabled:opacity-50">
-            Yes, delete it
-          </button>
-          <Button variant="outline" onClick={onClose}>
-            Keep it
-          </Button>
-        </div>
-      </div>
-    </Sheet>
-  );
-}
 
 export function StudioProduct() {
   const { id = '' } = useParams();
@@ -269,7 +250,7 @@ export function StudioProduct() {
               <input type="number" min={0} value={minXp} onChange={(e) => setMinXp(e.target.value)} className={FIELD} />
             </label>
             <label className="block">
-              <span className="block text-subhead font-semibold">Points balance of at least</span>
+              <span className="block text-subhead font-semibold">Points of at least</span>
               <input type="number" min={0} value={minPoints} onChange={(e) => setMinPoints(e.target.value)} className={FIELD} />
             </label>
             <label className="block">
@@ -482,8 +463,8 @@ export function StudioProduct() {
                     {i + 1}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-headline">{l.title}</span>
-                    <span className="block text-subhead text-ink-soft">
+                    <span className="block truncate text-card-title">{l.title}</span>
+                    <span className="block text-card-note text-ink-soft">
                       {l.dripDays > 0 ? `Unlocks ${l.dripDays} days after enrolling` : 'Available at once'}
                       {l.quiz.length > 0 ? `, quiz of ${l.quiz.length}${l.passScore > 0 ? `, pass at ${l.passScore}%` : ''}` : ''}
                     </span>
@@ -646,10 +627,10 @@ function DraftSheet({ productId, title, open, onClose, onSaved }: { productId: s
             <ol className="m-0 flex list-none flex-col gap-xs p-0">
               {draft.lessons.map((l, i) => (
                 <li key={i} className="rounded-tile bg-paper p-sm">
-                  <p className="m-0 text-headline">
+                  <p className="m-0 text-card-title">
                     {i + 1}. {l.title}
                   </p>
-                  <p className="mt-xs m-0 text-subhead text-ink-soft">
+                  <p className="mt-xs m-0 text-card-note text-ink-soft">
                     {l.body ? `${l.body.slice(0, 140)}${l.body.length > 140 ? '…' : ''}` : 'No text yet.'}
                     {l.quiz.length > 0 ? ` Quiz of ${l.quiz.length}.` : ''}
                   </p>

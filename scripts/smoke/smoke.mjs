@@ -1667,6 +1667,30 @@ section('Attendee codes');
 
   // Anonymous posts and threaded replies, in Community and inside an event.
   for (const t of [H, G, O]) await api('PATCH', '/me/modules', { key: 'community', on: true }, t.token);
+
+  // A creator who holds Moderation is a guide: they reach the guide's tools, and the rank ladder holds (canModerate, canUndo).
+  await api('PATCH', '/me/modules', { key: 'community', on: true }, A.token);
+  await admin('POST', `/admin/users/${H.user.id}/role`, { role: 'creator' });
+  await admin('POST', `/admin/users/${H.user.id}/permissions`, { permissions: ['moderation'] });
+  const memberPost = await api('POST', '/community', { category: 'Stories', body: `Guide check ${stamp}` }, O.token);
+  const adminPost = await api('POST', '/community', { category: 'Stories', body: `Admin check ${stamp}` }, A.token);
+  const guideHide = await api('POST', `/manage/community/posts/${memberPost.json.post?.id}`, { hidden: true }, H.token);
+  check('a creator guide hides a member post', guideHide.status === 200, guideHide.status);
+  check('a creator guide unhides what they hid', (await api('POST', `/manage/community/posts/${memberPost.json.post?.id}`, { hidden: false }, H.token)).status === 200, '');
+  const guideOnAdmin = await api('POST', `/manage/community/posts/${adminPost.json.post?.id}`, { hidden: true }, H.token);
+  check('a guide cannot hide an admin post', guideOnAdmin.status === 403, guideOnAdmin.status);
+  await api('POST', `/manage/community/posts/${memberPost.json.post?.id}`, { hidden: true }, A.token);
+  const guideUndo = await api('POST', `/manage/community/posts/${memberPost.json.post?.id}`, { hidden: false }, H.token);
+  check('a guide cannot undo what an admin hid', guideUndo.status === 403, guideUndo.status);
+  check('the admin can', (await api('POST', `/manage/community/posts/${memberPost.json.post?.id}`, { hidden: false }, A.token)).status === 200, '');
+  const guideQueue = await api('GET', '/manage/community/held', undefined, H.token);
+  check('a creator guide reads the held first posts', guideQueue.status === 200, guideQueue.status);
+  const guideOverview = await api('GET', '/manage/overview', undefined, H.token);
+  check('a guide still cannot open the staff tools', guideOverview.status === 403, guideOverview.status);
+  await api('DELETE', `/community/${memberPost.json.post?.id}`, undefined, O.token);
+  await api('DELETE', `/community/${adminPost.json.post?.id}`, undefined, A.token);
+  await admin('POST', `/admin/users/${H.user.id}/permissions`, { permissions: [] });
+  await admin('POST', `/admin/users/${H.user.id}/role`, { role: 'user' });
   const anon = await api('POST', '/community', { category: 'Stories', body: `Anon post ${stamp}`, anonymous: true }, G.token);
   check('a member posts anonymously and still sees it is theirs', anon.status === 201 && anon.json.post?.anonymous === true && anon.json.post?.mine === true, anon.json.post);
   const feedH = await api('GET', '/community?size=50', undefined, H.token);
@@ -3040,7 +3064,7 @@ section('Security: headers, origin, exposed files, errors, addresses, alerts');
   check('an alert holds counts only, no name, address or request', loud.every((a) => !/@|Bearer|\d+\.\d+\.\d+\.\d+/.test(a.body)));
   // A role change is in the audit trail by now (the Admin section changed roles in the last minutes), so the cron tells the admins once.
   // The founder's inbox is shared by every run on this database, so count only what these two cron runs add.
-  const roleNotesNow = async () => ((await api('GET', '/inbox?tab=team', undefined, A.token)).json.notifications ?? []).filter((n) => n.title === 'A role or permission was changed').length;
+  const roleNotesNow = async () => ((await api('GET', '/inbox?tab=team', undefined, A.token)).json.notifications ?? []).filter((n) => n.title === 'A role or a permission changed').length;
   const roleBefore = await roleNotesNow();
   await fetch(`${ORIGIN}/__scheduled?cron=*%2F15+*+*+*+*`);
   await fetch(`${ORIGIN}/__scheduled?cron=*%2F15+*+*+*+*`);

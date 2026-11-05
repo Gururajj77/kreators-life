@@ -1,5 +1,6 @@
 import { Hono, type Context } from 'hono';
 import {
+  canModerate,
   CHANNEL_LINES,
   channelCursor,
   channelMessageProblem,
@@ -465,6 +466,11 @@ function channelRouter(scope: ChannelScope) {
     const mine = line.user_id === user.id;
     const mod = manages(row, user);
     if (!mine && !mod) return c.json({ error: 'Only its writer or a moderator can take a line down.' }, 403);
+    // In Community the rank ladder holds (`canModerate`): a guide never takes down a line by staff or an admin. A Bond channel is its owner's.
+    if (!mine && scope === 'community') {
+      const writer = await db.prepare('SELECT role, permissions FROM users WHERE id = ?').bind(line.user_id).first<Pick<UserRow, 'role' | 'permissions'>>();
+      if (writer && !canModerate(rankOf(user), rankOf(writer))) return c.json({ error: 'You cannot take this line down. Report it and the team will look.' }, 403);
+    }
     await db.prepare("UPDATE channel_messages SET body = '', deleted_at = ?, deleted_by = ? WHERE id = ? AND deleted_at IS NULL").bind(nowIso(), user.id, line.id).run();
     if (!mine) {
       await audit(db, user.id, 'channel.line.delete', 'channel_message', line.id, '', { channel: row.id, scope });

@@ -136,8 +136,8 @@ function MatchList({ answers, available, onSend }: { answers: SetupAnswers; avai
         >
           <AppIcon name={mod.icon} size={22} className="text-ink-soft" />
           <span className="min-w-0 flex-1">
-            <span className="block text-headline">{mod.name}</span>
-            <span className="block text-subhead text-ink-soft">{SETUP_APP_LINES[a.key] ?? mod.blurb}</span>
+            <span className="block text-row-title">{mod.name}</span>
+            <span className="block text-card-note text-ink-soft">{SETUP_APP_LINES[a.key] ?? mod.blurb}</span>
             {why && (
               <span className="mt-xs block text-caption" style={{ color: `var(--deep-${MODULE_GROUP_ACCENT[mod.group]})` }}>
                 {a.why}

@@ -111,10 +111,10 @@ export function Sleep() {
           {logs.data?.logs.map((l) => (
             <li key={l.id} className={`flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft`}>
               <span className="min-w-0 flex-1">
-                <span className="block text-headline">
+                <span className="block text-card-title">
                   {l.value} hours, {QUALITY[Number(l.extra.quality ?? 3) - 1]?.toLowerCase()}
                 </span>
-                <span className="block text-subhead text-ink-soft">{new Date(`${l.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                <span className="block text-card-note text-ink-soft">{new Date(`${l.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
               </span>
               <button
                 type="button"

@@ -6,6 +6,7 @@ import { useAuthed } from '../lib/queries';
 import { chip } from './Chat';
 import { CheckRow } from './CheckRow';
 import { Icon } from './Icon';
+import { Skeleton } from './Skeleton';
 import { Compass } from 'lucide-react';
 
 
@@ -21,6 +22,15 @@ export function RoutineSection({ date }: { date: string }) {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['session'] }),
   });
   const d = q.data;
+  // While /session loads, a title and a row of the no-routine card's size keep the place, so the small act below does not move.
+  if (q.isPending) {
+    return (
+      <div className="mt-lg" aria-hidden="true">
+        <Skeleton className="h-[1lh] w-1/3 text-title2" />
+        <Skeleton className="mt-sm h-[84px] w-full md:h-[68px]" />
+      </div>
+    );
+  }
   if (!d) return null;
   if (!d.routine) {
     return (
@@ -33,8 +43,8 @@ export function RoutineSection({ date }: { date: string }) {
             <Icon icon={Compass} size={20} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-headline">Run the strategy session</span>
-            <span className="block text-subhead text-ink-soft">A few minutes: the map, your day, a routine and a contract.</span>
+            <span className="block text-card-title">Run the strategy session</span>
+            <span className="block text-card-note text-ink-soft">A few minutes: the map, your day, a routine and a contract.</span>
           </span>
         </Link>
       </section>

@@ -34,7 +34,7 @@ export function DayBlocks({ tasks, sessions }: { tasks: readonly Node[]; /** Tod
         {COPY.title}
       </h3>
       <p className="mt-xs m-0 text-caption text-ink-soft">{COPY.lede}</p>
-      <ol className="mt-xs flex list-none flex-col gap-xs p-0 m-0" aria-label={COPY.title}>
+      <ol className="mt-sm flex list-none flex-col gap-xs p-0 m-0" aria-label={COPY.title}>
         {d.blocks.map((b, i) => {
           const gap = i > 0 ? d.free.find((f) => f.end === b.start) : undefined;
           const rel = RELATIONSHIP_BY_KEY[byId.get(b.id)?.relationship ?? 'self'];

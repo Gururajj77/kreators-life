@@ -30,7 +30,7 @@ import {
 import type { AppEnv } from '../env';
 import { audit, dayFromDevice, nameOf, newId, notify, nowIso, oneOf, pageOf, paged, randomCode, str } from '../db';
 import { coverFrom, emailCopy, logDoc, maskEmail, ownLogo, publicUrl } from '../agencyPaper';
-import { billingOf, settingsFor } from './agency';
+import { settingsFor } from './agency';
 import { activeHouse, clientBits, clientFacts, docOf, houseContract, jsonOr, ownTemplate, recipientFor, templateDoc } from './agencyDocs';
 
 /**

@@ -17,7 +17,6 @@ import {
   type DeliverableKind,
   type DeliverableStage,
   type TagTone,
-  typedCents,
 } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useState, type FormEvent } from 'react';
@@ -31,7 +30,7 @@ import { StatusTag } from './StatusTag';
 import { CardHead } from './CardHead';
 import { useAgencyCan } from '../lib/agencyWorkspace';
 import { Toggle } from './Toggle';
-import { FIELD } from '../lib/ui';
+import { feeCents, FIELD } from '../lib/ui';
 import { FieldLabel } from './Field';
 
 
@@ -59,11 +58,6 @@ const ARMY_TAG: Record<string, { tone: TagTone; name: string }> = {
 const AUTHOR_TONE: Record<AgencyNote['author'], TagTone> = { me: 'neutral', client: 'info', brand: 'warn', team: 'calm' };
 
 const toMajor = (cents: number): string => (cents === 0 ? '' : cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2));
-/** A typed amount in cents (`typedCents`: "30,000" and "₹30,000" read as 30000); NaN for junk or a minus, so the form can say so. Blank is 0. */
-const toCents = (v: string): number => {
-  const c = typedCents(v);
-  return Number.isInteger(c) && c >= 0 ? c : Number.NaN;
-};
 /** "90" is minutes, "1:30" and "1h30" are an hour and a half, "1.5h" is the same. */
 export function parseMinutes(v: string): number {
   const t = v.trim().toLowerCase();
@@ -105,7 +99,7 @@ function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | 
   const [fee, setFee] = useState(toMajor(item?.feeCents ?? 0));
   const [confirm, setConfirm] = useState(false);
   const listId = useId();
-  const badFee = Number.isNaN(toCents(fee));
+  const badFee = Number.isNaN(feeCents(fee));
 
   // The stage moves from outside too (the brand's answer in Army, a drag on the board), so the form follows it.
   useEffect(() => {
@@ -118,7 +112,7 @@ function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | 
 
   const save = useMutation({
     mutationFn: async () => {
-      const body = { title: title.trim(), kind, platform: platform.trim(), stage, dueDate: due || null, publishDate: publish || null, link: link.trim(), ...(member ? {} : { notes }), ...(showFee ? { feeCents: toCents(fee) } : {}) };
+      const body = { title: title.trim(), kind, platform: platform.trim(), stage, dueDate: due || null, publishDate: publish || null, link: link.trim(), ...(member ? {} : { notes }), ...(showFee ? { feeCents: feeCents(fee) } : {}) };
       if (item) await api.agencyItemUpdate(item.id, body);
       else await api.agencyItemAdd({ ...body, clientId: client });
     },
@@ -380,7 +374,7 @@ function Thread({ itemId, onDone }: { itemId: string; onDone: () => void }) {
         Notes
       </h3>
       <p className="mt-xs m-0 text-subhead text-ink-soft">{COPY.threadLede}</p>
-      <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+      <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
         {notes.map((n) => (
           <li key={n.id} className="rounded-tile bg-paper p-sm">
             <div className="flex flex-wrap items-center gap-xs">

@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { Check } from 'lucide-react';
 import { api } from '../lib/api';
 import { Icon } from './Icon';
+import { Skeleton } from './Skeleton';
 import { useAuthed } from '../lib/queries';
 import { ToggleChevron } from './ToggleMark';
 
@@ -25,7 +26,8 @@ function Lines({ title, lines, label }: { title: string; lines: BriefLine[]; lab
           return (
             <li key={l.key}>
               {l.to ? (
-                <Link to={l.to} className="toy toy-soft flex items-start gap-sm rounded-tile bg-paper p-sm">
+                // 44px at least: one line of the tighter subhead (19px) and its padding came to 43, a pixel under a tap target.
+                <Link to={l.to} className="toy toy-soft flex min-h-[44px] items-start gap-sm rounded-tile bg-paper p-sm">
                   {inner}
                 </Link>
               ) : (
@@ -48,6 +50,8 @@ export function DailyBrief({ date, hour }: { date: string; hour: number }) {
   const q = useAuthed(['brief', date, hour], () => api.brief(date, hour));
   const fold = useMutation({ mutationFn: (folded: boolean) => api.foldGettingStarted(folded), onSuccess: () => void q.refetch() });
   const d = q.data;
+  // While it loads, a block about the brief's own height keeps its place, so Home does not jump when it lands.
+  if (q.isPending) return <Skeleton className="span-all mt-md h-[232px] rounded-card" />;
   if (!d) return null;
   const g = d.gettingStarted;
   return (

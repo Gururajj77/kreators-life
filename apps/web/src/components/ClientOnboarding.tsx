@@ -189,7 +189,7 @@ function Answer({ q, id, answer, onChange, onBlur, error }: { q: ContractQuestio
     <fieldset id={id} tabIndex={-1} className="mt-sm m-0 min-w-0 border-0 p-0" aria-invalid={error ? true : undefined}>
       <legend className="text-headline">{q.label || q.group}</legend>
       <span className="block text-subhead text-ink-soft">{q.multi ? 'Tick all that apply.' : 'Pick one.'}</span>
-      <div className="mt-xs grid gap-xs">
+      <div className="mt-sm grid gap-xs">
         {q.options.map((opt) => {
           const on = answer.picked.includes(opt);
           return (

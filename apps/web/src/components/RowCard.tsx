@@ -26,7 +26,7 @@ export function RowCard({
   action,
   children,
   className = '',
-  titleClass = 'text-headline',
+  titleClass = 'text-card-title',
 }: {
   to?: string;
   onClick?: () => void;
@@ -48,7 +48,7 @@ export function RowCard({
     <>
       <CardHead lead={lead} tag={corner}>
         <span className={`block text-balance ${titleClass}`}>{typeof title === 'string' ? tie(title) : title}</span>
-        {sub && <span className="block text-subhead text-ink-soft">{sub}</span>}
+        {sub && <span className="block text-card-note text-ink-soft">{sub}</span>}
       </CardHead>
       {children}
       {(hasFacts || action || tappable) && (

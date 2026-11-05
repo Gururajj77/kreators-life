@@ -279,7 +279,8 @@ function MonthBars({ months, currency }: { months: FinanceSummary['months']; cur
   // Six months with nothing logged are all zero, not missing: a floor of one cent would print ₹0 at every y line. Read
   // as no data instead, so the chart's own empty message shows rather than a flat zero axis repeated three times.
   const allZero = months.every((m) => m.incomeCents === 0 && m.expenseCents === 0);
-  const max = Math.max(1, ...months.flatMap((m) => [m.incomeCents, m.expenseCents]));
+  // The frame still draws its y labels when empty, so give it a round top (₹1,000): ₹0, ₹500, ₹1,000.
+  const max = allZero ? 100_000 : Math.max(1, ...months.flatMap((m) => [m.incomeCents, m.expenseCents]));
   const last = months.at(-1);
   return (
     <div className="mt-sm rounded-tile bg-card p-sm shadow-toy-soft">
@@ -319,10 +320,10 @@ function TxRow({ t, currency, onChange }: { t: FinanceTransaction; currency: str
           {sign}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-headline"> {t.category}
+          <span className="block truncate text-card-title"> {t.category}
             {t.counterparty ? <span className="text-ink-soft"> {t.kind === 'income' ? 'from' : 'to'} {t.counterparty}</span> : ''}
           </span>
-          <span className="block truncate text-subhead text-ink-soft">
+          <span className="block truncate text-card-note text-ink-soft">
             {day(t.date)}
             {t.note ? `, ${t.note}` : ''}
             {t.source === 'invoice' ? ', from an invoice' : t.source === 'due' ? ', settled a due' : t.source === 'recurring' ? ', monthly' : ''}
@@ -361,10 +362,10 @@ function DueRow({ due, currency, onChange }: { due: FinanceDue; currency: string
     <li className={`rounded-tile bg-card p-sm shadow-toy-soft ${due.status === 'settled' ? 'opacity-70' : ''}`}>
       <div className="flex items-center gap-sm">
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-headline">
+          <span className="block truncate text-card-title">
             {due.direction === 'owed' ? `${due.counterparty} owes you` : `You owe ${due.counterparty}`}
           </span>
-          <span className={`block text-subhead ${overdue ? 'text-r1' : 'text-ink-soft'}`}>
+          <span className={`block text-card-note ${overdue ? 'text-r1' : 'text-ink-soft'}`}>
             {due.dueDate ? `${overdue ? 'was due' : 'due'} ${day(due.dueDate)}` : 'no date'}
             {due.recurring === 'monthly' ? ', every month' : ''}
             {due.note ? `, ${due.note}` : ''}

@@ -96,14 +96,14 @@ export function HostCodeCard({ value, startsAt, onSave, guests = 'guests', child
     if (locked)
       return (
         <div className="rounded-card bg-card p-md shadow-toy-soft">
-          <p className="m-0 text-headline">Attendee code</p>
-          <p className="m-0 mt-xs text-subhead text-ink-soft">The xp is set up to thirty minutes before the start, and this event got none.</p>
+          <p className="m-0 text-card-title">Attendee code</p>
+          <p className="m-0 mt-xs text-card-note text-ink-soft">The xp is set up to thirty minutes before the start, and this event got none.</p>
         </div>
       );
     return (
       <div className="rounded-card bg-card p-md shadow-toy-soft">
-        <p className="m-0 text-headline">Give your {guests} xp</p>
-        <p className="m-0 mt-xs text-subhead text-ink-soft">
+        <p className="m-0 text-card-title">Give your {guests} xp</p>
+        <p className="m-0 mt-xs text-card-prose text-ink-soft">
           Set it now, up to {ATTENDEE_XP_MAX}. It is fixed thirty minutes before the start, when the code opens. You show the code at the event, and only your {guests} can use it, once each.
         </p>
         <div className="mt-sm grid grid-cols-2 gap-xs">
@@ -190,15 +190,15 @@ export function ClaimCard({ view, onClaim }: { view: AttendeeCodeView; onClaim: 
   return (
     <div className="rounded-card bg-card p-md shadow-toy-soft">
       <div className="flex items-center justify-between gap-sm">
-        <p className="m-0 text-headline">{view.claimed ? 'You got the xp for coming' : 'Got the code?'}</p>
+        <p className={`m-0 ${view.claimed || state !== 'open' ? 'text-card-title' : 'text-headline'}`}>{view.claimed ? 'You got the xp for coming' : 'Got the code?'}</p>
         <p className="m-0 inline-flex shrink-0 items-center gap-xs rounded-pill bg-paper px-sm py-xs text-subhead font-medium">{view.claimed ? <Icon icon={Check} size={14} strokeWidth={3} label="claimed" /> : '+'}{view.xp} xp</p>
       </div>
       {view.claimed ? (
-        <p className="m-0 mt-xs text-subhead text-ink-soft">It is in your xp. A code counts once per person.</p>
+        <p className="m-0 mt-xs text-card-note text-ink-soft">It is in your xp. A code counts once per person.</p>
       ) : state === 'early' ? (
-        <p className="m-0 mt-xs text-subhead text-ink-soft">The host shows a code at the event. It works from {clock(view.opensAt)}.</p>
+        <p className="m-0 mt-xs text-card-note text-ink-soft">The host shows a code at the event. It works from {clock(view.opensAt)}.</p>
       ) : state === 'closed' ? (
-        <p className="m-0 mt-xs text-subhead text-ink-soft">The code closed at {clock(view.closesAt)}.</p>
+        <p className="m-0 mt-xs text-card-note text-ink-soft">The code closed at {clock(view.closesAt)}.</p>
       ) : (
         <form
           className="mt-sm grid grid-cols-[1fr_auto] gap-xs"

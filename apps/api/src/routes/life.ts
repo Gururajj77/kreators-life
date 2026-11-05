@@ -126,7 +126,7 @@ export async function lifeSummary(db: D1Database, userId: string): Promise<LifeS
   const emotional: LifePart[] = [
     { label: 'Mood', value: moodAvg === null ? 'not logged' : `${moodAvg.toFixed(1)} of 5`, score: scoreMood(moodNow), path: '/mood', hint: 'Your average face this week.' },
     { label: 'Journal', value: journalNow.length ? `${journalNow.length} ${journalNow.length === 1 ? 'entry' : 'entries'}` : 'nothing written', score: journalAvg === null ? null : clamp(((journalAvg - 1) / 4) * 100), path: '/journal', hint: 'The feeling you tagged on entries.' },
-    { label: 'People floors', value: `level ${Math.round(avg(['friendship', 'lover_partner', 'parent_child'].map((k) => levelFromXp(xpOf(k as RelationshipKey)))) ?? 1)}`, score: floorScore(['friendship', 'lover_partner', 'parent_child']), path: '/tower', hint: 'Friendship, partner and family floors of your tower.' },
+    { label: 'People pillars', value: `level ${Math.round(avg(['friendship', 'lover_partner', 'parent_child'].map((k) => levelFromXp(xpOf(k as RelationshipKey)))) ?? 1)}`, score: floorScore(['friendship', 'lover_partner', 'parent_child']), path: '/tower', hint: 'Your friends, love and family pillars.' },
   ];
   const emotionalBefore = mean([
     { label: '', value: '', score: scoreMood(lastWeek('mood')), path: '', hint: '' },
@@ -136,8 +136,8 @@ export async function lifeSummary(db: D1Database, userId: string): Promise<LifeS
 
   const spiritual: LifePart[] = [
     { label: 'Stillness', value: mindfulNow.length ? `${mindfulTotal} min` : 'not logged', score: scoreMinutes(mindfulNow, 60), path: '/mindful', hint: 'Mindful minutes this week.' },
-    { label: 'Sparks', value: `${sparksThisWeek} of 7 days`, score: scoreCount(sparksThisWeek, 5), path: '/today', hint: 'Five sparks a week scores full marks.' },
-    { label: 'Top floors', value: `level ${Math.round(avg(['guru', 'divine'].map((k) => levelFromXp(xpOf(k as RelationshipKey)))) ?? 1)}`, score: floorScore(['guru', 'divine']), path: '/tower', hint: 'The guru and divine floors of your tower.' },
+    { label: 'Small acts', value: `${sparksThisWeek} of 7 days`, score: scoreCount(sparksThisWeek, 5), path: '/today', hint: 'Five small acts a week scores full marks.' },
+    { label: 'Teachers and faith', value: `level ${Math.round(avg(['guru', 'divine'].map((k) => levelFromXp(xpOf(k as RelationshipKey)))) ?? 1)}`, score: floorScore(['guru', 'divine']), path: '/tower', hint: 'Your teachers and faith pillars.' },
   ];
   const spiritualBefore = mean([
     { label: '', value: '', score: scoreMinutes(lastWeek('mindful'), 60), path: '', hint: '' },

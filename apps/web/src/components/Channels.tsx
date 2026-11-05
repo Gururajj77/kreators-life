@@ -1,4 +1,5 @@
 import {
+  canModerate,
   canMute,
   CHANNEL_POLL_MS,
   communityRankOf,
@@ -170,11 +171,11 @@ function ChannelList({ scope, onOpen }: { scope: ChannelScope; onOpen: (id: stri
             <div className="flex items-center gap-sm">
               <button type="button" onClick={() => onOpen(c.id)} className="toy toy-soft min-w-0 flex-1 rounded-tile bg-paper p-sm text-left text-ink">
                 <span className="flex items-center gap-xs">
-                  <span className="min-w-0 text-balance text-headline [overflow-wrap:anywhere]"># {c.name}</span>
+                  <span className="min-w-0 text-balance text-card-title [overflow-wrap:anywhere]"># {c.name}</span>
                   <Dot n={c.unread} />
                   {c.archived && <StatusTag tone="neutral">Closed</StatusTag>}
                 </span>
-                {c.topic && <span className="block text-subhead text-ink-soft">{c.topic}</span>}
+                {c.topic && <span className="block text-card-note text-ink-soft">{c.topic}</span>}
                 <span className="block text-caption text-ink-soft">
                   {c.members} {c.members === 1 ? 'person' : 'people'}
                   {c.lastLineAt ? `, last line ${when(c.lastLineAt)}` : ', no lines yet'}
@@ -568,7 +569,7 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
                   <LineActions
                     line={l}
                     canWrite={Boolean(writable)}
-                    canTakeDown={l.mine || canManage}
+                    canTakeDown={l.mine || (canManage && (scope === 'bond' || l.rank === null || canModerate(myRank, l.rank)))}
                     canMuteIt={scope === 'community' && !l.mine && Boolean(l.userId) && l.rank !== null && canMute(myRank, l.rank)}
                     onReply={() => setReply(l)}
                     onTakeDown={() => unsay.mutate(l.id)}

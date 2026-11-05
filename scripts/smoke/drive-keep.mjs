@@ -21,6 +21,13 @@ const QC = 'section[aria-label^="Bumling AI assistant"]';
 await page.goto(`${ORIGIN}/today`, { waitUntil: 'networkidle0' });
 await page.click('button[aria-label="Open the assistant"]'); await s(900);
 await click(`${QC} button`, 'Mark my not to do list'); await s(400);
+// Lines can still be arriving: wait until two reads 200 ms apart agree (or the card is up), at most about four seconds.
+for (let i = 0, n = -1; i < 20; i++) {
+  const now = (await lines(QC)).length;
+  if ((now > 0 && now === n) || (await page.$(`${QC} [data-form]`))) break;
+  n = now;
+  await s(200);
+}
 const before = await lines(QC);
 await click('nav a', 'Home'); await s(1200);
 console.log('on', new URL(page.url()).pathname);

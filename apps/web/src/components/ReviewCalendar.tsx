@@ -60,10 +60,10 @@ export function ReviewCalendar({ today, onOpenPeriod }: { today: string; onOpenP
     <li key={s.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="flex items-start justify-between gap-sm">
         <div className="min-w-0">
-          <p className="m-0 text-headline">
+          <p className="m-0 text-card-title">
             <Inert text={nameOf(s)} />
           </p>
-          <p className="m-0 text-subhead text-ink-soft">{tie(`${s.nextOn ? prettyDate(s.nextOn) : 'No day left'} at ${timeText(s.time)}, ${s.label.toLowerCase()}`)}</p>
+          <p className="m-0 text-card-note text-ink-soft">{tie(`${s.nextOn ? prettyDate(s.nextOn) : 'No day left'} at ${timeText(s.time)}, ${s.label.toLowerCase()}`)}</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => setForm({ existing: s, day: s.anchor })}>
           Edit
@@ -153,10 +153,10 @@ function DaySheet({ day, data, schedules, onClose, onAdd, onEdit, onOpen, onChan
           const series = Boolean(full?.repeat);
           return (
             <div key={s.id} className="rounded-tile bg-paper p-sm">
-              <p className="m-0 text-headline">
+              <p className="m-0 text-card-title">
                 <Inert text={nameOf(s)} />
               </p>
-              <p className="m-0 text-subhead text-ink-soft">{`Reminder at ${timeText(s.time)}${full ? `, ${full.label.toLowerCase()}` : ''}`}</p>
+              <p className="m-0 text-card-note text-ink-soft">{`Reminder at ${timeText(s.time)}${full ? `, ${full.label.toLowerCase()}` : ''}`}</p>
               <div className="mt-xs flex flex-wrap gap-xs">
                 {full && (
                   <Button variant="outline" size="sm" onClick={() => onEdit(full)}>

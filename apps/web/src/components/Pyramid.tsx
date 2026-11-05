@@ -153,8 +153,8 @@ export function Pyramid({ relationship, words = {}, autoplay = false, compact = 
                   {meta.rung}
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-headline">{meta.label}</span>
-                  <span className="block text-subhead text-ink-soft">{meta.explain}</span>
+                  <span className="block text-card-title">{meta.label}</span>
+                  <span className="block text-card-note text-ink-soft">{meta.explain}</span>
                 </span>
               </li>
             );

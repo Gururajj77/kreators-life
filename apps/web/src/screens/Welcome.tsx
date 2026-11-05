@@ -72,8 +72,7 @@ export function Welcome() {
           <TextReveal parts={[{ text: 'Seven relationships.' }, { br: true }, { text: 'One you.' }]} />
         </h1>
         <p className="mt-md text-headline text-ink-soft">
-          A daily game for the seven relationships, with the apps a creator or an agency needs. Answer a few questions and the apps that fit you switch on.
-          <span className="hidden sm:inline"> The deeper strategy session waits in Pillars until you want it.</span>
+          A daily game for all seven, with the apps a creator or an agency needs. Answer a few questions and the apps that fit you switch on.
         </p>
       </div>
       <div className="flex flex-col gap-sm pb-lg">
@@ -97,7 +96,7 @@ export function Welcome() {
           </Button>
         </LiquidMetal>
         <p className="m-0 text-center text-subhead text-ink-mute">
-          Free to start. Your answers are saved on this device, so you can stop and come back. Add this page to your home screen to keep it close.
+          Free to start. Your answers are saved on this device, so you can stop and come back.
         </p>
         <p className="m-0 text-center text-subhead">
           Already have an account?{' '}

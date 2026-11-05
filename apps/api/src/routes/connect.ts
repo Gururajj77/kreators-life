@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { EVENT_APPS, MAX_EVENT_MESSAGE, MAX_REPLY_DEPTH, photoLinkProblem, threadOrder, type EventApp, type EventExtras, type EventMessage, type EventPerson } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { anonAlias, can, liveUser, nameOf, newId, notify, notifyMany, nowIso, publicOf, str } from '../db';
+import { anonAlias, can, liveUser, nameOf, newId, notifyMany, nowIso, publicOf, str } from '../db';
 import { requestFriend } from './bond';
 
 /**

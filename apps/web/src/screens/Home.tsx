@@ -1,8 +1,8 @@
 import { QuoteOfTheDay } from '../components/QuoteOfTheDay';
 import { RemindersSection } from '../components/Reminders';
-import { BOOKS, badgeRoleOf, greetingFor, knowledgeKindIcon, LIFE_AREAS, MODULE_BY_KEY, MODULE_GROUP_ACCENT, MODULE_GROUPS, money, MOODS, RELATIONSHIP_BY_KEY, STRESS_LEVELS, type HomeResponse, type ModuleGroup, type RelationshipKey, formatCount } from '@kreators/shared';
+import { badgeRoleOf, greetingFor, knowledgeKindIcon, LIFE_AREAS, MODULE_BY_KEY, MODULE_GROUP_ACCENT, MODULE_GROUPS, money, MOODS, RELATIONSHIP_BY_KEY, STRESS_LEVELS, type HomeResponse, type ModuleGroup, type RelationshipKey, formatCount } from '@kreators/shared';
 import type { CSSProperties, ReactNode } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { Link } from 'react-router';
 import type { LucideIcon } from 'lucide-react';
@@ -15,7 +15,7 @@ import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { CountUp } from '../components/fx/CountUp';
 import '../components/fx/spotlight';
-import { AreaLine, Donut, Gauge, HBars, Legend, MultiLine, Segments, Sparkline } from '../components/Charts';
+import { AreaLine, Donut, Gauge, HBars, MultiLine, Segments, Sparkline } from '../components/Charts';
 import { HeroBlobs } from '../components/Hero';
 import { MoodFace } from '../components/MoodFace';
 import { Person } from '../components/Person';
@@ -32,6 +32,7 @@ import { useParamState } from '../lib/useParamState';
 import { api } from '../lib/api';
 import { BENTO_SIZE, bento } from '../lib/bento';
 import { tie } from '../lib/text';
+import { useWide } from '../lib/useWide';
 import { prettyDate, todayLocal, weekday, eventTime } from '../lib/date';
 import { useGroupOrder, useModules } from '../lib/modules';
 import { useAuthed, useMe } from '../lib/queries';
@@ -41,6 +42,7 @@ import { IconTag } from '../components/FactTag';
 import { CardHead } from '../components/CardHead';
 import { Reveal } from '../components/fx/Reveal';
 import { ToggleChevron } from '../components/ToggleMark';
+import { useFocusPortal } from '../lib/focusPortal';
 
 const SHORTCUT_ORDER: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'manage'];
 const when = eventTime;
@@ -98,19 +100,6 @@ const WHITE_TRACK = 'rgba(255,255,255,0.3)';
  * own views (xp per day and where it came from, the tower, money, the shop) and a door into every app.
  * On every coloured fill the foreground is white, as in the kit; dark elements sit only on cream.
  */
-/** True from the tablet width up (the same width and height the md layout uses), following the window as it changes. */
-function useWide() {
-  const q = '(min-width: 768px) and (min-height: 480px)';
-  const [on, setOn] = useState(() => typeof window !== 'undefined' && window.matchMedia(q).matches);
-  useEffect(() => {
-    const m = window.matchMedia(q);
-    const f = () => setOn(m.matches);
-    m.addEventListener('change', f);
-    return () => m.removeEventListener('change', f);
-  }, []);
-  return on;
-}
-
 export function Home() {
   // Home's metrics lay out as a bento (a large Life score beside two cards) from the tablet width up; below it they are a sideways row.
   const wideMetrics = useWide();
@@ -119,6 +108,13 @@ export function Home() {
   const hour = new Date().getHours();
   const q = useAuthed(['home', date], () => api.home(date, hour));
   const { modules } = useModules();
+  // Breathe and focus shows on Home whenever the team has not switched Mindfulness off (the person's own switch starts off, and the
+  // founder wants the panel on Home for everyone); its routes are open to anyone with a wellbeing app available.
+  const mindfulOn = modules.find((m) => m.key === 'mindful')?.available ?? false;
+  const setTarget = useFocusPortal((s) => s.setTarget);
+  const focusHeight = useFocusPortal((s) => s.height);
+  // A steady ref callback, so the slot is set once and the living clock is not moved out and back on every render.
+  const setFocusSlot = useCallback((el: HTMLDivElement | null) => setTarget(el, 'home'), [setTarget]);
   const shortcutGroups = useGroupOrder(SHORTCUT_ORDER);
   const [xpView, setXpView] = useParamState('xp', 'day');
   const d = q.data;
@@ -184,7 +180,7 @@ export function Home() {
           <div className="min-w-0">
             <h1 className="text-large-title [overflow-wrap:anywhere] text-on-fill">{firstName ? `Hi, ${firstName}!` : 'Hi there!'}</h1>
             {d && (
-              <p className="fill-row m-0 flex flex-wrap items-center gap-x-xs text-subhead font-medium opacity-90" aria-label="At a glance">
+              <p className="fill-row m-0 flex flex-wrap items-center gap-x-xs text-subhead opacity-90" aria-label="At a glance">
                 <Link to="/tower" className="inline-flex min-h-[44px] items-center underline-offset-4 hover:underline">
                   <Icon icon={Star} size={14} className="mr-xs inline-block align-[-2px]" />Level {d.xp.level}
                 </Link>
@@ -207,8 +203,12 @@ export function Home() {
         </div>
       </header>
 
-      <RemindersSection always />
+      {/* One solid button a screen: with Breathe and focus here (its Start is solid), + Glass takes the outline look, as on Journal. */}
+      <RemindersSection always quiet={mindfulOn} />
       <QuoteOfTheDay date={date} />
+      {/* Breathe and focus, the same living panel as Mindfulness (FocusRoundsHost moves it here while Home is showing), above the daily
+          brief (the founder, 2026-11-06). */}
+      {mindfulOn && <div ref={setFocusSlot} className="span-all" style={{ minHeight: focusHeight || undefined }} />}
       <DailyBrief date={date} hour={hour} />
 
 
@@ -419,8 +419,8 @@ export function Home() {
                       </span>
                     )}
                     <span className="min-w-0 flex-1">
-                      <span className="block text-headline">{r.name}</span>
-                      <span className="block truncate text-subhead text-ink-soft">{r.value}</span>
+                      <span className="block text-card-title">{r.name}</span>
+                      <span className="block truncate text-card-note text-ink-soft">{r.value}</span>
                     </span>
                     <span className="shrink-0">{r.visual}</span>
                   </Link>
@@ -681,8 +681,9 @@ export function Home() {
               <div className="rounded-card bg-card p-md shadow-toy-soft">
                 <div className="grid grid-cols-3 gap-xs">
                   <KitTile tone="bg-paper" plain icon={Receipt} value={String(d.shop.ordersMonth)} label="orders" hint="this month" />
-                  {/* Every tile carries a line under its label, so the three end level (2026-11-05). */}
-                  <KitTile tone="bg-paper" plain icon={Coins} value={formatCount(d.shop.pointsMonth)} label="points" hint={d.shop.centsMonth > 0 ? `and ${money(d.shop.centsMonth, d.shop.currency)}` : 'no money sales'} />
+                  {/* Every tile carries a line under its label, so the three end level (2026-11-05); "and ₹0" when nothing sold for money,
+                      which stays on one line in a narrow tile where "no money sales" broke short. */}
+                  <KitTile tone="bg-paper" plain icon={Coins} value={formatCount(d.shop.pointsMonth)} label="points" hint={`and ${money(d.shop.centsMonth, d.shop.currency)}`} />
                   <KitTile tone="bg-paper" plain icon={Users} value={String(d.shop.followers)} label="followers" hint={`${d.shop.views} page views`} />
                 </div>
                 <div className="mt-md">

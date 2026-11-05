@@ -102,7 +102,10 @@ export function HowItWorks({ page }: { /** A core page that is not an app (Emerg
         >
           <span className="min-w-0">
             <span className="block text-title3">How it works</span>
-            <span className="mt-xs block text-subhead text-ink-soft">{open ? `${count} for ${meta.name}. Tap to fold them away.` : `${count} for ${meta.name}. Tap to open them.`}</span>
+            {/* Two sentences kept whole, so a line that must break does so at the full stop (the rectangle rule). */}
+            <span className="mt-xs block text-subhead text-ink-soft">
+              <span className="inline-block">{`${count} for ${meta.name}.`}</span> <span className="inline-block">{open ? 'Tap to fold them away.' : 'Tap to open them.'}</span>
+            </span>
           </span>
           <span className="flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-ink text-on-ink" aria-hidden="true">
             <Chevron open={open} />

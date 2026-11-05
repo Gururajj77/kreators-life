@@ -1,8 +1,9 @@
 import { AnimatePresence, m as motion, useDragControls } from 'motion/react';
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { tick } from './fx/haptics';
 import { useDialogFocus } from '../lib/useDialogFocus';
+import { useWide } from '../lib/useWide';
 import { X } from 'lucide-react';
 import { Icon } from './Icon';
 
@@ -13,21 +14,9 @@ interface Props {
   children: ReactNode;
 }
 
-/** A tablet or laptop (the same test as the md breakpoint): the dialog is centred and scales in; on a phone it rises from the bottom and can be dragged down. */
-function useWide(): boolean {
-  const q = '(min-width: 48rem) and (min-height: 30rem)';
-  const [wide, setWide] = useState(() => typeof window !== 'undefined' && window.matchMedia(q).matches);
-  useEffect(() => {
-    const m = window.matchMedia(q);
-    const on = () => setWide(m.matches);
-    m.addEventListener('change', on);
-    return () => m.removeEventListener('change', on);
-  }, []);
-  return wide;
-}
-
 export function Sheet({ open, onClose, title, children }: Props) {
   const id = useId();
+  // A tablet or laptop (the md test): the dialog is centred and scales in; on a phone it rises from the bottom and can be dragged down.
   const wide = useWide();
   const grab = useDragControls();
   const dialog = useRef<HTMLDivElement>(null);

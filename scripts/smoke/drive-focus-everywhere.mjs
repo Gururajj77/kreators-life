@@ -490,7 +490,12 @@ try {
       const listed = await page.evaluate(() => document.querySelectorAll('[data-focus-round]').length);
       rec("T1 today's list shows the sessions", listed === r1.length, `${listed} rows, ${r1.length} rounds`);
 
-      // T2: the task sheet opens on recent tasks; a tap picks one.
+      // T2: the task sheet opens on recent tasks; a tap picks one. An account with no round on an open task gets one first (one
+      // minute, today), so the sheet has a recent row to tap whatever account runs this.
+      if (!((await api('/wellbeing/focus/tasks?recent=1')).tasks || []).length) {
+        const open = ((await api('/wellbeing/focus/tasks')).tasks || [])[0];
+        if (open) await api('/wellbeing/focus', { method: 'POST', body: JSON.stringify({ minutes: 1, nodeId: open.id, mode: 'timer', date: today() }) });
+      }
       await page.evaluate(() => document.querySelector('button[aria-label="Focus on a task"]')?.click());
       await sleep(900);
       const recent = await dialog('Recent');
@@ -502,6 +507,11 @@ try {
       await sleep(600);
       const onIt = await page.evaluate((t) => [...document.querySelectorAll('.mf-panel .mf-line')].some((p) => p.textContent.includes(t)), TASK);
       rec('T2 a recent task row picks the task', recent && pickedTask === 'ok' && onIt, `recent ${recent}, pick ${pickedTask}, on it ${onIt}`);
+      // Nothing picked leaves the sheet open, and the later key checks stand aside for a modal: close it so they still run.
+      if (await dialog('Working on:')) {
+        await page.keyboard.press('Escape');
+        await sleep(400);
+      }
 
       // T7: the task is in the tab title while the clock runs, and on the pill from the tablet width up.
       await panelClick('Start');
@@ -562,6 +572,10 @@ try {
 
       // T4: change a session's length, then delete it; add one that was forgotten.
       const before = await rounds();
+      // The row opened is the first on screen; its id says which session to compare, since the list on screen and the API's need not
+      // put the same session first once an account has several from earlier runs.
+      const editedId = await page.evaluate(() => document.querySelector('[data-focus-round]')?.getAttribute('data-focus-round'));
+      const minutesOf = (list) => list.find((r) => r.id === editedId)?.minutes;
       await page.evaluate(() => document.querySelector('[data-focus-round] button')?.click());
       await sleep(900);
       const editing = await dialog('Change this session');
@@ -572,7 +586,7 @@ try {
       await clickIn('[role="dialog"]', 'Save');
       await sleep(1500);
       const afterEdit = await rounds();
-      rec('T4 a session can be changed', editing && afterEdit[0]?.minutes === before[0]?.minutes + 4, `${before[0]?.minutes} -> ${afterEdit[0]?.minutes}`);
+      rec('T4 a session can be changed', editing && minutesOf(afterEdit) === minutesOf(before) + 4, `${minutesOf(before)} -> ${minutesOf(afterEdit)}`);
       await page.evaluate(() => document.querySelector('[data-focus-round] button')?.click());
       await sleep(900);
       await clickIn('[role="dialog"]', 'Delete this session');

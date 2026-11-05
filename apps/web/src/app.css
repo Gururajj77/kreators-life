@@ -80,124 +80,151 @@
   --font-display: 'Google Sans Flex', system-ui, sans-serif;
   --font-body: 'Google Sans Flex', system-ui, sans-serif;
   --font-mono: 'Google Sans Flex', system-ui, sans-serif;
-  /* Weights (2026-11-05, the founder: "the same thickness/boldness style as in umbrel.com", measured there): two weights only.
-     400 for reading and every secondary line; 500 for anything that stands out: every heading and title at every size, the line
-     that names a row or card, labels, tags, tab labels, buttons and numbers. umbrel sets every Google Sans heading at 500 and never
-     bolder, so medium, semibold, bold and extrabold are all 500: a class can mark emphasis, never weight. Hierarchy comes from size
-     and ink colour. Only the two rounded wordmarks, the guides' Caveat lines and printed paper keep their own weights. */
-  --font-weight-medium: 500;
-  --font-weight-semibold: 500;
-  --font-weight-bold: 500;
-  --font-weight-extrabold: 500;
+  /* Weights (2026-11-05, the founder: "i want the same thickness/boldness style as in umbrel.com", then "the fonts are so much more
+     bolder, but yours are not"). Measured against umbrel in this Chrome: at the same number Flex's strokes are umbrel's to a tenth of a
+     pixel, so what made umbrel read bolder was how it is drawn: white on black with macOS smoothing left on. Dark ink on a light page
+     reads about 50 weight units lighter than the same weight light on dark. So the weights follow the
+     surface, in one fixed order, heading over label over tag over reading: these are the light values (reading 450 at every size, tags
+     `font-medium` 480, labels and card titles `font-semibold` 550, titles `font-bold` 600, display and figures 550, caps
+     eyebrows 500), and every one is 50 lighter on a dark surface, down to umbrel's own 400 for reading (see "Weights on dark
+     surfaces"). Only the two rounded wordmarks, the guides' Caveat lines and printed paper keep their own. */
+  --font-weight-normal: 450;
+  --font-weight-medium: 480;
+  --font-weight-semibold: 550;
+  --font-weight-bold: 600;
+  --font-weight-extrabold: 600;
 
   /* The text styles (Apple iOS "Large" Dynamic Type, px = pt, in rem so the browser's font size applies; SwiftUI rule 25).
      Each utility (`text-body`, `text-title2`...) sets size, leading, tracking and weight together; a `leading-*`, `tracking-*` or
      `font-*` class on the same element still overrides its part, which is how emphasis works (`text-subhead font-semibold`).
-     Tracking is Flex's own: tight on large sizes (umbrel's Google Sans curve), zero at body, open on small text. */
+     Tracking follows umbrel's Google Sans curve, tight on large sizes and just under zero down to 13px (see "Leading" below). */
   --text-large-title: 2.125rem;                /* 34 */
-  --text-large-title--line-height: 2.5625rem;  /* 41 */
-  --text-large-title--letter-spacing: -0.016em;
-  --text-large-title--font-weight: 500;
+  --text-large-title--line-height: 2.375rem;   /* 38 */
+  --text-large-title--letter-spacing: -0.022em;
+  --text-large-title--font-weight: 600;
 
   --text-title1: 1.75rem;                      /* 28 */
-  --text-title1--line-height: 2.125rem;        /* 34 */
-  --text-title1--letter-spacing: -0.014em;
-  --text-title1--font-weight: 500;
+  --text-title1--line-height: 2rem;            /* 32 */
+  --text-title1--letter-spacing: -0.02em;
+  --text-title1--font-weight: 600;
 
   --text-title2: 1.375rem;                     /* 22 */
-  --text-title2--line-height: 1.75rem;         /* 28 */
-  --text-title2--letter-spacing: -0.012em;
-  --text-title2--font-weight: 500;
+  --text-title2--line-height: 1.625rem;        /* 26 */
+  --text-title2--letter-spacing: -0.017em;
+  --text-title2--font-weight: 600;
 
   --text-title3: 1.25rem;                      /* 20 */
-  --text-title3--line-height: 1.5625rem;       /* 25 */
-  --text-title3--letter-spacing: -0.008em;
-  --text-title3--font-weight: 500;
+  --text-title3--line-height: 1.5rem;          /* 24 */
+  --text-title3--letter-spacing: -0.015em;
+  --text-title3--font-weight: 600;
 
   --text-headline: 1.0625rem;                  /* 17 */
-  --text-headline--line-height: 1.375rem;      /* 22 */
-  --text-headline--letter-spacing: -0.004em;
-  --text-headline--font-weight: 500;
+  --text-headline--line-height: 1.3125rem;     /* 21 */
+  --text-headline--letter-spacing: -0.01em;
+  --text-headline--font-weight: 550;
 
   --text-body: 1.0625rem;                      /* 17 */
   --text-body--line-height: 1.375rem;          /* 22 */
-  --text-body--letter-spacing: 0em;
-  --text-body--font-weight: 400;
+  --text-body--letter-spacing: -0.008em;
+  --text-body--font-weight: 450;
 
   --text-callout: 1rem;                        /* 16 */
-  --text-callout--line-height: 1.3125rem;      /* 21 */
-  --text-callout--letter-spacing: 0em;
-  --text-callout--font-weight: 400;
+  --text-callout--line-height: 1.25rem;        /* 20 */
+  --text-callout--letter-spacing: -0.008em;
+  --text-callout--font-weight: 450;
 
   --text-prose: 1rem;                          /* 16, Callout with Apple's loose leading for 3+ lines */
-  --text-prose--line-height: 1.5rem;           /* 24 */
-  --text-prose--letter-spacing: 0.002em;
-  --text-prose--font-weight: 400;
+  --text-prose--line-height: 1.4375rem;        /* 23 */
+  --text-prose--letter-spacing: -0.004em;
+  --text-prose--font-weight: 450;
 
   --text-subhead: 0.9375rem;                   /* 15 */
-  --text-subhead--line-height: 1.25rem;        /* 20 */
-  --text-subhead--letter-spacing: 0.004em;
-  --text-subhead--font-weight: 400;
+  --text-subhead--line-height: 1.1875rem;      /* 19 */
+  --text-subhead--letter-spacing: -0.006em;
+  --text-subhead--font-weight: 450;
 
   --text-footnote: 0.8125rem;                  /* 13 */
-  --text-footnote--line-height: 1.125rem;      /* 18 */
-  --text-footnote--letter-spacing: 0.01em;
-  --text-footnote--font-weight: 400;
+  --text-footnote--line-height: 1.0625rem;     /* 17 */
+  --text-footnote--letter-spacing: -0.002em;
+  --text-footnote--font-weight: 450;
 
   --text-caption: 0.75rem;                     /* 12 */
-  --text-caption--line-height: 1rem;           /* 16 */
-  --text-caption--letter-spacing: 0.014em;
-  --text-caption--font-weight: 400;
+  --text-caption--line-height: 0.9375rem;      /* 15 */
+  --text-caption--letter-spacing: 0em;
+  --text-caption--font-weight: 450;
 
   --text-caption2: 0.6875rem;                  /* 11, the floor (HIG minimum) */
   --text-caption2--line-height: 0.8125rem;     /* 13 */
-  --text-caption2--letter-spacing: 0.02em;
-  --text-caption2--font-weight: 400;
+  --text-caption2--letter-spacing: 0.006em;
+  --text-caption2--font-weight: 450;
+
+  /* Card roles (2026-11-05, the founder: "reduce from body and increase in heading", "dont do a difference of more than 6px in total",
+     "keep a bit slightly better distance in seperation ... maybe 1 to 3px"). Only a title over its line in a tick row (CheckRow), a
+     list card (RowCard, the CardHead cards) or an icon row uses these: the title 3px up, the line 2px down, 5px in all. Every other text
+     keeps the scale above. The 2px of room is the note's own rule ("Card notes" in the components layer). */
+  --text-row-title: 1.25rem;                   /* 20, a tick row's title over a line (body 17 +3, reading weight) */
+  --text-row-title--line-height: 1.5rem;       /* 24 */
+  --text-row-title--letter-spacing: -0.015em;
+  --text-row-title--font-weight: 450;
+
+  --text-card-title: 1.25rem;                  /* 20, a card or icon row's title (headline 17 +3) */
+  --text-card-title--line-height: 1.5rem;      /* 24 */
+  --text-card-title--letter-spacing: -0.015em;
+  --text-card-title--font-weight: 550;
+
+  --text-card-note: 0.8125rem;                 /* 13, the line under it (subhead 15 -2) */
+  --text-card-note--line-height: 1.0625rem;    /* 17 */
+  --text-card-note--letter-spacing: -0.002em;
+  --text-card-note--font-weight: 450;
+
+  --text-card-prose: 0.875rem;                 /* 14, a card's reading description, School's program (prose 16 -2) */
+  --text-card-prose--line-height: 1.1875rem;   /* 19 */
+  --text-card-prose--letter-spacing: -0.004em;
+  --text-card-prose--font-weight: 450;
 
   --text-eyebrow: 0.75rem;                     /* 12, used with `uppercase` */
   --text-eyebrow--line-height: 1rem;
-  --text-eyebrow--letter-spacing: 0.06em;
+  --text-eyebrow--letter-spacing: 0.05em;
   --text-eyebrow--font-weight: 500;
 
   /* Numbers at display size. The stem is thick enough at 40px and up, so they step down to 500 (umbrel, Apple Weather). */
   --text-figure-lg: 2.5rem;                    /* 40 */
   --text-figure-lg--line-height: 1;
-  --text-figure-lg--letter-spacing: -0.02em;
-  --text-figure-lg--font-weight: 500;
+  --text-figure-lg--letter-spacing: -0.026em;
+  --text-figure-lg--font-weight: 550;
 
   --text-figure-hero: 4rem;                    /* 64, HeroNumber */
   --text-figure-hero--line-height: 1;
-  --text-figure-hero--letter-spacing: -0.024em;
-  --text-figure-hero--font-weight: 500;
+  --text-figure-hero--letter-spacing: -0.03em;
+  --text-figure-hero--font-weight: 550;
 
   /* The public site (poster type) and its lede. Phone values here; the md and lg steps follow the @theme block. */
   --text-display-1: 2.5rem;                    /* 40 → 52 → 64 */
-  --text-display-1--line-height: 1.05;
-  --text-display-1--letter-spacing: -0.02em;
-  --text-display-1--font-weight: 500;
+  --text-display-1--line-height: 1.02;
+  --text-display-1--letter-spacing: -0.026em;
+  --text-display-1--font-weight: 550;
 
   --text-display-2: 2rem;                      /* 32 → 40 → 48 */
-  --text-display-2--line-height: 1.1;
-  --text-display-2--letter-spacing: -0.02em;
-  --text-display-2--font-weight: 500;
+  --text-display-2--line-height: 1.06;
+  --text-display-2--letter-spacing: -0.024em;
+  --text-display-2--font-weight: 550;
 
   --text-display-3: 1.75rem;                   /* 28 → 34 → 40 */
-  --text-display-3--line-height: 1.15;
-  --text-display-3--letter-spacing: -0.018em;
-  --text-display-3--font-weight: 500;
+  --text-display-3--line-height: 1.1;
+  --text-display-3--letter-spacing: -0.022em;
+  --text-display-3--font-weight: 550;
 
   --text-lede: 1.125rem;                       /* 18 → 18 → 20 */
-  --text-lede--line-height: 1.625rem;          /* 26 */
-  --text-lede--letter-spacing: -0.006em;
-  --text-lede--font-weight: 400;
+  --text-lede--line-height: 1.5625rem;         /* 25 */
+  --text-lede--letter-spacing: -0.01em;
+  --text-lede--font-weight: 450;
 
-  /* Leading (baseline to baseline) and tracking. Big type sits tight, small type breathes. */
-  --leading-hook: 1.02;
-  --leading-heading: 1.12;
+  /* Leading (baseline to baseline) and tracking, tighter (2026-11-05, the founder: "check for line heights and kernings to be tighter"):
+     umbrel's Google Sans curve, -0.03em at 64px to -0.015em at 20px, then a little under zero down to 13px and zero or just over
+     only at 12 and 11; headings at about 1.1 to 1.2 of their size, display at 1.02 to 1.1, reading text kept at 1.3 to 1.45. */
+  --leading-heading: 1.08;
   --leading-body: 1.55;
-  --tracking-hook: -0.04em;
-  --tracking-heading: -0.014em;
-  --tracking-eyebrow: 0.06em;
+  --tracking-heading: -0.02em;
 
   --radius-card: 32px;
   /* Concentric curves, the way Apple draws them: a shape inside another has the outer radius minus the gap between them, so the two
@@ -217,17 +244,17 @@
    side keeps phone sizes. The app's own roles have no laptop step (iPadOS keeps the iPhone table). */
 @media (width >= 48rem) and (height >= 30rem) {
   :root {
-    --text-display-1: 3.25rem; --text-display-1--letter-spacing: -0.022em;  /* 52 */
+    --text-display-1: 3.25rem; --text-display-1--letter-spacing: -0.028em;  /* 52 */
     --text-display-2: 2.5rem;                                               /* 40 */
     --text-display-3: 2.125rem;                                             /* 34 */
   }
 }
 @media (width >= 64rem) and (height >= 30rem) {
   :root {
-    --text-display-1: 4rem; --text-display-1--letter-spacing: -0.024em;    /* 64 */
-    --text-display-2: 3rem; --text-display-2--letter-spacing: -0.02em;      /* 48 */
+    --text-display-1: 4rem; --text-display-1--letter-spacing: -0.03em;     /* 64 */
+    --text-display-2: 3rem; --text-display-2--letter-spacing: -0.026em;      /* 48 */
     --text-display-3: 2.5rem;                                               /* 40 */
-    --text-lede: 1.25rem; --text-lede--line-height: 1.75rem;                /* 20/28 */
+    --text-lede: 1.25rem; --text-lede--line-height: 1.6875rem;              /* 20/27 */
   }
 }
 
@@ -283,7 +310,6 @@
   --tint-sky: #dcebf8;
   --tint-indigo: #e1e4fa;
   --tint-purple: #ece8fb;
-  --tint-purple-deep: #dcd5f7;
   --soft-servant_leader: #fde8ee;
   --soft-friendship: #fdeee0;
   --soft-parent_child: #fbf3cf;
@@ -337,8 +363,7 @@
     --tint-sky: #14283a;
     --tint-indigo: #1d2350;
     --tint-purple: #2a2350;
-    --tint-purple-deep: #3a3070;
-    --soft-servant_leader: #3a1626;
+      --soft-servant_leader: #3a1626;
     --soft-friendship: #3a2416;
     --soft-parent_child: #35301a;
     --soft-lover_partner: #1b2c25;
@@ -387,7 +412,6 @@
   --tint-sky: #14283a;
   --tint-indigo: #1d2350;
   --tint-purple: #2a2350;
-  --tint-purple-deep: #3a3070;
   --soft-servant_leader: #3a1626;
   --soft-friendship: #3a2416;
   --soft-parent_child: #35301a;
@@ -440,14 +464,12 @@
     /* auto, not optimizeLegibility: browsers already kern and ligate with font-kerning set, and optimizeLegibility is slow on long
        lists. Large type turns it back on below (the optical tweak by size). */
     text-rendering: auto;
-    /* No lone last word anywhere. The setting is inherited, so every card, list line and short paragraph shares its words evenly over its lines
-       (a browser balances up to about six lines and leaves longer text alone). */
+    /* Every block of text reads as a rectangle (the founder, 2026-11-05): no line under 80% of the widest line above it since the last
+       break made on purpose (so a slow taper counts). The setting is
+       inherited, so every card, list line and paragraph, long reading text included, shares its words evenly over its lines. A browser
+       balances up to about six lines and wraps longer text the plain way; lib/rectText.ts then narrows such a block a little until its
+       lines hold (scripts/smoke/rag-probe.js is the check). */
     text-wrap: balance;
-  }
-  /* Long reading text, such as lessons, policies and things people wrote, keeps full-width lines and only avoids a short last line. */
-  .whitespace-pre-wrap,
-  .prose-long {
-    text-wrap: pretty;
   }
   /* A browser that cannot balance leaves the text as it is, and "pretty" is the next best. */
   @supports not (text-wrap: balance) {
@@ -458,9 +480,15 @@
   body {
     margin: 0;
     min-height: 100dvh;
+    font-weight: var(--font-weight-normal);
     overscroll-behavior-y: none;
     /* Full-bleed art (the hero's flowing lines) is as wide as the screen; clip, not hidden, so nothing scrolls sideways and sticky headers still stick. */
     overflow-x: clip;
+  }
+  /* A surface that changes the weights (see "Weights on dark surfaces") sets its reading weight again, since a weight is inherited
+     as a number, not as the token; in this layer, so a weight class on the same element still wins. */
+  :where(.night-card, .mf-panel, .text-on-fill, .fx-fglass-host, .bg-ink, .text-on-ink, .bg-r1, .bg-r2, .bg-r3, .bg-r4, .bg-r5, .bg-r6, .bg-r7, [style*='var(--color-on-fill)'], [style*='var(--color-r2)'], [style*='var(--color-r3)'], .legal-root, .legal-invoice, .legal-doc, .print-doc, .month-print-sheet) {
+    font-weight: var(--font-weight-normal);
   }
   /* The wash behind everything: soft glows over a gradient base, never a flat fill. It is fixed to the screen, so the
      glass above it always has something to frost. */
@@ -921,7 +949,25 @@ details[open] > summary {
 }
 /* The context line under a hook: paired with text-lede (or text-callout), which carries its size, weight and leading. */
 .type-context {
-  text-wrap: pretty;
+  text-wrap: balance;
+}
+/* lib/rectText.ts holds a block's first line short on purpose, so its lines grow going down instead of ending on a short one: a float
+   one line tall at the side the text runs out to (centred text takes as much indent, so its first line stays centred). Set only on a
+   block with no ::before of its own. */
+[data-rect-first]::before {
+  content: '';
+  float: right;
+  inline-size: var(--rect-first, 0);
+  block-size: 1lh;
+}
+[data-rect-first='start']::before {
+  float: left;
+}
+[data-rect-first='center'] {
+  text-indent: var(--rect-first, 0);
+}
+[data-rect-first='center'] * {
+  text-indent: 0;
 }
 .type-eyebrow {
   font-family: var(--font-mono);
@@ -948,26 +994,189 @@ details[open] > summary {
 .type-hook {
   text-rendering: optimizeLegibility;
 }
-/* Light text on a dark fill blooms with macOS's default smoothing and reads bolder, so dark surfaces take grayscale smoothing, the
-   way Apple's own pages do. It does nothing on Windows, Linux or iOS; light mode is unchanged. */
+/* Weights on dark surfaces (2026-11-05): light text on a dark ground reads heavier, so every weight is 50 lighter there, umbrel's own
+   400 for reading. A dark surface is dark mode, the night slate, the Mindfulness panel, white text on a fill (the class, the white
+   fills, or a fill whose colour is set inline from the on-fill token), the fractal glass, and the ink fill and white-on-ink text in
+   light mode (both turn cream in dark mode, so there they take the light weights back). The orange and yellow fills carry dark ink, so
+   they keep the light weights in both themes. macOS smoothing is left on everywhere, as umbrel leaves it (turning it off took about a
+   fifth of the ink). */
 :root[data-theme='dark'],
 .night-card,
-.bg-ink,
+.mf-panel,
+.text-on-fill,
+.fx-fglass-host,
 .bg-r1,
-.bg-r2,
-.bg-r3,
 .bg-r4,
 .bg-r5,
 .bg-r6,
 .bg-r7,
-.mf-panel {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+[style*='var(--color-on-fill)'],
+:root:not([data-theme='dark']) :is(.bg-ink, .text-on-ink) {
+  --font-weight-normal: 400;
+  --font-weight-medium: 430;
+  --font-weight-semibold: 500;
+  --font-weight-bold: 550;
+  --font-weight-extrabold: 550;
+  --text-large-title--font-weight: 550;
+  --text-title1--font-weight: 550;
+  --text-title2--font-weight: 550;
+  --text-title3--font-weight: 550;
+  --text-headline--font-weight: 500;
+  --text-figure-lg--font-weight: 500;
+  --text-figure-hero--font-weight: 500;
+  --text-display-1--font-weight: 500;
+  --text-display-2--font-weight: 500;
+  --text-display-3--font-weight: 500;
+  --text-eyebrow--font-weight: 450;
+  --text-body--font-weight: 400;
+  --text-callout--font-weight: 400;
+  --text-prose--font-weight: 400;
+  --text-lede--font-weight: 400;
+  --text-subhead--font-weight: 400;
+  --text-footnote--font-weight: 400;
+  --text-caption--font-weight: 400;
+  --text-caption2--font-weight: 400;
+  --text-row-title--font-weight: 400;
+  --text-card-title--font-weight: 500;
+  --text-card-note--font-weight: 400;
+  --text-card-prose--font-weight: 400;
+}
+:root[data-theme='dark'] :is(.bg-ink, .text-on-ink) {
+  --font-weight-normal: 450;
+  --font-weight-medium: 480;
+  --font-weight-semibold: 550;
+  --font-weight-bold: 600;
+  --font-weight-extrabold: 600;
+  --text-large-title--font-weight: 600;
+  --text-title1--font-weight: 600;
+  --text-title2--font-weight: 600;
+  --text-title3--font-weight: 600;
+  --text-headline--font-weight: 550;
+  --text-figure-lg--font-weight: 550;
+  --text-figure-hero--font-weight: 550;
+  --text-display-1--font-weight: 550;
+  --text-display-2--font-weight: 550;
+  --text-display-3--font-weight: 550;
+  --text-eyebrow--font-weight: 500;
+  --text-body--font-weight: 450;
+  --text-callout--font-weight: 450;
+  --text-prose--font-weight: 450;
+  --text-lede--font-weight: 450;
+  --text-subhead--font-weight: 450;
+  --text-footnote--font-weight: 450;
+  --text-caption--font-weight: 450;
+  --text-caption2--font-weight: 450;
+  --text-row-title--font-weight: 450;
+  --text-card-title--font-weight: 550;
+  --text-card-note--font-weight: 450;
+  --text-card-prose--font-weight: 450;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    --font-weight-normal: 400;
+    --font-weight-medium: 430;
+    --font-weight-semibold: 500;
+    --font-weight-bold: 550;
+    --font-weight-extrabold: 550;
+    --text-large-title--font-weight: 550;
+    --text-title1--font-weight: 550;
+    --text-title2--font-weight: 550;
+    --text-title3--font-weight: 550;
+    --text-headline--font-weight: 500;
+    --text-figure-lg--font-weight: 500;
+    --text-figure-hero--font-weight: 500;
+    --text-display-1--font-weight: 500;
+    --text-display-2--font-weight: 500;
+    --text-display-3--font-weight: 500;
+    --text-eyebrow--font-weight: 450;
+    --text-body--font-weight: 400;
+    --text-callout--font-weight: 400;
+    --text-prose--font-weight: 400;
+    --text-lede--font-weight: 400;
+    --text-subhead--font-weight: 400;
+    --text-footnote--font-weight: 400;
+    --text-caption--font-weight: 400;
+    --text-caption2--font-weight: 400;
+    --text-row-title--font-weight: 400;
+    --text-card-title--font-weight: 500;
+    --text-card-note--font-weight: 400;
+    --text-card-prose--font-weight: 400;
+  }
+  :root:not([data-theme]) :is(.bg-ink, .text-on-ink) {
+    --font-weight-normal: 450;
+    --font-weight-medium: 480;
+    --font-weight-semibold: 550;
+    --font-weight-bold: 600;
+    --font-weight-extrabold: 600;
+    --text-large-title--font-weight: 600;
+    --text-title1--font-weight: 600;
+    --text-title2--font-weight: 600;
+    --text-title3--font-weight: 600;
+    --text-headline--font-weight: 550;
+    --text-figure-lg--font-weight: 550;
+    --text-figure-hero--font-weight: 550;
+    --text-display-1--font-weight: 550;
+    --text-display-2--font-weight: 550;
+    --text-display-3--font-weight: 550;
+    --text-eyebrow--font-weight: 500;
+    --text-body--font-weight: 450;
+    --text-callout--font-weight: 450;
+    --text-prose--font-weight: 450;
+    --text-lede--font-weight: 450;
+    --text-subhead--font-weight: 450;
+    --text-footnote--font-weight: 450;
+    --text-caption--font-weight: 450;
+    --text-caption2--font-weight: 450;
+    --text-row-title--font-weight: 450;
+    --text-card-title--font-weight: 550;
+    --text-card-note--font-weight: 450;
+    --text-card-prose--font-weight: 450;
+  }
+}
+.bg-r2,
+.bg-r3,
+[style*='var(--color-r2)'],
+[style*='rgb(240, 138, 75)'],
+[style*='var(--color-r3)'],
+:is(.bg-r2, .bg-r3, [style*='var(--color-r2)'], [style*='rgb(240, 138, 75)'], [style*='var(--color-r3)']) .text-on-fill {
+  --font-weight-normal: 450;
+  --font-weight-medium: 480;
+  --font-weight-semibold: 550;
+  --font-weight-bold: 600;
+  --font-weight-extrabold: 600;
+  --text-large-title--font-weight: 600;
+  --text-title1--font-weight: 600;
+  --text-title2--font-weight: 600;
+  --text-title3--font-weight: 600;
+  --text-headline--font-weight: 550;
+  --text-figure-lg--font-weight: 550;
+  --text-figure-hero--font-weight: 550;
+  --text-display-1--font-weight: 550;
+  --text-display-2--font-weight: 550;
+  --text-display-3--font-weight: 550;
+  --text-eyebrow--font-weight: 500;
+  --text-body--font-weight: 450;
+  --text-callout--font-weight: 450;
+  --text-prose--font-weight: 450;
+  --text-lede--font-weight: 450;
+  --text-subhead--font-weight: 450;
+  --text-footnote--font-weight: 450;
+  --text-caption--font-weight: 450;
+  --text-caption2--font-weight: 450;
+  --text-row-title--font-weight: 450;
+  --text-card-title--font-weight: 550;
+  --text-card-note--font-weight: 450;
+  --text-card-prose--font-weight: 450;
+}
+/* Card notes (2026-11-05, the founder: "keep a bit slightly better distance in seperation, right now it feels like same text everywhere
+   without clear distinction between heading or body text, a bit more space maybe 1 to 3px would do"): the line under a card or row
+   title sits 2px lower. A layer under the utilities, so a note that already keeps its own room (mt-xs, mt-sm, m-0 after a flex gap)
+   keeps exactly that. */
+@layer components {
+  .text-card-note,
+  .text-card-prose {
+    --card-note-gap: 0.125rem; /* 2px, the middle of the founder's 1 to 3px */
+    margin-block-start: var(--card-note-gap);
   }
 }
 /* Long reading: a measure of about sixty-five characters. */
@@ -1892,13 +2101,26 @@ ol.grid > li > .toy:only-child {
   --font-weight-bold: 540;
   --font-weight-extrabold: 620;
   /* and the text styles keep the weights they had before the umbrel pass, so a printed page never changes under it. */
+  --font-weight-normal: 400;
   --text-large-title--font-weight: 600;
   --text-title1--font-weight: 600;
   --text-title2--font-weight: 600;
   --text-title3--font-weight: 550;
   --text-headline--font-weight: 550;
   --text-eyebrow--font-weight: 550;
-  --text-caption2--font-weight: 480;
+  --text-caption2--font-weight: 450;
+  --text-figure-lg--font-weight: 500;
+  --text-figure-hero--font-weight: 500;
+  --text-display-1--font-weight: 500;
+  --text-display-2--font-weight: 500;
+  --text-display-3--font-weight: 500;
+  --text-body--font-weight: 400;
+  --text-callout--font-weight: 400;
+  --text-prose--font-weight: 400;
+  --text-subhead--font-weight: 400;
+  --text-footnote--font-weight: 400;
+  --text-caption--font-weight: 400;
+  --text-lede--font-weight: 400;
 }
 .legal-root {
   --doc-font: Georgia, 'Times New Roman', Times, serif;
@@ -2267,6 +2489,118 @@ select.inv-edit { appearance: none; cursor: pointer; }
 }
 .mf-panel[data-accent='r4'] {
   --mf-a-text: color-mix(in oklab, var(--color-r4) 55%, #ffffff);
+}
+/* The water panel (components/Reminders.tsx, 2026-11-06) is a dark panel like Breathe and focus in both themes, and it holds ordinary
+   fields, tick rows and switches, so the dark theme's colours are pinned on it (the base tokens and the aliases Tailwind reads), as
+   printed paper pins the light ones. Native time and date pickers follow color-scheme. */
+.water-night {
+  color-scheme: dark;
+  --ink: #eef0f8;
+  --ink-soft: #d6dbe9;
+  --ink-mute: #c0c7db;
+  --on-ink: #10131f;
+  --paper: rgba(255, 255, 255, 0.05);
+  --card: rgba(255, 255, 255, 0.075);
+  --card-strong: rgba(15, 18, 30, 0.985);
+  --line: rgba(255, 255, 255, 0.16);
+  --color-ink: #eef0f8;
+  --color-ink-soft: #d6dbe9;
+  --color-ink-mute: #c0c7db;
+  --color-on-ink: #10131f;
+  --color-paper: rgba(255, 255, 255, 0.05);
+  --color-card: rgba(255, 255, 255, 0.075);
+  --color-card-strong: rgba(15, 18, 30, 0.985);
+  --color-line: rgba(255, 255, 255, 0.16);
+  /* The keyboard ring and the tick box's ring read in the dark theme's light blue, not the light theme's deep one. */
+  --deep-self: #9ccdf2;
+  --edge: rgba(255, 255, 255, 0.12);
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f2f2f2' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+}
+/* The water glass (components/fx/WaterGlass.tsx): sky water in a clear glass. On a light surface the rim is slate; on a dark one
+   (the water panel, dark mode) it is white. */
+:root {
+  --water-glass-inside: rgba(37, 41, 58, 0.05);
+  --water-glass-rim: rgba(37, 41, 58, 0.35);
+  --water-glass-shine: rgba(255, 255, 255, 0.7);
+  --water-glass-top: color-mix(in oklab, var(--color-r5) 60%, #ffffff);
+  --water-glass-deep: var(--color-r5);
+}
+.water-night,
+:root[data-theme='dark'] {
+  --water-glass-inside: rgba(255, 255, 255, 0.06);
+  --water-glass-rim: rgba(255, 255, 255, 0.55);
+  --water-glass-shine: rgba(255, 255, 255, 0.35);
+  --water-glass-top: color-mix(in oklab, var(--color-r5) 65%, #ffffff);
+  --water-glass-deep: color-mix(in oklab, var(--color-r5) 85%, #000000);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --water-glass-inside: rgba(255, 255, 255, 0.06);
+    --water-glass-rim: rgba(255, 255, 255, 0.55);
+    --water-glass-shine: rgba(255, 255, 255, 0.35);
+    --water-glass-top: color-mix(in oklab, var(--color-r5) 65%, #ffffff);
+    --water-glass-deep: color-mix(in oklab, var(--color-r5) 85%, #000000);
+  }
+}
+/* The water panel's layout: where there is room, the glass on the left with the amount picker under it and the last seven days on the
+   right; where the panel is narrow, one centred column (below). */
+.water-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  grid-template-areas:
+    'glass week'
+    'step week';
+  gap: var(--spacing-md) var(--spacing-lg);
+  align-items: center;
+}
+.water-grid-glass {
+  grid-area: glass;
+}
+.water-grid-step {
+  grid-area: step;
+}
+.water-grid-week {
+  grid-area: week;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+/* Narrow (the bubble at the left of Daily, a phone; the founder, 2026-11-06): one centred column, the glass, then its buttons, then the
+   last seven days under them. */
+@container mf (width < 460px) {
+  .water-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'glass'
+      'step'
+      'week';
+    row-gap: var(--spacing-md);
+    justify-items: center;
+  }
+  .water-grid-week {
+    width: 100%;
+    max-width: 320px;
+    text-align: center;
+  }
+  /* Under the buttons the week is a short strip, so the stacked panel stays short. */
+  .water-grid-week > [role='img'] {
+    height: 96px;
+  }
+}
+/* Its small lines sit close to what they belong to: 12px from the row above, 8px under a heading (the focus panel's own lines keep 16). */
+.water-night > .mf-line {
+  margin-top: var(--spacing-sm);
+}
+.water-night > h3 + .mf-line {
+  margin-top: var(--spacing-xs);
+}
+/* Its five pickers: two to a row whatever the screen (the panel is narrow), the hours together on the last row. */
+.water-night .mf-sets {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.water-night .mf-sets > :nth-child(3) {
+  grid-column: 1 / -1;
 }
 .mf-top {
   display: flex;
@@ -2661,7 +2995,8 @@ select.inv-edit { appearance: none; cursor: pointer; }
   z-index: 20;
   padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: var(--radius-inner);
-  background: var(--card-strong);
+  /* Fully opaque: the strong card over the page's own base, so no line behind a name shows through it. */
+  background: linear-gradient(var(--card-strong), var(--card-strong)), var(--page-base-a);
   color: var(--color-ink);
   box-shadow: 0 0 0 1px var(--line);
   font-size: 12px;
@@ -2681,6 +3016,13 @@ select.inv-edit { appearance: none; cursor: pointer; }
   right: 0;
   left: auto;
   transform: none;
+}
+/* A round button lifts a little on hover (the toy transform), which makes it a layer of its own, so its name could not rise over what
+   comes after it on the page (the water panel under the water block's buttons hid them, 2026-11-06). While its name shows, the button
+   itself sits above its neighbours. */
+.mf-round:hover,
+.mf-round:focus-visible {
+  z-index: 30;
 }
 .mf-round:focus-visible::after {
   opacity: 1;
@@ -3463,12 +3805,6 @@ select.inv-edit { appearance: none; cursor: pointer; }
   isolation: isolate;
   border-radius: var(--radius-pill, 999px);
   padding: var(--fx-metal-rim);
-}
-.fx-metal-rim-2 {
-  --fx-metal-rim: 2px;
-}
-.fx-metal-rim-4 {
-  --fx-metal-rim: 4px;
 }
 /* The rotating layers live in their own clip, so the child's keyboard ring can still be drawn outside the rim. */
 .fx-metal-clip {
@@ -4633,6 +4969,45 @@ li.sort-lifted {
     --fg-rib: 14px;
   }
 }
+/* FractalGlass colours (2026-11-05, the founder: "the cta box at bottom can have different colors on each of them, home one is fine"):
+   `hue` on FractalGlass. Navy above is the public home's and the default. The others take their glow from the pillar colours, mixed the
+   way the navy one is laid out (a main glow, a brighter edge, an accent and a pale core), each on a base that is its main colour mixed
+   deep toward black, so white words keep about 15:1 on the base and the main glow stays as dark as navy's (white on it 4.8:1 or better
+   before the scrim). Set on the host as well, through :has, so the card's own fill matches before the glass paints, to a probe and
+   under reduced transparency or more contrast (the solid base alone). The same in both themes. */
+.fx-fglass-host:has(> .fx-fglass[data-hue='teal']),
+.fx-fglass[data-hue='teal'] {
+  /* /features: green and sky blue, a mint core. */
+  --fx-glass-base: color-mix(in oklab, var(--color-r4) 24%, black);
+  --fx-glass-blue: color-mix(in oklab, var(--color-r4) 55%, var(--color-r5));
+  --fx-glass-sky: color-mix(in oklab, var(--color-r5) 82%, white);
+  --fx-glass-violet: color-mix(in oklab, var(--color-r4) 62%, white);
+  --fx-glass-core: color-mix(in oklab, var(--color-r4) 16%, white);
+}
+/* The pillar green and sky are calm, so mixed as they are the teal read grey-green beside the home's electric navy (seen in the shots,
+   2026-11-05). Where the browser can, keep each token's hue and give it a fuller chroma: the main glow is the green leaning to the sky
+   (hue about 185) at oklch L 0.46, the edge the sky blue, the accent a bright green, the core a pale mint, the base the same teal at
+   L 0.17. The lightness was tuned against navy's: with the words hidden, the brightest pixel behind them (a rib's streak) measures
+   4.1:1 with white here and 4.0:1 on navy, and most of the area far more. */
+@supports (color: oklch(from red l c h)) {
+  .fx-fglass-host:has(> .fx-fglass[data-hue='teal']),
+  .fx-fglass[data-hue='teal'] {
+    --fx-glass-base: oklch(from color-mix(in oklab, var(--color-r4) 70%, var(--color-r5)) 0.17 0.035 h);
+    --fx-glass-blue: oklch(from color-mix(in oklab, var(--color-r4) 70%, var(--color-r5)) 0.46 0.11 h);
+    --fx-glass-sky: oklch(from var(--color-r5) 0.6 0.14 h);
+    --fx-glass-violet: oklch(from var(--color-r4) 0.6 0.15 h);
+    --fx-glass-core: oklch(from var(--color-r4) 0.9 0.05 h);
+  }
+}
+.fx-fglass-host:has(> .fx-fglass[data-hue='wine']),
+.fx-fglass[data-hue='wine'] {
+  /* /7rp: the servitude red with orange at its edge and the faith violet beside it, a peach core. */
+  --fx-glass-base: color-mix(in oklab, var(--color-r1) 22%, black);
+  --fx-glass-blue: var(--color-r1);
+  --fx-glass-sky: color-mix(in oklab, var(--color-r1) 50%, var(--color-r2));
+  --fx-glass-violet: color-mix(in oklab, var(--color-r7) 85%, white);
+  --fx-glass-core: color-mix(in oklab, var(--color-r2) 22%, white);
+}
 /* The card that holds the glass carries the navy too, so its words have the right background before the glass paints and to a probe. */
 .fx-fglass-host {
   background-color: var(--fx-glass-base);
@@ -4721,6 +5096,195 @@ li.sort-lifted {
   }
 }
 
+/* The home hero (site/Home.tsx, 2026-11-05, after the founder's reference, then his changes): no box, it sits on the page's own wash.
+   The headline is metal ink: dark slate with a violet lean in light mode, light silver in dark mode (large text, 5:1 or better on the
+   wash, sampled from shots at 360 to 1600 in both themes). The knot is shaded toward --knot-shade and rimmed in --knot-rim, and a soft
+   glow of pillar colours fades out round it, so the depth belongs to the page and no edge shows. */
+:root {
+  --knot-shade: #1a1838;
+  --knot-rim: #c9c2ff;
+  --hero-glow: 30%;
+  --hero-metal-1: var(--color-ink);
+  --hero-metal-2: color-mix(in oklab, var(--color-ink) 82%, var(--color-r6));
+  --hero-metal-3: color-mix(in oklab, var(--color-ink) 70%, var(--color-r7));
+  --hero-metal-4: var(--color-ink);
+  --hero-metal-quiet-1: var(--color-ink-mute);
+  --hero-metal-quiet-2: color-mix(in oklab, var(--color-ink-mute) 82%, var(--color-r6));
+  --hero-metal-quiet-3: color-mix(in oklab, var(--color-ink-mute) 78%, var(--color-r7));
+  --hero-metal-quiet-4: var(--color-ink-mute);
+}
+:root[data-theme='dark'] {
+  --knot-shade: #0c0a24;
+  --hero-glow: 55%;
+  --hero-metal-1: #ffffff;
+  --hero-metal-2: #e9e7f7;
+  --hero-metal-3: #b9b6d6;
+  --hero-metal-4: #e4e1f5;
+  --hero-metal-quiet-1: #dcd9f0;
+  --hero-metal-quiet-2: #b7b3d6;
+  --hero-metal-quiet-3: #9692bd;
+  --hero-metal-quiet-4: #c8c4e6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --knot-shade: #0c0a24;
+    --hero-glow: 55%;
+    --hero-metal-1: #ffffff;
+    --hero-metal-2: #e9e7f7;
+    --hero-metal-3: #b9b6d6;
+    --hero-metal-4: #e4e1f5;
+    --hero-metal-quiet-1: #dcd9f0;
+    --hero-metal-quiet-2: #b7b3d6;
+    --hero-metal-quiet-3: #9692bd;
+    --hero-metal-quiet-4: #c8c4e6;
+  }
+}
+/* The headline's metal: each word clipped to the gradient (each word is its own box in TextReveal, so the light runs the same down every
+   line). Plain ink is the fallback where clipping is missing. */
+.hero-metal .fx-word {
+  color: var(--hero-metal-1);
+}
+.hero-metal em .fx-word {
+  color: var(--hero-metal-quiet-1);
+}
+@supports ((background-clip: text) or (-webkit-background-clip: text)) {
+  /* The background paints only inside each word's box, so the box is grown round the glyphs (descenders, the f's overhang) and the
+     growth taken back with a negative margin: the words set exactly as before, and no g or y is cut. */
+  .hero-metal .fx-word {
+    padding: 0.16em 0.06em;
+    margin: -0.16em -0.06em;
+    color: transparent;
+    background-image: linear-gradient(180deg, var(--hero-metal-1) 8%, var(--hero-metal-2) 46%, var(--hero-metal-3) 72%, var(--hero-metal-4) 96%);
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+  .hero-metal em .fx-word {
+    color: transparent;
+    background-image: linear-gradient(180deg, var(--hero-metal-quiet-1) 8%, var(--hero-metal-quiet-2) 52%, var(--hero-metal-quiet-3) 76%, var(--hero-metal-quiet-4) 96%);
+  }
+}
+/* The knot: a square box whose canvas fades in once drawn. Behind it a glow of violet, red and indigo, blurred and fading to nothing,
+   wider than the box, so the art melts into the page. */
+.hero-knot {
+  position: relative;
+  aspect-ratio: 1;
+  pointer-events: none;
+  /* Drawn at 98% of its box (the founder, 2026-11-05: first "a bit bigger", 9%, then "smaller by 10%"): the `scale` property composes
+     with the sway's transform and leaves the layout alone. */
+  scale: 0.98;
+}
+.hero-knot::before {
+  content: '';
+  position: absolute;
+  inset: -6%;
+  border-radius: 50%;
+  background:
+    radial-gradient(closest-side at 46% 44%, color-mix(in oklab, var(--color-r7) var(--hero-glow), transparent), transparent),
+    radial-gradient(closest-side at 62% 58%, color-mix(in oklab, var(--color-r1) calc(var(--hero-glow) * 0.6), transparent), transparent 80%),
+    radial-gradient(closest-side at 34% 64%, color-mix(in oklab, var(--color-r6) calc(var(--hero-glow) * 0.7), transparent), transparent 80%);
+  filter: blur(32px);
+}
+.hero-knot-sway,
+.hero-knot-canvas {
+  position: relative;
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+}
+.hero-knot-canvas {
+  opacity: 0;
+  transition: opacity 700ms var(--ease-open);
+}
+.hero-knot-canvas[data-drawn] {
+  opacity: 1;
+}
+/* The hero's body: one column on a phone (the order of the markup); from the tablet up a grid, the knot wider than its column and
+   reaching back over the end of the hook (a little, as an object stands in front of a title), never over the pitch or Start free. A
+   tablet: the hook beside the knot, then the daily line beside the pitch, a row's gap between. A laptop (the hero a gap wider than the
+   page's column each side, so the knot keeps its size): three columns, the hook over the daily line on the left, the knot in the middle
+   with a full gap either side, the pitch and Start free at the right. Room to breathe (the founder, 2026-11-05): the gaps are lg. */
+.hero-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+@media (width >= 48rem) and (height >= 30rem) {
+  .hero-body {
+    /* How far the knot reaches back over the hook: enough to cross the end of "life" a little (about a tenth of its ink, measured
+       from pixels), never a whole word; on a phone the knot sits under the hook and covers nothing. */
+    --knot-reach: calc(var(--spacing-xl) + var(--spacing-lg) + var(--spacing-md));
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    grid-template-areas:
+      'title knot'
+      'lead side';
+    column-gap: var(--spacing-md);
+    row-gap: var(--spacing-lg);
+    align-items: center;
+  }
+  .hero-title {
+    grid-area: title;
+  }
+  .hero-knot-place {
+    grid-area: knot;
+    inline-size: calc(100% + var(--knot-reach));
+    margin-inline-start: calc(-1 * var(--knot-reach));
+    /* It scales from its left edge, so its reach over the hook stays where it was measured (about a tenth of "life"). */
+    transform-origin: 0% 50%;
+  }
+  .hero-lead {
+    grid-area: lead;
+    align-self: start;
+  }
+  .hero-side {
+    grid-area: side;
+    align-self: start;
+  }
+}
+@media (width >= 64rem) and (height >= 30rem) {
+  .hero-body {
+    --knot-reach: calc(var(--spacing-xl) + var(--spacing-md) + var(--spacing-xs));
+    grid-template-columns: minmax(0, 400px) minmax(0, 1fr) minmax(0, 232px);
+    grid-template-areas:
+      'title knot side'
+      'lead knot side';
+    column-gap: var(--spacing-lg);
+  }
+  .hero-title {
+    align-self: end;
+  }
+  .hero-knot-place {
+    align-self: center;
+    inline-size: calc(100% + var(--knot-reach));
+    margin-inline-start: calc(-1 * var(--knot-reach));
+  }
+  .hero-side {
+    align-self: end;
+  }
+}
+/* The seven guides overlap in a stack on the dark card, each on a ring of the slate. */
+.hero-stack-face {
+  background-color: var(--color-ink-fixed);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-knot-canvas {
+    transition: none;
+  }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .hero-knot::before {
+    display: none;
+  }
+  .hero-metal .fx-word {
+    color: var(--hero-metal-1);
+    background-image: none;
+  }
+  .hero-metal em .fx-word {
+    color: var(--hero-metal-quiet-1);
+    background-image: none;
+  }
+}
+
 /* The public footer (site/SiteLayout.tsx, 2026-11-05): glass over the page's wash with a faint dusk-to-ground tint, and at its foot the
    wordmark as wide as the footer, its letters filled with the pillar colours and cut into upright ribs like fluted glass, fading into
    the ground band. The wordmark is CSS content (aria-hidden), so no probe or screen reader reads it as text. */
@@ -4731,23 +5295,45 @@ li.sort-lifted {
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
   backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
 }
+/* The footer wordmark is a link home (2026-11-05, the founder: "when someone hovers on it, let it move a bit up to reveal the text a
+   bit better and make it clickable and go back to main home"). Still CSS content (the link's name is its aria-label). At rest it is
+   exactly as before: the box cuts the letters at 0.62 of their size and the mask fades them from 30% down. On a phone the box would be
+   under 44px, so `--mark-extra` adds the missing height above the letters (the margin gives the same back), never moving them. The
+   box clips with `clip-path` instead of `overflow: hidden`, open 32px above it so the letters can rise; nothing reaches above the box
+   at rest (the ascenders start just under its top). The mask is a taller image (1.5 of the letters' box) placed so its stops match the
+   old ones at rest (black 30%, clear at 100%); a hover or keyboard focus slides it a quarter down, so the fade lessens, while the letters
+   rise 8 to 14px on --ease-open. Transform and mask only; under reduced motion the reveal applies without the rise or the glide. */
 .site-footer-mark {
+  --mark-h: calc(clamp(40px, 15.5vw, 236px) * 0.62);
+  --mark-extra: max(0px, calc(44px - var(--mark-h)));
   position: relative;
-  height: calc(clamp(64px, 15.5vw, 236px) * 0.62);
-  overflow: hidden;
-  margin-top: var(--spacing-lg);
-  pointer-events: none;
+  display: block;
+  height: calc(var(--mark-h) + var(--mark-extra));
+  overflow-x: clip;
+  overflow-y: visible;
+  clip-path: inset(-32px 0 0 0);
+  margin-top: calc(var(--spacing-lg) - var(--mark-extra));
+  border-radius: var(--radius-inner);
   user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.site-footer-mark:focus-visible {
+  outline-offset: -3px;
 }
 .site-footer-mark::before {
   content: 'kreators.app';
   position: absolute;
   left: 50%;
-  top: 0;
+  top: var(--mark-extra);
   transform: translateX(-50%);
+  transition:
+    transform 450ms var(--ease-open),
+    opacity 450ms var(--ease-open),
+    -webkit-mask-position 450ms var(--ease-open),
+    mask-position 450ms var(--ease-open);
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: clamp(64px, 15.5vw, 236px);
+  font-size: clamp(40px, 15.5vw, 236px);
   line-height: 0.8;
   letter-spacing: -0.04em;
   white-space: nowrap;
@@ -4758,15 +5344,63 @@ li.sort-lifted {
   -webkit-background-clip: text;
   background-clip: text;
   opacity: 0.32;
-  -webkit-mask-image: linear-gradient(180deg, black 30%, transparent 100%);
-  mask-image: linear-gradient(180deg, black 30%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, black 53.333%, transparent 100%);
+  mask-image: linear-gradient(180deg, black 53.333%, transparent 100%);
+  -webkit-mask-size: 100% 150%;
+  mask-size: 100% 150%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: 0 100%;
+  mask-position: 0 100%;
+}
+/* Second pass (2026-11-05): at a quarter down the reveal was hard to see on a laptop, so the mask slides three quarters down (the
+   letters' foot still fades into the ground, about three quarters shown instead of a third) and the ink lifts a little (0.32 to 0.42,
+   0.42 to 0.54 in dark mode). */
+.site-footer-mark:focus-visible::before {
+  transform: translateX(-50%) translateY(clamp(-14px, -0.06em, -8px));
+  -webkit-mask-position: 0 25%;
+  mask-position: 0 25%;
+  opacity: 0.42;
+}
+@media (hover: hover) and (pointer: fine) {
+  .site-footer-mark:hover::before {
+    transform: translateX(-50%) translateY(clamp(-14px, -0.06em, -8px));
+    -webkit-mask-position: 0 25%;
+    mask-position: 0 25%;
+    opacity: 0.42;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .site-footer-mark::before {
+    transition: none;
+  }
+  .site-footer-mark:focus-visible::before,
+  .site-footer-mark:hover::before {
+    transform: translateX(-50%);
+  }
 }
 :root[data-theme='dark'] .site-footer-mark::before {
   opacity: 0.42;
 }
+:root[data-theme='dark'] .site-footer-mark:focus-visible::before {
+  opacity: 0.54;
+}
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) .site-footer-mark::before {
     opacity: 0.42;
+  }
+  :root:not([data-theme='light']) .site-footer-mark:focus-visible::before {
+    opacity: 0.54;
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  :root[data-theme='dark'] .site-footer-mark:hover::before {
+    opacity: 0.54;
+  }
+}
+@media (hover: hover) and (pointer: fine) and (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .site-footer-mark:hover::before {
+    opacity: 0.54;
   }
 }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {

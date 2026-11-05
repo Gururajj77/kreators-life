@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Button } from '../components/Button';
-import { A, Bullets, Fact, Grievance, H, LegalPage, Mail, NOT_SET, P, Strong, contactEmail, useBusiness } from './legalBits';
+import { Bullets, Fact, Grievance, H, LegalPage, Mail, NOT_SET, P, Strong, contactEmail, useBusiness } from './legalBits';
 import { Link } from 'react-router';
 import { FIELD } from '../lib/ui';
 import { SITE_LINK } from './buttons';
@@ -49,8 +49,8 @@ function NoticeForm({ kind }: { kind: 'notice' | 'counter' }) {
   if (reference) {
     return (
       <div role="status" className="mt-sm rounded-tile bg-card p-md">
-        <p className="m-0 text-headline">We have it.</p>
-        <p className="mt-xs m-0 text-callout text-ink-soft">
+        <p className="m-0 text-card-title">We have it.</p>
+        <p className="mt-xs m-0 text-card-prose text-ink-soft">
           Your reference is <Strong>{reference}</Strong>. Keep it. A person will read your {counter ? 'counter-notice' : 'notice'} and write back to the email you gave.
         </p>
       </div>
@@ -168,7 +168,7 @@ export function Copyright() {
       </div>
       {!loading && !business?.dmcaRegistered && <P>Listing with the US Copyright Office is in progress.</P>}
       <P>
-        Questions that are not a notice go to <Mail address={email} />. Read our <A to="/terms">terms</A> too.
+        Questions that are not a notice go to <Mail address={email} />.
       </P>
     </LegalPage>
   );

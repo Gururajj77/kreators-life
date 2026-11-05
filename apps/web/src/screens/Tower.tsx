@@ -81,8 +81,8 @@ function StartSessionCard() {
   return (
     <Link to="/session" className="group toy toy-soft mt-md flex items-center gap-sm rounded-card bg-ink p-md text-on-ink">
       <span className="min-w-0 flex-1">
-        <span className="block text-headline">Set up your pillars: the strategy session</span>
-        <span className="mt-xs block text-subhead text-on-ink/70">Leave with your map, a routine, a contract and your first pyramids.</span>
+        <span className="block text-card-title">Set up your pillars: the strategy session</span>
+        <span className="mt-xs block text-card-note text-on-ink/70">Leave with your map, a routine, a contract and your first pyramids.</span>
       </span>
       <Icon icon={ArrowUpRight} size={22} className="transition-transform motion-safe:group-hover:translate-x-xs motion-safe:group-hover:-translate-y-xs row-chevron" />
     </Link>
@@ -136,10 +136,10 @@ export function Tower() {
       <NotToDoBlock />
       <EmergenceSlot app="tower" max={3} />
       <LifeMapPanel />
-      <section className="mt-lg rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="how-heading">
+      <section className="mt-lg rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="pillar-how-heading">
         <div>
           <div>
-            <h2 id="how-heading" className="text-title2">
+            <h2 id="pillar-how-heading" className="text-title2">
               How a pillar works
             </h2>
             <p className="mt-xs m-0 text-subhead text-ink-soft">Every pillar is a pyramid, from the foundation at the top to today’s small task at the point. Tick the task and the whole pyramid gets stronger.</p>

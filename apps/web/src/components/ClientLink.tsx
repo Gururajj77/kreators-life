@@ -62,8 +62,8 @@ export function ClientLink({ client, life }: { client: AgencyClient; life: Clien
     <div className="rounded-card bg-card p-md shadow-toy-soft">
       <div className="flex flex-wrap items-center gap-sm">
         <div className="min-w-0 flex-1">
-          <h3 className="m-0 text-headline">Client link</h3>
-          <p className="m-0 text-subhead text-ink-soft">{summary}</p>
+          <h3 className="m-0 text-card-title">Client link</h3>
+          <p className="m-0 text-card-note text-ink-soft">{summary}</p>
         </div>
         {on ? (
           <Button size="sm" onClick={copy}>

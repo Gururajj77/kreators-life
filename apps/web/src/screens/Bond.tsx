@@ -194,11 +194,11 @@ export function Bond() {
             {[...sent, ...friends].map((f) => (
               <li key={f.requestId} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                 <Link to={f.handle ? `/u/${f.handle}` : `/people/${f.userId}`} className="min-w-0 flex-1">
-                  <span className="block text-headline">
+                  <span className="block text-card-title">
                     {f.name}
                     {f.handle ? <span className="text-ink-soft"> @{f.handle}</span> : ''}
                   </span>
-                  <span className="block text-subhead text-ink-soft">{f.status === 'sent' ? 'Request sent, waiting' : 'Friends'}</span>
+                  <span className="block text-card-note text-ink-soft">{f.status === 'sent' ? 'Request sent, waiting' : 'Friends'}</span>
                 </Link>
                 {f.status === 'friends' && (
                   <Button variant="outline" className="shrink-0" onClick={() => openChat.mutate(f.userId)} disabled={openChat.isPending}>
@@ -230,8 +230,8 @@ export function Bond() {
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0" aria-label="Would like to meet you">
             {incoming.map((i) => (
               <li key={i.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <p className="m-0 text-headline">{i.requesterName} would like to meet you</p>
-                {i.context && <p className="m-0 text-subhead text-ink-soft">{i.context}</p>}
+                <p className="m-0 text-card-title">{i.requesterName} would like to meet you</p>
+                {i.context && <p className="m-0 text-card-note text-ink-soft">{i.context}</p>}
                 <div className="mt-sm flex flex-wrap justify-end gap-xs">
                   <Button variant="outline" onClick={() => answer.mutate({ id: i.id, status: 'accepted' })} disabled={answer.isPending}>
                     Yes, introduce us
@@ -253,11 +253,11 @@ export function Bond() {
             {d.suggestions.map((s) => (
               <li key={s.userId} className="flex flex-wrap items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                 <span className="min-w-0 flex-1">
-                  <span className="block text-headline">
+                  <span className="block text-card-title">
                     {s.name}
                     {s.handle ? <span className="text-ink-soft"> @{s.handle}</span> : ''}
                   </span>
-                  <span className="block text-subhead text-ink-soft">
+                  <span className="block text-card-note text-ink-soft">
                     {s.context}
                     {s.skills.length > 0 ? `. ${s.skills.join(', ')}` : ''}
                   </span>
@@ -283,11 +283,11 @@ export function Bond() {
               return (
                 <li key={i.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                   <span className="min-w-0 flex-1">
-                    <span className="block text-headline">
+                    <span className="block text-card-title">
                       {p.name}{' '}
                       <StatusTag tone={i.status === 'accepted' ? 'good' : i.status === 'declined' ? 'bad' : 'warn'}>{i.status === 'proposed' ? 'waiting' : i.status}</StatusTag>
                     </span>
-                    <span className="block text-subhead text-ink-soft">
+                    <span className="block text-card-note text-ink-soft">
                       {outgoing ? 'You asked' : 'They asked'} on {longDate(i.createdAt)}
                       {i.status === 'accepted' ? '. Contact details are in your Inbox.' : ''}
                     </span>
@@ -316,8 +316,8 @@ function ChatRow({ c }: { c: BondChat }) {
         <Icon icon={c.source === 'circle' ? UsersRound : MessageCircle} size={20} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-headline">{c.theirAlias}</span>
-        <span className="block truncate text-subhead text-ink-soft">{c.lastBody || 'No messages yet. Say hello.'}</span>
+        <span className="block text-card-title">{c.theirAlias}</span>
+        <span className="block truncate text-card-note text-ink-soft">{c.lastBody || 'No messages yet. Say hello.'}</span>
       </span>
       <span className="shrink-0 text-caption text-ink-soft">{c.lastMessageAt ? dateTime(c.lastMessageAt) : ''}</span>
     </Link>

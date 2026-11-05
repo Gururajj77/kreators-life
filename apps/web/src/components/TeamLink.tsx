@@ -78,12 +78,12 @@ export function TeamLink({ client }: { client: AgencyClient }) {
     <>
       <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-labelledby={`team-link-${client.id}`} data-team-link>
         <CardHead tag={on ? <StatusTag fit tone="good">On</StatusTag> : <StatusTag fit tone="neutral">Off</StatusTag>}>
-          <h3 id={`team-link-${client.id}`} className="m-0 text-headline">
+          <h3 id={`team-link-${client.id}`} className="m-0 text-card-title">
             Team link
           </h3>
         </CardHead>
-        <p className="mt-xs m-0 text-subhead text-ink-soft">{COPY.lede}</p>
-        {on && <p className="mt-xs m-0 text-subhead">{summary}</p>}
+        <p className="mt-xs m-0 text-card-note text-ink-soft">{COPY.lede}</p>
+        {on && <p className="mt-xs m-0 text-card-note">{summary}</p>}
 
         <div className="mt-sm flex items-center gap-xs">
           {on ? (

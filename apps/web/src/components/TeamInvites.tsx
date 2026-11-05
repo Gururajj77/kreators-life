@@ -51,8 +51,8 @@ export function TeamInvites({ only, compact = false, className = '' }: { only?: 
       <ul className="flex list-none flex-col gap-xs p-0 m-0" aria-label="Team invites">
         {waiting.map((t) => (
           <li key={t.id} className={compact ? '' : 'rounded-card bg-card p-md shadow-toy-soft'}>
-            {!compact && <p className="m-0 text-headline">{inviteLine(t)}</p>}
-            {!compact && <p className="mt-xs m-0 text-subhead text-ink-soft">{t.role === 'client' ? (t.clientName ? `You would see the work for ${t.clientName}, read only.` : 'You would see your own work, read only.') : TEAM_ROLE_META[t.role].blurb}</p>}
+            {!compact && <p className="m-0 text-card-title">{inviteLine(t)}</p>}
+            {!compact && <p className="mt-xs m-0 text-card-note text-ink-soft">{t.role === 'client' ? (t.clientName ? `You would see the work for ${t.clientName}, read only.` : 'You would see your own work, read only.') : TEAM_ROLE_META[t.role].blurb}</p>}
             <div className={`${compact ? '' : 'mt-sm '}flex flex-wrap gap-xs`}>
               <Button variant="outline" size="sm" onClick={() => answer.mutate({ t, yes: true })} disabled={answer.isPending} aria-label={`Accept: ${inviteLine(t)}`}>
                 Accept

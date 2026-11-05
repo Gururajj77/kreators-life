@@ -88,7 +88,7 @@ const when = (iso: string) => new Date(iso).toLocaleDateString(LOCALE, { day: 'n
 // from the tablet width up, so the meaning is the same and the phone reads less.
 function ShortBlurb({ text }: { text: string }) {
   const parts = text.match(/[^.!?]+[.!?]+(\s|$)/g)?.map((x) => x.trim()) ?? [text];
-  const cls = 'mt-xs m-0 flex-1 text-subhead text-ink-soft';
+  const cls = 'mt-xs m-0 flex-1 text-card-note text-ink-soft';
   // Two long sentences: the first says what it is on a phone, the second (the detail) joins it from the tablet width up.
   if (parts.length === 2 && text.split(/\s+/).length > 30)
     return (
@@ -128,7 +128,7 @@ export function MoreSection({ onOpen }: { onOpen: (k: ExtraKind) => void }) {
                   </span>
                 }
               >
-                <h3 className="text-balance text-headline">{k.name}</h3>
+                <h3 className="text-balance text-card-title">{k.name}</h3>
               </CardHead>
               <ShortBlurb text={k.blurb} />
               <div className="mt-sm flex flex-wrap-reverse items-center justify-between gap-sm">
@@ -752,17 +752,17 @@ function ChannelCards({ chart, selected, onSelect }: { chart: DesignChart; selec
           ? 'A channel joins two centers when both its gates are on. Tap one to see it on the graph.'
           : 'No channel is whole yet. Each of these gates is on, but the gate at its other end is off.'}
       </p>
-      <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
+      <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
         {channels.map((c) => {
           const m = CHANNEL_MEANINGS[c.key]!;
           return (
             <li key={c.key} id={`channel-${c.key}`} tabIndex={0} aria-current={selected === c.key ? 'true' : undefined} onFocus={() => onSelect(c.key)} onClick={() => onSelect(c.key)} className={card(c.key)}>
               <CardHead tag={<StatusTag tone="neutral" fit mark={<SideMark side={c.from} />}>{SIDE_WORD[c.from]}</StatusTag>}>
-                <p className="m-0 text-headline">
+                <p className="m-0 text-card-title">
                   {c.name} <span className="text-ink-soft">{c.a}-{c.b}</span>
                 </p>
               </CardHead>
-              <p className="m-0 text-subhead text-ink-soft">{centerWord(c.centers[0])} to {centerWord(c.centers[1])}</p>
+              <p className="m-0 text-card-note text-ink-soft">{centerWord(c.centers[0])} to {centerWord(c.centers[1])}</p>
               <Fold title="What it means" className="mt-xs">
                 <p className="m-0 text-subhead">{m.what}</p>
                 <p className="mt-xs m-0 text-subhead"><span className="font-bold">At your best: </span>{m.best}</p>
@@ -776,11 +776,11 @@ function ChannelCards({ chart, selected, onSelect }: { chart: DesignChart; selec
           hanging.map((h) => (
             <li key={h.gate} id={`channel-g${h.gate}`} tabIndex={0} aria-current={selected === `g${h.gate}` ? 'true' : undefined} onFocus={() => onSelect(`g${h.gate}`)} onClick={() => onSelect(`g${h.gate}`)} className={card(`g${h.gate}`)}>
               <CardHead tag={<StatusTag tone="neutral" fit mark={<SideMark side={h.side} />}>{SIDE_WORD[h.side]}</StatusTag>}>
-                <p className="m-0 text-headline">
+                <p className="m-0 text-card-title">
                   Gate {h.gate} <span className="text-ink-soft">{GATE_NAMES[h.gate - 1]}</span>
                 </p>
               </CardHead>
-              <p className="m-0 text-subhead text-ink-soft">{centerWord(h.center)}, waiting for gate {h.partners.join(' or ')}</p>
+              <p className="m-0 text-card-note text-ink-soft">{centerWord(h.center)}, waiting for gate {h.partners.join(' or ')}</p>
             </li>
           ))}
       </ul>

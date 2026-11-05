@@ -55,7 +55,7 @@ The rest of the baseline:
 - **Life coaches:** a coach works only with students who said yes. What a coach sees is the student's choice per link, five switches on to start with (Daily and streaks, pillars and pyramids, routine and contract, life map answers, reflection). They are read fresh on every request, with the link active and the permission held at that moment. Never the journal, a tracker's note, money, the Companion, practices, the contract's signed name or a review's snapshot. Every ask, answer, end, share change, note and task change is a line in `coach_log`, shown to both sides.
 - **Agency team members** work on the owner's Agency through one gate (`agencyTeamAccess.ts`) that reads their row on every request. Only routes on an allowlist open, at the tab's level the owner set (Off, View or Edit). The answer is scrubbed: no business profile or bank, private notes, fees, retainer amount, client link or Army links. A member's write is logged with who did it. A client member gets one read-only view.
 - **Phone and date of birth** are never shown to anyone else; the date of birth cannot be changed.
-- The smoke test (1,609 checks on 2026-11-05) proves much of this: journal, finance, not to do, the public page, Observability, the staff checks, an owner's Agency records and templates, the business-metrics switch, and the client link's switches. Campaigns, applications and cohorts are checked by reading the code. Emerging's privacy was checked by hand on 2026-11-04: another account and a coach with an active link see nothing of it.
+- The smoke test (1,610 checks on 2026-11-05) proves much of this: journal, finance, not to do, the public page, Observability, the staff checks, an owner's Agency records and templates, the business-metrics switch, and the client link's switches. Campaigns, applications and cohorts are checked by reading the code. Emerging's privacy was checked by hand on 2026-11-04: another account and a coach with an active link see nothing of it.
 
 ## 3. Privacy as practised
 
@@ -268,7 +268,7 @@ What changed for security, privacy and safety since 0.5, each checked in the cod
 - **Delete** (2026-11-04 and 05): a deleted account's friendships, Club membership and seats at future events go, and so do its `analytics_events` and `page_events` (§12).
 - **Password change** has its own limit and a constant-time compare (§1, §13).
 - **Fonts** are Google Sans Flex, plus Caveat on the public site, both self-hosted, so the CSP needed no new origin (§14).
-- **Checks on 2026-11-05:** typecheck, build, the performance budget, the scans and 553 shared tests pass; the smoke test has 1,609 checks. Migrations run from 0001 to 0083.
+- **Checks on 2026-11-05:** typecheck, build, the performance budget, the scans and 553 shared tests pass; the smoke test has 1,610 checks. Migrations run from 0001 to 0083.
 - **Not committed yet.** The commits "first launch" and "mini edit" (early on 5 November) hold the work up to migration 0082; the rest of 5 November is not in git. These new files must be added before a deploy: `apps/web/public/fonts/google-sans-flex-latin.woff2`, `apps/web/public/fonts/google-sans-flex-latin-ext.woff2`, `apps/web/src/components/fx/FractalGlass.tsx`, `apps/web/src/components/RowCard.tsx`, `packages/shared/src/insights.golden.test.ts`, `packages/shared/src/insights.golden.fixtures.ts`, `packages/shared/src/__golden__/` (three JSON files) and `apps/api/migrations/0083_agency_due_index.sql`. Run the pre-commit hook on that commit.
 
 ## Known gaps

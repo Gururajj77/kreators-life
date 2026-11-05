@@ -3,7 +3,8 @@
 import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
 const ORIGIN = 'http://127.0.0.1:8788';
-const OUT = process.argv[2];
+const OUT = process.argv[2] ?? process.env.SHOOT_OUT ?? new URL('./shots', import.meta.url).pathname;
+fs.mkdirSync(OUT, { recursive: true });
 const token = fs.readFileSync(new URL('./state/shoot-token', import.meta.url), 'utf8').trim();
 const api = async (m, p, b) => (await fetch(`${ORIGIN}/api${p}`, { method: m, headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, 'CF-Connecting-IP': '10.77.3.5' }, body: b ? JSON.stringify(b) : undefined })).json();
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });

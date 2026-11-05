@@ -239,9 +239,11 @@ app.route('/studio', studio);
 app.route('/studio', growth);
 app.route('/store', store);
 app.route('/store', buyer);
+// Before `manage`: its staff-only check covers every path under /manage, and a guide's tools answer here first (a creator who holds
+// Moderation is a guide, not staff).
+app.route('/manage/community', moderate);
 app.route('/manage', manage);
 app.route('/manage/resources', manageResources);
-app.route('/manage/community', moderate);
 app.route('/orgs', orgs);
 app.route('/army', army);
 app.route('/school', school);

@@ -13,7 +13,7 @@ export function Unsubscribe() {
       <header className="pt-lg">
         <p className="m-0 type-eyebrow text-ink-mute">kreators.app</p>
         <h1 className="type-hook mt-sm text-display-1">Unsubscribe</h1>
-        <p className="mt-xs m-0 text-pretty text-prose text-ink-soft">
+        <p className="mt-xs m-0 text-prose text-ink-soft">
           {stop.isSuccess ? 'Done. You will not get news and offers from kreators.app by email any more. Receipts and password emails still reach you, since you need them.' : 'Stop news and offers by email from kreators.app. Receipts and password emails still reach you.'}
         </p>
       </header>

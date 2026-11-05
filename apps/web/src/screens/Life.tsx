@@ -51,7 +51,10 @@ export function Life() {
       {d && (
         <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-label="The five areas this week">
           <div className="flex items-baseline justify-between gap-sm">
-            <p className="m-0 text-headline">The five areas, this week</p>
+            {/* Kept whole up to the comma, so a narrow phone breaks it there (the rectangle rule). */}
+            <p className="m-0 text-headline">
+              <span className="inline-block">The five areas,</span> <span className="inline-block">this week</span>
+            </p>
             <p className="m-0 text-caption text-ink-soft">
               <span className="inline-block size-[10px] rounded-pill bg-r2" aria-hidden="true" /> down on last week
             </p>
@@ -137,7 +140,15 @@ function AreaCard({ area }: { area: LifeArea }) {
               <AppIcon name={meta.icon} size={24} />
               {meta.name}
             </h2>
-            <p className="m-0 text-subhead text-ink-soft">{meta.blurb}</p>
+            {/* Each part up to a comma kept whole, so a narrow phone breaks the line there and never leaves a short one (the rectangle rule). */}
+            <p className="m-0 text-subhead text-ink-soft">
+              {meta.blurb.split(', ').map((part, i, all) => (
+                <span key={part}>
+                  {i > 0 && ' '}
+                  <span className="inline-block">{i < all.length - 1 ? `${part},` : part}</span>
+                </span>
+              ))}
+            </p>
             {trend !== 0 && (
               <p className="m-0 text-caption font-semibold" style={{ color: `var(--deep-${rel.key})` }}>
                 {trend > 0 ? `up ${trend}` : `down ${Math.abs(trend)}`} on last week
@@ -151,8 +162,8 @@ function AreaCard({ area }: { area: LifeArea }) {
             <li key={p.label}>
               <Link to={p.path} className="group toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm" title={p.hint}>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-headline">{p.label}</span>
-                  <span className="block text-subhead text-ink-soft">{p.value}</span>
+                  <span className="block text-card-title">{p.label}</span>
+                  <span className="block text-card-note text-ink-soft">{p.value}</span>
                 </span>
                 <span className="w-[96px] shrink-0">
                   <span className="block text-right text-caption text-ink-soft">{p.score === null ? 'no data' : p.score}</span>

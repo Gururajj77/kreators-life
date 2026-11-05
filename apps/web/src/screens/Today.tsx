@@ -173,7 +173,8 @@ export function Today() {
   const identity = me.data?.identity ?? null;
 
   return (
-    <Screen columns={false}>
+    // How it works comes in with the day: drawn under the loading cards, it would be pushed down when the day lands.
+    <Screen columns={false} howTo={!isPending}>
       <header className="pt-lg">
         <p className="m-0 text-subhead text-ink-soft">{prettyDate(date)}</p>
         <div className="flex items-center justify-between gap-sm">
@@ -186,7 +187,20 @@ export function Today() {
               </span>
             </span>
           )}
+          {/* While /today loads, placeholders of the same size hold the header, so nothing under it jumps when it answers. */}
+          {isPending && <Skeleton className="h-[calc(1lh+16px)] w-[88px] shrink-0 rounded-pill text-subhead" />}
         </div>
+        {isPending && (
+          <div className="mt-sm" aria-hidden="true">
+            <Skeleton className="h-[1lh] w-3/4 text-subhead" />
+            <div className="mt-xs flex gap-xs">
+              {[0, 1, 2].map((i) => (
+                <span key={i} className="h-[8px] flex-1 rounded-pill bg-line" />
+              ))}
+            </div>
+            <Skeleton className="mt-xs h-[1lh] w-1/2 text-caption" />
+          </div>
+        )}
         {data && (
           <div className="mt-sm">
             <p className="m-0 text-subhead">
@@ -372,7 +386,7 @@ export function Today() {
                   <span className="text-subhead text-ink-soft">{remembered.length}</span>
                 </div>
                 <p className="mt-xs m-0 text-caption text-ink-soft">Pick a day to move one into Tasks, with an inbox note.</p>
-                <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+                <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                   {remembered.map((t) => (
                     <BacklogTask key={t.id} t={t} date={date} queue={queue} />
                   ))}
@@ -382,7 +396,7 @@ export function Today() {
             {waiting > 0 && (
               <Fold className="mt-md" title="Not scheduled yet" hint={String(waiting)}>
                 <p className="mt-xs m-0 text-subhead text-ink-soft">Pick a do date or a due date to move one into Tasks.</p>
-                <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+                <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                   {backlog.map((t) => (
                     <BacklogTask key={t.id} t={t} date={date} queue={queue} />
                   ))}
@@ -433,7 +447,8 @@ export function Today() {
         </>
       )}
 
-      {identity && (
+      {/* Under the day, so it waits for it: shown before /today answers, the whole day would land above it and push it away. */}
+      {identity && !isPending && (
         <section className="mt-lg" aria-labelledby="evo-heading">
           <h2 id="evo-heading" className="text-title2">
             Who you are becoming

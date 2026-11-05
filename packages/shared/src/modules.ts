@@ -39,7 +39,7 @@ export const MODULES: readonly AppModule[] = [
   // Off on a new account. Owner only, like the journal: never shown to brands, staff, the leaderboard, a coach or the assistant.
   { key: 'discover', name: 'Discover', blurb: 'A quiz on how you think, feel and act. It shows your strengths across the seven relationships.', icon: 'Telescope', group: 'wellbeing', path: '/discover', defaultOn: false, minRole: 'user', accent: 'self' },
   { key: 'notifications', name: 'Inbox', blurb: 'What happened while you were away, and daily reminders.', icon: 'Bell', group: 'core', path: '/inbox', defaultOn: true, minRole: 'user' },
-  { key: 'help', name: 'Help', blurb: 'Answers to common questions, and a line to the team.', icon: 'LifeBuoy', group: 'core', path: '/help', defaultOn: true, minRole: 'user' },
+  { key: 'help', name: 'Help', blurb: 'Answers to your questions, and a line to the team.', icon: 'LifeBuoy', group: 'core', path: '/help', defaultOn: true, minRole: 'user' },
   // The assistant is part of every screen, not an app of its own: locked on, and its page is its plan and credits.
   { key: 'assistant', name: 'Assistant', blurb: 'Tap a flow to log something, or type it with a plan.', icon: 'WandSparkles', group: 'core', path: '/plans', defaultOn: true, locked: true, minRole: 'user' },
 
@@ -53,7 +53,7 @@ export const MODULES: readonly AppModule[] = [
   { key: 'party', name: 'Party', blurb: 'Meetups, workshops, camps and flagship days. RSVP, waitlist, check in.', icon: 'PartyPopper', group: 'community', path: '/party', defaultOn: false, minRole: 'user', accent: 'friendship' },
   { key: 'run', name: 'Kreators Run', blurb: 'Run clubs near you. A start code at the line logs your run.', icon: 'Footprints', group: 'community', path: '/run', defaultOn: false, minRole: 'user', accent: 'friendship' },
   { key: 'community', name: 'Community', blurb: 'Posts, replies and likes, by category.', icon: 'MessagesSquare', group: 'community', path: '/community', defaultOn: false, minRole: 'user', accent: 'friendship' },
-  { key: 'club', name: 'Club', blurb: 'A curated membership with benefits and exclusive opportunities.', icon: 'IdCard', group: 'community', path: '/club', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  { key: 'club', name: 'Club', blurb: 'A curated membership with benefits and members-only opportunities.', icon: 'IdCard', group: 'community', path: '/club', defaultOn: false, minRole: 'user', accent: 'friendship' },
   { key: 'bond', name: 'Bond', blurb: 'Friends, introductions, and anonymous chats with people you met.', icon: 'Handshake', group: 'community', path: '/bond', defaultOn: false, minRole: 'user', accent: 'friendship' },
   { key: 'circles', name: 'Circles', blurb: 'Small anonymous groups near you each week, matched by interests that fit.', icon: 'UsersRound', group: 'community', path: '/circles', defaultOn: false, minRole: 'user', accent: 'friendship' },
 
@@ -71,7 +71,7 @@ export const MODULES: readonly AppModule[] = [
   { key: 'profile', name: 'Public page', blurb: 'What people see: bio, skills, portfolio, links and what you sell.', icon: 'Link', group: 'creator', path: '/profile', defaultOn: true, minRole: 'user', accent: 'self' },
   { key: 'shop', name: 'Shop', blurb: 'Sell downloads, courses, memberships, sessions and events.', icon: 'ShoppingBag', group: 'creator', path: '/shop', defaultOn: true, minRole: 'user', accent: 'servant_leader' },
   { key: 'store', name: 'Store', blurb: 'Gear new from partners, or pre-owned from other creators.', icon: 'ShoppingCart', group: 'creator', path: '/store', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
-  { key: 'audience', name: 'Audience', blurb: 'Followers, leads, broadcasts and your affiliate link.', icon: 'Megaphone', group: 'creator', path: '/shop/audience', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
+  { key: 'audience', name: 'Audience', blurb: 'Your followers, leads, broadcasts and affiliate link.', icon: 'Megaphone', group: 'creator', path: '/shop/audience', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
   { key: 'content', name: 'Content', blurb: 'Which post made money: tracked links, views and revenue per piece of content.', icon: 'TrendingUp', group: 'creator', path: '/shop/content', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
   { key: 'automations', name: 'Auto-DM', blurb: 'Comment a keyword, get a link in DMs. Funnels show where people drop off.', icon: 'Bot', group: 'creator', path: '/shop/automations', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
   { key: 'finance', name: 'Finance', blurb: 'Money in and out, dues, budgets and goals for your work.', icon: 'Wallet', group: 'creator', path: '/finance', defaultOn: false, minRole: 'user', accent: 'parent_child' },

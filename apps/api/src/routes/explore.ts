@@ -1,9 +1,12 @@
 import { Hono } from 'hono';
-import { DEFAULT_ZONE, EVENT_TYPE_META, LISTING_TYPES, LOCALE, fact, type Listing, type ListingType, type PublicStats } from '@kreators/shared';
+import { DEFAULT_ZONE, EVENT_TYPE_META, LISTING_TYPES, LOCALE, fact, money as moneyOf, type Listing, type ListingType, type PublicStats } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { liveUser, nameOf, pageOf, paged } from '../db';
 import { mediaForListings } from './media';
 import { cache } from '../cachecontrol';
+
+// A program's delivery mode as the app's School screen names it ("Online", not the stored key).
+const DELIVERY_NAME: Record<string, string> = Object.assign(Object.create(null), { online: 'Online', in_person: 'In person', hybrid: 'Hybrid' });
 
 /** The public side of every module: what is on offer, with no account needed. */
 export const explore = new Hono<AppEnv>();
@@ -24,7 +27,10 @@ interface Opts {
 // A public card is read by anyone, so a moment is written in India's time, the Indian way.
 const when = (iso: string) => new Date(iso).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', timeZone: DEFAULT_ZONE });
 const whenAt = (iso: string) => new Date(iso).toLocaleString(LOCALE, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: DEFAULT_ZONE });
-const money = (min: number | null, max: number | null, cur: string) => (min === null && max === null ? null : `${cur} ${min ?? ''}${min !== null && max !== null ? ' to ' : ''}${max ?? ''}`.trim());
+// A gig's pay is kept in whole units (like a pitch's budget), so it is shown through money() from its cents: "₹2,000 to ₹5,000", not "INR 2000 to 5000".
+const units = (n: number, cur: string) => moneyOf(Math.round(n) * 100, cur);
+const money = (min: number | null, max: number | null, cur: string) =>
+  min === null && max === null ? null : min !== null && max !== null ? `${units(min, cur)} to ${units(max, cur)}` : units((min ?? max) as number, cur);
 
 /**
  * Why each kind reads up to 200 rows and the page is cut after the merge, not in SQL (decided 2026-11-03, P6):
@@ -131,7 +137,7 @@ export async function listingsFor(db: D1Database, o: Opts): Promise<Listing[]> {
             title: r.name,
             by: 'Kreators School',
             blurb: r.description,
-            facts: [...fact(r.delivery_mode === 'online' ? 'online' : 'place', r.delivery_mode.replace('_', ' ')), ...(r.price_points > 0 ? fact('price', `${r.price_points} pts`) : r.price_cents > 0 ? fact('price', `${r.currency} ${(r.price_cents / 100).toFixed(0)}`) : fact('free', 'Free')), ...fact('availability', r.cohorts > 0 ? `${r.cohorts} cohort${r.cohorts === 1 ? '' : 's'} open` : 'cohort dates soon')],
+            facts: [...fact(r.delivery_mode === 'online' ? 'online' : 'place', DELIVERY_NAME[r.delivery_mode] ?? r.delivery_mode.replace('_', ' ')), ...(r.price_points > 0 ? fact('price', `${r.price_points} pts`) : r.price_cents > 0 ? fact('price', moneyOf(r.price_cents, r.currency)) : fact('free', 'Free')), ...fact('availability', r.cohorts > 0 ? `${r.cohorts} cohort${r.cohorts === 1 ? '' : 's'} open` : 'cohort dates soon')],
             path: `/school`,
             featured: r.featured === 1,
             live: r.published === 1,

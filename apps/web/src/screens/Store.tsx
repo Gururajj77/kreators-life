@@ -21,7 +21,6 @@ import { FactTag, IconTag } from '../components/FactTag';
 import { StatusTag } from '../components/StatusTag';
 import { MoreMenu, type MoreMenuItem } from '../components/MoreMenu';
 import { bento } from '../lib/bento';
-import { TabRow } from '../components/TabRow';
 import { FilterBar, FilterSelect } from '../components/FilterSelect';
 import { CardHead } from '../components/CardHead';
 import { Reveal } from '../components/fx/Reveal';
@@ -216,8 +215,8 @@ export function Store() {
                 <li key={o.id}>
                   <button type="button" onClick={() => setOpen(o.listingId)} className="toy toy-soft flex w-full items-center gap-sm rounded-tile bg-card p-sm text-left text-ink">
                     <span className="min-w-0 flex-1">
-                      <span className="block text-headline">{o.listingTitle}</span>
-                      <span className="block text-subhead text-ink-soft">Your offer {money(o.cents, 'INR')}</span>
+                      <span className="block text-card-title">{o.listingTitle}</span>
+                      <span className="block text-card-note text-ink-soft">Your offer {money(o.cents, 'INR')}</span>
                     </span>
                     <StatusTag tone={o.status === 'accepted' ? 'good' : o.status === 'declined' ? 'bad' : o.status === 'open' ? 'info' : 'neutral'}>{o.status}</StatusTag>
                   </button>
@@ -267,9 +266,9 @@ function ItemBody({ item, team = [] }: { item: StoreItem; team?: MoreMenuItem[] 
     <div className="flex h-full flex-col">
       {item.imageUrl && <FadeImage src={item.imageUrl} alt={item.title} loading="lazy" decoding="async" frame="mb-sm aspect-video w-full rounded-tile bg-paper" className="h-full w-full object-cover" />}
       <CardHead tag={<Price cents={item.priceCents} currency={item.currency} />}>
-        <span className="block text-balance text-headline">{item.title}</span>
+        <span className="block text-balance text-card-title">{item.title}</span>
       </CardHead>
-      {item.description && <span className="mt-xs block text-subhead text-ink-soft">{item.description}</span>}
+      {item.description && <span className="mt-xs block text-card-note text-ink-soft">{item.description}</span>}
       <div className="mt-auto flex flex-col gap-xs pt-sm">
         <span className="flex">
           <TagRow>
@@ -302,9 +301,9 @@ function KitBody({ kit, team = [] }: { kit: StoreKit; team?: MoreMenuItem[] }) {
   return (
     <div className="flex h-full flex-col">
       <CardHead tag={<IconTag tone="calm" icon="Sprout" fit>{STORE_STAGE_META[kit.stage].name}</IconTag>}>
-        <span className="block text-balance text-headline">{kit.title}</span>
+        <span className="block text-balance text-card-title">{kit.title}</span>
       </CardHead>
-      {kit.description && <span className="mt-xs block text-subhead text-ink-soft">{kit.description}</span>}
+      {kit.description && <span className="mt-xs block text-card-note text-ink-soft">{kit.description}</span>}
       <ul className="mt-xs list-none p-0 m-0">
         {kit.items.map((it) => (
           <li key={`${it.type}-${it.id}`} className="flex items-baseline justify-between gap-sm border-t border-line py-xs text-subhead">
@@ -570,7 +569,7 @@ function ItemSheet({ open, onClose, onSaved }: { open: boolean; onClose: () => v
           <Field label="Xp of at least">
             <input type="number" min={0} value={minXp} onChange={(e) => setMinXp(e.target.value)} className={FIELD} />
           </Field>
-          <Field label="Points balance of at least">
+          <Field label="Points of at least">
             <input type="number" min={0} value={minPoints} onChange={(e) => setMinPoints(e.target.value)} className={FIELD} />
           </Field>
           <Field label="Holds the badge">

@@ -32,6 +32,14 @@ export function FocusRoundsHost() {
     if (place && home.parentNode !== place) place.appendChild(home);
   }, [target, parking, home]);
   useEffect(() => () => home.remove(), [home]);
+  // The panel's height while it is on a page, kept for the slots (see focusPortal's `height`).
+  const setHeight = useFocusPortal((s) => s.setHeight);
+  useEffect(() => {
+    if (!target || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setHeight(home.offsetHeight));
+    ro.observe(home);
+    return () => ro.disconnect();
+  }, [target, home, setHeight]);
 
   return (
     <>

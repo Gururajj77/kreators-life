@@ -304,15 +304,15 @@ export function ClientPassword({
         style={ask && !bare ? { background: 'var(--tint-yellow)' } : undefined}
       >
         <CardHead tag={tag}>
-          <h3 className="m-0 text-headline">{words.title}</h3>
+          <h3 className="m-0 text-card-title">{words.title}</h3>
         </CardHead>
-        <p className="mt-xs m-0 text-subhead">{line}</p>
+        <p className="mt-xs m-0 text-card-note">{line}</p>
         {ask?.reason && (
-          <p className="mt-xs m-0 text-subhead text-ink-soft">
+          <p className="mt-xs m-0 text-card-note text-ink-soft">
             <Inert text={`“${ask.reason}”`} />
           </p>
         )}
-        <p className="mt-xs m-0 text-subhead text-ink-soft">{[state.set || ask ? words.oneLock : '', opened].filter(Boolean).join(' ')}</p>
+        <p className="mt-xs m-0 text-card-note text-ink-soft">{[state.set || ask ? words.oneLock : '', opened].filter(Boolean).join(' ')}</p>
 
         {/* One main action across the row with its round button at the right end (wave 15). With only "Generate one" to offer,
             that button is the action itself, not a menu of one. */}

@@ -164,7 +164,17 @@ export function AgencyClient() {
       hint: `${included > 0 ? `of ${minutesLabel2(included)} included, ` : ''}${minutesLabel2(m.billableMinutes)} billable${included > 0 && m.billableMinutes > included ? ', over the hours' : ''}`,
       ring: null,
     },
-    { label: 'For them to look at', value: `${m.inReview} waiting, ${m.overdue} late`, hint: m.overdue > 0 ? 'Late means past their day' : 'In review now', ring: null },
+    // Two halves kept whole, so a narrow tile breaks at the comma (a rectangle, CLAUDE.md) and never leaves "late" short under it.
+    {
+      label: 'For them to look at',
+      value: (
+        <>
+          <span className="inline-block">{m.inReview} waiting,</span> <span className="inline-block">{m.overdue} late</span>
+        </>
+      ),
+      hint: m.overdue > 0 ? 'Late means past their day' : 'In review now',
+      ring: null,
+    },
   ];
   const facts = [
     [c.contactName, c.contactEmail].filter(Boolean).join(', '),
@@ -299,9 +309,10 @@ export function AgencyClient() {
               {d.time.map((t) => (
                 <li key={t.id} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
                   <div className="min-w-0 flex-1">
+                    {/* The time and the day each kept whole, so a narrow row breaks between them and never leaves "Nov" alone. */}
                     <p className="m-0 text-headline">
-                      {minutesLabel2(t.minutes)}
-                      <span className="ml-xs text-subhead text-ink-soft">{prettyDate(t.day)}</span>
+                      <span className="inline-block">{minutesLabel2(t.minutes)}</span>{' '}
+                      <span className="inline-block text-subhead text-ink-soft">{prettyDate(t.day)}</span>
                     </p>
                     {(t.itemTitle || t.note) && (
                       <p className="m-0 text-subhead text-ink-soft">

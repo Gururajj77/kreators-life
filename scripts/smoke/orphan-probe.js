@@ -28,7 +28,10 @@
     const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
     if (text.length < 24) continue;
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-    const lines = new Map();
+    // Lines in reading order: a word joins the current line when its middle sits inside it, so a word in another size or face on the
+    // same line (a code-like link, a count) is not taken for a line of its own.
+    const lines = [];
+    let cur = null;
     let node;
     while ((node = walker.nextNode())) {
       const t = node.textContent ?? '';
@@ -40,13 +43,21 @@
         range.setEnd(node, m.index + m[0].length);
         const rects = range.getClientRects();
         if (!rects.length) continue;
-        const top = Math.round(rects[0].top / 4) * 4;
-        lines.set(top, (lines.get(top) ?? []).concat(m[0]));
+        const r = rects[0];
+        const mid = (r.top + r.bottom) / 2;
+        if (cur && mid >= cur.top - 1 && mid <= cur.bottom + 1) {
+          cur.top = Math.min(cur.top, r.top);
+          cur.bottom = Math.max(cur.bottom, r.bottom);
+          cur.words.push(m[0]);
+        } else {
+          cur = { top: r.top, bottom: r.bottom, words: [m[0]] };
+          lines.push(cur);
+        }
       }
     }
-    const tops = [...lines.keys()].sort((a, b) => a - b);
-    if (tops.length < 2) continue;
-    const last = lines.get(tops[tops.length - 1]);
+    if (lines.length < 2) continue;
+    const tops = lines;
+    const last = lines[lines.length - 1].words;
     if (last.length === 1) {
       const key = `${where(el)}|${text.slice(0, 30)}`;
       if (seen.has(key)) continue;
