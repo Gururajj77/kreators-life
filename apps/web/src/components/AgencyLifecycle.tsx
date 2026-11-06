@@ -175,6 +175,10 @@ export function LifecycleCard({ client, life, compact = false }: { client: Agenc
             </Button>
           ))}
       </div>
+      {/* Stepping back before the agreement's stages: what is already sent or signed stays as it is and no longer moves them on by itself. */}
+      {confirmBack && prev && (prev === 'enquiry' || prev === 'agreement_sent') && (
+        <p className="mt-xs m-0 text-subhead text-ink-soft">The agreement stays as it is. They move on again when you send one or the client signs one, or with the move button.</p>
+      )}
       {problem && <p className="mt-xs m-0 text-subhead text-ink-soft">{problem}</p>}
       {move.isError && (
         <p role="alert" className="mt-xs m-0 text-subhead">

@@ -4070,7 +4070,13 @@ section('Agency lifecycle');
   check('and a stage that does not exist is refused', (await api('POST', `/agency/clients/${cid}/stage`, { to: 'constructor' }, O.token)).status === 400);
   check('the owner moves one step', (await api('POST', `/agency/clients/${cid}/stage`, { to: 'strategy' }, O.token)).status === 200 && (await page(cid)).lifecycle.stage === 'strategy');
   check('a slip can be undone one step back, and only one', (await api('POST', `/agency/clients/${cid}/stage`, { to: 'agreement_signed', undo: true }, O.token)).status === 200 && (await api('POST', `/agency/clients/${cid}/stage`, { to: 'enquiry', undo: true }, O.token)).status === 400);
-  await api('POST', `/agency/clients/${cid}/stage`, { to: 'strategy' }, O.token);
+  // A step back sticks: an agreement already sent or signed does not move them on again on the next page load (2026-11-07).
+  const backSent = await api('POST', `/agency/clients/${cid}/stage`, { to: 'agreement_sent', undo: true }, O.token);
+  check('stepping back past a signed agreement stays put after the page loads again', backSent.status === 200 && (await page(cid)).lifecycle.stage === 'agreement_sent' && (await page(cid)).lifecycle.stage === 'agreement_sent', backSent.json);
+  const backEnq = await api('POST', `/agency/clients/${cid}/stage`, { to: 'enquiry', undo: true }, O.token);
+  check('and back to Enquiry with the agreement still out stays at Enquiry', backEnq.status === 200 && (await page(cid)).lifecycle.stage === 'enquiry', backEnq.json);
+  for (const to of ['agreement_sent', 'agreement_signed', 'strategy']) await api('POST', `/agency/clients/${cid}/stage`, { to }, O.token);
+  check('the owner moves them on again by hand', (await page(cid)).lifecycle.stage === 'strategy');
   check('the move is written in the log, and the log holds no password', (await page(cid)).lifecycle.log.some((l) => /Moved to Strategy session/.test(l.text)) && !JSON.stringify((await page(cid)).lifecycle.log).includes(pw));
   check('someone else cannot move, read or change this client', (await api('POST', `/agency/clients/${cid}/stage`, { to: 'trial' }, X.token)).status === 404 && (await api('PUT', `/agency/clients/${cid}/password`, { clear: true }, X.token)).status === 404 && (await api('PUT', `/agency/clients/${cid}/lifecycle`, { trialDue: day(3) }, X.token)).status === 404);
 

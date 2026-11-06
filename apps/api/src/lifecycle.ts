@@ -75,16 +75,21 @@ export async function applyStageEvent(db: D1Database, userId: string, clientId: 
  * A client moves on when its agreement does: an agreement sent takes an enquiry to Agreement sent, and a signed one takes an enquiry or a
  * sent client to Agreement signed. Another part of the app signs the agreement, so this is read rather than called there: the client page,
  * the client's link and the cron all run it, and it does nothing the second time. Pass a client to look at one, none for all (the cron).
+ * Only an agreement sent or signed after the client reached the stage they are at counts (`stage_since`), so when the owner steps back
+ * (to Enquiry with an agreement still out, say) the client stays where they were put until an agreement is sent or signed again; before
+ * this, the next page load moved them straight forward again (the founder, 2026-11-07). A client with no `stage_since` keeps the old rule.
  */
 export async function syncStageFromAgreements(db: D1Database, only?: { userId: string; clientId: string }): Promise<number> {
   const rows = await db
     .prepare(
       `SELECT c.id, c.user_id, c.stage,
-        EXISTS (SELECT 1 FROM agency_contracts k WHERE k.client_id = c.id AND k.status = 'signed') AS signed,
-        EXISTS (SELECT 1 FROM agency_contracts k WHERE k.client_id = c.id AND k.status = 'sent') AS sent
+        EXISTS (SELECT 1 FROM agency_contracts k WHERE k.client_id = c.id AND k.status = 'signed' AND (c.stage_since IS NULL OR k.signed_at > c.stage_since)) AS signed,
+        EXISTS (SELECT 1 FROM agency_contracts k WHERE k.client_id = c.id AND k.status = 'sent' AND (c.stage_since IS NULL OR k.sent_at > c.stage_since)) AS sent
        FROM agency_clients c
        WHERE c.stage IN ('enquiry', 'agreement_sent') ${only ? 'AND c.id = ?1 AND c.user_id = ?2' : ''}
-       AND EXISTS (SELECT 1 FROM agency_contracts k WHERE k.client_id = c.id AND k.status IN ('sent', 'signed')) LIMIT 300`,
+       AND EXISTS (SELECT 1 FROM agency_contracts k WHERE k.client_id = c.id AND (
+         (k.status = 'sent' AND (c.stage_since IS NULL OR k.sent_at > c.stage_since)) OR
+         (k.status = 'signed' AND (c.stage_since IS NULL OR k.signed_at > c.stage_since)))) LIMIT 300`,
     )
     .bind(...(only ? [only.clientId, only.userId] : []))
     .all<{ id: string; user_id: string; stage: string; signed: number; sent: number }>();
