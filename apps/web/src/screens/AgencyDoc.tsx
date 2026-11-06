@@ -17,7 +17,8 @@ import { AppCover } from '../components/AppCover';
 import type { SheetStamp } from '../components/PrintSheet';
 import { Screen } from '../components/Screen';
 import { Busy, Skeleton, SkeletonCard } from '../components/Skeleton';
-import { api } from '../lib/api';
+import { api, ApiError } from '../lib/api';
+import { useAgencyCan } from '../lib/agencyWorkspace';
 import { copyPlain } from '../lib/clipboard';
 import { fileTitle, printAs, useAutoPrint } from '../lib/printDoc';
 import { DocClientBar, DocHeader, PAPER_CAN_ID, PAPER_CLIENT_ID, PAPER_PASSWORD_ID, SaveLine, TemplateSheet, ThreadSheet, usePaperDoc, useSaid, waitingFrom, type PaperState } from './AgencyContract';
@@ -38,6 +39,7 @@ export function AgencyDoc() {
   const clients = useQuery({ queryKey: ['agency', 'clients-pick'], queryFn: () => api.agency('csize=100') });
   const mine = useQuery({ queryKey: ['agency', 'templates', 'doc'], queryFn: () => api.agencyTemplates('doc') });
   const superAdmin = useSuperAdmin();
+  const canPaper = useAgencyCan().can('paperwork', 'edit');
   const d = q.data?.doc;
   const editable = d?.status === 'draft' || d?.status === 'sent' || d?.status === 'revised';
   const [open, setOpen] = useState<Open>(null);
@@ -81,6 +83,20 @@ export function AgencyDoc() {
     onSuccess: (r) => {
       done();
       nav(`/agency/docs/${r.id}`);
+    },
+  });
+  // Once approved, the one thing that still changes is what goes on paper: a section on or off the printed page.
+  const printFlip = useMutation({
+    mutationFn: ({ sectionId, print }: { sectionId: string; print: boolean }) => api.agencyDocPrint(id, sectionId, print),
+    onSuccess: (r, v) => {
+      const next = { doc: r.doc.doc, clientId: r.doc.clientId };
+      setState(next);
+      auto.reset(next, r.doc.updatedAt);
+      qc.setQueryData(['agency', 'doc', id], { doc: r.doc });
+      setSaid(v.print ? 'It prints now.' : 'Left off the printed page.');
+    },
+    onError: (e) => {
+      if (e instanceof ApiError && e.status === 409) void q.refetch();
     },
   });
   const remove = useMutation({
@@ -179,7 +195,7 @@ export function AgencyDoc() {
       Revise
     </Button>
   ) : null;
-  const error = [setStatus, duplicate, remove].map((m) => m.error).find(Boolean);
+  const error = [setStatus, duplicate, remove, printFlip].map((m) => m.error).find(Boolean);
 
   return (
     <Screen columns={false}>
@@ -210,7 +226,7 @@ export function AgencyDoc() {
       />
 
       <section className="mt-md" aria-label="The document">
-        <ContractView audience="owner" kind="document" doc={doc} answers={d.answers} acceptance={d.acceptance} reference={d.ref} date={d.sentAt ?? d.createdAt} stamp={sheetStamp} onDocChange={editable ? (x) => edit(() => x) : undefined} onFill={() => setOpen('fill')} />
+        <ContractView audience="owner" kind="document" doc={doc} answers={d.answers} acceptance={d.acceptance} reference={d.ref} date={d.sentAt ?? d.createdAt} stamp={sheetStamp} onDocChange={editable ? (x) => edit(() => x) : undefined} onFill={() => setOpen('fill')} onPrint={!editable && canPaper ? (sectionId, print) => void (printFlip.isPending || printFlip.mutate({ sectionId, print })) : undefined} />
       </section>
 
       <DocPasswordFold id={PAPER_PASSWORD_ID} open={pwOpen} onOpenChange={setPwOpen} clientId={clientId} clientName={clientName} savedClientId={d.clientId} />

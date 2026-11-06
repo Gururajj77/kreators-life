@@ -545,6 +545,13 @@ interface Props {
   onDocChange?: (doc: ContractDoc) => void;
   /** The owner's note of what is missing then ends with "Fill them in", which opens the Fill in the details form. */
   onFill?: () => void;
+  /**
+   * On paper that is a record (signed, approved, void), the owner may still switch a section on or off the printed page: each section
+   * then keeps a handle whose menu holds only "Print this section". It changes what goes on paper, never the words.
+   */
+  onPrint?: (sectionId: string, print: boolean) => void;
+  /** A quiet line shown under the brief's heading on the screen (the client's "Saved" while answers save as they type). */
+  briefNote?: ReactNode;
 }
 
 /** The sender's name and address for the top of the first page, from the names filled in. */
@@ -604,11 +611,49 @@ function SectionEdit({ s, index, doc, set, onMove, onRemove, onAdd, vars, answer
   );
 }
 
+/** One section of read-only paper. With `onPrint` it keeps a handle whose menu has only "Print this section" (a record's one switch). */
+function SectionRead({ s, doc, style, vars, audience, writeOn, answers, onAnswer, acceptance, signLine, empty, onPrint, briefNote }: { s: ContractSection; doc: ContractDoc; style: ReturnType<typeof parseDocStyle>; vars: Record<string, string>; audience: DocAudience; writeOn: ReturnType<typeof writeOnKeys>; answers: Record<string, ContractAnswer>; onAnswer?: (id: string, a: ContractAnswer) => void; acceptance?: Props['acceptance']; signLine?: Props['signLine']; empty: boolean; onPrint?: Props['onPrint']; briefNote?: ReactNode }) {
+  const [menu, setMenu] = useState(false);
+  const press = useLongPress(() => setMenu(true));
+  const prints = sectionPrints(s);
+  const switchable = Boolean(onPrint) && s.kind !== 'signatures';
+  const name = s.heading || 'Section';
+  const items: MoreMenuItem[] = switchable ? [{ key: 'print', label: 'Print this section', icon: Printer, hint: prints ? 'On' : 'Off', onSelect: () => onPrint?.(s.id, !prints) }] : [];
+  return (
+    <section className={`legal-sec${switchable ? ' paper-sec' : ''}${prints ? '' : ' legal-noprint'}`} data-print-only={switchable ? '' : undefined} data-kind={s.kind} aria-label={name}>
+      {s.heading && (
+        <h2 className="legal-sec-h" {...(switchable ? press : {})}>
+          {style.heading === 'numbered' ? stripNumber(s.heading) : s.heading}
+        </h2>
+      )}
+      {switchable && <SectionHandle items={items} label={`Section: ${name}`} open={menu} onOpenChange={setMenu} />}
+      {switchable && !prints && (
+        <p className="paper-note no-print">
+          Not printed. On the screen and at the client's link.
+          <span className="paper-hint paper-hint-touch">Press and hold the heading to print it.</span>
+          <span className="paper-hint paper-hint-mouse">Point at the heading to print it.</span>
+        </p>
+      )}
+      {s.kind === 'brief' && briefNote}
+      {s.body && (
+        <div {...(switchable && !s.heading ? press : {})}>
+          <Words text={s.body} vars={vars} audience={audience} writeOn={writeOn} sectionId={s.id} />
+        </div>
+      )}
+      {empty && <p className="legal-clause italic no-print">Not written yet. Write this part before you send it.</p>}
+      {s.kind === 'packages' && <Packages s={s} doc={doc} />}
+      {s.kind === 'brief' && <Brief s={s} answers={answers} onAnswer={onAnswer} />}
+      {s.tail && <Words text={s.tail} vars={vars} audience={audience} writeOn={writeOn} />}
+      {s.kind === 'signatures' && <Signatures doc={doc} acceptance={acceptance} signLine={signLine} />}
+    </section>
+  );
+}
+
 /**
  * An agreement (or any sectioned document) as a page: the title block, then every section in order. It prints as a legal document
  * (PrintSheet). With `onDocChange` it is also the editor: the same page, every part of it editable where it stands.
  */
-export function ContractView({ doc, answers = {}, onAnswer, acceptance, signLine, reference, date, stamp, kind = 'agreement', audience = 'client', onDocChange, onFill }: Props) {
+export function ContractView({ doc, answers = {}, onAnswer, acceptance, signLine, reference, date, stamp, kind = 'agreement', audience = 'client', onDocChange, onFill, onPrint, briefNote }: Props) {
   const style = parseDocStyle(doc.style);
   const typed = style.layout === 'typed';
   const vars = docVars(doc);
@@ -689,19 +734,7 @@ export function ContractView({ doc, answers = {}, onAnswer, acceptance, signLine
             />
           ))
         : sections.map((s) => (
-            <section key={s.id} className={sectionPrints(s) ? 'legal-sec' : 'legal-sec legal-noprint'} data-kind={s.kind} aria-label={s.heading || 'Section'}>
-              {s.heading && <h2 className="legal-sec-h">{style.heading === 'numbered' ? stripNumber(s.heading) : s.heading}</h2>}
-              {s.body && (
-                <div>
-                  <Words text={s.body} vars={vars} audience={audience} writeOn={writeOn} sectionId={s.id} />
-                </div>
-              )}
-              {empty(s) && <p className="legal-clause italic no-print">Not written yet. Write this part before you send it.</p>}
-              {s.kind === 'packages' && <Packages s={s} doc={doc} />}
-              {s.kind === 'brief' && <Brief s={s} answers={answers} onAnswer={onAnswer} />}
-              {s.tail && <Words text={s.tail} vars={vars} audience={audience} writeOn={writeOn} />}
-              {s.kind === 'signatures' && <Signatures doc={doc} acceptance={acceptance} signLine={signLine} />}
-            </section>
+            <SectionRead key={s.id} s={s} doc={doc} style={style} vars={vars} audience={audience} writeOn={writeOn} answers={answers} onAnswer={onAnswer} acceptance={acceptance} signLine={signLine} empty={empty(s)} onPrint={onPrint} briefNote={briefNote} />
           ))}
       {notPrinted.length > 0 && (
         <p className="legal-print-note m-0">{`Not printed here, and open at the agreement's link: ${notPrinted.map((s) => s.heading.replace(/\.$/, '')).join('; ')}.`}</p>

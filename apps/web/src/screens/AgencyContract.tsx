@@ -23,6 +23,7 @@ import { Sheet } from '../components/Sheet';
 import { StatusTag } from '../components/StatusTag';
 import { Toggle } from '../components/Toggle';
 import { api, ApiError } from '../lib/api';
+import { useAgencyCan } from '../lib/agencyWorkspace';
 import { copyPlain } from '../lib/clipboard';
 import { fileTitle, printAs, useAutoPrint } from '../lib/printDoc';
 import { tie } from '../lib/text';
@@ -303,6 +304,7 @@ export function AgencyContract() {
   const clients = useQuery({ queryKey: ['agency', 'clients-pick'], queryFn: () => api.agency('csize=100') });
   const mine = useQuery({ queryKey: ['agency', 'templates', 'contract'], queryFn: () => api.agencyTemplates('contract') });
   const superAdmin = useSuperAdmin();
+  const canPaper = useAgencyCan().can('paperwork', 'edit');
   const c = q.data?.contract;
   const editable = c?.status === 'draft' || c?.status === 'sent';
   const [open, setOpen] = useState<Open>(null);
@@ -357,6 +359,20 @@ export function AgencyContract() {
     onSuccess: (r) => {
       done();
       nav(`/agency/contracts/${r.id}`);
+    },
+  });
+  // On a record (signed or void) the one thing that still changes is what goes on paper: a section on or off the printed page.
+  const printFlip = useMutation({
+    mutationFn: ({ sectionId, print }: { sectionId: string; print: boolean }) => api.agencyContractPrint(id, sectionId, print),
+    onSuccess: (r, v) => {
+      const next = { doc: r.contract.doc, clientId: r.contract.clientId };
+      setState(next);
+      auto.reset(next, r.contract.updatedAt);
+      qc.setQueryData(['agency', 'contract', id], { contract: r.contract });
+      setSaid(v.print ? 'It prints now.' : 'Left off the printed page.');
+    },
+    onError: (e) => {
+      if (e instanceof ApiError && e.status === 409) void q.refetch();
     },
   });
   const remove = useMutation({
@@ -456,7 +472,7 @@ export function AgencyContract() {
       Revise
     </Button>
   ) : null;
-  const error = [setStatus, restore, duplicate, remove].map((m) => m.error).find(Boolean);
+  const error = [setStatus, restore, duplicate, remove, printFlip].map((m) => m.error).find(Boolean);
 
   return (
     <Screen columns={false}>
@@ -497,6 +513,7 @@ export function AgencyContract() {
           stamp={sheetStamp}
           onDocChange={editable ? (d) => edit(() => d) : undefined}
           onFill={() => setOpen('fill')}
+          onPrint={!editable && canPaper ? (sectionId, print) => void (printFlip.isPending || printFlip.mutate({ sectionId, print })) : undefined}
         />
       </section>
 

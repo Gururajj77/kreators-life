@@ -1,6 +1,6 @@
 import { contractAsText, docDateTime, type ContractAnswer } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { Button } from '../components/Button';
 import { ContractView, paperDate } from '../components/ContractView';
@@ -15,9 +15,22 @@ import { SiteLayout } from './SiteLayout';
 import { FIELD } from '../lib/ui';
 
 const COPY = {
+  idle: 'Your answers save as you type.',
+  saving: 'Saving',
+  saved: 'Saved',
+  failed: 'Not saved yet. We will try again.',
+  kept: 'Not saved. Your answers stay on this page and are sent when you sign.',
   typed: 'Typing your name is your acceptance of this agreement. It is typed acceptance, not a certified e-signature.',
   agree: ['I have read this agreement,', 'and I agree to it.'],
 };
+
+/**
+ * Answers typed but not saved when the link locked again (the password changed, or its twelve hours ran out). The lock screen takes the
+ * page's place, so they wait here, in this tab's memory only, and come back and save once the link is open again.
+ */
+const unsaved = new Map<string, Record<string, ContractAnswer>>();
+/** How long to wait before the next try after a failed save: 5 s, then twice as long each time, never more than a minute. */
+const retryMs = (tries: number) => Math.min(60_000, 5_000 * 2 ** tries);
 
 /** The client's agreement: read it, answer the brief, ask for a change, and accept by typing a name. */
 export function ContractPublic() {
@@ -45,8 +58,101 @@ export function ContractPublic() {
   }, [d]);
   useAutoPrint(Boolean(d), fileTitle('Agreement', d?.doc.vars.client, d?.doc.title));
 
+  // The brief's answers save as they are typed: 800 ms after the last change, and at once when a field is left, so nothing is lost if the
+  // client goes before signing. A failed save is tried again a little later; once the agreement is signed (409) the page reloads.
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed' | 'kept'>('idle');
+  const latest = useRef<Record<string, ContractAnswer> | null>(null);
+  const timer = useRef<number | null>(null);
+  const saving = useRef(false);
+  const tries = useRef(0);
+  const stopTimer = () => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
+  };
+  const saveAnswers = async () => {
+    stopTimer();
+    const next = latest.current;
+    if (!next || saving.current) return;
+    latest.current = null;
+    saving.current = true;
+    setSaveState('saving');
+    try {
+      await publicApi.contractAnswers(token, next);
+      saving.current = false;
+      tries.current = 0;
+      if (latest.current) void saveAnswers();
+      else setSaveState('saved');
+    } catch (e) {
+      saving.current = false;
+      const waiting = latest.current ?? next;
+      if (e instanceof ApiError && (e.status === 409 || e.status === 404)) {
+        setSaveState('idle');
+        void q.refetch();
+        return;
+      }
+      // The link locked again: keep what was typed, and ask the gate to show the lock screen. Once it is open again the answers come
+      // back and save (the effect below).
+      if (e instanceof ApiError && e.status === 401 && e.data.error === 'locked') {
+        latest.current = null;
+        unsaved.set(token, waiting);
+        setSaveState('idle');
+        void qc.invalidateQueries({ queryKey: ['portal-lock', 'contracts', token] });
+        return;
+      }
+      // Refused for a reason a retry cannot change: stop trying, and say plainly that signing still sends them.
+      if (e instanceof ApiError && e.status >= 400 && e.status < 500 && e.status !== 408 && e.status !== 429) {
+        latest.current = waiting;
+        setSaveState('kept');
+        return;
+      }
+      // Offline, busy or too many tries: keep what was not saved (unless something newer is waiting) and try again, waiting longer each time.
+      latest.current = waiting;
+      setSaveState('failed');
+      timer.current = window.setTimeout(() => void saveAnswers(), retryMs(tries.current));
+      tries.current += 1;
+    }
+  };
+  const answer = (id: string, a: ContractAnswer) => {
+    setAnswers((m) => {
+      const next = { ...m, [id]: a };
+      latest.current = next;
+      return next;
+    });
+    // A change waiting for its save is not "Saved" yet.
+    setSaveState('saving');
+    stopTimer();
+    timer.current = window.setTimeout(() => void saveAnswers(), 800);
+  };
+  const saveNow = () => {
+    if (latest.current) void saveAnswers();
+  };
+  useEffect(() => () => stopTimer(), []);
+  // Answers that waited through the lock screen come back over the saved ones and are sent again.
+  useEffect(() => {
+    if (d?.status !== 'sent') return;
+    const back = unsaved.get(token);
+    if (!back) return;
+    unsaved.delete(token);
+    setAnswers(back);
+    latest.current = back;
+    void saveAnswers();
+  }, [d, token]);
+  // A tab put away or closed sends what is waiting.
+  useEffect(() => {
+    const away = () => {
+      if (document.visibilityState === 'hidden') saveNow();
+    };
+    document.addEventListener('visibilitychange', away);
+    return () => document.removeEventListener('visibilitychange', away);
+  });
+
   const accept = useMutation({
-    mutationFn: () => publicApi.contractAccept(token, { name: name.trim(), title: title.trim(), agree, answers }),
+    mutationFn: () => {
+      // Signing sends the answers itself, so a save still waiting is not needed.
+      stopTimer();
+      latest.current = null;
+      return publicApi.contractAccept(token, { name: name.trim(), title: title.trim(), agree, answers });
+    },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['contract', token] }),
   });
   const comment = useMutation({
@@ -82,16 +188,25 @@ export function ContractPublic() {
               </span>
             </div>
 
+            <div onBlur={d.status === 'sent' ? saveNow : undefined}>
             <ContractView
               doc={d.doc}
               answers={answers}
-              onAnswer={d.status === 'sent' ? (id, a) => setAnswers((m) => ({ ...m, [id]: a })) : undefined}
+              onAnswer={d.status === 'sent' ? answer : undefined}
+              briefNote={
+                d.status === 'sent' ? (
+                  <p role="status" className="brief-save no-print m-0 text-caption text-ink-mute" data-state={saveState}>
+                    {COPY[saveState]}
+                  </p>
+                ) : undefined
+              }
               acceptance={d.acceptance}
               reference={d.ref}
               date={d.sentAt ?? undefined}
               stamp={stamp}
               signLine={d.status === 'sent' && name.trim() ? { name: name.trim(), title: title.trim() } : null}
             />
+            </div>
 
             {d.status === 'signed' && d.acceptance && (
               <p role="status" className="mt-md m-0 rounded-tile p-sm text-headline" style={{ background: 'var(--tint-green)' }}>

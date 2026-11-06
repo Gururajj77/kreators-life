@@ -91,6 +91,8 @@ export const LIMITS = {
    * own, so the saves never use up `portal` and the one Send at the end is never refused.
    */
   onboardingSave: { max: 300, windowSec: 600 },
+  /** The client's brief answers at an agreement link, saved as they type (PUT /public/contracts/:token/answers): generous like onboardingSave, and its own budget, so it never eats `portal`, which signing and comments use. */
+  contractAnswers: { max: 300, windowSec: 600 },
   /** Sending the onboarding form, per address: it is sent once, so ten in ten minutes is room for a retry after a typing slip. */
   onboardingSubmit: { max: 10, windowSec: 600 },
   /** The password on a client link, per address: five tries in ten minutes. */
@@ -306,6 +308,7 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/agency/retainers/:id/auto-send', limit: 'lifecycle' },
   { method: 'POST', path: '/agency/retainers/:id/withdraw', limit: 'lifecycle' },
   { method: 'POST', path: '/agency/items/:id/changes', limit: 'agency' },
+  { method: 'PUT', path: '/public/contracts/:token/answers', limit: 'contractAnswers', by: 'address' },
   { method: 'POST', path: '/public/contracts/:token/accept', limit: 'portal' },
   { method: 'POST', path: '/public/contracts/:token/comments', limit: 'portal' },
   { method: 'POST', path: '/public/invoices/:token/comments', limit: 'portal' },
@@ -337,6 +340,8 @@ export const ROUTE_LIMITS: readonly {
   { method: 'DELETE', path: '/agency/invoices/:id', limit: 'agency' },
   { method: 'DELETE', path: '/agency/comments/:id', limit: 'agency' },
   { method: 'PATCH', path: '/agency/contracts/:id', limit: 'agency' },
+  { method: 'POST', path: '/agency/contracts/:id/print', limit: 'agency' },
+  { method: 'POST', path: '/agency/docs/:id/print', limit: 'agency' },
   { method: 'DELETE', path: '/agency/contracts/:id', limit: 'agency' },
   { method: 'PATCH', path: '/agency/docs/:id', limit: 'agency' },
   { method: 'DELETE', path: '/agency/docs/:id', limit: 'agency' },

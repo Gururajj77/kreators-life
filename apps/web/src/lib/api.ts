@@ -500,6 +500,8 @@ export const api = {
   agencyContractUpdate: (id: string, body: { doc?: ContractDoc; clientId?: string | null; status?: 'draft' | 'sent' | 'void'; ifUpdatedAt?: string }) => patch<{ contract: AgencyContract }>(`/agency/contracts/${id}`, body),
   agencyContractDuplicate: (id: string) => post<{ id: string }>(`/agency/contracts/${id}/duplicate`),
   agencyContractRemove: (id: string) => del<{ ok: true }>(`/agency/contracts/${id}`),
+  /** One section on or off the printed page, in any status; nothing else changes. */
+  agencyContractPrint: (id: string, sectionId: string, print: boolean) => post<{ contract: AgencyContract }>(`/agency/contracts/${id}/print`, { sectionId, print }),
   agencyContractRestore: (id: string) => post<{ contract: AgencyContract; restoredTo: AgencyContract['status'] }>(`/agency/contracts/${id}/restore`),
   agencyComments: (type: DocType, id: string) => request<{ comments: DocComment[] }>(`/agency/comments/${type}/${id}`),
   agencyCommentAdd: (type: DocType, id: string, body: string) => post<{ ok: true }>(`/agency/comments/${type}/${id}`, { body }),
@@ -509,6 +511,7 @@ export const api = {
   agencyDocs: (q = '') => request<{ page: AgencyPage; docs: AgencyDocListItem[]; counts: { status: string; n: number }[] }>(withQ('/agency/docs', q)),
   agencyDoc: (id: string) => request<{ doc: AgencyDocFull }>(`/agency/docs/${id}`),
   agencyDocAdd: (body: { kind?: AgencyDocKind; clientId?: string | null; templateId?: string; houseId?: string; month?: string; retainer?: Partial<RetainerInput> }) => post<{ id: string }>(`/agency/docs?day=${todayLocal()}`, body),
+  agencyDocPrint: (id: string, sectionId: string, print: boolean) => post<{ doc: AgencyDocFull }>(`/agency/docs/${id}/print`, { sectionId, print }),
   agencyDocUpdate: (id: string, body: { doc?: ContractDoc; clientId?: string | null; status?: 'draft' | 'sent'; ifUpdatedAt?: string }) => patch<{ doc: AgencyDocFull }>(`/agency/docs/${id}`, body),
   agencyDocDuplicate: (id: string) => post<{ id: string }>(`/agency/docs/${id}/duplicate`),
   agencyDocRemove: (id: string) => del<{ ok: true }>(`/agency/docs/${id}`),
@@ -1207,6 +1210,8 @@ export const publicApi = {
   linkLock: (kind: LockedLink, token: string) => publicRequest<{ locked: boolean; clientName?: string; agencyName?: string; agencyLogo?: string }>(`/${kind}/${encodeURIComponent(token)}/lock`),
   linkUnlock: (kind: LockedLink, token: string, password: string) => publicSend<{ open: boolean; session: string | null; expiresAt: string | null }>('POST', `/${kind}/${encodeURIComponent(token)}/unlock`, { password }),
   contract: (token: string) => publicRequest<PublicContract>(`/contracts/${encodeURIComponent(token)}`),
+  /** The brief's answers, saved as the client types, while the agreement is sent (409 once it is signed). */
+  contractAnswers: (token: string, answers: Record<string, ContractAnswer>) => publicSend<{ ok: true }>('PUT', `/contracts/${encodeURIComponent(token)}/answers`, { answers }),
   contractAccept: (token: string, body: { name: string; title: string; agree: boolean; answers: Record<string, ContractAnswer> }) => publicSend<{ ok: true }>('POST', `/contracts/${encodeURIComponent(token)}/accept`, body),
   agencyDoc: (token: string) => publicRequest<PublicAgencyDoc>(`/agency/doc/${encodeURIComponent(token)}`),
   agencyDocApprove: (token: string, body: { name: string; title: string; agree: boolean; answers: Record<string, ContractAnswer> }) => publicSend<{ ok: true }>('POST', `/agency/doc/${encodeURIComponent(token)}/approve`, body),

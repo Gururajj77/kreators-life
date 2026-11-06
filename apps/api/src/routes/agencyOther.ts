@@ -26,9 +26,10 @@ import {
   type DocComment,
   type PublicAgencyDoc,
   invoiceFromProfile,
+  withSectionPrint,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { audit, dayFromDevice, nameOf, newId, notify, nowIso, oneOf, pageOf, paged, randomCode, str } from '../db';
+import { audit, objectBody, dayFromDevice, nameOf, newId, notify, nowIso, oneOf, pageOf, paged, randomCode, str } from '../db';
 import { coverFrom, emailCopy, logDoc, maskEmail, ownLogo, publicUrl } from '../agencyPaper';
 import { settingsFor } from './agency';
 import { activeHouse, clientBits, clientFacts, docOf, houseContract, jsonOr, ownTemplate, recipientFor, templateDoc } from './agencyDocs';
@@ -128,7 +129,7 @@ async function reportFacts(db: D1Database, userId: string, clientId: string, cli
 agencyOther.post('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const body = await objectBody(c);
   const client = await clientBits(db, user.id, body.clientId);
   if (body.clientId && !client) return c.json({ error: 'pick one of your clients' }, 400);
   const n = await db.prepare('SELECT COUNT(*) AS n FROM agency_docs WHERE user_id = ?').bind(user.id).first<{ n: number }>();
@@ -202,7 +203,7 @@ agencyOther.patch('/:id', async (c) => {
   const user = c.get('user');
   const row = await db.prepare(`${SELECT} WHERE d.id = ? AND d.user_id = ?`).bind(c.req.param('id'), user.id).first<DocRow>();
   if (!row) return c.json({ error: 'not found' }, 404);
-  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const body = await objectBody(c);
   const now = nowIso();
   if ('doc' in body || 'clientId' in body) {
     if (row.status === 'approved') return c.json({ error: 'an approved document is a record; make a revised copy and send that' }, 400);
@@ -241,6 +242,25 @@ agencyOther.patch('/:id', async (c) => {
   return fresh ? c.json({ doc: toFull(fresh) }) : c.json({ error: 'not found' }, 404);
 });
 
+/**
+ * Switch one section on or off the printed page, in any status (an approved document included): only what goes on paper changes, never
+ * the words, the answers or the approval. Never the signatures. Owner only (a team member with Paperwork Edit through the gate).
+ */
+agencyOther.post('/:id/print', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const row = await db.prepare(`${SELECT} WHERE d.id = ? AND d.user_id = ?`).bind(c.req.param('id'), user.id).first<DocRow>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  const body = await objectBody(c);
+  if (typeof body.sectionId !== 'string' || typeof body.print !== 'boolean') return c.json({ error: 'say which section and whether it prints' }, 400);
+  const doc = withSectionPrint(docOf(row.body_json), body.sectionId, body.print);
+  if (!doc) return c.json({ error: 'that section cannot be switched' }, 400);
+  const res = await db.prepare('UPDATE agency_docs SET body_json = ?, updated_at = ? WHERE id = ? AND user_id = ? AND updated_at = ?').bind(JSON.stringify(doc), nowIso(), row.id, user.id, row.updated_at).run();
+  if (res.meta.changes !== 1) return c.json({ error: 'changed' }, 409);
+  const fresh = await db.prepare(`${SELECT} WHERE d.id = ? AND d.user_id = ?`).bind(row.id, user.id).first<DocRow>();
+  return fresh ? c.json({ doc: toFull(fresh) }) : c.json({ error: 'not found' }, 404);
+});
+
 agencyOther.delete('/:id', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
@@ -257,7 +277,7 @@ agencyOther.post('/:id/email', async (c) => {
   const row = await db.prepare(`${SELECT} WHERE d.id = ? AND d.user_id = ?`).bind(c.req.param('id'), user.id).first<DocRow>();
   if (!row) return c.json({ error: 'not found' }, 404);
   if (row.status === 'draft' || !row.token) return c.json({ error: 'send the document first, so the link in the email works' }, 400);
-  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const body = await objectBody(c);
   const who = await recipientFor(db, user.id, row.client_id, body.to, '', Boolean(c.get('team')));
   if ('error' in who) return c.json({ error: who.error }, 400);
   const full = toFull(row);
@@ -315,7 +335,7 @@ docsPublic.post('/:token/approve', async (c) => {
   const row = await sentDoc(db, c.req.param('token'));
   if (!row) return c.json({ error: 'no document at this link' }, 404);
   if (row.status === 'approved') return c.json({ error: 'this document is already approved' }, 400);
-  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const body = await objectBody(c);
   const name = str(body.name, 80);
   const title = str(body.title, 80);
   if (!name) return c.json({ error: 'type your full name' }, 400);
@@ -337,7 +357,7 @@ docsPublic.post('/:token/comments', async (c) => {
   const row = await sentDoc(db, c.req.param('token'));
   if (!row) return c.json({ error: 'no document at this link' }, 404);
   if (!docOf(row.body_json).show.comments) return c.json({ error: 'comments are switched off on this document' }, 403);
-  const body = await c.req.json<{ body?: string }>().catch(() => ({}) as { body?: string });
+  const body = (await objectBody(c)) as { body?: string };
   const text = str(body.body, DOC_COMMENT_MAX);
   if (!text) return c.json({ error: 'write something' }, 400);
   await db.prepare("INSERT INTO agency_doc_comments (id, user_id, doc_type, doc_id, author, body, created_at) VALUES (?, ?, 'doc', ?, 'client', ?, ?)").bind(newId(), row.user_id, row.id, text, nowIso()).run();

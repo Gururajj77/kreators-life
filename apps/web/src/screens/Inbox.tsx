@@ -10,9 +10,10 @@ import { SkeletonList } from '../components/Skeleton';
 import { Sheet } from '../components/Sheet';
 import { TabRow } from '../components/TabRow';
 import type { LucideIcon } from 'lucide-react';
-import { AlarmClock, ArchiveRestore, AtSign, Bell, BriefcaseBusiness, CalendarCheck, Footprints, Handshake, Mail, Medal, Megaphone, MessageCircle, MessagesSquare, PartyPopper, ReceiptText, ShieldAlert, ShoppingBag, Star, Target, UserPlus, UsersRound, Wrench } from 'lucide-react';
+import { AlarmClock, Archive, ArchiveRestore, AtSign, Bell, BriefcaseBusiness, CalendarCheck, Footprints, Handshake, Mail, Medal, Megaphone, MessageCircle, MessagesSquare, PartyPopper, ReceiptText, ShieldAlert, ShoppingBag, Star, Target, Trash2, UserPlus, UsersRound, Wrench } from 'lucide-react';
 import { AnimatedIcon } from '../components/AnimatedIcon';
 import { Icon } from '../components/Icon';
+import { IconButton } from '../components/IconButton';
 import { api } from '../lib/api';
 import { useInbox, useMe, useRefreshAll } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
@@ -119,44 +120,42 @@ export function Inbox() {
         <h2 id="list-heading" className="text-title2">
           What happened
         </h2>
-        <TabRow
-          className="mt-sm"
-          label="Tabs"
-          items={(q.data?.tabs ?? [{ tab: 'all' as InboxTab, unread: 0 }]).map((t) => ({ key: t.tab, label: `${INBOX_TAB_META[t.tab].name}${t.unread > 0 ? ` (${t.unread})` : ''}` }))}
-          value={tab}
-          onChange={(k) => {
-            setUndo(null);
-            setTab(k);
-          }}
-        />
-        {/* The view (Inbox, Unread, Archived) at the left and its one action at the right of one row, centred on each other (the founder,
-            2026-11-06, as List and Board on Agency); in a row under 34rem (a phone) the three views fill their line in equal parts and the
-            action takes the next, at the right. */}
-        <div className="@container mt-xs flex flex-wrap items-center justify-between gap-xs">
-          <div className="grid basis-full grid-cols-3 gap-xs @min-[34rem]:flex @min-[34rem]:basis-auto" role="group" aria-label="Show">
-          {SHOWS.map(([k, label]) => (
-            <button key={k} type="button" aria-pressed={show === k} onClick={() => {
-              setUndo(null);
-              setShow(k);
-            }} className={`toy min-h-[44px] min-w-0 rounded-pill border-2 px-sm py-xs text-subhead font-medium ${show === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-              {label}
-            </button>
-          ))}
+        {/* One line (the founder, 2026-11-07): the view (Inbox, Unread, Archived) at the left with its one action as a round icon button
+            right after it, and the kinds (Everything, Replies and mentions…) at the right of the same line, as many as fit, then All. In a
+            row under 34rem (a phone) the views and the icon take the first line and the kinds the next, at full width. */}
+        <div className="@container mt-sm flex flex-wrap items-center gap-x-md gap-y-xs">
+          <div className="flex basis-full items-center gap-xs @min-[34rem]:basis-auto @min-[34rem]:shrink-0">
+            <div className="grid min-w-0 flex-1 grid-cols-3 gap-xs @min-[34rem]:flex @min-[34rem]:flex-none" role="group" aria-label="Show">
+              {SHOWS.map(([k, label]) => (
+                <button key={k} type="button" aria-pressed={show === k} onClick={() => {
+                  setUndo(null);
+                  setShow(k);
+                }} className={`toy min-h-[44px] min-w-0 rounded-pill border-2 px-sm py-xs text-subhead font-medium ${show === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {show !== 'archived' && list.some((n) => n.readAt) && (
+              <IconButton icon={Archive} label="Archive the read ones" tip="tl" disabled={archiveRead.isPending} onClick={() => archiveRead.mutate()} />
+            )}
+            {show === 'archived' && list.length > 0 && (
+              <IconButton icon={Trash2} label="Delete all archived" tip="tl" opens onClick={() => {
+                setUndo(null);
+                setToDelete('all');
+              }} />
+            )}
           </div>
-          {show !== 'archived' && list.some((n) => n.readAt) && (
-            <Button size="sm" variant="ghost" className="ml-auto" onClick={() => archiveRead.mutate()} disabled={archiveRead.isPending}>
-              <AnimatedIcon name={archiveRead.isPending ? 'loading' : 'archive'} size={16} />
-              Archive the read ones
-            </Button>
-          )}
-          {show === 'archived' && list.length > 0 && (
-            <Button size="sm" variant="ghost" className="ml-auto" onClick={() => {
+          <TabRow
+            className="basis-full @min-[34rem]:basis-0 @min-[34rem]:flex-1"
+            align="end"
+            label="Tabs"
+            items={(q.data?.tabs ?? [{ tab: 'all' as InboxTab, unread: 0 }]).map((t) => ({ key: t.tab, label: `${INBOX_TAB_META[t.tab].name}${t.unread > 0 ? ` (${t.unread})` : ''}` }))}
+            value={tab}
+            onChange={(k) => {
               setUndo(null);
-              setToDelete('all');
-            }}>
-              Delete all archived
-            </Button>
-          )}
+              setTab(k);
+            }}
+          />
         </div>
         {/* One quiet line after archiving a note, with the way back; always in the tree so a reader hears it. */}
         <div role="status" className={undo ? 'mt-xs flex flex-wrap items-center gap-xs text-subhead text-ink-soft' : 'sr-only'}>

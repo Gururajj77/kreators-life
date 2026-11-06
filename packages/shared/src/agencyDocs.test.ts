@@ -365,6 +365,21 @@ describe('what an agreement prints', () => {
     expect(sectionPrints(again.sections.find((s) => s.id === 'how')!)).toBe(true);
     expect(sectionPrints(again.sections.find((s) => s.id === 'after')!)).toBe(false);
   });
+
+  it('switches one section on the printed page and changes nothing else, never the signatures', async () => {
+    const { CONTRACT_TEMPLATES, sectionPrints, withSectionPrint } = await import('./index');
+    const trial = CONTRACT_TEMPLATES.find((t) => t.key === 'trial')!.doc;
+    const on = withSectionPrint(trial, 'brief', true)!;
+    expect(sectionPrints(on.sections.find((s) => s.id === 'brief')!)).toBe(true);
+    // Every other section is the very same object, and the words of the switched one are untouched.
+    on.sections.forEach((s, i) => (s.id === 'brief' ? expect({ ...s, print: undefined }).toEqual({ ...trial.sections[i], print: undefined }) : expect(s).toBe(trial.sections[i])));
+    expect(on.title).toBe(trial.title);
+    expect(sectionPrints(withSectionPrint(on, 'brief', false)!.sections.find((s) => s.id === 'brief')!)).toBe(false);
+    expect(withSectionPrint(trial, 'sign', false)).toBeNull();
+    expect(withSectionPrint(trial, 'nope', true)).toBeNull();
+    // The template itself is never changed.
+    expect(sectionPrints(trial.sections.find((s) => s.id === 'brief')!)).toBe(false);
+  });
 });
 
 describe('the Trial agreement, to the letter', async () => {

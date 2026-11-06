@@ -236,9 +236,15 @@ export function NumberCell({ value, onChange, label, as = 'td', className = '', 
   );
 }
 
-/** A long press (half a second) on a touch screen: how a phone opens a section's handle, since it has no hover. */
+/**
+ * A long press (half a second) on a touch screen: how a phone opens a section's handle, since it has no hover. Once it has fired, the
+ * lift that ends the press is swallowed (its touchend, the mouse events and click a browser makes from it, and the long-press menu), so
+ * the menu that just opened is not closed by the same finger landing on its backdrop.
+ */
 export function useLongPress(run: () => void) {
   const timer = useRef<number | null>(null);
+  const fired = useRef(false);
+  const from = useRef({ x: 0, y: 0 });
   const stop = () => {
     if (timer.current !== null) window.clearTimeout(timer.current);
     timer.current = null;
@@ -247,14 +253,28 @@ export function useLongPress(run: () => void) {
     onPointerDown: (e: React.PointerEvent) => {
       if (e.pointerType !== 'touch') return;
       stop();
+      fired.current = false;
+      from.current = { x: e.clientX, y: e.clientY };
       timer.current = window.setTimeout(() => {
         timer.current = null;
+        fired.current = true;
         run();
       }, 500);
     },
     onPointerUp: stop,
     onPointerCancel: stop,
-    onPointerMove: stop,
+    // A finger is never quite still: only a move of more than 8px (a scroll starting) cancels the press.
+    onPointerMove: (e: React.PointerEvent) => {
+      if (Math.hypot(e.clientX - from.current.x, e.clientY - from.current.y) > 8) stop();
+    },
+    onTouchEnd: (e: React.TouchEvent) => {
+      if (!fired.current) return;
+      fired.current = false;
+      if (e.cancelable) e.preventDefault();
+    },
+    onContextMenu: (e: React.MouseEvent) => {
+      if (timer.current !== null || fired.current) e.preventDefault();
+    },
   };
 }
 

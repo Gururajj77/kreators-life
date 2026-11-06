@@ -2329,6 +2329,23 @@ ol.grid > li > .toy:only-child {
 }
 .legal-doc:has(.paper-sec) { padding-left: max(var(--spacing-md), 48px); }
 @media (max-width: 640px) { .legal-doc:has(.paper-sec) { padding-left: var(--spacing-md); } }
+/* Paper that is a record (signed, approved, void) keeps one handle per section, for "Print this section" only. Nothing inside a read-only
+   section takes focus, so the handle is in the tab order but unseen until it is pointed at, focused or open; a touch screen opens it
+   by a long press on the heading. Opacity only. */
+.paper-sec[data-print-only] > .paper-handle { display: flex; opacity: 0; transition: opacity 0.2s var(--ease-open); }
+.paper-sec[data-print-only] > .paper-handle:focus-visible { opacity: 1; }
+@media (hover: hover) and (pointer: fine) { .paper-sec[data-print-only]:hover > .paper-handle { opacity: 1; } }
+@media (hover: none) { .paper-sec[data-print-only] > .paper-handle { display: none; } }
+/* The note on a section left off a record's paper says how to put it back: a long press on a touch screen, the handle by the heading
+   with a mouse or the keyboard. One line each, on a line of its own under the note. */
+.paper-hint { display: block; font-weight: 500; }
+.paper-hint-touch { display: none; }
+@media (hover: none) { .paper-hint-touch { display: block; } .paper-hint-mouse { display: none; } }
+/* The client's "Saved" line on an agreement's brief (site/ContractPublic.tsx): it rides along the top of the screen while the brief is in
+   view, so whoever is typing in 3.5 still sees whether their words were kept. White like the paper, so nothing shows through it. */
+.brief-save { position: sticky; top: var(--spacing-xs); z-index: 5; width: fit-content; margin-bottom: var(--spacing-xs); padding: 4px 12px; border-radius: 999px; background: #ffffff; box-shadow: 0 0 0 1px rgba(37, 41, 58, 0.14); }
+.brief-save[data-state='failed'], .brief-save[data-state='kept'] { color: #25293a; }
+@media (width >= 48rem) and (height >= 30rem) { .brief-save { top: calc(var(--brief-save-head, 64px) + var(--spacing-xs)); } }
 
 /* ----- Invoice designs: Founder classic (components/InvoiceView.tsx, INVOICE_DESIGNS 'founder')
    The founder's own invoice, colour for colour: dark grey bars, a teal bank header, green totals, a blue words bar, light grey value boxes

@@ -83,6 +83,19 @@ export interface ContractSection {
 }
 /** Whether a section goes on the printed page. */
 export const sectionPrints = (s: Pick<ContractSection, 'kind' | 'print'>): boolean => s.print ?? s.kind !== 'brief';
+/**
+ * One section switched on or off the printed page, and nothing else changed: the words, the answers and every other section stay as they
+ * are, so the owner may do it on a signed agreement or an approved document too. Null when the paper has no such section, or when it is
+ * the signatures, which always print.
+ */
+export function withSectionPrint<D extends Pick<ContractDoc, 'sections'>>(doc: D, sectionId: string, print: boolean): D | null {
+  const at = doc.sections.findIndex((s) => s.id === sectionId);
+  const s = doc.sections[at];
+  if (!s || s.kind === 'signatures') return null;
+  const sections = doc.sections.slice();
+  sections[at] = { ...s, print };
+  return { ...doc, sections };
+}
 export interface ContractDoc {
   title: string;
   subtitle: string;

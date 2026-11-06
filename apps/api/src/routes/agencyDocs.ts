@@ -51,9 +51,10 @@ import {
   monthName,
   tdsGrossupNote,
   invoiceFromProfile,
+  withSectionPrint,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { audit, dayFromDevice, nameOf, newId, notify, nowIso, num, oneOf, pageOf, paged, randomCode, shiftDate, str } from '../db';
+import { audit, objectBody, dayFromDevice, nameOf, newId, notify, nowIso, num, oneOf, pageOf, paged, randomCode, shiftDate, str } from '../db';
 import { dateOrNull } from '../agencyUtil';
 import { createInvoice, INV_SELECT, nextNumberAfter, restoreInvoice, setInvoiceStatus, toInvoice, updateDraftInvoice, type InvRow } from './finance';
 import { logStmt, type LogActor } from '../lifecycle';
@@ -244,7 +245,7 @@ async function templateCount(db: D1Database, userId: string, kind: TemplateKind)
 agencyDocs.post('/templates', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const body = await objectBody(c);
   if (body.kind === 'email') {
     const name = str(body.name, TEMPLATE_NAME_MAX);
     if (!name) return c.json({ error: 'give it a name' }, 400);
@@ -277,7 +278,7 @@ agencyDocs.patch('/templates/:id', async (c) => {
   const user = c.get('user');
   const row = await db.prepare('SELECT * FROM agency_templates WHERE id = ? AND user_id = ?').bind(c.req.param('id'), user.id).first<TemplateRow>();
   if (!row) return c.json({ error: 'not found' }, 404);
-  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const body = await objectBody(c);
   const name = 'name' in body ? str(body.name, TEMPLATE_NAME_MAX) : row.name;
   if (!name) return c.json({ error: 'give it a name' }, 400);
   let doc = row.doc_json;
@@ -360,7 +361,7 @@ agencyDocs.get('/invoices/:id', async (c) => {
 agencyDocs.post('/invoices', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const body = await objectBody(c);
   const client = await clientBits(db, user.id, body.clientId);
   if (!client) return c.json({ error: 'pick a client' }, 400);
   const settings = await settingsFor(db, user.id);
@@ -415,7 +416,7 @@ agencyDocs.post('/clients/:id/invoice', async (c) => {
   const user = c.get('user');
   const row = await db.prepare('SELECT id, name, contact_name, contact_email, billing_json, retainer_cents FROM agency_clients WHERE id = ? AND user_id = ?').bind(c.req.param('id'), user.id).first<ClientBits & { retainer_cents: number }>();
   if (!row) return c.json({ error: 'not found' }, 404);
-  const body = await c.req.json<{ month?: string }>().catch(() => ({}) as { month?: string });
+  const body = (await objectBody(c)) as { month?: string };
   const month = body.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(body.month) ? body.month : deviceDay(c).slice(0, 7);
   const { start, end } = monthBounds(month);
   const fees = await db
@@ -448,7 +449,7 @@ agencyDocs.patch('/invoices/:id', async (c) => {
   const user = c.get('user');
   const row = await db.prepare(`${INV_SELECT} WHERE i.id = ? AND i.user_id = ? AND i.agency_client_id IS NOT NULL`).bind(c.req.param('id'), user.id).first<InvRow>();
   if (!row) return c.json({ error: 'not found' }, 404);
-  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const body = await objectBody(c);
   if (typeof body.status === 'string') {
     const invoice = await setInvoiceStatus(db, user.id, row.id, body.status);
     return invoice ? c.json({ invoice }) : c.json({ error: 'not found' }, 404);
@@ -533,7 +534,7 @@ agencyDocs.post('/invoices/:id/duplicate', async (c) => {
   const user = c.get('user');
   const row = await db.prepare(`${INV_SELECT} WHERE i.id = ? AND i.user_id = ? AND i.agency_client_id IS NOT NULL`).bind(c.req.param('id'), user.id).first<InvRow>();
   if (!row) return c.json({ error: 'not found' }, 404);
-  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const body = await objectBody(c);
   const prev = toInvoice(row);
   const issueDate = dateOrNull(body.issueDate) ?? deviceDay(c);
   const gap = prev.dueDate ? Math.max(0, Math.round((Date.parse(`${prev.dueDate}T00:00:00Z`) - Date.parse(`${prev.issueDate}T00:00:00Z`)) / 86_400_000)) : null;
@@ -575,7 +576,7 @@ agencyDocs.post('/comments/:type/:id', async (c) => {
   const user = c.get('user');
   const type = c.req.param('type') as DocType;
   if (!(DOC_TYPES as readonly string[]).includes(type) || !(await docOwned(db, user.id, type, c.req.param('id')))) return c.json({ error: 'not found' }, 404);
-  const body = await c.req.json<{ body?: string }>().catch(() => ({}) as { body?: string });
+  const body = (await objectBody(c)) as { body?: string };
   const text = str(body.body, DOC_COMMENT_MAX);
   if (!text) return c.json({ error: 'write something' }, 400);
   await db.prepare("INSERT INTO agency_doc_comments (id, user_id, doc_type, doc_id, author, body, created_at) VALUES (?, ?, ?, ?, 'me', ?, ?)").bind(newId(), user.id, type, c.req.param('id'), text, nowIso()).run();
@@ -679,7 +680,7 @@ const MAX_CONTRACTS = 300;
 agencyDocs.post('/contracts', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const body = await objectBody(c);
   const mine = body.templateId ? await ownTemplate(db, user.id, body.templateId, 'contract') : null;
   if (body.templateId && !mine) return c.json({ error: 'that template is not yours' }, 400);
   const houseRow = body.houseId ? await activeHouse(db, body.houseId, 'contract') : null;
@@ -729,7 +730,7 @@ agencyDocs.patch('/contracts/:id', async (c) => {
   const user = c.get('user');
   const row = await db.prepare(`${CONTRACT_SELECT} WHERE k.id = ? AND k.user_id = ?`).bind(c.req.param('id'), user.id).first<ContractRow>();
   if (!row) return c.json({ error: 'not found' }, 404);
-  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const body = await objectBody(c);
   const now = nowIso();
   if ('doc' in body || 'clientId' in body) {
     // A draft or a sent agreement can change in place (the client then sees it marked revised). A signed one is a record: revise it into a new draft.
@@ -802,6 +803,28 @@ agencyDocs.post('/contracts/:id/restore', async (c) => {
   return fresh ? c.json({ contract: toContract(fresh), restoredTo: back }) : c.json({ error: 'not found' }, 404);
 });
 
+/**
+ * Switch one section on or off the printed page, in any status (a signed agreement included): it changes only what goes on paper, never
+ * the words, the answers or the acceptance, so a record stays a record. Never the signatures. Owner only (a team member with Paperwork
+ * Edit through the gate); the revised mark is not touched, since the client's words are the same.
+ */
+agencyDocs.post('/contracts/:id/print', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const row = await db.prepare(`${CONTRACT_SELECT} WHERE k.id = ? AND k.user_id = ?`).bind(c.req.param('id'), user.id).first<ContractRow>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  const body = await objectBody(c);
+  if (typeof body.sectionId !== 'string' || typeof body.print !== 'boolean') return c.json({ error: 'say which section and whether it prints' }, 400);
+  const doc = withSectionPrint(docOf(row.doc_json), body.sectionId, body.print);
+  if (!doc) return c.json({ error: 'that section cannot be switched' }, 400);
+  const now = nowIso();
+  // Guarded on the version read, so a save in another tab at the same moment is never written over; the page reloads instead.
+  const res = await db.prepare('UPDATE agency_contracts SET doc_json = ?, updated_at = ? WHERE id = ? AND user_id = ? AND updated_at = ?').bind(JSON.stringify(doc), now, row.id, user.id, row.updated_at).run();
+  if (res.meta.changes !== 1) return c.json({ error: 'changed' }, 409);
+  const fresh = await db.prepare(`${CONTRACT_SELECT} WHERE k.id = ? AND k.user_id = ?`).bind(row.id, user.id).first<ContractRow>();
+  return fresh ? c.json({ contract: toContract(fresh) }) : c.json({ error: 'not found' }, 404);
+});
+
 agencyDocs.delete('/contracts/:id', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
@@ -842,7 +865,7 @@ agencyDocs.post('/invoices/:id/email', async (c) => {
   if (!row) return c.json({ error: 'not found' }, 404);
   if (row.status === 'draft') return c.json({ error: 'mark the invoice as sent first, so the link in the email works' }, 400);
   if (row.status === 'void') return c.json({ error: 'a void invoice is not sent' }, 400);
-  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const body = await objectBody(c);
   const who = await recipientFor(db, user.id, row.agency_client_id ?? null, body.to, row.client_email, Boolean(c.get('team')));
   if ('error' in who) return c.json({ error: who.error }, 400);
   // The client's version: what the person switched off is left out of the words too.
@@ -869,7 +892,7 @@ agencyDocs.post('/contracts/:id/email', async (c) => {
   if (!row) return c.json({ error: 'not found' }, 404);
   if (row.status === 'draft' || !row.token) return c.json({ error: 'send the agreement first, so the link in the email works' }, 400);
   if (row.status === 'void') return c.json({ error: 'a voided agreement is not sent' }, 400);
-  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const body = await objectBody(c);
   const who = await recipientFor(db, user.id, row.client_id, body.to, '', Boolean(c.get('team')));
   if ('error' in who) return c.json({ error: who.error }, 400);
   const doc = docOf(row.doc_json);
@@ -930,13 +953,32 @@ contractsPublic.get('/:token', async (c) => {
   return c.json(view);
 });
 
+/**
+ * The client's answers to the brief, saved as they type (the page sends them 800 ms after the last change and on leaving a field), so
+ * nothing is lost if they leave before signing. Only while the agreement is sent: a signed one is a record (409). Only answers to the
+ * agreement's own questions are kept (`cleanContractAnswers`); signing sends them again. The words are never logged.
+ */
+contractsPublic.put('/:token/answers', async (c) => {
+  const db = c.env.DB;
+  const row = await sentContract(db, c.req.param('token'));
+  if (!row) return c.json({ error: 'no agreement at this link' }, 404);
+  if (row.status !== 'sent') return c.json({ error: 'this agreement is already signed' }, 409);
+  const body = await objectBody(c);
+  // A save always carries the whole set as an object; anything else is refused, so a stray request never wipes what was saved.
+  if (!body.answers || typeof body.answers !== 'object' || Array.isArray(body.answers)) return c.json({ error: 'send the answers' }, 400);
+  const answers = cleanContractAnswers(docOf(row.doc_json), body.answers);
+  const res = await db.prepare("UPDATE agency_contracts SET answers_json = ? WHERE id = ? AND status = 'sent'").bind(JSON.stringify(answers), row.id).run();
+  if (!res.meta.changes) return c.json({ error: 'this agreement is already signed' }, 409);
+  return c.json({ ok: true });
+});
+
 // The client answers the brief and accepts by typing their name. This is typed acceptance, not a certified e-signature.
 contractsPublic.post('/:token/accept', async (c) => {
   const db = c.env.DB;
   const row = await sentContract(db, c.req.param('token'));
   if (!row) return c.json({ error: 'no agreement at this link' }, 404);
   if (row.status !== 'sent') return c.json({ error: 'this agreement is already signed' }, 400);
-  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const body = await objectBody(c);
   const name = str(body.name, 80);
   const title = str(body.title, 80);
   if (!name) return c.json({ error: 'type your full name' }, 400);
@@ -960,7 +1002,7 @@ contractsPublic.post('/:token/comments', async (c) => {
   const row = await sentContract(db, c.req.param('token'));
   if (!row) return c.json({ error: 'no agreement at this link' }, 404);
   if (!docOf(row.doc_json).show.comments) return c.json({ error: 'comments are switched off on this agreement' }, 403);
-  const body = await c.req.json<{ body?: string }>().catch(() => ({}) as { body?: string });
+  const body = (await objectBody(c)) as { body?: string };
   const text = str(body.body, DOC_COMMENT_MAX);
   if (!text) return c.json({ error: 'write something' }, 400);
   await db.prepare("INSERT INTO agency_doc_comments (id, user_id, doc_type, doc_id, author, body, created_at) VALUES (?, ?, 'contract', ?, 'client', ?, ?)").bind(newId(), row.user_id, row.id, text, nowIso()).run();

@@ -230,6 +230,11 @@ export async function orgIdsOf(db: D1Database, userId: string): Promise<string[]
   return rows.results.map((r) => r.organization_id);
 }
 
+/** A request's JSON body as a plain object: a body that is not JSON, or is JSON but not an object (`null`, a list, a number), reads as `{}`, so a route answers 400 from its own checks and never a 500. */
+export async function objectBody(c: Context<AppEnv>): Promise<Record<string, unknown>> {
+  const v: unknown = await c.req.json().catch(() => null);
+  return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+}
 export const str = (v: unknown, max: number, fallback = '') => (typeof v === 'string' ? v.trim().slice(0, max) : fallback);
 export const num = (v: unknown, fallback: number | null, lo = -1e12, hi = 1e12): number | null => {
   if (v === null) return null;

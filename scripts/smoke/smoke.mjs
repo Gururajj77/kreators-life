@@ -2911,12 +2911,37 @@ section('Agency');
   const editedSent = await api('PATCH', `/agency/contracts/${kid}`, { doc: { ...doc, subtitle: 'Revised terms' } }, O.token);
   check('a sent agreement can be edited in place and is marked revised', editedSent.status === 200 && editedSent.json.contract.revisedAt !== null && editedSent.json.contract.token === ktok, editedSent.json.contract?.revisedAt);
   const brief = doc.sections.find((x) => x.kind === 'brief').questions;
+  // The brief's answers save as the client types (2026-11-07), before signing, cleaned like the answers sent with the signature.
+  const textQ = brief.find((x) => x.text);
+  const saveA = await pub('PUT', `/contracts/${ktok}/answers`, { answers: { [brief[0].id]: { picked: [brief[0].options[0], 'A made up option'], other: '', text: '' }, [textQ.id]: { picked: [], other: '', text: 'Saved as typed' }, ghost: { picked: ['x'] } } });
+  check('the client\'s brief answers save before signing', saveA.status === 200, saveA.json);
+  const kSaved = (await api('GET', `/agency/contracts/${kid}`, undefined, O.token)).json.contract;
+  check('the owner sees the saved answers, cleaned, and it is still only sent', kSaved.status === 'sent' && !kSaved.acceptance && kSaved.answers[textQ.id]?.text === 'Saved as typed' && kSaved.answers[brief[0].id]?.picked.length === 1 && !('ghost' in kSaved.answers), kSaved.answers);
+  check('saving answers does not change the paper\'s version, so the owner\'s autosave is never refused', kSaved.updatedAt === editedSent.json.contract.updatedAt, { a: kSaved.updatedAt, b: editedSent.json.contract.updatedAt });
+  check('they load back at the link', (await pub('GET', `/contracts/${ktok}`)).json.answers?.[textQ.id]?.text === 'Saved as typed');
+  check('a link that is not there saves nothing', (await pub('PUT', '/contracts/ZZZZZZZZZZZZZZZZ/answers', { answers: {} })).status === 404);
+  const oddBodies = [await pub('PUT', `/contracts/${ktok}/answers`, null), await pub('PUT', `/contracts/${ktok}/answers`, { answers: [] }), await pub('POST', `/contracts/${ktok}/accept`, null), await pub('POST', `/contracts/${ktok}/comments`, [])];
+  check('a body that is not an object is refused with a 400, never a 500, and the saved answers stay', oddBodies.map((r) => r.status).join() === '400,400,400,400' && (await pub('GET', `/contracts/${ktok}`)).json.answers?.[textQ.id]?.text === 'Saved as typed', oddBodies.map((r) => r.status));
   const acc = await pub('POST', `/contracts/${ktok}/accept`, { name: 'Asha Rao', title: 'Marketing head', agree: true, answers: { [brief[0].id]: { picked: [brief[0].options[1], 'A made up option'], other: '', text: '<script>x</script>' }, [brief[3].id]: { picked: brief[3].options.slice(0, 3), other: 'Voiceover', text: '' }, ghost: { picked: ['x'] } } });
   check('the client answers the brief and accepts by typing their name', acc.status === 200, acc.json);
   const signed = (await api('GET', `/agency/contracts/${kid}`, undefined, O.token)).json.contract;
   check('it is signed with the name, title and time', signed.status === 'signed' && signed.acceptance?.name === 'Asha Rao' && signed.acceptance.title === 'Marketing head' && signed.signedAt, signed.acceptance);
   check('only the options it offered are kept, and nothing for a question it does not ask', signed.answers[brief[0].id].picked.length === 1 && !('ghost' in signed.answers) && signed.answers[brief[3].id].picked.length === 3 && signed.answers[brief[3].id].other === 'Voiceover', signed.answers);
   check('a signed agreement cannot be edited or signed twice', (await api('PATCH', `/agency/contracts/${kid}`, { doc }, O.token)).status === 400 && (await pub('POST', `/contracts/${ktok}/accept`, { name: 'Again', agree: true })).status === 400);
+  const lateSave = await pub('PUT', `/contracts/${ktok}/answers`, { answers: { [textQ.id]: { picked: [], other: '', text: 'After signing' } } });
+  check('answers are not saved once it is signed', lateSave.status === 409 && JSON.stringify((await api('GET', `/agency/contracts/${kid}`, undefined, O.token)).json.contract.answers) === JSON.stringify(signed.answers), lateSave.status);
+  // Print this section on a signed agreement (2026-11-07): only what goes on paper changes, never the words, the answers or the signature.
+  const flip = await api('POST', `/agency/contracts/${kid}/print`, { sectionId: 'brief', print: true }, O.token);
+  const flipped = flip.json.contract;
+  const noPrint = (d) => JSON.stringify(d.sections.map(({ print: _p, ...rest }) => rest));
+  check('the owner switches the brief onto the printed page of a signed agreement', flip.status === 200 && flipped.status === 'signed' && flipped.doc.sections.find((x) => x.id === 'brief').print === true, flip.json);
+  check('and nothing else changed: the words, every other section, the answers and the acceptance', noPrint(flipped.doc) === noPrint(signed.doc) && flipped.doc.title === signed.doc.title && JSON.stringify(flipped.doc.vars) === JSON.stringify(signed.doc.vars) && JSON.stringify(flipped.answers) === JSON.stringify(signed.answers) && JSON.stringify(flipped.acceptance) === JSON.stringify(signed.acceptance) && flipped.revisedAt === signed.revisedAt && flipped.doc.sections.filter((x) => x.id !== 'brief').every((x, i) => (x.print ?? null) === (signed.doc.sections.filter((y) => y.id !== 'brief')[i].print ?? null)));
+  check('the client\'s link follows it', (await pub('GET', `/contracts/${ktok}`)).json.doc.sections.find((x) => x.id === 'brief').print === true);
+  const flipOff = await api('POST', `/agency/contracts/${kid}/print`, { sectionId: 'brief', print: false }, O.token);
+  check('and it switches off again', flipOff.status === 200 && flipOff.json.contract.doc.sections.find((x) => x.id === 'brief').print === false);
+  check('the signatures always print, and a section that is not there is refused', (await api('POST', `/agency/contracts/${kid}/print`, { sectionId: 'sign', print: false }, O.token)).status === 400 && (await api('POST', `/agency/contracts/${kid}/print`, { sectionId: 'ghost', print: true }, O.token)).status === 400 && (await api('POST', `/agency/contracts/${kid}/print`, { sectionId: 'brief' }, O.token)).status === 400);
+  check('a body that is not an object is refused with a 400, never a 500', (await api('POST', `/agency/contracts/${kid}/print`, null, O.token)).status === 400 && (await api('POST', `/agency/docs/${kid}/print`, null, O.token)).status === 404);
+  check('another person cannot switch what it prints', (await api('POST', `/agency/contracts/${kid}/print`, { sectionId: 'brief', print: true }, X.token)).status === 404 && (await api('GET', `/agency/contracts/${kid}`, undefined, O.token)).json.contract.doc.sections.find((x) => x.id === 'brief').print === false);
   check('and cannot be removed, only voided', (await api('DELETE', `/agency/contracts/${kid}`, undefined, O.token)).status === 400);
   const revise = await api('POST', `/agency/contracts/${kid}/duplicate`, {}, O.token);
   const dr = (await api('GET', `/agency/contracts/${revise.json.id}`, undefined, O.token)).json.contract;
@@ -4033,6 +4058,7 @@ section('Agency lifecycle');
   check('the agreement link is locked for a client with a password', kLocked.status === 401 && kLocked.json.error === 'locked' && !JSON.stringify(kLocked.json).includes('sections'), kLocked.json);
   check('the lock probe says so, and says no with a session', (await P('GET', `/contracts/${ktok}/lock`)).json.locked === true && (await P('GET', `/contracts/${ktok}/lock`, undefined, { session })).json.locked === false);
   check('signing without the session is refused', (await P('POST', `/contracts/${ktok}/accept`, { name: 'Asha Rao', agree: true })).status === 401);
+  check('saving answers without the session is refused', (await P('PUT', `/contracts/${ktok}/answers`, { answers: {} })).status === 401 && (await P('PUT', `/contracts/${ktok}/answers`, { answers: {} }, { session })).status === 200);
   check('the agreement reads with the session', (await P('GET', `/contracts/${ktok}`, undefined, { session })).status === 200);
   const ac = await P('POST', `/contracts/${ktok}/accept`, { name: 'Asha Rao', title: 'Head', agree: true, answers: {} }, { session });
   check('and is signed with it', ac.status === 200, ac.json);
@@ -4321,6 +4347,7 @@ section('Agency team link');
     P('GET', `/agency/${mainTok}`, undefined, { team: tS }),
     P('GET', `/agency/${mainTok}/onboarding`, undefined, { team: tS }),
     P('POST', `/contracts/${kTok}/accept`, { name: 'Junior', agree: true, answers: {} }, { team: tS }),
+    P('PUT', `/contracts/${kTok}/answers`, { answers: {} }, { team: tS }),
   ]);
   check('team link: a team session on an invoice, agreement, document or the client link is a 404', refused.every((r) => r.status === 404), refused.map((r) => r.status));
   check('team link: a team session passed as a client session opens nothing', (await P('GET', `/agency/${mainTok}`, undefined, { portal: tS })).status === 401 && (await P('GET', `/contracts/${kTok}`, undefined, { portal: tS })).status === 401 && (await P('GET', `/invoices/${invSent.token}`, undefined, { portal: tS })).status === 401);
@@ -4481,6 +4508,11 @@ section('Agency documents');
   check('it is approved with the typed name and time', done.status === 'approved' && done.acceptance?.name === 'Dana Rao' && done.approvedAt, done.acceptance);
   check('an approved document cannot be edited', (await api('PATCH', `/agency/docs/${did}`, { doc: ed }, O.token)).status === 400 && (await api('PATCH', `/agency/docs/${did}`, { status: 'draft' }, O.token)).status === 400);
   check('and a second approval is refused', (await pub('POST', `/agency/doc/${dtok}/approve`, { name: 'Someone Else', agree: true })).status === 400);
+  // An approved document is a record, but what goes on paper can still be switched (2026-11-07), and only that.
+  const dSec = done.doc.sections.find((x) => x.kind !== 'signatures');
+  const dFlip = await api('POST', `/agency/docs/${did}/print`, { sectionId: dSec.id, print: false }, O.token);
+  check('the owner switches a section off the printed page of an approved document, and nothing else changes', dFlip.status === 200 && dFlip.json.doc.status === 'approved' && dFlip.json.doc.doc.sections.find((x) => x.id === dSec.id).print === false && JSON.stringify(dFlip.json.doc.doc.sections.map(({ print: _p, ...r }) => r)) === JSON.stringify(done.doc.sections.map(({ print: _p, ...r }) => r)) && JSON.stringify(dFlip.json.doc.acceptance) === JSON.stringify(done.acceptance), dFlip.json);
+  check('another person cannot switch it', (await api('POST', `/agency/docs/${did}/print`, { sectionId: dSec.id, print: true }, X.token)).status === 404);
   const revise = await api('POST', `/agency/docs/${did}/duplicate`, {}, O.token);
   const rev = (await api('GET', `/agency/docs/${revise.json.id}`, undefined, O.token)).json.doc;
   check('it is revised into a new draft with no link and no approval', rev.status === 'draft' && !rev.token && !rev.acceptance && rev.doc.sections.length === done.doc.sections.length, rev.status);
