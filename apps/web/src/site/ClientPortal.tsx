@@ -205,7 +205,7 @@ function PieceActions({ doors, id, stage, changes, waiting = false, onDone }: { 
           </label>
           <textarea id={`note-${id}`} value={note} onChange={(e) => setNote(e.target.value)} rows={3} maxLength={500} className={FIELD} />
           <div className="mt-xs">
-            <Button size="sm" onClick={() => send(mode === 'change' ? 'changes' : mode === 'paid' ? 'paid_change' : 'comment')} disabled={busy || !note.trim()}>
+            <Button size="sm" full onClick={() => send(mode === 'change' ? 'changes' : mode === 'paid' ? 'paid_change' : 'comment')} disabled={busy || !note.trim()}>
               {mode === 'comment' ? 'Send the comment' : mode === 'paid' ? 'Send the request' : 'Send the change'}
             </Button>
           </div>
@@ -419,7 +419,7 @@ function Retainer({ token, view, onDone }: { token: string; view: PortalView; on
             })}
           </div>
           <div className="mt-sm no-print flex flex-wrap items-center gap-sm">
-            <Button onClick={choose} disabled={busy || !months}>
+            <Button className="flex-1" onClick={choose} disabled={busy || !months}>
               {busy ? 'Sending' : months ? `Choose ${lengthWord(months)}` : 'Pick a length first'}
             </Button>
             {changing && (
@@ -433,16 +433,17 @@ function Retainer({ token, view, onDone }: { token: string; view: PortalView; on
         <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft" role={r.status === 'chosen' ? 'status' : undefined}>
           {chosen ? details(chosen) : <span className="block text-headline">{r.chosenMonths ? lengthWord(r.chosenMonths) : ''}</span>}
           {r.status === 'chosen' && (
-            <>
-              <p className="mt-sm m-0 text-headline">{`You chose ${r.chosenMonths ? lengthWord(r.chosenMonths) : 'a length'}. ${agency} will confirm it.`}</p>
+            // The line on the left and "Change my pick" at its bottom right, in line with it (as "Edit kind of day" sits by its note).
+            <div className="mt-sm flex flex-wrap items-end justify-between gap-x-sm gap-y-xs">
+              <p className="m-0 min-w-0 flex-[1_1_240px] text-headline">{`You chose ${r.chosenMonths ? lengthWord(r.chosenMonths) : 'a length'}. ${agency} will confirm it.`}</p>
               {r.options.length > 1 && (
-                <div className="mt-sm no-print">
+                <div className="ml-auto no-print">
                   <Button variant="outline" size="sm" onClick={() => { setMonths(r.chosenMonths); setChanging(true); }}>
                     Change my pick
                   </Button>
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
       )}

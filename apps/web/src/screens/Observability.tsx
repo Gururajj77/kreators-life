@@ -139,19 +139,30 @@ export function Observability() {
             </div>
           </Section>
 
-          <Section id="obs-log" title="The log, last 24 hours" lede="Changes people made, requests that were refused and errors, from the app's own log.">
+          <Section
+            id="obs-log"
+            title="The log, last 24 hours"
+            lede="Changes people made, requests that were refused and errors, from the app's own log."
+            action={isAdmin ? (
+              <Link to="/internal/logs" className="toy hidden min-h-[48px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink md:inline-flex">
+                Open the logs
+              </Link>
+            ) : undefined}
+          >
+            {/* On a phone the link sits under the heading at the right, so the title keeps its width. */}
+            {isAdmin && (
+              <div className="mb-sm flex justify-end md:hidden">
+                <Link to="/internal/logs" className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
+                  Open the logs
+                </Link>
+              </div>
+            )}
             <div className="grid grid-cols-3 gap-xs">
               <StatTile label="Errors" value={data.additions.logs.errors} hint="server and browser" />
               <StatTile label="Refused" value={data.additions.logs.warnings} hint="400s and rate limits" />
               <StatTile label="Changes" value={data.additions.logs.changes} hint="made by people" />
             </div>
-            {isAdmin ? (
-              <Link to="/internal/logs" className="toy mt-sm inline-flex min-h-[48px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
-                Open the logs
-              </Link>
-            ) : (
-              <p className="mt-sm m-0 text-subhead text-ink-soft">The lines themselves name people, so only a super admin reads them.</p>
-            )}
+            {!isAdmin && <p className="mt-sm m-0 text-subhead text-ink-soft">The lines themselves name people, so only a super admin reads them.</p>}
           </Section>
 
           <Section id="obs-people" title="People" lede={`${formatCount(data.total)} ${data.total === 1 ? 'account' : 'accounts'}, newest first, with the apps each one has on.${isAdmin ? ' Change a role from the menu on a row.' : ' Only an admin changes roles.'}`}>

@@ -875,47 +875,101 @@
    "state": "ready",
    "apps": [
     "today",
+    "reviews",
     "insights"
    ],
    "reads": [
     "dayTypes",
-    "tasks"
+    "tasks",
+    "timeBlocks",
+    "focus",
+    "wellbeing"
    ],
-   "private": false,
+   "private": true,
    "relationship": null,
-   "headline": "15.3 vs 14.8",
-   "text": "On Admin days you ticked 15.3 tasks, 17% of them Friends. On other days, 14.8.",
-   "basis": "From 10 days and 38 days. Things that happen together, not causes.",
+   "headline": "13 of 28 days",
+   "text": "Create days and more focus went together: 54 minutes a day, against 41 on other days.",
+   "basis": "The last four weeks: 5 days beside 23 other days. Things that happen together, not causes.",
    "chart": {
-    "kind": "pair",
+    "kind": "kinds",
+    "parts": [
+     {
+      "templateId": "t-make",
+      "name": "Create",
+      "days": 5,
+      "color": "red"
+     },
+     {
+      "templateId": "t-admin",
+      "name": "Admin",
+      "days": 3,
+      "color": "red"
+     },
+     {
+      "templateId": "t-deep",
+      "name": "Deep work",
+      "days": 3,
+      "color": "red"
+     },
+     {
+      "templateId": "t-rest",
+      "name": "Rest and body",
+      "days": 2,
+      "color": "red"
+     }
+    ],
+    "none": 15,
+    "noneName": "Everyday",
     "rows": [
      {
-      "label": "Rest and body days",
-      "value": 14.9,
-      "n": 17,
-      "unit": "tasks"
+      "templateId": "t-make",
+      "name": "Create days",
+      "n": 5,
+      "tasks": 15.6,
+      "focus": 54.2,
+      "mood": 3.8
      },
      {
-      "label": "Admin days",
-      "value": 15.3,
-      "n": 10,
-      "unit": "tasks"
+      "templateId": "t-admin",
+      "name": "Admin days",
+      "n": 3,
+      "tasks": 15.7,
+      "focus": 43,
+      "mood": 3.5
      },
      {
-      "label": "Other days",
-      "value": 14.8,
-      "n": 38,
-      "unit": "tasks"
+      "templateId": "t-deep",
+      "name": "Deep work days",
+      "n": 3,
+      "tasks": 14.7,
+      "focus": 21.7,
+      "mood": 3.3
+     },
+     {
+      "templateId": "t-rest",
+      "name": "Rest and body days",
+      "n": 2,
+      "tasks": 15.5,
+      "focus": 50,
+      "mood": 3
+     },
+     {
+      "templateId": null,
+      "name": "Days on Everyday",
+      "n": 15,
+      "tasks": 14.7,
+      "focus": 43.4,
+      "mood": 3.5
      }
     ]
    },
    "action": {
-    "label": "Pick today's kind of day",
-    "to": "/today#day-type",
+    "label": "Open time blocks",
+    "to": "/time-blocks",
     "kind": "link"
    },
    "need": null,
-   "strength": 41
+   "strength": 40
   },
   {
    "key": "best-hours",
@@ -1243,7 +1297,7 @@
   "finance": [],
   "reviews": [
    "pillar-balance",
-   "review-since"
+   "daytype-done"
   ],
   "discover": [
    "discover-strength"

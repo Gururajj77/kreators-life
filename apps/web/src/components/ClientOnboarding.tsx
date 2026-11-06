@@ -157,7 +157,7 @@ function Answer({ q, id, answer, onChange, onBlur, error }: { q: ContractQuestio
         ))}
         {shown.length < max && (
           <div className="mt-xs">
-            <Button size="sm" variant="ghost" onClick={() => onChange({ ...answer, links: [...shown, ''] })}>
+            <Button size="sm" variant="ghost" full onClick={() => onChange({ ...answer, links: [...shown, ''] })}>
               {COPY.addLink}
             </Button>
           </div>
@@ -435,7 +435,7 @@ export function ClientOnboarding({ token, agencyName, clientName, onDone }: { to
                 ))}
                 {refs.length < 5 && (
                   <div className="mt-xs">
-                    <Button size="sm" variant="ghost" onClick={() => setRefInputs([...refs, ''])}>
+                    <Button size="sm" variant="ghost" full onClick={() => setRefInputs([...refs, ''])}>
                       {COPY.addLink}
                     </Button>
                   </div>

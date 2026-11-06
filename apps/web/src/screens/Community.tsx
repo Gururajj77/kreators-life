@@ -25,6 +25,7 @@ import { IconTag } from '../components/FactTag';
 import { FilterBar, FilterSelect } from '../components/FilterSelect';
 import { Fold } from '../components/Fold';
 import { AskSheet, type Ask } from '../components/Channels';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 import { ToggleChevron } from '../components/ToggleMark';
 
 const FILTER_ITEMS = FEED_FILTERS.map((f) => ({ key: f, label: FEED_FILTER_META[f] }));
@@ -86,7 +87,8 @@ function MutedList() {
   const pg = usePage('muted');
   const q = useAuthed(['community-mutes', pg.query], () => api.mutes(pg.query));
   const refresh = useRefreshAll();
-  const unmute = useMutation({ mutationFn: (id: string) => api.unmute(id), onSuccess: () => { void q.refetch(); refresh(); } });
+  const [lifting, setLifting] = useState<{ userId: string; name: string } | null>(null);
+  const unmute = useMutation({ mutationFn: (id: string) => api.unmute(id), onSuccess: () => { setLifting(null); void q.refetch(); refresh(); } });
   const list = q.data?.mutes ?? [];
   if (pg.page === 1 && list.length === 0) return null;
   return (
@@ -101,14 +103,24 @@ function MutedList() {
               <span className="block text-balance text-card-title [overflow-wrap:anywhere]">{m.name}</span>
               <span className="block text-card-note text-ink-soft">Muted by {m.by}{m.reason ? `: ${m.reason}` : ''}</span>
             </span>
-            <Button variant="outline" size="sm" onClick={() => unmute.mutate(m.userId)} disabled={unmute.isPending}>
+            <Button variant="outline" size="sm" onClick={() => { unmute.reset(); setLifting({ userId: m.userId, name: m.name }); }} disabled={unmute.isPending}>
               Lift
             </Button>
           </li>
         ))}
       </ul>
-      {unmute.isError && <p role="alert" className="mt-xs m-0 text-subhead">{unmute.error instanceof Error ? unmute.error.message : 'That did not work.'}</p>}
       <Pager page={q.data?.page} prefix="muted" label="muted members" />
+      <ConfirmDelete
+        open={lifting !== null}
+        title={`Lift the mute on ${lifting?.name ?? 'them'}?`}
+        body="They can post and reply in Community again. A guide can mute them again later."
+        pending={unmute.isPending}
+        failed={unmute.isError}
+        onYes={() => lifting && unmute.mutate(lifting.userId)}
+        onClose={() => setLifting(null)}
+        yes="Yes, lift it"
+        keep="Keep the mute"
+      />
     </section>
   );
 }
@@ -307,7 +319,7 @@ function CommunityFeed() {
                   ...(p.mine ? [{ key: 'delete', label: 'Delete', icon: Trash2, destructive: true, onSelect: () => setAsk({ title: 'Delete your post?', body: 'It and its replies go from the feed. This cannot be undone.', action: 'Yes, delete it', run: () => remove.mutate(p.id) }) }] : []),
                   ...(!p.mine ? [{ key: 'block', label: 'Block', destructive: true, onSelect: () => setAsk({ title: `Block ${p.authorName}?`, body: "You will not see each other's posts, and any friendship ends. You can undo it under Bond.", action: 'Yes, block', run: () => block.mutate(p.id) }) }] : []),
                   ...(me.data && me.data.user.id !== p.authorId && canMute(myRank, p.authorRank) ? [{ key: 'mute', label: 'Mute', destructive: true, onSelect: () => setAsk({ title: `Mute ${p.authorName} in Community?`, body: 'They can still read but cannot post or reply.', action: 'Yes, mute', run: () => mute.mutate(p.authorId) }) }] : []),
-                  ...(isMod && me.data?.user.id !== p.authorId && canModerate(myRank, p.authorRank) ? [{ key: 'hide', label: p.hidden ? 'Unhide' : 'Hide', onSelect: () => hide.mutate({ id: p.id, hidden: !p.hidden }) }] : []),
+                  ...(isMod && me.data?.user.id !== p.authorId && canModerate(myRank, p.authorRank) ? [{ key: 'hide', label: p.hidden ? 'Unhide' : 'Hide', onSelect: () => (p.hidden ? hide.mutate({ id: p.id, hidden: false }) : setAsk({ title: 'Hide this post?', body: 'It leaves the feed for everyone. A guide can unhide it later.', action: 'Yes, hide it', run: () => hide.mutate({ id: p.id, hidden: true }) })) }] : []),
                 ]}
               />
             </div>

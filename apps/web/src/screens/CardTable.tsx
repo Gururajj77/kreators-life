@@ -24,6 +24,7 @@ import { TabRow } from '../components/TabRow';
 import { Segmented } from '../components/fx/Segmented';
 import { fillVar } from '../lib/relFill';
 import { tie } from '../lib/text';
+import { ToggleChevron } from '../components/ToggleMark';
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 /** A mouse or pen lifts a card once it has moved this far; a finger lifts it after a still press (moving first scrolls the page). */
@@ -474,7 +475,9 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
   const [table, setTable] = useState<OnTable[]>([]);
   const [said, setSaid] = useState('');
   const [reading, setReading] = useState<{ card: PlayCard; deck: PlayDeck; side: 'a' | 'b' } | null>(null);
+  // A drawn special card shows under its button, in the rules card itself; a small toggle hides it and shows it again.
   const [special, setSpecial] = useState<string | null>(null);
+  const [specialShown, setSpecialShown] = useState(true);
   const zTop = useRef(1);
   const uid = useRef(1);
   const pileRef = useRef<HTMLButtonElement>(null);
@@ -660,9 +663,10 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
 
       {!focus && (
       <>
-      <Section id="how-to-play" title="How to play" className="focus-dimmable">
+      {/* The Rules tabs at the section's top right, level with its title (the founder, 2026-11-06, as Section tools); on a narrow phone
+          they wrap under it, still at the right. */}
+      <Section id="how-to-play" title="How to play" className="focus-dimmable" tools={guide.length > 1 ? <Segmented label="Rules" value={shownGuide} onChange={setGuideTab} options={guide} /> : undefined}>
         <div className="rounded-card bg-card p-md shadow-toy-soft">
-          {guide.length > 1 && <Segmented label="Rules" value={shownGuide} onChange={setGuideTab} options={guide} className="mb-sm" />}
           {/* The rules are read at the table, so they are a reading block (full lines, exempt from the phone's density rule). */}
           {shownGuide === 'how' && <p className="prose-long m-0 text-prose text-ink-soft">{game.howTo}</p>}
           {shownGuide === 'rules' && game.rules && (
@@ -680,9 +684,39 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
                 ))}
               </ul>
               {game.specialNote && <p className="mt-sm m-0 text-subhead text-ink-soft">{game.specialNote}</p>}
-              <Button className="mt-sm" size="sm" variant="outline" onClick={() => setSpecial(game.special![Math.floor(Math.random() * game.special!.length)]!)}>
-                Draw a special card
-              </Button>
+              <div className="mt-sm flex flex-wrap items-center gap-xs">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  aria-controls="special-card"
+                  onClick={() => {
+                    setSpecial(game.special![Math.floor(Math.random() * game.special!.length)]!);
+                    setSpecialShown(true);
+                  }}
+                >
+                  Draw a special card
+                </Button>
+                {special !== null && (
+                  <button
+                    type="button"
+                    aria-expanded={specialShown}
+                    aria-controls="special-card"
+                    onClick={() => setSpecialShown((v) => !v)}
+                    className="toy toy-flat inline-flex min-h-[44px] items-center gap-xs rounded-pill px-sm text-subhead text-ink-soft"
+                  >
+                    {specialShown ? 'Hide the card' : 'Show the card'}
+                    <ToggleChevron open={specialShown} size={14} />
+                  </button>
+                )}
+              </div>
+              <div id="special-card" aria-live="polite">
+                {special !== null && specialShown && (
+                  <div className="mt-xs rounded-tile bg-paper p-sm">
+                    <p className="m-0 text-caption text-ink-soft">Special card</p>
+                    <p className="mt-xs m-0 text-headline">{special}</p>
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>
@@ -705,9 +739,6 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
             )}
           </div>
         )}
-      </Sheet>
-      <Sheet open={special !== null} onClose={() => setSpecial(null)} title="Special card">
-        <p className="m-0 text-headline">{special}</p>
       </Sheet>
     </div>
   );

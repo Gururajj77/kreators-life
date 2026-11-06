@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { useSession } from '../lib/store';
 import { AnonToggle } from './AnonToggle';
 import { Button } from './Button';
+import { ConfirmDelete } from './ConfirmDelete';
 import { Section } from './Section';
 import { FIELD } from '../lib/ui';
 import { dateTime } from '../lib/date';
@@ -30,6 +31,8 @@ export function EventPanel({ app, id, talk = true }: { app: EventApp; id: string
   const [to, setTo] = useState<EventMessage | null>(null);
   const [url, setUrl] = useState('');
   const [note, setNote] = useState('');
+  const [dropLine, setDropLine] = useState<EventMessage | null>(null);
+  const [dropFolder, setDropFolder] = useState(false);
   const end = useRef<HTMLLIElement | null>(null);
   const d = q.data;
   const count = d?.messages.length ?? 0;
@@ -38,9 +41,9 @@ export function EventPanel({ app, id, talk = true }: { app: EventApp; id: string
   }, [count]);
 
   const say = useMutation({ mutationFn: () => api.eventSay(app, id, text, { anonymous, parentId: to?.id ?? null }), onSuccess: () => { setText(''); setTo(null); refresh(); } });
-  const unsay = useMutation({ mutationFn: (mid: string) => api.eventUnsay(app, id, mid), onSuccess: refresh });
+  const unsay = useMutation({ mutationFn: (mid: string) => api.eventUnsay(app, id, mid), onSuccess: () => { setDropLine(null); refresh(); } });
   const share = useMutation({ mutationFn: () => api.eventPhotos(app, id, url, note), onSuccess: () => { setUrl(''); setNote(''); refresh(); } });
-  const unshare = useMutation({ mutationFn: () => api.eventPhotosOff(app, id), onSuccess: refresh });
+  const unshare = useMutation({ mutationFn: () => api.eventPhotosOff(app, id), onSuccess: () => { setDropFolder(false); refresh(); } });
   const listed = useMutation({ mutationFn: (on: boolean) => api.eventListed(app, id, on), onSuccess: refresh });
   const connect = useMutation({ mutationFn: (userId: string) => api.eventConnect(app, id, userId), onSuccess: refresh });
   const err = (m: { isError: boolean; error: unknown }) => (m.isError ? <p role="alert" className="mt-xs m-0 text-subhead">{msg(m.error)}</p> : null);
@@ -58,7 +61,7 @@ export function EventPanel({ app, id, talk = true }: { app: EventApp; id: string
             {d.photos.note && <p className="mt-xs m-0 text-subhead text-ink-soft">{d.photos.note}</p>}
             <p className="mt-xs m-0 text-caption text-ink-soft">Opens the host's shared folder in a new tab. Only open links you trust.</p>
             {host && (
-              <Button variant="outline" size="sm" className="mt-sm" onClick={() => unshare.mutate()} disabled={unshare.isPending}>
+              <Button variant="outline" size="sm" className="mt-sm" onClick={() => { unshare.reset(); setDropFolder(true); }} disabled={unshare.isPending}>
                 Take the folder down
               </Button>
             )}
@@ -132,7 +135,7 @@ export function EventPanel({ app, id, talk = true }: { app: EventApp; id: string
                   Reply
                 </button>
                 {(m.mine || host) && (
-                  <button type="button" onClick={() => unsay.mutate(m.id)} className={`mt-xs inline-flex min-h-[44px] items-center text-caption underline underline-offset-4 ${m.mine ? 'text-on-ink/80' : 'text-ink-soft'}`}>
+                  <button type="button" onClick={() => { unsay.reset(); setDropLine(m); }} className={`mt-xs inline-flex min-h-[44px] items-center text-caption underline underline-offset-4 ${m.mine ? 'text-on-ink/80' : 'text-ink-soft'}`}>
                     Take down
                   </button>
                 )}
@@ -155,9 +158,28 @@ export function EventPanel({ app, id, talk = true }: { app: EventApp; id: string
           </form>
           <AnonToggle on={anonymous} onChange={setAnonymous} className="mt-xs" />
           {err(say)}
-          {err(unsay)}
         </Section>
       )}
+      <ConfirmDelete
+        open={dropFolder}
+        title="Take the folder down?"
+        body="Guests can no longer open the photos from here. You can share a folder again any time."
+        pending={unshare.isPending}
+        failed={unshare.isError}
+        onYes={() => unshare.mutate()}
+        onClose={() => setDropFolder(false)}
+        yes="Yes, take it down"
+      />
+      <ConfirmDelete
+        open={dropLine !== null}
+        title="Take this message down?"
+        body={dropLine?.mine ? 'Your message is removed for every guest. This cannot be undone.' : 'The message is removed for every guest. This cannot be undone.'}
+        pending={unsay.isPending}
+        failed={unsay.isError}
+        onYes={() => dropLine && unsay.mutate(dropLine.id)}
+        onClose={() => setDropLine(null)}
+        yes="Yes, take it down"
+      />
     </>
   );
 }

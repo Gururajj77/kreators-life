@@ -1,5 +1,5 @@
-import { PRODUCT_KIND_META, productPayWays, type CourseDraft, type Lesson, type QuizQuestion, PUBLIC_BADGES, HONORS, FAQ_A_MAX, FAQ_Q_MAX, MAX_FAQ, type ProductFaq, money, typedCents, formatCount } from '@kreators/shared';
-import { eventTime, longDate } from '../lib/date';
+import { PRODUCT_KIND_META, productPayWays, productStatusLabel, statusesFor, type ProductInvite, type ProductStatus, type CourseDraft, type Lesson, type QuizQuestion, PUBLIC_BADGES, HONORS, FAQ_A_MAX, FAQ_Q_MAX, MAX_FAQ, type ProductFaq, money, typedCents, formatCount } from '@kreators/shared';
+import { eventTime, localDateTimeValue, longDate } from '../lib/date';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -7,6 +7,8 @@ import { Button } from '../components/Button';
 import { ConfirmDelete } from '../components/ConfirmDelete';
 import { MoreMenu, type MoreMenuItem } from '../components/MoreMenu';
 import { Fold } from '../components/Fold';
+import { Segmented } from '../components/fx/Segmented';
+import { ErrorLine, errorText } from '../components/ErrorLine';
 import { MediaSection, useMediaMenuItem } from '../components/MediaSection';
 import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
@@ -14,7 +16,10 @@ import { Sheet } from '../components/Sheet';
 import { Pager, usePage } from '../components/Pager';
 import { api } from '../lib/api';
 import { useAuthed, useRefreshAll, useStudio } from '../lib/queries';
-import { FIELD } from '../lib/ui';
+import { FIELD, FIELD_LINE, LABEL } from '../lib/ui';
+import { IconButton } from '../components/IconButton';
+import { CloseButton } from '../components/CloseButton';
+import { Check } from 'lucide-react';
 
 
 
@@ -89,7 +94,7 @@ export function StudioProduct() {
     setPricePoints(String(p.pricePoints));
     setPriceCents(typedFromCents(p.priceCents));
     setUrl(p.url ?? '');
-    setStartsAt(p.startsAt ? p.startsAt.slice(0, 16) : '');
+    setStartsAt(p.startsAt ? localDateTimeValue(new Date(p.startsAt)) : '');
     setDurationMin(String(p.durationMin ?? 30));
     setCapacity(p.capacity ? String(p.capacity) : '');
     setMeetingUrl(p.meetingUrl ?? '');
@@ -114,7 +119,7 @@ export function StudioProduct() {
   }, [p]);
 
   const save = useMutation({
-    mutationFn: (status?: 'live' | 'draft' | 'archived') =>
+    mutationFn: (status?: ProductStatus) =>
       api.updateProduct(id, {
         title,
         description,
@@ -155,7 +160,15 @@ export function StudioProduct() {
     },
   });
   const addCoupon = useMutation({ mutationFn: () => api.createCoupon({ code: couponCode, percentOff: Number(couponOff), productId: id }), onSuccess: () => coupons.refetch() });
-  const delCoupon = useMutation({ mutationFn: (cid: string) => api.deleteCoupon(cid), onSuccess: () => coupons.refetch() });
+  const delCoupon = useMutation({
+    mutationFn: (cid: string) => api.deleteCoupon(cid),
+    onSuccess: () => {
+      setDroppingCoupon(null);
+      coupons.refetch();
+    },
+  });
+  // A coupon's delete asks first, with the code it is about.
+  const [droppingCoupon, setDroppingCoupon] = useState<{ id: string; code: string; all: boolean } | null>(null);
   // Pictures and videos open from the More menu, so the form's Save stays the one solid button.
   const [editingMedia, setEditingMedia] = useState(false);
   const mediaItem = useMediaMenuItem('product', id, () => setEditingMedia(true));
@@ -170,25 +183,28 @@ export function StudioProduct() {
   if (!p || !d) return null;
   const meta = PRODUCT_KIND_META[p.kind];
   const mine = coupons.data?.coupons.filter((c) => c.productId === id || c.productId === null) ?? [];
-  const others = (studio.data?.products ?? []).filter((x) => x.id !== id && x.kind !== 'bundle');
+  // A private course never goes in a bundle: a bundle is sold to anyone.
+  const others = (studio.data?.products ?? []).filter((x) => x.id !== id && x.kind !== 'bundle' && x.status !== 'private');
   const priced = p.kind !== 'link';
   const setIntakeAt = (key: string, v: string) => setIntake((list) => list.map((x) => (x.key === key ? { ...x, text: v } : x)));
   const more: MoreMenuItem[] = [
     ...(mediaItem ? [mediaItem] : []),
     ...(p.status === 'live' ? [{ key: 'unpublish', label: 'Unpublish', onSelect: () => save.mutate('draft'), disabled: save.isPending }] : []),
-    ...(p.status === 'live' ? [{ key: 'view', label: 'View as buyer', onSelect: () => nav(`/p/${p.id}`) }] : []),
-    { key: 'delete', label: 'Delete product', destructive: true, onSelect: () => setDeleting(true) },
+    ...(p.status === 'live' || p.status === 'private' ? [{ key: 'view', label: 'View as buyer', onSelect: () => nav(`/p/${p.id}`) }] : []),
+    // Deleting for good is the last step, and only from Archived; a product people have bought stays archived (the server refuses it).
+    ...(p.status === 'archived' && p.sold === 0 ? [{ key: 'delete', label: 'Delete for good', destructive: true, onSelect: () => setDeleting(true) }] : []),
   ];
+  const states = statusesFor(p.kind).map((v) => ({ value: v, label: productStatusLabel(v, p.kind) }));
 
   return (
     <Screen>
       <AppCover
         back={{ to: '/shop', label: 'Shop' }}
         title={p.title}
-        lede={`${meta.name}, ${p.status}, ${formatCount(p.sold)} sold${p.rating ? `, rated ${p.rating}` : ''}`}
+        lede={`${meta.name}, ${productStatusLabel(p.status, p.kind).toLowerCase()}, ${formatCount(p.sold)} sold${p.rating ? `, rated ${p.rating}` : ''}`}
         actions={
           <>
-            {p.status !== 'live' && (
+            {p.status === 'draft' && (
               <Button variant="outline" onClick={() => save.mutate('live')} disabled={save.isPending}>
                 Publish
               </Button>
@@ -200,6 +216,26 @@ export function StudioProduct() {
 
       <MediaSection type="product" id={p.id} trigger={null} open={editingMedia} onOpenChange={setEditingMedia} />
 
+      <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="state-heading">
+        <h2 id="state-heading" className="m-0 text-title3">
+          Who can see it
+        </h2>
+        {/* The states span the full width in equal parts, by the room the card has: one row, or two by two for a course's four when the
+            card is narrower than 23rem (the founder, 2026-11-06; `grid!` beats the capsule's inline-flex). */}
+        <div className="mt-sm @container">
+          <Segmented
+            className={`grid! w-full grid-flow-col auto-cols-fr [&>button]:px-xs! ${states.length > 3 ? '@max-[23rem]:grid-flow-row @max-[23rem]:grid-cols-2' : ''}`}
+            label="State"
+            value={p.status}
+            onChange={(v) => v !== p.status && !save.isPending && save.mutate(v)}
+            options={states}
+          />
+        </div>
+        <p className="mt-xs m-0 text-caption text-ink-soft">{stateLine(p.status, p.kind === 'course')}</p>
+        {save.isError && <ErrorLine className="mt-xs" e={save.error} />}
+        {p.kind === 'course' && p.status === 'private' && <InviteFold productId={p.id} />}
+      </section>
+
       <form
         className="mt-md flex flex-col gap-md rounded-card bg-card p-md shadow-toy-soft"
         onSubmit={(e) => {
@@ -210,20 +246,24 @@ export function StudioProduct() {
         <label className="block">
           <span className="block text-subhead font-semibold">Title</span>
           <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={FIELD} />
+          <span className="mt-xs block text-caption text-ink-soft">Buyers see it on the card and the page.</span>
         </label>
         <label className="block">
           <span className="block text-subhead font-semibold">Description</span>
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} rows={4} className={FIELD} />
+          <span className="mt-xs block text-caption text-ink-soft">Shown on the product page. Up to 2,000 characters.</span>
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-subhead font-semibold">Emoji cover</span>
             <input value={cover} onChange={(e) => setCover(e.target.value)} maxLength={8} className={FIELD} />
+            <span className="mt-xs block text-caption text-ink-soft">One emoji, shown on the card and the page.</span>
           </label>
           {priced && (
             <label className="block">
               <span className="block text-subhead font-semibold">{pwyw ? 'Minimum points' : 'Points price'}</span>
               <input type="number" min={0} value={pricePoints} onChange={(e) => setPricePoints(e.target.value)} className={FIELD} />
+              <span className="mt-xs block text-caption text-ink-soft">{pwyw ? 'The least a buyer pays in points.' : 'Whole points. Zero means no points price.'}</span>
             </label>
           )}
         </div>
@@ -231,6 +271,7 @@ export function StudioProduct() {
           <label className="block">
             <span className="block text-subhead font-semibold">Money price ({money(0, p.currency).replace(/0$/, '').trim()})</span>
             <input type="text" inputMode="decimal" value={priceCents} onChange={(e) => setPriceCents(e.target.value)} placeholder="1,299.50" className={FIELD} />
+            <span className="mt-xs block text-caption text-ink-soft">Type it like 1,299.50. Zero means no money price.</span>
           </label>
         )}
         {priced && (
@@ -248,12 +289,15 @@ export function StudioProduct() {
             <label className="block">
               <span className="block text-subhead font-semibold">Xp of at least</span>
               <input type="number" min={0} value={minXp} onChange={(e) => setMinXp(e.target.value)} className={FIELD} />
+              <span className="mt-xs block text-caption text-ink-soft">All the xp they have earned.</span>
             </label>
             <label className="block">
               <span className="block text-subhead font-semibold">Points of at least</span>
               <input type="number" min={0} value={minPoints} onChange={(e) => setMinPoints(e.target.value)} className={FIELD} />
+              <span className="mt-xs block text-caption text-ink-soft">Points they hold. None are spent.</span>
             </label>
-            <label className="block">
+            {/* The third field takes the whole second row, so the row is filled (the form rules, 2026-11-06). */}
+            <label className="col-span-2 block">
               <span className="block text-subhead font-semibold">Holds the badge</span>
               <select value={badge} onChange={(e) => setBadge(e.target.value)} className={FIELD}>
                 <option value="">Any badge or none</option>
@@ -268,13 +312,17 @@ export function StudioProduct() {
                   </option>
                 ))}
               </select>
+              <span className="mt-xs block text-caption text-ink-soft">Only public badges and honors are listed.</span>
             </label>
           </div>
         </fieldset>
         {(p.kind === 'payment' || p.kind === 'digital' || p.kind === 'locked') && (
           <label className="flex min-h-[44px] items-center gap-sm text-subhead font-semibold">
             <input type="checkbox" checked={pwyw} onChange={(e) => setPwyw(e.target.checked)} className="size-[20px] accent-ink" />
-            Pay what you want, this price is the minimum
+            <span>
+              Pay what you want, this price is the minimum
+              <span className="block text-caption text-ink-soft">Buyers paying in points can give more, never less.</span>
+            </span>
           </label>
         )}
         {p.kind === 'digital' && (
@@ -290,12 +338,14 @@ export function StudioProduct() {
           <label className="block">
             <span className="block text-subhead font-semibold">{p.kind === 'link' ? 'Link' : 'Download link, shown after purchase'}</span>
             <input value={url} onChange={(e) => setUrl(e.target.value)} className={FIELD} placeholder="https://" />
+            <span className="mt-xs block text-caption text-ink-soft">{p.kind === 'link' ? 'Where the button on your page sends people.' : 'The file buyers get, as a web link.'}</span>
           </label>
         )}
         {p.kind === 'locked' && (
           <label className="block">
             <span className="block text-subhead">The post, shown only after purchase</span>
             <textarea value={lockedBody} onChange={(e) => setLockedBody(e.target.value)} rows={8} maxLength={20000} className={FIELD} placeholder="Text, links, a video address" />
+            <span className="mt-xs block text-caption text-ink-soft">Up to 20,000 characters.</span>
           </label>
         )}
         {p.kind === 'bundle' && (
@@ -330,14 +380,17 @@ export function StudioProduct() {
             <label className="block">
               <span className="block text-subhead font-semibold">Starts at</span>
               <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className={FIELD} />
+              <span className="mt-xs block text-caption text-ink-soft">In the time zone of this device.</span>
             </label>
             <label className="block">
               <span className="block text-subhead font-semibold">Capacity, blank for unlimited</span>
               <input type="number" min={1} value={capacity} onChange={(e) => setCapacity(e.target.value)} className={FIELD} />
+              <span className="mt-xs block text-caption text-ink-soft">Sales stop once this many are sold.</span>
             </label>
             <label className="block">
               <span className="block text-subhead">Recording link, shown to ticket holders afterwards</span>
               <input value={replayUrl} onChange={(e) => setReplayUrl(e.target.value)} className={FIELD} placeholder="https://" />
+              <span className="mt-xs block text-caption text-ink-soft">A web link. Leave it empty until you have one.</span>
             </label>
             <label className="block">
               <span className="block text-subhead">Price for people who missed it, in points</span>
@@ -350,6 +403,7 @@ export function StudioProduct() {
           <label className="block">
             <span className="block text-subhead">Joining link, shown to ticket holders</span>
             <input value={meetingUrl} onChange={(e) => setMeetingUrl(e.target.value)} className={FIELD} placeholder="Zoom, Meet, anything" />
+            <span className="mt-xs block text-caption text-ink-soft">A web link that starts with https:// or http://.</span>
           </label>
         )}
         {p.kind === 'session' && (
@@ -363,17 +417,19 @@ export function StudioProduct() {
               <label className="block">
                 <span className="block text-subhead font-semibold">Buffer, minutes</span>
                 <input type="number" min={0} max={120} step={5} value={bufferMin} onChange={(e) => setBufferMin(e.target.value)} className={FIELD} />
+                <span className="mt-xs block text-caption text-ink-soft">Kept free before and after.</span>
               </label>
               <label className="block">
                 <span className="block text-subhead font-semibold">Notice, hours</span>
                 <input type="number" min={0} max={720} value={noticeHours} onChange={(e) => setNoticeHours(e.target.value)} className={FIELD} />
+                <span className="mt-xs block text-caption text-ink-soft">How soon someone can book.</span>
               </label>
               <label className="block">
                 <span className="block text-subhead font-semibold">Book up to, days</span>
                 <input type="number" min={1} max={365} value={maxDaysAhead} onChange={(e) => setMaxDaysAhead(e.target.value)} className={FIELD} />
+                <span className="mt-xs block text-caption text-ink-soft">How far ahead it opens.</span>
               </label>
             </div>
-            <span className="block text-caption text-ink-soft">Buffer keeps minutes free before and after each session. Notice is how soon someone can book. The last is how far ahead the calendar opens.</span>
           </>
         )}
         {p.kind === 'membership' && (
@@ -385,7 +441,7 @@ export function StudioProduct() {
         )}
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-subhead">Questions buyers ask (shown on the page)</legend>
-          <p className="mt-xs m-0 text-caption text-ink-soft">Answer the doubts that stop people buying: who it is for, what they get, how long it takes. Up to {MAX_FAQ}.</p>
+          <p className="mt-xs m-0 text-caption text-ink-soft">Answer the doubts that stop people buying: who it is for, what they get, how long it takes. Up to {MAX_FAQ}. Questions up to {FAQ_Q_MAX} characters, answers up to {FAQ_A_MAX}.</p>
           <div className="mt-xs flex flex-col gap-xs">
             {faq.map((f, i) => (
               <div key={f.key} className="flex flex-col gap-xs rounded-tile bg-paper p-sm">
@@ -398,7 +454,7 @@ export function StudioProduct() {
             ))}
           </div>
           {faq.length < MAX_FAQ && (
-            <Button variant="outline" className="mt-xs" plusToX onClick={() => setFaq((list) => [...list, { key: rowKey(), q: '', a: '' }])}>
+            <Button variant="outline" className="mt-xs" full plusToX onClick={() => setFaq((list) => [...list, { key: rowKey(), q: '', a: '' }])}>
               Add a question
             </Button>
           )}
@@ -406,10 +462,11 @@ export function StudioProduct() {
         {(p.kind === 'session' || p.kind === 'dm') && (
           <fieldset className="m-0 border-0 p-0">
             <legend className="text-subhead">{p.kind === 'session' ? 'Questions to answer when booking' : 'Questions to answer at checkout'}</legend>
+            <p className="mt-xs m-0 text-caption text-ink-soft">Up to 8 questions, each up to 200 characters.</p>
             <div className="mt-xs flex flex-col gap-xs">
               {intake.map((qn, i) => (
                 <div key={qn.key} className="flex items-center gap-xs">
-                  <input value={qn.text} onChange={(e) => setIntakeAt(qn.key, e.target.value)} maxLength={200} aria-label={`Question ${i + 1}`} className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+                  <input value={qn.text} onChange={(e) => setIntakeAt(qn.key, e.target.value)} maxLength={200} aria-label={`Question ${i + 1}`} className={`${FIELD_LINE} min-w-0 flex-1`} />
                   <Button variant="ghost" onClick={() => setIntake((list) => list.filter((x) => x.key !== qn.key))} aria-label={`Remove question ${i + 1}`}>
                     Remove
                   </Button>
@@ -417,7 +474,7 @@ export function StudioProduct() {
               ))}
             </div>
             {intake.length < 8 && (
-              <Button variant="outline" className="mt-xs" plusToX onClick={() => setIntake((list) => [...list, { key: rowKey(), text: '' }])}>
+              <Button variant="outline" className="mt-xs" full plusToX onClick={() => setIntake((list) => [...list, { key: rowKey(), text: '' }])}>
                 Add a question
               </Button>
             )}
@@ -444,15 +501,18 @@ export function StudioProduct() {
 
       {p.kind === 'course' && (
         <section className="mt-lg" aria-labelledby="lessons-heading">
-          <div className="flex items-center justify-between gap-sm">
-            <h2 id="lessons-heading" className="text-title2">
-              Lessons
-            </h2>
+          <h2 id="lessons-heading" className="text-title2">
+            Lessons
+          </h2>
+          {/* Under 34rem (a phone) each button fills its own line; from there up they sit at the right, each its own width. */}
+          <div className="@container mt-sm">
             <div className="flex flex-wrap justify-end gap-xs">
-              <Button variant="outline" onClick={() => setDrafting(true)}>
+              <Button variant="outline" className="basis-full justify-center @min-[34rem]:basis-auto" onClick={() => setDrafting(true)}>
                 Draft from notes
               </Button>
-              <Button variant="outline" onClick={() => setLesson('new')}>Add lesson</Button>
+              <Button variant="outline" className="basis-full justify-center @min-[34rem]:basis-auto" onClick={() => setLesson('new')}>
+                Add lesson
+              </Button>
             </div>
           </div>
           <ol className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -500,7 +560,14 @@ export function StudioProduct() {
                   {c.code}, {c.percentOff}% off{c.productId ? '' : ', all products'}, used {c.uses}
                   {c.maxUses ? ` of ${c.maxUses}` : ''}
                 </span>
-                <Button variant="ghost" onClick={() => delCoupon.mutate(c.id)}>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    delCoupon.reset();
+                    setDroppingCoupon({ id: c.id, code: c.code, all: c.productId === null });
+                  }}
+                  aria-label={`Remove coupon ${c.code}`}
+                >
                   Remove
                 </Button>
               </li>
@@ -573,11 +640,140 @@ export function StudioProduct() {
         </section>
       )}
 
-      <ConfirmDelete open={deleting} title="Delete this product?" body={`"${p.title}". Buyers lose access. This cannot be undone.`} pending={remove.isPending} failed={remove.isError} onYes={() => remove.mutate()} onClose={() => setDeleting(false)} />
+      <ConfirmDelete
+        open={droppingCoupon !== null}
+        title="Delete this coupon?"
+        body={`${droppingCoupon?.code ?? ''}${droppingCoupon?.all ? ', on all your products' : ''}. Buyers can no longer use it. This cannot be undone.`}
+        pending={delCoupon.isPending}
+        failed={delCoupon.isError}
+        onYes={() => droppingCoupon && delCoupon.mutate(droppingCoupon.id)}
+        onClose={() => setDroppingCoupon(null)}
+      />
+      <ConfirmDelete
+        open={deleting}
+        title={`Delete ${p.title} for good?`}
+        body={`It goes for good, with its ${p.kind === 'course' ? 'lessons, ' : ''}reviews and invites. This cannot be undone.`}
+        yes="Yes, delete it for good"
+        pending={remove.isPending}
+        failed={remove.isError}
+        error={remove.isError ? errorText(remove.error) : undefined}
+        onYes={() => remove.mutate()}
+        onClose={() => setDeleting(false)}
+      />
 
       <LessonSheet productId={id} lesson={lesson} onClose={() => setLesson(null)} onSaved={() => q.refetch()} />
       {p.kind === 'course' && <DraftSheet productId={id} title={p.title} open={drafting} onClose={() => setDrafting(false)} onSaved={() => q.refetch()} />}
     </Screen>
+  );
+}
+
+/** One plain line for what the picked state means. */
+function stateLine(status: ProductStatus, course: boolean): string {
+  if (status === 'draft') return 'Only you can see it. Nobody can buy it yet.';
+  if (status === 'private') return 'Only the people you invite can see it and enrol.';
+  if (status === 'live') return course ? 'Anyone can find it and enrol.' : 'Anyone can find it and buy it.';
+  return 'Hidden from everyone, and nobody new can buy it. Buyers keep what they have.';
+}
+
+/** The invite list of a private course: one field (email, @username or friend code) and the people asked, each removed only after a yes. */
+function InviteFold({ productId }: { productId: string }) {
+  const pg = usePage('i');
+  const list = useAuthed(['product-invites', productId, pg.query], () => api.productInvites(productId, pg.query));
+  const [who, setWho] = useState('');
+  const [said, setSaid] = useState('');
+  const [removing, setRemoving] = useState<ProductInvite | null>(null);
+  const [open, setOpen] = useState(false);
+  const invite = useMutation({
+    mutationFn: () => api.inviteToProduct(productId, who.trim()),
+    onSuccess: (r) => {
+      setSaid(r.already ? `${r.invite?.name ?? 'They'} was already invited.` : `Invited ${r.invite?.name ?? 'them'}. They got a note in their inbox.`);
+      setWho('');
+      list.refetch();
+    },
+  });
+  const uninvite = useMutation({
+    mutationFn: (userId: string) => api.uninviteFromProduct(productId, userId),
+    onSuccess: () => {
+      setRemoving(null);
+      list.refetch();
+    },
+  });
+  const invites = list.data?.invites ?? [];
+  return (
+    <Fold className="mt-sm" adds title="Invite people" open={open} onOpenChange={setOpen}>
+      {/* The small-input card of the design rules: the label, a quiet example, then the field with its tick and a cross that folds it. */}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          setSaid('');
+          if (who.trim()) invite.mutate();
+        }}
+      >
+        <label htmlFor={`invite-${productId}`} className={LABEL}>
+          Email, @username or friend code
+        </label>
+        <p className="m-0 text-caption text-ink-soft">Like asha@example.com, @asha or their 8-character code.</p>
+        <div className="mt-xs flex items-center gap-xs">
+          <input
+            id={`invite-${productId}`}
+            value={who}
+            onChange={(e) => setWho(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                setOpen(false);
+              }
+            }}
+            maxLength={120}
+            autoComplete="off"
+            className={`${FIELD_LINE} min-w-0 flex-1`}
+          />
+          <IconButton
+            icon={Check}
+            label="Invite them"
+            tip="br"
+            onClick={() => {
+              setSaid('');
+              if (who.trim()) invite.mutate();
+            }}
+            disabled={invite.isPending || !who.trim()}
+          />
+          <CloseButton onClick={() => setOpen(false)} label="Close" />
+        </div>
+      </form>
+      {invite.isError && <ErrorLine className="mt-xs" e={invite.error} />}
+      {said && (
+        <p role="status" className="mt-xs m-0 text-subhead">
+          {said}
+        </p>
+      )}
+      {invites.length > 0 && (
+        <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+          {invites.map((i) => (
+            <li key={i.userId} className="flex flex-wrap-reverse items-center justify-between gap-xs rounded-tile bg-paper p-xs pl-sm">
+              <span className="min-w-0 text-subhead">
+                <span className="font-semibold">{i.name}</span>
+                {i.handle ? <span className="text-ink-soft"> @{i.handle}</span> : null}
+              </span>
+              <Button variant="outline" onClick={() => setRemoving(i)}>
+                Remove
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {list.data && <Pager page={list.data.page} prefix="i" label="invites" />}
+      <ConfirmDelete
+        open={removing !== null}
+        title={`Remove ${removing?.name ?? 'them'}?`}
+        body="They can no longer see this course or enrol. If they already enrolled, they keep what they have."
+        yes="Yes, remove them"
+        pending={uninvite.isPending}
+        failed={uninvite.isError}
+        onYes={() => removing && uninvite.mutate(removing.userId)}
+        onClose={() => setRemoving(null)}
+      />
+    </Fold>
   );
 }
 
@@ -702,18 +898,22 @@ function LessonSheet({ productId, lesson, onClose, onSaved }: { productId: strin
         <label className="block">
           <span className="block text-subhead font-semibold">Title</span>
           <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} required className={FIELD} />
+          <span className="mt-xs block text-caption text-ink-soft">Up to 140 characters.</span>
         </label>
         <label className="block">
           <span className="block text-subhead font-semibold">Lesson text</span>
           <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} className={FIELD} />
+          <span className="mt-xs block text-caption text-ink-soft">Plain text, shown with the lesson.</span>
         </label>
         <label className="block">
           <span className="block text-subhead font-semibold">Video link</span>
           <input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} className={FIELD} placeholder="Optional" />
+          <span className="mt-xs block text-caption text-ink-soft">A web link. Learners open it from the lesson.</span>
         </label>
         <label className="block">
           <span className="block text-subhead">Drip: unlock this many days after enrolling</span>
           <input type="number" min={0} max={365} value={drip} onChange={(e) => setDrip(e.target.value)} className={FIELD} />
+          <span className="mt-xs block text-caption text-ink-soft">Zero opens it the day they enrol.</span>
         </label>
 
         <fieldset className="m-0 border-0 p-0">
@@ -725,6 +925,7 @@ function LessonSheet({ productId, lesson, onClose, onSaved }: { productId: strin
                 <label className="block">
                   <span className="block text-caption">Question {i + 1}</span>
                   <input value={qn.q} onChange={(e) => setQ(i, { q: e.target.value })} maxLength={300} className={FIELD} />
+                  <span className="mt-xs block text-caption text-ink-soft">Then mark the right option below.</span>
                 </label>
                 <div className="mt-xs flex flex-col gap-xs" role="radiogroup" aria-label={`Right answer for question ${i + 1}`}>
                   {qn.options.map((o, k) => (
@@ -753,7 +954,7 @@ function LessonSheet({ productId, lesson, onClose, onSaved }: { productId: strin
             ))}
           </ol>
           {quiz.length < 20 && (
-            <Button variant="outline" className="mt-xs" plusToX onClick={() => setQuiz((list) => [...list, quizRow(blankQuestion())])}>
+            <Button variant="outline" className="mt-xs" full plusToX onClick={() => setQuiz((list) => [...list, quizRow(blankQuestion())])}>
               Add a question
             </Button>
           )}
@@ -761,6 +962,7 @@ function LessonSheet({ productId, lesson, onClose, onSaved }: { productId: strin
             <label className="mt-sm block">
               <span className="block text-subhead">Percent needed to pass, zero for no gate</span>
               <input type="number" min={0} max={100} value={passScore} onChange={(e) => setPassScore(e.target.value)} className={FIELD} />
+              <span className="mt-xs block text-caption text-ink-soft">A whole number from 0 to 100.</span>
             </label>
           )}
         </fieldset>
@@ -770,14 +972,17 @@ function LessonSheet({ productId, lesson, onClose, onSaved }: { productId: strin
             {save.error instanceof Error ? save.error.message : 'Could not save.'}
           </p>
         )}
-        <Button type="submit" size="lg" full disabled={save.isPending || !title.trim()}>
-          {existing ? 'Save lesson' : 'Add lesson'}
-        </Button>
-        {existing && (
-          <button type="button" disabled={remove.isPending} onClick={() => setDeleting(true)} className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-headline text-r1 hover:bg-r1/10 disabled:opacity-50">
-            Delete lesson
-          </button>
-        )}
+        {/* The main Save takes the width and Delete lesson sits at its right on the same line (2026-11-06, the form rules). */}
+        <div className="flex gap-xs">
+          <Button type="submit" size="lg" className="min-w-0 flex-1" disabled={save.isPending || !title.trim()}>
+            {existing ? 'Save lesson' : 'Add lesson'}
+          </Button>
+          {existing && (
+            <button type="button" disabled={remove.isPending} onClick={() => setDeleting(true)} className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-headline text-r1 hover:bg-r1/10 disabled:opacity-50">
+              Delete lesson
+            </button>
+          )}
+        </div>
       </form>
       <ConfirmDelete open={deleting} title="Delete this lesson?" body={`"${existing?.title ?? ''}". Its text and quiz go. This cannot be undone.`} pending={remove.isPending} failed={remove.isError} onYes={() => remove.mutate()} onClose={() => setDeleting(false)} />
     </Sheet>

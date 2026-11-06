@@ -17,6 +17,6 @@ export function useView(prefix = '', fallback: PipelineView = 'board'): [Pipelin
 }
 
 /** The two-way switch between a list and a kanban board. */
-export function ViewToggle({ view, onChange, label = 'View' }: { view: PipelineView; onChange: (v: PipelineView) => void; label?: string }) {
-  return <Segmented label={label} value={view} onChange={onChange} options={PIPELINE_VIEWS.map((v) => ({ value: v, label: NAME[v] }))} />;
+export function ViewToggle({ view, onChange, label = 'View', className }: { view: PipelineView; onChange: (v: PipelineView) => void; label?: string; className?: string }) {
+  return <Segmented label={label} value={view} onChange={onChange} options={PIPELINE_VIEWS.map((v) => ({ value: v, label: NAME[v] }))} className={className} />;
 }

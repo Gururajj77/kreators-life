@@ -8,6 +8,7 @@ import { BackLink } from '../components/PageHeader';
 import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 import { api } from '../lib/api';
 import { useAuthed, useMe, useRefreshAll, useResources } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
@@ -172,7 +173,9 @@ function ResourceSheet({ resource, onClose, onSaved }: { resource: Resource | 'n
   const [url, setUrl] = useState('');
   const [tags, setTags] = useState('');
   const [published, setPublished] = useState(true);
+  const [asking, setAsking] = useState(false);
   useEffect(() => {
+    setAsking(false);
     setKind(existing?.kind ?? 'article');
     setTitle(existing?.title ?? '');
     setSummary(existing?.summary ?? '');
@@ -192,6 +195,7 @@ function ResourceSheet({ resource, onClose, onSaved }: { resource: Resource | 'n
   const remove = useMutation({
     mutationFn: () => api.deleteResource(existing!.id),
     onSuccess: () => {
+      setAsking(false);
       onSaved();
       onClose();
     },
@@ -248,11 +252,29 @@ function ResourceSheet({ resource, onClose, onSaved }: { resource: Resource | 'n
           {existing ? 'Save changes' : 'Publish'}
         </Button>
         {existing && (
-          <Button variant="ghost" disabled={remove.isPending} onClick={() => window.confirm('Delete this resource?') && remove.mutate()}>
+          <Button
+            variant="ghost"
+            disabled={remove.isPending}
+            onClick={() => {
+              remove.reset();
+              setAsking(true);
+            }}
+          >
             Delete
           </Button>
         )}
       </form>
+      {existing && (
+        <ConfirmDelete
+          open={asking}
+          title="Delete this resource?"
+          body={`“${existing.title}” goes from Knowledge for everyone. This cannot be undone.`}
+          pending={remove.isPending}
+          failed={remove.isError}
+          onYes={() => remove.mutate()}
+          onClose={() => setAsking(false)}
+        />
+      )}
     </Sheet>
   );
 }

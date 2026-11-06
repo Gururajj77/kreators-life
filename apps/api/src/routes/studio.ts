@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
-import { AFFILIATE_SHARE, PRODUCT_KINDS, type Availability, type AvailabilityOverride, type Booking, type Coupon, type Lead, type Lesson, type Order, type Product, type ProductKind, type QuizQuestion, type StudioAnalytics, type Testimonial, parseFaq } from '@kreators/shared';
+import { AFFILIATE_SHARE, INVITE_NOT_FOUND, PRODUCT_KINDS, statusesFor, type Availability, type AvailabilityOverride, type Booking, type Coupon, type Lead, type Lesson, type Order, type Product, type ProductInvite, type ProductKind, type ProductStatus, type QuizQuestion, type StudioAnalytics, type Testimonial, parseFaq } from '@kreators/shared';
 import { isUnlockBadgeKey } from '@kreators/shared';
-import type { AppEnv } from '../env';
-import { nameOf, newId, notify, nowIso, parseList, pageOf, paged, httpUrl, str } from '../db';
+import type { AppEnv, UserRow } from '../env';
+import { audit, DELETED_NAME, nameOf, newId, notify, nowIso, parseList, pageOf, paged, personBy, httpUrl, str } from '../db';
 import { logEvent, sendEmail, track } from '../ops';
 import { parseQuiz } from './buyer';
 
@@ -24,7 +24,7 @@ export interface ProductRow {
   duration_min: number | null;
   capacity: number | null;
   meeting_url: string | null;
-  status: 'draft' | 'live' | 'archived';
+  status: ProductStatus;
   cover: string;
   sort_order: number;
   created_at: string;
@@ -204,16 +204,37 @@ function cleanQuiz(v: unknown): QuizQuestion[] {
   return out;
 }
 
-/** Only your own live products can go in a bundle. */
+/** Only your own products can go in a bundle, and never a private course: a bundle is sold to anyone, and a private course is invite only. */
 async function ownedIds(db: D1Database, ownerId: string, v: unknown): Promise<string[]> {
   const ids = list(v, 12, 64);
   if (ids.length === 0) return [];
-  const rows = await db.prepare(`SELECT id FROM products WHERE owner_id = ? AND kind != 'bundle' AND id IN (${ids.map(() => '?').join(',')})`).bind(ownerId, ...ids).all<{ id: string }>();
+  const rows = await db.prepare(`SELECT id FROM products WHERE owner_id = ? AND kind != 'bundle' AND status != 'private' AND id IN (${ids.map(() => '?').join(',')})`).bind(ownerId, ...ids).all<{ id: string }>();
   return rows.results.map((r) => r.id);
 }
 
 async function ownProduct(db: D1Database, ownerId: string, id: string): Promise<ProductRow | null> {
   return db.prepare(`${PRODUCT_SELECT} WHERE p.id = ? AND p.owner_id = ?`).bind(id, ownerId).first<ProductRow>();
+}
+
+/** A super admin (role admin) sees and changes every product of every creator in every state; nobody else is let past an owner check. */
+export const isSuperAdmin = (user: Pick<UserRow, 'role'> | null | undefined): boolean => user?.role === 'admin';
+
+/** A product this person may open and change in Studio: their own, or any product for an admin. */
+async function editableProduct(db: D1Database, user: UserRow, id: string): Promise<ProductRow | null> {
+  return isSuperAdmin(user) ? db.prepare(`${PRODUCT_SELECT} WHERE p.id = ?`).bind(id).first<ProductRow>() : ownProduct(db, user.id, id);
+}
+
+/**
+ * Who may see a product's page and buy it, the one rule (the public page, checkout and the price check all ask it): a live product
+ * is for anyone; any other state only for its owner and an admin, and a private course also for the people invited to it. Anyone
+ * else gets the same 404 as a product that does not exist.
+ */
+export async function canSeeProduct(db: D1Database, viewer: UserRow | null, row: Pick<ProductRow, 'id' | 'owner_id' | 'status' | 'kind'>): Promise<boolean> {
+  if (row.status === 'live') return true;
+  if (!viewer) return false;
+  if (viewer.id === row.owner_id || isSuperAdmin(viewer)) return true;
+  if (row.status !== 'private' || row.kind !== 'course') return false;
+  return Boolean(await db.prepare('SELECT 1 FROM product_invites WHERE product_id = ? AND user_id = ?').bind(row.id, viewer.id).first());
 }
 
 // ---- overview
@@ -298,7 +319,7 @@ studio.post('/products', async (c) => {
 studio.get('/products/:id', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const row = await ownProduct(db, user.id, c.req.param('id'));
+  const row = await editableProduct(db, user, c.req.param('id'));
   if (!row) return c.json({ error: 'not found' }, 404);
   const orderAsk = pageOf(c, 'o');
   const bookingAsk = pageOf(c, 'b');
@@ -316,10 +337,19 @@ studio.get('/products/:id', async (c) => {
 studio.patch('/products/:id', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const prev = await ownProduct(db, user.id, c.req.param('id'));
+  const prev = await editableProduct(db, user, c.req.param('id'));
   if (!prev) return c.json({ error: 'not found' }, 404);
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
-  const status = body.status === 'live' || body.status === 'draft' || body.status === 'archived' ? body.status : prev.status;
+  // Private is for courses only; every other kind is Draft, Live or Archived.
+  if ('status' in body && body.status !== prev.status && !(statusesFor(prev.kind) as readonly unknown[]).includes(body.status)) {
+    return c.json({ error: body.status === 'private' ? 'Only a course can be private.' : 'That is not a state this product can be in.' }, 400);
+  }
+  const status: ProductStatus = (statusesFor(prev.kind) as readonly unknown[]).includes(body.status) ? (body.status as ProductStatus) : prev.status;
+  // A bundle is sold to anyone, so a course inside one cannot turn private: the bundle would hand it out.
+  if (status === 'private' && prev.status !== 'private') {
+    const inBundle = await db.prepare("SELECT title FROM products WHERE owner_id = ? AND kind = 'bundle' AND bundle_json LIKE ? LIMIT 1").bind(prev.owner_id, `%"${prev.id}"%`).first<{ title: string }>();
+    if (inBundle) return c.json({ error: `This course is in the bundle "${inBundle.title}". Take it out of the bundle first.` }, 409);
+  }
   await db
     .prepare(
       `UPDATE products SET title = ?, description = ?, price_points = ?, price_cents = ?, currency = ?, url = ?, starts_at = ?, duration_min = ?, capacity = ?, meeting_url = ?, status = ?, cover = ?, sort_order = ?, updated_at = ?,
@@ -331,7 +361,7 @@ studio.patch('/products/:id', async (c) => {
       'durationMin' in body ? int(body.durationMin, prev.duration_min, 5, 600) : prev.duration_min, 'capacity' in body ? int(body.capacity, prev.capacity, 1) : prev.capacity,
       'meetingUrl' in body ? httpUrl(body.meetingUrl, 500) || null : prev.meeting_url, status, str(body.cover, 8, prev.cover) || prev.cover, int(body.sortOrder, prev.sort_order) ?? prev.sort_order, nowIso(),
       typeof body.pwyw === 'boolean' ? (body.pwyw ? 1 : 0) : prev.pwyw, 'intake' in body ? JSON.stringify(list(body.intake, 8, 200)) : prev.intake_json, 'replayUrl' in body ? httpUrl(body.replayUrl, 500) || null : prev.replay_url, int(body.replayPoints, prev.replay_points) ?? prev.replay_points,
-      'bundleIds' in body ? JSON.stringify(await ownedIds(db, user.id, body.bundleIds)) : prev.bundle_json, 'lockedBody' in body ? str(body.lockedBody, 20000) : prev.locked_body, 'responseDays' in body ? int(body.responseDays, prev.response_days, 1, 30) : prev.response_days,
+      'bundleIds' in body ? JSON.stringify(await ownedIds(db, prev.owner_id, body.bundleIds)) : prev.bundle_json, 'lockedBody' in body ? str(body.lockedBody, 20000) : prev.locked_body, 'responseDays' in body ? int(body.responseDays, prev.response_days, 1, 30) : prev.response_days,
       typeof body.leadMagnet === 'boolean' ? (body.leadMagnet ? 1 : 0) : prev.lead_magnet, typeof body.certificate === 'boolean' ? (body.certificate ? 1 : 0) : prev.certificate,
       int(body.bufferMin, prev.buffer_min, 0, 120) ?? prev.buffer_min, int(body.noticeHours, prev.notice_hours, 0, 720) ?? prev.notice_hours, int(body.maxDaysAhead, prev.max_days_ahead, 1, 365) ?? prev.max_days_ahead, 'periodMonths' in body ? int(body.periodMonths, prev.period_months, 1, 36) : prev.period_months,
       'minPoints' in body ? (int(body.minPoints, prev.min_points, 0) ?? prev.min_points) : prev.min_points, 'badge' in body ? (isUnlockBadgeKey(str(body.badge, 40)) ? str(body.badge, 40) : '') : prev.badge, prev.id,
@@ -339,22 +369,75 @@ studio.patch('/products/:id', async (c) => {
     .run();
   if ('minXp' in body) await db.prepare('UPDATE products SET min_xp = ? WHERE id = ?').bind(int(body.minXp, 0, 0) ?? 0, prev.id).run();
   if ('faq' in body) await db.prepare('UPDATE products SET faq_json = ? WHERE id = ?').bind(JSON.stringify(parseFaq(body.faq)), prev.id).run();
-  const row = await ownProduct(db, user.id, prev.id);
+  // An admin changing someone else's product leaves a line in the audit log.
+  if (prev.owner_id !== user.id) await audit(db, user.id, 'product.update', 'product', prev.id, { status: prev.status }, { status });
+  const row = await editableProduct(db, user, prev.id);
   return c.json({ product: row ? toProduct(row, true) : null });
 });
 
 studio.delete('/products/:id', async (c) => {
   const db = c.env.DB;
-  const id = c.req.param('id');
-  // A product that has been sold is kept: deleting it would take the paid orders and the buyers' access with it. It is archived instead.
-  const sold = await db.prepare('SELECT 1 FROM orders o JOIN products p ON p.id = o.product_id WHERE o.product_id = ? AND p.owner_id = ? LIMIT 1').bind(id, c.get('user').id).first();
-  if (sold) {
-    const res = await db.prepare("UPDATE products SET status = 'archived' WHERE id = ? AND owner_id = ?").bind(id, c.get('user').id).run();
-    if (res.meta.changes === 0) return c.json({ error: 'not found' }, 404);
-    return c.json({ ok: true, archived: true });
-  }
-  const res = await db.prepare('DELETE FROM products WHERE id = ? AND owner_id = ?').bind(id, c.get('user').id).run();
+  const user = c.get('user');
+  const row = await editableProduct(db, user, c.req.param('id'));
+  if (!row) return c.json({ error: 'not found' }, 404);
+  // Deleting for good is the last step and only from Archived (the founder, 2026-11-06): archive it first, then delete it.
+  if (row.status !== 'archived') return c.json({ error: 'Archive it first. Only an archived product can be deleted for good.' }, 409);
+  // A product that has been sold is kept: deleting it would take the paid orders and the buyers' access with it.
+  const sold = await db.prepare('SELECT 1 FROM orders WHERE product_id = ? LIMIT 1').bind(row.id).first();
+  if (sold) return c.json({ error: 'People have bought this, so it stays archived to keep their orders and access.' }, 409);
+  const res = await db.prepare("DELETE FROM products WHERE id = ? AND status = 'archived'").bind(row.id).run();
   if (res.meta.changes === 0) return c.json({ error: 'not found' }, 404);
+  if (row.owner_id !== user.id) await audit(db, user.id, 'product.delete', 'product', row.id, { title: row.title, owner: row.owner_id }, '');
+  return c.json({ ok: true });
+});
+
+// ---- invites to a private course: the owner or an admin adds people by email, @username or friend code; each is told in the inbox.
+interface InviteRow { user_id: string; display_name: string; handle: string | null; created_at: string }
+const toInvite = (r: InviteRow): ProductInvite => ({ userId: r.user_id, name: nameOf(r), handle: r.handle, createdAt: r.created_at });
+const INVITE_SELECT = 'SELECT i.user_id, u.display_name, u.handle, i.created_at FROM product_invites i JOIN users u ON u.id = i.user_id';
+
+studio.get('/products/:id/invites', async (c) => {
+  const db = c.env.DB;
+  const row = await editableProduct(db, c.get('user'), c.req.param('id'));
+  if (!row) return c.json({ error: 'not found' }, 404);
+  const ask = pageOf(c, 'i');
+  const rows = await db.prepare(`${INVITE_SELECT} WHERE i.product_id = ? AND u.display_name != ? ORDER BY i.created_at DESC LIMIT ? OFFSET ?`).bind(row.id, DELETED_NAME, ask.limit, ask.offset).all<InviteRow>();
+  const pg = paged(rows.results, ask);
+  return c.json({ page: pg.page, invites: pg.items.map(toInvite) });
+});
+
+studio.post('/products/:id/invites', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const row = await editableProduct(db, user, c.req.param('id'));
+  if (!row) return c.json({ error: 'not found' }, 404);
+  if (row.kind !== 'course') return c.json({ error: 'Only a course can be private.' }, 400);
+  if (row.status !== 'private') return c.json({ error: 'Make the course private first, then invite people.' }, 409);
+  const body = await c.req.json<{ who?: unknown }>().catch(() => ({}) as { who?: unknown });
+  const who = str(body.who, 120);
+  if (!who) return c.json({ error: 'Type an email, @username or friend code.' }, 400);
+  const target = await personBy(db, who);
+  // A block either way reads like nobody, so an invite never tells someone they were blocked.
+  const blocked = target
+    ? await db.prepare('SELECT 1 FROM blocks WHERE (blocker_id = ?1 AND blocked_id = ?2) OR (blocker_id = ?2 AND blocked_id = ?1) OR (blocker_id = ?3 AND blocked_id = ?2) OR (blocker_id = ?2 AND blocked_id = ?3)').bind(user.id, target.id, row.owner_id).first()
+    : null;
+  if (!target || target.display_name === DELETED_NAME || blocked) return c.json({ error: INVITE_NOT_FOUND }, 404);
+  if (target.id === row.owner_id) return c.json({ error: 'That is the course owner. They can always open it.' }, 400);
+  const res = await db.prepare('INSERT OR IGNORE INTO product_invites (product_id, user_id, invited_by, created_at) VALUES (?, ?, ?, ?)').bind(row.id, target.id, user.id, nowIso()).run();
+  if (res.meta.changes > 0) await notify(db, target.id, 'invite', `You are invited to ${row.title}`, `${nameOf({ display_name: row.owner_name })} invited you to a private course.`, `/p/${row.id}`);
+  if (row.owner_id !== user.id) await audit(db, user.id, 'product.invite', 'product', row.id, '', { userId: target.id });
+  const out = await db.prepare(`${INVITE_SELECT} WHERE i.product_id = ? AND i.user_id = ?`).bind(row.id, target.id).first<InviteRow>();
+  return c.json({ invite: out ? toInvite(out) : null, already: res.meta.changes === 0 }, res.meta.changes > 0 ? 201 : 200);
+});
+
+studio.delete('/products/:id/invites/:userId', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const row = await editableProduct(db, user, c.req.param('id'));
+  if (!row) return c.json({ error: 'not found' }, 404);
+  const res = await db.prepare('DELETE FROM product_invites WHERE product_id = ? AND user_id = ?').bind(row.id, c.req.param('userId')).run();
+  if (res.meta.changes === 0) return c.json({ error: 'not found' }, 404);
+  if (row.owner_id !== user.id) await audit(db, user.id, 'product.uninvite', 'product', row.id, { userId: c.req.param('userId') }, '');
   return c.json({ ok: true });
 });
 

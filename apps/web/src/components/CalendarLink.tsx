@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useSession } from '../lib/store';
 import { Button } from './Button';
+import { ConfirmDelete } from './ConfirmDelete';
 import { Fold } from './Fold';
 import { Toggle } from './Toggle';
 import { copyPlain } from '../lib/clipboard';
@@ -18,7 +19,8 @@ const COPY = {
   updates: 'Your calendar app checks the link by itself, about once an hour.',
   secret: 'Anyone with this link can see those titles. Do not share it.',
   fresh: 'Make a fresh link',
-  freshAsk: 'Tap again to make a fresh link. The old one stops at once.',
+  freshTitle: 'Make a fresh link?',
+  freshAsk: 'The old link stops at once, so every calendar that uses it needs the new one.',
   google: 'Google Calendar: open Other calendars, then From URL, and paste the link.',
   apple: 'Apple Calendar: choose File, then New Calendar Subscription, and paste the link.',
   outlook: 'Outlook: choose Add calendar, then Subscribe from web, and paste the link.',
@@ -34,18 +36,16 @@ export function CalendarLink() {
   const [sure, setSure] = useState(false);
   const save = useMutation({
     mutationFn: (body: { on?: boolean; fresh?: boolean }) => api.calendarSwitch(body),
-    onSuccess: (res) => qc.setQueryData(['me', 'calendar'], res),
+    onSuccess: (res, body) => {
+      qc.setQueryData(['me', 'calendar'], res);
+      if (body.fresh) setSure(false);
+    },
   });
   useEffect(() => {
     if (!copied) return;
     const t = window.setTimeout(() => setCopied(false), 2000);
     return () => window.clearTimeout(t);
   }, [copied]);
-  useEffect(() => {
-    if (!sure) return;
-    const t = window.setTimeout(() => setSure(false), 5000);
-    return () => window.clearTimeout(t);
-  }, [sure]);
 
   const on = q.data?.enabled === true;
   const url = on && q.data?.token ? `${window.location.origin}/api/public/calendar/${q.data.token}.ics` : '';
@@ -81,19 +81,24 @@ export function CalendarLink() {
                 size="sm"
                 disabled={save.isPending}
                 onClick={() => {
-                  if (!sure) return setSure(true);
-                  setSure(false);
-                  save.mutate({ on: true, fresh: true });
+                  save.reset();
+                  setSure(true);
                 }}
               >
-                {sure ? 'Yes, make a fresh link' : COPY.fresh}
+                {COPY.fresh}
               </Button>
             </div>
-            {sure && (
-              <p role="status" className="mt-xs m-0 text-caption text-ink-soft">
-                {COPY.freshAsk}
-              </p>
-            )}
+            <ConfirmDelete
+              open={sure}
+              title={COPY.freshTitle}
+              body={COPY.freshAsk}
+              pending={save.isPending}
+              failed={save.isError}
+              onYes={() => save.mutate({ on: true, fresh: true })}
+              onClose={() => setSure(false)}
+              yes="Yes, make a fresh link"
+              keep="Keep this link"
+            />
             <p className="mt-sm m-0 text-caption text-ink-soft">{COPY.secret}</p>
             <Fold className="mt-sm" title="How to add it">
               <ul className="m-0 flex list-none flex-col gap-xs p-sm text-subhead text-ink-soft">

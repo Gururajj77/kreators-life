@@ -7,7 +7,7 @@ import { useParamState } from '../lib/useParamState';
 import { tie } from '../lib/text';
 import { shortDay } from '../lib/date';
 import { Busy, Skeleton } from './Skeleton';
-import { FILTER_SELECT } from './AgencyInvoices';
+import { FILTER_SELECT, PAPER_FILL } from './AgencyInvoices';
 import { Button } from './Button';
 import { useAgencyCan } from '../lib/agencyWorkspace';
 import { DeliverableSheet } from './DeliverableSheet';
@@ -104,6 +104,9 @@ export function AgencyPipeline({ clientId, defaultView = 'board', adding, onAddi
   const [channel, setChannel] = useParamState('pchannel', '');
   const [stageRaw, setStageRaw] = useParamState('pstage', '');
   const stage = (DELIVERABLE_STAGES as readonly string[]).includes(stageRaw) ? (stageRaw as DeliverableStage) : '';
+  // Only the pieces past their day (`?pdue=late`), the Late number on the overview and on a client's page. It sits in the Stage select.
+  const [dueRaw, setDue] = useParamState('pdue', '');
+  const late = dueRaw === 'late';
   const client = clientId ?? clientRaw;
   const pg = usePage('p');
   const [per, setPer] = useState(25);
@@ -116,7 +119,11 @@ export function AgencyPipeline({ clientId, defaultView = 'board', adding, onAddi
 
   const filterQuery = [client ? `client=${client}` : '', channel ? `channel=${encodeURIComponent(channel)}` : ''].filter(Boolean).join('&');
   const boardQ = useAuthed(['agency', 'board', client, channel, per], () => api.agencyBoard([filterQuery, `per=${per}`].filter(Boolean).join('&')), view === 'board');
-  const listQ = useAuthed(['agency', 'items', client, channel, stage, pg.page, pg.size], () => api.agencyItems([pageQuery(pg.page, pg.size), filterQuery, stage ? `stage=${stage}` : ''].filter(Boolean).join('&')), view === 'list');
+  const listQ = useAuthed(
+    ['agency', 'items', client, channel, stage, late, pg.page, pg.size],
+    () => api.agencyItems([pageQuery(pg.page, pg.size), filterQuery, stage ? `stage=${stage}` : '', late ? 'due=late' : ''].filter(Boolean).join('&')),
+    view === 'list',
+  );
 
   const move = useMutation({
     mutationFn: (v: { item: AgencyDeliverable; to: DeliverableStage }) => api.agencyItemUpdate(v.item.id, { title: v.item.title, stage: v.to }),
@@ -162,71 +169,78 @@ export function AgencyPipeline({ clientId, defaultView = 'board', adding, onAddi
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-sm">
-        <ViewToggle view={view} onChange={setView} label="Deliverables view" />
+      {/* List and Board at the left and the filters at the right of one row (the founder, 2026-11-06); in a row under 34rem (a phone) the
+          switch fills its line in equal parts and the filters fill the next. */}
+      <div className="@container flex flex-wrap items-center justify-between gap-sm">
+        <div className="basis-full @min-[34rem]:basis-auto">
+          <ViewToggle view={view} onChange={setView} label="Deliverables view" className={PAPER_FILL} />
+        </div>
+        <div className="fill-row flex basis-full flex-wrap justify-end gap-xs @min-[34rem]:ml-auto @min-[34rem]:basis-auto">
+          {!clientId && (
+            <select
+              aria-label="Client"
+              value={clientRaw}
+              onChange={(e) => {
+                setClientRaw(e.target.value);
+                pg.reset();
+              }}
+              className={select}
+            >
+              <option value="">All clients</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <select
+            aria-label="Channel"
+            value={channel}
+            onChange={(e) => {
+              setChannel(e.target.value);
+              pg.reset();
+            }}
+            className={select}
+          >
+            <option value="">All channels</option>
+            {channels.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          {view === 'list' && (
+            <select
+              aria-label="Stage"
+              value={late ? 'late' : stage}
+              onChange={(e) => {
+                const v = e.target.value;
+                setDue(v === 'late' ? 'late' : '');
+                setStageRaw(v === 'late' ? '' : v);
+                pg.reset();
+              }}
+              className={select}
+            >
+              <option value="">Stage: All{counts ? ` (${total})` : ''}</option>
+              {DELIVERABLE_STAGES.map((s) => (
+                <option key={s} value={s}>
+                  Stage: {DELIVERABLE_STAGE_META[s].name}
+                  {counts ? ` (${counts[s]})` : ''}
+                </option>
+              ))}
+              <option value="late">Late{listQ.data?.late !== undefined ? ` (${listQ.data.late})` : ''}</option>
+            </select>
+          )}
+        </div>
         {!onAdding && edit && (
           // On a client's page the stage move is the screen's one solid button, so adding a piece there is outline.
-          <Button size="sm" variant={clientId ? 'outline' : 'primary'} plusToX disabled={noClients} onClick={() => openItem(null)}>
+          <Button size="sm" variant={clientId ? 'outline' : 'primary'} plusToX className="basis-full justify-center @min-[34rem]:basis-auto" disabled={noClients} onClick={() => openItem(null)}>
             Add deliverable
           </Button>
         )}
       </div>
       {noClients && <p className="mt-xs m-0 text-subhead">{COPY.noClients}</p>}
-      <div className="fill-row mt-sm flex flex-wrap gap-xs">
-        {!clientId && (
-          <select
-            aria-label="Client"
-            value={clientRaw}
-            onChange={(e) => {
-              setClientRaw(e.target.value);
-              pg.reset();
-            }}
-            className={select}
-          >
-            <option value="">All clients</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        )}
-        <select
-          aria-label="Channel"
-          value={channel}
-          onChange={(e) => {
-            setChannel(e.target.value);
-            pg.reset();
-          }}
-          className={select}
-        >
-          <option value="">All channels</option>
-          {channels.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-        {view === 'list' && (
-          <select
-            aria-label="Stage"
-            value={stage}
-            onChange={(e) => {
-              setStageRaw(e.target.value);
-              pg.reset();
-            }}
-            className={select}
-          >
-            <option value="">Stage: All{counts ? ` (${total})` : ''}</option>
-            {DELIVERABLE_STAGES.map((s) => (
-              <option key={s} value={s}>
-                Stage: {DELIVERABLE_STAGE_META[s].name}
-                {counts ? ` (${counts[s]})` : ''}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
 
       {view === 'board' ? (
         <div className="mt-sm">

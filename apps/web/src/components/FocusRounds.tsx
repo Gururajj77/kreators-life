@@ -1,6 +1,7 @@
 import { BREAK_BEATS, BREATH_CUES, BREATH_PATTERNS, breathAtPace, breathPatternFor, breathRounds, FOCUS_MAX_MINUTES, FOCUS_PRESETS, FOCUS_QUALITY, focusQualityName, RELATIONSHIP_BY_KEY, type BreathStepKind, type FocusMode, type FocusRoundRow, type FocusSettings } from '@kreators/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import gsap from 'gsap';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useSearchParams } from 'react-router';
 import { focusRunActive, parseFocusRun, resumeFrom, type FocusRun, type FocusResume } from '@kreators/shared/focusRun';
 import { api } from '../lib/api';
@@ -27,6 +28,7 @@ import { Toggle } from './Toggle';
 import { Icon as LucideGlyph } from './Icon';
 import { AnimatedIcon } from './AnimatedIcon';
 import { EighthNotes, Play, Square, Target } from 'lucide-react';
+import { Fold } from './Fold';
 
 type Phase = 'focus' | 'short' | 'long';
 type Mode = 'breathe' | 'timer' | 'pomodoro' | 'stopwatch';
@@ -136,6 +138,59 @@ function RoundButton({ at, label, icon, onClick, opens = false, pressed }: { at:
     <RoundButtonBase at={at} label={label} onClick={onClick} opens={opens} pressed={pressed}>
       <RoundGlyph name={icon} active={pressed} />
     </RoundButtonBase>
+  );
+}
+
+/**
+ * A panel that slides open inside the focus card (Background music): it rises in with GSAP (opacity and a small lift, set in place
+ * under reduced motion), focus moves to its first control, Escape closes it, and it fades out before it leaves.
+ */
+function SlidePane({ open, label, className, onEscape, children }: { open: boolean; label: string; className: string; onEscape: () => void; children: ReactNode }) {
+  const [mounted, setMounted] = useState(open);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (open) {
+      el.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled])')?.focus();
+      if (still) {
+        gsap.set(el, { opacity: 1, y: 0 });
+        return;
+      }
+      const tween = gsap.fromTo(el, { opacity: 0, y: -8 }, { opacity: 1, y: 0, duration: 0.24, ease: 'power2.out', clearProps: 'transform' });
+      return () => {
+        tween.kill();
+      };
+    }
+    if (still) {
+      gsap.set(el, { opacity: 0 });
+      setMounted(false);
+      return;
+    }
+    const tween = gsap.to(el, { opacity: 0, y: -8, duration: 0.16, ease: 'power2.in', onComplete: () => setMounted(false) });
+    return () => {
+      tween.kill();
+    };
+  }, [open, mounted]);
+  if (!mounted) return null;
+  return (
+    <div
+      ref={ref}
+      role="group"
+      aria-label={label}
+      className={className}
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape') return;
+        e.stopPropagation();
+        onEscape();
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -360,7 +415,19 @@ export function FocusRounds({
     setSaidState(text);
     useFocusSession.getState().say(text);
   };
-  const [sheet, setSheet] = useState<'settings' | 'music' | 'task' | 'keys' | null>(null);
+  const [sheet, setSheet] = useState<'settings' | 'task' | null>(null);
+  // Background music opens inside the card (under the round buttons), not in a sheet; the music button opens and closes it.
+  const [musicOpen, setMusicOpen] = useState(false);
+  const toolsRef = useRef<HTMLDivElement>(null);
+  const closeMusic = () => {
+    setMusicOpen(false);
+    toolsRef.current?.querySelector<HTMLElement>('button[aria-label="Background music"]')?.focus();
+  };
+  // The keyboard shortcuts are a fold at the foot of the card; the ? key opens it and moves focus to it.
+  const [keysOpen, setKeysOpen] = useState(false);
+  // Set once the ? key is pressed, so the shortcuts fold shows on a touch screen that has a keyboard too.
+  const [keysTyped, setKeysTyped] = useState(false);
+  const keysRef = useRef<HTMLDivElement>(null);
   // Stop past a whole minute asks: keep the minutes so far, or throw them away.
   const [stopAsk, setStopAsk] = useState<{ minutes: number; mode: 'timer' | 'pomodoro' } | null>(null);
   // A finished session being changed, or 'new' for one added afterwards.
@@ -1006,7 +1073,9 @@ export function FocusRounds({
       finish(false);
     } else if (e.key === '?') {
       e.preventDefault();
-      setSheet('keys');
+      setKeysTyped(true);
+      setKeysOpen(true);
+      requestAnimationFrame(() => keysRef.current?.querySelector<HTMLElement>('button[aria-expanded]')?.focus());
     }
   };
   useEffect(() => {
@@ -1115,17 +1184,22 @@ export function FocusRounds({
             Breathe with the circle, or work in sessions with breaks. Today: {plural(todayRounds.length, 'session')}, {todayMinutes} min of focus.
           </p>
         </div>
-        <div className="mf-rounds ml-auto" role="group" aria-label="Focus tools">
+        <div ref={toolsRef} className="mf-rounds ml-auto" role="group" aria-label="Focus tools">
           <RoundButton at="bc" label="Focus on a task" icon="task" opens onClick={() => setSheet('task')} />
           <RoundButton at="bc" label="Timer settings" icon="gear" opens onClick={() => setSheet('settings')} />
           <RoundButton at="bc" label={settings.sound ? 'Sounds are on. Turn them off' : 'Sounds are off. Turn them on'} icon={settings.sound ? 'sound' : 'mute'} onClick={() => save({ ...settings, sound: !settings.sound })} />
-          <RoundButton at="tr" label="Background music" icon="music" opens onClick={() => setSheet('music')} />
+          <RoundButton at="tr" label="Background music" icon="music" pressed={musicOpen} onClick={() => (musicOpen ? closeMusic() : setMusicOpen(true))} />
           <RoundButton at="tr" label={fullOn ? 'Leave full screen' : 'Full screen'} icon="full" pressed={fullOn} onClick={() => setFullScreen(!fullOn)} />
         </div>
       </div>
 
       <div className="mf-stage mt-sm">
         <div className="night-card mf-panel rounded-card" data-accent={accent}>
+          {/* Background music, opened by the music round button above: the six sounds and the volume, inside the card. Escape closes it. */}
+          <SlidePane open={musicOpen} className="mf-pinned mf-pane" label="Background music" onEscape={closeMusic}>
+            {/* The sound controls carry their own "Background sound" heading; the pane's name is for screen readers. */}
+            <SoundControls settings={settings} onChange={save} part="music" />
+          </SlidePane>
           <div className="mf-top">
             <div ref={tabs.ref} role="group" aria-label="Kind of clock" className="fx-slide mf-tabs">
               {MODES.map((m) => (
@@ -1387,6 +1461,38 @@ export function FocusRounds({
               )}
             </div>
           )}
+
+          {/* The laptop's keys, at the foot of the card (Mindful only; a touch screen shows it once ? is pressed). The ? key opens it. */}
+          {keysHere && (
+            <div
+              ref={keysRef}
+              className="mf-pinned mf-keys"
+              data-kbd={keysTyped ? '' : undefined}
+              onKeyDown={(e) => {
+                if (e.key !== 'Escape' || !keysOpen) return;
+                e.stopPropagation();
+                setKeysOpen(false);
+                keysRef.current?.querySelector<HTMLElement>('button[aria-expanded]')?.focus();
+              }}
+            >
+              <Fold title="Keyboard shortcuts" open={keysOpen} onOpenChange={setKeysOpen}>
+                <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-md gap-y-xs px-sm text-callout">
+                  {[
+                    ['Space', 'Start or pause'],
+                    ['S', 'Stop'],
+                    ['K', 'Skip to the next part (Pomodoro)'],
+                    ['?', 'Open this list'],
+                  ].map(([k, what]) => (
+                    <div key={k} className="contents">
+                      <dt className="font-mono font-semibold">{k}</dt>
+                      <dd className="m-0">{what}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <p className="mt-xs mb-0 px-sm text-caption text-ink-soft">They work on this page, and never while you type in a box.</p>
+              </Fold>
+            </div>
+          )}
         </div>
 
       </div>
@@ -1473,26 +1579,6 @@ export function FocusRounds({
         </div>
       </Sheet>
 
-      <Sheet open={sheet === 'keys'} onClose={() => setSheet(null)} title="Keyboard shortcuts">
-        <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-md gap-y-xs text-callout">
-          {[
-            ['Space', 'Start or pause'],
-            ['S', 'Stop'],
-            ['K', 'Skip to the next part (Pomodoro)'],
-            ['?', 'Show this list'],
-          ].map(([k, what]) => (
-            <div key={k} className="contents">
-              <dt className="font-mono font-semibold">{k}</dt>
-              <dd className="m-0">{what}</dd>
-            </div>
-          ))}
-        </dl>
-        <p className="mt-sm m-0 text-caption text-ink-soft">They work on this page, and never while you type in a box.</p>
-        <Button className="mt-md" full onClick={() => setSheet(null)}>
-          Done
-        </Button>
-      </Sheet>
-
       <Sheet open={edit !== null} onClose={() => setEdit(null)} title={edit === 'new' ? 'Add a session I forgot' : 'Change this session'}>
         {edit !== null && <SessionEditor key={edit === 'new' ? 'new' : edit.id} edit={edit} onClose={() => setEdit(null)} enabled={Boolean(token)} owner={owner} logFocus={settings.logFocus} />}
       </Sheet>
@@ -1509,13 +1595,6 @@ export function FocusRounds({
             }}
           />
         </div>
-        <Button className="mt-md" full onClick={() => setSheet(null)}>
-          Done
-        </Button>
-      </Sheet>
-
-      <Sheet open={sheet === 'music'} onClose={() => setSheet(null)} title="Background music">
-        <SoundControls settings={settings} onChange={save} part="music" />
         <Button className="mt-md" full onClick={() => setSheet(null)}>
           Done
         </Button>

@@ -399,10 +399,29 @@ export function CircleGroup() {
   const savePlan = useMutation({
     mutationFn: () => api.circlePlan(id, { venue, plan }),
     onSuccess: () => {
+      // Back to Edit with focus on it, as Cancel and Escape do, so a save never drops focus on the page.
       setPlanning(false);
+      window.requestAnimationFrame(() => document.getElementById('plan-edit')?.focus());
       void q.refetch();
     },
   });
+  // The plan is edited in place in its own card (2026-11-06, no sheet): Edit fills the fields from what is saved and moves focus into
+  // them, Escape or Cancel puts the card back as it was, and focus returns to Edit.
+  const venueRef = useRef<HTMLInputElement>(null);
+  const startPlan = () => {
+    if (!g) return;
+    setVenue(g.venue);
+    setPlan(g.plan);
+    savePlan.reset();
+    setPlanning(true);
+  };
+  const stopPlan = () => {
+    setPlanning(false);
+    window.requestAnimationFrame(() => document.getElementById('plan-edit')?.focus());
+  };
+  useEffect(() => {
+    if (planning) venueRef.current?.focus();
+  }, [planning]);
   const nav = useNavigate();
   const chat = useMutation({ mutationFn: (alias: string) => api.openChat({ groupId: id, alias }), onSuccess: (r) => nav(`/bond/chats/${r.chat.id}`) });
 
@@ -416,12 +435,6 @@ export function CircleGroup() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'nearest' });
   }, [g?.messages.length]);
-  useEffect(() => {
-    if (g) {
-      setVenue(g.venue);
-      setPlan(g.plan);
-    }
-  }, [g?.venue, g?.plan, g]);
 
   if (q.isError)
     return (
@@ -496,16 +509,66 @@ export function CircleGroup() {
       </section>
 
       <section className="mt-md rounded-tile bg-card p-sm shadow-toy-soft" aria-labelledby="plan-heading">
-        <div className="flex items-center justify-between gap-sm">
-          <h2 id="plan-heading" className="m-0 text-title3">
-            The plan
-          </h2>
-          <Button variant="ghost" onClick={() => setPlanning(true)}>
-            Edit
-          </Button>
+        {/* The plan's words at the left and Edit at their bottom right, in line with them (the founder, 2026-11-06, as "Edit kind of
+            day"); on a narrow phone Edit wraps under the words, still at the right. */}
+        <div className="flex flex-wrap items-end justify-between gap-sm">
+          <div className="min-w-0 flex-[1_1_220px]">
+            <h2 id="plan-heading" className="m-0 text-title3">
+              The plan
+            </h2>
+            {!planning && (
+              <>
+                <p className="mt-xs m-0 text-headline">{g.venue || 'Where: not decided yet'}</p>
+                <p className="m-0 text-subhead text-ink-soft">{g.plan || 'Agree on the exact time and table in the chat, then write it here so everyone sees it.'}</p>
+              </>
+            )}
+          </div>
+          {!planning && (
+            <div className="ml-auto -mb-sm">
+              <Button id="plan-edit" variant="ghost" onClick={startPlan}>
+                Edit
+              </Button>
+            </div>
+          )}
         </div>
-        <p className="mt-xs m-0 text-headline">{g.venue || 'Where: not decided yet'}</p>
-        <p className="m-0 text-subhead text-ink-soft">{g.plan || 'Agree on the exact time and table in the chat, then write it here so everyone sees it.'}</p>
+        {planning && (
+          <form
+            id="plan-form"
+            className="mt-sm flex flex-col gap-md"
+            onSubmit={(e) => {
+              e.preventDefault();
+              savePlan.mutate();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                stopPlan();
+              }
+            }}
+          >
+            <label className="block">
+              <span className="block text-subhead font-semibold">Where</span>
+              <input ref={venueRef} value={venue} onChange={(e) => setVenue(e.target.value)} maxLength={200} className={FIELD} />
+            </label>
+            <label className="block">
+              <span className="block text-subhead font-semibold">Details</span>
+              <textarea value={plan} onChange={(e) => setPlan(e.target.value)} maxLength={500} rows={3} placeholder="7 pm, ask for the table under the alias Quiet Ember" className={FIELD} />
+            </label>
+            {savePlan.isError && (
+              <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
+                {savePlan.error instanceof Error ? savePlan.error.message : 'Could not save the plan.'}
+              </p>
+            )}
+            <div className="flex flex-wrap gap-xs">
+              <Button type="submit" variant="outline" disabled={savePlan.isPending}>
+                Save for the table
+              </Button>
+              <Button type="button" variant="ghost" onClick={stopPlan}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        )}
       </section>
 
       <MediaSection type="circle" id={g.eventId} title="Pictures and videos from this circle" />
@@ -570,27 +633,6 @@ export function CircleGroup() {
         )}
       </section>
 
-      <Sheet open={planning} onClose={() => setPlanning(false)} title="The plan">
-        <form
-          className="flex flex-col gap-md"
-          onSubmit={(e) => {
-            e.preventDefault();
-            savePlan.mutate();
-          }}
-        >
-          <label className="block">
-            <span className="block text-subhead font-semibold">Where</span>
-            <input value={venue} onChange={(e) => setVenue(e.target.value)} maxLength={200} className={FIELD} />
-          </label>
-          <label className="block">
-            <span className="block text-subhead font-semibold">Details</span>
-            <textarea value={plan} onChange={(e) => setPlan(e.target.value)} maxLength={500} rows={3} placeholder="7 pm, ask for the table under the alias Quiet Ember" className={FIELD} />
-          </label>
-          <Button type="submit" size="lg" full disabled={savePlan.isPending}>
-            Save for the table
-          </Button>
-        </form>
-      </Sheet>
     </Screen>
   );
 }

@@ -9,7 +9,9 @@ import { formatCount, RELATIONSHIP_BY_KEY, RELATIONSHIPS } from './core.ts';
 import type { RelationshipKey } from './core.ts';
 import { addDays, daysBetween, isoWeekday, zoneOffsetMinutes } from './dates.ts';
 import type { Repeat } from './tasks.ts';
-import { DAY_TYPES } from './dayTypes.ts';
+import { slotContains } from './timeBlocks.ts';
+import type { BlockColor, DayTemplate, TimeBlock } from './timeBlocks.ts';
+import { KIND_MIN_DAYS, KINDS_WINDOW_DAYS, kindBeside, kindsOfDays, templateColor, templateForDate } from './dayKinds.ts';
 import { money } from './money.ts';
 import { MAX_NOT_TO_DO } from './api.ts';
 import { DISCOVER_STRENGTHS } from './discover.ts';
@@ -52,8 +54,9 @@ export type InsightKey =
   | 'journal-mood'
   | 'review-since'
   | 'discover-strength'
-  | 'agency-load';
-export type InsightPart = 'tasks' | 'xp' | 'checkins' | 'wellbeing' | 'focus' | 'water' | 'journal' | 'money' | 'notToDo' | 'routine' | 'dayTypes' | 'reviews' | 'discover' | 'agency';
+  | 'agency-load'
+  | 'block-kept';
+export type InsightPart = 'tasks' | 'xp' | 'checkins' | 'wellbeing' | 'focus' | 'water' | 'journal' | 'money' | 'notToDo' | 'routine' | 'dayTypes' | 'reviews' | 'discover' | 'agency' | 'timeBlocks';
 
 export interface InsightPairRow {
   label: string;
@@ -67,7 +70,22 @@ export type InsightChart =
   | { kind: 'week'; labels: string[]; values: number[] }
   | { kind: 'hours'; labels: string[]; values: number[] }
   | { kind: 'share'; parts: { relationship: RelationshipKey; value: number }[]; mark?: RelationshipKey }
-  | { kind: 'dots'; days: { date: string; on: boolean }[] };
+  | { kind: 'dots'; days: { date: string; on: boolean }[] }
+  /** Your kinds of day: the window's days by kind, each in its template's colour (`templateColor`), and how each group of days went. */
+  | { kind: 'kinds'; parts: { templateId: string; name: string; days: number; color: BlockColor | null }[]; none: number; noneName: string; rows: KindRow[] };
+/** One group of days in "Your kinds of day": a kind (or the days with none, `templateId` null), over the days the app was used. */
+export interface KindRow {
+  templateId: string | null;
+  name: string;
+  /** Days the app was used (0: the kind had days, but no app use on any of them). */
+  n: number;
+  /** Tasks ticked a day. */
+  tasks: number;
+  /** Focus minutes a day, while Mindfulness is on. */
+  focus: number | null;
+  /** The average mood logged on those days, while Mood is on; null with none logged. */
+  mood: number | null;
+}
 export interface InsightAction {
   label: string;
   to: string;
@@ -143,6 +161,8 @@ export interface InsightTaskFact {
   repeats: boolean;
   /** "Count it as a habit": the person's pick, or null when they made none. */
   habit?: boolean | null;
+  /** The time block the person put it in, or null (docs/time-blocks.md). */
+  timeBlockId?: string | null;
 }
 export interface InsightOpenTaskFact {
   id: string;
@@ -197,6 +217,7 @@ export interface InsightFacts {
   notToDoMarks: { itemId: string; day: string; status: 'kept' | 'slipped' }[];
   water: { day: string; ml: number }[];
   waterGoal: number | null;
+  /** Dates the person set a kind of day for (a sign they used the app that day). Which template a day uses comes from `timeBlocks`. */
   dayTypes: { day: string; kind: string }[];
   routine: { day: string; done: boolean }[];
   /** When journal entries were written (UTC ISO). Never a word of them. */
@@ -207,6 +228,8 @@ export interface InsightFacts {
   discover: { growth: RelationshipKey; steps: boolean } | null;
   /** Days with an Agency piece due. */
   agencyDue: string[];
+  /** Time blocks (docs/time-blocks.md): the blocks, the day templates with their slots, the default, the weekly pattern and the date changes in the window. Absent: no block line. */
+  timeBlocks?: { blocks: TimeBlock[]; templates: DayTemplate[]; defaultId: string; pattern: (string | null)[]; overrides: Record<string, string>; /** The account's first day in the person's zone: a day before it has no kind. */ since?: string | null };
 }
 export interface InsightsResponse {
   day: string;
@@ -895,56 +918,102 @@ function stressCalm(c: Ctx): Insight | null {
   return ready[0]!.r;
 }
 
-function daytypeDone(c: Ctx): Insight {
+/** "Deep work day" reads "Deep work days", "Studio" reads "Studio days", "Long days" stays; one day keeps the name as it is. */
+function kindDays(raw: string, n = 2): string {
+  const name = raw.trim();
+  if (n === 1) return /\bdays?$/i.test(name) ? name.replace(/days$/i, 'day') : `${name} day`;
+  return /\bdays$/i.test(name) ? name : /\bday$/i.test(name) ? `${name}s` : `${name} days`;
+}
+
+/** The days past the three kinds named: "7 days of other kinds", "1 day of another kind". */
+const otherKinds = (n: number): string => (n === 1 ? '1 day of another kind' : `${formatCount(n)} days of other kinds`);
+
+/**
+ * Your kinds of day (2026-11-06, the founder's ask): the last four weeks by kind of day, a kind being the day template set for that
+ * date or given by the weekly pattern (`kindsOfDays`; the default template's days have none, nor a day before the account), each in its
+ * template's colour, and how each group of days went: tasks ticked, focus minutes while Mindfulness is on, the mood while Mood is on,
+ * on the days the app was used. The sentence sets the kind with the clearest gap beside every other day and says they went together,
+ * never that one made the other. No time blocks yet, or no day with a kind, and it watches with the way to start.
+ */
+function daytypeDone(c: Ctx): Insight | null {
   const { f } = c;
-  const apps: InsightApp[] = ['today', 'insights'];
-  const from = addDays(f.today, -(INSIGHT_WINDOW_DAYS - 1));
-  const kindOf = new Map(f.dayTypes.filter((d) => d.day >= from && d.day <= c.yesterday).map((d) => [d.day, d.kind]));
-  const counts = new Map<string, number>();
-  for (const k of kindOf.values()) counts.set(k, (counts.get(k) ?? 0) + 1);
-  const used = [...counts.entries()].filter(([k, n]) => n >= 4 && DAY_TYPES.some((t) => t.key === k)).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, 3);
-  const offDays = dayRange(from, c.yesterday).filter((d) => !kindOf.has(d) && c.activeDays.has(d));
-  if (!used.length || offDays.length < 7) {
-    const most = Math.max(0, ...counts.values());
-    const need = !used.length ? `Pick a kind of day on Daily on ${plural(4 - Math.min(3, most), 'more day')}.` : `Have ${plural(7 - offDays.length, 'more day')} with no kind of day picked.`;
-    return watching('daytype-done', apps, ['dayTypes', 'tasks'], false, 'Kinds of day', need);
+  const tb = f.timeBlocks;
+  const apps: InsightApp[] = ['today', 'reviews', 'insights'];
+  // No time blocks yet (the rows are made the first time Daily, the month calendar or Time blocks opens): still say how to start.
+  if (!tb) return watching('daytype-done', apps, ['dayTypes', 'timeBlocks'], false, 'Your kinds of day', 'Give a day a kind on Daily, or set your usual week in Time blocks.');
+  const focusOn = c.on('mindful');
+  const moodOn = c.on('mood');
+  const reads: InsightPart[] = ['dayTypes', 'tasks', 'timeBlocks', ...(focusOn ? (['focus'] as const) : []), ...(moodOn ? (['wellbeing'] as const) : [])];
+  const from = addDays(f.today, -KINDS_WINDOW_DAYS);
+  const k = kindsOfDays({ templates: tb.templates, defaultId: tb.defaultId, pattern: tb.pattern, overrides: tb.overrides, since: tb.since ?? null }, from, c.yesterday);
+  if (!k.tally.length) return watching('daytype-done', apps, reads, false, 'Your kinds of day', 'Give a day a kind on Daily, or set your usual week in Time blocks.');
+  const byId = new Map(tb.templates.map((t) => [t.id, t]));
+  const noneName = byId.get(tb.defaultId)?.name ?? 'Everyday';
+  const focusBy = new Map<string, number>();
+  for (const r of f.focus) focusBy.set(r.day, (focusBy.get(r.day) ?? 0) + Math.max(0, r.minutes));
+  const mood = moodOn ? c.wb('mood') : null;
+  const used = (d: string) => c.activeDays.has(d);
+  const metrics: { key: 'tasks' | 'focus' | 'mood'; value: (d: string) => number | null; min: number; scale: (a: number, b: number) => number }[] = [
+    { key: 'tasks', value: (d) => (used(d) ? (c.ticksByDay.get(d) ?? 0) : null), min: 0.5, scale: (a, b) => Math.max(a, b, 1) },
+    ...(focusOn ? [{ key: 'focus' as const, value: (d: string) => (used(d) ? (focusBy.get(d) ?? 0) : null), min: 10, scale: (a: number, b: number) => Math.max(a, b, 15) }] : []),
+    ...(mood ? [{ key: 'mood' as const, value: (d: string) => mood.get(d) ?? null, min: 0.3, scale: () => 4 }] : []),
+  ];
+  // The groups side by side: each kind, then the days with none.
+  const avg = (days: string[], value: (d: string) => number | null): number | null => {
+    const vs = days.map(value).filter((v): v is number => v !== null);
+    return vs.length ? Math.round((vs.reduce((s, v) => s + v, 0) / vs.length) * 10) / 10 : null;
+  };
+  const groups: { templateId: string | null; name: string }[] = [...k.tally.map((t) => ({ templateId: t.templateId, name: t.name })), { templateId: null, name: noneName }];
+  const rows: KindRow[] = [];
+  for (const g of groups) {
+    const days = k.days.filter((d) => d.from !== null && d.templateId === g.templateId).map((d) => d.date);
+    const n = days.filter(used).length;
+    // A group with days is always listed, even with no app use on them (then its row says so; n is 0 and the numbers are not read).
+    if (!days.length) continue;
+    rows.push({ templateId: g.templateId, name: g.templateId ? kindDays(g.name) : `Days on ${g.name}`, n, tasks: avg(days, metrics[0]!.value) ?? 0, focus: focusOn ? avg(days, (d) => (used(d) ? (focusBy.get(d) ?? 0) : null)) : null, mood: mood ? avg(days, (d) => mood.get(d) ?? null) : null });
   }
-  const offAvg = offDays.reduce((s, d) => s + (c.ticksByDay.get(d) ?? 0), 0) / offDays.length;
-  const rows: InsightPairRow[] = [];
-  let best: { kind: string; avg: number; n: number; gap: number } | null = null;
-  for (const [kind, n] of used) {
-    const days = [...kindOf.entries()].filter(([, k]) => k === kind).map(([d]) => d);
-    const avg = days.reduce((s, d) => s + (c.ticksByDay.get(d) ?? 0), 0) / days.length;
-    const name = DAY_TYPES.find((t) => t.key === kind)!.name;
-    rows.push({ label: `${name} days`, value: Math.round(avg * 10) / 10, n, unit: 'tasks' });
-    const gap = avg - offAvg;
-    if (!best || Math.abs(gap) > Math.abs(best.gap)) best = { kind, avg, n, gap };
+  // The clearest gap: a kind beside every other day, on any reading with enough days each side.
+  let best: { name: string; key: 'tasks' | 'focus' | 'mood'; on: number; off: number; onN: number; offN: number; norm: number } | null = null;
+  for (const t of k.tally) {
+    for (const m of metrics) {
+      const s = kindBeside(k.days, t.templateId, m.value);
+      if (s.on.avg === null || s.off.avg === null || s.on.n < KIND_MIN_DAYS || s.off.n < PAIR_MIN_DAYS) continue;
+      const gap = s.on.avg - s.off.avg;
+      if (Math.abs(gap) < m.min) continue;
+      const norm = Math.abs(gap) / m.scale(s.on.avg, s.off.avg);
+      if (!best || norm > best.norm) best = { name: t.name, key: m.key, on: s.on.avg, off: s.off.avg, onN: s.on.n, offN: s.off.n, norm };
+    }
   }
-  rows.push({ label: 'Other days', value: Math.round(offAvg * 10) / 10, n: offDays.length, unit: 'tasks' });
-  const b = best!;
-  const name = DAY_TYPES.find((t) => t.key === b.kind)!.name;
-  const big = Math.abs(b.gap) >= 0.5 && one(b.avg) !== one(offAvg);
-  const kindDays = new Set([...kindOf.entries()].filter(([, k]) => k === b.kind).map(([d]) => d));
-  const relCount = new Map<RelationshipKey, number>();
-  for (const t of c.ticks) if (kindDays.has(t.day)) relCount.set(t.relationship, (relCount.get(t.relationship) ?? 0) + 1);
-  const totalOn = [...relCount.values()].reduce((s, n) => s + n, 0);
-  const lead = [...relCount.entries()].sort((x, y) => y[1] - x[1] || (x[0] < y[0] ? -1 : 1))[0];
-  const leadLine = lead && totalOn ? `, ${pct(lead[1], totalOn)}% of them ${pillarName(lead[0])}` : '';
+  const kindTotal = k.tally.reduce((s, t) => s + t.days, 0);
+  const total = kindTotal + k.none;
+  const mix = listWords([...k.tally.slice(0, 3).map((t) => `${formatCount(t.days)} ${kindDays(t.name, t.days)}`), ...(k.tally.length > 3 ? [otherKinds(k.tally.slice(3).reduce((s, t) => s + t.days, 0))] : []), ...(k.none ? [`${formatCount(k.none)} on ${noneName}`] : [])]);
+  let text = `Your last four weeks: ${mix}.`;
+  if (best) {
+    const up = best.on > best.off;
+    const who = kindDays(best.name);
+    const minutes = (v: number) => formatCount(Math.round(v));
+    text =
+      best.key === 'tasks'
+        ? `${who} and ${up ? 'more' : 'fewer'} ticked tasks went together: ${one(best.on)} a day, against ${one(best.off)} on other days.`
+        : best.key === 'focus'
+          ? `${who} and ${up ? 'more' : 'less'} focus went together: ${minutes(best.on)} minutes a day, against ${minutes(best.off)} on other days.`
+          : `${who} and a ${up ? 'higher' : 'lower'} mood went together: ${one(best.on)} on average, against ${one(best.off)} on other days.`;
+  }
   return {
     key: 'daytype-done',
     id: 'daytype-done',
     state: 'ready',
     apps,
-    reads: ['dayTypes', 'tasks'],
-    private: false,
+    reads,
+    private: moodOn,
     relationship: null,
-    headline: `${one(b.avg)} vs ${one(offAvg)}`,
-    text: big ? `On ${name} days you ticked ${one(b.avg)} tasks${leadLine}. On other days, ${one(offAvg)}.` : `You ticked about the same on ${name} days as on others: ${one(b.avg)} and ${one(offAvg)} tasks.`,
-    basis: basisOf(b.n, offDays.length),
-    chart: { kind: 'pair', rows },
-    action: big ? { label: "Pick today's kind of day", to: '/today#day-type', kind: 'link' } : null,
+    headline: `${formatCount(kindTotal)} of ${plural(total, 'day')}`,
+    text,
+    basis: best ? `The last four weeks: ${plural(best.onN, 'day')} beside ${plural(best.offN, 'other day')}. ${INSIGHT_BASIS_TAIL}` : `The last four weeks, set on Daily or by your usual week. ${INSIGHT_BASIS_TAIL}`,
+    chart: { kind: 'kinds', parts: k.tally.map((t) => ({ templateId: t.templateId, name: t.name, days: t.days, color: templateColor(byId.get(t.templateId) ?? { slots: [] }, tb.blocks) })), none: k.none, noneName, rows },
+    action: { label: 'Open time blocks', to: '/time-blocks', kind: 'link' },
     need: null,
-    strength: big ? Math.max(1, Math.min(85, Math.round(40 + 40 * (Math.abs(b.gap) / Math.max(b.avg, offAvg, 1)))) - (b.n < 10 ? 10 : 0)) : 0,
+    strength: best ? Math.max(25, Math.min(85, Math.round(40 + 40 * best.norm)) - (best.onN < 7 ? 10 : 0)) : 20,
   };
 }
 
@@ -1520,7 +1589,60 @@ function habitTies(c: Ctx): Insight[] {
   return [...ready, ...wait];
 }
 
-const KEY_ORDER: InsightKey[] = ['habit', 'habit-tie', 'pillar-balance', 'best-hours', 'streak-weekday', 'sleep-mood', 'focus-tasks', 'stress-calm', 'daytype-done', 'money-stress', 'slips-sleep', 'routine-tasks', 'journal-mood', 'review-since', 'discover-strength', 'agency-load'];
+const KEY_ORDER: InsightKey[] = ['habit', 'habit-tie', 'pillar-balance', 'best-hours', 'streak-weekday', 'sleep-mood', 'focus-tasks', 'stress-calm', 'daytype-done', 'block-kept', 'money-stress', 'slips-sleep', 'routine-tasks', 'journal-mood', 'review-since', 'discover-strength', 'agency-load'];
+
+/** The fewest ticked tasks put in one block, over BLOCK_KEPT_DAYS, before the block line says anything. */
+export const BLOCK_KEPT_MIN = 10;
+export const BLOCK_KEPT_DAYS = 56;
+
+/**
+ * Time blocks kept (docs/time-blocks.md): of the tasks the person put in a block and ticked in the last eight weeks, how many were ticked
+ * inside one of that block's slots on that day (the day's template as it is now: a date change, the weekly pattern, else the default).
+ * Counts only; it never says why. Absent facts give nothing, so an account without blocks sees no line.
+ */
+function blockKept(c: Ctx): Insight | null {
+  const tb = c.f.timeBlocks;
+  if (!tb) return null;
+  const apps: InsightApp[] = ['today', 'insights'];
+  const from = addDays(c.f.today, -(BLOCK_KEPT_DAYS - 1));
+  const ids = new Set(tb.templates.map((t) => t.id));
+  const known = new Map(tb.blocks.map((b) => [b.id, b]));
+  const counts = new Map<string, { total: number; inside: number }>();
+  for (const x of c.stamped) {
+    const blockId = x.t.timeBlockId;
+    if (!blockId || !x.at || x.at.day < from || x.at.day > c.f.today || !known.has(blockId)) continue;
+    const { templateId } = templateForDate(x.at.day, { overrides: tb.overrides, pattern: tb.pattern, defaultId: tb.defaultId, exists: (id) => ids.has(id) });
+    const slots = tb.templates.find((t) => t.id === templateId)?.slots ?? [];
+    const minute = x.at.minutes;
+    const inside = slots.some((sl) => sl.blockId === blockId && slotContains(sl, minute));
+    const cur = counts.get(blockId) ?? { total: 0, inside: 0 };
+    cur.total += 1;
+    if (inside) cur.inside += 1;
+    counts.set(blockId, cur);
+  }
+  if (counts.size === 0) return null;
+  const ranked = [...counts.entries()].sort((a, b) => b[1].total - a[1].total || (known.get(a[0])!.name < known.get(b[0])!.name ? -1 : 1));
+  const [blockId, n] = ranked[0]!;
+  const name = known.get(blockId)!.name;
+  if (n.total < BLOCK_KEPT_MIN) return watching('block-kept', apps, ['tasks', 'timeBlocks'], false, 'Time blocks', `Tick ${plural(BLOCK_KEPT_MIN - n.total, 'more task')} you put in ${name}.`);
+  const share = pct(n.inside, n.total);
+  return {
+    key: 'block-kept',
+    id: 'block-kept',
+    state: 'ready',
+    apps,
+    reads: ['tasks', 'timeBlocks'],
+    private: false,
+    relationship: known.get(blockId)!.pillar,
+    headline: `${formatCount(n.inside)} of ${formatCount(n.total)}`,
+    text: `You ticked ${formatCount(n.inside)} of ${formatCount(n.total)} ${name} tasks inside the block.`,
+    basis: `Tasks you put in ${name}, ticked in the last 8 weeks. ${INSIGHT_BASIS_TAIL}`,
+    chart: { kind: 'pair', rows: [{ label: 'Inside the block', value: n.inside, n: n.inside, unit: 'tasks' }, { label: 'At other times', value: n.total - n.inside, n: n.total - n.inside, unit: 'tasks' }] },
+    action: { label: 'Open time blocks', to: '/time-blocks', kind: 'link' },
+    need: null,
+    strength: share >= 60 ? Math.min(70, 30 + Math.round(share / 3)) : 20,
+  };
+}
 
 /**
  * The one rule: every signal whose apps are on, from the person's own facts. Ready ones by strength, then the ones still
@@ -1611,6 +1733,7 @@ function computeInsights(f: InsightFacts, pillarRels: readonly RelationshipKey[]
     on('mindful') ? focusTasks(c) : null,
     on('stress') ? stressCalm(c) : null,
     daytypeDone(c),
+    blockKept(c),
     on('finance') && on('stress') ? moneyStress(c) : null,
     on('sleep') ? slipsSleep(c) : null,
     routineTasks(c),

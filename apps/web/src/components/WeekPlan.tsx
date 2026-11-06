@@ -1,10 +1,13 @@
 import { PLAN_DAY_MINUTES } from '@kreators/shared';
-import { Suspense, useState } from 'react';
+import { Settings } from 'lucide-react';
+import { Suspense, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { lazyNamed } from '../lib/lazy';
 import { useAuthed } from '../lib/queries';
 import { Button } from './Button';
+import { IconButton } from './IconButton';
 import { RulerPicker } from './RulerPicker';
 import { Sheet } from './Sheet';
 
@@ -16,7 +19,8 @@ const PlanBody = lazyNamed(loadBody, 'PlanBody');
 export const COPY = {
   button: 'Plan my week',
   title: 'Plan my week',
-  lede: 'Seven days from today. Each task with no day gets a suggested one. Nothing changes until you keep them.',
+  lede: 'Seven days from today. Each task with no day gets a suggested day and block. Nothing changes until you keep them.',
+  blocksLink: 'Time blocks and day templates',
   hours: 'Hours of planned work a day',
   strength: 'Plan strength',
   strengthLede: 'Days with something planned, days that are not overloaded, and tasks that say how long they take.',
@@ -70,13 +74,22 @@ const saveHours = (n: number) => {
 };
 
 /** The "Plan my week" button for Daily, its sheet, and a short line after the plan is kept. */
-export function WeekPlanButton() {
+export function WeekPlanButton({ openOn = 0 }: { /** Opens the sheet each time this goes up (Daily's "2 late"), as the button does. */ openOn?: number } = {}) {
   const date = todayLocal();
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (openOn <= 0) return;
+    void loadBody();
+    setSaid('');
+    setOpen(true);
+  }, [openOn]);
   const [hours, setHours] = useState(readHours);
   const [said, setSaid] = useState('');
-  const q = useAuthed(['today', 'week-plan', date, hours], () => api.weekPlan(date, hours), open);
+  const navigate = useNavigate();
+  // Under `weekPlan`, which every time block and day template write reads again.
+  const q = useAuthed(['weekPlan', date, hours], () => api.weekPlan(date, hours), open);
   const plan = q.data?.plan;
+  const blocks = q.data?.blocks ?? [];
   const [draftHours, setDraftHours] = useState(hours);
   const setH = (n: number) => {
     const next = Math.max(1, Math.min(12, n));
@@ -110,7 +123,19 @@ export function WeekPlanButton() {
       )}
       <Sheet open={open} onClose={() => setOpen(false)} title={COPY.title}>
         <div className="pb-md">
-          <p className="m-0 text-subhead text-ink-soft">{COPY.lede}</p>
+          {/* The blocks and templates the plan leans on are set on their own page: the gear goes there. */}
+          <div className="flex items-start justify-between gap-sm">
+            <p className="m-0 min-w-0 flex-1 text-subhead text-ink-soft">{COPY.lede}</p>
+            <IconButton
+              icon={Settings}
+              label={COPY.blocksLink}
+              tip="br"
+              onClick={() => {
+                setOpen(false);
+                navigate('/time-blocks');
+              }}
+            />
+          </div>
           <div className="mt-sm rounded-tile bg-paper p-sm">
             <div className="flex items-baseline justify-between gap-sm">
               <span className="text-subhead">{COPY.hours}</span>
@@ -143,7 +168,7 @@ export function WeekPlanButton() {
                     </p>
                   }
                 >
-                  <PlanBody key={`${hours}:${plan.suggestions.map((s) => `${s.id}${s.day}`).join()}`} plan={plan} onDone={done} />
+                  <PlanBody key={`${hours}:${plan.suggestions.map((s) => `${s.id}${s.day}${s.blockId ?? ''}`).join()}`} plan={plan} blocks={blocks} onDone={done} />
                 </Suspense>
               )
             )}

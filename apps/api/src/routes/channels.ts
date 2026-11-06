@@ -504,8 +504,9 @@ function channelRouter(scope: ChannelScope) {
   r.post('/:id/messages/:mid/block-author', async (c) => {
     const row = await open(c);
     if (!row || (scope === 'bond' && row.my_status !== 'member')) return c.json({ error: 'not found' }, 404);
-    const line = await c.env.DB.prepare('SELECT user_id FROM channel_messages WHERE id = ? AND channel_id = ?').bind(c.req.param('mid'), row.id).first<{ user_id: string }>();
-    return blockBehind(c, line?.user_id);
+    const line = await c.env.DB.prepare('SELECT user_id, anonymous FROM channel_messages WHERE id = ? AND channel_id = ?').bind(c.req.param('mid'), row.id).first<{ user_id: string; anonymous: number }>();
+    // An anonymous writer is blocked under the channel's made-up name for them, so Bond never names them.
+    return blockBehind(c, line?.user_id, line?.anonymous === 1 ? await anonAlias(c.env, line.user_id, `channel:${row.id}`) : null);
   });
 
   return r;

@@ -1,6 +1,6 @@
 import { EVENT_TYPE_META, EVENT_TYPES, type DiscountCheck, type EventRegistration, type EventType, type PartyEvent, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 import { MediaSection } from '../components/MediaSection';
 import { EventPanel } from '../components/EventPanel';
@@ -9,12 +9,13 @@ import { DiscountField } from '../components/DiscountField';
 import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
+import { Fold } from '../components/Fold';
 import { api } from '../lib/api';
 import { useAuthed, useRefreshAll } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { attendeeBody, AttendeeFields, attendeeProblem, ClaimCard, HostCodeCard } from '../components/AttendeeCode';
 import { AppIcon } from '../components/AppIcon';
-import { FIELD } from '../lib/ui';
+import { FIELD, FIELD_CARD } from '../lib/ui';
 import { ErrorLine } from '../components/ErrorLine';
 import { eventTime, localDateTimeValue } from '../lib/date';
 import { FactTag, IconTag } from '../components/FactTag';
@@ -189,6 +190,7 @@ function HostSheet({ open, onClose, canHostAll }: { open: boolean; onClose: () =
   const [visibility, setVisibility] = useState<PartyEvent['visibility']>('public');
   const [attendeeXp, setAttendeeXp] = useState('');
   const [attendeeCode, setAttendeeCode] = useState('');
+  const hid = useId();
   const create = useMutation({
     mutationFn: () =>
       api.createEvent({
@@ -230,47 +232,74 @@ function HostSheet({ open, onClose, canHostAll }: { open: boolean; onClose: () =
               </button>
             ))}
           </div>
-          {!canHostAll && <p className="mt-xs m-0 text-caption text-ink-soft">Parties, workshops, camps and Kreators Days are run by the team.</p>}
+          <p className="mt-xs m-0 text-caption text-ink-soft">{canHostAll ? 'Members can host a meetup. The rest are team events.' : 'Parties, workshops, camps and Kreators Days are run by the team.'}</p>
         </fieldset>
-        <label className="block">
-          <span className="block text-subhead font-semibold">Title</span>
-          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={FIELD} />
-        </label>
-        <label className="block">
-          <span className="block text-subhead font-semibold">What to expect</span>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={3000} rows={3} className={FIELD} />
-        </label>
-        <div className="grid grid-cols-2 gap-xs">
+        <div>
           <label className="block">
-            <span className="block text-subhead font-semibold">Starts</span>
-            <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required className={FIELD} />
+            <span className="block text-subhead font-semibold">Title</span>
+            <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required aria-describedby={`${hid}-title`} className={FIELD} />
           </label>
-          <label className="block">
-            <span className="block text-subhead font-semibold">Minutes</span>
-            <input type="number" min={15} max={10080} value={minutes} onChange={(e) => setMinutes(e.target.value)} className={FIELD} />
-          </label>
+          <p id={`${hid}-title`} className="mt-xs m-0 text-caption text-ink-soft">A short name, up to 120 characters.</p>
         </div>
-        <label className="block">
-          <span className="block text-subhead font-semibold">Venue</span>
-          <input value={venue} onChange={(e) => setVenue(e.target.value)} maxLength={200} placeholder="Leave empty for online" className={FIELD} />
-        </label>
-        <label className="block">
-          <span className="block text-subhead font-semibold">Online link</span>
-          <input type="url" value={onlineUrl} onChange={(e) => setOnlineUrl(e.target.value)} maxLength={500} placeholder="https://" className={FIELD} />
-        </label>
+        <div>
+          <label className="block">
+            <span className="block text-subhead font-semibold">What to expect</span>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={3000} rows={3} aria-describedby={`${hid}-about`} className={FIELD} />
+          </label>
+          <p id={`${hid}-about`} className="mt-xs m-0 text-caption text-ink-soft">Optional. What guests will do there.</p>
+        </div>
         <div className="grid grid-cols-2 gap-xs">
+          <div>
+            <label className="block">
+              <span className="block text-subhead font-semibold">Starts</span>
+              <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required aria-describedby={`${hid}-starts`} className={FIELD} />
+            </label>
+            <p id={`${hid}-starts`} className="mt-xs m-0 text-caption text-ink-soft">Your local time.</p>
+          </div>
+          <div>
+            <label className="block">
+              <span className="block text-subhead font-semibold">Minutes</span>
+              <input type="number" min={15} max={10080} value={minutes} onChange={(e) => setMinutes(e.target.value)} aria-describedby={`${hid}-minutes`} className={FIELD} />
+            </label>
+            <p id={`${hid}-minutes`} className="mt-xs m-0 text-caption text-ink-soft">How long it runs.</p>
+          </div>
+        </div>
+        <div>
           <label className="block">
-            <span className="block text-subhead font-semibold">Seats</span>
-            <input type="number" min={1} value={capacity} onChange={(e) => setCapacity(e.target.value)} placeholder="No limit" className={FIELD} />
+            <span className="block text-subhead font-semibold">Venue</span>
+            <input value={venue} onChange={(e) => setVenue(e.target.value)} maxLength={200} placeholder="Leave empty for online" aria-describedby={`${hid}-venue`} className={FIELD} />
           </label>
+          <p id={`${hid}-venue`} className="mt-xs m-0 text-caption text-ink-soft">Where guests should go.</p>
+        </div>
+        <div>
           <label className="block">
-            <span className="block text-subhead font-semibold">Price in points</span>
-            <input type="number" min={0} value={pricePoints} onChange={(e) => setPricePoints(e.target.value)} className={FIELD} />
+            <span className="block text-subhead font-semibold">Online link</span>
+            <input type="url" value={onlineUrl} onChange={(e) => setOnlineUrl(e.target.value)} maxLength={500} placeholder="https://" aria-describedby={`${hid}-link`} className={FIELD} />
           </label>
+          <p id={`${hid}-link`} className="mt-xs m-0 text-caption text-ink-soft">Optional. The call link for guests.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-xs">
+          <div>
+            <label className="block">
+              <span className="block text-subhead font-semibold">Seats</span>
+              <input type="number" min={1} value={capacity} onChange={(e) => setCapacity(e.target.value)} placeholder="No limit" aria-describedby={`${hid}-seats`} className={FIELD} />
+            </label>
+            <p id={`${hid}-seats`} className="mt-xs m-0 text-caption text-ink-soft">Once full, people wait in line.</p>
+          </div>
+          <div>
+            <label className="block">
+              <span className="block text-subhead font-semibold">Price in points</span>
+              <input type="number" min={0} value={pricePoints} onChange={(e) => setPricePoints(e.target.value)} aria-describedby={`${hid}-price`} className={FIELD} />
+            </label>
+            <p id={`${hid}-price`} className="mt-xs m-0 text-caption text-ink-soft">0 makes it free.</p>
+          </div>
         </div>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-subhead font-semibold">Who can see it</legend>
-          <div className="mt-xs flex flex-wrap gap-xs">
+          {/* Three equal choices across the full width in equal parts; where the sheet is narrow, two by two (as PeriodFilter) with the
+              third taking the whole second line, so none is left alone. */}
+          <div className="@container mt-xs">
+          <div className="grid grid-cols-3 gap-xs @max-[23rem]:grid-cols-2 @max-[23rem]:*:last:col-span-2">
             {(
               [
                 ['public', 'Everyone'],
@@ -278,11 +307,13 @@ function HostSheet({ open, onClose, canHostAll }: { open: boolean; onClose: () =
                 ['private', 'People with the link'],
               ] as [PartyEvent['visibility'], string][]
             ).map(([v, label]) => (
-              <button key={v} type="button" aria-pressed={visibility === v} onClick={() => setVisibility(v)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${visibility === v ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+              <button key={v} type="button" aria-pressed={visibility === v} onClick={() => setVisibility(v)} className={`toy min-h-[44px] min-w-0 rounded-pill border-2 px-sm py-xs text-subhead font-medium ${visibility === v ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                 {label}
               </button>
             ))}
           </div>
+          </div>
+          <p className="mt-xs m-0 text-caption text-ink-soft">Everyone: listed for all. Club members: only the club sees it. People with the link: kept off the list.</p>
         </fieldset>
         <AttendeeFields xp={attendeeXp} onXp={setAttendeeXp} code={attendeeCode} onCode={setAttendeeCode} />
         <ErrorLine e={create.isError ? create.error : null} />
@@ -589,22 +620,44 @@ function DuplicateEvent({ id, startsAt }: { id: string; startsAt: string }) {
       if (r.event) nav(`/party/${r.event.id}`);
     },
   });
+  // A fold under its own title, in the host's card (2026-11-06, no sheet): the date field takes focus as it opens, Escape folds it back.
+  const fieldRef = useRef<HTMLInputElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (open) fieldRef.current?.focus();
+  }, [open]);
+  const close = () => {
+    setOpen(false);
+    window.requestAnimationFrame(() => wrapRef.current?.querySelector<HTMLButtonElement>('button[aria-expanded]')?.focus());
+  };
   return (
-    <>
-      <Button variant="outline" className="mt-sm" onClick={() => setOpen(true)}>
-        Run it again
-      </Button>
-      <Sheet open={open} onClose={() => setOpen(false)} title="Run it again">
-        <p className="m-0 text-subhead text-ink-soft">Same title, place, seats and price on a new date. Guests sign up again, with a new code.</p>
-        <label className="mt-md block">
-          <span className="block text-subhead font-semibold">Starts</span>
-          <input type="datetime-local" value={when} onChange={(ev) => setWhen(ev.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
-        </label>
-        <ErrorLine e={copy.isError ? copy.error : null} />
-        <Button size="lg" full className="mt-md" disabled={copy.isPending || !when} onClick={() => copy.mutate()}>
-          Make the new event
-        </Button>
-      </Sheet>
-    </>
+    <div ref={wrapRef} className="mt-sm">
+      <Fold title="Run it again" adds open={open} onOpenChange={setOpen}>
+        <div
+          className="rounded-tile bg-paper p-sm"
+          onKeyDown={(ev) => {
+            if (ev.key === 'Escape') {
+              ev.preventDefault();
+              close();
+            }
+          }}
+        >
+          <p className="m-0 text-subhead text-ink-soft">Same title, place, seats and price on a new date. Guests sign up again, with a new code.</p>
+          <label className="mt-sm block">
+            <span className="block text-subhead font-semibold">Starts</span>
+            <input ref={fieldRef} type="datetime-local" value={when} onChange={(ev) => setWhen(ev.target.value)} className={FIELD_CARD} />
+          </label>
+          <ErrorLine e={copy.isError ? copy.error : null} />
+          <div className="mt-sm flex flex-wrap gap-xs">
+            <Button variant="outline" disabled={copy.isPending || !when} onClick={() => copy.mutate()}>
+              Make the new event
+            </Button>
+            <Button variant="ghost" onClick={close}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Fold>
+    </div>
   );
 }

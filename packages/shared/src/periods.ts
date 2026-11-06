@@ -5,6 +5,7 @@ import { shiftDay } from './api.ts';
 import type { NotToDoStatus } from './api.ts';
 import { nextOccurrence } from './tasks.ts';
 import type { Priority, Repeat } from './tasks.ts';
+import type { BlockColor } from './timeBlocks.ts';
 
 // ---------------------------------------------------------------------------
 // Periods and reviews: a week, a month, a quarter or half a year, and what you make of it
@@ -144,6 +145,13 @@ export interface PeriodNumbers {
   /** Runs logged with a start code, and the metres they added up to. */
   runs: number;
   runMetres: number;
+  /**
+   * Kinds of day (2026-11-06): the period's days so far that had a kind (a day template set for the date or given by the weekly
+   * pattern, not the default), and the kinds most used, each with its colour (`kindsOfDays`, `templateColor`). Absent on a review saved
+   * before then.
+   */
+  kindDays?: number;
+  kinds?: { name: string; days: number; color: BlockColor | null }[];
 }
 
 export interface ReviewSummary {

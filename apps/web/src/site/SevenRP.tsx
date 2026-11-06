@@ -21,6 +21,7 @@ import { TabRow } from '../components/TabRow';
 import { BookCover } from './Books';
 import { SITE_PRIMARY_ON_GLASS } from './buttons';
 import { FractalGlass } from '../components/fx/FractalGlass';
+import { PeekGuides } from './PeekGuides';
 
 /** A gentle lift into place the first time a section scrolls into view. The content is always visible (opacity
  * never hides it); only the small upward delta animates, so a full-page shot taken before the observer fires never
@@ -350,7 +351,7 @@ export function SevenRP() {
       <section className="mt-2xl">
         {/* Fractal glass (FractalGlass) in wine, the same card as /features in its own colour (the home's is navy, /features' teal):
             deep in both themes, the glow rising from the right through narrow ribs; the words and Start free sit on its dark left. */}
-        <motion.div {...rise} className="fx-fglass-host relative overflow-hidden rounded-card p-lg pb-xl text-on-fill shadow-toy-soft">
+        <motion.div {...rise} className="fx-fglass-host relative overflow-hidden rounded-card p-md pb-0 text-on-fill shadow-toy-soft md:p-lg md:pb-0">
           <FractalGlass hue="wine" />
           <div className="relative z-10">
             <h2 className="type-hook text-display-2">
@@ -361,6 +362,8 @@ export function SevenRP() {
               {entry === '/home' ? 'Go to app' : 'Start free'}
             </Link>
           </div>
+          {/* The seven peek up from the card's foot, as on the home's last card (the founder, 2026-11-06). */}
+          <PeekGuides />
         </motion.div>
       </section>
     </SiteLayout>

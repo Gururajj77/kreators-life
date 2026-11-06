@@ -5,6 +5,8 @@ import type { Redemption } from './rewards.ts';
 import type { Organization } from './work.ts';
 import { addDays } from './dates.ts';
 import type { Priority, Repeat } from './tasks.ts';
+import type { LifeAreaKey } from './life.ts';
+import type { DayPlan } from './timeBlocks.ts';
 import type { IconName, Permission, Role } from './roles.ts';
 import type { AppPrefs, ModuleAccess, ModuleGroup, ModuleSetting } from './modules.ts';
 import type { LinkBlock, PublicSettings, Socials } from './profile.ts';
@@ -212,6 +214,10 @@ export interface Node {
   forReview: boolean;
   /** Tasks only: counted as a habit (the Habit tag). Null keeps the old rule, a repeating task is one; see `taskIsHabit`. */
   habit?: boolean | null;
+  /** Tasks only, optional: the one area of life it serves (physical, financial, mental, emotional, spiritual), or null for none. A tag and a filter; it never changes what a tick pays. */
+  lifeArea: LifeAreaKey | null;
+  /** Tasks only, optional: the time block the person picked for it (one of their own), or null: it then falls in the block its time sits in (`blockOfTask`). */
+  timeBlockId?: string | null;
   /** Tasks only, optional: a time of day (HH:MM) and how long it should take, to plan the day. */
   dueTime: string | null;
   estimateMin: number | null;
@@ -253,6 +259,10 @@ export interface TodayResponse {
   /** Tasks with no do date and no deadline within reach, waiting until one is picked. Not part of the main list. */
   backlog: Node[];
   backlogTotal: number;
+  /** Every open task whose day has come, under the same cuts as `tasks` (which holds only the first six, or DAILY_GROUPED_MAX grouped). */
+  tasksTotal?: number;
+  /** How many of those are late: their do date (else due date) is before the person's day. */
+  tasksLate?: number;
   /** Tasks ticked on the person's day (in their zone), newest first, so a tick stays in sight and can be undone. */
   done: Node[];
   /** Tasks ticked in the last day, so Today can say the routine is done. */
@@ -266,6 +276,26 @@ export interface TodayResponse {
   events: TodayEvent[];
   /** Agency work waiting on the person today. Present only while Agency is on for them; owner only, titles and client names, never a fee. */
   agency?: TodayAgency;
+  /** The area of life the lists were cut to (`?area=`, a `LIFE_AREAS` key or 'none'), so `tasks`, `backlog` and `backlogTotal` are all for it; absent or null for every area. */
+  area?: LifeAreaKey | 'none' | null;
+  /** True when any open or ticked task of the person's carries an area, whatever `area` was asked; Daily shows its Area filter then. */
+  areasUsed?: boolean;
+  /** The day's plan: its day template (the kind of day), where it came from, its slots in clock order and every block (docs/time-blocks.md). */
+  day: DayPlan;
+  /** With `?group=1` (up to DAILY_GROUPED_MAX tasks): true when more open tasks are waiting than were sent. */
+  tasksMore?: boolean;
+  /** The time block the lists were cut to (`?block=`, a block id or 'none'); absent or null for every block. */
+  block?: string | null;
+  /** "Your day": open tasks that open on the day with no block and no time, whatever the six shown or the Area cut (up to 50, oldest first). */
+  looseTasks?: Node[];
+  /** How many such tasks there are in all. */
+  looseTotal?: number;
+}
+
+/** GET /today/waiting: the open tasks past the ones GET /today shows, in the same order, a page at a time (prefix `w`). */
+export interface TodayWaitingResponse {
+  tasks: Node[];
+  page: Page;
 }
 
 /** Something the person signed up for that starts today. */

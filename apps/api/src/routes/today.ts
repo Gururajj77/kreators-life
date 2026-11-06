@@ -1,8 +1,9 @@
 import { Hono } from 'hono';
-import { DAY_TYPES, dayTypeOf, type DayTypeResponse, MONTH_RE, MONTH_TASKS_MAX, monthShift, repeatLabel, type MonthProject, type MonthTask, type TodayMonthResponse, PLAN_DAY_MINUTES, planWeek, type PlanTask, MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, notToDoStreak, notToDoWeek, POINTS, RELATIONSHIPS, sparkFor, XP, zonedToUtc, type CheckinResponse, type NotToDo, type NotToDoStatus, type RelationshipKey, TODAY_AGENCY_MAX, type TodayAgency, type TodayEvent, type TodayResponse } from '@kreators/shared';
+import { DAILY_GROUPED_MAX, dayTypeOf, slotIndexOfTask, slotOrder, PLAN_DEFAULT_MINUTES, startingTemplateFor, weekDates, type DayPlan, type DayTypeResponse, type TemplateSlot, MONTH_RE, MONTH_TASKS_MAX, monthShift, repeatLabel, type MonthProject, type MonthTask, type TodayMonthResponse, PLAN_DAY_MINUTES, planWeek, type PlanTask, MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, notToDoStreak, notToDoWeek, POINTS, RELATIONSHIPS, sparkFor, XP, zonedToUtc, type CheckinResponse, type NotToDo, type NotToDoStatus, type RelationshipKey, TODAY_AGENCY_MAX, type TodayAgency, type TodayEvent, type TodayResponse, type TodayWaitingResponse, parseLifeArea, isTaskSort } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { resolveAccess } from '../access';
-import { DATE_RE, dateNearToday, getUser, newId, notify, nowIso, shiftDate, toNode, type NodeRow, taskGate, withSubtasks } from '../db';
+import { DATE_RE, dateNearToday, getUser, newId, notify, nowIso, pageOf, paged, shiftDate, toNode, type NodeRow, taskGate, withSubtasks } from '../db';
+import { dayPlan, ensureTimeBlocks, kindsBetween, loadBlocking } from '../timeBlocks';
 
 export const today = new Hono<AppEnv>();
 
@@ -142,34 +143,119 @@ export async function agencyToday(db: D1Database, userId: string, date: string):
   };
 }
 
-// A day type's lead and second pillar as SQL, from DAY_TYPES (code constants of letters and underscores only, checked here).
-const dayPillarSql = (pick: 'lead' | 'second') => {
-  for (const d of DAY_TYPES) if (!/^[a-z_]+$/.test(d.key) || !/^[a-z_]+$/.test(d[pick])) throw new Error('bad day type key');
-  return `(CASE dt.kind ${DAY_TYPES.map((d) => `WHEN '${d.key}' THEN '${d[pick]}'`).join(' ')} END)`;
+/**
+ * Whether the By context order applies to a day: a date someone changed, or a weekday whose pattern gives it a template other than the
+ * default. A plain day (the default template) sorts by day, as before day templates.
+ */
+export const contextApplies = (plan: DayPlan, defaultId: string): boolean => plan.from === 'date' || (plan.from === 'week' && plan.template.id !== defaultId);
+
+const BLOCK_ID_RE = /^[A-Za-z0-9-]{1,80}$/;
+/** A task's time of day as minutes after midnight, in SQL. */
+const minuteSql = (col: string) => `(CAST(substr(${col}, 1, 2) AS INTEGER) * 60 + CAST(substr(${col}, 4, 2) AS INTEGER))`;
+/** A slot's range as SQL over that minute; the bounds are whole numbers from the person's own rows, written as numbers. */
+const slotSql = (m: string, s: TemplateSlot) => {
+  const a = Math.trunc(s.start);
+  const b = Math.trunc(s.end);
+  return a < b ? `(${m} >= ${a} AND ${m} < ${b})` : `(${m} >= ${a} OR ${m} < ${b})`;
 };
-const DAY_LEAD_SQL = dayPillarSql('lead');
-const DAY_SECOND_SQL = dayPillarSql('second');
+/**
+ * The `?block=` cut as SQL (Daily's screen no longer sends it: its Block filter was taken out on 2026-11-06): a task is in a block when it was picked into it, or when it has none picked and its time falls in one of the
+ * block's slots that day. 'none': nothing picked and no time in any slot. The id is one of the person's own block ids, checked first.
+ */
+function blockFilterSql(block: string | null, slots: readonly TemplateSlot[], prefix: string): string {
+  if (!block) return '';
+  const m = minuteSql(`${prefix}due_time`);
+  if (block === 'none') {
+    const any = slots.length ? slots.map((s) => slotSql(m, s)).join(' OR ') : '0';
+    return ` AND ${prefix}time_block_id IS NULL AND (${prefix}due_time IS NULL OR NOT (${any}))`;
+  }
+  const own = slots.filter((s) => s.blockId === block);
+  const timed = own.length ? ` OR (${prefix}time_block_id IS NULL AND ${prefix}due_time IS NOT NULL AND (${own.map((s) => slotSql(m, s)).join(' OR ')}))` : '';
+  return ` AND (${prefix}time_block_id = '${block}'${timed})`;
+}
+
+/**
+ * Daily's open tasks: every open task whose day (do date, else due date) has come, late ones included. `cut` is the Area and block cuts,
+ * written from fixed keys only. ?1 is the person, ?2 their day.
+ */
+const openTasksWhere = (cut: string) =>
+  `n.user_id = ?1 AND n.kind = 'task' AND n.status = 'active' AND COALESCE(n.do_date, n.due_date) IS NOT NULL AND COALESCE(n.do_date, n.due_date) <= ?2${cut}`;
+/**
+ * Which come first, the same order as the sort the person picked (`sortTasks`), so the six shown are the top six of it: ?3 = 0 by day;
+ * ?3 = 1 by priority, then the lead pillar ?4 and its second ?5 (empty for Priority, so only the priority counts); ?3 = 2 by due date (none
+ * last), then priority. With no sort picked, a plain day is by day and a day whose template was picked by context, so a P0 is never left out
+ * behind a P2. The six shown and the rest under "N more waiting" (GET /today/waiting) read the same order, so the rest start where the six end.
+ */
+const OPEN_TASKS_ORDER = `ORDER BY CASE WHEN ?3 = 2 THEN COALESCE(n.due_date, '9999-99-99') ELSE '' END ASC,
+         CASE WHEN ?3 = 0 THEN 0 ELSE COALESCE(n.priority, 4) END ASC,
+         CASE WHEN ?3 = 0 THEN 0 WHEN n.relationship = ?4 THEN 0 WHEN n.relationship = ?5 THEN 1 ELSE 2 END ASC,
+         COALESCE(n.do_date, n.due_date) ASC, CASE WHEN n.due_time IS NULL THEN 1 ELSE 0 END, n.due_time ASC, n.created_at ASC`;
+
+/**
+ * ?3, ?4 and ?5 for OPEN_TASKS_ORDER. `sort` is read only through `isTaskSort`, so nothing typed reaches the SQL; the grouped views (By time
+ * block, By area) read by priority and the boxes sort them.
+ */
+function openOrderArgs(sortAsk: string | undefined, grouped: boolean, useContext: number, day: DayPlan): [number, string, string] {
+  const ctx: [number, string, string] = [1, day.template.lead, day.template.second ?? ''];
+  if (grouped) return [1, '', ''];
+  const sort = isTaskSort(sortAsk) ? sortAsk : null;
+  if (sort === 'priority') return [1, '', ''];
+  if (sort === 'due') return [2, '', ''];
+  if (sort === 'context') return ctx;
+  if (sort === 'day') return [0, '', ''];
+  return useContext ? ctx : [0, '', ''];
+}
 
 today.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const date = dateParam(c.req.query('date'));
+  // Daily's Area filter (2026-11-06): the six shown and the not scheduled list cut to one area of life, or to tasks with none. The key is
+  // one of the five from parseLifeArea (a fixed list), so it is written into the query as text, never a value a person typed.
+  const areaAsk = c.req.query('area');
+  const area = areaAsk === 'none' ? 'none' : parseLifeArea(areaAsk);
+  const areaSql = (col: string) => (area === 'none' ? ` AND ${col} IS NULL` : area ? ` AND ${col} = '${area}'` : '');
+
+  // The day's plan (its day template, the kind of day): read first, since the six shown and the `?block=` cut depend on it.
+  const grouped = c.req.query('group') === '1';
+  const blockAsk = c.req.query('block');
+  await ensureTimeBlocks(db, user);
+  const blocking = await loadBlocking(db, user.id, [date]);
+  const day = dayPlan(blocking, date);
+  const block = blockAsk === 'none' ? 'none' : blockAsk && BLOCK_ID_RE.test(blockAsk) && blocking.blocks.some((b) => b.id === blockAsk) ? blockAsk : null;
+  if (blockAsk && !block) return c.json({ error: 'pick one of your time blocks' }, 400);
+  const blockSql = (prefix: string) => blockFilterSql(block, day.slots, prefix);
+  const useContext = contextApplies(day, blocking.defaultId) ? 1 : 0;
+  const shownMax = grouped ? DAILY_GROUPED_MAX : 6;
+  const order = openOrderArgs(c.req.query('sort'), grouped, useContext, day);
+  const openWhere = openTasksWhere(`${areaSql('n.life_area')}${blockSql('n.')}`);
 
   // None of these reads waits on another, so they run together: one round trip of waiting instead of a dozen.
   const [dayStart, dayEnd] = dayBounds(date, user.timezone);
-  const [due, plan, back, backTotal, doneToday, recent, gate, relationship, sparkDone, notToDo, events, access] = await Promise.all([
-    // Which six are shown: by day, unless a kind of day is picked for this date; then by context, the same order as `sortTasks`
-    // 'context' (priority, then the day's lead pillar, then its second), so a P0 is never left out behind a P2.
+  const [due, openCount, loose, plan, back, backTotal, doneToday, recent, gate, relationship, sparkDone, notToDo, events, access, areasUsedRow, slotRows] = await Promise.all([
+    // Which six are shown: by day on a plain day; on a day whose template was picked (a date change, or a weekday of the pattern that is not
+    // the default) by context, the same order as `sortTasks` 'context' (priority, then the template's lead pillar, then its second), so a P0
+    // is never left out behind a P2. Grouped (`?group=1`): up to DAILY_GROUPED_MAX by priority, then day, and the boxes sort them.
+    db
+      .prepare(`SELECT n.* FROM nodes n WHERE ${openWhere} ${OPEN_TASKS_ORDER} LIMIT ?6`)
+      .bind(user.id, date, ...order, shownMax + 1)
+      .all<NodeRow>(),
+    // The true count of what waits (2026-11-06): every open task whose day has come, under the same cuts, and how many of them are late
+    // (their day is before this one, the rule Plan my week counts), so the heading says "6 of 14 waiting, 2 late" instead of stopping at six.
+    db
+      .prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN COALESCE(n.do_date, n.due_date) < ?2 THEN 1 ELSE 0 END), 0) AS late FROM nodes n WHERE ${openWhere}`)
+      .bind(user.id, date)
+      .first<{ n: number; late: number }>(),
+    // "Your day": every open task that opens on the day with no block and no time, whatever the six shown or the Area cut, so its line names
+    // each one (the room in each block is counted the same way, below). The count is over all of them; up to 50 are listed.
     db
       .prepare(
-        `SELECT n.* FROM nodes n LEFT JOIN day_types dt ON dt.user_id = n.user_id AND dt.day = ?2
-       WHERE n.user_id = ?1 AND n.kind = 'task' AND n.status = 'active' AND COALESCE(n.do_date, n.due_date) IS NOT NULL AND COALESCE(n.do_date, n.due_date) <= ?2
-       ORDER BY CASE WHEN dt.kind IS NULL THEN 0 ELSE COALESCE(n.priority, 4) END ASC,
-         CASE WHEN dt.kind IS NULL THEN 0 WHEN n.relationship = ${DAY_LEAD_SQL} THEN 0 WHEN n.relationship = ${DAY_SECOND_SQL} THEN 1 ELSE 2 END ASC,
-         COALESCE(n.do_date, n.due_date) ASC, CASE WHEN n.due_time IS NULL THEN 1 ELSE 0 END, n.due_time ASC, n.created_at ASC LIMIT 6`,
+        `SELECT n.*, COUNT(*) OVER () AS loose_total FROM nodes n
+       WHERE n.user_id = ?1 AND n.kind = 'task' AND n.status = 'active' AND COALESCE(n.do_date, n.due_date) = ?2 AND n.time_block_id IS NULL AND n.due_time IS NULL
+       ORDER BY n.created_at ASC LIMIT 50`,
       )
       .bind(user.id, date)
-      .all<NodeRow>(),
+      .all<NodeRow & { loose_total: number }>(),
     // The day's time plan counts every timed task due today, not just the six shown.
     db
       .prepare(
@@ -183,13 +269,13 @@ today.get('/', async (c) => {
     // The main list is only what has a day that has come. A task with no date at all (no do date and no due date) waits in the not scheduled list below it until either is picked.
     db
       .prepare(
-        `SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND do_date IS NULL AND due_date IS NULL
+        `SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND do_date IS NULL AND due_date IS NULL${areaSql('life_area')}${blockSql('')}
        ORDER BY remind DESC, created_at DESC LIMIT 60`,
       )
       .bind(user.id)
       .all<NodeRow>(),
     db
-      .prepare("SELECT COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND do_date IS NULL AND due_date IS NULL")
+      .prepare(`SELECT COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND do_date IS NULL AND due_date IS NULL${areaSql('life_area')}${blockSql('')}`)
       .bind(user.id)
       .first<{ n: number }>(),
     // What was ticked today stays in sight under the tasks still waiting, so a tick can be seen and undone.
@@ -210,6 +296,18 @@ today.get('/', async (c) => {
     notToDoList(db, user.id, date),
     eventsOnDay(db, user.id, dayStart, dayEnd),
     resolveAccess(db, user).then((r) => r.access),
+    // Whether any of the person's open tasks carries an area, so Daily shows the Area filter only once it means something.
+    db.prepare("SELECT 1 AS one FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND life_area IS NOT NULL LIMIT 1").bind(user.id).first<{ one: number }>(),
+    // Every open task that opens on the day and has a block or a time, summed by block and time, so "Your day" counts a slot's room from
+    // all of them, never from the six shown or the Area filter's cut.
+    db
+      .prepare(
+        `SELECT time_block_id, due_time, SUM(COALESCE(estimate_min, ?3)) AS min FROM nodes
+       WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) = ?2 AND (time_block_id IS NOT NULL OR due_time IS NOT NULL)
+       GROUP BY time_block_id, due_time LIMIT 2000`,
+      )
+      .bind(user.id, date, PLAN_DEFAULT_MINUTES)
+      .all<{ time_block_id: string | null; due_time: string | null; min: number }>(),
     // A gentle nudge in the inbox, once a day, when a reminder time is set and
     // the day's check-in has not happened yet.
     (async () => {
@@ -219,7 +317,14 @@ today.get('/', async (c) => {
       }
     })(),
   ]);
-  const tasks = due.results;
+  const tasksMore = due.results.length > shownMax;
+  const tasks = due.results.slice(0, shownMax);
+  const ordered = slotOrder(day.slots);
+  const slotPlannedMin = ordered.map(() => 0);
+  for (const r of slotRows.results) {
+    const i = slotIndexOfTask({ timeBlockId: r.time_block_id, dueTime: r.due_time }, ordered);
+    if (i !== null && i >= 0) slotPlannedMin[i] = (slotPlannedMin[i] ?? 0) + Number(r.min);
+  }
 
   // The three lists share one subtask count query (the lists never hold the same task twice).
   const shown = await withSubtasks(db, user.id, [...tasks, ...back.results, ...doneToday.results].map((t) => toNode(t, gate)));
@@ -230,6 +335,10 @@ today.get('/', async (c) => {
     tasks: shown.slice(0, tasks.length),
     backlog: shown.slice(tasks.length, tasks.length + back.results.length),
     backlogTotal: backTotal?.n ?? 0,
+    tasksTotal: Math.max(tasks.length, Number(openCount?.n ?? 0)),
+    tasksLate: Number(openCount?.late ?? 0),
+    area: area ?? null,
+    areasUsed: Boolean(areasUsedRow),
     done: shown.slice(tasks.length + back.results.length),
     doneRecently: recent?.n ?? 0,
     timePlan: { plannedMin: plan?.planned ?? 0, doneMin: plan?.done ?? 0, timed: plan?.timed ?? 0 },
@@ -240,9 +349,41 @@ today.get('/', async (c) => {
     },
     notToDo,
     events,
+    day: { ...day, slotPlannedMin, contextual: useContext === 1 },
+    block,
+    looseTasks: loose.results.map((t) => toNode(t, gate)),
+    looseTotal: Number(loose.results[0]?.loose_total ?? 0),
   };
+  if (grouped) res.tasksMore = tasksMore;
   // Agency's work for the day is read only while Agency is on for the person; with it off the field is absent.
   if (access.agency?.on === true) res.agency = await agencyToday(db, user.id, date);
+  return c.json(res);
+});
+
+// The rest of Daily's open tasks, past the ones GET /today shows (the six, or DAILY_GROUPED_MAX with `group=1`), in the same order and
+// under the same Area cut, a page at a time, for the "N more waiting" fold. Owner only; reads the same tables and writes nothing.
+today.get('/waiting', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const date = dateParam(c.req.query('date'));
+  const areaAsk = c.req.query('area');
+  const area = areaAsk === 'none' ? 'none' : parseLifeArea(areaAsk);
+  const cut = area === 'none' ? ' AND n.life_area IS NULL' : area ? ` AND n.life_area = '${area}'` : '';
+  const grouped = c.req.query('group') === '1';
+  await ensureTimeBlocks(db, user);
+  const blocking = await loadBlocking(db, user.id, [date]);
+  const day = dayPlan(blocking, date);
+  const useContext = contextApplies(day, blocking.defaultId) ? 1 : 0;
+  const order = openOrderArgs(c.req.query('sort'), grouped, useContext, day);
+  const ask = pageOf(c, 'w');
+  const skip = (grouped ? DAILY_GROUPED_MAX : 6) + ask.offset;
+  const rows = await db
+    .prepare(`SELECT n.* FROM nodes n WHERE ${openTasksWhere(cut)} ${OPEN_TASKS_ORDER} LIMIT ?6 OFFSET ?7`)
+    .bind(user.id, date, ...order, ask.limit, skip)
+    .all<NodeRow>();
+  const { items, page } = paged(rows.results, ask);
+  const gate = await taskGate(db, user.id);
+  const res: TodayWaitingResponse = { tasks: await withSubtasks(db, user.id, items.map((t) => toNode(t, gate))), page };
   return c.json(res);
 });
 
@@ -252,12 +393,32 @@ today.get('/week-plan', async (c) => {
   const user = c.get('user');
   const date = dateParam(c.req.query('date'));
   const hours = Math.max(1, Math.min(12, Math.round(Number(c.req.query('hours')) || PLAN_DAY_MINUTES / 60)));
-  const rows = await c.env.DB
-    .prepare("SELECT id, title, relationship, estimate_min, priority, do_date, due_date, origin FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' ORDER BY created_at LIMIT 600")
-    .bind(user.id)
-    .all<{ id: string; title: string; relationship: RelationshipKey; estimate_min: number | null; priority: number | null; do_date: string | null; due_date: string | null; origin: string | null }>();
-  const tasks: PlanTask[] = rows.results.map((r) => ({ id: r.id, title: r.title, relationship: r.relationship, estimateMin: r.estimate_min, priority: (r.priority as PlanTask['priority']) ?? null, doDate: r.do_date, dueDate: r.due_date, fromPillar: r.origin === 'build' }));
-  return c.json({ plan: planWeek(date, tasks, hours * 60) });
+  const db = c.env.DB;
+  await ensureTimeBlocks(db, user);
+  const dates = weekDates(date).slice(0, 7);
+  const [rows, blocking] = await Promise.all([
+    db
+      .prepare("SELECT id, title, relationship, estimate_min, priority, do_date, due_date, origin, time_block_id, life_area, due_time FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' ORDER BY created_at LIMIT 600")
+      .bind(user.id)
+      .all<{ id: string; title: string; relationship: RelationshipKey; estimate_min: number | null; priority: number | null; do_date: string | null; due_date: string | null; origin: string | null; time_block_id: string | null; life_area: string | null; due_time: string | null }>(),
+    loadBlocking(db, user.id, dates),
+  ]);
+  const tasks: PlanTask[] = rows.results.map((r) => ({
+    id: r.id,
+    title: r.title,
+    relationship: r.relationship,
+    estimateMin: r.estimate_min,
+    priority: (r.priority as PlanTask['priority']) ?? null,
+    doDate: r.do_date,
+    dueDate: r.due_date,
+    fromPillar: r.origin === 'build',
+    timeBlockId: r.time_block_id,
+    lifeArea: parseLifeArea(r.life_area),
+    dueTime: r.due_time,
+  }));
+  const plans = dates.map((d) => dayPlan(blocking, d));
+  const plan = planWeek(date, tasks, hours * 60, { days: plans.map((p) => ({ date: p.date, slots: slotOrder(p.slots), templateId: p.template.id, templateName: p.template.name })), blocks: blocking.blocks });
+  return c.json({ plan, blocks: blocking.blocks });
 });
 
 // The month calendar on Daily: every task whose day (do date, else due date) falls in the month, ticked ones included, and the projects a new task can go under.
@@ -271,7 +432,9 @@ today.get('/month', async (c) => {
   if (dayAsked !== undefined && !DATE_RE.test(dayAsked)) return c.json({ error: 'day must be a real day like 2026-11-02' }, 400);
   const start = `${month}-01`;
   const end = `${monthShift(month, 1)}-01`;
-  const [gate, rows, projects] = await Promise.all([
+  // The day's sheet sets a kind from the person's templates, so the starting set is there (nothing is read when it already is).
+  await ensureTimeBlocks(db, user);
+  const [gate, rows, projects, kindRead] = await Promise.all([
     taskGate(db, user.id),
     db
       .prepare(
@@ -285,6 +448,8 @@ today.get('/month', async (c) => {
       .prepare("SELECT id, title, relationship FROM nodes WHERE user_id = ? AND kind = 'project' AND status = 'active' ORDER BY relationship ASC, sort_order ASC, created_at ASC LIMIT 100")
       .bind(user.id)
       .all<MonthProject>(),
+    // Kinds of day (2026-11-06): each day's template, set for the date or given by the week (the default has none), for the marks.
+    kindsBetween(db, user, start, shiftDate(end, -1)),
   ]);
   const more = rows.results.length > MONTH_TASKS_MAX;
   const tasks: MonthTask[] = rows.results.slice(0, MONTH_TASKS_MAX).map((r) => {
@@ -299,6 +464,7 @@ today.get('/month', async (c) => {
       day,
       status: n.status === 'done' ? 'done' : 'active',
       priority: n.priority,
+      lifeArea: n.lifeArea,
       time: n.dueTime,
       estimateMin: n.estimateMin,
       repeat: n.repeat ? repeatLabel(n.repeat, day) : null,
@@ -306,7 +472,9 @@ today.get('/month', async (c) => {
       completedAt: n.completedAt,
     };
   });
-  const res: TodayMonthResponse = { month, today: dayAsked ?? dateParam(undefined), tasks, more, projects: projects.results };
+  const kb = kindRead.blocking;
+  const kinds: TodayMonthResponse['kinds'] = { days: kindRead.kinds.days, templates: kb.templates.map((t) => ({ id: t.id, name: t.name, color: kindRead.colors[t.id] ?? null })), defaultId: kb.defaultId, pattern: kb.pattern };
+  const res: TodayMonthResponse = { month, today: dayAsked ?? dateParam(undefined), tasks, more, projects: projects.results, kinds };
   return c.json(res);
 });
 
@@ -452,32 +620,53 @@ function dayTypeDay(date: unknown, today: unknown): string | null {
   return date === own || date === shiftDate(own, 1) ? date : null;
 }
 
+// The kind of day is now a day template (docs/time-blocks.md); these two routes keep working for the old picker and the assistant.
+// GET answers the template's old kind (null for a template made from none) and its id; PUT takes a kind, which maps to the person's
+// template made from it, or a templateId. Both write the same day_types row as PUT /time-blocks/days.
 today.get('/day-type', async (c) => {
+  const db = c.env.DB;
   const user = c.get('user');
   const date = dayTypeDay(c.req.query('date'), c.req.query('today'));
   if (!date) return c.json({ error: 'Pick today or tomorrow.' }, 400);
-  const row = await c.env.DB.prepare('SELECT kind FROM day_types WHERE user_id = ? AND day = ?').bind(user.id, date).first<{ kind: string }>();
-  const body: DayTypeResponse = { date, kind: dayTypeOf(row?.kind)?.key ?? null };
+  await ensureTimeBlocks(db, user);
+  const blocking = await loadBlocking(db, user.id, [date]);
+  const templateId = blocking.overrides[date] ?? null;
+  const tpl = templateId ? blocking.templates.find((t) => t.id === templateId) : null;
+  const body: DayTypeResponse = { date, kind: tpl?.sourceKind ?? null, templateId };
   return c.json(body);
 });
 
 today.put('/day-type', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const body = await c.req.json<{ date?: unknown; today?: unknown; kind?: unknown }>().catch(() => ({}) as { date?: unknown; today?: unknown; kind?: unknown });
+  const body = await c.req.json<{ date?: unknown; today?: unknown; kind?: unknown; templateId?: unknown }>().catch(() => ({}) as { date?: unknown; today?: unknown; kind?: unknown; templateId?: unknown });
   const date = dayTypeDay(body.date, body.today);
   if (!date) return c.json({ error: 'Pick today or tomorrow.' }, 400);
-  if (body.kind === null || body.kind === undefined || body.kind === '') {
+  const asksTemplate = body.templateId !== undefined;
+  const clear = asksTemplate ? body.templateId === null || body.templateId === '' : body.kind === null || body.kind === undefined || body.kind === '';
+  if (clear) {
     await db.prepare('DELETE FROM day_types WHERE user_id = ? AND day = ?').bind(user.id, date).run();
-    const cleared: DayTypeResponse = { date, kind: null };
+    const cleared: DayTypeResponse = { date, kind: null, templateId: null };
     return c.json(cleared);
   }
-  const kind = dayTypeOf(body.kind);
-  if (!kind) return c.json({ error: 'That is not a kind of day we know.' }, 400);
+  await ensureTimeBlocks(db, user);
+  const blocking = await loadBlocking(db, user.id, [date]);
+  let tpl;
+  if (asksTemplate) {
+    tpl = typeof body.templateId === 'string' ? blocking.templates.find((t) => t.id === body.templateId) : undefined;
+    if (!tpl) return c.json({ error: 'not found' }, 404);
+  } else {
+    const kind = dayTypeOf(body.kind);
+    if (!kind) return c.json({ error: 'That is not a kind of day we know.' }, 400);
+    // The person's template made from that kind: the starting one (by its seed), else any with that kind.
+    const seed = startingTemplateFor(kind.key).seed;
+    tpl = blocking.templates.find((t) => t.seed === seed && t.sourceKind === kind.key) ?? blocking.templates.find((t) => t.sourceKind === kind.key);
+    if (!tpl) return c.json({ error: 'That kind of day was removed; pick a day template.' }, 404);
+  }
   await db
-    .prepare('INSERT INTO day_types (user_id, day, kind, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, day) DO UPDATE SET kind = excluded.kind')
-    .bind(user.id, date, kind.key, nowIso())
+    .prepare('INSERT INTO day_types (user_id, day, kind, created_at, template_id) VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, day) DO UPDATE SET kind = excluded.kind, template_id = excluded.template_id')
+    .bind(user.id, date, tpl.sourceKind ?? 'template', nowIso(), tpl.id)
     .run();
-  const saved: DayTypeResponse = { date, kind: kind.key };
+  const saved: DayTypeResponse = { date, kind: tpl.sourceKind, templateId: tpl.id };
   return c.json(saved);
 });

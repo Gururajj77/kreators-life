@@ -111,6 +111,8 @@ export interface UserRow {
   best_streak: number;
   /** The first-week checklist on Home was folded away. */
   getting_started_hidden_at?: string | null;
+  /** When the starting time blocks and day templates were added (migration 0089); null until the first read. */
+  time_blocks_seeded_at?: string | null;
   last_checkin: string | null;
   onboarded_at: string | null;
   created_at: string;

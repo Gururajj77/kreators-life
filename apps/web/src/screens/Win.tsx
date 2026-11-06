@@ -150,7 +150,7 @@ function ReviewBox({ s, rule, reviewer, finance, onDone }: { s: BountySubmission
       )}
       {finance && s.status === 'verified' && (
         <div className="flex flex-wrap items-end gap-xs">
-          <label className="block">
+          <label className="block min-w-0 flex-1">
             <span className="block text-caption">Pay out</span>
             <input
               type="number"
@@ -513,9 +513,10 @@ function EditSheet({ b, open, onClose, onSaved }: { b: Bounty; open: boolean; on
         </label>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-subhead font-semibold">Status</legend>
-          <div className="mt-xs flex flex-wrap gap-xs">
+          {/* Two equal choices across the full width in equal parts (as PeriodFilter). */}
+          <div className="mt-xs grid grid-cols-2 gap-xs">
             {(['open', 'closed'] as const).map((v) => (
-              <button key={v} type="button" aria-pressed={status === v} onClick={() => setStatus(v)} className={`min-h-[44px] rounded-pill border-2 px-sm text-subhead font-medium ${status === v ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+              <button key={v} type="button" aria-pressed={status === v} onClick={() => setStatus(v)} className={`min-h-[44px] min-w-0 rounded-pill border-2 px-sm text-subhead font-medium ${status === v ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
                 {v}
               </button>
             ))}

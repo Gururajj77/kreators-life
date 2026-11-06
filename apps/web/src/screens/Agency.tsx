@@ -39,7 +39,7 @@ import { Screen } from '../components/Screen';
 import { Section } from '../components/Section';
 import { Busy, Skeleton } from '../components/Skeleton';
 import { StatusTag } from '../components/StatusTag';
-import { FILTER_SELECT } from '../components/AgencyInvoices';
+import { FILTER_SELECT, PAPER_FILL } from '../components/AgencyInvoices';
 import { useView, ViewToggle } from '../components/ViewToggle';
 import { useWide } from '../lib/useWide';
 import { api } from '../lib/api';
@@ -136,8 +136,11 @@ export function Agency() {
     );
   };
 
-  /** Go to a tab, and on Paperwork to one kind of paper, in one change of the URL (two setters in a row would lose the first). */
-  const goTab = (t: TabKey, paper?: 'invoices' | 'agreements' | 'other') => {
+  /**
+   * Go to a tab, and on Paperwork to one kind of paper, in one change of the URL (two setters in a row would lose the first). `filter`
+   * sets that tab's own list filters too (an empty value clears one), so a number on the overview opens the list of what it counts.
+   */
+  const goTab = (t: TabKey, paper?: 'invoices' | 'agreements' | 'other', filter?: Record<string, string>) => {
     setAdding(false);
     setParams(
       (prev) => {
@@ -145,6 +148,10 @@ export function Agency() {
         if (t === 'overview' && !access) next.delete('tab');
         else next.set('tab', t);
         if (paper) next.set('agseg', paper);
+        for (const [k, v] of Object.entries(filter ?? {})) {
+          if (v) next.set(k, v);
+          else next.delete(k);
+        }
         return next;
       },
       { replace: true, preventScrollReset: true },
@@ -296,7 +303,10 @@ function TilesLoading() {
   );
 }
 
-function Overview({ onTab, onAdd }: { onTab: (t: TabKey, paper?: 'invoices' | 'agreements') => void; onAdd: () => void }) {
+/** The pipeline's list with only these filters on (`pstage` or `pdue`), every other one of its filters and its page cleared. */
+const pipelineOnly = (f: { pstage?: string; pdue?: string }): Record<string, string> => ({ pview: 'list', pclient: '', pchannel: '', ppage: '', pstage: f.pstage ?? '', pdue: f.pdue ?? '' });
+
+function Overview({ onTab, onAdd }: { onTab: (t: TabKey, paper?: 'invoices' | 'agreements', filter?: Record<string, string>) => void; onAdd: () => void }) {
   const q = useAuthed(['agency', 'overview', ''], () => api.agency(''));
   const { access, can } = useAgencyCan();
   const [open, setOpen] = useState(false);
@@ -326,10 +336,11 @@ function Overview({ onTab, onAdd }: { onTab: (t: TabKey, paper?: 'invoices' | 'a
   type Tile = { label: string; value: string; hint: string; go?: () => void };
   // The four most people need first; the rest wait behind a fold.
   const first: Tile[] = [
-    { label: 'Active clients', value: String(t.activeClients), hint: 'working with you now', go: () => onTab('clients') },
-    { label: 'Unpaid invoices', value: money(t.unpaidCents, cur), hint: 'sent, not paid yet', go: () => onTab('paperwork', 'invoices') },
-    { label: 'In review', value: String(t.inReview), hint: 'waiting for a client', go: () => onTab('pipeline') },
-    { label: 'Late', value: String(t.overdue), hint: 'past their day', go: () => onTab('pipeline') },
+    // Each number opens the list of exactly what it counts, its filter set in the list's own controls.
+    { label: 'Active clients', value: String(t.activeClients), hint: 'working with you now', go: () => onTab('clients', undefined, { cview: 'list', cstatus: 'active', cpage: '' }) },
+    { label: 'Unpaid invoices', value: money(t.unpaidCents, cur), hint: 'sent, not paid yet', go: () => onTab('paperwork', 'invoices', { invview: 'list', invstatus: 'sent', invpage: '' }) },
+    { label: 'In review', value: String(t.inReview), hint: 'waiting for a client', go: () => onTab('pipeline', undefined, pipelineOnly({ pstage: 'review' })) },
+    { label: 'Late', value: String(t.overdue), hint: 'past their day', go: () => onTab('pipeline', undefined, pipelineOnly({ pdue: 'late' })) },
   ];
   const rest: Tile[] = [
     { label: 'Retainers a month', value: money(t.retainerCents, cur), hint: 'from active clients' },
@@ -490,38 +501,45 @@ function Clients({ onAdd }: { onAdd: () => void }) {
     : [];
 
   return (
-    <Section id="clients-heading" title="Clients" action={<ViewToggle view={view} onChange={setView} label="Clients view" />}>
-      {view === 'list' &&
-        (wide ? (
-          <div className="mb-sm">
-            <Segmented<AgencyClientStatus | ''>
-              label="Status"
+    <Section id="clients-heading" title="Clients">
+      {/* List and Board at the left and the status filter at the right of one row, like Pipeline and Paperwork (the founder, 2026-11-06);
+          in a row under 34rem (a phone) the switch fills its line in equal parts and the filter takes the next. */}
+      <div className="@container mb-sm flex flex-wrap items-center justify-between gap-sm">
+        <div className="basis-full @min-[34rem]:basis-auto">
+          <ViewToggle view={view} onChange={setView} label="Clients view" className={PAPER_FILL} />
+        </div>
+        {view === 'list' &&
+          (wide ? (
+            <div className="@min-[34rem]:ml-auto">
+              <Segmented<AgencyClientStatus | ''>
+                label="Status"
+                value={status}
+                onChange={(v) => {
+                  setStatus(v);
+                  pg.reset();
+                }}
+                options={[{ value: '', label: 'All' }, ...AGENCY_CLIENT_STATUSES.map((st) => ({ value: st, label: AGENCY_STATUS_NAME[st] }))]}
+              />
+            </div>
+          ) : (
+            <select
+              aria-label="Status"
               value={status}
-              onChange={(v) => {
-                setStatus(v);
+              onChange={(e) => {
+                setStatus(e.target.value);
                 pg.reset();
               }}
-              options={[{ value: '', label: 'All' }, ...AGENCY_CLIENT_STATUSES.map((st) => ({ value: st, label: AGENCY_STATUS_NAME[st] }))]}
-            />
-          </div>
-        ) : (
-          <select
-            aria-label="Status"
-            value={status}
-            onChange={(e) => {
-              setStatus(e.target.value);
-              pg.reset();
-            }}
-            className={`mb-sm ${FILTER_SELECT}`}
-          >
-            <option value="">Status: All</option>
-            {AGENCY_CLIENT_STATUSES.map((st) => (
-              <option key={st} value={st}>
-                Status: {AGENCY_STATUS_NAME[st]}
-              </option>
-            ))}
-          </select>
-        ))}
+              className={`basis-full @min-[34rem]:ml-auto @min-[34rem]:basis-auto ${FILTER_SELECT}`}
+            >
+              <option value="">Status: All</option>
+              {AGENCY_CLIENT_STATUSES.map((st) => (
+                <option key={st} value={st}>
+                  Status: {AGENCY_STATUS_NAME[st]}
+                </option>
+              ))}
+            </select>
+          ))}
+      </div>
       {q.isError && (
         <p role="alert" className="m-0 text-subhead">
           {COPY.fail}

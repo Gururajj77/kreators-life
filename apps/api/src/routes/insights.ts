@@ -7,6 +7,7 @@ import {
   insightsForPlace,
   isInsightApp,
   isRelationshipKey,
+  overrideTemplateId,
   periodFor,
   periodShift,
   type InsightFacts,
@@ -16,12 +17,14 @@ import {
   type PeriodKind,
   type PeriodNumbers,
   type RelationshipKey,
+  type TemplateSlot,
   zonedToUtc,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { resolveAccess } from '../access';
 import { currencyOf, DATE_RE, dayFromDevice, shiftDate } from '../db';
 import { numbersFor } from './reviews';
+import { accountDay, toDayTemplate, toTimeBlock, type DayTemplateRow, type TimeBlockRow } from '../timeBlocks';
 
 /**
  * Emerging (2026-11-04): patterns from what the person already logs, read across their own apps. Core, owner only, read
@@ -76,7 +79,7 @@ insights.get('/', async (c) => {
   const stmts: D1PreparedStatement[] = [
     // The newest ticks when there are more than the cap (shared orders them again); the cap keeps the weeks closest to today.
     db
-      .prepare("SELECT id, title, relationship, parent_id, completed_at, (repeat_json IS NOT NULL OR spawned_from IS NOT NULL) AS repeats, habit FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? ORDER BY completed_at DESC LIMIT 3000")
+      .prepare("SELECT id, title, relationship, parent_id, completed_at, (repeat_json IS NOT NULL OR spawned_from IS NOT NULL) AS repeats, habit, time_block_id FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? ORDER BY completed_at DESC LIMIT 3000")
       .bind(uid, fromTs),
     // Past the cap, the open tasks touched most recently; handed over in the order they were made (rowid), the order the unordered
     // read always gave, so the open task a habit card picks (`mates[0]`, `habitOf`) never changes between two made in one batch.
@@ -90,7 +93,6 @@ insights.get('/', async (c) => {
     db.prepare('SELECT day, SUM(minutes) AS minutes FROM focus_rounds WHERE user_id = ? AND day >= ? GROUP BY day').bind(uid, from),
     db.prepare('SELECT day, SUM(ml) AS ml FROM water_logs WHERE user_id = ? AND day >= ? GROUP BY day').bind(uid, from),
     db.prepare('SELECT water_goal_ml FROM reminder_prefs WHERE user_id = ?').bind(uid),
-    db.prepare('SELECT day, kind FROM day_types WHERE user_id = ? AND day >= ?').bind(uid, from),
     db.prepare('SELECT day, done FROM routine_days WHERE user_id = ? AND day >= ?').bind(uid, from),
     db.prepare('SELECT focus_json FROM assessments WHERE user_id = ? ORDER BY created_at DESC LIMIT 1').bind(uid),
   ];
@@ -114,6 +116,14 @@ insights.get('/', async (c) => {
     add('discoverSettings', db.prepare('SELECT steps FROM discover_settings WHERE user_id = ?').bind(uid));
     add('discoverResult', db.prepare('SELECT result_json, created_at FROM discover_results WHERE user_id = ? ORDER BY created_at DESC LIMIT 1').bind(uid));
   }
+  // Time blocks (core): the blocks, the day templates and their slots, the weekly pattern and the date changes in the window, for the
+  // block line (how many of a block's tasks were ticked inside it) and Your kinds of day (each day's template; the account's first day
+  // bounds it). Names and minutes only.
+  add('tbBlocks', db.prepare('SELECT * FROM time_blocks WHERE user_id = ? ORDER BY sort ASC, created_at ASC').bind(uid));
+  add('tbTemplates', db.prepare('SELECT * FROM day_templates WHERE user_id = ? ORDER BY sort ASC, created_at ASC').bind(uid));
+  add('tbSlots', db.prepare('SELECT template_id, block_id, start_min, end_min FROM day_template_slots WHERE user_id = ?').bind(uid));
+  add('tbPattern', db.prepare('SELECT weekday, template_id FROM week_patterns WHERE user_id = ?').bind(uid));
+  add('tbDays', db.prepare('SELECT day, kind, template_id FROM day_types WHERE user_id = ? AND day >= ?').bind(uid, from));
   if (on('reviews')) add('review', db.prepare('SELECT kind, period_start, period_end, snapshot_json FROM reviews WHERE user_id = ? AND period_end < ? ORDER BY period_end DESC, updated_at DESC LIMIT 1').bind(uid, today));
 
   const res = await db.batch(stmts);
@@ -121,9 +131,22 @@ insights.get('/', async (c) => {
   const row = <T>(i: number | undefined): T | null => rows<T>(i)[0] ?? null;
 
   const habitOf = (v: number | null) => (v === null || v === undefined ? null : v === 1);
-  const done = rows<{ id: string; title: string; relationship: RelationshipKey; parent_id: string | null; completed_at: string; repeats: number; habit: number | null }>(0)
+  const done = rows<{ id: string; title: string; relationship: RelationshipKey; parent_id: string | null; completed_at: string; repeats: number; habit: number | null; time_block_id: string | null }>(0)
     .filter((r) => r.completed_at && isRelationshipKey(r.relationship))
-    .map((r) => ({ id: r.id, title: r.title, relationship: r.relationship, parentId: r.parent_id, completedAt: r.completed_at, repeats: r.repeats === 1, habit: habitOf(r.habit) }));
+    .map((r) => ({ id: r.id, title: r.title, relationship: r.relationship, parentId: r.parent_id, completedAt: r.completed_at, repeats: r.repeats === 1, habit: habitOf(r.habit), timeBlockId: r.time_block_id }));
+  // The person's days as their time blocks make them (the same reading as loadBlocking in timeBlocks.ts).
+  const tbSlotsBy = new Map<string, TemplateSlot[]>();
+  for (const r of rows<{ template_id: string; block_id: string; start_min: number; end_min: number }>(extra.tbSlots)) tbSlotsBy.set(r.template_id, [...(tbSlotsBy.get(r.template_id) ?? []), { blockId: r.block_id, start: r.start_min, end: r.end_min }]);
+  const tbTemplates = rows<DayTemplateRow>(extra.tbTemplates).map((r) => toDayTemplate(r, tbSlotsBy.get(r.id) ?? []));
+  const tbIds = new Set(tbTemplates.map((t) => t.id));
+  const tbPattern: (string | null)[] = [null, null, null, null, null, null, null];
+  for (const r of rows<{ weekday: number; template_id: string }>(extra.tbPattern)) if (r.weekday >= 1 && r.weekday <= 7 && tbIds.has(r.template_id)) tbPattern[r.weekday - 1] = r.template_id;
+  const tbOverrides: Record<string, string> = Object.create(null) as Record<string, string>;
+  for (const r of rows<{ day: string; kind: string; template_id: string | null }>(extra.tbDays)) {
+    const id = overrideTemplateId(r, tbTemplates);
+    if (id) tbOverrides[r.day] = id;
+  }
+  const tbBlocks = rows<TimeBlockRow>(extra.tbBlocks).map(toTimeBlock);
   const open = rows<{ id: string; title: string; relationship: RelationshipKey; parent_id: string | null; repeats: number; habit: number | null; open_day: string | null }>(1)
     .filter((r) => isRelationshipKey(r.relationship))
     .map((r) => ({ id: r.id, title: r.title, relationship: r.relationship, parentId: r.parent_id, repeats: r.repeats === 1, habit: habitOf(r.habit), openDay: r.open_day }));
@@ -181,7 +204,7 @@ insights.get('/', async (c) => {
     open,
     projects,
     xp30,
-    focusPillars: json<RelationshipKey[]>(row<{ focus_json: string }>(11)?.focus_json, []).filter(isRelationshipKey),
+    focusPillars: json<RelationshipKey[]>(row<{ focus_json: string }>(10)?.focus_json, []).filter(isRelationshipKey),
     checkins: rows<{ day: string }>(4).map((r) => r.day),
     firstCheckin: row<{ first: string | null }>(5)?.first ?? null,
     wellbeing: rows<{ kind: string; date: string; value: number }>(extra.wellbeing),
@@ -193,13 +216,14 @@ insights.get('/', async (c) => {
       .map((r) => ({ itemId: r.item_id, day: r.day, status: r.status as 'kept' | 'slipped' })),
     water: rows<{ day: string; ml: number }>(7),
     waterGoal: row<{ water_goal_ml: number }>(8)?.water_goal_ml ?? null,
-    dayTypes: rows<{ day: string; kind: string }>(9),
-    routine: rows<{ day: string; done: number }>(10).map((r) => ({ day: r.day, done: r.done === 1 })),
+    dayTypes: rows<{ day: string; kind: string }>(extra.tbDays).map((r) => ({ day: r.day, kind: r.kind })),
+    routine: rows<{ day: string; done: number }>(9).map((r) => ({ day: r.day, done: r.done === 1 })),
     journalAt: rows<{ created_at: string }>(extra.journal).map((r) => r.created_at),
     expenses: rows<{ date: string; cents: number }>(extra.money),
     review,
     discover,
     agencyDue: rows<{ day: string }>(extra.agency).map((r) => r.day),
+    ...(tbBlocks.length && tbTemplates.length ? { timeBlocks: { blocks: tbBlocks, templates: tbTemplates, defaultId: tbTemplates.find((t) => t.isDefault)?.id ?? tbTemplates[0]!.id, pattern: tbPattern, overrides: tbOverrides, since: accountDay(user) } } : {}),
   };
   const all = insightsForEvery(facts);
   const body: InsightsResponse = { day: today, insights: app ? insightsForPlace(all, app, rel) : all };

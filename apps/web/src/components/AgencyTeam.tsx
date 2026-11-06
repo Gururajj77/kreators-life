@@ -177,7 +177,7 @@ function InviteSheet({ open, onClose, onSent }: { open: boolean; onClose: () => 
   return (
     <Sheet open={open} onClose={onClose} title="Invite a team member">
       <form onSubmit={submit}>
-        <FieldLabel label={COPY.who}>
+        <FieldLabel label={COPY.who} hint={COPY.friend}>
           <input value={who} onChange={(e) => setWho(e.target.value)} maxLength={200} autoComplete="off" autoCapitalize="none" spellCheck={false} className={FIELD} placeholder="name@example.com" />
         </FieldLabel>
         <p className="mt-sm m-0 text-subhead font-semibold">Role</p>
@@ -190,7 +190,6 @@ function InviteSheet({ open, onClose, onSent }: { open: boolean; onClose: () => 
         <div className="mt-xs">
           <AccessRows role={role} access={access} onChange={setAccess} idPrefix="invite" />
         </div>
-        <p className="mt-sm m-0 text-subhead text-ink-soft">{COPY.friend}</p>
         {send.isError && <ErrorLine e={send.error} className="mt-xs" />}
         <div className="mt-md">
           <Button type="submit" full disabled={send.isPending || !who.trim() || (role === 'client' && !clientId)}>
@@ -260,7 +259,29 @@ function MemberRow({ m, onRole, onSaid }: { m: TeamMember; onRole: (m: TeamMembe
       <div className="flex items-start gap-sm">
         <Face name={m.person.name} url={m.person.avatarUrl} />
         <div className="min-w-0 flex-1">
-          <p className="m-0 text-card-title">{m.person.name}</p>
+          {/* The name and the "…" on one row, centred on each other (the founder, 2026-11-06); the role and the state are tags under it. */}
+          <div className="flex items-center justify-between gap-xs">
+            <p className="m-0 min-w-0 flex-1 text-card-title">{m.person.name}</p>
+            {open && (
+              <MoreMenu
+                label={`More for ${m.person.name}`}
+                title={m.person.name}
+                items={[
+                  { key: 'role', label: 'Change role', icon: Shuffle, onSelect: () => onRole(m) },
+                  ...(m.status === 'invited' ? [{ key: 'resend', label: 'Resend invite', icon: RotateCcw, onSelect: () => resend.mutate(), disabled: resend.isPending }] : []),
+                  {
+                    key: 'remove',
+                    label: m.status === 'invited' ? 'Take back the invite' : 'Remove from the team',
+                    icon: UserMinus,
+                    destructive: true,
+                    confirm: m.status === 'invited' ? 'Yes, take it back' : `Yes, remove ${m.person.name}`,
+                    onSelect: () => remove.mutate(),
+                    disabled: remove.isPending,
+                  },
+                ]}
+              />
+            )}
+          </div>
           <p className="m-0 text-card-note text-ink-soft">{[m.person.handle ? `@${m.person.handle}` : '', m.client ? `for ${m.client.name}` : '', since].filter(Boolean).join(', ')}</p>
           <div className="mt-xs flex flex-wrap items-center gap-xs">
             <IconTag tone={ROLE_TONE[m.role]} icon={TEAM_ROLE_META[m.role].icon}>
@@ -269,25 +290,6 @@ function MemberRow({ m, onRole, onSaid }: { m: TeamMember; onRole: (m: TeamMembe
             <StatusTag tone={TEAM_STATUS_TONE[m.status]}>{TEAM_STATUS_NAME[m.status]}</StatusTag>
           </div>
         </div>
-        {open && (
-          <MoreMenu
-            label={`More for ${m.person.name}`}
-            title={m.person.name}
-            items={[
-              { key: 'role', label: 'Change role', icon: Shuffle, onSelect: () => onRole(m) },
-              ...(m.status === 'invited' ? [{ key: 'resend', label: 'Resend invite', icon: RotateCcw, onSelect: () => resend.mutate(), disabled: resend.isPending }] : []),
-              {
-                key: 'remove',
-                label: m.status === 'invited' ? 'Take back the invite' : 'Remove from the team',
-                icon: UserMinus,
-                destructive: true,
-                confirm: m.status === 'invited' ? 'Yes, take it back' : `Yes, remove ${m.person.name}`,
-                onSelect: () => remove.mutate(),
-                disabled: remove.isPending,
-              },
-            ]}
-          />
-        )}
       </div>
       {open && (
         <div className="mt-sm">

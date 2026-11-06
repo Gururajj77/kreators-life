@@ -1,8 +1,14 @@
 import { Fragment, type ReactNode } from 'react';
+import { Phrases } from './Phrases';
 
 /** Bold inside a line, written **like this**. Nothing else: no HTML, no links, so a lesson can never run as code. */
 function inline(text: string, key: string): ReactNode[] {
   return text.split(/\*\*(.+?)\*\*/g).map((part, i) => (i % 2 === 1 ? <strong key={`${key}-${i}`}>{part}</strong> : <Fragment key={`${key}-${i}`}>{part}</Fragment>));
+}
+
+/** A heading keeps its parts whole after a colon ("Step three:" over "the scorecard and her real day" on a phone), unless it carries bold. */
+function heading(text: string, key: string): ReactNode {
+  return text.includes('**') ? inline(text, key) : <Phrases text={text} />;
 }
 
 /**
@@ -39,7 +45,7 @@ export function Markdown({ text, className = '' }: { text: string; className?: s
       const k = key();
       out.push(
         <h4 key={k} className="mt-md text-headline">
-          {inline(line.slice(4), k)}
+          {heading(line.slice(4), k)}
         </h4>,
       );
       i += 1;
@@ -49,7 +55,7 @@ export function Markdown({ text, className = '' }: { text: string; className?: s
       const k = key();
       out.push(
         <h3 key={k} className="mt-md text-title3">
-          {inline(line.slice(3), k)}
+          {heading(line.slice(3), k)}
         </h3>,
       );
       i += 1;
@@ -59,13 +65,14 @@ export function Markdown({ text, className = '' }: { text: string; className?: s
       const items = take((l) => /^[-*] /.test(l));
       const k = key();
       out.push(
+        // Each item's words take the row's width (flex-1), so their box never shrinks to its words and the rectangle fixer can even them.
         <ul key={k} className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {items.map((it, j) => (
             <li key={j} className="flex gap-xs text-prose">
               <span aria-hidden="true" className="shrink-0 font-bold">
                 •
               </span>
-              <span>{inline(it.slice(2), `${k}-${j}`)}</span>
+              <span className="min-w-0 flex-1">{inline(it.slice(2), `${k}-${j}`)}</span>
             </li>
           ))}
         </ul>,
@@ -82,7 +89,7 @@ export function Markdown({ text, className = '' }: { text: string; className?: s
               <span className="flex size-[24px] shrink-0 items-center justify-center rounded-pill bg-ink text-caption font-medium text-on-ink" aria-hidden="true">
                 {j + 1}
               </span>
-              <span>{inline(it.replace(/^\d+\. /, ''), `${k}-${j}`)}</span>
+              <span className="min-w-0 flex-1">{inline(it.replace(/^\d+\. /, ''), `${k}-${j}`)}</span>
             </li>
           ))}
         </ol>,

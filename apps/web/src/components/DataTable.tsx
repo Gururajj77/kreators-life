@@ -5,6 +5,7 @@ import { PagerBar } from './Pager';
 import { Icon } from './Icon';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import { FIELD_CELL } from '../lib/ui';
+import { ConfirmDelete } from './ConfirmDelete';
 
 export type CellValue = string | number | boolean | null | undefined;
 
@@ -39,8 +40,14 @@ export interface Column<T> {
 
 export interface BulkAction<T> {
   label: string;
+  /** Throw to keep the confirmation sheet open with its "That did not work" line. */
   onClick: (rows: T[]) => void | Promise<void>;
   variant?: 'primary' | 'outline' | 'ghost';
+  /**
+   * A removal asks first, once for the whole set (the founder, 2026-11-06: "removals should always ask confirmation"):
+   * a sheet with a red yes and an outline Keep. Without it the action runs at once.
+   */
+  confirm?: { title: (n: number) => string; body: string; yes: string; keep?: string };
 }
 
 interface Props<T> {
@@ -107,6 +114,10 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [shown, setShown] = useState(pageSize);
   const [draft, setDraft] = useState<Record<string, string>>({});
+  // The bulk removal the sheet is asking about, with the rows it was ticked for.
+  const [asking, setAsking] = useState<{ action: BulkAction<T>; rows: T[] } | null>(null);
+  const [askPending, setAskPending] = useState(false);
+  const [askFailed, setAskFailed] = useState(false);
 
   const options = useMemo(() => {
     const out: Record<string, string[]> = {};
@@ -230,7 +241,18 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
             {pickedRows.length} {pickedRows.length === 1 ? 'row' : 'rows'} ticked
           </span>
           {bulk.map((b) => (
-            <Button key={b.label} size="sm" variant={b.variant ?? 'outline'} disabled={busy} onClick={() => void b.onClick(pickedRows)}>
+            <Button
+              key={b.label}
+              size="sm"
+              variant={b.variant ?? 'outline'}
+              disabled={busy}
+              onClick={() => {
+                if (b.confirm) {
+                  setAskFailed(false);
+                  setAsking({ action: b, rows: pickedRows });
+                } else void b.onClick(pickedRows);
+              }}
+            >
               {b.label}
             </Button>
           ))}
@@ -345,6 +367,29 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
           </Button>
         </div>
       )}
+      <ConfirmDelete
+        open={asking !== null}
+        title={asking?.action.confirm?.title(asking.rows.length) ?? ''}
+        body={asking?.action.confirm?.body ?? ''}
+        yes={asking?.action.confirm?.yes}
+        keep={asking?.action.confirm?.keep}
+        pending={askPending || busy}
+        failed={askFailed}
+        onClose={() => setAsking(null)}
+        onYes={() => {
+          const a = asking;
+          if (!a) return;
+          setAskPending(true);
+          setAskFailed(false);
+          void Promise.resolve()
+            .then(() => a.action.onClick(a.rows))
+            .then(
+              () => setAsking(null),
+              () => setAskFailed(true),
+            )
+            .finally(() => setAskPending(false));
+        }}
+      />
     </div>
   );
 }

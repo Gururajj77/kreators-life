@@ -1,9 +1,11 @@
-import { RELATIONSHIP_BY_KEY, minutesLabel2, type FocusTask, type Node, type PlanAttention, type PlanStrength, type RelationshipKey, type WeekPlan as WeekPlanData, type WeekPlanSuggestion, LOCALE } from '@kreators/shared';
+import { FOCUS_TAG, RELATIONSHIP_BY_KEY, minutesLabel2, type FocusTask, type TimeBlock, type Node, type PlanAttention, type PlanStrength, type RelationshipKey, type WeekPlan as WeekPlanData, type WeekPlanSuggestion, LOCALE } from '@kreators/shared';
+import { tbClass, tbStyle } from '../lib/blockColor';
 import { useEffect, useState } from 'react';
 import { api, type TaskPlanBody } from '../lib/api';
 import { prettyDate, todayLocal, weekday } from '../lib/date';
 import { useAuthed, useRefreshAll } from '../lib/queries';
 import { tie } from '../lib/text';
+import { FIELD } from '../lib/ui';
 import { Button } from './Button';
 import { Fold } from './Fold';
 import { Inert } from './Inert';
@@ -45,7 +47,7 @@ function Strength({ title, s }: { title: string; s: PlanStrength }) {
 }
 
 const ESTIMATES = [15, 25, 45, 60, 90] as const;
-type Change = { doDate?: string; estimateMin?: number };
+type Change = { doDate?: string; estimateMin?: number; timeBlockId?: string | null };
 interface Own {
   id: string;
   title: string;
@@ -55,6 +57,24 @@ interface Own {
 const chip = (on: boolean) => `toy min-h-[44px] rounded-pill border-2 px-sm text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`;
 const selectBase = 'block min-h-[44px] rounded-pill border-2 border-line bg-card-strong px-sm text-subhead font-medium text-ink';
 const selectClass = `${selectBase} w-full`;
+
+/** The block a "worth a look" line about an empty block names: matched by the name it starts with, else the first Focus-tagged block. */
+function blockOfLine(a: PlanAttention, blocks: readonly TimeBlock[]): TimeBlock | null {
+  const named = [...blocks].sort((x, y) => y.name.length - x.name.length).find((b) => a.text.startsWith(`${b.name} is empty`));
+  return named ?? blocks.find((b) => b.tag.trim().toLowerCase() === FOCUS_TAG.toLowerCase()) ?? null;
+}
+
+/** A suggestion's time block under its title: a dot in the block's colour and its name (the select beside the day picker changes it). */
+function BlockMark({ id, blocks }: { id: string | null; blocks: readonly TimeBlock[] }) {
+  const b = id ? blocks.find((x) => x.id === id) : undefined;
+  if (!b) return null;
+  return (
+    <p className="mt-xs m-0 flex items-center gap-xs text-caption font-medium">
+      <span className={`tb-dot ${tbClass(b.color)} shrink-0`} style={tbStyle(b.color)} aria-hidden="true" />
+      <span className="min-w-0">{b.name}</span>
+    </p>
+  );
+}
 
 /** The form for a task you pick yourself: its day, how long it takes, a time, a priority and the rest, from the same form a task uses on Daily. */
 function OwnForm({ node, day, today, onAdd }: { node: Node; day: string; today: string; onAdd: (o: Own) => void }) {
@@ -124,7 +144,7 @@ function AddOwn({ day, today, taken, onAdd }: { day: string; today: string; take
       <label className="block text-subhead font-semibold" htmlFor="own-find">
         {COPY.pick}
       </label>
-      <input id="own-find" type="search" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={COPY.pickPlaceholder} autoComplete="off" className={`mt-xs ${selectClass}`} />
+      <input id="own-find" type="search" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={COPY.pickPlaceholder} autoComplete="off" className={FIELD} />
       <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0" aria-label="Your open tasks">
         {tasks.isPending && (
           <li role="status" className="text-caption text-ink-soft">
@@ -151,7 +171,35 @@ function AddOwn({ day, today, taken, onAdd }: { day: string; today: string; take
 }
 
 /** What each line under "Worth a look" lets you fix right here. Nothing is saved until Keep. */
-function Fix({ a, plan, edits, stage, onFill }: { a: PlanAttention; plan: WeekPlanData; edits: Record<string, Change>; stage: (id: string, c: Change) => void; onFill: (day: string) => void }) {
+function Fix({ a, plan, blocks, edits, stage, onFill }: { a: PlanAttention; plan: WeekPlanData; blocks: readonly TimeBlock[]; edits: Record<string, Change>; stage: (id: string, c: Change) => void; onFill: (day: string) => void }) {
+  // A Focus block with nothing in it: give one of the open tasks with no block a day it is empty on, and that block with it.
+  if (a.kind === 'blockEmpty') {
+    const b = blockOfLine(a, blocks);
+    if (!b || a.tasks.length === 0) return <p className="m-0 text-subhead text-ink-soft">No open task without a block to put here.</p>;
+    return (
+      <ul className="m-0 flex list-none flex-col gap-sm p-0">
+        {a.tasks.slice(0, 5).map((t) => {
+          const staged = edits[t.id]?.timeBlockId === b.id ? (edits[t.id]?.doDate ?? '') : '';
+          return (
+            <li key={t.id} className="flex items-center gap-sm">
+              <p className="m-0 min-w-0 flex-1 text-subhead">
+                <Inert text={t.title} />
+                {t.estimateMin ? <span className="text-ink-soft"> {minutesLabel2(t.estimateMin)}</span> : null}
+              </p>
+              <select value={staged} onChange={(e) => e.target.value && stage(t.id, { doDate: e.target.value, timeBlockId: b.id })} aria-label={`Put ${t.title} in ${b.name} on`} className={`${selectBase} w-[148px] shrink-0`}>
+                <option value="">{COPY.chooseDay}</option>
+                {a.days.map((d) => (
+                  <option key={d} value={d}>
+                    {dayOption(d)}
+                  </option>
+                ))}
+              </select>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
   if (a.kind === 'empty')
     return (
       <div className="flex flex-wrap gap-xs">
@@ -205,12 +253,14 @@ function Fix({ a, plan, edits, stage, onFill }: { a: PlanAttention; plan: WeekPl
 }
 
 /** The sheet's body. It is made again whenever a new plan arrives, so the ticks and days start from what the plan suggested. */
-export function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: number, failed: number) => void }) {
+export function PlanBody({ plan, blocks = [], onDone }: { plan: WeekPlanData; /** The person's time blocks, for the block each suggestion goes in. */ blocks?: readonly TimeBlock[]; onDone: (kept: number, failed: number) => void }) {
   // Keep can give a task a day, a repeat or a habit pick, which decide what an Emerging card offers, so it is read again at once.
   const refresh = useRefreshAll({ insights: true });
   const today = todayLocal();
   const [on, setOn] = useState<Record<string, boolean>>(() => Object.fromEntries(plan.suggestions.map((s) => [s.id, true])));
   const [day, setDay] = useState<Record<string, string>>(() => Object.fromEntries(plan.suggestions.map((s) => [s.id, s.day])));
+  // The block each suggestion goes in: the one the plan suggested (its own, or one from its area and pillar), changed here if you like.
+  const [blockOf, setBlockOf] = useState<Record<string, string | null>>(() => Object.fromEntries(plan.suggestions.map((s) => [s.id, s.blockId ?? null])));
   const [edits, setEdits] = useState<Record<string, Change>>({});
   const [checked, setChecked] = useState<Record<number, boolean>>({});
   const [openLine, setOpenLine] = useState<number | null>(null);
@@ -226,7 +276,13 @@ export function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: 
 
   // Everything to save, one entry for each task, so a task in two places is saved once: the suggestions, then the fixes, then what you added.
   const changes = new Map<string, TaskPlanBody>();
-  for (const s of kept) changes.set(s.id, { doDate: day[s.id]! });
+  for (const s of kept) {
+    const b = blockOf[s.id] ?? null;
+    // The block goes with the day when there is one, or when the suggested one was taken off on purpose. A block the task's time falls in
+    // is not pinned while it is left as it was, so a later change to the time still moves the task to the right block.
+    const byTime = s.blockHow === 'time' && b === s.blockId;
+    changes.set(s.id, !byTime && (b !== null || b !== (s.blockId ?? null)) ? { doDate: day[s.id]!, timeBlockId: b } : { doDate: day[s.id]! });
+  }
   for (const [id, c] of Object.entries(edits)) changes.set(id, { ...changes.get(id), ...c });
   for (const o of own) changes.set(o.id, planBody(o.plan));
 
@@ -282,7 +338,7 @@ export function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: 
             const total = d.plannedMin + extra;
             const over = total > plan.capacityMin;
             return (
-              <li key={d.date} className="min-w-0 text-center" aria-label={`${prettyDate(d.date)}: ${minutesLabel2(d.plannedMin)} planned, ${minutesLabel2(extra)} suggested`}>
+              <li key={d.date} className="min-w-0 text-center" aria-label={`${prettyDate(d.date)}${d.templateName ? `, ${d.templateName}` : ''}: ${minutesLabel2(d.plannedMin)} planned, ${minutesLabel2(extra)} suggested`}>
                 <div className="mx-auto flex h-[72px] w-full max-w-[40px] flex-col justify-end overflow-hidden rounded-tile bg-line" aria-hidden="true">
                   <div className="w-full bg-r4" style={{ height: `${Math.round((extra / peak) * 100)}%` }} />
                   <div className="w-full bg-r5" style={{ height: `${Math.round((d.plannedMin / peak) * 100)}%` }} />
@@ -319,9 +375,11 @@ export function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: 
                     <p className="m-0 text-card-note text-ink-soft">
                       {minutesLabel2(s.estimateMin)}, {s.reason.toLowerCase()}
                     </p>
+                    <BlockMark id={blockOf[s.id] ?? null} blocks={blocks} />
                   </div>
                 </div>
-                <div className="w-[148px] shrink-0">
+                {/* The day, and under it the time block, each a fixed width so the title keeps the rest of the line. */}
+                <div className="flex w-[148px] shrink-0 flex-col gap-xs">
                   <select value={day[s.id]} onChange={(e) => setDay((d) => ({ ...d, [s.id]: e.target.value }))} aria-label={`Day for ${s.title}`} className={selectClass}>
                     {plan.days.map((d) => (
                       <option key={d.date} value={d.date}>
@@ -329,6 +387,16 @@ export function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: 
                       </option>
                     ))}
                   </select>
+                  {blocks.length > 0 && (
+                    <select value={blockOf[s.id] ?? ''} onChange={(e) => setBlockOf((o) => ({ ...o, [s.id]: e.target.value || null }))} aria-label={`Time block for ${s.title}`} className={selectClass}>
+                      <option value="">No block</option>
+                      {blocks.map((x) => (
+                        <option key={x.id} value={x.id}>
+                          {x.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </li>
             ))}
@@ -363,6 +431,7 @@ export function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: 
                       <Fix
                         a={a}
                         plan={plan}
+                        blocks={blocks}
                         edits={edits}
                         stage={stage}
                         onFill={(d) => {
@@ -427,7 +496,7 @@ export function PlanBody({ plan, onDone }: { plan: WeekPlanData; onDone: (kept: 
       )}
       <div className="flex flex-wrap gap-xs">
         {(plan.suggestions.length > 0 || changes.size > 0) && (
-          <Button onClick={keep} disabled={busy}>
+          <Button onClick={keep} disabled={busy} className="flex-1">
             {busy ? 'Keeping' : `${COPY.keep} (${changes.size})`}
           </Button>
         )}

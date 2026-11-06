@@ -1,12 +1,13 @@
-import { RELATIONSHIP_BY_KEY, taskIsHabit, timeLabel, type Node } from '@kreators/shared';
+import { RELATIONSHIP_BY_KEY, mondayOf, taskIsHabit, timeLabel, type Node } from '@kreators/shared';
 import { m as motion, useReducedMotion } from 'motion/react';
 import type { ReactNode } from 'react';
 import { ListChecks, Pencil } from 'lucide-react';
-import { dueLabel } from '../lib/date';
+import { dueLabel, todayLocal } from '../lib/date';
+import { useTimeBlocks } from '../lib/useTimeBlocks';
 import { minutesUntil, useNow } from '../lib/useNow';
 import { CheckRow } from './CheckRow';
 import { Icon } from './Icon';
-import { PriorityChip, TaskTags } from './TaskPlan';
+import { PriorityChip, TaskTags } from './TaskMarks';
 import { FactTag, IconTag } from './FactTag';
 import { StatusTag } from './StatusTag';
 import { ToggleIcon } from './ToggleMark';
@@ -50,8 +51,12 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
 
   const when = [task.dueTime ? timeLabel(task.dueTime) : null, task.estimateMin ? `${task.estimateMin} min` : null].filter(Boolean).join(' · ');
   const timeChip = when && !done ? <FactTag kind="when">{when}</FactTag> : null;
+  // The block mark draws only once its block is found in the same cached read TaskTags uses (TaskBlockMark), so a row whose block is
+  // its only mark never grows an empty band while that read loads, fails or misses the id.
+  const blocks = useTimeBlocks(mondayOf(todayLocal()), Boolean(task.timeBlockId));
+  const hasBlock = Boolean(task.timeBlockId && blocks.data?.blocks.some((b) => b.id === task.timeBlockId));
   // A task a life coach added says so; it ticks and pays like any other.
-  const hasMarks = task.remind || Boolean(task.repeat && taskIsHabit(task)) || Boolean(task.fromPillar) || Boolean(task.fromCoach) || Boolean(task.forReview);
+  const hasMarks = task.remind || Boolean(task.repeat && taskIsHabit(task)) || Boolean(task.fromPillar) || Boolean(task.fromCoach) || Boolean(task.forReview) || Boolean(task.lifeArea) || hasBlock;
   const badge =
     wait > 0 ? (
       <IconTag tone="neutral" icon="Hourglass">{`Ready in ${wait} min`}</IconTag>

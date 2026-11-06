@@ -141,7 +141,8 @@ export function CheckRow({
             // right; a long set wraps, right-aligned, and never takes more than half the row.
             <span className="flex shrink-0 flex-col items-end justify-between gap-xs self-stretch md:max-w-[50%] md:flex-row-reverse md:flex-wrap md:items-center md:justify-start md:self-center">
               {corner ?? <span aria-hidden="true" />}
-              {marks && <span className="hidden md:order-3 md:flex md:flex-wrap md:justify-end md:gap-xs">{marks}</span>}
+              {/* When the marks wrap, each line fills (as on a phone), so a third mark never stands alone under two (a task's block, 2026-11-06). */}
+              {marks && <span className="hidden md:order-3 md:flex md:flex-wrap md:justify-end md:gap-xs md:[&>*]:flex-auto md:[&>*]:justify-center">{marks}</span>}
               {foot ? <span className="md:order-2">{foot}</span> : <span aria-hidden="true" />}
             </span>
           )}

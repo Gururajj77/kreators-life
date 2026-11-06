@@ -35,10 +35,22 @@ export function DiscountField({ area, itemId, points, value, onChange, check, cl
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  // Closing with Cancel or Escape hands focus back to "Have a discount code?".
+  const back = useRef(false);
 
   useEffect(() => {
     if (open) input.current?.focus();
+    else if (back.current) {
+      back.current = false;
+      trigger.current?.focus();
+    }
   }, [open]);
+  const close = () => {
+    back.current = true;
+    setOpen(false);
+    setProblem(null);
+  };
 
   // A pay-what-you-want offer that changes changes the saving, so the code is checked again on the new amount.
   useEffect(() => {
@@ -100,7 +112,7 @@ export function DiscountField({ area, itemId, points, value, onChange, check, cl
   if (!open) {
     return (
       <div className={className}>
-        <button type="button" onClick={() => setOpen(true)} aria-expanded="false" className="inline-flex min-h-[44px] items-center text-subhead font-semibold underline underline-offset-4 hover:text-ink-soft">
+        <button ref={trigger} type="button" onClick={() => setOpen(true)} aria-expanded="false" className="inline-flex min-h-[44px] items-center text-subhead font-semibold underline underline-offset-4 hover:text-ink-soft">
           Have a discount code?
         </button>
         {problem && (
@@ -129,6 +141,12 @@ export function DiscountField({ area, itemId, points, value, onChange, check, cl
           id={id}
           value={text}
           onChange={(e) => setText(e.target.value.toUpperCase())}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              close();
+            }
+          }}
           maxLength={40}
           autoCapitalize="characters"
           autoComplete="off"
@@ -139,7 +157,7 @@ export function DiscountField({ area, itemId, points, value, onChange, check, cl
         <Button type="submit" variant="outline" disabled={busy || !text.trim()}>
           Apply
         </Button>
-        <Button type="button" variant="ghost" onClick={() => (setOpen(false), setProblem(null))}>
+        <Button type="button" variant="ghost" onClick={close}>
           Cancel
         </Button>
       </div>

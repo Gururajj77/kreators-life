@@ -1,6 +1,7 @@
 import { blockTimeLabel, PERIOD_KINDS, PERIOD_META, REVIEW_REMINDER_TIME, REVIEW_SCHEDULE_NAME_MAX, addDays, type Period, type PeriodKind, type Repeat, type ReviewSchedule } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import gsap from 'gsap';
 import { Bell, Check, type LucideIcon } from 'lucide-react';
 import { api } from '../lib/api';
 import { prettyDate } from '../lib/date';
@@ -8,9 +9,12 @@ import { useAuthed } from '../lib/queries';
 import { tie } from '../lib/text';
 import { Button } from './Button';
 import { CalendarGrid } from './Charts';
+import { CloseButton } from './CloseButton';
+import { ConfirmDelete } from './ConfirmDelete';
 import { Fold } from './Fold';
 import { Inert } from './Inert';
 import { RepeatPicker } from './RepeatPicker';
+import { SkeletonList } from './Skeleton';
 import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
 import { Toggle } from './Toggle';
@@ -20,7 +24,7 @@ import { FIELD } from '../lib/ui';
 const COPY = {
   lede: 'Pick a day to plan a look back. You get a note in your inbox on that day.',
   legend: 'A bell is a reminder. A tick is a review you wrote.',
-  empty: 'Nothing is scheduled yet. Tap a day, or use the button below.',
+  empty: 'Nothing is scheduled yet. Tap a day, or schedule one here.',
   note: 'You get a note in your inbox on the day. On the first day of a week, month, quarter or half year it opens the one that just ended.',
   pastOnce: 'Pick today or a day to come, so the reminder has a day to fall on.',
 } as const;
@@ -82,72 +86,131 @@ export function ReviewCalendar({ today, onOpenPeriod }: { today: string; onOpenP
       </h2>
       <p className="mt-xs m-0 text-balance text-subhead text-ink-soft">{COPY.lede}</p>
       <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
-        <CalendarGrid month={month} marks={marks} label="Review calendar" today={today} selected={picked} onPick={(day) => setPicked(day)} onMonth={setMonth} />
+        <CalendarGrid month={month} marks={marks} label="Review calendar" today={today} selected={picked} onPick={(day) => setPicked(day)} onMonth={(m) => {
+            setMonth(m);
+            setPicked(null);
+          }} />
         <p className="mt-sm m-0 text-caption text-ink-soft">{COPY.legend}</p>
       </div>
-      {q.isError && (
-        <p role="alert" className="mt-sm m-0 text-subhead">
-          The calendar did not load. Try again in a moment.
-        </p>
-      )}
-
-      <h3 className="mt-md text-headline">Coming up</h3>
-      {coming.length === 0 ? (
-        <p className="mt-xs m-0 text-subhead text-ink-soft">{COPY.empty}</p>
-      ) : (
-        <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">{coming.map(row)}</ul>
-      )}
-      {others.length > 0 && (
-        <Fold className="mt-xs" title="All scheduled reviews" hint={String(schedules.length)}>
-          <ul className="flex list-none flex-col gap-xs p-0 m-0">{others.map(row)}</ul>
-        </Fold>
-      )}
-      <div className="mt-sm">
-        <Button variant="outline" onClick={() => setForm({ existing: null, day: today >= `${month}-01` && today.slice(0, 7) === month ? today : `${month}-01` })}>
-          Schedule a review
-        </Button>
-      </div>
-
-      <DaySheet
+      {/* The day tapped opens here, under the calendar, never in a popup; the day keeps its ring on the grid. */}
+      <DayPanel
         day={picked}
         data={picked ? d?.days[picked] : undefined}
+        loading={q.isPending}
         schedules={schedules}
         onClose={() => setPicked(null)}
-        onAdd={(day) => {
-          setPicked(null);
-          setForm({ existing: null, day });
-        }}
-        onEdit={(s) => {
-          setPicked(null);
-          setForm({ existing: s, day: s.anchor });
-        }}
+        onAdd={(day) => setForm({ existing: null, day })}
+        onEdit={(s) => setForm({ existing: s, day: s.anchor })}
         onOpen={(p) => {
           setPicked(null);
           onOpenPeriod(p);
         }}
         onChanged={refresh}
       />
+      {q.isError && (
+        <p role="alert" className="mt-sm m-0 text-subhead">
+          The calendar did not load. Try again in a moment.
+        </p>
+      )}
+
+      {/* "Coming up" and its line at the left, Schedule a review at the bottom right of the same block (the founder, 2026-11-06); on a
+          narrow phone the button wraps under the words, still at the right. The button keeps its look. */}
+      <div className="mt-md flex flex-wrap items-end justify-between gap-sm">
+        <div className="min-w-0 flex-[1_1_220px]">
+          <h3 className="m-0 text-headline">Coming up</h3>
+          {coming.length === 0 && <p className="mt-xs m-0 text-subhead text-ink-soft">{COPY.empty}</p>}
+        </div>
+        <div className="ml-auto">
+          <Button variant="outline" onClick={() => setForm({ existing: null, day: today >= `${month}-01` && today.slice(0, 7) === month ? today : `${month}-01` })}>
+            Schedule a review
+          </Button>
+        </div>
+      </div>
+      {coming.length > 0 && <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">{coming.map(row)}</ul>}
+      {others.length > 0 && (
+        <Fold className="mt-xs" title="All scheduled reviews" hint={String(schedules.length)}>
+          <ul className="flex list-none flex-col gap-xs p-0 m-0">{others.map(row)}</ul>
+        </Fold>
+      )}
+
       <ScheduleForm state={form} today={today} onClose={() => setForm(null)} onSaved={refresh} />
     </section>
   );
 }
 
-function DaySheet({ day, data, schedules, onClose, onAdd, onEdit, onOpen, onChanged }: { day: string | null; data: { scheduled: { id: string; kind: PeriodKind; time: string; name: string }[]; written: { kind: PeriodKind; start: string; end: string }[] } | undefined; schedules: ReviewSchedule[]; onClose: () => void; onAdd: (day: string) => void; onEdit: (s: ReviewSchedule) => void; onOpen: (p: Period) => void; onChanged: () => void }) {
-  const [sure, setSure] = useState<string | null>(null);
-  useEffect(() => setSure(null), [day]);
+type DayData = { scheduled: { id: string; kind: PeriodKind; time: string; name: string }[]; written: { kind: PeriodKind; start: string; end: string }[] };
+
+/**
+ * One day of the calendar, in a card right under it: the reminders that fall on it (Edit opens the schedule form, Remove asks first in a
+ * sheet with a red yes) and the reviews written for a period that ended on it. Focus moves to its heading when a day is picked; Escape or
+ * the close button folds it and hands focus back to the day that opened it. Its buttons are outlines, so the screen keeps one solid one.
+ */
+function DayPanel({ day, data, loading, schedules, onClose, onAdd, onEdit, onOpen, onChanged }: { day: string | null; data: DayData | undefined; loading: boolean; schedules: ReviewSchedule[]; onClose: () => void; onAdd: (day: string) => void; onEdit: (s: ReviewSchedule) => void; onOpen: (p: Period) => void; onChanged: () => void }) {
+  const [sure, setSure] = useState<{ id: string; series: boolean } | null>(null);
+  const box = useRef<HTMLElement>(null);
+  const head = useRef<HTMLHeadingElement>(null);
+  const back = useRef<HTMLElement | null>(null);
   const remove = useMutation({
     mutationFn: (id: string) => api.reviewScheduleRemove(id),
     onSuccess: () => {
       onChanged();
       setSure(null);
+      // The removed row's Remove button is gone, so the sheet cannot hand focus back to it: bring it to the day's heading instead.
+      requestAnimationFrame(() => head.current?.focus({ preventScroll: true }));
     },
   });
+  useEffect(() => {
+    setSure(null);
+    if (!day) return;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const from = document.activeElement;
+    if (from instanceof HTMLElement && !box.current?.contains(from)) back.current = from;
+    head.current?.focus({ preventScroll: true });
+    head.current?.scrollIntoView({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
+    const el = box.current;
+    if (!el) return;
+    if (reduced) {
+      gsap.set(el, { opacity: 1, y: 0 });
+      return;
+    }
+    const tween = gsap.fromTo(el, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.3, ease: 'expo.out' });
+    return () => {
+      tween.kill();
+    };
+  }, [day]);
+  if (!day) return null;
+  const close = () => {
+    const to = back.current;
+    back.current = null;
+    onClose();
+    to?.focus({ preventScroll: true });
+  };
   const scheduled = data?.scheduled ?? [];
   const written = data?.written ?? [];
   return (
-    <Sheet open={day !== null} onClose={onClose} title={day ? prettyDate(day) : ''}>
-      <div className="flex flex-col gap-sm pb-xl">
-        {scheduled.length === 0 && written.length === 0 && <p className="m-0 text-subhead text-ink-soft">Nothing on this day yet.</p>}
+    <section
+      ref={box}
+      aria-labelledby="rcal-day-heading"
+      className="mt-sm rounded-card bg-card p-md shadow-toy-soft"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && !e.defaultPrevented && box.current?.contains(e.target as Node)) {
+          e.preventDefault();
+          close();
+        }
+      }}
+    >
+      <div className="flex items-start justify-between gap-sm">
+        <h3 id="rcal-day-heading" ref={head} tabIndex={-1} className="m-0 min-w-0 text-title3 outline-none">
+          {prettyDate(day)}
+        </h3>
+        <CloseButton onClick={close} label="Close this day" />
+      </div>
+      <div className="mt-sm flex flex-col gap-sm">
+        {loading && data === undefined ? (
+          <SkeletonList count={1} label="Loading this day" />
+        ) : (
+          scheduled.length === 0 && written.length === 0 && <p className="m-0 text-subhead text-ink-soft">Nothing on this day yet.</p>
+        )}
         {scheduled.map((s) => {
           const full = schedules.find((x) => x.id === s.id);
           const series = Boolean(full?.repeat);
@@ -163,8 +226,8 @@ function DaySheet({ day, data, schedules, onClose, onAdd, onEdit, onOpen, onChan
                     Edit
                   </Button>
                 )}
-                <Button variant="outline" size="sm" disabled={remove.isPending} onClick={() => (sure === s.id ? remove.mutate(s.id) : setSure(s.id))}>
-                  {sure === s.id ? (series ? 'Tap again to remove the whole series' : 'Tap again to remove') : series ? 'Remove the series' : 'Remove'}
+                <Button variant="outline" size="sm" disabled={remove.isPending} onClick={() => setSure({ id: s.id, series })}>
+                  {series ? 'Remove the series' : 'Remove'}
                 </Button>
               </div>
             </div>
@@ -176,23 +239,29 @@ function DaySheet({ day, data, schedules, onClose, onAdd, onEdit, onOpen, onChan
               <StatusTag tone="good">Written</StatusTag>
               <p className="mt-xs m-0 text-subhead text-ink-soft">{tie(`${PERIOD_META[w.kind].name} for ${prettyDate(w.start)} to ${prettyDate(w.end)}`)}</p>
             </div>
-            <Button size="sm" onClick={() => onOpen({ kind: w.kind, start: w.start, end: w.end })}>
+            <Button variant="outline" size="sm" onClick={() => onOpen({ kind: w.kind, start: w.start, end: w.end })}>
               Open it
             </Button>
           </div>
         ))}
-        {remove.isError && (
-          <p role="alert" className="m-0 text-subhead">
-            That did not work. Try again.
-          </p>
-        )}
-        {day && (
-          <Button full onClick={() => onAdd(day)}>
-            Add a review reminder on this day
-          </Button>
-        )}
+        <Button variant="outline" full onClick={() => onAdd(day)}>
+          Add a review reminder on this day
+        </Button>
       </div>
-    </Sheet>
+      <ConfirmDelete
+        open={sure !== null}
+        title={sure?.series ? 'Remove the whole series?' : 'Remove this reminder?'}
+        body={sure?.series ? 'Every reminder in this series goes. Reviews you wrote stay.' : 'This reminder goes. Reviews you wrote stay.'}
+        yes={sure?.series ? 'Yes, remove the series' : 'Yes, remove it'}
+        pending={remove.isPending}
+        failed={remove.isError}
+        onYes={() => sure && remove.mutate(sure.id)}
+        onClose={() => {
+          setSure(null);
+          remove.reset();
+        }}
+      />
+    </section>
   );
 }
 
@@ -228,6 +297,7 @@ function ScheduleForm({ state, today, onClose, onSaved }: { state: FormState | n
   const remove = useMutation({
     mutationFn: () => api.reviewScheduleRemove(existing!.id),
     onSuccess: () => {
+      setSure(false);
       onSaved();
       onClose();
     },
@@ -272,9 +342,9 @@ function ScheduleForm({ state, today, onClose, onSaved }: { state: FormState | n
             {problem}
           </p>
         )}
-        {(save.isError || remove.isError) && (
+        {save.isError && (
           <p role="alert" className="m-0 text-subhead">
-            {((save.error ?? remove.error) as Error | null)?.message || 'That did not save. Try again.'}
+            {(save.error as Error | null)?.message || 'That did not save. Try again.'}
           </p>
         )}
         <div className="flex flex-wrap gap-xs">
@@ -282,12 +352,25 @@ function ScheduleForm({ state, today, onClose, onSaved }: { state: FormState | n
             {save.isPending ? 'Saving' : existing ? 'Save changes' : 'Schedule it'}
           </Button>
           {existing && (
-            <Button variant="outline" disabled={remove.isPending} onClick={() => (sure ? remove.mutate() : setSure(true))}>
-              {sure ? 'Tap again to remove' : repeat ? 'Remove the series' : 'Remove'}
+            <Button variant="outline" disabled={remove.isPending} onClick={() => setSure(true)}>
+              {existing.repeat ? 'Remove the series' : 'Remove'}
             </Button>
           )}
         </div>
       </form>
+      <ConfirmDelete
+        open={sure}
+        title={existing?.repeat ? 'Remove the whole series?' : 'Remove this reminder?'}
+        body={existing?.repeat ? 'Every reminder in this series goes. Reviews you wrote stay.' : 'This reminder goes. Reviews you wrote stay.'}
+        yes={existing?.repeat ? 'Yes, remove the series' : 'Yes, remove it'}
+        pending={remove.isPending}
+        failed={remove.isError}
+        onYes={() => remove.mutate()}
+        onClose={() => {
+          setSure(false);
+          remove.reset();
+        }}
+      />
     </Sheet>
   );
 }

@@ -160,13 +160,16 @@ function FeaturePage() {
 
       {listingType && (
         <section className="mt-lg" aria-labelledby="open-now">
-          <div className="flex flex-wrap items-end justify-between gap-sm">
-            <h2 id="open-now" className="text-title2 font-medium">
+          {/* "See all" level with the title at the top of the block, as Section's action: a box one title line tall, the link centred on it. */}
+          <div className="flex items-start justify-between gap-sm">
+            <h2 id="open-now" className="min-w-0 text-title2 font-medium">
               {LISTING_TYPE_META[listingType].plural} open now
             </h2>
-            <Link to={`/explore?type=${listingType}`} className={`${SITE_LINK} text-subhead`}>
-              See all in Explore
-            </Link>
+            <div className="flex h-[1.2em] shrink-0 items-center text-[24px] leading-none">
+              <Link to={`/explore?type=${listingType}`} className={`${SITE_LINK} text-subhead`}>
+                See all in Explore
+              </Link>
+            </div>
           </div>
           {listings.data && listings.data.listings.length === 0 && (
             <p className="mt-sm m-0 rounded-tile bg-card p-md text-callout text-ink-soft shadow-toy-soft">

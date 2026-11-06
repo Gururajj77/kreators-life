@@ -1236,54 +1236,6 @@
    "strength": 53
   },
   {
-   "key": "daytype-done",
-   "id": "daytype-done",
-   "state": "ready",
-   "apps": [
-    "today",
-    "insights"
-   ],
-   "reads": [
-    "dayTypes",
-    "tasks"
-   ],
-   "private": false,
-   "relationship": null,
-   "headline": "20.4 vs 20.9",
-   "text": "On Rest and body days you ticked 20.4 tasks, 16% of them Friends. On other days, 20.9.",
-   "basis": "From 11 days and 36 days. Things that happen together, not causes.",
-   "chart": {
-    "kind": "pair",
-    "rows": [
-     {
-      "label": "Rest and body days",
-      "value": 20.4,
-      "n": 11,
-      "unit": "tasks"
-     },
-     {
-      "label": "Admin days",
-      "value": 20.8,
-      "n": 10,
-      "unit": "tasks"
-     },
-     {
-      "label": "Other days",
-      "value": 20.9,
-      "n": 36,
-      "unit": "tasks"
-     }
-    ]
-   },
-   "action": {
-    "label": "Pick today's kind of day",
-    "to": "/today#day-type",
-    "kind": "link"
-   },
-   "need": null,
-   "strength": 41
-  },
-  {
    "key": "best-hours",
    "id": "best-hours",
    "state": "ready",
@@ -1318,6 +1270,108 @@
    "action": {
     "label": "Plan my week",
     "to": "/today?plan=week",
+    "kind": "link"
+   },
+   "need": null,
+   "strength": 35
+  },
+  {
+   "key": "daytype-done",
+   "id": "daytype-done",
+   "state": "ready",
+   "apps": [
+    "today",
+    "reviews",
+    "insights"
+   ],
+   "reads": [
+    "dayTypes",
+    "tasks",
+    "timeBlocks",
+    "focus",
+    "wellbeing"
+   ],
+   "private": true,
+   "relationship": null,
+   "headline": "20 of 28 days",
+   "text": "Rest and body days and a lower mood went together: 3.2 on average, against 3.7 on other days.",
+   "basis": "The last four weeks: 5 days beside 19 other days. Things that happen together, not causes.",
+   "chart": {
+    "kind": "kinds",
+    "parts": [
+     {
+      "templateId": "t-deep",
+      "name": "Deep work",
+      "days": 7,
+      "color": "red"
+     },
+     {
+      "templateId": "t-make",
+      "name": "Create",
+      "days": 5,
+      "color": "red"
+     },
+     {
+      "templateId": "t-rest",
+      "name": "Rest and body",
+      "days": 5,
+      "color": "red"
+     },
+     {
+      "templateId": "t-admin",
+      "name": "Admin",
+      "days": 3,
+      "color": "red"
+     }
+    ],
+    "none": 8,
+    "noneName": "Everyday",
+    "rows": [
+     {
+      "templateId": "t-deep",
+      "name": "Deep work days",
+      "n": 7,
+      "tasks": 20.7,
+      "focus": 40,
+      "mood": 3.9
+     },
+     {
+      "templateId": "t-make",
+      "name": "Create days",
+      "n": 5,
+      "tasks": 21.2,
+      "focus": 45,
+      "mood": 3.7
+     },
+     {
+      "templateId": "t-rest",
+      "name": "Rest and body days",
+      "n": 5,
+      "tasks": 20,
+      "focus": 40.6,
+      "mood": 3.2
+     },
+     {
+      "templateId": "t-admin",
+      "name": "Admin days",
+      "n": 3,
+      "tasks": 20.3,
+      "focus": 76,
+      "mood": 4.5
+     },
+     {
+      "templateId": null,
+      "name": "Days on Everyday",
+      "n": 8,
+      "tasks": 20.5,
+      "focus": 45.5,
+      "mood": 3.4
+     }
+    ]
+   },
+   "action": {
+    "label": "Open time blocks",
+    "to": "/time-blocks",
     "kind": "link"
    },
    "need": null,
@@ -1672,8 +1726,8 @@
    "money-stress"
   ],
   "reviews": [
-   "pillar-balance",
-   "review-since"
+   "daytype-done",
+   "pillar-balance"
   ],
   "discover": [
    "discover-strength"
@@ -1694,8 +1748,8 @@
    "habit-tie:task:self:reel|shoot",
    "slips-sleep",
    "stress-calm",
-   "daytype-done",
    "best-hours",
+   "daytype-done",
    "pillar-balance",
    "review-since",
    "discover-strength",
@@ -1902,8 +1956,8 @@
    "habit-tie:task:self:reel|shoot",
    "slips-sleep",
    "stress-calm",
-   "daytype-done",
    "best-hours",
+   "daytype-done",
    "pillar-balance",
    "pillar-balance:servant_leader",
    "review-since",
@@ -2056,8 +2110,8 @@
    "habit-tie:task:self:reel|shoot",
    "slips-sleep",
    "stress-calm",
-   "daytype-done",
    "best-hours",
+   "daytype-done",
    "pillar-balance",
    "pillar-balance:friendship",
    "review-since",
@@ -2208,8 +2262,8 @@
    "habit-tie:task:self:reel|shoot",
    "slips-sleep",
    "stress-calm",
-   "daytype-done",
    "best-hours",
+   "daytype-done",
    "pillar-balance",
    "pillar-balance:parent_child",
    "review-since",
@@ -2474,8 +2528,8 @@
    "habit-tie:task:self:reel|shoot",
    "slips-sleep",
    "stress-calm",
-   "daytype-done",
    "best-hours",
+   "daytype-done",
    "pillar-balance",
    "pillar-balance:lover_partner",
    "review-since",
@@ -2643,8 +2697,8 @@
    "habit-tie:task:self:reel|shoot",
    "slips-sleep",
    "stress-calm",
-   "daytype-done",
    "best-hours",
+   "daytype-done",
    "pillar-balance",
    "pillar-balance:self",
    "review-since",
@@ -2909,8 +2963,8 @@
    "habit-tie:task:self:reel|shoot",
    "slips-sleep",
    "stress-calm",
-   "daytype-done",
    "best-hours",
+   "daytype-done",
    "pillar-balance",
    "pillar-balance:guru",
    "review-since",
@@ -3175,8 +3229,8 @@
    "slips-sleep",
    "stress-calm",
    "pillar-balance:divine",
-   "daytype-done",
    "best-hours",
+   "daytype-done",
    "pillar-balance",
    "review-since",
    "discover-strength",

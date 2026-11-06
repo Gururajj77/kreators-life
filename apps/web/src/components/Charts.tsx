@@ -576,7 +576,7 @@ export function StatTile({ label, value, hint, tone, to, children, className = '
   const style = { background: tone ?? 'var(--color-card)' };
   if (onClick)
     return (
-      <button type="button" onClick={onClick} aria-pressed={pressed} className={`${cls} toy toy-soft w-full text-left ${pressed ? 'ring-2 ring-ink' : ''}`} style={style}>
+      <button type="button" onClick={onClick} aria-pressed={pressed} className={`${cls} toy toy-soft flex w-full flex-col items-stretch justify-start text-left ${pressed ? 'ring-2 ring-ink' : ''}`} style={style}>
         {inner}
       </button>
     );

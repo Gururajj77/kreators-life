@@ -179,6 +179,36 @@ export interface QuizQuestion {
 
 export const AFFILIATE_SHARE = 0.2;
 
+/**
+ * A product's state (the founder, 2026-11-06). Every kind is Draft, Live or Archived; a course is Draft, Private, Public or Archived,
+ * where Public is the stored 'live' (so every `status = 'live'` list keeps working) and Private, courses only, is invite only: in no
+ * list, search or page, its page and checkout open only to its owner, an admin and the people invited. Archived takes no new buyers,
+ * keeps what buyers already have, and is the only state a product is deleted from for good. An admin sees and changes every one.
+ */
+export type ProductStatus = 'draft' | 'private' | 'live' | 'archived';
+/** The four states a course can be in, in the order the editor shows them. */
+export const COURSE_STATUSES = ['draft', 'private', 'live', 'archived'] as const satisfies readonly ProductStatus[];
+/** The three states every other kind can be in. */
+export const PRODUCT_STATUSES = ['draft', 'live', 'archived'] as const satisfies readonly ProductStatus[];
+/** The states a product of this kind can be put in. */
+export function statusesFor(kind: ProductKind): readonly ProductStatus[] {
+  return kind === 'course' ? COURSE_STATUSES : PRODUCT_STATUSES;
+}
+/** The word a state is shown as: a live course reads Public, any other live product Live. */
+export function productStatusLabel(status: ProductStatus, kind: ProductKind): string {
+  if (status === 'live') return kind === 'course' ? 'Public' : 'Live';
+  return status === 'draft' ? 'Draft' : status === 'private' ? 'Private' : 'Archived';
+}
+/** Someone invited to a private course, as its owner (or an admin) sees them. */
+export interface ProductInvite {
+  userId: string;
+  name: string;
+  handle: string | null;
+  createdAt: string;
+}
+/** The answer to an invite by a name that finds nobody, or someone blocked either way: the same words, so nobody learns which. */
+export const INVITE_NOT_FOUND = 'We could not find that person.';
+
 export interface Product {
   id: string;
   ownerId: string;
@@ -195,7 +225,7 @@ export interface Product {
   durationMin: number | null;
   capacity: number | null;
   meetingUrl: string | null;
-  status: 'draft' | 'live' | 'archived';
+  status: ProductStatus;
   cover: string;
   sortOrder: number;
   createdAt: string;

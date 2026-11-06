@@ -2,6 +2,7 @@ import { BOOK_AUTHOR, BUMLING, inGroupOrder, MODULE_GROUP_ACCENT, MODULE_GROUPS,
 import { Link } from 'react-router';
 import { FEATURES, SITE_FEATURES } from './content';
 import { FractalGlass } from '../components/fx/FractalGlass';
+import { PeekGuides } from './PeekGuides';
 import { Reveal } from '../components/fx/Reveal';
 import '../components/fx/spotlight';
 import { GuideLine } from './GuideLine';
@@ -104,7 +105,7 @@ export function Features() {
       <section className="mt-2xl">
         {/* Fractal glass (FractalGlass) in teal, its own colour (the home's is navy, /7rp's wine): deep in both themes, the glow rising
             from the right through narrow ribs; the words and Start free sit on its dark left. */}
-        <div className="fx-fglass-host relative overflow-hidden rounded-card p-lg pb-xl text-on-fill shadow-toy-soft">
+        <div className="fx-fglass-host relative overflow-hidden rounded-card p-md pb-0 text-on-fill shadow-toy-soft md:p-lg md:pb-0">
           <FractalGlass hue="teal" />
           <div className="relative z-10">
             <h2 className="type-hook text-display-2">Switch on only <em>what you need</em></h2>
@@ -112,6 +113,8 @@ export function Features() {
               {entry === '/home' ? 'Go to app' : 'Start free'}
             </Link>
           </div>
+          {/* The seven peek up from the card's foot, as on the home's last card (the founder, 2026-11-06). */}
+          <PeekGuides />
         </div>
       </section>
     </SiteLayout>

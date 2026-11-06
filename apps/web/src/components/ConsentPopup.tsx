@@ -15,6 +15,7 @@ import { Button } from './Button';
 import { Icon } from './Icon';
 import { Sheet } from './Sheet';
 import { Toggle } from './Toggle';
+import { ToggleChevron } from './ToggleMark';
 
 /** The icon beside each choice in the sheet. */
 const PURPOSE_ICON: Record<ConsentPurpose['key'], LucideIcon> = { attribution: Link2, embeds: Video, marketing: Mail };
@@ -24,8 +25,9 @@ const CHAT_PATHS = ['/onboarding', '/session'];
 
 /**
  * The one-time privacy question, and, for an account made before the terms were written down, the terms notice once.
- * Compact by default: one short line with Accept all and Reject all, equally easy, and a quiet Choose that opens a sheet
- * with the three choices as switches. All three start off. On a laptop it is a small glass card at the bottom left, low
+ * Compact by default: one short line with Accept all and Reject all, equally easy, and a quiet "Choose for each" that unfolds
+ * the three choices as switches inside the card itself (2026-11-06, no sheet over the page): the card grows, in the page's flow on
+ * a public phone page and upward from the bottom edge elsewhere. All three start off. On a laptop it is a small glass card at the bottom left, low
  * and narrow so it never covers the public hero's words; on a phone it is a slim bar above the tab bar. It is asked once:
  * the answer is kept on the account (and on this device for a visitor), changed any time under Profile, Privacy choices,
  * and shown again only when the wording changes (`CONSENT_VERSION`) or the footer's "Privacy choices" button opens it,
@@ -72,13 +74,26 @@ export function ConsentPopup() {
   // The footer's button (local.open) opens the sheet itself; the card is for the first ask.
   const showCard = asked && !inChat && !local.open;
   const step: 'terms' | 'choices' = needsTerms ? 'terms' : 'choices';
-  const sheetOpen = local.open || choosing;
+  // The sheet is only for the footer's button, when no card is showing; the card unfolds its own switches.
+  const sheetOpen = local.open;
+  const editing = local.open || choosing;
 
-  // The sheet starts from what is kept.
+  // The switches start from what is kept.
   useEffect(() => {
-    if (sheetOpen) setDraft({ ...local.choices });
+    if (editing) setDraft({ ...local.choices });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sheetOpen]);
+  }, [editing]);
+
+  // Unfolding the switches moves focus to the first one; folding them back returns it to "Choose for each".
+  const chooseRef = useRef<HTMLButtonElement>(null);
+  const choicesRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (choosing) choicesRef.current?.querySelector<HTMLElement>('[role="switch"]:not(:disabled)')?.focus();
+  }, [choosing]);
+  const foldChoices = () => {
+    setChoosing(false);
+    window.requestAnimationFrame(() => chooseRef.current?.focus());
+  };
 
   // On a public page on a phone the card takes its own place under the header (`consentSlot`), in the flow, so it covers nothing. The
   // slot is there on every public page (hidden from the tablet up), so it also says the card is on the public site rather than in the app,
@@ -124,12 +139,20 @@ export function ConsentPopup() {
     ? 'md:bottom-[calc(var(--spacing-xl)+var(--spacing-sm))] md:left-[calc(var(--nav-w)+var(--spacing-md))] md:right-auto md:w-[360px]'
     : 'md:inset-x-0 md:bottom-0 md:rounded-none md:border-x-0 md:border-b-0 md:border-t-2 md:px-md md:py-sm md:pb-[calc(var(--spacing-sm)+env(safe-area-inset-bottom))]';
 
+  // While the switches are unfolded a fixed card can grow past a short screen, so it scrolls inside itself then.
+  const tall = choosing && !inFlow ? 'max-h-[calc(100dvh-var(--spacing-2xl))] overflow-y-auto' : '';
   const card = () => (
     <div
       ref={root}
       role="dialog"
       aria-label={step === 'terms' ? 'Our terms and privacy policy' : 'Your privacy choices'}
-      className={`rounded-card border border-line bg-card-strong p-md text-ink shadow-toy-soft ${inFlow ? 'relative mt-sm' : `fixed inset-x-sm z-[45] ${place} ${laptop}`}`}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && choosing) {
+          e.preventDefault();
+          foldChoices();
+        }
+      }}
+      className={`rounded-card border border-line bg-card-strong p-md text-ink shadow-toy-soft ${tall} ${inFlow ? 'relative mt-sm' : `fixed inset-x-sm z-[45] ${place} ${laptop}`}`}
     >
       {step === 'terms' ? (
         <div className="flex flex-col gap-xs">
@@ -151,33 +174,57 @@ export function ConsentPopup() {
           </div>
         </div>
       ) : (
-        // On the public site's laptop width the words and the three choices share one short line, so the bar covers less of the page.
-        <div className={`flex flex-col gap-sm ${inApp ? '' : 'md:mx-auto md:max-w-[1080px] md:flex-row md:items-center md:justify-between md:gap-md'}`}>
-          <div className="min-w-0">
-            <p className={`m-0 flex items-center gap-xs text-headline text-ink ${inApp ? '' : 'md:hidden'}`}>
-              <Icon icon={ShieldCheck} size={18} />
-              Your privacy
-            </p>
-            <p className={`mt-xs m-0 text-subhead text-ink-soft ${inApp ? '' : 'md:mt-0'}`}>
-              A cookie, outside videos and email news stay off unless you say yes.{' '}
-              <Link to="/privacy" target="_blank" className="whitespace-nowrap underline underline-offset-4">
-                Privacy policy
-              </Link>
-            </p>
-            <GrievanceLine />
+        // On the public site's laptop width the words and the three choices share one short line, so the bar covers less of the page;
+        // the switches unfold under that line, across the bar.
+        <div className={inApp ? '' : 'md:mx-auto md:max-w-[1080px]'}>
+          <div className={`flex flex-col gap-sm ${inApp ? '' : 'md:flex-row md:items-center md:justify-between md:gap-md'}`}>
+            <div className="min-w-0">
+              <p className={`m-0 flex items-center gap-xs text-headline text-ink ${inApp ? '' : 'md:hidden'}`}>
+                <Icon icon={ShieldCheck} size={18} />
+                Your privacy
+              </p>
+              <p className={`mt-xs m-0 text-subhead text-ink-soft ${inApp ? '' : 'md:mt-0'}`}>
+                A cookie, outside videos and email news stay off unless you say yes.{' '}
+                <Link to="/privacy" target="_blank" className="whitespace-nowrap underline underline-offset-4">
+                  Privacy policy
+                </Link>
+              </p>
+              <GrievanceLine />
+            </div>
+            {/* Two equal choices side by side, neither solid; "Choose for each", a quiet link above them, unfolds the three switches under them. */}
+            <div className={`grid grid-cols-2 gap-xs ${inApp ? '' : 'md:flex md:shrink-0 md:items-center'}`}>
+              <button
+                ref={chooseRef}
+                type="button"
+                aria-expanded={choosing}
+                aria-controls="consent-choices"
+                onClick={() => (choosing ? foldChoices() : setChoosing(true))}
+                className="col-span-2 inline-flex min-h-[44px] items-center gap-xs justify-self-start text-subhead text-ink-soft underline underline-offset-4 hover:text-ink md:mr-xs"
+              >
+                Choose for each
+                <ToggleChevron open={choosing} size={14} />
+              </button>
+              <Button variant="outline" full onClick={() => choose({ ...NO_CONSENT })} disabled={save.isPending} className="md:w-auto">
+                Reject all
+              </Button>
+              <Button variant="outline" full onClick={() => choose({ attribution: true, embeds: true, marketing: true })} disabled={save.isPending} className="md:w-auto">
+                Accept all
+              </Button>
+            </div>
           </div>
-          {/* Two equal choices side by side, neither solid; "Choose" opens the three switches, as a quiet link above them. */}
-          <div className={`grid grid-cols-2 gap-xs ${inApp ? '' : 'md:flex md:shrink-0 md:items-center'}`}>
-            <button type="button" onClick={() => setChoosing(true)} className="col-span-2 inline-flex min-h-[44px] items-center justify-self-start text-subhead text-ink-soft underline underline-offset-4 hover:text-ink md:mr-xs">
-              Choose for each
-            </button>
-            <Button variant="outline" full onClick={() => choose({ ...NO_CONSENT })} disabled={save.isPending} className="md:w-auto">
-              Reject all
-            </Button>
-            <Button variant="outline" full onClick={() => choose({ attribution: true, embeds: true, marketing: true })} disabled={save.isPending} className="md:w-auto">
-              Accept all
-            </Button>
-          </div>
+          {choosing && (
+            <div ref={choicesRef} id="consent-choices" className="mt-sm">
+              <Choices draft={draft} setDraft={setDraft} gpc={gpc} wide={!inApp} />
+              <div className="mt-sm flex flex-wrap items-center justify-end gap-xs">
+                <Button variant="ghost" onClick={foldChoices}>
+                  Cancel
+                </Button>
+                <Button variant="outline" onClick={() => choose(draft)} disabled={save.isPending}>
+                  Save my choices
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -191,22 +238,9 @@ export function ConsentPopup() {
       <Sheet open={sheetOpen} onClose={closeSheet} title="Your privacy choices">
         <p className="m-0 text-subhead text-ink-soft">All three start off. They also live under Profile, Privacy choices.</p>
         <GrievanceLine />
-        <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
-          {CONSENT_PURPOSES.map((p) => {
-            const off = p.key === 'attribution' && gpc;
-            return (
-              <li key={p.key} className="flex items-start gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-                <span className="mt-sm flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink-soft">
-                  <Icon icon={PURPOSE_ICON[p.key]} size={18} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <Toggle compact on={draft[p.key] && !off} disabled={off} onChange={(on) => setDraft((d) => ({ ...d, [p.key]: on }))} label={p.name} />
-                  <p className="m-0 text-caption text-ink-soft">{off ? 'Your browser sent Global Privacy Control, so this stays off.' : p.line}</p>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="mt-sm">
+          <Choices draft={draft} setDraft={setDraft} gpc={gpc} />
+        </div>
         <div className="mt-md flex flex-wrap items-center justify-end gap-xs">
           <Link to="/privacy" target="_blank" className="mr-auto text-subhead text-ink-soft underline underline-offset-4">
             Privacy policy
@@ -217,6 +251,29 @@ export function ConsentPopup() {
         </div>
       </Sheet>
     </>
+  );
+}
+
+/** The three switches, all off to start with: in the card when it unfolds, and in the footer's sheet. */
+function Choices({ draft, setDraft, gpc, wide = false }: { draft: ConsentChoices; setDraft: (f: (d: ConsentChoices) => ConsentChoices) => void; gpc: boolean; wide?: boolean }) {
+  // On the public site's laptop bar the three sit side by side, so the bar grows by one row, not three.
+  return (
+    <ul className={`m-0 grid list-none gap-xs p-0 ${wide ? 'md:grid-cols-3' : ''}`}>
+      {CONSENT_PURPOSES.map((p) => {
+        const off = p.key === 'attribution' && gpc;
+        return (
+          <li key={p.key} className="flex items-start gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+            <span className="mt-sm flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink-soft">
+              <Icon icon={PURPOSE_ICON[p.key]} size={18} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <Toggle compact on={draft[p.key] && !off} disabled={off} onChange={(on) => setDraft((d) => ({ ...d, [p.key]: on }))} label={p.name} />
+              <p className="m-0 text-caption text-ink-soft">{off ? 'Your browser sent Global Privacy Control, so this stays off.' : p.line}</p>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

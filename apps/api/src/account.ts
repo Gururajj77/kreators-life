@@ -63,11 +63,25 @@ export async function deleteAccount(db: D1Database, userId: string): Promise<voi
     db.prepare('DELETE FROM event_messages WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM run_messages WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM run_discussion_reads WHERE user_id = ?').bind(userId),
+    // School cohort discussions: their lines go, except that a line others replied under keeps its place with its words wiped,
+    // so the replies stay where they were. How they chose to appear in each cohort goes too.
+    db.prepare('DELETE FROM cohort_talk WHERE user_id = ? AND id NOT IN (SELECT parent_id FROM cohort_talk WHERE parent_id IS NOT NULL)').bind(userId),
+    db.prepare("UPDATE cohort_talk SET body = '', deleted_at = COALESCE(deleted_at, ?), deleted_by = COALESCE(deleted_by, ?) WHERE user_id = ?").bind(nowIso(), userId, userId),
+    db.prepare('DELETE FROM cohort_talk_prefs WHERE user_id = ?').bind(userId),
+    // Invites to private School programs: theirs go, and an invite they sent stays without who sent it.
+    db.prepare('DELETE FROM program_invites WHERE user_id = ?').bind(userId),
+    db.prepare('UPDATE program_invites SET invited_by = NULL WHERE invited_by = ?').bind(userId),
     db.prepare('DELETE FROM event_networking WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM community_mutes WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM block_aliases WHERE blocker_id = ?').bind(userId),
     db.prepare('DELETE FROM blocks WHERE blocker_id = ?').bind(userId),
     db.prepare('DELETE FROM not_to_do WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM day_types WHERE user_id = ?').bind(userId),
+    // Time blocks (migration 0089): the slots first, then the pattern, the templates and the blocks.
+    db.prepare('DELETE FROM day_template_slots WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM week_patterns WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM day_templates WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM time_blocks WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM reviews WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM review_templates WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM review_schedules WHERE user_id = ?').bind(userId),
@@ -133,6 +147,10 @@ export async function deleteAccount(db: D1Database, userId: string): Promise<voi
     db.prepare('DELETE FROM finance_recurring WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM finance_budgets WHERE user_id = ?').bind(userId),
     db.prepare("UPDATE products SET status = 'archived' WHERE owner_id = ?").bind(userId),
+    // Private courses: their invites, and the invite list of their own courses, go with the account; an invite they sent to
+    // someone else's course stays for that course and loses who sent it.
+    db.prepare('DELETE FROM product_invites WHERE user_id = ?1 OR product_id IN (SELECT id FROM products WHERE owner_id = ?1)').bind(userId),
+    db.prepare('UPDATE product_invites SET invited_by = NULL WHERE invited_by = ?').bind(userId),
   ]);
   await logEvent(db, 'user', userId, 'account.deleted');
 }

@@ -491,8 +491,13 @@ export const canModerate = (actor: CommunityRank, target: CommunityRank): boolea
 export const canUndo = (actor: CommunityRank, by: CommunityRank): boolean => COMMUNITY_RANKS[actor] >= COMMUNITY_RANKS.guide && COMMUNITY_RANKS[actor] >= COMMUNITY_RANKS[by];
 
 export interface BlockedPerson {
+  /** What Unblock sends: the person's id for a block by name, or the made-up name's own key. */
+  key: string;
+  /** Empty for a block made from an anonymous post, reply or line: the list never says who it was. */
   userId: string;
+  /** The real name, or for an anonymous block the made-up name it was made from. */
   name: string;
   handle: string | null;
+  anonymous: boolean;
   createdAt: string;
 }

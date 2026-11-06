@@ -98,16 +98,47 @@ bond.post('/block', async (c) => {
 });
 
 // Who I have blocked, and taking a block back. Anyone can do both, whatever their role.
+// A block by name is listed by name. A block made from an anonymous post, reply or line (`block_aliases`, migration 0099) is listed
+// as the made-up name it was made from, with no id or handle, and Unblock sends that row's own key, so the list never says who it was.
 bond.get('/blocks', async (c) => {
   const ask = pageOf(c, 'bl');
-  const rows = await c.env.DB.prepare('SELECT b.blocked_id AS user_id, b.created_at, u.display_name, u.handle FROM blocks b JOIN users u ON u.id = b.blocked_id WHERE b.blocker_id = ? ORDER BY b.created_at DESC LIMIT ? OFFSET ?').bind(c.get('user').id, ask.limit, ask.offset).all<{ user_id: string; created_at: string; display_name: string; handle: string | null }>();
+  const rows = await c.env.DB.prepare(
+    `SELECT b.blocked_id AS block_key, b.blocked_id AS user_id, b.created_at, u.display_name, u.handle, NULL AS alias FROM blocks b JOIN users u ON u.id = b.blocked_id WHERE b.blocker_id = ?1 AND b.by_name = 1
+     UNION ALL
+     SELECT a.id AS block_key, NULL AS user_id, a.created_at, NULL AS display_name, NULL AS handle, a.alias FROM block_aliases a WHERE a.blocker_id = ?1
+     ORDER BY created_at DESC LIMIT ?2 OFFSET ?3`,
+  )
+    .bind(c.get('user').id, ask.limit, ask.offset)
+    .all<{ block_key: string; user_id: string | null; created_at: string; display_name: string | null; handle: string | null; alias: string | null }>();
   const pg = paged(rows.results, ask);
-  const blocked: BlockedPerson[] = pg.items.map((r) => ({ userId: r.user_id, name: nameOf(r), handle: r.handle, createdAt: r.created_at }));
+  const blocked: BlockedPerson[] = pg.items.map((r) =>
+    r.alias !== null
+      ? { key: r.block_key, userId: '', name: r.alias, handle: null, anonymous: true, createdAt: r.created_at }
+      : { key: r.block_key, userId: r.user_id ?? '', name: nameOf({ display_name: r.display_name ?? '' }), handle: r.handle, anonymous: false, createdAt: r.created_at },
+  );
   return c.json({ page: pg.page, blocked });
 });
 
-bond.delete('/block/:userId', async (c) => {
-  await c.env.DB.prepare('DELETE FROM blocks WHERE blocker_id = ? AND blocked_id = ?').bind(c.get('user').id, c.req.param('userId')).run();
+// The key is a person's id for a block by name, or a made-up name's own key. Lifting a made-up name ends the block only when no other
+// name is left on it and it was not also made by name; lifting by name leaves the blocks behind made-up names in place, so the list
+// never changes in a way that says who is behind a name.
+bond.delete('/block/:key', async (c) => {
+  const db = c.env.DB;
+  const me = c.get('user').id;
+  const key = c.req.param('key');
+  const named = await db.prepare('SELECT blocked_id FROM block_aliases WHERE id = ? AND blocker_id = ?').bind(key, me).first<{ blocked_id: string }>();
+  const left = 'EXISTS (SELECT 1 FROM block_aliases WHERE blocker_id = ?1 AND blocked_id = ?2)';
+  if (named) {
+    await db.batch([
+      db.prepare('DELETE FROM block_aliases WHERE id = ? AND blocker_id = ?').bind(key, me),
+      db.prepare(`DELETE FROM blocks WHERE blocker_id = ?1 AND blocked_id = ?2 AND by_name = 0 AND NOT ${left}`).bind(me, named.blocked_id),
+    ]);
+    return c.json({ ok: true });
+  }
+  await db.batch([
+    db.prepare(`UPDATE blocks SET by_name = 0 WHERE blocker_id = ?1 AND blocked_id = ?2 AND ${left}`).bind(me, key),
+    db.prepare(`DELETE FROM blocks WHERE blocker_id = ?1 AND blocked_id = ?2 AND NOT ${left}`).bind(me, key),
+  ]);
   return c.json({ ok: true });
 });
 

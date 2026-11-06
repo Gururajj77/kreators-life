@@ -8,6 +8,7 @@ import { LinksEditor } from '../components/LinksEditor';
 import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Toggle } from '../components/Toggle';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 import { api } from '../lib/api';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
 import { Icon } from '../components/Icon';
@@ -333,7 +334,14 @@ function Portfolio() {
       q.refetch();
     },
   });
-  const remove = useMutation({ mutationFn: (id: string) => api.removePortfolio(id), onSuccess: () => q.refetch() });
+  const [askingRemove, setAskingRemove] = useState<{ id: string; title: string } | null>(null);
+  const remove = useMutation({
+    mutationFn: (id: string) => api.removePortfolio(id),
+    onSuccess: () => {
+      setAskingRemove(null);
+      q.refetch();
+    },
+  });
   const items = q.data?.items ?? [];
   return (
     <section className="mt-lg" aria-labelledby="portfolio-heading">
@@ -352,12 +360,22 @@ function Portfolio() {
               {it.description && <span className="block text-card-note text-ink-soft">{it.description}</span>}
               <span className="block text-caption text-ink-mute">{it.visibility === 'public' ? 'Public' : 'Only you'}</span>
             </span>
-            <Button variant="ghost" className="shrink-0" aria-label={`Remove ${it.title}`} onClick={() => remove.mutate(it.id)} disabled={remove.isPending}>
+            <Button variant="ghost" className="shrink-0" aria-label={`Remove ${it.title}`} onClick={() => setAskingRemove({ id: it.id, title: it.title })} disabled={remove.isPending}>
               Remove
             </Button>
           </li>
         ))}
       </ul>
+      <ConfirmDelete
+        open={askingRemove !== null}
+        title="Remove this piece?"
+        body={`“${askingRemove?.title ?? ''}” leaves your portfolio and your page. To show it again you add it again.`}
+        yes="Yes, remove it"
+        pending={remove.isPending}
+        failed={remove.isError}
+        onYes={() => askingRemove && remove.mutate(askingRemove.id)}
+        onClose={() => setAskingRemove(null)}
+      />
       <form
         className="mt-sm flex flex-col gap-md rounded-card bg-card p-md shadow-toy-soft"
         onSubmit={(e) => {

@@ -1,6 +1,6 @@
 import { contractAsText, docRef, CONTRACT_STATUSES, CONTRACT_STATUS_NAME, CONTRACT_STATUS_TONE, CONTRACT_TEMPLATES, type AgencyTemplate, type BoardColumn, type ContractListItem, type ContractStatus, LOCALE } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useAgencyCan } from '../lib/agencyWorkspace';
 import { api, ApiError } from '../lib/api';
@@ -8,12 +8,13 @@ import { useAuthed } from '../lib/queries';
 import { useParamState } from '../lib/useParamState';
 import { tie } from '../lib/text';
 import { AgencyDocsList } from './AgencyDocs';
-import { AgencyInvoices, FILTER_SELECT, PaperLoading, PaperRowMenu } from './AgencyInvoices';
+import { AgencyInvoices, FILTER_SELECT, PAPER_FILL, PaperLoading, PaperRowMenu, paperRow } from './AgencyInvoices';
 import { Button } from './Button';
 import { Segmented } from './fx/Segmented';
 import { KanbanBoard } from './KanbanBoard';
 import { Pager, usePage } from './Pager';
 import { Sheet } from './Sheet';
+import { ConfirmDelete } from './ConfirmDelete';
 import { StatusTag } from './StatusTag';
 import { CardHead } from './CardHead';
 import { useView, ViewToggle } from './ViewToggle';
@@ -51,18 +52,24 @@ export function AgencyContracts({ clientId, adding, onAdding }: { clientId?: str
   const [seg, setSeg] = usePaperSegment();
   // On one client's page the invoices and the other documents have their own blocks, so only the agreements are here.
   if (clientId) return <AgencyAgreements clientId={clientId} />;
+  // In a row narrower than 34rem (a phone) List and Board and the three kinds each take a full-width row in equal parts; wider, one row,
+  // List and Board at the left and the kinds at the right (the founder, 2026-11-06). The row is the container (see PAPER_ROW).
+  const kinds = (
+    <div className="basis-full @min-[34rem]:ml-auto @min-[34rem]:basis-auto">
+      <Segmented label="Kind of paper" value={seg} onChange={setSeg} options={PAPER_SEGMENTS} className={PAPER_FILL} />
+    </div>
+  );
   return (
+    // Invoices, Agreements and Documents sit at the right of the List and Board switch, on its row (the founder, 2026-11-06); the
+    // switch keeps its look and wraps under at the right on a narrow phone.
     <div>
-      <Segmented label="Kind of paper" value={seg} onChange={setSeg} options={PAPER_SEGMENTS} />
-      <div className="mt-sm">
-        {seg === 'invoices' ? <AgencyInvoices adding={adding} onAdding={onAdding} /> : seg === 'other' ? <AgencyDocsList /> : <AgencyAgreements adding={adding} onAdding={onAdding} />}
-      </div>
+      {seg === 'invoices' ? <AgencyInvoices adding={adding} onAdding={onAdding} kinds={kinds} /> : seg === 'other' ? <AgencyDocsList kinds={kinds} /> : <AgencyAgreements adding={adding} onAdding={onAdding} kinds={kinds} />}
     </div>
   );
 }
 
 /** The agreements pipeline: a list or a board, for every client or for one. `adding` and `onAdding` hand the New agreement button to a header. */
-export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clientId?: string; adding?: boolean; onAdding?: (open: boolean) => void }) {
+export function AgencyAgreements({ clientId, adding: outside, onAdding, kinds }: { clientId?: string; adding?: boolean; onAdding?: (open: boolean) => void; /** The kind-of-paper switch, at the right of List and Board (Paperwork). */ kinds?: ReactNode }) {
   const qc = useQueryClient();
   const nav = useNavigate();
   const [view, setView] = useView('ag', 'board');
@@ -77,6 +84,8 @@ export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clie
   const [template, setTemplate] = useState<string>(`key:${CONTRACT_TEMPLATES[0]?.key ?? 'trial'}`);
   const [pickClient, setPickClient] = useState('');
   const [note, setNote] = useState('');
+  // A move to Void on the board asks first, with the agreement it is about.
+  const [voiding, setVoiding] = useState<ContractListItem | null>(null);
 
   const clientQ = clientId ? `&client=${clientId}` : '';
   const board = useAuthed(['agency', 'contracts', 'board', clientId ?? '', per], () => api.agencyContractBoard(`per=${per}${clientQ}`), view === 'board');
@@ -124,6 +133,10 @@ export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clie
     if (to === 'signed') return setNote('Only the client can sign, with the link you send.');
     if (from === 'void') return setNote('A voided agreement stays put. Restore it from its More menu, or make a copy.');
     if (!canMove(from, to)) return;
+    if (to === 'void') {
+      move.reset();
+      return setVoiding(item);
+    }
     move.mutate({ id: item.id, to });
   };
 
@@ -133,8 +146,11 @@ export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clie
 
   return (
     <section aria-labelledby="agreements-heading">
-      <div className="flex flex-wrap items-center justify-between gap-sm">
-        <ViewToggle view={view} onChange={setView} label="How to see agreements" />
+      <div className={`flex flex-wrap items-center justify-between gap-sm ${paperRow(kinds)}`}>
+        <div className={kinds ? 'basis-full @min-[34rem]:basis-auto' : ''}>
+          <ViewToggle view={view} onChange={setView} label="How to see agreements" className={kinds ? PAPER_FILL : undefined} />
+        </div>
+        {kinds}
         {!onAdding && edit && (
           <Button size="sm" plusToX onClick={() => setAdding(true)}>
             New agreement
@@ -170,7 +186,7 @@ export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clie
           )}
         </div>
       ) : (
-        <div className="mt-sm">
+        <div className="@container mt-sm">
           <select
             aria-label="Agreement status"
             value={status}
@@ -178,7 +194,7 @@ export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clie
               setStatus(e.target.value);
               pg.reset();
             }}
-            className={FILTER_SELECT}
+            className={`${FILTER_SELECT} w-full @min-[34rem]:w-auto`}
           >
             <option value="all">Status: All{list.data ? ` (${total})` : ''}</option>
             {CONTRACT_STATUSES.map((st) => (
@@ -296,6 +312,20 @@ export function AgencyAgreements({ clientId, adding: outside, onAdding }: { clie
           </Button>
         </div>
       </Sheet>
+      <ConfirmDelete
+        open={voiding !== null}
+        title="Void this agreement?"
+        body={`"${voiding?.title ?? ''}". Its link stops working for the client. You can restore it from its More menu.`}
+        pending={move.isPending}
+        failed={move.isError}
+        onYes={() => voiding && move.mutate({ id: voiding.id, to: 'void' }, { onSuccess: () => setVoiding(null) })}
+        onClose={() => {
+          setVoiding(null);
+          // The board put the card in Void while it asked; reading the columns again puts it back where it was.
+          void board.refetch();
+        }}
+        yes="Yes, void it"
+      />
     </section>
   );
 }
@@ -319,7 +349,8 @@ export function AgreementTemplates() {
   const templates: AgencyTemplate[] = (q.data?.templates ?? []).filter((t) => t.scope === 'own');
   const [editing, setEditing] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [armed, setArmed] = useState<string | null>(null);
+  // A template's remove asks first, with the template it is about.
+  const [dropping, setDropping] = useState<AgencyTemplate | null>(null);
   const done = () => qc.invalidateQueries({ queryKey: ['agency'] });
   const rename = useMutation({
     mutationFn: ({ id, to }: { id: string; to: string }) => api.agencyTemplateUpdate(id, { name: to }),
@@ -328,16 +359,13 @@ export function AgreementTemplates() {
       void done();
     },
   });
-  const remove = useMutation({ mutationFn: (id: string) => api.agencyTemplateRemove(id), onSuccess: () => void done() });
-  const armRemove = (id: string) => {
-    if (armed === id) {
-      setArmed(null);
-      remove.mutate(id);
-      return;
-    }
-    setArmed(id);
-    window.setTimeout(() => setArmed((a) => (a === id ? null : a)), 4000);
-  };
+  const remove = useMutation({
+    mutationFn: (id: string) => api.agencyTemplateRemove(id),
+    onSuccess: () => {
+      setDropping(null);
+      void done();
+    },
+  });
   return (
     <div>
       <p className="m-0 text-subhead text-ink-soft">Make one from any agreement: open it and tap "Save as template". It keeps the sections, not the names filled in.</p>
@@ -388,8 +416,16 @@ export function AgreementTemplates() {
                   >
                     Rename
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => armRemove(t.id)}>
-                    {armed === t.id ? 'Tap again to remove' : 'Remove'}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      remove.reset();
+                      setDropping(t);
+                    }}
+                    aria-label={`Remove template ${t.name}`}
+                  >
+                    Remove
                   </Button>
                 </span>
               </div>
@@ -397,6 +433,16 @@ export function AgreementTemplates() {
           </li>
         ))}
       </ul>
+      <ConfirmDelete
+        open={dropping !== null}
+        title="Remove this template?"
+        body={`"${dropping?.name ?? ''}". Agreements already made from it stay as they are. This cannot be undone.`}
+        pending={remove.isPending}
+        failed={remove.isError}
+        onYes={() => dropping && remove.mutate(dropping.id)}
+        onClose={() => setDropping(null)}
+        yes="Yes, remove it"
+      />
     </div>
   );
 }

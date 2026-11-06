@@ -9,6 +9,7 @@ import { FactTag } from '../components/FactTag';
 import { RowCard } from '../components/RowCard';
 import { Reveal } from '../components/fx/Reveal';
 import { Sheet } from '../components/Sheet';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 import { Toggle } from '../components/Toggle';
 import { api, errorText } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
@@ -175,7 +176,15 @@ function OrgCard({ org }: { org: Organization }) {
       members.refetch();
     },
   });
-  const remove = useMutation({ mutationFn: (userId: string) => api.removeOrgMember(org.id, userId), onSuccess: () => members.refetch() });
+  const remove = useMutation({
+    mutationFn: (userId: string) => api.removeOrgMember(org.id, userId),
+    onSuccess: () => {
+      setRemoving(null);
+      members.refetch();
+    },
+  });
+  // Removing a teammate asks first, with the person it is about.
+  const [removing, setRemoving] = useState<{ userId: string; name: string } | null>(null);
   const owner = org.myRole === 'owner';
   return (
     <div className="rounded-tile bg-card p-sm shadow-toy-soft">
@@ -204,7 +213,15 @@ function OrgCard({ org }: { org: Organization }) {
                   </span>
                 </span>
                 {owner && m.role !== 'owner' && (
-                  <Button variant="ghost" onClick={() => remove.mutate(m.userId)} disabled={remove.isPending}>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      remove.reset();
+                      setRemoving({ userId: m.userId, name: m.name });
+                    }}
+                    disabled={remove.isPending}
+                    aria-label={`Remove ${m.name}`}
+                  >
                     Remove
                   </Button>
                 )}
@@ -229,10 +246,20 @@ function OrgCard({ org }: { org: Organization }) {
             </form>
           )}
           <div className="mt-xs">
-            <ErrorLine e={add.error ?? remove.error} />
+            <ErrorLine e={add.error} />
           </div>
         </div>
       )}
+      <ConfirmDelete
+        open={removing !== null}
+        title="Remove this teammate?"
+        body={`${removing?.name ?? ''} leaves ${org.name} and loses access to its campaigns. You can add them again by email.`}
+        pending={remove.isPending}
+        failed={remove.isError}
+        onYes={() => removing && remove.mutate(removing.userId)}
+        onClose={() => setRemoving(null)}
+        yes="Yes, remove them"
+      />
     </div>
   );
 }
@@ -262,9 +289,10 @@ function NewOrgSheet({ open, onClose, onCreated }: { open: boolean; onClose: () 
         </label>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-subhead">What kind of team is it?</legend>
-          <div className="mt-xs flex flex-wrap gap-xs">
+          {/* Three short equal choices across the full width in equal parts (as PeriodFilter). */}
+          <div className="mt-xs grid grid-cols-3 gap-xs">
             {(['brand', 'agency', 'partner'] as const).map((t) => (
-              <button key={t} type="button" aria-pressed={type === t} onClick={() => setType(t)} className={`min-h-[44px] rounded-pill border-2 px-sm text-subhead font-medium ${type === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+              <button key={t} type="button" aria-pressed={type === t} onClick={() => setType(t)} className={`min-h-[44px] min-w-0 rounded-pill border-2 px-sm text-subhead font-medium ${type === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
                 {t}
               </button>
             ))}
@@ -396,6 +424,8 @@ export function Campaign() {
   const [isPublic, setIsPublic] = useState(false);
 
   const setStatus = useMutation({ mutationFn: (status: CampaignStatus) => api.updateCampaign(id, { status }), onSuccess: () => q.refetch() });
+  // Cancelling the campaign asks first; the other steps move in one tap.
+  const [cancelling, setCancelling] = useState(false);
   const publish = useMutation({ mutationFn: (on: boolean) => api.setCampaignPublic(id, on), onSuccess: (_r, on) => setIsPublic(on) });
   const answer = useMutation({ mutationFn: ({ aid, status }: { aid: string; status: 'accepted' | 'declined' | 'done' }) => api.answerAssignment(aid, status), onSuccess: () => q.refetch() });
 
@@ -501,7 +531,16 @@ export function Campaign() {
               {statusChoices
                 .filter((s) => s !== c.status)
                 .map((s) => (
-                  <Button key={s} variant={s === 'cancelled' ? 'ghost' : 'outline'} onClick={() => setStatus.mutate(s)} disabled={setStatus.isPending}>
+                  <Button
+                    key={s}
+                    variant={s === 'cancelled' ? 'ghost' : 'outline'}
+                    onClick={() => {
+                      if (s !== 'cancelled') return setStatus.mutate(s);
+                      setStatus.reset();
+                      setCancelling(true);
+                    }}
+                    disabled={setStatus.isPending}
+                  >
                     {CAMPAIGN_STATUS_META[s]}
                   </Button>
                 ))}
@@ -597,6 +636,17 @@ export function Campaign() {
         </ul>
       </section>
 
+      <ConfirmDelete
+        open={cancelling}
+        title="Cancel this campaign?"
+        body={`"${c.name}". The brand's team is told it is off.${who === 'staff' ? '' : ' Only the team can move it on again.'}`}
+        pending={setStatus.isPending}
+        failed={setStatus.isError}
+        onYes={() => setStatus.mutate('cancelled', { onSuccess: () => setCancelling(false) })}
+        onClose={() => setCancelling(false)}
+        yes="Yes, cancel it"
+        keep="Keep the campaign"
+      />
       <AddDeliverableSheet
         campaignId={id}
         open={addingDeliverable}

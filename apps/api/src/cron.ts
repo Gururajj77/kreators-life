@@ -89,6 +89,9 @@ export async function tidyOld(db: D1Database): Promise<void> {
     db.prepare('DELETE FROM channel_messages WHERE created_at < ?').bind(ago(RETENTION_DAYS.channelLines)),
     // A run's discussion is a channel for that run: its lines are kept as long as a channel's.
     db.prepare('DELETE FROM run_messages WHERE created_at < ?').bind(ago(RETENTION_DAYS.channelLines)),
+    // A cohort's discussion is kept as long as a channel's lines, a whole thread at a time once its newest line is that old, so a
+    // newer reply is never left without the post or the line it hangs from.
+    db.prepare('DELETE FROM cohort_talk WHERE thread_id IN (SELECT thread_id FROM cohort_talk GROUP BY thread_id HAVING MAX(created_at) < ?)').bind(ago(RETENTION_DAYS.channelLines)),
     db.prepare('DELETE FROM agency_password_requests WHERE closed_at IS NOT NULL AND closed_at < ?').bind(ago(RETENTION_DAYS.passwordRequests)),
     db.prepare('DELETE FROM data_requests WHERE requested_at < ?').bind(ago(RETENTION_DAYS.requests)),
     db.prepare("DELETE FROM copyright_notices WHERE status != 'new' AND COALESCE(resolved_at, created_at) < ?").bind(ago(RETENTION_DAYS.notices)),

@@ -375,9 +375,9 @@ function FeaturedCard({ card, onOpen }: { card: MarketCard; onOpen: (id: string)
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, children, className = '' }: { label: string; children: ReactNode; className?: string }) {
   return (
-    <label className="block">
+    <label className={`block ${className}`}>
       <span className="block text-subhead font-semibold">{label}</span>
       {children}
     </label>
@@ -572,7 +572,8 @@ function ItemSheet({ open, onClose, onSaved }: { open: boolean; onClose: () => v
           <Field label="Points of at least">
             <input type="number" min={0} value={minPoints} onChange={(e) => setMinPoints(e.target.value)} className={FIELD} />
           </Field>
-          <Field label="Holds the badge">
+          {/* The third field takes the whole second row, so the row is filled (the form rules, 2026-11-06). */}
+          <Field label="Holds the badge" className="col-span-2">
             <select value={badge} onChange={(e) => setBadge(e.target.value)} className={FIELD}>
               <option value="">Any badge or none</option>
               {PUBLIC_BADGES.map((b) => (

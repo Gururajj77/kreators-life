@@ -123,11 +123,100 @@ export interface Program {
   priceCents: number;
   currency: string;
   deliveryMode: 'online' | 'in_person' | 'hybrid';
+  /** True exactly when `visibility` is public; kept for the older readers (Explore, the books, discount codes). */
   published: boolean;
+  /** Draft, private (invite only), public or archived (migration 0086). */
+  visibility: ProgramVisibility;
   outcomes: string;
   prerequisites: string;
   createdAt: string;
   cohorts: Cohort[];
+  /** The viewer may change its state, invite people and, once archived, delete it: its creator or an admin. */
+  canManage?: boolean;
+  /** The viewer may add lessons, assignments and cohorts: whoever runs it, an admin, or the team on a public program. */
+  canEdit?: boolean;
+  /** The viewer may move it in School's order (Show first, Move up, Move down): an admin (migration 0095). */
+  canOrder?: boolean;
+  /** For an admin: it is first, or last, of its state in the view they asked for, so Show first and Move up, or Move down, are off. */
+  orderFirst?: boolean;
+  orderLast?: boolean;
+  /** The viewer made it. */
+  mine?: boolean;
+  /** Who made it, for an admin looking at every program. */
+  createdByName?: string | null;
+}
+
+// A program's state (the founder, 2026-11-06). Draft: only its creator, the managers of its cohorts and admins see it. Private: invite
+// only, hidden from every list, search and Explore; the people invited can see it and enrol. Public: listed for everyone. Archived: hidden
+// from everyone but its creator, managers and admins, takes no new enrolments, keeps what enrolled people already have, and is the only
+// state a program can be deleted from for good. Admins see and change every program in every state.
+export const PROGRAM_VISIBILITIES = ['draft', 'private', 'public', 'archived'] as const;
+export type ProgramVisibility = (typeof PROGRAM_VISIBILITIES)[number];
+export const PROGRAM_VISIBILITY_META: Record<ProgramVisibility, { name: string; line: string; tone: TagTone }> = {
+  draft: { name: 'Draft', line: 'Only the people who run it and admins can see it.', tone: 'neutral' },
+  private: { name: 'Private', line: 'Only the people you invite can see it and enrol.', tone: 'deep' },
+  public: { name: 'Public', line: 'Listed on School and Explore for everyone.', tone: 'good' },
+  archived: { name: 'Archived', line: 'Hidden, and no one new can enrol. People already in keep it.', tone: 'warn' },
+};
+export const isProgramVisibility = (v: unknown): v is ProgramVisibility => typeof v === 'string' && (PROGRAM_VISIBILITIES as readonly string[]).includes(v);
+/**
+ * The Admin guide (scripts/admin-guide, migration 0088): a private School program for the team. It opens at /admin/guide for an admin
+ * account, outside School's switch, and the module gate lets an admin reach its one cohort even when School is off for them.
+ */
+export const ADMIN_GUIDE_PROGRAM = 'prog-admin-guide';
+export const ADMIN_GUIDE_COHORT = 'coh-admin-guide';
+/** Up to this many people can be invited to one private program. */
+export const MAX_PROGRAM_INVITES = 500;
+/**
+ * Onboarding into kreators.app (scripts/onboarding-guide, migration 0096): a public, free School program for everyone, first in School's
+ * order (`sort_position` 0, migration 0095), with one cohort open all year.
+ */
+export const ONBOARDING_PROGRAM = 'prog-onboarding';
+export const ONBOARDING_COHORT = 'coh-onboarding';
+/** A lesson's title and its words (the small markdown, no links), the same lengths on add and on edit. */
+export const LESSON_TITLE_MAX = 140;
+export const LESSON_BODY_MAX = 20000;
+/** Lesson words carry no links (the School markdown draws none): a markdown link or a web address is refused. Null when fine. */
+export function lessonBodyProblem(body: string): string | null {
+  if (body.length > LESSON_BODY_MAX) return 'Keep a lesson under 20,000 characters.';
+  if (/\]\(|https?:\/\//i.test(body)) return 'Lessons carry no links. Put a link in the lesson’s resource instead.';
+  return null;
+}
+/**
+ * A cohort that runs for ten years or more (the Admin guide's and Onboarding's, open until 2099) is always open, so School says that
+ * instead of "1 Jan to 31 Dec".
+ */
+export function cohortAlwaysOpen(startAt: string, endAt: string): boolean {
+  const start = Date.parse(startAt);
+  const end = Date.parse(endAt);
+  return Number.isFinite(start) && Number.isFinite(end) && end - start >= 10 * 365 * 86_400_000;
+}
+
+/** Who is looking at a program. `runs`: its creator or the manager of one of its cohorts. */
+export interface ProgramViewer {
+  admin: boolean;
+  runs: boolean;
+  invited: boolean;
+}
+
+/** The one rule for who sees a program: admins and the people who run it always, everyone when public, the invited when private. */
+export function programVisibleTo(visibility: ProgramVisibility, who: ProgramViewer): boolean {
+  if (who.admin || who.runs) return true;
+  if (visibility === 'public') return true;
+  if (visibility === 'private') return who.invited;
+  return false;
+}
+
+/** Enrolling needs a program the person can see that is not archived. */
+export function programTakesEnrolment(visibility: ProgramVisibility, who: ProgramViewer): boolean {
+  return visibility !== 'archived' && programVisibleTo(visibility, who);
+}
+
+export interface ProgramInvite {
+  userId: string;
+  name: string;
+  handle: string;
+  invitedAt: string;
 }
 
 export interface Cohort {

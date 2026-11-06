@@ -24,6 +24,7 @@ import { api } from '../lib/api';
 import { prettyDate, todayLocal } from '../lib/date';
 import { useAuthed } from '../lib/queries';
 import { Button } from './Button';
+import { ConfirmDelete } from './ConfirmDelete';
 import { Inert } from './Inert';
 import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
@@ -124,6 +125,7 @@ function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | 
   const remove = useMutation({
     mutationFn: () => api.agencyItemRemove(item!.id),
     onSuccess: () => {
+      setConfirm(false);
       invalidate();
       onClose();
     },
@@ -212,28 +214,36 @@ function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | 
         )}
         {edit && (
         <div className="mt-md flex flex-wrap items-center gap-xs">
-          <Button type="submit" disabled={save.isPending || !title.trim() || !client || badFee}>
+          <Button type="submit" className="flex-1" disabled={save.isPending || !title.trim() || !client || badFee}>
             {save.isPending ? 'Saving' : item ? 'Save changes' : 'Add it'}
           </Button>
-          {item && !member &&
-            (confirm ? (
-              <>
-                <Button variant="outline" onClick={() => remove.mutate()} disabled={remove.isPending}>
-                  Yes, remove it
-                </Button>
-                <Button variant="ghost" onClick={() => setConfirm(false)}>
-                  Keep it
-                </Button>
-                <p className="m-0 basis-full text-subhead text-ink-soft">{COPY.removeAsk}</p>
-              </>
-            ) : (
-              <Button variant="outline" onClick={() => setConfirm(true)}>
-                Remove
-              </Button>
-            ))}
+          {item && !member && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                remove.reset();
+                setConfirm(true);
+              }}
+              disabled={remove.isPending}
+            >
+              Remove
+            </Button>
+          )}
         </div>
         )}
       </form>
+      {item && !member && (
+        <ConfirmDelete
+          open={confirm}
+          title="Remove this deliverable?"
+          body={COPY.removeAsk}
+          pending={remove.isPending}
+          failed={remove.isError}
+          onYes={() => remove.mutate()}
+          onClose={() => setConfirm(false)}
+          yes="Yes, remove it"
+        />
+      )}
 
       {item && !member && <Army item={item} link={link} onDone={invalidate} />}
       {item && <Changes item={item} onDone={invalidate} edit={edit} />}
@@ -366,7 +376,15 @@ function Thread({ itemId, onDone }: { itemId: string; onDone: () => void }) {
       refresh();
     },
   });
-  const del = useMutation({ mutationFn: (id: string) => api.agencyNoteRemove(id), onSuccess: refresh });
+  // Removing a note asks first, with the note it is about.
+  const [asking, setAsking] = useState<AgencyNote | null>(null);
+  const del = useMutation({
+    mutationFn: (id: string) => api.agencyNoteRemove(id),
+    onSuccess: () => {
+      setAsking(null);
+      refresh();
+    },
+  });
   const notes = q.data?.notes ?? [];
   return (
     <section className="mt-md" aria-labelledby={`thread-${itemId}`}>
@@ -383,7 +401,14 @@ function Thread({ itemId, onDone }: { itemId: string; onDone: () => void }) {
               {n.author === 'me' && <span className="text-caption text-ink-soft">{n.shared ? 'Shared with the client' : 'Private'}</span>}
               <span className="text-caption text-ink-mute">{prettyDate(n.createdAt.slice(0, 10))}</span>
               {(member ? n.author === 'team' && n.mine && can('pipeline', 'edit') : n.author === 'me' || n.author === 'team') && (
-                <button type="button" onClick={() => del.mutate(n.id)} className="ml-auto min-h-[44px] px-xs text-caption text-ink-soft underline-offset-4 hover:text-ink hover:underline">
+                <button
+                  type="button"
+                  onClick={() => {
+                    del.reset();
+                    setAsking(n);
+                  }}
+                  aria-haspopup="dialog"
+                  className="ml-auto min-h-[44px] px-xs text-caption text-ink-soft underline-offset-4 hover:text-ink hover:underline">
                   Remove
                 </button>
               )}
@@ -395,6 +420,16 @@ function Thread({ itemId, onDone }: { itemId: string; onDone: () => void }) {
         ))}
         {notes.length === 0 && !q.isPending && <li className="text-subhead text-ink-mute">No notes yet.</li>}
       </ul>
+      <ConfirmDelete
+        open={asking !== null}
+        title="Remove this note?"
+        body={asking?.shared ? 'The note goes from this deliverable and from the client’s link. This cannot be undone.' : 'The note goes from this deliverable. This cannot be undone.'}
+        pending={del.isPending}
+        failed={del.isError}
+        onYes={() => asking && del.mutate(asking.id)}
+        onClose={() => setAsking(null)}
+        yes="Yes, remove it"
+      />
       {(!member || can('pipeline', 'edit')) && (
       <form
         className="mt-xs"
@@ -416,7 +451,7 @@ function Thread({ itemId, onDone }: { itemId: string; onDone: () => void }) {
           </p>
         )}
         <div className="mt-xs">
-          <Button type="submit" size="sm" disabled={add.isPending || !text.trim()}>
+          <Button type="submit" size="sm" full disabled={add.isPending || !text.trim()}>
             Add the note
           </Button>
         </div>
@@ -479,7 +514,7 @@ function TimeLog({ item, onDone }: { item: AgencyDeliverable; onDone: () => void
           </p>
         )}
         <div className="mt-xs">
-          <Button type="submit" size="sm" disabled={log.isPending || minutes < 1 || minutes > AGENCY_MAX_MINUTES}>
+          <Button type="submit" size="sm" full disabled={log.isPending || minutes < 1 || minutes > AGENCY_MAX_MINUTES}>
             Log the time
           </Button>
         </div>

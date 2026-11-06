@@ -7,13 +7,14 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 import { BackLink } from '../components/PageHeader';
 import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Section, SeeAll } from '../components/Section';
 import { Sheet } from '../components/Sheet';
 import { Toggle } from '../components/Toggle';
-import { ChannelsPanel } from '../components/Channels';
+import { ChannelsPanel, NewChannelButton } from '../components/Channels';
 import { Pager, usePage } from '../components/Pager';
 import { api } from '../lib/api';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
@@ -48,6 +49,9 @@ export function Bond() {
   const refresh = useRefreshAll();
   const [asking, setAsking] = useState<Person | null>(null);
   const [blocking, setBlocking] = useState<Person | null>(null);
+  // A friend to remove or a sent request to cancel, and a block to lift: each asks first in a sheet.
+  const [dropping, setDropping] = useState<{ userId: string; name: string; sent: boolean } | null>(null);
+  const [unblocking, setUnblocking] = useState<Person | null>(null);
   const optIn = useMutation({
     mutationFn: (on: boolean) => api.updateMe({ openToIntros: on }),
     onSuccess: () => {
@@ -73,8 +77,8 @@ export function Bond() {
     },
   });
   const blocked = useAuthed(['bond-blocks', blPage.query], () => api.blocks(blPage.query));
-  const unblock = useMutation({ mutationFn: (id: string) => api.unblock(id), onSuccess: () => { void blocked.refetch(); fr.refetch(); } });
-  const unfriend = useMutation({ mutationFn: (userId: string) => api.unfriend(userId), onSuccess: () => fr.refetch() });
+  const unblock = useMutation({ mutationFn: (id: string) => api.unblock(id), onSuccess: () => { setUnblocking(null); void blocked.refetch(); fr.refetch(); } });
+  const unfriend = useMutation({ mutationFn: (userId: string) => api.unfriend(userId), onSuccess: () => { setDropping(null); fr.refetch(); } });
   const openChat = useMutation({ mutationFn: (userId: string) => api.openChat({ userId }), onSuccess: (r) => nav(`/bond/chats/${r.chat.id}`) });
   const d = q.data;
   const myId = me.data?.user.id ?? '';
@@ -110,17 +114,24 @@ export function Bond() {
         <ErrorLine e={openChat.isError ? openChat.error : null} />
       </Section>
 
-      <Section id="bond-channels" title="Channels" lede="Private rooms for you and friends you ask in. Unlike chats, names show here.">
-        <ChannelsPanel scope="bond" />
+      <Section
+        id="bond-channels"
+        title="Channels"
+        lede="Private rooms for you and friends you ask in. Unlike chats, names show here."
+        action={<NewChannelButton scope="bond" className="hidden md:block" />}
+      >
+        {/* On a phone the button sits under the heading at the right, so the title and its line keep their width. */}
+        <NewChannelButton scope="bond" className="mb-sm flex justify-end md:hidden" />
+        <ChannelsPanel scope="bond" create={false} />
       </Section>
 
       {(blocked.data?.blocked.length ?? 0) > 0 && (
         <Section id="bond-blocked" title="People you blocked" lede="Neither of you sees the other’s posts or friend asks. Lift a block any time.">
           <ul className="flex list-none flex-col gap-xs p-0 m-0">
             {blocked.data?.blocked.map((b) => (
-              <li key={b.userId} className="flex items-center justify-between gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-                <span className="min-w-0 text-balance text-headline [overflow-wrap:anywhere]">{b.name}{b.handle ? ` (@${b.handle})` : ''}</span>
-                <Button variant="outline" size="sm" onClick={() => unblock.mutate(b.userId)} disabled={unblock.isPending}>
+              <li key={b.key} className="flex items-center justify-between gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+                <span className="min-w-0 text-balance text-headline [overflow-wrap:anywhere]">{b.name}{b.handle ? ` (@${b.handle})` : b.anonymous ? ' (anonymous)' : ''}</span>
+                <Button variant="outline" size="sm" onClick={() => { unblock.reset(); setUnblocking({ userId: b.key, name: b.name }); }} disabled={unblock.isPending}>
                   Unblock
                 </Button>
               </li>
@@ -205,7 +216,7 @@ export function Bond() {
                     Chat
                   </Button>
                 )}
-                <Button variant="ghost" className="shrink-0" onClick={() => unfriend.mutate(f.userId)} disabled={unfriend.isPending}>
+                <Button variant="ghost" className="shrink-0" onClick={() => { unfriend.reset(); setDropping({ userId: f.userId, name: f.name, sent: f.status === 'sent' }); }} disabled={unfriend.isPending}>
                   {f.status === 'sent' ? 'Cancel' : 'Remove'}
                 </Button>
               </li>
@@ -305,6 +316,28 @@ export function Bond() {
 
       <AskSheet person={asking} onClose={() => setAsking(null)} onDone={() => q.refetch()} />
       <BlockSheet person={blocking} onClose={() => setBlocking(null)} onDone={() => q.refetch()} />
+      <ConfirmDelete
+        open={dropping !== null}
+        title={dropping?.sent ? `Cancel your request to ${dropping.name}?` : `Remove ${dropping?.name ?? 'this friend'} as a friend?`}
+        body={dropping?.sent ? 'They no longer see it. You can send another one later.' : 'You stop being friends. You can send a new request later.'}
+        pending={unfriend.isPending}
+        failed={unfriend.isError}
+        onYes={() => dropping && unfriend.mutate(dropping.userId)}
+        onClose={() => setDropping(null)}
+        yes={dropping?.sent ? 'Yes, cancel it' : 'Yes, remove them'}
+        keep={dropping?.sent ? 'Keep the request' : 'Keep them'}
+      />
+      <ConfirmDelete
+        open={unblocking !== null}
+        title={`Unblock ${unblocking?.name ?? 'them'}?`}
+        body="You can see each other's posts and friend asks again. You can block them again any time."
+        pending={unblock.isPending}
+        failed={unblock.isError}
+        onYes={() => unblocking && unblock.mutate(unblocking.userId)}
+        onClose={() => setUnblocking(null)}
+        yes="Yes, unblock"
+        keep="Keep the block"
+      />
     </Screen>
   );
 }

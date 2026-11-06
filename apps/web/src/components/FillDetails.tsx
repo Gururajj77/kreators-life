@@ -417,7 +417,7 @@ export function FillDetailsSheet({ open, onClose, doc, noun = 'agreement', clien
           <ErrorLine e={err} />
           <div className="flex flex-wrap gap-xs">
             {!locked && rows.some((r) => !r.readOnly) && (
-              <Button type="submit" disabled={busy || blocked}>
+              <Button type="submit" className="flex-1" disabled={busy || blocked}>
                 {busy ? 'Saving' : 'Save details'}
               </Button>
             )}

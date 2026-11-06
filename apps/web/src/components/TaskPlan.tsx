@@ -1,60 +1,102 @@
-import { PRIORITIES, RELATIONSHIPS, addDays, priorityTag, repeatLabel, openDay, taskIsHabit, type MonthProject, type Node, type Priority, type Repeat } from '@kreators/shared';
+import { LIFE_AREA_ORDER, LIFE_AREAS, PRIORITIES, RELATIONSHIPS, addDays, blockOfTask, blocksInDay, mondayOf, templateForDate, timeLabel, type LifeAreaKey, type MonthProject, type Node, type Priority, type Repeat, type TemplateSlot, type TimeBlock, type TimeBlocksResponse } from '@kreators/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { Bell, ClipboardCheck, Landmark, Repeat as RepeatIcon, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { api, type TaskPlanBody } from '../lib/api';
 import { Icon } from './Icon';
 import { useAuthed, useRefreshAll } from '../lib/queries';
 import { RepeatPicker } from './RepeatPicker';
 import { RulerPicker } from './RulerPicker';
 import { Toggle } from './Toggle';
-import { FIELD } from '../lib/ui';
-import { StatusTag } from './StatusTag';
+import { FIELD, FIELD_LINE } from '../lib/ui';
+import { useTimeBlocks } from '../lib/useTimeBlocks';
+import { ConfirmDelete } from './ConfirmDelete';
 
-const CHIP = 'inline-flex shrink-0 items-center rounded-pill px-sm text-caption font-medium leading-[24px]';
+// The row's marks live in TaskMarks.tsx (in the first download); this file is the plan form, loaded when a plan opens.
+export { AreaTag, BlockMark, PriorityChip, TaskTags } from './TaskMarks';
+
 const ESTIMATES = [15, 25, 45, 60, 90];
 
-/** A priority tag in its colour: P0 red, P1 orange, P2 purple, P3 grey. */
-export function PriorityChip({ priority }: { priority: Priority | null }) {
-  if (priority === null) return null;
-  return (
-    <span className={`pri-${priority} pri-chip ${CHIP}`} title={PRIORITIES[priority]!.name}>
-      {priorityTag(priority)}
-    </span>
-  );
+/** A day's slots and blocks from the week's answer: the blocks with a slot that day in clock order, then the person's other blocks. */
+export function blocksForDay(data: TimeBlocksResponse | undefined, date: string): { slots: TemplateSlot[]; inDay: TimeBlock[]; other: TimeBlock[] } {
+  if (!data) return { slots: [], inDay: [], other: [] };
+  const overrides: Record<string, string> = Object.create(null);
+  for (const o of data.overrides) overrides[o.date] = o.templateId;
+  const ids = new Set(data.templates.map((t) => t.id));
+  const { templateId } = templateForDate(date, { overrides, pattern: data.pattern, defaultId: data.defaultTemplateId, exists: (id) => ids.has(id) });
+  const slots = data.templates.find((t) => t.id === templateId)?.slots ?? [];
+  const inDay = blocksInDay(slots, data.blocks);
+  return { slots, inDay, other: data.blocks.filter((b) => !inDay.includes(b)) };
 }
 
 /**
- * The marks on a task, so a person can tell kinds of task apart at a glance: its priority, Remember (it will remind them on the day),
- * Habit (it comes back on its own), From pillar (the strategy session or the vibe check made it) and From your coach.
+ * "Time block": By its time first (no block picked: the block its time falls in holds it on Daily), then the blocks of the task's day
+ * in clock order, then the person's other blocks. The blocks come from that day's template, so a Deep work day lists Deep work first.
  */
-export function TaskTags({ task, priority = true }: { task: Node; /** False where the row shows the priority in its own corner. */ priority?: boolean }) {
+export function TimeBlockSelect({ value, onChange, day, time }: { value: string | null; onChange: (id: string | null) => void; /** The day it is planned for. */ day: string; /** Its time, "HH:MM" or empty. */ time: string }) {
+  const q = useTimeBlocks(mondayOf(day));
+  const { slots, inDay, other } = blocksForDay(q.data, day);
+  const all = [...inDay, ...other];
+  const picked = value ? all.find((b) => b.id === value) : undefined;
+  const byTime = value ? null : blockOfTask({ timeBlockId: null, dueTime: time || null }, slots);
+  const timeBlock = byTime ? all.find((b) => b.id === byTime.blockId) : undefined;
+  // Nobody's blocks yet and nothing picked: there is nothing to choose from, so the field stays away.
+  if (q.data && all.length === 0 && !value) return null;
+  const hint = picked
+    ? inDay.includes(picked)
+      ? `It sits in ${picked.name} on Daily, whatever its time.`
+      : `It sits in ${picked.name}, which is not in this day's plan.`
+    : timeBlock
+      ? `By its time it falls in ${timeBlock.name}.`
+      : time
+        ? `At ${timeLabel(time)} it falls between this day's blocks, so it sits outside them. Pick one to place it.`
+        : 'With no time, Plan my week suggests a block. Pick one to place it now.';
   return (
-    <>
-      {priority && <PriorityChip priority={task.priority} />}
-      {task.remind && (
-        <StatusTag tone="warn" mark={<Icon icon={Bell} size={12} />}>
-          Remember
-        </StatusTag>
-      )}
-      {task.forReview && (
-        <StatusTag tone="info" mark={<Icon icon={ClipboardCheck} size={12} />}>
-          For review
-        </StatusTag>
-      )}
-      {task.repeat && taskIsHabit(task) && (
-        <StatusTag tone="good" mark={<Icon icon={RepeatIcon} size={12} />} title={repeatLabel(task.repeat, openDay(task))}>
-          Habit
-        </StatusTag>
-      )}
-      {task.fromPillar && (
-        <StatusTag tone="calm" mark={<Icon icon={Landmark} size={12} />}>
-          From pillar
-        </StatusTag>
-      )}
-      {task.fromCoach && <StatusTag tone="deep">From your coach</StatusTag>}
-    </>
+    <label className="block">
+      <span className="block text-subhead font-semibold">Time block</span>
+      <select value={value ?? ''} onChange={(e) => onChange(e.target.value || null)} className={FIELD}>
+        <option value="">By its time</option>
+        {value && !picked && <option value={value}>Where it is now</option>}
+        {inDay.length > 0 && (
+          <optgroup label="In the day">
+            {inDay.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </optgroup>
+        )}
+        {other.length > 0 && (
+          <optgroup label="Other blocks">
+            {other.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </optgroup>
+        )}
+      </select>
+      <span className="mt-xs block text-caption text-ink-soft">{hint}</span>
+    </label>
+  );
+}
+
+/** "Area of life": No area, then the five in their one order. Optional; it never changes what a tick pays. */
+export function AreaSelect({ value, onChange }: { value: LifeAreaKey | null; onChange: (a: LifeAreaKey | null) => void }) {
+  return (
+    <label className="block">
+      <span className="block text-subhead font-semibold">Area of life</span>
+      <select value={value ?? ''} onChange={(e) => onChange((e.target.value || null) as LifeAreaKey | null)} className={FIELD}>
+        <option value="">No area</option>
+        {LIFE_AREA_ORDER.map((k) => (
+          <option key={k} value={k}>
+            {LIFE_AREAS[k].name}
+          </option>
+        ))}
+      </select>
+      <span className="mt-xs block text-caption text-ink-soft">{value ? `It wears the ${LIFE_AREAS[value].name} tag, and a tick counts toward that area in Life.` : 'Optional. Pick one to tag it and count it in Life. It never changes what a tick pays.'}</span>
+    </label>
   );
 }
 
@@ -88,6 +130,10 @@ export interface Plan {
   habit: boolean;
   time: string;
   minutes: string;
+  /** The area of life it is for, or null for none. */
+  lifeArea: LifeAreaKey | null;
+  /** The time block it was put in, or null: by its time. */
+  timeBlockId: string | null;
 }
 export const planOf = (n?: Node | null, doDate = ''): Plan => ({
   doDate: n?.doDate ?? doDate,
@@ -99,6 +145,8 @@ export const planOf = (n?: Node | null, doDate = ''): Plan => ({
   habit: n?.habit ?? true,
   time: n?.dueTime ?? '',
   minutes: n?.estimateMin ? String(n.estimateMin) : '',
+  lifeArea: n?.lifeArea ?? null,
+  timeBlockId: n?.timeBlockId ?? null,
 });
 export const planBody = (p: Plan): TaskPlanBody => {
   const dated = Boolean(p.doDate || p.dueDate);
@@ -112,13 +160,15 @@ export const planBody = (p: Plan): TaskPlanBody => {
     habit: dated && p.repeat ? p.habit : null,
     dueTime: p.time || null,
     estimateMin: Number(p.minutes) > 0 ? Number(p.minutes) : null,
+    lifeArea: p.lifeArea,
+    timeBlockId: p.timeBlockId,
   };
 };
 /** The same check the server makes, so the person hears it before they save. */
 export const planProblem = (p: Plan): string | null =>
   p.doDate && p.dueDate && p.doDate > p.dueDate ? 'Do it on or before the day it is due.' : p.repeat && !p.doDate && !p.dueDate ? 'Pick a do date or a due date for it to repeat from.' : null;
 
-/** The fields of a task's plan: when to do it, when it is due, how it repeats, its priority, a reminder, a time and a length. */
+/** The fields of a task's plan: when to do it, when it is due, how it repeats, its priority, its area of life and time block, a reminder, a time and a length. */
 export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange: (p: Plan) => void; today: string }) {
   const set = (patch: Partial<Plan>) => onChange({ ...plan, ...patch });
   const dated = Boolean(plan.doDate || plan.dueDate);
@@ -156,6 +206,11 @@ export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange
       )}
 
       <PriorityPicker value={plan.priority} onChange={(priority) => set({ priority })} />
+      {/* The area and the block side by side from the tablet width; each its own line on a phone. */}
+      <div className="grid gap-md sm:grid-cols-2">
+        <AreaSelect value={plan.lifeArea} onChange={(lifeArea) => set({ lifeArea })} />
+        <TimeBlockSelect value={plan.timeBlockId} onChange={(timeBlockId) => set({ timeBlockId })} day={plan.doDate || plan.dueDate || today} time={plan.time} />
+      </div>
 
       <RepeatPicker
         value={plan.repeat}
@@ -198,6 +253,7 @@ export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange
       </div>
       </div>
       {/* The quick picks stay; the ruler is for anything between (5 to 240 minutes). A longer time can still be typed above. */}
+      <div>
       <RulerPicker
         label="Minutes it should take"
         tone="paper"
@@ -213,6 +269,9 @@ export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange
         format={(v) => (v % 60 === 0 ? `${v / 60}h` : String(v))}
         valueText={(v) => `${v} minutes`}
       />
+      {/* The helper line for the time and the minutes (with their quick picks and the ruler), so every field here has one (2026-11-06). */}
+      <p className="mt-xs m-0 text-caption text-ink-soft">The time puts it in its block on Daily and times its note. The minutes set how long Start focus runs.</p>
+      </div>
     </div>
   );
 }
@@ -227,7 +286,7 @@ export function StartFocus({ task, className = '' }: { task: Node; className?: s
   );
 }
 
-/** A task's checklist: add a line, tick it, remove it. Pays nothing and never stops the task being ticked. */
+/** A task's checklist: add a line, tick it, remove it (asked first in a sheet). Pays nothing and never stops the task being ticked. */
 export function Subtasks({ task }: { task: Node }) {
   const refresh = useRefreshAll();
   const [title, setTitle] = useState('');
@@ -240,7 +299,14 @@ export function Subtasks({ task }: { task: Node }) {
   };
   const add = useMutation({ mutationFn: () => api.addSubtask(task.id, title.trim()), onSuccess: () => { setTitle(''); after(); } });
   const tick = useMutation({ mutationFn: (v: { id: string; done: boolean }) => api.editSubtask(v.id, { done: v.done }), onSuccess: after });
-  const remove = useMutation({ mutationFn: (id: string) => api.deleteSubtask(id), onSuccess: after });
+  const [asking, setAsking] = useState<{ id: string; title: string } | null>(null);
+  const remove = useMutation({
+    mutationFn: (id: string) => api.deleteSubtask(id),
+    onSuccess: () => {
+      setAsking(null);
+      after();
+    },
+  });
   return (
     <div>
       <div className="flex items-baseline justify-between gap-sm">
@@ -254,12 +320,29 @@ export function Subtasks({ task }: { task: Node }) {
               <input type="checkbox" checked={s.done} onChange={(e) => tick.mutate({ id: s.id, done: e.target.checked })} className="size-[20px] shrink-0" />
               <span className={`min-w-0 break-words text-callout ${s.done ? 'text-ink-soft line-through' : ''}`}>{s.title}</span>
             </label>
-            <button type="button" onClick={() => remove.mutate(s.id)} aria-label={`Remove "${s.title}"`} className="flex min-h-[44px] min-w-[44px] items-center justify-center text-ink-soft hover:text-ink">
+            <button
+              type="button"
+              onClick={() => {
+                remove.reset();
+                setAsking({ id: s.id, title: s.title });
+              }}
+              aria-haspopup="dialog"
+              aria-label={`Remove "${s.title}"`} className="flex min-h-[44px] min-w-[44px] items-center justify-center text-ink-soft hover:text-ink">
               <Icon icon={X} size={18} />
             </button>
           </li>
         ))}
       </ul>
+      <ConfirmDelete
+        open={asking !== null}
+        title="Remove this subtask?"
+        body={asking ? `“${asking.title}” goes from this task's checklist. The task itself stays.` : ''}
+        pending={remove.isPending}
+        failed={remove.isError}
+        onYes={() => asking && remove.mutate(asking.id)}
+        onClose={() => setAsking(null)}
+        yes="Yes, remove it"
+      />
       <form
         className="mt-xs flex gap-xs"
         onSubmit={(e) => {
@@ -267,11 +350,13 @@ export function Subtasks({ task }: { task: Node }) {
           if (title.trim()) add.mutate();
         }}
       >
-        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} placeholder="Add a small step" aria-label="New subtask" className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} placeholder="Add a small step" aria-label="New subtask" className={`${FIELD_LINE} min-w-0 flex-1`} />
         <button type="submit" disabled={add.isPending || !title.trim()} className="toy min-h-[48px] rounded-pill bg-ink px-md text-subhead font-medium text-on-ink disabled:opacity-60">
           Add
         </button>
       </form>
+      {/* A helper line under this field too, as under every field of the plan above (2026-11-06). */}
+      <p className="mt-xs m-0 text-caption text-ink-soft">A checklist for this task. It pays nothing and never stops the tick.</p>
       {add.isError && (
         <p role="alert" className="mt-xs m-0 text-subhead">
           {add.error instanceof Error ? add.error.message : 'Could not add it.'}

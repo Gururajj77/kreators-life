@@ -1,4 +1,4 @@
-import { DEFAULT_PAGE_SIZE, DEFAULT_ZONE, DISCOUNT_AREAS, DISCOUNT_AREA_META, DISCOUNT_CODE_MAX, discountLabel, money, pageQuery, zonedToUtc, type AdminDiscountCode, type DiscountArea, type Page, type PageSize } from '@kreators/shared';
+import { DEFAULT_PAGE_SIZE, DEFAULT_ZONE, DISCOUNT_AREAS, DISCOUNT_AREA_META, DISCOUNT_CODE_MAX, DISCOUNT_PER_PERSON_MAX, discountLabel, money, pageQuery, zonedToUtc, type AdminDiscountCode, type DiscountArea, type Page, type PageSize } from '@kreators/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { adminApi, type DiscountInput, type DiscountList } from '../lib/api';
 import { Button } from './Button';
@@ -258,9 +258,10 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
 
           <fieldset className="m-0 border-0 p-0">
             <legend className="text-subhead font-semibold">What it takes off</legend>
-            <div className="mt-xs flex gap-xs">
+            {/* Two equal choices across the full width in equal parts (as PeriodFilter), each 44px tall. */}
+            <div className="mt-xs grid grid-cols-2 gap-xs">
               {(['percent', 'fixed'] as const).map((k) => (
-                <button key={k} type="button" aria-pressed={form.kind === k} onClick={() => set('kind', k)} className={`toy rounded-pill border-2 px-md py-xs text-subhead font-medium ${form.kind === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                <button key={k} type="button" aria-pressed={form.kind === k} onClick={() => set('kind', k)} className={`toy min-h-[44px] min-w-0 rounded-pill border-2 px-md py-xs text-subhead font-medium ${form.kind === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                   {k === 'percent' ? 'A percent' : 'A fixed amount'}
                 </button>
               ))}
@@ -308,6 +309,7 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
               <label className="mt-sm block">
                 <span className="block text-subhead font-semibold">Only one item (optional)</span>
                 <input value={form.itemId} onChange={(e) => set('itemId', e.target.value)} placeholder="An id, or pro, pro_max, ultra, small, medium, large" className={FIELD_44} />
+                <span className="mt-xs block text-caption text-ink-soft">Empty works on every item in that place.</span>
               </label>
             )}
           </fieldset>
@@ -316,27 +318,33 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
             <label className="block">
               <span className="block text-subhead font-semibold">Times it can be used</span>
               <input inputMode="numeric" value={form.maxUses} onChange={(e) => set('maxUses', e.target.value)} placeholder="No limit" className={FIELD_44} />
+              <span className="mt-xs block text-caption text-ink-soft">By everyone together. Empty means no limit.</span>
             </label>
             <label className="block">
               <span className="block text-subhead font-semibold">Times per person</span>
               <input inputMode="numeric" value={form.perPersonLimit} onChange={(e) => set('perPersonLimit', e.target.value)} className={FIELD_44} />
+              <span className="mt-xs block text-caption text-ink-soft">By each person, from 1 to {DISCOUNT_PER_PERSON_MAX}.</span>
             </label>
             <label className="block">
               <span className="block text-subhead font-semibold">First day</span>
               <input type="date" value={form.startDay} onChange={(e) => set('startDay', e.target.value)} className={FIELD_44} />
+              <span className="mt-xs block text-caption text-ink-soft">Starts at midnight. Empty means now.</span>
             </label>
             <label className="block">
               <span className="block text-subhead font-semibold">Last day</span>
               <input type="date" value={form.endDay} onChange={(e) => set('endDay', e.target.value)} className={FIELD_44} />
+              <span className="mt-xs block text-caption text-ink-soft">Works all that day. Empty means no end.</span>
             </label>
           </div>
           <label className="block">
             <span className="block text-subhead font-semibold">Only for prices from (optional)</span>
             <input inputMode="decimal" value={form.minAmount} onChange={(e) => set('minAmount', e.target.value)} placeholder="Any price" className={FIELD_44} />
+            <span className="mt-xs block text-caption text-ink-soft">Checks prices in money only. Prices in points always pass.</span>
           </label>
           <label className="block">
             <span className="block text-subhead font-semibold">Note for the team</span>
             <input value={form.note} onChange={(e) => set('note', e.target.value)} maxLength={200} className={FIELD_44} />
+            <span className="mt-xs block text-caption text-ink-soft">Only the team sees it. You can search the table by it.</span>
           </label>
           <Button type="submit" size="lg" full disabled={busy || form.areas.length === 0}>
             Make the code

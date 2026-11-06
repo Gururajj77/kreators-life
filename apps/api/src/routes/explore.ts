@@ -124,6 +124,8 @@ export async function listingsFor(db: D1Database, o: Opts): Promise<Listing[]> {
       })()
     : Promise.resolve<Listing[]>([]);
   // Each kind is its own query and none waits on another: they run together, then join in this order.
+  // Only public programs: `published` is 1 exactly when a program is public (migration 0086), so a draft, a private (invite only) or
+  // an archived program never reaches Explore.
   const kind_program = types.includes('program')
     ? (async () => {
         const out: Listing[] = [];

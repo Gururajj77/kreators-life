@@ -837,10 +837,12 @@ function DesignForm({ initial, birthDate, onDone }: { initial: DesignInput; birt
       <label className="block">
         <span className="block text-subhead font-semibold">Birth date</span>
         <input type="date" value={input.date} max={todayLocal()} onChange={(e) => set({ date: e.target.value })} className={FIELD} required />
+        <span className="mt-xs block text-caption text-ink-soft">The day on your birth record.</span>
       </label>
       <label className="block">
         <span className="block text-subhead font-semibold">Birth time</span>
         <input type="time" value={input.time} onChange={(e) => set({ time: e.target.value })} className={FIELD} required />
+        <span className="mt-xs block text-caption text-ink-soft">As close to the minute as you know.</span>
       </label>
       <label className="block">
         <span className="block text-subhead">Time zone of the place you were born</span>
@@ -860,6 +862,7 @@ function DesignForm({ initial, birthDate, onDone }: { initial: DesignInput; birt
       <label className="block">
         <span className="block text-subhead font-semibold">Place (optional)</span>
         <input value={input.place} maxLength={80} onChange={(e) => set({ place: e.target.value })} placeholder="Mumbai" className={FIELD} />
+        <span className="mt-xs block text-caption text-ink-soft">Shown on your chart, for you only. It does not change the chart.</span>
       </label>
       <p className="m-0 rounded-tile bg-paper p-sm text-caption text-ink-soft">Only you see your birth details. The assistant and your next steps only ever learn your type, strategy, authority and profile, and only if you allow them.</p>
       {(error ?? (dirty.current ? problem : null)) && (

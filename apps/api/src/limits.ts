@@ -75,6 +75,10 @@ export const LIMITS = {
   agency: { max: 600, windowSec: 3600 },
   /** Asking someone to join your Agency team: an inbox note and maybe a friend request go out, so twenty a day. */
   teamInvite: { max: 20, windowSec: 86400 },
+  /** Inviting someone to a private School program: an inbox note goes out each time, so a hundred a day (a cohort's worth). */
+  programInvite: { max: 100, windowSec: 86400 },
+  /** Inviting someone to a private course: each sends an inbox note, so a hundred a day is room for a class without a way to spam. */
+  courseInvite: { max: 100, windowSec: 86400 },
   /** Asking whether a discount code works, per person; the same number again per address (`discountAddress`), so many accounts on one address cannot guess codes. */
   discount: { max: 20, windowSec: 600 },
   discountAddress: { max: 60, windowSec: 600 },
@@ -151,6 +155,7 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/market/listings/:id/offers', limit: 'offer' },
   { method: 'POST', path: '/market/listings', limit: 'create' },
   { method: 'POST', path: '/studio/products', limit: 'create' },
+  { method: 'POST', path: '/studio/products/:id/invites', limit: 'courseInvite' },
   { method: 'POST', path: '/party/events', limit: 'create' },
   { method: 'POST', path: '/run/clubs', limit: 'create' },
   { method: 'POST', path: '/work/opportunities', limit: 'create' },
@@ -183,6 +188,17 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/me/calendar', limit: 'prefs' },
   { method: 'PUT', path: '/session/away', limit: 'prefs' },
   { method: 'PUT', path: '/today/day-type', limit: 'prefs' },
+  // Time blocks, day templates and the weekly pattern (docs/time-blocks.md): settings, so under `prefs` like the kind of day.
+  { method: 'POST', path: '/time-blocks/blocks', limit: 'prefs' },
+  { method: 'PATCH', path: '/time-blocks/blocks/:id', limit: 'prefs' },
+  { method: 'DELETE', path: '/time-blocks/blocks/:id', limit: 'prefs' },
+  { method: 'PUT', path: '/time-blocks/blocks/order', limit: 'prefs' },
+  { method: 'POST', path: '/time-blocks/templates', limit: 'prefs' },
+  { method: 'PATCH', path: '/time-blocks/templates/:id', limit: 'prefs' },
+  { method: 'DELETE', path: '/time-blocks/templates/:id', limit: 'prefs' },
+  { method: 'PUT', path: '/time-blocks/pattern', limit: 'prefs' },
+  { method: 'PUT', path: '/time-blocks/days', limit: 'prefs' },
+  { method: 'POST', path: '/time-blocks/restore', limit: 'prefs' },
   { method: 'GET', path: '/insights', limit: 'insights' },
   { method: 'POST', path: '/discover/more/:kind/submit', limit: 'discover' },
   { method: 'POST', path: '/public/client-error', limit: 'clientError' },
@@ -208,6 +224,23 @@ export const ROUTE_LIMITS: readonly {
   { method: 'DELETE', path: '/run/talk/:runId/messages/:mid', limit: 'prefs' },
   { method: 'POST', path: '/run/talk/:runId/messages/:mid/report', limit: 'ticket' },
   { method: 'POST', path: '/run/talk/:runId/messages/:mid/block-author', limit: 'follow' },
+  // A School cohort's discussion: lines take the conversation limit, the rest the channel doors' limits.
+  { method: 'POST', path: '/school/cohorts/:id/talk', limit: 'message' },
+  // A program's state, invites and the delete from archived.
+  { method: 'POST', path: '/school/programs/:id/invites', limit: 'programInvite' },
+  { method: 'DELETE', path: '/school/programs/:id/invites/:userId', limit: 'prefs' },
+  { method: 'DELETE', path: '/school/programs/:id', limit: 'prefs' },
+  // Editing a program in place on School: its name and words, its order (an admin), and its lessons (add, change, move, remove).
+  { method: 'PATCH', path: '/school/programs/:id', limit: 'prefs' },
+  { method: 'POST', path: '/school/programs/:id/move', limit: 'prefs' },
+  { method: 'POST', path: '/school/programs/:id/items', limit: 'create' },
+  { method: 'PATCH', path: '/school/items/:id', limit: 'prefs' },
+  { method: 'POST', path: '/school/items/:id/move', limit: 'prefs' },
+  { method: 'DELETE', path: '/school/items/:id', limit: 'prefs' },
+  { method: 'PUT', path: '/school/cohorts/:id/talk/me', limit: 'prefs' },
+  { method: 'DELETE', path: '/school/cohorts/:id/talk/:lineId', limit: 'prefs' },
+  { method: 'POST', path: '/school/cohorts/:id/talk/:lineId/report', limit: 'ticket' },
+  { method: 'POST', path: '/school/cohorts/:id/talk/:lineId/block-author', limit: 'follow' },
   { method: 'POST', path: '/connect/:app/:id/people/:userId/connect', limit: 'intro' },
   { method: 'POST', path: '/reviews/kpis', limit: 'create' },
   { method: 'PUT', path: '/reviews/kpis/:id/value', limit: 'prefs' },

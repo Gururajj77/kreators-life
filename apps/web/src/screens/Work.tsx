@@ -7,6 +7,7 @@ import { Button } from '../components/Button';
 import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 import { api, errorText } from '../lib/api';
 import { todayLocal, shortDate } from '../lib/date';
 import { useAuthed, useMe } from '../lib/queries';
@@ -88,6 +89,8 @@ export function Work() {
   const q = useAuthed(['work', pg.query, dpg.query], () => api.work(pg.query, dpg.query));
   const [posting, setPosting] = useState(false);
   const setStatus = useMutation({ mutationFn: ({ id, status }: { id: string; status: OpportunityT['status'] }) => api.setOpportunity(id, status), onSuccess: () => q.refetch() });
+  // Closing a listing asks first, with the listing it is about.
+  const [closing, setClosing] = useState<{ id: string; title: string } | null>(null);
   const d = q.data;
 
   return (
@@ -162,7 +165,14 @@ export function Work() {
                     </Button>
                   )}
                   {o.status !== 'closed' && (
-                    <Button variant="outline" onClick={() => setStatus.mutate({ id: o.id, status: 'closed' })} disabled={setStatus.isPending}>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setStatus.reset();
+                        setClosing({ id: o.id, title: o.title });
+                      }}
+                      disabled={setStatus.isPending}
+                    >
                       Close
                     </Button>
                   )}
@@ -176,6 +186,17 @@ export function Work() {
           </div>
         </section>
       )}
+
+      <ConfirmDelete
+        open={closing !== null}
+        title="Close this listing?"
+        body={`"${closing?.title ?? ''}". Nobody can apply after this. You can put it back to draft later.`}
+        pending={setStatus.isPending}
+        failed={setStatus.isError}
+        onYes={() => closing && setStatus.mutate({ id: closing.id, status: 'closed' }, { onSuccess: () => setClosing(null) })}
+        onClose={() => setClosing(null)}
+        yes="Yes, close it"
+      />
 
       <PostSheet
         open={posting}
@@ -284,9 +305,10 @@ function PostSheet({ open, onClose, onPosted }: { open: boolean; onClose: () => 
         </fieldset>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-subhead font-semibold">Where</legend>
-          <div className="mt-xs flex flex-wrap gap-xs">
+          {/* Three short equal choices across the full width in equal parts (as PeriodFilter). */}
+          <div className="mt-xs grid grid-cols-3 gap-xs">
             {(['remote', 'on_site', 'hybrid'] as const).map((m) => (
-              <button key={m} type="button" aria-pressed={locationMode === m} onClick={() => setLocationMode(m)} className={`min-h-[44px] rounded-pill border-2 px-sm text-subhead font-medium ${locationMode === m ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+              <button key={m} type="button" aria-pressed={locationMode === m} onClick={() => setLocationMode(m)} className={`min-h-[44px] min-w-0 rounded-pill border-2 px-sm text-subhead font-medium ${locationMode === m ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
                 {typeName(m)}
               </button>
             ))}
@@ -349,6 +371,8 @@ export function Opportunity() {
   const apply = useMutation({ mutationFn: () => api.apply(id, coverNote), onSuccess: () => q.refetch() });
   const setApp = useMutation({ mutationFn: ({ aid, status }: { aid: string; status: ApplicationStatus }) => api.setApplication(aid, { status, note }), onSuccess: () => q.refetch() });
   const setStatus = useMutation({ mutationFn: (status: OpportunityT['status']) => api.setOpportunity(id, status), onSuccess: () => q.refetch() });
+  // Withdrawing and closing ask first in a sheet.
+  const [asking, setAsking] = useState<'withdraw' | 'close' | null>(null);
   const setClubFlag = useMutation({ mutationFn: (clubOnly: boolean) => api.setOpportunity(id, q.data?.opportunity.status ?? 'draft', clubOnly), onSuccess: () => q.refetch() });
 
   if (q.isError) {
@@ -412,7 +436,15 @@ export function Opportunity() {
               </div>
               {mine.coverNote && <p className="mt-xs m-0 whitespace-pre-wrap text-card-prose text-ink-soft">{mine.coverNote}</p>}
               {!['withdrawn', 'rejected', 'completed', 'selected'].includes(mine.status) && (
-                <Button variant="ghost" className="mt-sm" onClick={() => setApp.mutate({ aid: mine.id, status: 'withdrawn' })} disabled={setApp.isPending}>
+                <Button
+                  variant="ghost"
+                  className="mt-sm"
+                  onClick={() => {
+                    setApp.reset();
+                    setAsking('withdraw');
+                  }}
+                  disabled={setApp.isPending}
+                >
                   Withdraw
                 </Button>
               )}
@@ -455,7 +487,14 @@ export function Opportunity() {
                 </Button>
               )}
               {o.status !== 'closed' && (
-                <Button variant="outline" onClick={() => setStatus.mutate('closed')} disabled={setStatus.isPending}>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setStatus.reset();
+                    setAsking('close');
+                  }}
+                  disabled={setStatus.isPending}
+                >
                   Close
                 </Button>
               )}
@@ -497,6 +536,19 @@ export function Opportunity() {
           </section>
         </>
       )}
+      <ConfirmDelete
+        open={asking !== null}
+        title={asking === 'withdraw' ? 'Withdraw your application?' : 'Close this listing?'}
+        body={asking === 'withdraw' ? `For "${o.title}". It cannot be sent again: one application per person.` : `"${o.title}". Nobody can apply after this. You can put it back to draft later.`}
+        pending={asking === 'withdraw' ? setApp.isPending : setStatus.isPending}
+        failed={asking === 'withdraw' ? setApp.isError : setStatus.isError}
+        onYes={() => {
+          if (asking === 'withdraw' && mine) setApp.mutate({ aid: mine.id, status: 'withdrawn' }, { onSuccess: () => setAsking(null) });
+          else if (asking === 'close') setStatus.mutate('closed', { onSuccess: () => setAsking(null) });
+        }}
+        onClose={() => setAsking(null)}
+        yes={asking === 'withdraw' ? 'Yes, withdraw it' : 'Yes, close it'}
+      />
     </Screen>
   );
 }

@@ -41,6 +41,7 @@ import { useParamState } from '../lib/useParamState';
 import { api } from '../lib/api';
 import { useDiscover, useRefreshAll } from '../lib/queries';
 import { AskDelete, MoreScreen, MoreSection } from '../components/DiscoverMore';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 import { IconTag } from '../components/FactTag';
 import { CardHead } from '../components/CardHead';
 import { TabRow } from '../components/TabRow';
@@ -702,7 +703,7 @@ function UseTab({ settings, onChange }: { settings: { steps: boolean; assistant:
   );
 }
 
-function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, deleting, onOpenMore }: { onOpenMore: (k: ExtraKind) => void; id: string; at: string; result: DiscoverResult; settings: { steps: boolean; assistant: boolean; mind: boolean }; onSettings: (s: Partial<{ steps: boolean; assistant: boolean; mind: boolean }>) => void; onRetake: () => void; onDelete: (id: string) => void; deleting: boolean }) {
+function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, deleting, deleteFailed, onOpenMore }: { onOpenMore: (k: ExtraKind) => void; deleteFailed: boolean; id: string; at: string; result: DiscoverResult; settings: { steps: boolean; assistant: boolean; mind: boolean }; onSettings: (s: Partial<{ steps: boolean; assistant: boolean; mind: boolean }>) => void; onRetake: () => void; onDelete: (id: string) => void; deleting: boolean }) {
   const [tabAsked, setTab] = useParamState('tab', 'strengths');
   const [asking, setAsking] = useState(false);
   // A link to the emotional intelligence tab only works when that part was taken.
@@ -826,7 +827,7 @@ function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, 
           Delete this result
         </Button>
       </div>
-      <AskDelete open={asking} title="Delete this result?" line="The result and your answers are gone for good. This cannot be undone." pending={deleting} failed={false} onYes={() => onDelete(id)} onClose={() => setAsking(false)} />
+      <AskDelete open={asking} title="Delete this result?" line="The result and your answers are gone for good. This cannot be undone." pending={deleting} failed={deleteFailed} onYes={() => onDelete(id)} onClose={() => setAsking(false)} />
     </>
   );
 }
@@ -880,6 +881,19 @@ export function Discover() {
     },
   });
 
+  // Starting again wipes the answers in progress, so it asks first; "Take it again" over a draft in progress asks the same, then opens the quiz.
+  const [askingRestart, setAskingRestart] = useState<'home' | 'quiz' | null>(null);
+  const restart = useMutation({
+    mutationFn: () => api.dropDiscoverDraft(),
+    onSuccess: () => {
+      setAnswersState(emptyDiscoverAnswers());
+      dirty.current = false;
+      if (askingRestart === 'quiz') setMode('quiz');
+      setAskingRestart(null);
+      refresh();
+    },
+  });
+
   const prog = useMemo(() => discoverProgress(answers ?? emptyDiscoverAnswers()), [answers]);
   const data = q.data;
   const result = shown ?? data?.latest ?? null;
@@ -919,7 +933,7 @@ export function Discover() {
       )}
 
       {data && mode === 'result' && result && (
-        <ResultView onOpenMore={(k) => setMore(k)} id={result.id} at={result.createdAt} result={result.result} settings={data.settings} onSettings={(v) => saveSettings.mutate(v)} onRetake={() => { setAnswersState(emptyDiscoverAnswers()); dirty.current = true; setMode('quiz'); }} onDelete={(id) => remove.mutate(id)} deleting={remove.isPending} />
+        <ResultView onOpenMore={(k) => setMore(k)} id={result.id} at={result.createdAt} result={result.result} settings={data.settings} onSettings={(v) => saveSettings.mutate(v)} onRetake={() => { if (prog.done > 0) { setAskingRestart('quiz'); return; } setAnswersState(emptyDiscoverAnswers()); dirty.current = true; setMode('quiz'); }} onDelete={(id) => remove.mutate(id)} deleting={remove.isPending} deleteFailed={remove.isError} />
       )}
 
       {data && mode !== 'result' && (
@@ -944,7 +958,7 @@ export function Discover() {
                 </Button>
               )}
               {prog.done > 0 && (
-                <Button variant="light" onClick={() => { setAnswersState(emptyDiscoverAnswers()); dirty.current = false; api.dropDiscoverDraft().then(() => refresh()); }}>
+                <Button variant="light" onClick={() => setAskingRestart('home')} disabled={restart.isPending}>
                   Start again
                 </Button>
               )}
@@ -1002,6 +1016,17 @@ export function Discover() {
         </>
       )}
       <EmergenceSlot app="discover" max={2} />
+      <ConfirmDelete
+        open={askingRestart !== null}
+        title="Start the quiz again?"
+        body={`The ${prog.done} ${prog.done === 1 ? 'answer' : 'answers'} you have given so far are cleared. Saved results stay. This cannot be undone.`}
+        yes="Yes, start again"
+        keep="Keep my answers"
+        pending={restart.isPending}
+        failed={restart.isError}
+        onYes={() => restart.mutate()}
+        onClose={() => setAskingRestart(null)}
+      />
     </Screen>
   );
 }

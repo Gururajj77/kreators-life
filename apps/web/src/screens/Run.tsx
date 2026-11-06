@@ -11,17 +11,17 @@ import { BadgeMedal } from '../components/BadgeArt';
 import { Button } from '../components/Button';
 import { useCelebrate } from '../components/Celebration';
 import { AreaLine, HBars, StatTile } from '../components/Charts';
-import { Hero, HeroNumber } from '../components/Hero';
 import { Nudge } from '../components/Nudge';
 import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 import { api } from '../lib/api';
 import { shortDay, eventTime } from '../lib/date';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
 import { useNow } from '../lib/useNow';
 import { Pager, usePage } from '../components/Pager';
-import { FIELD } from '../lib/ui';
+import { FIELD, FIELD_LINE } from '../lib/ui';
 import { ErrorLine } from '../components/ErrorLine';
 import { StatusTag } from '../components/StatusTag';
 import { CardHead } from '../components/CardHead';
@@ -45,42 +45,17 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 
-/** A step asked once more before it happens, in a sheet instead of the browser's confirm box: a red button does it, a quiet one does not. */
-function AskSheet({ ask, onClose }: { ask: { title: string; body: string; action: string; run: () => void } | null; onClose: () => void }) {
-  return (
-    <Sheet open={ask !== null} onClose={onClose} title={ask?.title ?? ''}>
-      <div className="grid gap-md pb-xl">
-        <p className="m-0 text-callout text-ink-soft">{ask?.body}</p>
-        <div className="flex flex-wrap gap-xs">
-          <button
-            type="button"
-            onClick={() => {
-              ask?.run();
-              onClose();
-            }}
-            className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill"
-          >
-            {ask?.action}
-          </button>
-          <Button variant="outline" onClick={onClose}>
-            Keep it
-          </Button>
-        </div>
-      </div>
-    </Sheet>
-  );
-}
-
-function Choice<T extends string>({ options, value, onChange, label }: { options: { key: T; label: string }[]; value: T; onChange: (v: T) => void; label: string }) {
-  return (
-    <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label={label}>
+function Choice<T extends string>({ options, value, onChange, label, even = false }: { options: { key: T; label: string }[]; value: T; onChange: (v: T) => void; label: string; /** A few equal choices: the full width in equal parts, two by two where the sheet is narrow (as PeriodFilter). */ even?: boolean }) {
+  const pills = (
+    <div className={even ? `grid gap-xs ${options.length === 4 ? 'grid-cols-4 @max-[23rem]:grid-cols-2' : 'grid-cols-2'}` : 'mt-xs flex flex-wrap gap-xs'} role="group" aria-label={label}>
       {options.map((o) => (
-        <button key={o.key} type="button" aria-pressed={value === o.key} onClick={() => onChange(o.key)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${value === o.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+        <button key={o.key} type="button" aria-pressed={value === o.key} onClick={() => onChange(o.key)} className={`toy min-h-[44px] min-w-0 rounded-pill border-2 px-sm py-xs text-subhead font-medium ${value === o.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
           {o.label}
         </button>
       ))}
     </div>
   );
+  return even ? <div className="@container mt-xs">{pills}</div> : pills;
 }
 
 function Giveaway({ giveaway, brand, count }: { giveaway: string; brand?: string; count?: number }) {
@@ -259,16 +234,14 @@ function TrackingTab({ t }: { t: RunTracking }) {
   const km = (m: number) => kmLabel(m).replace(' km', '');
   return (
     <>
-      <Hero color={REL.color} deep={`var(--deep-${REL.key})`} className="mt-md" character="friendship" characterSize={64} mood={t.monthRuns > 0 ? 'excited' : 'happy'}>
-        <HeroNumber value={km(t.monthMetres)} unit="km" label={t.monthRuns === 0 ? 'No runs logged this month yet' : `${t.monthRuns} ${t.monthRuns === 1 ? 'run' : 'runs'} this month`} />
-        <p className="mt-sm m-0 text-subhead font-semibold opacity-85">{t.weekStreak > 0 ? `${t.weekStreak} ${t.weekStreak === 1 ? 'week' : 'weeks'} in a row with a run.` : 'Log a run this week to start a weekly streak.'}</p>
-      </Hero>
-
-      <div className="mt-md grid grid-cols-2 gap-xs md:grid-cols-4">
+      {/* Run wears the app cover, so the month's numbers sit in the tiles rather than a coloured hero (one or the other, never both). */}
+      <div className="mt-md grid grid-cols-2 gap-xs md:grid-cols-3">
+        <StatTile label="Km this month" value={km(t.monthMetres)} hint="since the 1st" />
+        <StatTile label="Runs this month" value={t.monthRuns} hint={t.monthRuns === 0 ? 'none logged yet' : 'since the 1st'} />
         <StatTile label="Runs" value={t.runs} hint="logged with a start code" />
         <StatTile label="Kilometres" value={km(t.metres)} hint="all time" />
         <StatTile label="Minutes" value={t.minutes} hint="count as movement in Life" to="/life" />
-        <StatTile label="Week streak" value={t.weekStreak} hint="weeks with a run" />
+        <StatTile label="Week streak" value={t.weekStreak} hint={t.weekStreak > 0 ? 'weeks in a row with a run' : 'log a run this week to start one'} />
       </div>
 
       <section className="mt-lg rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="run-line">
@@ -313,7 +286,15 @@ function TrackingTab({ t }: { t: RunTracking }) {
 }
 
 function CollabCard({ k, myClubs, onApply, onChange }: { k: RunCollab; myClubs: RunClub[]; onApply: () => void; onChange: () => void }) {
-  const close = useMutation({ mutationFn: () => api.setRunCollab(k.id, 'closed'), onSuccess: onChange });
+  // Closing the collab asks first.
+  const [closing, setClosing] = useState(false);
+  const close = useMutation({
+    mutationFn: () => api.setRunCollab(k.id, 'closed'),
+    onSuccess: () => {
+      setClosing(false);
+      onChange();
+    },
+  });
   const appliedWith = new Set(k.mine.map((a) => a.clubId));
   const canApply = k.status === 'open' && myClubs.some((c) => !appliedWith.has(c.id));
   // The brand and the title at the top left, Open or Closed in the corner, the brief under them, the giveaway, the dates and the
@@ -349,14 +330,30 @@ function CollabCard({ k, myClubs, onApply, onChange }: { k: RunCollab; myClubs: 
       {(canApply || (k.poster && k.status === 'open')) && (
         <div className="mt-sm flex flex-wrap justify-end gap-xs">
           {k.poster && k.status === 'open' && (
-            <Button variant="outline" onClick={() => close.mutate()} disabled={close.isPending}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                close.reset();
+                setClosing(true);
+              }}
+              disabled={close.isPending}
+            >
               Close collab
             </Button>
           )}
           {canApply && <Button variant="outline" onClick={onApply}>Apply with a club</Button>}
         </div>
       )}
-      <ErrorLine e={close.isError ? close.error : null} />
+      <ConfirmDelete
+        open={closing}
+        title="Close this collab?"
+        body={`"${k.title}". No club can apply after this, and it cannot be opened again here.`}
+        pending={close.isPending}
+        failed={close.isError}
+        onYes={() => close.mutate()}
+        onClose={() => setClosing(false)}
+        yes="Yes, close it"
+      />
     </li>
   );
 }
@@ -403,10 +400,13 @@ function CollabsTab() {
   return (
     <>
       <p className="mt-sm m-0 text-subhead text-ink-soft">Brands post a giveaway for runners. A host applies, and it shows on the run.</p>
+      {/* A lone add button: the full width in a row under 34rem (a phone), its own width from there up (as New document). */}
       {d?.canPost && (
-        <Button variant="outline" className="mt-md" onClick={() => setPosting(true)}>
-          Post a collab
-        </Button>
+        <div className="@container mt-md">
+          <Button variant="outline" className="w-full @min-[34rem]:w-auto" onClick={() => setPosting(true)}>
+            Post a collab
+          </Button>
+        </div>
       )}
       {q.isPending && (
         <p className="mt-md text-subhead text-ink-soft" role="status">
@@ -471,27 +471,32 @@ function StartClubSheet({ open, onClose }: { open: boolean; onClose: () => void 
         <label className="block">
           <span className="block text-subhead font-semibold">Name</span>
           <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required className={FIELD} />
+          <p className="mt-xs m-0 text-caption text-ink-soft">You cannot change the name later.</p>
         </label>
         <label className="block">
           <span className="block text-subhead font-semibold">City</span>
           <input value={city} onChange={(e) => setCity(e.target.value)} maxLength={80} required className={FIELD} />
+          <p className="mt-xs m-0 text-caption text-ink-soft">Starts as your Profile city. It cannot change later.</p>
         </label>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-subhead font-semibold">Pace</legend>
-          <Choice label="Pace" options={RUN_PACES.map((p) => ({ key: p, label: RUN_PACE_META[p].name }))} value={pace} onChange={setPace} />
+          <Choice even label="Pace" options={RUN_PACES.map((p) => ({ key: p, label: RUN_PACE_META[p].name }))} value={pace} onChange={setPace} />
           <p className="mt-xs m-0 text-caption text-ink-soft">{RUN_PACE_META[pace].blurb}</p>
         </fieldset>
         <label className="block">
           <span className="block text-subhead">When and where you usually meet</span>
           <input value={meets} onChange={(e) => setMeets(e.target.value)} maxLength={200} placeholder="Sundays 6am, Cubbon Park gate" className={FIELD} />
+          <p className="mt-xs m-0 text-caption text-ink-soft">Runners see this at the top of the club page.</p>
         </label>
         <label className="block">
           <span className="block text-subhead font-semibold">About the club</span>
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} rows={3} className={FIELD} />
+          <p className="mt-xs m-0 text-caption text-ink-soft">A few lines on who the club is for.</p>
         </label>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-subhead font-semibold">Who can find it</legend>
           <Choice
+            even
             label="Who can find it"
             options={[
               { key: 'public', label: 'Everyone' },
@@ -500,6 +505,7 @@ function StartClubSheet({ open, onClose }: { open: boolean; onClose: () => void 
             value={visibility}
             onChange={setVisibility}
           />
+          <p className="mt-xs m-0 text-caption text-ink-soft">{visibility === 'public' ? 'It shows in the clubs list for everyone.' : 'It stays out of the list. Share its link to invite people.'}</p>
         </fieldset>
         <ErrorLine e={create.isError ? create.error : null} />
         <Button type="submit" size="lg" full disabled={create.isPending || !name.trim() || !city.trim()}>
@@ -660,7 +666,7 @@ function RunCodeEditor({ r, onRecode, busy }: { r: RunItem; onRecode: (change: {
   const [xp, setXp] = useState(String(r.xp));
   const [own, setOwn] = useState('');
   const started = attendeeXpLocked(r.startsAt, useNow());
-  const box = 'w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-callout';
+  const box = FIELD_LINE;
   return (
     <div className="mt-sm flex flex-col gap-xs">
       <div className="grid grid-cols-[1fr_auto] gap-xs">
@@ -854,25 +860,30 @@ function AddRunSheet({ open, clubId, collabs, onClose, onDone }: { open: boolean
         <label className="block">
           <span className="block text-subhead font-semibold">Title</span>
           <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Sunday long run" className={FIELD} />
+          <p className="mt-xs m-0 text-caption text-ink-soft">Leave it blank to use the club’s name.</p>
         </label>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-subhead font-semibold">Starts</span>
             <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required className={FIELD} />
+            <p className="mt-xs m-0 text-caption text-ink-soft">Club members get a note about the new run.</p>
           </label>
           <label className="block">
             <span className="block text-subhead font-semibold">Minutes</span>
             <input type="number" min={10} max={1440} value={minutes} onChange={(e) => setMinutes(e.target.value)} className={FIELD} />
+            <p className="mt-xs m-0 text-caption text-ink-soft">From 10 to 1,440. The code works until three hours after it ends.</p>
           </label>
         </div>
         <div className="grid grid-cols-2 gap-xs">
           <label className="block">
             <span className="block text-subhead font-semibold">Kilometres</span>
             <input type="number" min={0.1} max={100} step={0.1} value={km} onChange={(e) => setKm(e.target.value)} className={FIELD} />
+            <p className="mt-xs m-0 text-caption text-ink-soft">A runner who leaves their distance blank gets this.</p>
           </label>
           <label className="block">
             <span className="block text-subhead font-semibold">Meeting point</span>
             <input value={meetingPoint} onChange={(e) => setMeetingPoint(e.target.value)} maxLength={200} className={FIELD} />
+            <p className="mt-xs m-0 text-caption text-ink-soft">It shows on the run’s card.</p>
           </label>
         </div>
         {collabs.length > 0 && (
@@ -886,6 +897,7 @@ function AddRunSheet({ open, clubId, collabs, onClose, onDone }: { open: boolean
                 </option>
               ))}
             </select>
+            <p className="mt-xs m-0 text-caption text-ink-soft">Only collabs that took this club are listed.</p>
           </label>
         )}
         <div className="grid grid-cols-2 gap-xs">
@@ -925,17 +937,22 @@ export function RunClubPage() {
   const celebrate = useCelebrate();
   const [adding, setAdding] = useState(false);
   const [logging, setLogging] = useState<RunItem | null>(null);
-  const [ask, setAsk] = useState<{ title: string; body: string; action: string; run: () => void } | null>(null);
+  // The one step asked before it happens (leave, close the club, cancel a run, void an entry), opened with what it is about.
+  const [ask, setAsk] = useState<{ kind: 'leave' } | { kind: 'close' } | { kind: 'cancel'; runId: string; title: string } | { kind: 'void'; entryId: string; name: string } | null>(null);
   const after = () => {
     refresh();
     q.refetch();
   };
+  const asked = () => {
+    setAsk(null);
+    after();
+  };
   const join = useMutation({ mutationFn: () => api.joinRunClub(id), onSuccess: after });
-  const leave = useMutation({ mutationFn: () => api.leaveRunClub(id), onSuccess: after });
-  const close = useMutation({ mutationFn: () => api.setRunClub(id, { status: 'closed' }), onSuccess: after });
+  const leave = useMutation({ mutationFn: () => api.leaveRunClub(id), onSuccess: asked });
+  const close = useMutation({ mutationFn: () => api.setRunClub(id, { status: 'closed' }), onSuccess: asked });
   const recode = useMutation({ mutationFn: (v: { runId: string; change?: { xp?: number; code?: string } }) => api.recodeRun(v.runId, v.change ?? {}), onSuccess: () => q.refetch() });
   const setRun = useMutation({ mutationFn: (v: { runId: string; status: 'cancelled' | 'done' }) => api.setRun(v.runId, v.status), onSuccess: after });
-  const voidEntry = useMutation({ mutationFn: (entryId: string) => api.voidRunEntry(entryId), onSuccess: after });
+  const voidEntry = useMutation({ mutationFn: (entryId: string) => api.voidRunEntry(entryId), onSuccess: asked });
 
   if (q.isError) {
     return (
@@ -978,7 +995,14 @@ export function RunClubPage() {
               </Button>
             )}
             {k.mine && !k.host && (
-              <Button variant="outline" onClick={() => leave.mutate()} disabled={leave.isPending}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  leave.reset();
+                  setAsk({ kind: 'leave' });
+                }}
+                disabled={leave.isPending}
+              >
                 Leave
               </Button>
             )}
@@ -987,7 +1011,10 @@ export function RunClubPage() {
                 <Button onClick={() => setAdding(true)}>Add a run</Button>
                 <Button
                   variant="ghost"
-                  onClick={() => setAsk({ title: 'Close this club?', body: 'Runs and entries stay, and nobody can join after that.', action: 'Yes, close it', run: () => close.mutate() })}
+                  onClick={() => {
+                    close.reset();
+                    setAsk({ kind: 'close' });
+                  }}
                   disabled={close.isPending}
                 >
                   Close the club
@@ -1022,7 +1049,11 @@ export function RunClubPage() {
         <ul className="mt-sm flex list-none flex-col gap-sm p-0 m-0">
           {d.runs.map((r) => (
             <Fragment key={r.id}>
-              <RunCard r={r} host={k.host} member={k.mine} onLog={() => setLogging(r)} onRecode={(change) => recode.mutate({ runId: r.id, change })} onStatus={(status) => (status === 'cancelled' ? setAsk({ title: 'Cancel this run?', body: 'Everyone in the club is told it is off.', action: 'Yes, cancel it', run: () => setRun.mutate({ runId: r.id, status }) }) : setRun.mutate({ runId: r.id, status }))} busy={busy} />
+              <RunCard r={r} host={k.host} member={k.mine} onLog={() => setLogging(r)} onRecode={(change) => recode.mutate({ runId: r.id, change })} onStatus={(status) => {
+                  if (status !== 'cancelled') return setRun.mutate({ runId: r.id, status });
+                  setRun.reset();
+                  setAsk({ kind: 'cancel', runId: r.id, title: r.title });
+                }} busy={busy} />
               {(k.host || k.mine) && <RunTalk runId={r.id} />}
             </Fragment>
           ))}
@@ -1085,7 +1116,16 @@ export function RunClubPage() {
                   </span>
                 </span>
                 {e.status === 'logged' && (
-                  <Button variant="outline" className="shrink-0" onClick={() => voidEntry.mutate(e.id)} disabled={voidEntry.isPending}>
+                  <Button
+                    variant="outline"
+                    className="shrink-0"
+                    onClick={() => {
+                      voidEntry.reset();
+                      setAsk({ kind: 'void', entryId: e.id, name: e.name });
+                    }}
+                    disabled={voidEntry.isPending}
+                    aria-label={`Void ${e.name}'s entry`}
+                  >
                     Void
                   </Button>
                 )}
@@ -1126,7 +1166,31 @@ export function RunClubPage() {
           after();
         }}
       />
-      <AskSheet ask={ask} onClose={() => setAsk(null)} />
+      <ConfirmDelete
+        open={ask !== null}
+        title={ask?.kind === 'leave' ? 'Leave this club?' : ask?.kind === 'close' ? 'Close this club?' : ask?.kind === 'cancel' ? 'Cancel this run?' : 'Void this entry?'}
+        body={
+          ask?.kind === 'leave'
+            ? `You leave ${k.name} and stop seeing its runs. You can join again while it is open.`
+            : ask?.kind === 'close'
+              ? 'Runs and entries stay, and nobody can join after that.'
+              : ask?.kind === 'cancel'
+                ? `"${ask.title}". Everyone in the club is told it is off.`
+                : ask?.kind === 'void'
+                  ? `${ask.name}'s entry stops counting and its xp and points come back out. This cannot be undone.`
+                  : ''
+        }
+        pending={ask?.kind === 'leave' ? leave.isPending : ask?.kind === 'close' ? close.isPending : ask?.kind === 'cancel' ? setRun.isPending : voidEntry.isPending}
+        failed={ask?.kind === 'leave' ? leave.isError : ask?.kind === 'close' ? close.isError : ask?.kind === 'cancel' ? setRun.isError : voidEntry.isError}
+        onYes={() => {
+          if (ask?.kind === 'leave') leave.mutate();
+          else if (ask?.kind === 'close') close.mutate();
+          else if (ask?.kind === 'cancel') setRun.mutate({ runId: ask.runId, status: 'cancelled' }, { onSuccess: () => setAsk(null) });
+          else if (ask?.kind === 'void') voidEntry.mutate(ask.entryId);
+        }}
+        onClose={() => setAsk(null)}
+        yes={ask?.kind === 'leave' ? 'Yes, leave the club' : ask?.kind === 'close' ? 'Yes, close it' : ask?.kind === 'cancel' ? 'Yes, cancel it' : 'Yes, void it'}
+      />
     </Screen>
   );
 }

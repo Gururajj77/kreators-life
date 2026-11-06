@@ -40,10 +40,10 @@ import { ClientPassword } from './ClientPassword';
 const failed = (e: unknown): string => (e instanceof ApiError ? e.message : 'That did not go through. Try again.');
 const day = (d: string | null): string => (d ? prettyDate(d) : 'not set');
 
-/** A short card with what is set now and its own Edit button, like the invoice and agreement editors. */
+/** A short card with what is set now and its own Edit button at the bottom right, in line with its last line (the founder, 2026-11-06). */
 function LifeCard({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
   return (
-    <li className="flex items-start justify-between gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+    <li className="flex items-end justify-between gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
       <div className="min-w-0 flex-1">
         <h3 className="m-0 text-card-title">{title}</h3>
         <div className="mt-xs text-card-note text-ink-soft">{children}</div>
@@ -273,22 +273,22 @@ function DaysForm({ client, life, onClose }: { client: AgencyClient; life: Clien
         save.mutate();
       }}
     >
-      <div className="grid gap-sm md:grid-cols-2">
-        <FieldLabel className="mt-sm" label="Strategy session day">
+      <div className="grid items-end gap-sm md:grid-cols-2">
+        <FieldLabel className="mt-sm" label="Strategy session day" hint="Shown at their link once the agreement is signed.">
           <input type="date" value={strategyDay} onChange={(e) => setStrategyDay(e.target.value)} className={FIELD} />
         </FieldLabel>
-        <FieldLabel className="mt-sm" label="Trial video due">
+        <FieldLabel className="mt-sm" label="Trial video due" hint="Shown at their link during the trial.">
           <input type="date" value={trialDue} onChange={(e) => setTrialDue(e.target.value)} className={FIELD} />
         </FieldLabel>
       </div>
       <FieldLabel className="mt-sm" label="Call link" hint="Starts with https. The client sees it at their link.">
         <input type="url" value={strategyLink} onChange={(e) => setStrategyLink(e.target.value)} placeholder="https://" maxLength={300} className={FIELD} />
       </FieldLabel>
-      <div className="grid gap-sm md:grid-cols-2">
-        <FieldLabel className="mt-sm" label="Pilot starts">
+      <div className="grid items-end gap-sm md:grid-cols-2">
+        <FieldLabel className="mt-sm" label="Pilot starts" hint="Shown at their link from the pilot month.">
           <input type="date" value={pilotStart} onChange={(e) => setPilotStart(e.target.value)} className={FIELD} />
         </FieldLabel>
-        <FieldLabel className="mt-sm" label="Pilot ends">
+        <FieldLabel className="mt-sm" label="Pilot ends" hint="Shown at their link from the pilot month.">
           <input type="date" value={pilotEnd} min={pilotStart || undefined} onChange={(e) => setPilotEnd(e.target.value)} className={FIELD} />
         </FieldLabel>
       </div>
@@ -301,7 +301,7 @@ function DaysForm({ client, life, onClose }: { client: AgencyClient; life: Clien
         </p>
       )}
       <div className="mt-md">
-        <Button type="submit" disabled={save.isPending}>
+        <Button type="submit" full disabled={save.isPending}>
           {save.isPending ? 'Saving' : 'Save'}
         </Button>
       </div>
@@ -347,8 +347,38 @@ export function DocPassword({ clientId, clientName, savedClientId }: { clientId:
       </div>
     );
   }
-  // Every document page opens this from its More menu, inside a sheet, so the card draws without a surface of its own.
-  return <ClientPassword bare className="no-print" clientId={page.client.id} clientName={clientName || page.client.name} state={page.lifecycle.password} linkOn={Boolean(page.client.portalToken)} />;
+  // Drawn under the paper inside a Fold (2026-11-06, was a sheet behind More), so the card keeps its own surface.
+  return <ClientPassword className="no-print" clientId={page.client.id} clientName={clientName || page.client.name} state={page.lifecycle.password} linkOn={Boolean(page.client.portalToken)} />;
+}
+
+/**
+ * A document page's password, under the paper (2026-11-06: "fix all 20", the popups pass): a closed Fold titled for the client, holding
+ * the same password card the client page shows. The More menu's Password item opens it and moves focus to it (`revealIn`).
+ */
+export function DocPasswordFold({ id, open, onOpenChange, clientId, clientName, savedClientId }: { id: string; open: boolean; onOpenChange: (open: boolean) => void; clientId: string | null; clientName: string; savedClientId?: string | null }) {
+  return (
+    <div id={id} className="no-print mt-md">
+      <Fold title={`Password for ${clientName || 'the client'}`} open={open} onOpenChange={onOpenChange}>
+        <DocPassword clientId={clientId} clientName={clientName} savedClientId={savedClientId} />
+      </Fold>
+    </div>
+  );
+}
+
+/**
+ * Brings a control on the page into view and gives it focus, for a More menu item whose panel now lives on the page. Two frames later,
+ * so the menu has closed and handed focus back first.
+ */
+export function revealIn(id: string, selector = 'select, input, [role="switch"], button'): void {
+  window.requestAnimationFrame(() =>
+    window.requestAnimationFrame(() => {
+      const box = document.getElementById(id);
+      if (!box) return;
+      box.scrollIntoView({ block: 'center' });
+      const target = box.matches(selector) ? box : box.querySelector<HTMLElement>(selector);
+      target?.focus({ preventScroll: true });
+    }),
+  );
 }
 
 // ---- the retainer
@@ -512,11 +542,11 @@ function OfferForm({ client, currency, previous, onClose }: { client: AgencyClie
       <FieldLabel className="mt-sm" label={`Fee for a month, in ${currency}`} hint="Type whole units, like 50000. It starts as the client's retainer amount.">
         <input inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} className={FIELD} />
       </FieldLabel>
-      <div className="grid gap-sm md:grid-cols-2">
-        <FieldLabel className="mt-sm" label="Pieces each month">
+      <div className="grid items-end gap-sm md:grid-cols-2">
+        <FieldLabel className="mt-sm" label="Pieces each month" hint="Each month adds this many pieces to the pipeline.">
           <input inputMode="numeric" value={pieces} onChange={(e) => setPieces(e.target.value.replace(/\D/g, '').slice(0, 2))} className={FIELD} />
         </FieldLabel>
-        <FieldLabel className="mt-sm" label="Changes included in each piece">
+        <FieldLabel className="mt-sm" label="Changes included in each piece" hint="Rounds the client can ask for on each piece.">
           <input inputMode="numeric" value={revisions} onChange={(e) => setRevisions(e.target.value.replace(/\D/g, '').slice(0, 2))} className={FIELD} />
         </FieldLabel>
       </div>
@@ -539,7 +569,7 @@ function OfferForm({ client, currency, previous, onClose }: { client: AgencyClie
         ))}
         {rows.length < RETAINER_OPTIONS_MAX && (
           <div className="mt-xs">
-            <Button type="button" variant="outline" size="sm" onClick={() => setRows([...rows, { months: '', off: '' }])}>
+            <Button type="button" variant="outline" size="sm" full onClick={() => setRows([...rows, { months: '', off: '' }])}>
               Add a length
             </Button>
           </div>
@@ -566,7 +596,7 @@ function OfferForm({ client, currency, previous, onClose }: { client: AgencyClie
         </p>
       )}
       <div className="mt-md">
-        <Button type="submit" disabled={save.isPending || options.length === 0 || badOff || !Number.isFinite(cents) || cents <= 0}>
+        <Button type="submit" full disabled={save.isPending || options.length === 0 || badOff || !Number.isFinite(cents) || cents <= 0}>
           {save.isPending ? 'Sending' : 'Send the offer'}
         </Button>
       </div>
@@ -605,7 +635,7 @@ function ConfirmForm({ retainer, currency, onClose }: { retainer: AgencyRetainer
         </p>
       )}
       <div className="mt-md">
-        <Button type="submit" disabled={save.isPending || !start}>
+        <Button type="submit" full disabled={save.isPending || !start}>
           {save.isPending ? 'Starting' : 'Start the retainer'}
         </Button>
       </div>

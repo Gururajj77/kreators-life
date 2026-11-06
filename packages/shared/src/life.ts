@@ -23,6 +23,32 @@ export const LIFE_AREAS: Record<LifeAreaKey, { name: string; icon: IconName; blu
   spiritual: { name: 'Spiritual', icon: 'Sparkles', blurb: 'Stillness, awe, teachers and faith.', path: '/mindful', relationship: 'divine' },
 };
 
+/** True for one of the five keys. */
+export function isLifeAreaKey(v: unknown): v is LifeAreaKey {
+  return typeof v === 'string' && (LIFE_AREA_ORDER as readonly string[]).includes(v);
+}
+
+/**
+ * The area of life a task or habit carries, read from what was sent: a key ("physical") or a name in any case
+ * ("Physical"). Null, an empty string, "none" or anything else gives null, so a caller that must refuse an unknown
+ * value checks it with `lifeAreaProblem` first.
+ */
+export function parseLifeArea(v: unknown): LifeAreaKey | null {
+  if (typeof v !== 'string') return null;
+  const t = v.trim().toLowerCase();
+  if (!t || t === 'none') return null;
+  for (const key of LIFE_AREA_ORDER) if (t === key || t === LIFE_AREAS[key].name.toLowerCase()) return key;
+  return null;
+}
+
+/** What a request may send as a task's area: a key or name, or null, '' or "none" to clear it. Anything else is refused with this line. */
+export const LIFE_AREA_PROBLEM = 'pick one of the five areas, or none';
+export function lifeAreaProblem(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'string' && (!v.trim() || v.trim().toLowerCase() === 'none')) return null;
+  return parseLifeArea(v) ? null : LIFE_AREA_PROBLEM;
+}
+
 export interface LifePart {
   label: string;
   /** What to show, e.g. "7.2 h" or "3 of 5 days". */

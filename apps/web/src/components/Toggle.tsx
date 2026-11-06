@@ -21,7 +21,7 @@ export function Toggle({ on, onChange, label, hint, disabled = false, color = 'v
         <span className={`block ${compact ? 'text-subhead text-ink-soft' : 'text-body'}`} id={`${id}-l`}>
           {label}
         </span>
-        {hint && <span className="prose-long block text-subhead text-ink-soft">{hint}</span>}
+        {hint && <span className="block text-subhead text-ink-soft">{hint}</span>}
       </span>
       <button
         type="button"

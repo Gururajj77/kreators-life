@@ -34,9 +34,12 @@ import {
   type ReviewsResponse,
   type Page,
   monthShift,
+  DEFAULT_ZONE,
+  localStamp,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { DATE_RE, dayFromDevice, newId, nowIso, pageOf, paged, shiftDate, str } from '../db';
+import { kindsBetween } from '../timeBlocks';
 
 /** Reviews: the numbers for a period from every app, and the review a person writes about it. */
 export const reviews = new Hono<AppEnv>();
@@ -76,7 +79,16 @@ export async function numbersFor(db: D1Database, userId: string, p: Period): Pro
   const to = p.end;
   const fromTs = `${from}T00:00:00`;
   const toTs = `${shiftDate(to, 1)}T00:00:00`;
-  const [daily, xp, ntd, wb, journal, fin, shop, school, work, people] = await Promise.all([
+  // Kinds of day (2026-11-06): the period's days up to the person's own today, each with the template set for it or given by the week.
+  const kindsRead = (async () => {
+    const u = await db.prepare('SELECT created_at, timezone FROM users WHERE id = ?').bind(userId).first<{ created_at: string; timezone: string | null }>();
+    const localToday = localStamp(new Date().toISOString(), u?.timezone || DEFAULT_ZONE)?.day ?? today();
+    const upTo = to < localToday ? to : localToday;
+    if (upTo < from) return { kindDays: 0, kinds: [] };
+    const { kinds, colors } = await kindsBetween(db, { id: userId, created_at: u?.created_at ?? null, timezone: u?.timezone ?? null }, from, upTo);
+    return { kindDays: kinds.tally.reduce((s, t) => s + t.days, 0), kinds: kinds.tally.slice(0, 3).map((t) => ({ name: t.name, days: t.days, color: colors[t.templateId] ?? null })) };
+  })();
+  const [daily, xp, ntd, wb, journal, fin, shop, school, work, people, kindsNow] = await Promise.all([
     db
       .prepare(
         `SELECT
@@ -122,6 +134,7 @@ export async function numbersFor(db: D1Database, userId: string, p: Period): Pro
       )
       .bind(userId, fromTs, toTs)
       .first<{ events: number; posts: number; circles: number; runs: number; run_metres: number }>(),
+    kindsRead,
   ]);
   const log = (kind: string) => wb.results.find((w) => w.kind === kind);
   const avgOf = (kind: string) => {
@@ -159,6 +172,8 @@ export async function numbersFor(db: D1Database, userId: string, p: Period): Pro
     circles: n(people?.circles),
     runs: n(people?.runs),
     runMetres: n(people?.run_metres),
+    kindDays: kindsNow.kindDays,
+    kinds: kindsNow.kinds,
   };
 }
 

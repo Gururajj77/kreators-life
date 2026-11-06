@@ -9,6 +9,7 @@ import { MoodFace } from '../components/MoodFace';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
+import { FIELD } from '../lib/ui';
 import { lastDays, shortDay, todayLocal } from '../lib/date';
 import { useLogs, useRefreshAll, useWellbeing } from '../lib/queries';
 import { EmergenceSlot } from '../components/EmergenceSlot';
@@ -48,7 +49,7 @@ export function Mood() {
   return (
     <>
       <div style={{ background: `linear-gradient(135deg, ${mood.color}, color-mix(in oklab, ${mood.color} 72%, var(--fill-shade)))`, color: mood.text }}>
-        <div className="mood-top safe-top mx-auto w-full max-w-[480px] px-md pb-lg pt-md md:ml-[240px] md:max-w-[1040px] md:px-lg lg:mx-auto lg:pl-[240px]">
+        <div className="mood-top safe-top mx-auto w-full max-w-[480px] px-md pb-lg pt-md md:ml-[240px] md:w-auto md:max-w-[1040px] md:px-lg lg:mx-auto lg:pl-[240px]">
           <BackLink to="/wellbeing" inherit>
             Wellbeing
           </BackLink>
@@ -107,7 +108,7 @@ export function Mood() {
             ))}
             <label className="mt-md block">
               <span className="block text-subhead font-semibold">Anything else</span>
-              <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Optional" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+              <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Optional" className={FIELD} />
             </label>
             {save.isError && (
               <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
@@ -241,17 +242,20 @@ function MoodDaySheet({ date, existing, onClose, onChanged }: { date: string | n
         </div>
         <label className="block">
           <span className="block text-subhead font-semibold">A note (optional)</span>
-          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} className={FIELD} />
         </label>
         {failed && <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">{failed instanceof Error ? failed.message : 'That did not save.'}</p>}
-        <Button full size="lg" onClick={() => save.mutate()} disabled={save.isPending}>
-          {existing ? 'Save this day' : 'Add this day'}
-        </Button>
-        {existing && !asking && (
-          <Button full variant="outline" onClick={() => setAsking(true)} disabled={remove.isPending}>
-            Remove this day
+        {/* The main save takes the free width, with Remove at its right on the same line (the founder's form rule, 2026-11-06). */}
+        <div className="flex flex-wrap items-stretch gap-xs">
+          <Button size="lg" className="flex-1" onClick={() => save.mutate()} disabled={save.isPending}>
+            {existing ? 'Save this day' : 'Add this day'}
           </Button>
-        )}
+          {existing && !asking && (
+            <Button variant="outline" onClick={() => setAsking(true)} disabled={remove.isPending}>
+              Remove this day
+            </Button>
+          )}
+        </div>
         {existing && asking && (
           <div className="grid gap-sm rounded-tile bg-card p-sm" role="group" aria-label="Remove this day’s mood?">
             <p className="m-0 text-headline">Remove this day’s mood?</p>

@@ -136,6 +136,9 @@ export async function settingsFor(db: D1Database, userId: string): Promise<Agenc
   return { currency: r?.currency ?? 'INR', weeklyHours: r?.weekly_hours ?? AGENCY_DEFAULT_WEEKLY_HOURS, profile };
 }
 
+/** A piece past its day, in SQL over `agency_items i` with the day bound twice: the rule of `deliverableOverdue` and of `statsFor`'s count. */
+const LATE_SQL = "((i.stage = 'approved' AND COALESCE(i.publish_date, i.due_date) < ?) OR (i.stage NOT IN ('approved', 'published') AND i.due_date < ?))";
+
 interface MonthStats { published: number; inReview: number; open: number; overdue: number; minutes: number; billableMinutes: number }
 const emptyStats = (): MonthStats => ({ published: 0, inReview: 0, open: 0, overdue: 0, minutes: 0, billableMinutes: 0 });
 
@@ -575,8 +578,14 @@ agency.get('/items', async (c) => {
   const client = c.req.query('client');
   const stage = c.req.query('stage');
   const channel = c.req.query('channel');
+  // `due=late` keeps only the pieces past their day, the same rule as the Late number on the overview (`statsFor`, `deliverableOverdue`).
+  const late = c.req.query('due') === 'late';
   const where = ['i.user_id = ?'];
   const binds: unknown[] = [user.id];
+  if (late) {
+    where.push(LATE_SQL);
+    binds.push(today, today);
+  }
   if (client) {
     where.push('i.client_id = ?');
     binds.push(client);
@@ -595,14 +604,18 @@ agency.get('/items', async (c) => {
       .bind(...binds, ask.limit, ask.offset)
       .all<ItemRow>(),
     db
-      .prepare(`SELECT i.stage, COUNT(*) AS n FROM agency_items i WHERE i.user_id = ?${client ? ' AND i.client_id = ?' : ''}${channel ? ' AND i.platform = ?' : ''} GROUP BY i.stage`)
-      .bind(...[user.id, ...(client ? [client] : []), ...(channel ? [channel] : [])])
-      .all<{ stage: DeliverableStage; n: number }>(),
+      .prepare(`SELECT i.stage, COUNT(*) AS n, SUM(CASE WHEN ${LATE_SQL} THEN 1 ELSE 0 END) AS late FROM agency_items i WHERE i.user_id = ?${client ? ' AND i.client_id = ?' : ''}${channel ? ' AND i.platform = ?' : ''} GROUP BY i.stage`)
+      .bind(...[today, today, user.id, ...(client ? [client] : []), ...(channel ? [channel] : [])])
+      .all<{ stage: DeliverableStage; n: number; late: number | null }>(),
   ]);
   const by = Object.fromEntries(DELIVERABLE_STAGES.map((s) => [s, 0])) as Record<DeliverableStage, number>;
-  for (const r of counts.results) by[r.stage] = r.n;
+  let lateTotal = 0;
+  for (const r of counts.results) {
+    by[r.stage] = r.n;
+    lateTotal += r.late ?? 0;
+  }
   const pg = paged(rows.results, ask);
-  return c.json({ page: pg.page, items: pg.items.map((r) => toItem(r, today)), counts: by });
+  return c.json({ page: pg.page, items: pg.items.map((r) => toItem(r, today)), counts: by, late: lateTotal });
 });
 
 // The board: one column a stage, each with its own count and the first few cards. "per" grows a column ("Show more").

@@ -27,10 +27,12 @@ import { StatusTag } from '../components/StatusTag';
 import { Pyramid } from '../components/Pyramid';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 import { TaskRow } from '../components/TaskRow';
 import { ProjectSelect, StartFocus, Subtasks, TaskPlanFields, planBody, planOf, planProblem, type Plan } from '../components/TaskPlan';
 import { api } from '../lib/api';
-import { todayLocal } from '../lib/date';
+import { FIELD } from '../lib/ui';
+import { localDateTimeValue, todayLocal } from '../lib/date';
 import { fillVar, ON_FILL } from '../lib/relFill';
 import { useAuthed, useMe, useNodes, useRefreshAll } from '../lib/queries';
 import { placementLine } from '../components/LifeMap';
@@ -60,6 +62,8 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
   const today = todayLocal();
   const [adding, setAdding] = useState<NodeKind | null>(null);
   const [editing, setEditing] = useState<Node | null>(null);
+  // Opened from a project's "Add a due day" line: the edit sheet starts in its due day field.
+  const [focusDue, setFocusDue] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const fail = (e: unknown) => setNotice(e instanceof Error ? e.message : 'That did not work. Try again.');
 
@@ -265,7 +269,14 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                                 const parentNode = nodes.find((p) => p.id === n.parentId);
                                 return (
                                   <li key={n.id}>
-                                    <button type="button" onClick={() => setEditing(n)} className="toy toy-flat flex w-full items-center gap-sm rounded-tile bg-paper p-sm text-left">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        setFocusDue(n.kind === 'project' && e.target instanceof Element && e.target.closest('[data-due-hint]') !== null);
+                                        setEditing(n);
+                                      }}
+                                      className="toy toy-flat flex w-full items-center gap-sm rounded-tile bg-paper p-sm text-left"
+                                    >
                                       <span className="w-[6px] self-stretch rounded-pill" style={{ background: n.status === 'done' ? rel.deep : rel.color }} aria-hidden="true" />
                                       <span className="min-w-0 flex-1">
                                         <span className="block truncate text-card-title">
@@ -274,14 +285,16 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                                         </span>
                                         {parentNode && <span className="block truncate text-card-note text-ink-soft">Holds up: {parentNode.title}</span>}
                                         {n.kind === 'project' && n.status === 'active' && (
-                                          <PaceTag
-                                            created={n.createdAt}
-                                            dueDate={n.dueDate}
-                                            done={byKind('task').filter((t) => t.parentId === n.id && t.status === 'done').length}
-                                            total={byKind('task').filter((t) => t.parentId === n.id && t.status !== 'archived').length}
-                                            today={today}
-                                            hint
-                                          />
+                                          <span className="block" data-due-hint={n.dueDate ? undefined : ''}>
+                                            <PaceTag
+                                              created={n.createdAt}
+                                              dueDate={n.dueDate}
+                                              done={byKind('task').filter((t) => t.parentId === n.id && t.status === 'done').length}
+                                              total={byKind('task').filter((t) => t.parentId === n.id && t.status !== 'archived').length}
+                                              today={today}
+                                              hint
+                                            />
+                                          </span>
                                         )}
                                       </span>
                                       <StatusTag tone="warn">{`${n.xp} xp`}</StatusTag>
@@ -339,7 +352,14 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
       </Screen>
 
       <AddSheet kind={adding} relationship={relationship} nodes={nodes} today={today} onClose={() => setAdding(null)} />
-      <EditSheet node={editing} onClose={() => setEditing(null)} />
+      <EditSheet
+        node={editing}
+        focusDue={focusDue}
+        onClose={() => {
+          setEditing(null);
+          setFocusDue(false);
+        }}
+      />
     </>
   );
 }
@@ -426,13 +446,16 @@ function AddSheet({ kind, relationship, nodes, today, onClose }: { kind: NodeKin
   );
 }
 
-function EditSheet({ node, onClose }: { node: Node | null; onClose: () => void }) {
+function EditSheet({ node, focusDue = false, onClose }: { node: Node | null; focusDue?: boolean; onClose: () => void }) {
   const refresh = useRefreshAll({ insights: true });
   const [title, setTitle] = useState('');
   const [note, setNote] = useState('');
+  // A project's due day, which its pace counts towards (a task keeps its own in TaskPlanFields).
+  const [due, setDue] = useState('');
   const [plan, setPlan] = useState<Plan>(() => planOf(null));
   // An open task can move under any of the person's active projects, in any pillar: the same read and picker as TaskPanel on Daily.
   const [parentId, setParentId] = useState('');
+  const [asking, setAsking] = useState(false);
   const day = todayLocal();
   const month = day.slice(0, 7);
   const movable = node?.kind === 'task' && node.status === 'active';
@@ -442,8 +465,10 @@ function EditSheet({ node, onClose }: { node: Node | null; onClose: () => void }
   useEffect(() => {
     setTitle(node?.title ?? '');
     setNote(node?.note ?? '');
+    setDue(node?.dueDate ?? '');
     setPlan(planOf(node));
     setParentId(node?.parentId ?? '');
+    setAsking(false);
   }, [node]);
 
   const save = useMutation({
@@ -453,6 +478,7 @@ function EditSheet({ node, onClose }: { node: Node | null; onClose: () => void }
         title: title.trim(),
         note,
         ...(node.kind === 'task' ? planBody(plan) : {}),
+        ...(node.kind === 'project' ? { dueDate: due || null } : {}),
         ...(movable && parentId && parentId !== node.parentId ? { parentId } : {}),
       });
     },
@@ -467,6 +493,7 @@ function EditSheet({ node, onClose }: { node: Node | null; onClose: () => void }
       return api.deleteNode(node.id);
     },
     onSuccess: () => {
+      setAsking(false);
       refresh();
       onClose();
     },
@@ -491,6 +518,13 @@ function EditSheet({ node, onClose }: { node: Node | null; onClose: () => void }
             <span className="block text-subhead font-semibold">Note</span>
             <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={3} placeholder="Why this matters, in your words" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
           </label>
+          {node.kind === 'project' && (
+            <label className="block">
+              <span className="block text-subhead font-semibold">Due by</span>
+              <input type="date" value={due} min={node.createdAt ? localDateTimeValue(new Date(node.createdAt)).slice(0, 10) : undefined} onChange={(e) => setDue(e.target.value)} data-autofocus={focusDue ? '' : undefined} className={FIELD} />
+              <span className="mt-xs block text-caption text-ink-soft">The day you want it done. Its pace counts the tasks done against the days gone. Clear it to drop the pace.</span>
+            </label>
+          )}
           {node.kind === 'task' && (
             <>
               {movable && projects.length > 0 && <ProjectSelect projects={projects} value={parentId} onChange={setParentId} />}
@@ -508,13 +542,26 @@ function EditSheet({ node, onClose }: { node: Node | null; onClose: () => void }
           <Button
             variant="ghost"
             onClick={() => {
-              if (window.confirm(`Remove "${node.title}"?`)) remove.mutate();
+              remove.reset();
+              setAsking(true);
             }}
             disabled={remove.isPending}
           >
             Remove this {meta.label.toLowerCase()}
           </Button>
         </form>
+      )}
+      {node && meta && (
+        <ConfirmDelete
+          open={asking}
+          title={`Remove this ${meta.label.toLowerCase()}?`}
+          body={node.kind === 'task' ? `“${node.title}” goes from your pyramid. This cannot be undone.` : `“${node.title}” and everything it holds up go from your pyramid. This cannot be undone.`}
+          pending={remove.isPending}
+          failed={remove.isError}
+          onYes={() => remove.mutate()}
+          onClose={() => setAsking(false)}
+          yes="Yes, remove it"
+        />
       )}
     </Sheet>
   );

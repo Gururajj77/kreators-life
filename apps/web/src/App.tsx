@@ -10,7 +10,6 @@ import { HowTo } from './components/HowTo';
 import { TabBar } from './components/TabBar';
 import { Assistant } from './components/AssistantButton';
 import { ReminderBubble } from './components/Reminders';
-import { ConsentPopup } from './components/ConsentPopup';
 import { RouteFallback } from './components/RouteFallback';
 import { lazyNamed } from './lib/lazy';
 import { useMe } from './lib/queries';
@@ -30,6 +29,8 @@ import { SevenRP } from './site/SevenRP';
 // Mounted once by Root for anyone signed in, not a screen, but still downloaded only after the first paint so the entry stays under budget:
 // a running clock is written down in the tab (sessionStorage, lib/focusSession.ts) and picked back up when it mounts, so a delay loses nothing.
 const FocusRoundsHost = lazyNamed(() => import('./components/FocusRoundsHost'), 'FocusRoundsHost');
+// The privacy card asks once and then stays away, so it comes in its own chunk right after the first paint (keeps the entry under budget).
+const ConsentPopup = lazyNamed(() => import('./components/ConsentPopup'), 'ConsentPopup');
 const Forgot = lazyNamed(() => import('./screens/PasswordReset'), 'Forgot');
 const ResetPassword = lazyNamed(() => import('./screens/PasswordReset'), 'ResetPassword');
 const Admin = lazyNamed(() => import('./screens/Admin'), 'Admin');
@@ -48,6 +49,7 @@ const CircleGroup = lazyNamed(() => import('./screens/Circles'), 'CircleGroup');
 const Circles = lazyNamed(() => import('./screens/Circles'), 'Circles');
 const Club = lazyNamed(() => import('./screens/Club'), 'Club');
 const Cohort = lazyNamed(() => import('./screens/Cohort'), 'Cohort');
+const AdminGuide = lazyNamed(() => import('./screens/AdminGuide'), 'AdminGuide');
 const Community = lazyNamed(() => import('./screens/Community'), 'Community');
 const Companion = lazyNamed(() => import('./screens/Companion'), 'Companion');
 const Content = lazyNamed(() => import('./screens/Content'), 'Content');
@@ -112,6 +114,7 @@ const Wellbeing = lazyNamed(() => import('./screens/Wellbeing'), 'Wellbeing');
 const Reward = lazyNamed(() => import('./screens/Win'), 'Reward');
 const Win = lazyNamed(() => import('./screens/Win'), 'Win');
 const Insights = lazyNamed(() => import('./screens/Insights'), 'Insights');
+const TimeBlocks = lazyNamed(() => import('./screens/TimeBlocks'), 'TimeBlocks');
 const You = lazyNamed(() => import('./screens/You'), 'You');
 const CertificatePage = lazyNamed(() => import('./site/CertificatePage'), 'CertificatePage');
 const InvoicePage = lazyNamed(() => import('./site/InvoicePage'), 'InvoicePage');
@@ -225,7 +228,9 @@ function Root() {
     <>
       <ScrollRestoration />
       <Page tabs={false} />
-      <ConsentPopup />
+      <Suspense fallback={null}>
+        <ConsentPopup />
+      </Suspense>
       {/* The focus clock, for anyone signed in, at the root so no page change ever unmounts it: the app, the two chats, the vibe check,
           the public site and the card table's focus mode alike. Signing out (no token) takes it away. */}
       {token && (
@@ -344,6 +349,8 @@ const router = createBrowserRouter([
       { path: '/you', element: explained('you', <You />) },
       { path: '/search', element: <Search /> },
       { path: '/insights', element: explained('insights', <Insights />) },
+      // Time blocks: a page under Daily, not an app (core like Daily; docs/time-blocks.md).
+      { path: '/time-blocks', element: <TimeBlocks /> },
       { path: '/profile', element: gated('profile', <Profile />) },
       { path: '/help', element: gated('help', <Help />) },
       { path: '/inbox', element: gated('notifications', <Inbox />) },
@@ -358,6 +365,8 @@ const router = createBrowserRouter([
       // learn and earn
       { path: '/school', element: gated('school', <School />) },
       { path: '/school/:id', element: gated('school', <Cohort />) },
+      // The Admin guide: the private School cohort for the team, outside School's switch, shown only to an admin account.
+      { path: '/admin/guide', element: <AdminGuide /> },
       { path: '/work', element: gated('work', <Work />) },
       { path: '/work/:id', element: gated('work', <Opportunity />) },
       { path: '/army', element: gated('army', <Army />) },

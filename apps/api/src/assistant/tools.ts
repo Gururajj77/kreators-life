@@ -5,11 +5,14 @@ import {
   EXPENSE_CATEGORIES,
   INCOME_CATEGORIES,
   KIND_META,
+  LIFE_AREA_ORDER,
+  LIFE_AREAS,
   money,
   openDay,
   MOODS,
   NOT_TO_DO_TITLE_MAX,
   parentKind,
+  parseLifeArea,
   parsePriority,
   parseRepeat,
   PERIOD_KINDS,
@@ -20,6 +23,8 @@ import {
   RELATIONSHIP_BY_KEY,
   RELATIONSHIPS,
   repeatLabel,
+  slotRangeLabel,
+  blockOfTask,
   taskIsHabit,
   REVIEW_ANSWER_MAX,
   REVIEW_HIGHLIGHT_MAX,
@@ -50,6 +55,8 @@ import {
   type ReviewsResponse,
   type SessionResponse,
   type StoreItem,
+  type TimeBlock,
+  type TimeBlocksResponse,
   type TodayResponse,
   type WeekPlan,
   type WellbeingLog,
@@ -225,7 +232,19 @@ const PILLAR: Prop = {
   description: `The pillar: ${RELATIONSHIPS.map((r) => `${r.key} is ${r.name}`).join(', ')}.`,
   aliases: Object.fromEntries(RELATIONSHIPS.flatMap((r) => [[r.name, r.key], [r.character, r.key]])),
 };
+/** A task's area of life, by name; "none" clears it. Mapped to the key the route takes by `parseLifeArea`. */
+const AREA: Prop = {
+  type: 'string',
+  enum: [...LIFE_AREA_ORDER.map((k) => LIFE_AREAS[k].name), 'none'],
+  description: 'Tasks only: the area of life it serves (Physical, Financial, Mental, Emotional or Spiritual), or none. A tag only: it never changes what a tick pays.',
+  aliases: { 'No area': 'none' },
+};
+const areaName = (key: string | null | undefined) => (key && key in LIFE_AREAS ? LIFE_AREAS[key as keyof typeof LIFE_AREAS].name : null);
 const DAY: Prop = { type: 'string', enum: ['today', 'yesterday'], description: 'Which day. Today unless they say yesterday.' };
+/** A task's time block, by name; "none" clears it. Sent as `timeBlock` to the node routes, which look it up among the person's own blocks. */
+const BLOCK: Prop = { type: 'string', maxLength: 40, description: 'Tasks only: the time block it sits in, by name (Deep work, Busy work, Learn/explore, ... as get_time_blocks lists them), or none to let its time decide.' };
+const blockName = (blocks: readonly TimeBlock[] | undefined, id: string | null | undefined) => (id ? (blocks?.find((b) => b.id === id)?.name ?? null) : null);
+const WEEKDAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const AMOUNT: Prop = { type: 'string', description: 'The amount as the person said it, in their currency: "400" or "12.50". No symbol.', maxLength: 14 };
 const id = (what: string): Prop => ({ type: 'string', description: `The ${what} id, exactly as a read tool gave it.`, maxLength: 80 });
 
@@ -294,7 +313,7 @@ export const TOOLS: readonly Tool[] = [
     refresh: [],
     title: 'Look at Daily',
     description:
-      "Today on Daily: whether they checked in, the small act, the tasks waiting (up to six, with ids and whether each can be ticked now), the tasks already ticked today (with ids, to untick one), and the not to do list (with ids and today's and yesterday's marks). Read this before ticking, unticking, checking in or marking.",
+      "Today on Daily: whether they checked in, the small act, the day template (the kind of day) and its time blocks, the tasks waiting (up to six, with ids, their block and whether each can be ticked now), the tasks already ticked today (with ids, to untick one), and the not to do list (with ids and today's and yesterday's marks). Read this before ticking, unticking, checking in or marking.",
     params: { type: 'object', properties: {} },
     run: async (_a, io) => {
       const t = await today(io);
@@ -305,10 +324,12 @@ export const TOOLS: readonly Tool[] = [
           checkedIn: t.checkedIn,
           streak: t.streak,
           smallAct: { text: t.spark.text, pillar: pillarName(t.spark.relationship), done: t.spark.done },
+          dayTemplate: t.day ? { name: t.day.template.name, leads: pillarName(t.day.template.lead), from: t.day.from } : null,
+          timeBlocks: (t.day?.slots ?? []).map((sl) => `${blockName(t.day?.blocks, sl.blockId) ?? 'A block'} ${slotRangeLabel(sl)}`),
           tasks: t.tasks.map((n) => {
             const wait = n.readyAt ? Math.ceil((Date.parse(n.readyAt) - now) / 60_000) : 0;
             const later = Boolean(n.doDate && n.doDate > io.date);
-            return { id: n.id, title: n.title, pillar: pillarName(n.relationship), doDate: n.doDate, due: n.dueDate, priority: n.priority === null ? null : `P${n.priority}`, remember: n.remind, repeats: n.repeat ? repeatLabel(n.repeat, openDay(n)) : null, habit: taskIsHabit(n), time: n.dueTime, minutes: n.estimateMin, canTickNow: !later && wait <= 0, ...(later ? { waitsForDay: n.doDate } : wait > 0 ? { readyInMinutes: wait } : {}) };
+            return { id: n.id, title: n.title, pillar: pillarName(n.relationship), doDate: n.doDate, due: n.dueDate, priority: n.priority === null ? null : `P${n.priority}`, remember: n.remind, repeats: n.repeat ? repeatLabel(n.repeat, openDay(n)) : null, habit: taskIsHabit(n), area: areaName(n.lifeArea), block: blockName(t.day?.blocks, blockOfTask(n, t.day?.slots ?? [])?.blockId), time: n.dueTime, minutes: n.estimateMin, canTickNow: !later && wait <= 0, ...(later ? { waitsForDay: n.doDate } : wait > 0 ? { readyInMinutes: wait } : {}) };
           }),
           notScheduled: t.backlogTotal,
           notToDo: t.notToDo.map((i) => ({ id: i.id, title: i.title, today: i.today, yesterday: i.week[5] ?? null, streak: i.streak })),
@@ -628,7 +649,7 @@ export const TOOLS: readonly Tool[] = [
     needs: null,
     refresh: R.layers,
     title: 'Add to a pyramid',
-    description: `Add one layer to a pillar's pyramid. Each layer hangs under the one before: a guiding principle under a foundation, a value goal under a guiding principle, a goal outcome under a value goal, a project under a goal outcome, a task under a project. Give under (the parent's id) when the pillar has more than one; with just one it is found. A task is for today unless a do date is given (doDate is the day it will be done; dueDate is the deadline, never before the do date; doDate "none" leaves it unscheduled, in the list on Daily until a day is picked), and can be ticked ${WAIT.taskMinAgeMinutes} minutes after it is written. A task can have a priority P0 (do now), P1, P2 or P3, can repeat, and can be tagged to remember (an inbox note on its day).`,
+    description: `Add one layer to a pillar's pyramid. Each layer hangs under the one before: a guiding principle under a foundation, a value goal under a guiding principle, a goal outcome under a value goal, a project under a goal outcome, a task under a project. Give under (the parent's id) when the pillar has more than one; with just one it is found. A task is for today unless a do date is given (doDate is the day it will be done; dueDate is the deadline, never before the do date; doDate "none" leaves it unscheduled, in the list on Daily until a day is picked), and can be ticked ${WAIT.taskMinAgeMinutes} minutes after it is written. A task can have a priority P0 (do now), P1, P2 or P3, can repeat, can carry one area of life (Physical, Financial, Mental, Emotional or Spiritual), can sit in one of their time blocks (by name), and can be tagged to remember (an inbox note on its day).`,
     params: {
       type: 'object',
       properties: {
@@ -643,6 +664,8 @@ export const TOOLS: readonly Tool[] = [
         every: { type: 'integer', minimum: 1, maximum: 52, description: 'With repeat: every this many days, weeks, months or years.' },
         remember: { type: 'boolean', description: 'Tasks only: tag it Remember. With a do date or a due date it also sends an inbox note on that day; with none it waits in the To remember list.' },
         habit: { type: 'boolean', description: 'Tasks only, with repeat: count it as a habit (the Habit tag). A repeating task is one unless this is false.' },
+        area: AREA,
+        block: BLOCK,
         dueTime: { type: 'string', description: 'Tasks only: HH:MM, 24-hour.' },
         minutes: { type: 'integer', minimum: 5, maximum: 600, description: 'Tasks only: how long it should take.' },
         note: { type: 'string', maxLength: 500 },
@@ -688,6 +711,8 @@ export const TOOLS: readonly Tool[] = [
                   repeat: repeatArg(a.repeat, a.every),
                   remind: a.remember === true,
                   ...(typeof a.habit === 'boolean' ? { habit: a.habit } : {}),
+                  ...(a.area ? { lifeArea: parseLifeArea(a.area) } : {}),
+                  ...(str(a.block) ? { timeBlock: str(a.block) } : {}),
                   dueTime: dueTime || null,
                   estimateMin: a.minutes ? Number(a.minutes) : null,
                 }
@@ -698,7 +723,7 @@ export const TOOLS: readonly Tool[] = [
       return {
         label: `Added the ${layerName(kind)} ${quote(r.node.title)} to ${pillarName(pillar)}`,
         undo: { method: 'DELETE', path: `/nodes/${seg(r.node.id)}` },
-        data: { id: r.node.id, layer: layerKey(kind), title: r.node.title, pillar: pillarName(pillar), doDate: r.node.doDate, due: r.node.dueDate, priority: r.node.priority === null ? null : `P${r.node.priority}` },
+        data: { id: r.node.id, layer: layerKey(kind), title: r.node.title, pillar: pillarName(pillar), doDate: r.node.doDate, due: r.node.dueDate, priority: r.node.priority === null ? null : `P${r.node.priority}`, area: areaName(r.node.lifeArea) },
       };
     },
   },
@@ -708,7 +733,7 @@ export const TOOLS: readonly Tool[] = [
     needs: null,
     refresh: R.layers,
     title: 'Change something in a pyramid',
-    description: 'Change a layer or a task: its title, its note, and for a task its do date, due date, priority (P0 to P3, or none), how it repeats (or none), whether it counts as a habit, remember, time and minutes. Renaming a task starts its wait again. Use "none" to clear a date, a time, a priority or a repeat.',
+    description: 'Change a layer or a task: its title, its note, and for a task its do date, due date, priority (P0 to P3, or none), how it repeats (or none), whether it counts as a habit, its area of life (or none), its time block (by name, or none), remember, time and minutes. Renaming a task starts its wait again. Use "none" to clear a date, a time, a priority, a block or a repeat.',
     params: {
       type: 'object',
       properties: {
@@ -722,6 +747,8 @@ export const TOOLS: readonly Tool[] = [
         every: { type: 'integer', minimum: 1, maximum: 52 },
         remember: { type: 'boolean' },
         habit: { type: 'boolean', description: 'A repeating task: count it as a habit (the Habit tag), or not.' },
+        area: AREA,
+        block: BLOCK,
         dueTime: { type: 'string', description: 'HH:MM or none.' },
         minutes: { type: 'integer', minimum: 5, maximum: 600 },
       },
@@ -747,6 +774,8 @@ export const TOOLS: readonly Tool[] = [
         else if (a.repeat) body.repeat = repeatArg(a.repeat, a.every);
         if (typeof a.remember === 'boolean') body.remind = a.remember;
         if (typeof a.habit === 'boolean') body.habit = a.habit;
+        if (a.area) body.lifeArea = parseLifeArea(a.area);
+        if (str(a.block)) body.timeBlock = str(a.block);
         const time = str(a.dueTime).toLowerCase();
         if (time === 'none') body.dueTime = null;
         else if (time) {
@@ -759,8 +788,8 @@ export const TOOLS: readonly Tool[] = [
       const r = must(await io.call({ method: 'PATCH', path: `/nodes/${prev.id}`, body })) as { node: Node };
       return {
         label: `Changed ${quote(r.node.title)}`,
-        undo: { method: 'PATCH', path: `/nodes/${prev.id}`, body: { title: prev.title, note: prev.note, ...(prev.kind === 'task' ? { doDate: prev.doDate, dueDate: prev.dueDate, repeat: prev.repeat, priority: prev.priority, remind: prev.remind, habit: prev.habit ?? null } : { dueDate: prev.dueDate }), dueTime: prev.dueTime, estimateMin: prev.estimateMin } },
-        data: { title: r.node.title, doDate: r.node.doDate, due: r.node.dueDate, priority: r.node.priority === null ? null : `P${r.node.priority}`, time: r.node.dueTime, minutes: r.node.estimateMin },
+        undo: { method: 'PATCH', path: `/nodes/${prev.id}`, body: { title: prev.title, note: prev.note, ...(prev.kind === 'task' ? { doDate: prev.doDate, dueDate: prev.dueDate, repeat: prev.repeat, priority: prev.priority, remind: prev.remind, habit: prev.habit ?? null, lifeArea: prev.lifeArea ?? null, timeBlockId: prev.timeBlockId ?? null } : { dueDate: prev.dueDate }), dueTime: prev.dueTime, estimateMin: prev.estimateMin } },
+        data: { title: r.node.title, doDate: r.node.doDate, due: r.node.dueDate, priority: r.node.priority === null ? null : `P${r.node.priority}`, area: areaName(r.node.lifeArea), time: r.node.dueTime, minutes: r.node.estimateMin },
       };
     },
   },
@@ -1061,19 +1090,89 @@ export const TOOLS: readonly Tool[] = [
     refresh: [],
     title: 'Plan the week',
     description:
-      'A suggested day for each open task that has none, the lightest day it fits in, plus how strong the plan is and a few plain notes. Writes nothing: put a suggestion into effect with edit_pyramid_item and its doDate.',
+      'A suggested day for each open task that has none, the lightest day it fits in, and a time block for it from its area and pillar, plus each day\'s day template, how strong the plan is and a few plain notes. Writes nothing: put a suggestion into effect with edit_pyramid_item and its doDate (and block).',
     params: { type: 'object', properties: { hoursADay: { type: 'integer', minimum: 1, maximum: 12 } } },
     run: async (a, io) => {
       const hours = a.hoursADay ? Number(a.hoursADay) : undefined;
-      const plan = must(await io.call({ method: 'GET', path: `/today/week-plan?date=${io.date}${hours ? `&hours=${hours}` : ''}` })) as WeekPlan;
+      const { plan, blocks } = must(await io.call({ method: 'GET', path: `/today/week-plan?date=${io.date}${hours ? `&hours=${hours}` : ''}` })) as { plan: WeekPlan; blocks?: TimeBlock[] };
       return {
         data: {
           strengthNow: plan.strengthNow.label,
           strengthWithSuggestions: plan.strengthWith.label,
-          suggestions: plan.suggestions.map((s) => ({ id: s.id, title: s.title, day: s.day, minutes: s.estimateMin, reason: s.reason })),
+          days: plan.days.map((d) => ({ day: d.date, dayTemplate: d.templateName ?? null })),
+          suggestions: plan.suggestions.map((s) => ({ id: s.id, title: s.title, day: s.day, minutes: s.estimateMin, reason: s.reason, block: blockName(blocks, s.blockId) })),
           noRoom: plan.noRoom.map((t) => ({ id: t.id, title: t.title })),
           notes: plan.notes,
         },
+      };
+    },
+  },
+
+  // ---- time blocks and day templates (core: docs/time-blocks.md)
+  {
+    name: 'get_time_blocks',
+    risk: 'read',
+    needs: null,
+    refresh: [],
+    title: 'Look at your time blocks',
+    description:
+      'Their time blocks (name, tag, area, pillar), their day templates (the kinds of day, each with its blocks on the clock and the pillar that leads), which template each weekday of their usual week uses, and this week\'s seven days with the template each one uses and whether that date was changed.',
+    params: { type: 'object', properties: {} },
+    run: async (_a, io) => {
+      const r = must(await io.call({ method: 'GET', path: `/time-blocks?day=${io.date}` })) as TimeBlocksResponse;
+      const tplName = (id: string | null) => (id ? (r.templates.find((t) => t.id === id)?.name ?? null) : null);
+      return {
+        data: {
+          blocks: r.blocks.map((b) => ({ name: b.name, tag: b.tag, area: areaName(b.area), pillar: b.pillar ? pillarName(b.pillar) : null })),
+          templates: r.templates.map((t) => ({ name: t.name, isDefault: t.isDefault, leads: pillarName(t.lead), second: t.second ? pillarName(t.second) : null, blocks: t.slots.map((sl) => `${blockName(r.blocks, sl.blockId) ?? 'A block'} ${slotRangeLabel(sl)}`) })),
+          usualWeek: r.pattern.map((id, i) => ({ weekday: WEEKDAY_NAMES[i], template: tplName(id) ?? `${tplName(r.defaultTemplateId)} (the default)` })),
+          thisWeek: r.days.map((d) => ({ day: d.date, template: tplName(d.templateId), changedForThisDate: d.from === 'date' })),
+        },
+      };
+    },
+  },
+  {
+    name: 'set_day_template',
+    risk: 'write',
+    needs: null,
+    refresh: ['today', 'timeBlocks', 'weekPlan', 'dayType'],
+    title: 'Set the kind of day',
+    description:
+      'Set which day template (kind of day) some days use. Give dates (YYYY-MM-DD, today or tomorrow) to change just those dates, or weekdays to change their usual week. template is a template name from get_time_blocks, or "week" to put those dates (or weekdays) back to following the week (or the default).',
+    params: {
+      type: 'object',
+      properties: {
+        template: { type: 'string', maxLength: 40, description: 'A day template name, or "week" to follow the usual week again.' },
+        dates: { type: 'array', items: { type: 'string' }, maxItems: 31, description: 'Change only these dates.' },
+        weekdays: { type: 'array', items: { type: 'string', enum: WEEKDAY_NAMES }, maxItems: 7, description: 'Change the usual week on these weekdays.' },
+      },
+      required: ['template'],
+    },
+    run: async (a, io) => {
+      const name = str(a.template);
+      const back = ['week', 'default', 'none'].includes(name.toLowerCase());
+      const dates = Array.isArray(a.dates) ? (a.dates as unknown[]).map((d) => dateArg(d, io)).filter((d): d is string => typeof d === 'string') : [];
+      const weekdays = Array.isArray(a.weekdays) ? (a.weekdays as unknown[]).map((w) => WEEKDAY_NAMES.indexOf(str(w).toLowerCase()) + 1).filter((w) => w > 0) : [];
+      if (!dates.length && !weekdays.length) throw new ToolError('Say which dates or which weekdays.');
+      if (dates.length && weekdays.length) throw new ToolError('Change dates or weekdays, one at a time.');
+      const choice = back ? { templateId: null } : { template: name };
+      if (dates.length) {
+        const r = must(await io.call({ method: 'PUT', path: '/time-blocks/days', body: { dates, ...choice } })) as { days: { date: string; templateId: string | null; previous: string | null }[] };
+        const prev = [...new Set(r.days.map((d) => d.previous))];
+        return {
+          label: back ? `Put ${dates.length === 1 ? dates[0] : `${dates.length} days`} back on your week` : `Made ${dates.length === 1 ? dates[0] : `${dates.length} days`} a ${quote(name)}`,
+          // One undo when the dates all had the same template before; otherwise it is set back by hand.
+          undo: prev.length === 1 ? { method: 'PUT', path: '/time-blocks/days', body: { dates, templateId: prev[0] ?? null } } : null,
+          data: { days: r.days.map((d) => ({ day: d.date, changed: d.templateId !== null })) },
+        };
+      }
+      const r = must(await io.call({ method: 'PUT', path: '/time-blocks/pattern', body: { weekdays, ...choice } })) as { pattern: (string | null)[]; previous: { weekday: number; templateId: string | null }[] };
+      const prev = [...new Set(r.previous.map((p) => p.templateId))];
+      const names = weekdays.map((w) => WEEKDAY_NAMES[w - 1]).join(', ');
+      return {
+        label: back ? `Put ${names} back on the default` : `Your ${names} now ${weekdays.length === 1 ? 'uses' : 'use'} ${quote(name)}`,
+        undo: prev.length === 1 ? { method: 'PUT', path: '/time-blocks/pattern', body: { weekdays, templateId: prev[0] ?? null } } : null,
+        data: { weekdays: weekdays.map((w) => WEEKDAY_NAMES[w - 1]) },
       };
     },
   },

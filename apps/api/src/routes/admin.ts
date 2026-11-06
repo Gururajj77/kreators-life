@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { attendeeXpLocked, BADGES, DEFAULT_ZONE, type AdminCoachAsk, type AdminCoachLink, EVENT_TYPES, HONOR_BY_KEY, isPaidPlan, type AdminAttendeeCode, type AttendeeCodeApp, isRole, MAX_CREDIT_GRANT, PLAN_DAYS, LISTING_TYPES, MODULE_BY_KEY, MODULES, OPPORTUNITY_TYPES, PERMISSIONS, TOOL_CATEGORIES, type AdminRedemption, type AdminUser, type AuditLog, type FlagOverride, type ListingType, type ModuleSetting, type Permission } from '@kreators/shared';
+import { ADMIN_GUIDE_PROGRAM, attendeeXpLocked, BADGES, DEFAULT_ZONE, type AdminCoachAsk, type AdminCoachLink, EVENT_TYPES, HONOR_BY_KEY, isPaidPlan, type AdminAttendeeCode, type AttendeeCodeApp, isRole, MAX_CREDIT_GRANT, PLAN_DAYS, LISTING_TYPES, MODULE_BY_KEY, MODULES, OPPORTUNITY_TYPES, PERMISSIONS, TOOL_CATEGORIES, type AdminRedemption, type AdminUser, type AuditLog, type FlagOverride, type ListingType, type ModuleSetting, type Permission } from '@kreators/shared';
 import { forgetAccessContext, resolveAccess } from '../access';
 import { listingsFor } from './explore';
 import { deleteAccount } from '../account';
@@ -560,7 +560,16 @@ admin.patch('/listings/:type/:id', async (c) => {
     if (type === 'reward') stmts.push(db.prepare('UPDATE bounties SET status = ? WHERE id = ?').bind(live ? 'open' : 'closed', id));
     if (type === 'opportunity') stmts.push(db.prepare("UPDATE opportunities SET status = ?, published_at = CASE WHEN ? THEN COALESCE(published_at, ?) ELSE published_at END WHERE id = ?").bind(live ? 'published' : 'closed', live ? 1 : 0, now, id));
     if (type === 'event') stmts.push(db.prepare('UPDATE events SET status = ? WHERE id = ?').bind(live ? 'published' : 'cancelled', id));
-    if (type === 'program') stmts.push(db.prepare('UPDATE programs SET published = ? WHERE id = ?').bind(live ? 1 : 0, id));
+    if (type === 'program') {
+      // A program's state is its visibility, and published only mirrors public (school.ts reads them together). Live writes both:
+      // public, or back to draft. A private or archived program (the Admin guide is private) is changed from its School page,
+      // never here, so one tap or a bulk Publish can never list a private program for everyone.
+      const p = await db.prepare('SELECT visibility FROM programs WHERE id = ?').bind(id).first<{ visibility: string | null }>();
+      if (!p) return c.json({ error: 'not found' }, 404);
+      if (id === ADMIN_GUIDE_PROGRAM || p.visibility === 'private' || p.visibility === 'archived')
+        return c.json({ error: 'This program is private or archived. Change its state from its page on School.' }, 400);
+      stmts.push(db.prepare('UPDATE programs SET published = ?, visibility = ? WHERE id = ?').bind(live ? 1 : 0, live ? 'public' : 'draft', id));
+    }
     if (type === 'tool') stmts.push(db.prepare('UPDATE tools SET verified = ? WHERE id = ?').bind(live ? 1 : 0, id));
     if (type === 'campaign') stmts.push(db.prepare('UPDATE campaigns SET public = ? WHERE id = ?').bind(live ? 1 : 0, id));
     if (type === 'circle') stmts.push(db.prepare('UPDATE circle_events SET status = ? WHERE id = ?').bind(live ? 'open' : 'cancelled', id));

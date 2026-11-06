@@ -1,6 +1,6 @@
-import { FOCUS_OPTIONS, HONORS, IDENTITY_BY_KEY, OWN_TAG_ICON, IDENTITY_STAGES, identityLabel, identityLine, levelFromXp, matchSetup, passwordProblem, POINTS, RELATIONSHIPS, BADGE_META, badgeRoleOf, setupSwitchable, type MeResponse, MODULE_GROUP_ORDER, nextBadge, LOCALE } from '@kreators/shared';
+import { FOCUS_OPTIONS, HONORS, IDENTITY_BY_KEY, OWN_TAG_ICON, IDENTITY_STAGES, identityLabel, identityLine, levelFromXp, passwordProblem, POINTS, RELATIONSHIPS, BADGE_META, badgeRoleOf, type MeResponse, MODULE_GROUP_ORDER, nextBadge, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { BadgeArt } from '../components/BadgeArt';
@@ -13,13 +13,13 @@ import { RoleBadge } from '../components/RoleBadge';
 import { SignOut } from '../components/SignOut';
 import { AppCover } from '../components/AppCover';
 import { EvolutionReveal } from '../components/EvolutionReveal';
-import { AppGroups } from '../components/AppGroups';
-import { useModules } from '../lib/modules';
+import { AppGroups, useFits } from '../components/AppGroups';
 import { useSession } from '../lib/store';
 import { useTheme, type ThemeMode } from '../lib/theme';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
+import { FIELD } from '../lib/ui';
 import { useMe, useRefreshAll } from '../lib/queries';
 import { tie } from '../lib/text';
 import { bento } from '../lib/bento';
@@ -46,7 +46,6 @@ function YouView({ data }: { data: MeResponse }) {
   const refresh = useRefreshAll();
   const nav = useNavigate();
   const setToken = useSession((s) => s.setToken);
-  const { modules } = useModules();
   // The one group order (Contribution, Reflection, Connection, Creation, Essentials, Operations).
   const featureGroups = MODULE_GROUP_ORDER;
   const themeMode = useTheme((s) => s.mode);
@@ -112,12 +111,7 @@ function YouView({ data }: { data: MeResponse }) {
   // Who you are, from the setup chat, and the apps it says fit: the same match, so Features can say why.
   const setup = { identities: user.identities, goals: user.intake.goals, blockers: user.intake.blockers };
   const whoLine = identityLine(setup);
-  const fits = useMemo(() => {
-    if (setup.identities.length === 0 && setup.goals.length === 0) return new Map<string, string>();
-    const m = matchSetup(setup, modules.filter((x) => setupSwitchable(x) && x.available).map((x) => x.key));
-    return new Map([...m.apps, ...m.more].map((a) => [a.key, a.why]));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user.identities.join('|'), user.intake.goals.join('|'), user.intake.blockers.join('|'), modules]);
+  const fits = useFits();
   const awarded = new Set(honors);
 
   return (
@@ -167,7 +161,7 @@ function YouView({ data }: { data: MeResponse }) {
           <Link to="/profile" className="inline-flex min-h-[48px] items-center px-sm text-subhead text-ink-mute underline-offset-4 hover:text-ink hover:underline">
             Edit page
           </Link>
-          <Link to="/plans" className="toy toy-soft inline-flex min-h-[48px] w-full items-center justify-center gap-xs rounded-pill bg-card px-md text-subhead font-semibold text-ink md:ml-auto md:w-auto md:justify-start">
+          <Link to="/plans" className="toy toy-soft inline-flex min-h-[48px] w-full items-center justify-center gap-xs rounded-pill bg-card px-md text-subhead font-semibold text-ink lg:ml-auto lg:w-auto lg:justify-start">
             <Icon icon={WandSparkles} size={18} />
             Plans and credits
           </Link>
@@ -227,7 +221,7 @@ function YouView({ data }: { data: MeResponse }) {
         <h2 id="features-heading" className="text-title2">
           Features
         </h2>
-        <p className="mt-xs m-0 text-subhead text-ink-soft">Open a group to switch its apps. Off hides an app; nothing is deleted.</p>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">Hide the apps you do not use. Nothing is deleted.</p>
         <div className="mt-md">
           <AppGroups groups={featureGroups} fits={fits} open where="profile" />
         </div>
@@ -267,7 +261,7 @@ function YouView({ data }: { data: MeResponse }) {
         <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
           <p className="m-0 text-card-title">Your data</p>
           <p className="mt-xs m-0 text-card-note text-ink-soft">Everything we hold about you as one file, or the whole account gone.</p>
-          <div className="mt-sm fill-row flex flex-wrap gap-xs">
+          <div className="mt-sm fill-row-all flex flex-wrap gap-xs">
             <Button variant="outline" onClick={() => exportData.mutate()} disabled={exportData.isPending}>
               {exportData.isPending ? 'Preparing' : 'Export my data'}
             </Button>
@@ -295,15 +289,15 @@ function YouView({ data }: { data: MeResponse }) {
           <p className="m-0 text-subhead text-ink-soft">Type the one you have, then the new one twice. Every other device is signed out.</p>
           <label className="block">
             <span className="block text-subhead font-semibold">Current password</span>
-            <input type="password" required value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} autoComplete="current-password" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+            <input type="password" required value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} autoComplete="current-password" className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-subhead font-semibold">New password</span>
-            <input type="password" required minLength={8} value={pwNew} onChange={(e) => setPwNew(e.target.value)} autoComplete="new-password" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+            <input type="password" required minLength={8} value={pwNew} onChange={(e) => setPwNew(e.target.value)} autoComplete="new-password" className={FIELD} />
           </label>
           <label className="block">
             <span className="block text-subhead font-semibold">Once more</span>
-            <input type="password" required minLength={8} value={pwAgain} onChange={(e) => setPwAgain(e.target.value)} autoComplete="new-password" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+            <input type="password" required minLength={8} value={pwAgain} onChange={(e) => setPwAgain(e.target.value)} autoComplete="new-password" className={FIELD} />
           </label>
           {pwNew && passwordProblem(pwNew, user.email ?? '') && <p className="m-0 text-subhead text-ink-soft">{passwordProblem(pwNew, user.email ?? '')}</p>}
           {pwAgain && pwNew !== pwAgain && <p className="m-0 text-subhead text-ink-soft">The two do not match yet.</p>}
@@ -326,7 +320,7 @@ function YouView({ data }: { data: MeResponse }) {
           </ul>
           <label className="mt-md block">
             <span className="block text-subhead font-semibold">Type DELETE to confirm</span>
-            <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} autoComplete="off" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+            <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} autoComplete="off" className={FIELD} />
           </label>
           {deleteAccount.isError && (
             <p role="alert" className="mt-xs m-0 rounded-tile bg-r1/15 p-sm text-subhead">
@@ -540,7 +534,7 @@ function YouView({ data }: { data: MeResponse }) {
         >
           <label className="block">
             <span className="block text-subhead font-semibold">Name</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} autoComplete="nickname" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} autoComplete="nickname" className={FIELD} />
           </label>
           <fieldset className="m-0 border-0 p-0">
             <legend className="text-subhead">What fills most of your days</legend>

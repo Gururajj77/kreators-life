@@ -24,9 +24,10 @@ export async function lifeSummary(db: D1Database, userId: string): Promise<LifeS
   const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
   const since14 = daysAgo(14);
   const since7 = daysAgo(7);
+  const since30 = daysAgo(30);
   const month = today.slice(0, 7);
 
-  const [logs, journal, floors, tasks, sparks, fin, budgets, invoices, goals, cohorts] = await Promise.all([
+  const [logs, journal, floors, tasks, sparks, fin, budgets, invoices, goals, cohorts, areaTasks, areaUsed] = await Promise.all([
     db.prepare('SELECT kind, date, value, extra FROM wellbeing_logs WHERE user_id = ? AND date >= ? ORDER BY date').bind(user.id, since14).all<Log>(),
     db.prepare('SELECT emotion, created_at FROM journal_entries WHERE user_id = ? AND created_at >= ? AND emotion IS NOT NULL').bind(user.id, `${since14}T00:00:00`).all<{ emotion: number; created_at: string }>(),
     db.prepare('SELECT relationship, xp FROM relationship_scores WHERE user_id = ?').bind(user.id).all<{ relationship: RelationshipKey; xp: number }>(),
@@ -44,6 +45,16 @@ export async function lifeSummary(db: D1Database, userId: string): Promise<LifeS
       )
       .bind(user.id)
       .all<{ status: string; total: number; approved: number }>(),
+    // Tasks that carry an area of life, ticked in the last two weeks: this week's count is the area's "Tasks for this area" part, last week's its trend.
+    db
+      .prepare("SELECT life_area AS area, substr(completed_at, 1, 10) AS d, COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND life_area IS NOT NULL AND completed_at >= ? GROUP BY life_area, d")
+      .bind(user.id, `${since14}T00:00:00`)
+      .all<{ area: string; d: string; n: number }>(),
+    // The part counts only for an area the person tagged a task with in the last thirty days, so no area's score drops because the tag is new.
+    db
+      .prepare("SELECT DISTINCT life_area AS area FROM nodes WHERE user_id = ?1 AND kind = 'task' AND life_area IS NOT NULL AND (updated_at >= ?2 OR completed_at >= ?2 OR created_at >= ?2)")
+      .bind(user.id, `${since30}T00:00:00`)
+      .all<{ area: string }>(),
   ]);
 
   const week = (kind: string, from: string, to: string) => logs.results.filter((l) => l.kind === kind && l.date >= from && l.date < to);
@@ -68,6 +79,18 @@ export async function lifeSummary(db: D1Database, userId: string): Promise<LifeS
     return a === null ? null : clamp(((5 - a) / 4) * 100);
   };
   const scoreCount = (n: number, target: number) => clamp((n / target) * 100);
+
+  // Tasks for this area: tasks tagged with the area and ticked this week, five for full marks. Shown and counted only for an area the
+  // person tagged a task with in the last thirty days, so tagging one area never changes the other four.
+  const usedAreas = new Set(areaUsed.results.map((r) => r.area));
+  const usesArea = (key: LifeAreaKey) => usedAreas.has(key);
+  const areaCount = (key: LifeAreaKey, from: string, to: string) => areaTasks.results.filter((t) => t.area === key && t.d >= from && t.d < to).reduce((s, t) => s + t.n, 0);
+  const areaPart = (key: LifeAreaKey): LifePart[] => {
+    if (!usesArea(key)) return [];
+    const n = areaCount(key, since7, '9999');
+    return [{ label: 'Tasks for this area', value: `${n} ${n === 1 ? 'task' : 'tasks'} ticked`, score: scoreCount(n, 5), path: `/today?area=${key}`, hint: 'Five ticked tasks tagged with this area in a week scores full marks.' }];
+  };
+  const areaBefore = (key: LifeAreaKey): LifePart[] => (usesArea(key) ? [{ label: '', value: '', score: scoreCount(areaCount(key, since14, since7), 5), path: '', hint: '' }] : []);
 
   const sleepNow = thisWeek('sleep');
   const moveNow = thisWeek('move');
@@ -98,8 +121,10 @@ export async function lifeSummary(db: D1Database, userId: string): Promise<LifeS
     { label: 'Sleep', value: sleepAvg === null ? 'not logged' : `${sleepAvg.toFixed(1)} h a night`, score: scoreSleep(sleepNow), path: '/sleep', hint: 'Seven to eight hours scores full marks.' },
     { label: 'Movement', value: moveNow.length ? `${moveTotal} min this week` : 'not logged', score: scoreMinutes(moveNow, 150), path: '/life#move', hint: 'A hundred and fifty minutes a week is the target.' },
     { label: 'Breath', value: mindfulNow.length ? `${mindfulTotal} mindful min` : 'not logged', score: scoreMinutes(mindfulNow, 60), path: '/mindful', hint: 'Sixty mindful minutes a week scores full marks.' },
+    ...areaPart('physical'),
   ];
   const physicalBefore = mean([
+    ...areaBefore('physical'),
     { label: '', value: '', score: scoreSleep(lastWeek('sleep')), path: '', hint: '' },
     { label: '', value: '', score: scoreMinutes(lastWeek('move'), 150), path: '', hint: '' },
     { label: '', value: '', score: scoreMinutes(lastWeek('mindful'), 60), path: '', hint: '' },
@@ -110,14 +135,17 @@ export async function lifeSummary(db: D1Database, userId: string): Promise<LifeS
     { label: 'Budgets', value: budgets.results.length ? (over ? `${over} over` : 'all within') : 'none set', score: budgets.results.length ? clamp(100 - over * 25) : null, path: '/finance', hint: 'Every category over budget costs twenty-five points.' },
     { label: 'Invoices', value: (invoices?.n ?? 0) > 0 ? `${invoices?.n} overdue` : 'none overdue', score: hasFinance ? clamp(100 - (invoices?.n ?? 0) * 30) : null, path: '/finance', hint: 'Chase what is overdue.' },
     { label: 'Goals', value: goals.results.length ? `${Math.round(avg(goalPct) ?? 0)}% there` : 'none yet', score: goals.results.length ? clamp(avg(goalPct) ?? 0) : null, path: '/finance', hint: 'Average progress across your money goals.' },
+    ...areaPart('financial'),
   ];
 
   const mental: LifePart[] = [
     { label: 'Stress', value: stressAvg === null ? 'not logged' : `${stressAvg.toFixed(1)} of 5`, score: scoreStress(stressNow), path: '/stress', hint: 'Lower stress scores higher.' },
     { label: 'Focus', value: `${tasksThisWeek} ${tasksThisWeek === 1 ? 'task' : 'tasks'} done`, score: scoreCount(tasksThisWeek, 7), path: '/today', hint: 'Seven ticked tasks a week scores full marks.' },
     { label: 'Learning', value: cohorts.results.length ? `${Math.round(avg(learning) ?? 0)}% through` : 'not enrolled', score: cohorts.results.length ? clamp(avg(learning) ?? 0) : null, path: '/school', hint: 'Progress through your programs.' },
+    ...areaPart('mental'),
   ];
   const mentalBefore = mean([
+    ...areaBefore('mental'),
     { label: '', value: '', score: scoreStress(lastWeek('stress')), path: '', hint: '' },
     { label: '', value: '', score: scoreCount(tasksLastWeek, 7), path: '', hint: '' },
     { label: '', value: '', score: cohorts.results.length ? clamp(avg(learning) ?? 0) : null, path: '', hint: '' },
@@ -127,8 +155,10 @@ export async function lifeSummary(db: D1Database, userId: string): Promise<LifeS
     { label: 'Mood', value: moodAvg === null ? 'not logged' : `${moodAvg.toFixed(1)} of 5`, score: scoreMood(moodNow), path: '/mood', hint: 'Your average face this week.' },
     { label: 'Journal', value: journalNow.length ? `${journalNow.length} ${journalNow.length === 1 ? 'entry' : 'entries'}` : 'nothing written', score: journalAvg === null ? null : clamp(((journalAvg - 1) / 4) * 100), path: '/journal', hint: 'The feeling you tagged on entries.' },
     { label: 'People pillars', value: `level ${Math.round(avg(['friendship', 'lover_partner', 'parent_child'].map((k) => levelFromXp(xpOf(k as RelationshipKey)))) ?? 1)}`, score: floorScore(['friendship', 'lover_partner', 'parent_child']), path: '/tower', hint: 'Your friends, love and family pillars.' },
+    ...areaPart('emotional'),
   ];
   const emotionalBefore = mean([
+    ...areaBefore('emotional'),
     { label: '', value: '', score: scoreMood(lastWeek('mood')), path: '', hint: '' },
     { label: '', value: '', score: journalBefore.length ? clamp((((avg(journalBefore.map((j) => j.emotion)) ?? 3) - 1) / 4) * 100) : null, path: '', hint: '' },
     { label: '', value: '', score: floorScore(['friendship', 'lover_partner', 'parent_child']), path: '', hint: '' },
@@ -138,8 +168,10 @@ export async function lifeSummary(db: D1Database, userId: string): Promise<LifeS
     { label: 'Stillness', value: mindfulNow.length ? `${mindfulTotal} min` : 'not logged', score: scoreMinutes(mindfulNow, 60), path: '/mindful', hint: 'Mindful minutes this week.' },
     { label: 'Small acts', value: `${sparksThisWeek} of 7 days`, score: scoreCount(sparksThisWeek, 5), path: '/today', hint: 'Five small acts a week scores full marks.' },
     { label: 'Teachers and faith', value: `level ${Math.round(avg(['guru', 'divine'].map((k) => levelFromXp(xpOf(k as RelationshipKey)))) ?? 1)}`, score: floorScore(['guru', 'divine']), path: '/tower', hint: 'Your teachers and faith pillars.' },
+    ...areaPart('spiritual'),
   ];
   const spiritualBefore = mean([
+    ...areaBefore('spiritual'),
     { label: '', value: '', score: scoreMinutes(lastWeek('mindful'), 60), path: '', hint: '' },
     { label: '', value: '', score: scoreCount(sparksLastWeek, 5), path: '', hint: '' },
     { label: '', value: '', score: floorScore(['guru', 'divine']), path: '', hint: '' },

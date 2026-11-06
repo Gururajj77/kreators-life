@@ -1,7 +1,7 @@
 import { portalPasswordProblem, TEAM_LINK_ACTIONS, TEAM_LINK_NEVER, TEAM_LINK_PARTS, type AgencyClient, type TeamLinkActionKey, type TeamLinkPartKey } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowUpRight, Eye, Link2Off, RefreshCw } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../lib/api';
 import { copyPlain } from '../lib/clipboard';
@@ -13,6 +13,7 @@ import { MoreMenu } from './MoreMenu';
 import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
 import { Toggle } from './Toggle';
+import { ToggleChevron } from './ToggleMark';
 
 const COPY = {
   lede: 'A second link for their own team. It shows the work, never the paperwork or money.',
@@ -22,6 +23,8 @@ const COPY = {
   approve: (name: string) => `What they approve or send back is recorded as from ${name}'s team.`,
   freshTitle: 'Make a fresh team link?',
   freshHint: 'A fresh link closes the old one at once. Their own page keeps its link.',
+  offTitle: 'Switch the team link off?',
+  offHint: 'Their team can no longer open it. Switching it on later makes a new link.',
   failed: 'That did not save. Try again.',
   openTitle: 'Switch the team link on',
   openHint: 'The team link always has a password. Set it now; they type it to open the link.',
@@ -30,6 +33,10 @@ const COPY = {
 };
 
 const ALL_SWITCHES = [...TEAM_LINK_PARTS, ...TEAM_LINK_ACTIONS];
+
+/** The red yes of a confirm sheet (the look `ConfirmSheet` and Sign out use), beside an outline Keep. */
+const RED_YES = 'toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill disabled:opacity-50';
+const RED_YES_STYLE = { '--toy-color': 'var(--deep-servant_leader)' } as CSSProperties;
 
 /**
  * The team link (2026-11-04): a second link per client, for the client's own team, under the client link on the Link segment. The same
@@ -46,7 +53,21 @@ export function TeamLink({ client }: { client: AgencyClient }) {
   const shown = ALL_SWITCHES.filter((p) => tl.show[p.key]).length;
   const [copied, setCopied] = useState(false);
   const [manual, setManual] = useState(false);
-  const [sheet, setSheet] = useState<null | 'see' | 'fresh' | 'open'>(null);
+  const [sheet, setSheet] = useState<null | 'see' | 'fresh' | 'off'>(null);
+  // Switching on with a password opens a form in the card, under its button (2026-11-06, was a sheet).
+  const [opening, setOpening] = useState(false);
+  const openBtn = `team-open-${client.id}`;
+  const openPanel = `team-open-panel-${client.id}`;
+  const openField = `team-open-pw-${client.id}`;
+  const copyBtn = `team-copy-${client.id}`;
+  const closeOpening = (back = true) => {
+    setOpening(false);
+    setPass('');
+    if (back) window.requestAnimationFrame(() => document.getElementById(openBtn)?.focus());
+  };
+  useEffect(() => {
+    if (opening) document.getElementById(openField)?.focus();
+  }, [opening, openField]);
   const [pass, setPass] = useState('');
   const passBad = pass ? portalPasswordProblem(pass, client.name) : null;
   const timers = useRef<number[]>([]);
@@ -57,9 +78,12 @@ export function TeamLink({ client }: { client: AgencyClient }) {
     onSuccess: (_d, body) => {
       if (body.password) {
         setPass('');
-        setSheet(null);
+        setOpening(false);
       }
-      return qc.invalidateQueries({ queryKey: ['agency'] });
+      return qc.invalidateQueries({ queryKey: ['agency'] }).then(() => {
+        // The submit button unmounts with the form: once the link is on, hand focus to the Copy team link button that replaces it.
+        if (body.password) window.requestAnimationFrame(() => document.getElementById(copyBtn)?.focus());
+      });
     },
   });
 
@@ -87,13 +111,24 @@ export function TeamLink({ client }: { client: AgencyClient }) {
 
         <div className="mt-sm flex items-center gap-xs">
           {on ? (
-            <Button size="sm" variant="outline" full className="flex-1" onClick={copy}>
+            <Button id={copyBtn} size="sm" variant="outline" full className="flex-1" onClick={copy}>
               {copied ? 'Copied' : 'Copy team link'}
             </Button>
           ) : (
-            // A password set from before switches it straight on; otherwise the sheet asks for one first.
-            <Button size="sm" variant="outline" full className="flex-1" onClick={() => (tl.password.set ? send.mutate({ on: true }) : setSheet('open'))} disabled={send.isPending}>
-              {send.isPending ? 'Switching on' : COPY.openTitle}
+            // A password set from before switches it straight on; otherwise the form under it asks for one first.
+            <Button
+              id={openBtn}
+              size="sm"
+              variant="outline"
+              full
+              className="flex-1"
+              onClick={() => (tl.password.set ? send.mutate({ on: true }) : opening ? closeOpening(false) : setOpening(true))}
+              disabled={send.isPending && !opening}
+              aria-expanded={tl.password.set ? undefined : opening}
+              aria-controls={opening ? openPanel : undefined}
+            >
+              {send.isPending && !opening ? 'Switching on' : COPY.openTitle}
+              {!tl.password.set && <ToggleChevron open={opening} />}
             </Button>
           )}
           {on && (
@@ -103,13 +138,42 @@ export function TeamLink({ client }: { client: AgencyClient }) {
                 { key: 'see', label: 'Change what their team sees', icon: Eye, onSelect: () => setSheet('see') },
                 { key: 'preview', label: 'Open preview', icon: ArrowUpRight, onSelect: () => window.open(url, '_blank', 'noopener') },
                 { key: 'fresh', label: 'Make a fresh team link', icon: RefreshCw, onSelect: () => setSheet('fresh') },
-                { key: 'off', label: 'Switch the team link off', icon: Link2Off, destructive: true, onSelect: () => send.mutate({ on: false }) },
+                { key: 'off', label: 'Switch the team link off', icon: Link2Off, destructive: true, onSelect: () => setSheet('off') },
               ]}
             />
           )}
         </div>
 
-        {!on && <p className="mt-sm m-0 text-subhead text-ink-soft">{COPY.off}</p>}
+        {!on && opening && (
+          <form
+            id={openPanel}
+            className="mt-sm rounded-tile bg-paper p-sm"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (pass && !passBad) send.mutate({ on: true, password: pass });
+            }}
+            onKeyDown={(e) => {
+              if (e.key !== 'Escape' || e.nativeEvent.isComposing) return;
+              e.preventDefault();
+              e.stopPropagation();
+              closeOpening();
+            }}
+          >
+            <p className="m-0 text-subhead text-ink-soft">{COPY.openHint}</p>
+            <div className="mt-sm">
+              <PasswordField id={openField} label={COPY.passLabel} hint={COPY.passHint} value={pass} onChange={setPass} clientName={client.name} required />
+            </div>
+            <div className="mt-sm flex flex-wrap gap-xs">
+              <Button type="submit" size="sm" variant="outline" className="flex-1" disabled={send.isPending || !pass || Boolean(passBad)}>
+                {send.isPending ? 'Switching on' : 'Switch it on'}
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => closeOpening()}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        )}
+        {!on && !opening && <p className="mt-sm m-0 text-subhead text-ink-soft">{COPY.off}</p>}
         {on && manual && (
           <div className="mt-sm">
             <label className="block text-subhead font-semibold" htmlFor={`team-url-${client.id}`}>
@@ -162,50 +226,50 @@ export function TeamLink({ client }: { client: AgencyClient }) {
               </p>
             )}
             <div className="mt-md pb-xl">
-              <Button variant="outline" onClick={() => setSheet(null)}>
+              <Button variant="outline" full onClick={() => setSheet(null)}>
                 Done
               </Button>
             </div>
           </Sheet>
 
-          <Sheet open={sheet === 'open'} onClose={() => setSheet(null)} title={COPY.openTitle}>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (pass && !passBad) send.mutate({ on: true, password: pass });
-              }}
-            >
-              <p className="m-0 text-subhead text-ink-soft">{COPY.openHint}</p>
-              <div className="mt-md">
-                <PasswordField id={`team-open-pw-${client.id}`} label={COPY.passLabel} hint={COPY.passHint} value={pass} onChange={setPass} clientName={client.name} required />
-              </div>
-              {send.isError && (
-                <p role="alert" className="mt-sm m-0 text-subhead">
-                  {COPY.failed}
-                </p>
-              )}
-              <div className="mt-md pb-xl">
-                <Button type="submit" full disabled={send.isPending || !pass || Boolean(passBad)}>
-                  {send.isPending ? 'Switching on' : 'Switch it on'}
-                </Button>
-              </div>
-            </form>
-          </Sheet>
-
           <Sheet open={sheet === 'fresh'} onClose={() => setSheet(null)} title={COPY.freshTitle}>
             <p className="m-0 text-subhead text-ink-soft">{COPY.freshHint}</p>
             <div className="mt-md flex flex-wrap gap-xs pb-xl">
-              <Button
+              <button
+                type="button"
                 onClick={() => {
                   send.mutate({ fresh: true });
                   setSheet(null);
                 }}
                 disabled={send.isPending}
+                className={RED_YES}
+                style={RED_YES_STYLE}
               >
                 Yes, make a fresh link
-              </Button>
+              </button>
               <Button variant="outline" onClick={() => setSheet(null)}>
                 Keep this one
+              </Button>
+            </div>
+          </Sheet>
+
+          <Sheet open={sheet === 'off'} onClose={() => setSheet(null)} title={COPY.offTitle}>
+            <p className="m-0 text-subhead text-ink-soft">{COPY.offHint}</p>
+            <div className="mt-md flex flex-wrap gap-xs pb-xl">
+              <button
+                type="button"
+                onClick={() => {
+                  send.mutate({ on: false });
+                  setSheet(null);
+                }}
+                disabled={send.isPending}
+                className={RED_YES}
+                style={RED_YES_STYLE}
+              >
+                Yes, switch it off
+              </button>
+              <Button variant="outline" onClick={() => setSheet(null)}>
+                Keep it on
               </Button>
             </div>
           </Sheet>

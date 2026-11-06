@@ -6,6 +6,7 @@ import { DISCOVER_KEYS } from '../../apps/api/src/discoverKeys.ts';
 import { LEGAL_VERSION } from '../../packages/shared/src/index.ts';
 import { CONTRACT_VARS, contractAsText, contractVarsUsed, invoiceAsText, money } from '../../packages/shared/src/index.ts';
 import { ATTENDEE_CLAIMS_PER_DAY, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, PLANS } from '../../packages/shared/src/index.ts';
+import { cohortTalkPrivateLabel } from '../../packages/shared/src/index.ts';
 import http from 'node:http';
 
 const ORIGIN = process.env.SMOKE_ORIGIN ?? 'http://127.0.0.1:8788';
@@ -663,6 +664,75 @@ section('Shop');
   check('a draft cannot be bought', notLive.status === 404, notLive.status);
 }
 
+// ---------------------------------------------------------------- shop course visibility: draft, private (invite only), public, archived
+section('Shop course visibility');
+{
+  const stranger = await signup(`course-stranger-${stamp}@smoke.test`, `Pebble-${stamp}-pass`, 'Smoke stranger');
+  const made = await api('POST', '/studio/products', { kind: 'course', title: `Smoke private course ${stamp}`, pricePoints: 0, status: 'live' }, C.token);
+  const cid = made.json.product?.id;
+  check('a course is made public (live)', made.status === 201 && made.json.product?.status === 'live', made.json);
+  const digital = await api('POST', '/studio/products', { kind: 'digital', title: `Smoke not a course ${stamp}`, pricePoints: 0 }, C.token);
+  const notCourse = await api('PATCH', `/studio/products/${digital.json.product?.id}`, { status: 'private' }, C.token);
+  check('only a course can be private', notCourse.status === 400, notCourse.json);
+  const early = await api('POST', `/studio/products/${cid}/invites`, { who: `buyer-${stamp}@smoke.test` }, C.token);
+  check('nobody is invited before the course is private', early.status === 409, early.json);
+  const priv = await api('PATCH', `/studio/products/${cid}`, { status: 'private' }, C.token);
+  check('a course can be set private', priv.status === 200 && priv.json.product?.status === 'private', priv.json);
+  const strangerPage = await api('GET', `/public/products/${cid}`, undefined, stranger.token);
+  check('a private course is 404 to a stranger', strangerPage.status === 404, strangerPage.status);
+  const anonPage = await api('GET', `/public/products/${cid}`);
+  check('a private course is 404 without a session', anonPage.status === 404, anonPage.status);
+  const strangerBuy = await api('POST', `/store/${cid}/checkout`, {}, stranger.token);
+  check('a stranger cannot enrol in a private course', strangerBuy.status === 404, strangerBuy.json);
+  const browse = await api('GET', '/store/browse?size=100', undefined, stranger.token);
+  check('a private course is in no storefront list', browse.status === 200 && !JSON.stringify(browse.json).includes(cid), browse.status);
+  const found = await api('GET', `/search?q=${encodeURIComponent(`Smoke private course ${stamp}`)}`, undefined, stranger.token);
+  check('a private course is not found by search', !JSON.stringify(found.json ?? {}).includes(cid), found.status);
+  const nobody = await api('POST', `/studio/products/${cid}/invites`, { who: `nobody-${stamp}@smoke.test` }, C.token);
+  check('an unknown person reads "We could not find that person."', nobody.status === 404 && nobody.json.error === 'We could not find that person.', nobody.json);
+  const byOther = await api('POST', `/studio/products/${cid}/invites`, { who: `buyer-${stamp}@smoke.test` }, stranger.token);
+  check('only the owner or an admin invites', byOther.status === 404, byOther.status);
+  const invited = await api('POST', `/studio/products/${cid}/invites`, { who: `buyer-${stamp}@smoke.test` }, C.token);
+  check('the owner invites someone by email', invited.status === 201 && invited.json.invite?.userId === B.user.id, invited.json);
+  const again = await api('POST', `/studio/products/${cid}/invites`, { who: `@${B.user.handle}` }, C.token);
+  check('inviting the same person twice changes nothing', again.status === 200 && again.json.already === true, again.json);
+  const inbox = await api('GET', '/inbox', undefined, B.token);
+  check('the invitee is told in the inbox with the link', JSON.stringify(inbox.json ?? {}).includes(`/p/${cid}`), inbox.status);
+  const list = await api('GET', `/studio/products/${cid}/invites`, undefined, C.token);
+  check('the owner sees the invite list', list.status === 200 && list.json.invites?.some((i) => i.userId === B.user.id), list.json);
+  const guestPage = await api('GET', `/public/products/${cid}`, undefined, B.token);
+  check('an invitee sees the private course', guestPage.status === 200 && guestPage.json.product?.status === 'private' && guestPage.json.canEdit === false, guestPage.status);
+  const guestBuy = await api('POST', `/store/${cid}/checkout`, {}, B.token);
+  check('an invitee can enrol in the private course', guestBuy.status === 200 || guestBuy.status === 201, guestBuy.json);
+  const adminPage = await api('GET', `/public/products/${cid}`, undefined, A.token);
+  check('an admin sees a private course from anyone', adminPage.status === 200 && adminPage.json.canEdit === true, adminPage.status);
+  const adminStudio = await api('GET', `/studio/products/${cid}`, undefined, A.token);
+  check('an admin opens anyone\'s course in Studio', adminStudio.status === 200 && adminStudio.json.product?.id === cid, adminStudio.status);
+  const strangerStudio = await api('GET', `/studio/products/${cid}`, undefined, stranger.token);
+  check('nobody else opens it in Studio', strangerStudio.status === 404, strangerStudio.status);
+  const bundle = await api('POST', '/studio/products', { kind: 'bundle', title: `Smoke bundle ${stamp}`, pricePoints: 0, bundleIds: [cid] }, C.token);
+  check('a private course never goes in a bundle', bundle.status === 201 && !(bundle.json.product?.bundleIds ?? []).includes(cid), bundle.json.product?.bundleIds);
+
+  const liveDelete = await api('DELETE', `/studio/products/${digital.json.product?.id}`, undefined, C.token);
+  check('delete is refused unless archived', liveDelete.status === 409, liveDelete.json);
+  await api('PATCH', `/studio/products/${digital.json.product?.id}`, { status: 'archived' }, C.token);
+  const archivedPage = await api('GET', `/public/products/${digital.json.product?.id}`, undefined, stranger.token);
+  check('an archived product is 404 to everyone else', archivedPage.status === 404, archivedPage.status);
+  const archivedDelete = await api('DELETE', `/studio/products/${digital.json.product?.id}`, undefined, C.token);
+  check('an archived product is deleted for good', archivedDelete.status === 200 && archivedDelete.json.ok === true, archivedDelete.json);
+  const gone = await api('GET', `/studio/products/${digital.json.product?.id}`, undefined, C.token);
+  check('a product deleted for good is gone', gone.status === 404, gone.status);
+  await api('PATCH', `/studio/products/${cid}`, { status: 'archived' }, A.token);
+  const archivedBuy = await api('POST', `/store/${cid}/checkout`, {}, stranger.token);
+  check('an archived course takes no new enrolments', archivedBuy.status === 404, archivedBuy.json);
+  const kept = await api('GET', `/store/products/${cid}`, undefined, B.token);
+  check('an archived course keeps what enrolled people have', kept.status === 200, kept.status);
+  const soldDelete = await api('DELETE', `/studio/products/${cid}`, undefined, C.token);
+  check('a course people enrolled in stays archived for them', soldDelete.status === 409, soldDelete.json);
+  const removed = await api('DELETE', `/studio/products/${cid}/invites/${B.user.id}`, undefined, C.token);
+  check('the owner removes an invite', removed.status === 200, removed.json);
+}
+
 // ---------------------------------------------------------------- community: feed, follows, capped rewards
 section('Community');
 {
@@ -922,8 +992,14 @@ section('Run discussions');
   const nAfter = (await linesFor(N)).lines ?? [];
   check('a block hides their lines from you', blocked.status === 201 && !mAfter.some((l) => l.body === `quiet line ${stamp}`), blocked.json);
   check('and yours from them', !nAfter.some((l) => l.body.startsWith('Meet at the gate')), nAfter.map((l) => l.body));
-  await api('DELETE', `/bond/block/${N.user.id}`, undefined, M.token);
-  check('lifting the block shows the lines again', ((await linesFor(M)).lines ?? []).some((l) => l.body === `quiet line ${stamp}`), '');
+  // Bond lists that block under the made-up name it was made from (migration 0099), never the writer's name, @handle or id.
+  const mBlocks = await api('GET', '/bond/blocks', undefined, M.token);
+  const anonBlock = mBlocks.json.blocked?.find((b) => b.anonymous);
+  check('Bond lists a block from an anonymous line by the run’s made-up name, with no name, handle or id', mBlocks.status === 200 && anonBlock?.name === seenByM.name && anonBlock.userId === '' && anonBlock.handle === null && Boolean(anonBlock.key) && !JSON.stringify(mBlocks.json).includes(N.user.id) && !JSON.stringify(mBlocks.json).includes('Talk second') && (!N.user.handle || !JSON.stringify(mBlocks.json).includes(N.user.handle)), mBlocks.json);
+  const liftById = await api('DELETE', `/bond/block/${N.user.id}`, undefined, M.token);
+  check('lifting by the real id leaves a block behind a made-up name in place', liftById.status === 200 && !((await linesFor(M)).lines ?? []).some((l) => l.body === `quiet line ${stamp}`), '');
+  const liftAnon = await api('DELETE', `/bond/block/${encodeURIComponent(anonBlock?.key ?? 'none')}`, undefined, M.token);
+  check('lifting the block by its made-up name shows the lines again', liftAnon.status === 200 && ((await linesFor(M)).lines ?? []).some((l) => l.body === `quiet line ${stamp}`) && !(await api('GET', '/bond/blocks', undefined, M.token)).json.blocked?.some((b) => b.key === anonBlock?.key), '');
 
   // Report and take down.
   const nLine = (await linesFor(M)).lines.find((l) => l.body === `quiet line ${stamp}`);
@@ -981,6 +1057,303 @@ section('School and staff');
   const closed = await api('POST', '/school/programs', { name: 'Smoke test program three' }, C.token);
   check('taking the permission back closes it', closed.status === 403, closed.status);
   await admin('POST', `/admin/users/${C.user.id}/role`, { role: 'user' });
+}
+
+// ---------------------------------------------------------------- school cohorts: discussions
+section('Cohort discussions');
+{
+  // Its own address, so these sign-ups never touch the sign-up limit the rest of the checks use.
+  const COHORT_TALK_ADDRESS = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 51) & 255}`;
+  const join = async (who) => {
+    const r = await api('POST', '/auth/signup', { email: `cohort-${who}-${stamp}@smoke.test`, password: `Lantern-${stamp}-pass`, displayName: `Cohort ${who}`, phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': COHORT_TALK_ADDRESS });
+    const u = await me(r.json.token);
+    return { token: r.json.token, user: u };
+  };
+  const M = await join('member');
+  const N = await join('second');
+  const X = await join('outsider');
+  // The smoke program is published only while the two enrol, so the published list never shows it after this.
+  const prog = await api('POST', '/school/programs', { name: 'Smoke test program', description: 'Made by the smoke test.', published: true }, A.token);
+  const k = await api('POST', `/school/programs/${prog.json.id}/cohorts`, { name: `Talk cohort ${stamp}`, startAt: new Date().toISOString(), endAt: new Date(Date.now() + 30 * 86_400_000).toISOString() }, A.token);
+  const kid = k.json.id;
+  const em = await api('POST', `/school/cohorts/${kid}/enroll`, {}, M.token);
+  const en = await api('POST', `/school/cohorts/${kid}/enroll`, {}, N.token);
+  await api('PATCH', `/school/programs/${prog.json.id}`, { published: false }, A.token);
+  check('two members enrol in the cohort', k.status === 201 && em.status === 201 && en.status === 201, [k.json, em.json, en.json]);
+  const path = `/school/cohorts/${kid}/talk`;
+
+  const outside = await api('GET', path, undefined, X.token);
+  check('someone not in the cohort gets 404 for its discussion', outside.status === 404, outside.status);
+  const outsidePost = await api('POST', path, { body: 'let me in' }, X.token);
+  check('and cannot write in it', outsidePost.status === 404, outsidePost.status);
+
+  const first = await api('GET', path, undefined, M.token);
+  check('a member opens it, private to start', first.status === 200 && first.json.me?.visibility === 'private' && first.json.me?.label === cohortTalkPrivateLabel(M.user.handle, M.user.friendCode) && first.json.moderator === false, first.json.me);
+
+  // A post and replies four levels down: the fourth is kept at depth 3, beside the one it answers, and names it.
+  const p0 = await api('POST', path, { body: `cohort post ${stamp}` }, M.token);
+  const r1 = await api('POST', path, { body: 'level one', parentId: p0.json.line?.id }, N.token);
+  const r2 = await api('POST', path, { body: 'level two', parentId: r1.json.line?.id }, M.token);
+  const r3 = await api('POST', path, { body: 'level three', parentId: r2.json.line?.id }, N.token);
+  const r4 = await api('POST', path, { body: 'level four', parentId: r3.json.line?.id }, M.token);
+  check('a post and replies nest to depth 3', p0.status === 201 && p0.json.line?.depth === 0 && r1.json.line?.depth === 1 && r2.json.line?.depth === 2 && r3.json.line?.depth === 3, [p0.json, r1.json, r2.json, r3.json]);
+  check('a reply past the third level is kept at depth 3 beside it and names who it answers', r4.status === 201 && r4.json.line?.depth === 3 && r4.json.line?.parentId === r2.json.line?.id && r4.json.line?.replyTo?.id === r3.json.line?.id, r4.json);
+  check('and the answer to the post names the private writer it answers by their starred name, never "a line"', r4.json.line?.replyTo?.label === cohortTalkPrivateLabel(N.user.handle, N.user.friendCode), r4.json.line?.replyTo);
+  const empty = await api('POST', path, { body: '   ' }, M.token);
+  check('an empty line is refused', empty.status === 400, empty.status);
+
+  const asM = await api('GET', path, undefined, M.token);
+  const order = (asM.json.lines ?? []).map((l) => l.body);
+  check('the thread reads in order, each reply under what it answers', JSON.stringify(order) === JSON.stringify([`cohort post ${stamp}`, 'level one', 'level two', 'level three', 'level four']), order);
+  const nLine = (asM.json.lines ?? []).find((l) => l.body === 'level one');
+  check('a private member is masked for another member: no handle, name, id or whole code', nLine && nLine.author.label === cohortTalkPrivateLabel(N.user.handle, N.user.friendCode) && nLine.author.handle === null && nLine.author.name === null && nLine.author.userId === '' && !JSON.stringify(asM.json).includes(N.user.handle) && (!N.user.friendCode || !JSON.stringify(asM.json).includes(N.user.friendCode)), nLine?.author);
+  const twoPrivate = (asM.json.lines ?? []).find((l) => l.body === 'level two');
+  check('two private members never share a name in the cohort', twoPrivate && nLine && twoPrivate.author.label !== nLine.author.label, [twoPrivate?.author.label, nLine?.author.label]);
+  const blockPrivate = await api('POST', `${path}/${r1.json.line?.id}/block-author`, {}, M.token);
+  const blockList = await api('GET', '/bond/blocks', undefined, M.token);
+  check('a private member cannot be blocked from a line, so Bond never lists who they are', blockPrivate.status === 403 && !JSON.stringify(blockList.json).includes(N.user.id), [blockPrivate.status, blockPrivate.json]);
+  const asStaff = await api('GET', path, undefined, A.token);
+  const nForStaff = (asStaff.json.lines ?? []).find((l) => l.body === 'level one');
+  check('the team sees the real handle and id of a private member', asStaff.status === 200 && asStaff.json.moderator === true && nForStaff?.author.handle === N.user.handle && nForStaff?.author.userId === N.user.id, nForStaff?.author);
+
+  // Going public shows the @handle; going private hides it again.
+  const pub = await api('PUT', `${path}/me`, { visibility: 'public' }, N.token);
+  const asM2 = await api('GET', path, undefined, M.token);
+  const nPublic = (asM2.json.lines ?? []).find((l) => l.body === 'level one');
+  check('a member who goes public shows their @handle', pub.status === 200 && pub.json.me?.visibility === 'public' && nPublic?.author.public === true && nPublic?.author.label === `@${N.user.handle}` && nPublic?.author.handle === N.user.handle, nPublic?.author);
+  const bad = await api('PUT', `${path}/me`, { visibility: 'everyone' }, N.token);
+  check('a visibility that is not public or private is refused', bad.status === 400, bad.status);
+  await api('PUT', `${path}/me`, { visibility: 'private' }, N.token);
+  const asM3 = await api('GET', path, undefined, M.token);
+  check('and back to private hides it again', !JSON.stringify(asM3.json).includes(N.user.handle), '');
+
+  // Delete: only the writer or a moderator; the words go and the place stays while replies hang from it.
+  const notMine = await api('DELETE', `${path}/${r1.json.line?.id}`, undefined, M.token);
+  check('a member cannot take down someone else’s line', notMine.status === 403, notMine.status);
+  const own = await api('DELETE', `${path}/${r1.json.line?.id}`, undefined, N.token);
+  const asM4 = await api('GET', path, undefined, M.token);
+  const gone = (asM4.json.lines ?? []).find((l) => l.id === r1.json.line?.id);
+  check('a writer deletes their own line: the words go, the place stays for its replies', own.status === 200 && gone?.takenDown === true && gone?.body === '' && (asM4.json.lines ?? []).some((l) => l.body === 'level two'), gone);
+  const leaf = await api('DELETE', `${path}/${r4.json.line?.id}`, undefined, A.token);
+  const asM5 = await api('GET', path, undefined, M.token);
+  check('a moderator takes a line down, and an empty line with nothing under it leaves the list', leaf.status === 200 && !(asM5.json.lines ?? []).some((l) => l.id === r4.json.line?.id), asM5.json.lines?.length);
+
+  // The export holds the lines and the setting; deleting the account removes them.
+  const exp = (await api('GET', '/me/export', undefined, N.token)).json;
+  check('the export holds a member’s cohort lines and setting', (exp.cohortTalkLines ?? []).some((l) => l.body === 'level three') && (exp.cohortTalkPrefs ?? []).some((p) => p.cohort_id === kid), [exp.cohortTalkLines?.length, exp.cohortTalkPrefs]);
+  const del = await api('DELETE', '/me', { confirm: 'DELETE' }, N.token);
+  const asM6 = await api('GET', path, undefined, M.token);
+  check('deleting the account deletes the lines, and replies under them stay', del.status === 200 && !(asM6.json.lines ?? []).some((l) => l.body === 'level three') && (asM6.json.lines ?? []).some((l) => l.body === 'level two'), asM6.json.lines?.map((l) => l.body));
+}
+
+// ---------------------------------------------------------------- school programs: draft, private, public, archived
+section('School visibility');
+{
+  // Its own address, so these sign-ups never touch the sign-up limit the rest of the checks use.
+  const VIS_ADDRESS = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 61) & 255}`;
+  const join = async (who) => {
+    const r = await api('POST', '/auth/signup', { email: `school-${who}-${stamp}@smoke.test`, password: `Lantern-${stamp}-pass`, displayName: `School ${who}`, phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': VIS_ADDRESS });
+    return { token: r.json.token, user: await me(r.json.token) };
+  };
+  const W = await join('maker');
+  const S2 = await join('otherstaff');
+  const L = await join('learner');
+  const I = await join('invitee');
+  for (const s of [W, S2]) {
+    await admin('POST', `/admin/users/${s.user.id}/role`, { role: 'sub_admin' });
+    await admin('POST', `/admin/users/${s.user.id}/permissions`, { permissions: ['cohorts'] });
+  }
+  const name = `Smoke test program private ${stamp}`;
+  const listed = async (who, q = '') => JSON.stringify((await api('GET', `/school${q}`, undefined, who.token)).json.programs ?? []).includes(name);
+  const prog = await api('POST', '/school/programs', { name, visibility: 'private' }, W.token);
+  const pid = prog.json.id;
+  const k = await api('POST', `/school/programs/${pid}/cohorts`, { name: `Private cohort ${stamp}`, startAt: new Date().toISOString(), endAt: new Date(Date.now() + 30 * 86_400_000).toISOString() }, W.token);
+  const kid = k.json.id;
+  check('staff with the cohorts permission make a private program and open a cohort', prog.status === 201 && k.status === 201, [prog.json, k.json]);
+  const mine = (await api('GET', '/school', undefined, W.token)).json.programs?.find((p) => p.id === pid);
+  check('its creator sees it as private and may manage it', mine?.visibility === 'private' && mine?.published === false && mine?.canManage === true, mine);
+  check('a learner who was not invited never sees a private program', !(await listed(L)) && !(await listed(I)), '');
+  check('nor does other staff, nor an admin in their own view', !(await listed(S2)) && !(await listed(A)), '');
+  check('an admin sees it under every program', await listed(A, '?view=every'), '');
+  check('a view of every program is for admins only', !(await listed(S2, '?view=every')), '');
+  const explorePriv = await api('GET', `/public/explore?type=program&q=${encodeURIComponent(name)}`);
+  check('Explore never lists a private program', explorePriv.status === 200 && !JSON.stringify(explorePriv.json).includes(name), explorePriv.status);
+  const lEnrol = await api('POST', `/school/cohorts/${kid}/enroll`, {}, L.token);
+  check('someone not invited cannot enrol, and is told nothing about it', lEnrol.status === 404, lEnrol.json);
+  const lCohort = await api('GET', `/school/cohorts/${kid}`, undefined, L.token);
+  check('nor open its cohort', lCohort.status === 404, lCohort.status);
+
+  // Invites: by friend code, by @username, the same words for nobody, and never twice.
+  const nobody = await api('POST', `/school/programs/${pid}/invites`, { who: `nobody-${stamp}` }, W.token);
+  check('an unknown person reads "We could not find that person."', nobody.status === 404 && nobody.json.error === 'We could not find that person.', nobody.json);
+  const byOther = await api('POST', `/school/programs/${pid}/invites`, { who: I.user.friendCode }, S2.token);
+  check('other staff cannot invite to a program they cannot see', byOther.status === 404, byOther.status);
+  const inv = await api('POST', `/school/programs/${pid}/invites`, { who: I.user.friendCode }, W.token);
+  check('the creator invites someone by friend code', inv.status === 201 && inv.json.invite?.userId === I.user.id, inv.json);
+  const again = await api('POST', `/school/programs/${pid}/invites`, { who: `@${I.user.handle}` }, W.token);
+  check('the same person is not invited twice', again.status === 409, again.json);
+  const iInbox = JSON.stringify((await api('GET', '/inbox?size=50', undefined, I.token)).json);
+  check('the invitee is told in the inbox', iInbox.includes(`invited you to ${name}`), '');
+  check('the invitee now sees it', await listed(I), '');
+  const iEnrol = await api('POST', `/school/cohorts/${kid}/enroll`, {}, I.token);
+  check('and can enrol', iEnrol.status === 201, iEnrol.json);
+  const invites = await api('GET', `/school/programs/${pid}/invites`, undefined, W.token);
+  check('the creator lists who is invited', invites.status === 200 && invites.json.invites?.some((x) => x.userId === I.user.id), invites.json);
+  check('a learner cannot read the invite list', (await api('GET', `/school/programs/${pid}/invites`, undefined, I.token)).status === 403, '');
+  const exp = (await api('GET', '/me/export', undefined, I.token)).json;
+  check('the export holds a person’s program invites', (exp.programInvites ?? []).some((x) => x.program_id === pid), exp.programInvites);
+  await api('POST', `/school/programs/${pid}/invites`, { who: L.user.friendCode }, W.token);
+  const seesBefore = await listed(L);
+  const un = await api('DELETE', `/school/programs/${pid}/invites/${L.user.id}`, undefined, W.token);
+  check('an invite can be taken back, and then the program is hidden again', seesBefore && un.status === 200 && !(await listed(L)), [seesBefore, un.status]);
+
+  // State changes: only its creator or an admin; a draft hides it from the invited, who keep the cohort they joined.
+  check('a learner cannot change its state', (await api('PATCH', `/school/programs/${pid}`, { visibility: 'public' }, I.token)).status === 403, '');
+  check('other staff cannot either', (await api('PATCH', `/school/programs/${pid}`, { visibility: 'public' }, S2.token)).status === 404, '');
+  check('a state that is not one of the four is refused', (await api('PATCH', `/school/programs/${pid}`, { visibility: 'hidden' }, W.token)).status === 400, '');
+  const toDraft = await api('PATCH', `/school/programs/${pid}`, { visibility: 'draft' }, W.token);
+  check('a draft is hidden from the invited', toDraft.status === 200 && !(await listed(I)), toDraft.json);
+  check('who keep the cohort they already joined', (await api('GET', `/school/cohorts/${kid}`, undefined, I.token)).status === 200, '');
+  const toPublic = await api('PATCH', `/school/programs/${pid}`, { visibility: 'public' }, W.token);
+  const pubRow = (await api('GET', '/school', undefined, L.token)).json.programs?.find((p) => p.id === pid);
+  check('public lists it for everyone, and published follows', toPublic.status === 200 && pubRow?.visibility === 'public' && pubRow?.published === true && pubRow?.canManage === false, pubRow);
+  // A different address from the private check above: Explore answers are kept at the edge for a minute.
+  const explorePub = await api('GET', `/public/explore?type=program&q=${encodeURIComponent(name)}&after=public`);
+  check('Explore lists it once public', explorePub.status === 200 && JSON.stringify(explorePub.json).includes(name), explorePub.status);
+  check('invites are only for a private program', (await api('POST', `/school/programs/${pid}/invites`, { who: L.user.friendCode }, W.token)).status === 400, '');
+  const early = await api('DELETE', `/school/programs/${pid}`, undefined, W.token);
+  check('a program that is not archived cannot be deleted', early.status === 400, early.json);
+
+  // An admin changes anyone's program; archived takes no one new and hides it, and people in keep their cohort.
+  const arch = await api('PATCH', `/school/programs/${pid}`, { visibility: 'archived' }, A.token);
+  check('an admin archives someone else’s program', arch.status === 200 && arch.json.visibility === 'archived', arch.json);
+  check('archived is hidden from learners and the invited', !(await listed(L)) && !(await listed(I)), '');
+  check('its creator still sees it', await listed(W), '');
+  const lateL = await api('POST', `/school/cohorts/${kid}/enroll`, {}, L.token);
+  const lateA = await api('POST', `/school/cohorts/${kid}/enroll`, {}, A.token);
+  check('archived takes no new enrolments, even from an admin', lateL.status === 404 && lateA.status === 400, [lateL.json, lateA.json]);
+  check('people already in keep their cohort', (await api('GET', `/school/cohorts/${kid}`, undefined, I.token)).status === 200, '');
+  check('no new cohort opens on an archived program', (await api('POST', `/school/programs/${pid}/cohorts`, { name: 'late', startAt: new Date().toISOString(), endAt: new Date(Date.now() + 86_400_000).toISOString() }, W.token)).status === 400, '');
+
+  // Delete for good: only from archived, by its creator or an admin.
+  check('a learner cannot delete it', (await api('DELETE', `/school/programs/${pid}`, undefined, L.token)).status === 404, '');
+  check('other staff cannot delete it', (await api('DELETE', `/school/programs/${pid}`, undefined, S2.token)).status === 404, '');
+  const gone = await api('DELETE', `/school/programs/${pid}`, undefined, W.token);
+  check('its creator deletes an archived program for good', gone.status === 200 && !(await listed(A, '?view=every')), gone.json);
+  check('and its cohort goes with it', (await api('GET', `/school/cohorts/${kid}`, undefined, I.token)).status === 404, '');
+
+  // An admin's own draft: deleted from archived the same way, and an invite goes with an account.
+  const own = await api('POST', '/school/programs', { name: `Smoke test program admin ${stamp}`, visibility: 'private' }, A.token);
+  await api('POST', `/school/programs/${own.json.id}/invites`, { who: I.user.friendCode }, A.token);
+  const iDel = await api('DELETE', '/me', { confirm: 'DELETE' }, I.token);
+  const left = await api('GET', `/school/programs/${own.json.id}/invites`, undefined, A.token);
+  check('deleting an account takes its invites', iDel.status === 200 && !(left.json.invites ?? []).some((x) => x.userId === I.user.id), left.json);
+  await api('PATCH', `/school/programs/${own.json.id}`, { visibility: 'archived' }, A.token);
+  check('an admin deletes their own archived program', (await api('DELETE', `/school/programs/${own.json.id}`, undefined, A.token)).status === 200, '');
+  for (const s of [W, S2]) await admin('POST', `/admin/users/${s.user.id}/role`, { role: 'user' });
+}
+
+// ---------------------------------------------------------------- school editing: names, lessons and School's order (migration 0095)
+section('School editing');
+{
+  const ED_ADDRESS = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 67) & 255}`;
+  const join = async (who) => {
+    const r = await api('POST', '/auth/signup', { email: `school-edit-${who}-${stamp}@smoke.test`, password: `Lantern-${stamp}-pass`, displayName: `School edit ${who}`, phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': ED_ADDRESS });
+    return { token: r.json.token, user: await me(r.json.token) };
+  };
+  const W = await join('maker');
+  const L = await join('learner');
+  await admin('POST', `/admin/users/${W.user.id}/role`, { role: 'sub_admin' });
+  await admin('POST', `/admin/users/${W.user.id}/permissions`, { permissions: ['cohorts'] });
+  const name = `Smoke test program editing ${stamp}`;
+  const prog = await api('POST', '/school/programs', { name, description: 'Made by the smoke test.', visibility: 'public' }, W.token);
+  const pid = prog.json.id;
+  const k = await api('POST', `/school/programs/${pid}/cohorts`, { name: `Editing cohort ${stamp}`, startAt: new Date().toISOString(), endAt: new Date(Date.now() + 30 * 86_400_000).toISOString() }, W.token);
+  const kid = k.json.id;
+  check('staff make a public program with a cohort to edit', prog.status === 201 && k.status === 201, [prog.json, k.json]);
+
+  // Its name and description, changed in place by whoever runs it; never by a learner.
+  const renamed = await api('PATCH', `/school/programs/${pid}`, { name: `${name} renamed`, description: 'Changed by the smoke test.' }, W.token);
+  const row = (await api('GET', '/school', undefined, L.token)).json.programs?.find((p) => p.id === pid);
+  check('its maker renames it and changes its words', renamed.status === 200 && row?.name === `${name} renamed` && row?.description === 'Changed by the smoke test.', [renamed.json, row?.name]);
+  check('a learner cannot rename it', (await api('PATCH', `/school/programs/${pid}`, { name: 'Taken over' }, L.token)).status === 403, '');
+  check('an empty name is refused', (await api('PATCH', `/school/programs/${pid}`, { name: '   ' }, W.token)).status === 400, '');
+
+  // Lessons: added with no links in the words, changed in place, moved, removed.
+  const linked = await api('POST', `/school/programs/${pid}/items`, { moduleTitle: 'Has a link', body: 'Read https://example.com first.' }, W.token);
+  check('a lesson whose words carry a link is refused', linked.status === 400, linked.json);
+  const badRef = await api('POST', `/school/programs/${pid}/items`, { moduleTitle: 'Odd resource', contentRef: 'javascript:alert(1)' }, W.token);
+  check('a lesson resource that is not https or /resources/ is refused', badRef.status === 400, badRef.json);
+  const one = await api('POST', `/school/programs/${pid}/items`, { moduleTitle: 'First lesson', body: '## Start\n\nIn this lesson you will learn one thing.' }, W.token);
+  const two = await api('POST', `/school/programs/${pid}/items`, { moduleTitle: 'Second lesson', body: 'More words.' }, W.token);
+  check('its maker adds two lessons', one.status === 201 && two.status === 201 && one.json.id && two.json.id, [one.json, two.json]);
+  await api('POST', `/school/cohorts/${kid}/enroll`, {}, L.token);
+  const titles = async () => ((await api('GET', `/school/cohorts/${kid}`, undefined, L.token)).json.items ?? []).map((i) => i.moduleTitle);
+  check('a learner reads them in order', JSON.stringify(await titles()) === JSON.stringify(['First lesson', 'Second lesson']), await titles());
+  const edit = await api('PATCH', `/school/items/${one.json.id}`, { moduleTitle: 'First lesson, changed', body: 'Changed words.', contentType: 'reading' }, W.token);
+  const items = (await api('GET', `/school/cohorts/${kid}`, undefined, L.token)).json.items ?? [];
+  const first = items.find((i) => i.id === one.json.id);
+  check('its maker changes a lesson’s title, kind and words', edit.status === 200 && first?.moduleTitle === 'First lesson, changed' && first?.body === 'Changed words.' && first?.contentType === 'reading', [edit.json, first]);
+  check('a link in changed words is refused', (await api('PATCH', `/school/items/${one.json.id}`, { body: 'See [this](https://example.com).' }, W.token)).status === 400, '');
+  check('an empty title is refused', (await api('PATCH', `/school/items/${one.json.id}`, { moduleTitle: '' }, W.token)).status === 400, '');
+  check('a learner cannot change a lesson', (await api('PATCH', `/school/items/${one.json.id}`, { moduleTitle: 'Mine now' }, L.token)).status === 403, '');
+  check('nor move one', (await api('POST', `/school/items/${two.json.id}/move`, { to: 'up' }, L.token)).status === 403, '');
+  check('nor remove one', (await api('DELETE', `/school/items/${two.json.id}`, undefined, L.token)).status === 403, '');
+  const up = await api('POST', `/school/items/${two.json.id}/move`, { to: 'up' }, W.token);
+  check('moving the second lesson up puts it first', up.status === 200 && (await titles())[0] === 'Second lesson', [up.json, await titles()]);
+  check('the first lesson cannot move further up', (await api('POST', `/school/items/${two.json.id}/move`, { to: 'up' }, W.token)).status === 400, '');
+  const gone = await api('DELETE', `/school/items/${two.json.id}`, undefined, W.token);
+  check('its maker removes a lesson, and it leaves the cohort', gone.status === 200 && JSON.stringify(await titles()) === JSON.stringify(['First lesson, changed']), [gone.json, await titles()]);
+  check('a lesson already removed is not found', (await api('DELETE', `/school/items/${two.json.id}`, undefined, W.token)).status === 404, '');
+
+  // School's order: an admin moves a program first, up or down among programs in the same state; nobody else can.
+  const asW = (await api('GET', '/school', undefined, W.token)).json.programs?.find((p) => p.id === pid);
+  check('only an admin is offered the order', asW?.canOrder === false, asW);
+  check('staff cannot move a program', (await api('POST', `/school/programs/${pid}/move`, { to: 'first' }, W.token)).status === 403, '');
+  check('a move that is not first, up or down is refused', (await api('POST', `/school/programs/${pid}/move`, { to: 'sideways' }, A.token)).status === 400, '');
+  const firstIs = async () => (await api('GET', '/school', undefined, L.token)).json.programs?.[0]?.id;
+  // First, then down, then first again: a new program has no place yet, so it may sit first (nothing placed) or last (a database
+  // where an earlier run placed every program), and only from first is a move down always there to make.
+  const lead = (await firstIs()) === pid ? { status: 200, json: 'already first' } : await api('POST', `/school/programs/${pid}/move`, { to: 'first' }, A.token);
+  const down = await api('POST', `/school/programs/${pid}/move`, { to: 'down' }, A.token);
+  check('an admin moves a program down a place', lead.status === 200 && down.status === 200 && (await firstIs()) !== pid, [lead.json, down.json, await firstIs()]);
+  const toFirst = await api('POST', `/school/programs/${pid}/move`, { to: 'first' }, A.token);
+  check('and shows it first, for everyone', toFirst.status === 200 && (await firstIs()) === pid, [toFirst.json, await firstIs()]);
+  check('the first program cannot move up', (await api('POST', `/school/programs/${pid}/move`, { to: 'up' }, A.token)).status === 400, '');
+  // The server says where each program sits in its state for the view asked for, so the screen never offers a move that fails.
+  const ends = async (view) => (await api('GET', `/school${view === 'every' ? '?view=every' : ''}`, undefined, A.token)).json.programs?.find((p) => p.id === pid);
+  const mineEnds = await ends('mine');
+  const everyEnds = await ends('every');
+  check('the admin is told it is first of its state in both views', mineEnds?.orderFirst === true && everyEnds?.orderFirst === true, [mineEnds, everyEnds]);
+  check('a staff member is not told the order', asW?.orderFirst === undefined, asW);
+  // Put Onboarding back first when this server has it (migration 0096), so the order is what people see after the smoke run.
+  if ((await api('GET', '/school/cohorts/coh-onboarding', undefined, A.token)).status === 200) {
+    await api('POST', '/school/programs/prog-onboarding/move', { to: 'first' }, A.token);
+    check('Onboarding is first in School again', (await firstIs()) === 'prog-onboarding', await firstIs());
+  }
+  // The Admin guide stays for admins only (migration 0088): never public, never invites.
+  if ((await api('GET', '/school/cohorts/coh-admin-guide', undefined, A.token)).status === 200) {
+    check('the Admin guide cannot be made public', (await api('PATCH', '/school/programs/prog-admin-guide', { visibility: 'public' }, A.token)).status === 400, '');
+    check('nor take invites', (await api('POST', '/school/programs/prog-admin-guide/invites', { who: L.user.friendCode }, A.token)).status === 400, '');
+    // With School switched off for the admin, the guide still opens and its lessons can still be added, changed, moved and removed.
+    const shut = await admin('POST', '/admin/flags/school/overrides', { subjectType: 'user', subjectId: A.user.id, enabled: false, reason: 'smoke guide' });
+    try {
+      check('School off for the admin shuts the rest of School', (await api('GET', '/school', undefined, A.token)).status === 403, shut.json);
+      check('but the Admin guide still opens', (await api('GET', '/school/cohorts/coh-admin-guide', undefined, A.token)).status === 200, '');
+      const add = await api('POST', '/school/programs/prog-admin-guide/items', { moduleTitle: `Smoke guide lesson ${stamp}`, body: 'Added by the smoke test.' }, A.token);
+      const lid = add.json?.id;
+      const changed = await api('PATCH', `/school/items/${lid}`, { moduleTitle: `Smoke guide lesson ${stamp}, changed` }, A.token);
+      const moved = await api('POST', `/school/items/${lid}/move`, { to: 'up' }, A.token);
+      const removed = await api('DELETE', `/school/items/${lid}`, undefined, A.token);
+      check('and the admin adds, changes, moves and removes a guide lesson', add.status === 201 && changed.status === 200 && [200, 400].includes(moved.status) && removed.status === 200, [add.json, changed.json, moved.json, removed.json]);
+    } finally {
+      if (shut.json?.override?.id) await admin('DELETE', `/admin/flags/overrides/${shut.json.override.id}`);
+    }
+  }
+
+  await api('PATCH', `/school/programs/${pid}`, { visibility: 'archived' }, W.token);
+  check('the editing program is deleted after', (await api('DELETE', `/school/programs/${pid}`, undefined, W.token)).status === 200, '');
+  await admin('POST', `/admin/users/${W.user.id}/role`, { role: 'user' });
 }
 
 // ---------------------------------------------------------------- club benefits and reward changes
@@ -1715,7 +2088,13 @@ section('Attendee codes');
   check('an anonymous author can be blocked without learning who they are', blockedBy.status === 201, blockedBy.json);
   const stillThere = (await api('GET', '/community?size=50', undefined, O.token)).json.posts?.some((x) => x.id === anon.json.post.id);
   check('the blocked author’s posts disappear for the one who blocked', stillThere === false, stillThere);
-  await api('DELETE', `/bond/block/${G.user.id}`, undefined, O.token);
+  // The block is listed under the post's made-up name: no real name, @handle or id anywhere in Bond's list (migration 0099).
+  const oBlocks = await api('GET', '/bond/blocks', undefined, O.token);
+  const oAnon = oBlocks.json.blocked?.find((b) => b.anonymous);
+  check('Bond lists a block of an anonymous author by the made-up name only', oBlocks.status === 200 && oAnon?.name === seenAnon?.authorName && oAnon.userId === '' && oAnon.handle === null && !JSON.stringify(oBlocks.json).includes(G.user.id) && !JSON.stringify(oBlocks.json).includes('Smoke guest') && (!G.user.handle || !JSON.stringify(oBlocks.json).includes(G.user.handle)), oBlocks.json);
+  const oLift = await api('DELETE', `/bond/block/${encodeURIComponent(oAnon?.key ?? 'none')}`, undefined, O.token);
+  const backAgain = (await api('GET', '/community?size=50', undefined, O.token)).json.posts?.some((x) => x.id === anon.json.post.id);
+  check('Unblock on that made-up name lifts the block', oLift.status === 200 && backAgain === true && !(await api('GET', '/bond/blocks', undefined, O.token)).json.blocked?.some((b) => b.key === oAnon?.key), [oLift.status, backAgain]);
   const evAnon = await api('POST', `/connect/party/${ev.id}/messages`, { body: 'Is there parking?', anonymous: true }, G.token);
   const evRoot = (await api('GET', `/connect/party/${ev.id}`, undefined, H.token)).json.messages?.find((m) => m.body === 'Is there parking?');
   check('an anonymous line in an event carries a made-up name and no id', evAnon.status === 201 && evRoot?.anonymous === true && evRoot.userId === '' && /^\w+ \w+ \d\d$/.test(evRoot.name ?? ''), evRoot);
@@ -3276,7 +3655,10 @@ section('Channels');
   check('lifting the block brings the lines back', (await lines('community', room.id, M2.token)).lines?.some((l) => l.body.startsWith('hello one')) === true, '');
   const blockAnon = await api('POST', `/community/channels/${room.id}/messages/${anonA.json.line.id}/block-author`, {}, X.token);
   check('an anonymous line’s writer can be blocked by the line, without learning who it is', blockAnon.status === 201, blockAnon.status);
-  await api('DELETE', `/bond/block/${M1.user.id}`, undefined, X.token);
+  const xBlocks = await api('GET', '/bond/blocks', undefined, X.token);
+  const xAnon = xBlocks.json.blocked?.find((b) => b.anonymous);
+  check('Bond lists it by the channel’s made-up name, never who wrote it', xAnon?.name === seenBy2[0]?.name && xAnon.userId === '' && !JSON.stringify(xBlocks.json).includes(M1.user.id) && !JSON.stringify(xBlocks.json).includes('Chan one'), xBlocks.json);
+  await api('DELETE', `/bond/block/${encodeURIComponent(xAnon?.key ?? 'none')}`, undefined, X.token);
 
   // Taking a line down.
   const notYours = await api('DELETE', `/community/channels/${room.id}/messages/${one.json.line.id}`, undefined, M2.token);
@@ -5044,6 +5426,324 @@ section('Good and bad habits');
     const other = await api('GET', `/insights?day=${today}`, undefined, O.token);
     check('habits: another account sees none of it', other.status === 200 && !JSON.stringify(other.json).includes('Scroll in bed') && !JSON.stringify(other.json).includes('Evening walk'), '');
   }
+}
+
+section('Area of life on a task');
+{
+  // A task (and so a habit) can carry one of the five areas of life beside its pillar: a tag and a filter, never a change to what a tick pays.
+  const L = await signup(`lifearea-${stamp}@smoke.test`, 'Lifearea-smoke-ok-1', 'Area Smoke');
+  const built = await api('POST', '/onboarding/build', { relationships: ['self'], date: today, picks: { self: { project: 'Area project' } } }, L.token);
+  const proj = (built.json.nodes ?? []).find((n) => n.kind === 'project');
+  check('area: a pyramid to hang tasks on', built.status === 201 && proj?.id, built.status);
+  const add = (b) => api('POST', '/nodes', { kind: 'task', parentId: proj?.id, relationship: 'self', ...b }, L.token);
+  const lifeBefore = await api('GET', '/life', undefined, L.token);
+  check('area: before any task carries an area, Life shows no tasks part', lifeBefore.status === 200 && lifeBefore.json.areas?.every((a) => !a.parts.some((p) => p.label === 'Tasks for this area')), lifeBefore.json.areas?.map((a) => a.parts.map((p) => p.label)));
+  check('area: Life keeps the five areas in their one order', lifeBefore.json.areas?.map((a) => a.key).join() === 'physical,financial,mental,emotional,spiritual', lifeBefore.json.areas?.map((a) => a.key));
+
+  const plain = await add({ title: 'No area yet', doDate: today });
+  check('area: a task starts with no area', plain.status === 201 && plain.json.node?.lifeArea === null, plain.json.node);
+  const made = await add({ title: 'Morning run', doDate: today, lifeArea: 'physical' });
+  check('area: a task is made with an area', made.status === 201 && made.json.node?.lifeArea === 'physical', made.json.node);
+  // Tagging one task Physical changes no other area: with no Finance data the financial score and its parts stay as they were.
+  const lifeOne = await api('GET', '/life', undefined, L.token);
+  const areaOf = (life, key) => life.json.areas?.find((a) => a.key === key);
+  check('area: one Physical task leaves the financial score and parts unchanged', lifeOne.status === 200 && JSON.stringify(areaOf(lifeOne, 'financial')) === JSON.stringify(areaOf(lifeBefore, 'financial')), [areaOf(lifeBefore, 'financial'), areaOf(lifeOne, 'financial')]);
+  check('area: one Physical task leaves mental, emotional and spiritual unchanged', ['mental', 'emotional', 'spiritual'].every((k) => JSON.stringify(areaOf(lifeOne, k)) === JSON.stringify(areaOf(lifeBefore, k))), '');
+  check('area: one Physical task shows the tasks part on physical only', lifeOne.json.areas?.filter((a) => a.parts.some((p) => p.label === 'Tasks for this area')).map((a) => a.key).join() === 'physical', lifeOne.json.areas?.map((a) => [a.key, a.parts.map((p) => p.label)]));
+  const byName = await add({ title: 'Read the statement', doDate: today, lifeArea: 'Financial' });
+  check('area: an area can be sent by its name', byName.status === 201 && byName.json.node?.lifeArea === 'financial', byName.json.node);
+  const bad = await add({ title: 'Bad area', doDate: today, lifeArea: 'body' });
+  check('area: an unknown area is refused with a plain line', bad.status === 400 && bad.json.error === 'pick one of the five areas, or none', bad.json);
+  const proto = await add({ title: 'Proto area', doDate: today, lifeArea: 'constructor' });
+  check('area: "constructor" is not an area', proto.status === 400, proto.json);
+
+  const patched = await api('PATCH', `/nodes/${plain.json.node?.id}`, { lifeArea: 'mental' }, L.token);
+  check('area: an area can be set later', patched.status === 200 && patched.json.node?.lifeArea === 'mental', patched.json.node);
+  const kept = await api('PATCH', `/nodes/${plain.json.node?.id}`, { title: 'Still mental' }, L.token);
+  check('area: a change that does not name the area keeps it', kept.json.node?.lifeArea === 'mental', kept.json.node);
+  const badPatch = await api('PATCH', `/nodes/${plain.json.node?.id}`, { lifeArea: 42 }, L.token);
+  check('area: a bad area on a change is refused and changes nothing', badPatch.status === 400 && (await api('GET', `/nodes/${plain.json.node?.id}`, undefined, L.token)).json.node?.lifeArea === 'mental', badPatch.json);
+  const cleared = await api('PATCH', `/nodes/${plain.json.node?.id}`, { lifeArea: null }, L.token);
+  check('area: null clears it', cleared.status === 200 && cleared.json.node?.lifeArea === null, cleared.json.node);
+  await api('PATCH', `/nodes/${plain.json.node?.id}`, { lifeArea: 'emotional' }, L.token);
+  const none = await api('PATCH', `/nodes/${plain.json.node?.id}`, { lifeArea: 'none' }, L.token);
+  check('area: "none" clears it too', none.status === 200 && none.json.node?.lifeArea === null, none.json.node);
+  check('area: someone else cannot set it', (await api('PATCH', `/nodes/${made.json.node?.id}`, { lifeArea: 'spiritual' }, A.token)).status === 404);
+
+  const one = await api('GET', `/nodes/${made.json.node?.id}`, undefined, L.token);
+  check('area: one task read carries it', one.json.node?.lifeArea === 'physical', one.json.node);
+  const list = await api('GET', '/nodes?relationship=self&kind=task', undefined, L.token);
+  check('area: the pillar page list carries it', list.json.nodes?.find((n) => n.id === made.json.node?.id)?.lifeArea === 'physical', '');
+  const daily = await api('GET', `/today?date=${today}`, undefined, L.token);
+  check('area: Daily carries it on every task', daily.status === 200 && daily.json.tasks?.find((n) => n.id === made.json.node?.id)?.lifeArea === 'physical' && daily.json.tasks?.every((n) => 'lifeArea' in n), daily.json.tasks?.map((n) => [n.title, n.lifeArea]));
+  const onlyPhysical = await api('GET', `/today?date=${today}&area=physical`, undefined, L.token);
+  check('area: Daily cut to one area holds only that area', onlyPhysical.status === 200 && onlyPhysical.json.area === 'physical' && onlyPhysical.json.areasUsed === true && (onlyPhysical.json.tasks ?? []).every((n) => n.lifeArea === 'physical'), onlyPhysical.json.tasks?.map((n) => n.lifeArea));
+  const noArea = await api('GET', `/today?date=${today}&area=none`, undefined, L.token);
+  check('area: Daily cut to no area holds only untagged tasks', noArea.status === 200 && (noArea.json.tasks ?? []).every((n) => n.lifeArea === null) && !(noArea.json.tasks ?? []).some((n) => n.id === made.json.node?.id), noArea.json.tasks?.map((n) => n.lifeArea));
+  const undated = await add({ title: 'Someday budget', lifeArea: 'financial' });
+  const backlog = (await api('GET', `/today?date=${today}`, undefined, L.token)).json.backlog ?? [];
+  check('area: Not scheduled yet carries it', backlog.find((n) => n.id === undated.json.node?.id)?.lifeArea === 'financial', backlog.map((n) => [n.title, n.lifeArea]));
+  const month = (await api('GET', `/today/month?month=${today.slice(0, 7)}&day=${today}`, undefined, L.token)).json.tasks ?? [];
+  check('area: the month calendar carries it', month.find((t) => t.id === made.json.node?.id)?.lifeArea === 'physical', month.map((t) => [t.title, t.lifeArea]));
+
+  // The repeat carries the area to the next one.
+  const habit = await add({ title: 'Evening stretch', doDate: today, lifeArea: 'Physical', repeat: { kind: 'daily', every: 1, days: [], until: null } });
+  const tickedHabit = await api('POST', `/nodes/${habit.json.node?.id}/complete`, { date: today }, L.token);
+  check('area: ticking a repeating task carries the area to the next one', tickedHabit.status === 200 && tickedHabit.json.next?.lifeArea === 'physical', tickedHabit.json.next);
+  check('area: the area never changes what a tick pays', tickedHabit.json.ripple?.[0]?.amount === XP.task, tickedHabit.json.ripple);
+
+  // Life: each area the person tagged a task with shows "Tasks for this area" with its count; the others are left as they were.
+  const tickedRun = await api('POST', `/nodes/${made.json.node?.id}/complete`, { date: today }, L.token);
+  check('area: the run is ticked', tickedRun.status === 200, tickedRun.json);
+  const lifeAfter = await api('GET', '/life', undefined, L.token);
+  const partOf = (key) => lifeAfter.json.areas?.find((a) => a.key === key)?.parts.find((p) => p.label === 'Tasks for this area');
+  check('area: Life shows the tasks part only on the areas in use', lifeAfter.status === 200 && lifeAfter.json.areas?.filter((a) => a.parts.some((p) => p.label === 'Tasks for this area')).map((a) => a.key).join() === 'physical,financial', lifeAfter.json.areas?.map((a) => [a.key, a.parts.map((p) => p.label)]));
+  check('area: physical counts the two ticked physical tasks', partOf('physical')?.value === '2 tasks ticked' && partOf('physical')?.score === 40 && partOf('physical')?.path === '/today?area=physical', partOf('physical'));
+  check('area: an area in use with none ticked counts zero', partOf('financial')?.value === '0 tasks ticked' && partOf('financial')?.score === 0, partOf('financial'));
+  check('area: an area never tagged has no tasks part', partOf('spiritual') === undefined, partOf('spiritual'));
+  check('area: Life still keeps the one order', lifeAfter.json.areas?.map((a) => a.key).join() === 'physical,financial,mental,emotional,spiritual');
+  check('area: another account sees no tasks part', (await api('GET', '/life', undefined, A.token)).json.areas?.every((a) => !a.parts.some((p) => p.label === 'Tasks for this area')));
+
+  const exported = await api('GET', '/me/export', undefined, L.token);
+  check('area: the export carries it', JSON.stringify(exported.json).includes('"life_area":"physical"'), '');
+}
+
+section('Time blocks');
+{
+  // Time blocks, day templates and the weekly pattern (docs/time-blocks.md): settings the person owns, core like /today.
+  const T = await signup(`timeblocks-${stamp}@smoke.test`, 'Timeblocks-smoke-ok-1', 'Blocks Smoke');
+  const built = await api('POST', '/onboarding/build', { relationships: ['self'], date: today, picks: { self: { project: 'Blocks project' } } }, T.token);
+  const proj = (built.json.nodes ?? []).find((n) => n.kind === 'project');
+  check('blocks: a pyramid to hang tasks on', built.status === 201 && proj?.id, built.status);
+  const add = (b) => api('POST', '/nodes', { kind: 'task', parentId: proj?.id, relationship: 'self', ...b }, T.token);
+  const weekday = ((new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
+
+  const first = await api('GET', `/time-blocks?day=${today}`, undefined, T.token);
+  check('blocks: the first read adds the starting set, 14 blocks and 14 day templates', first.status === 200 && first.json.blocks?.length === 14 && first.json.templates?.length === 14, [first.status, first.json.blocks?.length, first.json.templates?.length]);
+  const second = await api('GET', `/time-blocks?day=${today}`, undefined, T.token);
+  check('blocks: a second read adds nothing', second.json.blocks?.length === 14 && second.json.templates?.length === 14 && JSON.stringify(second.json.blocks?.map((b) => b.id)) === JSON.stringify(first.json.blocks?.map((b) => b.id)), second.json.blocks?.length);
+  check('blocks: the week is seven days from its Monday', second.json.days?.length === 7 && second.json.days?.[0]?.weekday === 1 && second.json.week === second.json.days?.[0]?.date, second.json.days?.map((d) => d.date));
+  const blockOf = (seed) => second.json.blocks?.find((b) => b.seed === seed);
+  const tplOf = (seed) => second.json.templates?.find((t) => t.seed === seed);
+  const everyday = tplOf('everyday');
+  const deep = blockOf('deep');
+  check('blocks: Everyday is the default with the founder’s ten', everyday?.isDefault === true && second.json.defaultTemplateId === everyday?.id && everyday?.slots?.length === 10, everyday);
+  check('blocks: Deep work runs 10 am to 1 pm and Sleep 11 pm to 7 am', everyday?.slots?.some((sl) => sl.blockId === deep?.id && sl.start === 600 && sl.end === 780) && everyday?.slots?.some((sl) => sl.blockId === blockOf('sleep')?.id && sl.start === 1380 && sl.end === 420), everyday?.slots);
+  check('blocks: Sleep is tagged Recovery, Deep work Focus', blockOf('sleep')?.tag === 'Recovery' && deep?.tag === 'Focus' && deep?.color === 'red', [blockOf('sleep'), deep]);
+  check('blocks: every day starts on the default', second.json.days?.every((d) => d.from === 'default' && d.templateId === everyday?.id), second.json.days);
+  const stranger = await api('GET', `/time-blocks?day=${today}`, undefined, A.token);
+  check('blocks: another person’s blocks are their own', stranger.status === 200 && !stranger.json.blocks?.some((b) => b.id === deep?.id), '');
+
+  // Blocks: add, change, refuse what is not clean.
+  const made = await api('POST', '/time-blocks/blocks', { name: 'Writing', tag: 'Focus', color: 'sky', area: 'financial', pillar: 'servant_leader' }, T.token);
+  check('blocks: a block is added', made.status === 201 && made.json.block?.name === 'Writing' && made.json.block?.color === 'sky' && made.json.block?.area === 'financial', made.json);
+  // A person's own "#rrggbb" is a colour now (the founder's colour wheel, 2026-11-06); anything that is neither a swatch nor a hex is refused.
+  check('blocks: a colour that is neither a swatch nor a hex is refused', (await api('POST', '/time-blocks/blocks', { name: 'Bad', color: 'not-a-colour' }, T.token)).status === 400);
+  check('blocks: a block needs a name', (await api('POST', '/time-blocks/blocks', { name: '  ', color: 'red' }, T.token)).status === 400);
+  const renamed = await api('PATCH', `/time-blocks/blocks/${made.json.block?.id}`, { name: 'Writing time', area: null }, T.token);
+  check('blocks: a block is renamed and its area cleared', renamed.status === 200 && renamed.json.block?.name === 'Writing time' && renamed.json.block?.area === null && renamed.json.block?.color === 'sky', renamed.json);
+  check('blocks: someone else cannot change it', (await api('PATCH', `/time-blocks/blocks/${made.json.block?.id}`, { name: 'Mine now' }, A.token)).status === 404);
+  const ids = [...(second.json.blocks ?? []).map((b) => b.id), made.json.block?.id];
+  check('blocks: arranging needs every block once', (await api('PUT', '/time-blocks/blocks/order', { ids: ids.slice(1) }, T.token)).status === 400);
+  const arranged = await api('PUT', '/time-blocks/blocks/order', { ids: [...ids].reverse() }, T.token);
+  const afterOrder = await api('GET', `/time-blocks?day=${today}`, undefined, T.token);
+  check('blocks: arranging puts them in the new order', arranged.status === 200 && afterOrder.json.blocks?.[0]?.id === made.json.block?.id, afterOrder.json.blocks?.map((b) => b.name));
+
+  // Templates: slots that overlap are refused; a copy keeps the slots; one default.
+  const overlap = await api('POST', '/time-blocks/templates', { name: 'Clash day', lead: 'self', slots: [{ blockId: deep?.id, start: '10:00', end: '13:00' }, { blockId: blockOf('recovery')?.id, start: '12:00', end: '15:00' }] }, T.token);
+  check('blocks: overlapping slots answer 400 and name both', overlap.status === 400 && /Deep work .* overlaps Recovery/.test(overlap.json.error ?? ''), overlap.json);
+  check('blocks: a slot with someone else’s block is refused', (await api('POST', '/time-blocks/templates', { name: 'Theirs', lead: 'self', slots: [{ blockId: stranger.json.blocks?.[0]?.id, start: '10:00', end: '11:00' }] }, T.token)).status === 400);
+  check('blocks: a second pillar the same as the lead is refused', (await api('POST', '/time-blocks/templates', { name: 'Same', lead: 'self', second: 'self' }, T.token)).status === 400);
+  const mine = await api('POST', '/time-blocks/templates', { name: 'Writing day', lead: 'servant_leader', second: 'self', slots: [{ blockId: made.json.block?.id, start: '09:00', end: '12:00' }, { blockId: blockOf('sleep')?.id, start: '23:00', end: '07:00' }] }, T.token);
+  check('blocks: a template of your own is saved with its slots in clock order', mine.status === 201 && mine.json.template?.slots?.length === 2 && mine.json.template?.slots?.[0]?.start === 540 && mine.json.template?.isDefault === false, mine.json);
+  const copy = await api('POST', '/time-blocks/templates', { name: 'My day', fromId: everyday?.id }, T.token);
+  check('blocks: a copy keeps the slots and pillars, not the seed', copy.status === 201 && copy.json.template?.slots?.length === 10 && copy.json.template?.lead === 'servant_leader' && copy.json.template?.seed === null, copy.json);
+  const reslot = await api('PATCH', `/time-blocks/templates/${copy.json.template?.id}`, { slots: [{ blockId: deep?.id, start: '08:00', end: '12:00' }] }, T.token);
+  check('blocks: changing the slots replaces the whole set', reslot.status === 200 && reslot.json.template?.slots?.length === 1 && reslot.json.template?.slots?.[0]?.start === 480, reslot.json);
+  const noDefault = await api('DELETE', `/time-blocks/templates/${everyday?.id}`, undefined, T.token);
+  check('blocks: the default cannot be deleted', noDefault.status === 409, noDefault.json);
+  const newDefault = await api('PATCH', `/time-blocks/templates/${mine.json.template?.id}`, { isDefault: true }, T.token);
+  const afterDefault = await api('GET', `/time-blocks?day=${today}`, undefined, T.token);
+  check('blocks: making another the default leaves exactly one', newDefault.status === 200 && afterDefault.json.defaultTemplateId === mine.json.template?.id && afterDefault.json.templates?.filter((t) => t.isDefault).length === 1, afterDefault.json.templates?.filter((t) => t.isDefault).map((t) => t.name));
+  await api('PATCH', `/time-blocks/templates/${everyday?.id}`, { isDefault: true }, T.token);
+
+  // A kind of day's own colour (migration 0098, 2026-11-06): each starting template wears its own; a swatch or a hex is kept, anything
+  // else is refused, null goes back to its longest block's; with every wheel colour taken, a copy keeps its source's.
+  check('blocks: the starting templates wear their own colours', everyday?.color === 'indigo' && tplOf('deep')?.color === 'red' && tplOf('travel')?.color === 'vermilion' && tplOf('family')?.color === 'amber', [everyday?.color, tplOf('deep')?.color, tplOf('travel')?.color, tplOf('family')?.color]);
+  check('blocks: a copy keeps its source’s colour once the wheel is used up', copy.json.template?.color === 'indigo', copy.json.template?.color);
+  const tinted = await api('PATCH', `/time-blocks/templates/${copy.json.template?.id}`, { color: 'teal' }, T.token);
+  check('blocks: a template’s colour is set', tinted.status === 200 && tinted.json.template?.color === 'teal' && tinted.json.template?.slots?.length === 1, tinted.json);
+  const ownHex = await api('PATCH', `/time-blocks/templates/${copy.json.template?.id}`, { color: '#1E90FF' }, T.token);
+  check('blocks: a template takes a hex colour, kept in lower case', ownHex.status === 200 && ownHex.json.template?.color === '#1e90ff', ownHex.json);
+  const badTint = await api('PATCH', `/time-blocks/templates/${copy.json.template?.id}`, { color: 'not-a-colour' }, T.token);
+  check('blocks: a template colour that is neither a swatch nor a hex is refused', badTint.status === 400, badTint.json);
+  check('blocks: a new template with a bad colour is refused', (await api('POST', '/time-blocks/templates', { name: 'Bad tint', lead: 'self', color: 'constructor' }, T.token)).status === 400);
+  const keptHex = await api('GET', `/time-blocks?day=${today}`, undefined, T.token);
+  check('blocks: a refused colour leaves the old one', keptHex.json.templates?.find((t) => t.id === copy.json.template?.id)?.color === '#1e90ff', keptHex.json.templates?.find((t) => t.id === copy.json.template?.id));
+  const cleared = await api('PATCH', `/time-blocks/templates/${copy.json.template?.id}`, { color: null }, T.token);
+  check('blocks: a null colour goes back to none', cleared.status === 200 && cleared.json.template?.color === null, cleared.json);
+
+  // The weekly pattern and single dates.
+  const plainDay = await api('GET', `/today?date=${today}`, undefined, T.token);
+  check('blocks: Daily carries the day’s plan', plainDay.status === 200 && plainDay.json.day?.template?.id === everyday?.id && plainDay.json.day?.from === 'default' && plainDay.json.day?.slots?.length === 10 && plainDay.json.day?.blocks?.length === 15, plainDay.json.day);
+  const pattern = await api('PUT', '/time-blocks/pattern', { weekdays: [weekday], templateId: tplOf('deep')?.id }, T.token);
+  check('blocks: the pattern gives a weekday a template and says what it had', pattern.status === 200 && pattern.json.pattern?.[weekday - 1] === tplOf('deep')?.id && pattern.json.previous?.[0]?.templateId === null, pattern.json);
+  const weekDay = await api('GET', `/today?date=${today}`, undefined, T.token);
+  check('blocks: the week’s template is the day’s', weekDay.json.day?.template?.name === 'Deep work day' && weekDay.json.day?.from === 'week', weekDay.json.day?.template);
+  check('blocks: the pattern takes a weekday from 1 to 7 only', (await api('PUT', '/time-blocks/pattern', { weekdays: [8], templateId: null }, T.token)).status === 400);
+  const dated = await api('PUT', '/time-blocks/days', { dates: [today], templateId: tplOf('family')?.id }, T.token);
+  const datedDay = await api('GET', `/today?date=${today}`, undefined, T.token);
+  check('blocks: a date change wins over the week', dated.status === 200 && dated.json.days?.[0]?.previous === null && datedDay.json.day?.template?.name === 'Family day' && datedDay.json.day?.from === 'date', [dated.json, datedDay.json.day?.template]);
+  const datedWeek = await api('GET', `/time-blocks?day=${today}`, undefined, T.token);
+  check('blocks: the week shows the change and leaves the pattern alone', datedWeek.json.overrides?.some((o) => o.date === today && o.templateId === tplOf('family')?.id) && datedWeek.json.pattern?.[weekday - 1] === tplOf('deep')?.id, [datedWeek.json.overrides, datedWeek.json.pattern]);
+  check('blocks: a day that is not real is refused', (await api('PUT', '/time-blocks/days', { dates: ['2026-11-31'], templateId: null }, T.token)).status === 400);
+  check('blocks: a template by a name nobody has is refused', (await api('PUT', '/time-blocks/days', { dates: [today], template: 'Moon day' }, T.token)).status === 400);
+  const byName = await api('PUT', '/time-blocks/days', { dates: [today], template: 'social day' }, T.token);
+  check('blocks: a template can be named instead of its id', byName.status === 200 && byName.json.days?.[0]?.templateId === tplOf('social')?.id && byName.json.days?.[0]?.previous === tplOf('family')?.id, byName.json);
+  const undated = await api('PUT', '/time-blocks/days', { dates: [today], templateId: null }, T.token);
+  const backToWeek = await api('GET', `/today?date=${today}`, undefined, T.token);
+  check('blocks: null puts the date back on the week', undated.status === 200 && backToWeek.json.day?.from === 'week' && backToWeek.json.day?.template?.name === 'Deep work day', backToWeek.json.day?.template);
+
+  // The old kind of day keeps working: a kind maps to the template made from it.
+  const oldKind = await api('PUT', '/today/day-type', { date: today, today, kind: 'family' }, T.token);
+  const oldRead = await api('GET', `/today/day-type?date=${today}&today=${today}`, undefined, T.token);
+  const oldDay = await api('GET', `/today?date=${today}`, undefined, T.token);
+  check('blocks: an old kind of day finds its template', oldKind.status === 200 && oldRead.json.kind === 'family' && oldRead.json.templateId === tplOf('family')?.id && oldDay.json.day?.template?.name === 'Family day' && oldDay.json.day?.from === 'date', [oldKind.json, oldRead.json, oldDay.json.day?.template]);
+  const byTemplate = await api('PUT', '/today/day-type', { date: today, today, templateId: tplOf('travel')?.id }, T.token);
+  check('blocks: the old route takes a template too; one made from no kind reads as none', byTemplate.status === 200 && byTemplate.json.kind === null && byTemplate.json.templateId === tplOf('travel')?.id, byTemplate.json);
+
+  // A template's delete: its date changes and weekdays go back to the week and the default.
+  const gone = await api('DELETE', `/time-blocks/templates/${tplOf('travel')?.id}`, undefined, T.token);
+  const deepGone = await api('DELETE', `/time-blocks/templates/${tplOf('deep')?.id}`, undefined, T.token);
+  const afterGone = await api('GET', `/today?date=${today}`, undefined, T.token);
+  check('blocks: deleting a template clears the dates and weekdays that used it', gone.status === 200 && gone.json.daysCleared === 1 && deepGone.json.weekdaysReset === 1 && afterGone.json.day?.from === 'default' && afterGone.json.day?.template?.id === everyday?.id, [gone.json, deepGone.json, afterGone.json.day?.from]);
+  const kindRemoved = await api('PUT', '/today/day-type', { date: today, today, kind: 'deep_work' }, T.token);
+  check('blocks: a kind whose template was deleted says so', kindRemoved.status === 404, kindRemoved.json);
+  const restored = await api('POST', '/time-blocks/restore', {}, T.token);
+  const afterRestore = await api('GET', `/time-blocks?day=${today}`, undefined, T.token);
+  check('blocks: the starting set comes back without touching the rest', restored.status === 200 && restored.json.added?.templates === 2 && afterRestore.json.templates?.some((t) => t.seed === 'deep') && afterRestore.json.templates?.filter((t) => t.isDefault).length === 1 && afterRestore.json.templates?.some((t) => t.id === copy.json.template?.id), restored.json);
+
+  // Tasks: a picked block, a block by time, the filter and the grouped view.
+  const picked = await add({ title: 'Draft the essay', doDate: today, timeBlockId: made.json.block?.id, priority: 'P0' });
+  check('blocks: a task is made in a block', picked.status === 201 && picked.json.node?.timeBlockId === made.json.block?.id, picked.json.node);
+  const timed = await add({ title: 'Ship the report', doDate: today, dueTime: '10:30' });
+  check('blocks: a task with no block keeps null', timed.status === 201 && timed.json.node?.timeBlockId === null, timed.json.node);
+  const loose = await add({ title: 'Plain task', doDate: today });
+  const named = await add({ title: 'Read a chapter', doDate: today, timeBlock: 'learn/explore' });
+  check('blocks: a block can be named instead of its id', named.status === 201 && named.json.node?.timeBlockId === blockOf('learn')?.id, named.json);
+  check('blocks: a block by a name nobody has is refused', (await add({ title: 'Nowhere', doDate: today, timeBlock: 'Moon block' })).status === 400);
+  check('blocks: someone else’s block is refused on a task', (await add({ title: 'Theirs', doDate: today, timeBlockId: stranger.json.blocks?.[0]?.id })).status === 400);
+  const moved = await api('PATCH', `/nodes/${loose.json.node?.id}`, { timeBlockId: blockOf('busy')?.id }, T.token);
+  check('blocks: a task’s block is changed', moved.status === 200 && moved.json.node?.timeBlockId === blockOf('busy')?.id, moved.json.node);
+  check('blocks: a change to someone else’s block is refused and changes nothing', (await api('PATCH', `/nodes/${loose.json.node?.id}`, { timeBlockId: stranger.json.blocks?.[0]?.id }, T.token)).status === 400 && (await api('GET', `/nodes/${loose.json.node?.id}`, undefined, T.token)).json.node?.timeBlockId === blockOf('busy')?.id);
+  const keptBlock = await api('PATCH', `/nodes/${loose.json.node?.id}`, { title: 'Plain task again' }, T.token);
+  check('blocks: a change that does not name the block keeps it', keptBlock.json.node?.timeBlockId === blockOf('busy')?.id, keptBlock.json.node);
+  const noneBlock = await api('PATCH', `/nodes/${loose.json.node?.id}`, { timeBlock: 'none' }, T.token);
+  check('blocks: "none" clears it', noneBlock.status === 200 && noneBlock.json.node?.timeBlockId === null, noneBlock.json.node);
+  const inDeep = await api('GET', `/today?date=${today}&group=1&block=${deep?.id}`, undefined, T.token);
+  check('blocks: the Block filter keeps a task whose time falls in the block', inDeep.status === 200 && inDeep.json.block === deep?.id && inDeep.json.tasks?.some((n) => n.id === timed.json.node?.id) && !inDeep.json.tasks?.some((n) => n.id === picked.json.node?.id), inDeep.json.tasks?.map((n) => n.title));
+  const inMine = await api('GET', `/today?date=${today}&group=1&block=${made.json.block?.id}`, undefined, T.token);
+  check('blocks: the Block filter keeps a task picked into a block not in the day', inMine.json.tasks?.map((n) => n.id).join() === picked.json.node?.id, inMine.json.tasks?.map((n) => n.title));
+  const inNone = await api('GET', `/today?date=${today}&group=1&block=none`, undefined, T.token);
+  check('blocks: "No block" holds only tasks with no block and no time in one', inNone.json.tasks?.some((n) => n.id === loose.json.node?.id) && !inNone.json.tasks?.some((n) => n.id === timed.json.node?.id || n.id === picked.json.node?.id || n.id === named.json.node?.id), inNone.json.tasks?.map((n) => n.title));
+  check('blocks: a block that is not yours is refused on the filter', (await api('GET', `/today?date=${today}&block=${stranger.json.blocks?.[0]?.id}`, undefined, T.token)).status === 400);
+  const grouped = await api('GET', `/today?date=${today}&group=1`, undefined, T.token);
+  check('blocks: the grouped view reads more than six and says if more wait', grouped.status === 200 && grouped.json.tasks?.length >= 4 && typeof grouped.json.tasksMore === 'boolean' && grouped.json.tasks?.every((n) => 'timeBlockId' in n), [grouped.json.tasks?.length, grouped.json.tasksMore]);
+  const habit = await add({ title: 'Morning pages', doDate: today, timeBlockId: blockOf('routine')?.id, repeat: { kind: 'daily', every: 1, days: [], until: null } });
+  const tickedHabit = await api('POST', `/nodes/${habit.json.node?.id}/complete`, { date: today }, T.token);
+  check('blocks: a repeating task carries its block to the next one', tickedHabit.status === 200 && tickedHabit.json.next?.timeBlockId === blockOf('routine')?.id, tickedHabit.json.next);
+
+  // Deleting a block: its slots go, tasks lose it and keep everything else.
+  const dropped = await api('DELETE', `/time-blocks/blocks/${made.json.block?.id}`, undefined, T.token);
+  const droppedTask = await api('GET', `/nodes/${picked.json.node?.id}`, undefined, T.token);
+  check('blocks: deleting a block clears it from its tasks and its templates', dropped.status === 200 && dropped.json.tasksCleared === 1 && dropped.json.templatesTouched === 1 && droppedTask.json.node?.timeBlockId === null && droppedTask.json.node?.title === 'Draft the essay', [dropped.json, droppedTask.json.node?.timeBlockId]);
+  check('blocks: someone else cannot delete a block', (await api('DELETE', `/time-blocks/blocks/${deep?.id}`, undefined, A.token)).status === 404);
+
+  // The week plan suggests a block and names each day's template.
+  const undatedTask = await add({ title: 'Plan the budget', lifeArea: 'financial', priority: 'P3' });
+  const wp = await api('GET', `/today/week-plan?date=${today}`, undefined, T.token);
+  const sug = wp.json.plan?.suggestions?.find((x) => x.id === undatedTask.json.node?.id);
+  check('blocks: the week plan names each day’s template and suggests a block', wp.status === 200 && wp.json.plan?.days?.every((d) => typeof d.templateName === 'string') && Array.isArray(wp.json.blocks) && sug?.blockId === blockOf('busy')?.id, [wp.json.plan?.days?.map((d) => d.templateName), sug]);
+
+  check('blocks: every write is rate limited under prefs', ['/time-blocks/blocks', '/time-blocks/blocks/:id', '/time-blocks/templates', '/time-blocks/templates/:id', '/time-blocks/pattern', '/time-blocks/days', '/time-blocks/restore', '/time-blocks/blocks/order'].every((path) => ROUTE_LIMITS.some((r) => r.path === path && r.limit === 'prefs')));
+  const exported = await api('GET', '/me/export', undefined, T.token);
+  const ex = JSON.stringify(exported.json);
+  check('blocks: the export carries blocks, templates, slots, the pattern and the task’s block', exported.status === 200 && ['"timeBlocks"', '"dayTemplates"', '"dayTemplateSlots"', '"weekPattern"', '"time_block_id"'].every((k) => ex.includes(k)), Object.keys(exported.json ?? {}).filter((k) => /block|template|pattern/i.test(k)));
+  const D = await signup(`timeblocks-del-${stamp}@smoke.test`, 'Timeblocks-smoke-ok-2', 'Blocks Delete');
+  await api('GET', `/time-blocks?day=${today}`, undefined, D.token);
+  await api('PUT', '/time-blocks/pattern', { weekdays: [1], template: 'Family day' }, D.token);
+  const dDel = await api('DELETE', '/me', { confirm: 'DELETE' }, D.token);
+  check('blocks: an account with blocks, templates and a pattern can be deleted', dDel.status === 200 && (await api('GET', `/time-blocks?day=${today}`, undefined, D.token)).status === 401, dDel.json);
+}
+
+section('Kinds of day progress');
+{
+  // Kinds of day over many days (2026-11-06, the founder's ask): a day counts as the template set for it, else the one the weekly
+  // pattern gives it; the default (Everyday) and a day before the account count as none. One shared reading (kindsOfDays) behind the
+  // Time blocks page's This month line, the month calendar's marks and sheet, the Reviews tile and Emerging's Your kinds of day.
+  const K = await signup(`kinds-${stamp}@smoke.test`, 'Kinds-smoke-ok-1', 'Kinds Smoke');
+  const plus = (d, n) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+  const wd = (d) => ((new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
+  const tb = await api('GET', `/time-blocks?day=${today}`, undefined, K.token);
+  const tpl = (seed) => tb.json.templates?.find((t) => t.seed === seed);
+  const deepDay = tpl('deep');
+  const familyDay = tpl('family');
+  const everyday = tpl('everyday');
+  check('kinds: the starting templates are there to pick from', tb.status === 200 && deepDay?.id && familyDay?.id && everyday?.isDefault, tb.status);
+  const monthOf = () => api('GET', `/time-blocks/month?day=${today}`, undefined, K.token);
+  const m0 = await monthOf();
+  check('kinds: this month starts with no kind (every day on Everyday)', m0.status === 200 && m0.json.from === `${today.slice(0, 7)}-01` && m0.json.to === today && m0.json.kinds?.length === 0 && m0.json.none === 1, m0.json);
+  check('kinds: a day that is not real is refused', (await api('GET', '/time-blocks/month?day=2026-11-31', undefined, K.token)).status === 400);
+  check('kinds: the month line needs a session', (await api('GET', `/time-blocks/month?day=${today}`)).status === 401);
+
+  // A day set to a template counts as that kind, in the template's colour (its longest block over the day: Deep work, red).
+  await api('PUT', '/time-blocks/days', { dates: [today], templateId: deepDay?.id }, K.token);
+  const m1 = await monthOf();
+  check('kinds: a day set to Deep work day counts as one, in its colour', m1.json.kinds?.length === 1 && m1.json.kinds[0].templateId === deepDay?.id && m1.json.kinds[0].days === 1 && m1.json.kinds[0].color === 'red', m1.json.kinds);
+  // Set to Everyday it counts as none.
+  await api('PUT', '/time-blocks/days', { dates: [today], templateId: everyday?.id }, K.token);
+  const m2 = await monthOf();
+  check('kinds: a day set to the default counts as no kind', m2.json.kinds?.length === 0 && m2.json.none === 1, m2.json);
+  // Patterned: the weekly pattern gives today's weekday Family day, and the date follows the week again.
+  await api('PUT', '/time-blocks/pattern', { weekdays: [wd(today)], templateId: familyDay?.id }, K.token);
+  await api('PUT', '/time-blocks/days', { dates: [today], templateId: null }, K.token);
+  const m3 = await monthOf();
+  check('kinds: a patterned day counts as the kind its weekday gives', m3.json.kinds?.length === 1 && m3.json.kinds[0].templateId === familyDay?.id, m3.json.kinds);
+  // A date's own pick beats the pattern.
+  await api('PUT', '/time-blocks/days', { dates: [today], templateId: deepDay?.id }, K.token);
+  const m4 = await monthOf();
+  check('kinds: a day set for the date beats the weekly pattern', m4.json.kinds?.length === 1 && m4.json.kinds[0].templateId === deepDay?.id, m4.json.kinds);
+
+  // The month calendar: each day's kind and where it came from, the templates with their colours, and setting a future date.
+  const cal = await api('GET', `/today/month?month=${today.slice(0, 7)}&day=${today}`, undefined, K.token);
+  const calToday = cal.json.kinds?.days?.find((d) => d.date === today);
+  check('kinds: the month calendar marks today with its kind, set for the date', cal.status === 200 && calToday?.templateId === deepDay?.id && calToday?.from === 'date' && cal.json.kinds?.templates?.some((t) => t.id === deepDay?.id && t.color === 'red') && cal.json.kinds?.defaultId === everyday?.id && cal.json.kinds?.pattern?.[wd(today) - 1] === familyDay?.id, calToday);
+  const firstOfMonth = `${today.slice(0, 7)}-01`;
+  if (firstOfMonth < today) {
+    const early = cal.json.kinds?.days?.find((d) => d.date === firstOfMonth);
+    check('kinds: a day before the account has no kind', early?.templateId === null && early?.from === null, early);
+  }
+  const ahead = plus(today, 3);
+  const setAhead = await api('PUT', '/time-blocks/days', { dates: [ahead], templateId: familyDay?.id }, K.token);
+  const calAhead = await api('GET', `/today/month?month=${ahead.slice(0, 7)}&day=${today}`, undefined, K.token);
+  const aheadDay = calAhead.json.kinds?.days?.find((d) => d.date === ahead);
+  check('kinds: a future day can be given a kind from the calendar', setAhead.status === 200 && aheadDay?.templateId === familyDay?.id && aheadDay?.from === 'date', [setAhead.status, aheadDay]);
+  await api('PUT', '/time-blocks/days', { dates: [ahead], templateId: null }, K.token);
+  const calBack = await api('GET', `/today/month?month=${ahead.slice(0, 7)}&day=${today}`, undefined, K.token);
+  const backDay = calBack.json.kinds?.days?.find((d) => d.date === ahead);
+  check('kinds: Follow your week clears the date and the week decides again', backDay?.from !== 'date', backDay);
+  const other = await api('GET', `/today/month?month=${today.slice(0, 7)}&day=${today}`, undefined, A.token);
+  check('kinds: another person’s calendar knows nothing of these templates', other.status === 200 && !other.json.kinds?.templates?.some((t) => t.id === deepDay?.id) && (await api('GET', `/time-blocks/month?day=${today}`, undefined, A.token)).json.kinds?.every((k) => k.templateId !== deepDay?.id), '');
+
+  // Reviews: the Kinds of day tile for the period, next to the period before.
+  const sum = await api('GET', `/reviews/summary?kind=week&date=${today}`, undefined, K.token);
+  check('kinds: the review counts the period’s days with a kind and names the most used', sum.status === 200 && sum.json.now?.kindDays === 1 && sum.json.now?.kinds?.[0]?.name === deepDay?.name && sum.json.now?.kinds?.[0]?.color === 'red' && sum.json.before?.kindDays === 0, [sum.json.now?.kindDays, sum.json.now?.kinds, sum.json.before?.kindDays]);
+
+  // Emerging: Your kinds of day reads the last four weeks up to yesterday; a new account's earlier days count as none, so it watches.
+  const ins = await api('GET', `/insights?day=${today}`, undefined, K.token);
+  const kindsCard = ins.json.insights?.find((i) => i.key === 'daytype-done');
+  check('kinds: Your kinds of day watches while no past day has a kind', ins.status === 200 && kindsCard?.state === 'watching' && kindsCard?.text === 'Your kinds of day' && /Give a day a kind/.test(kindsCard?.need ?? ''), kindsCard);
+  check('kinds: the card shows on Daily, Reviews and Emerging, and says nothing of causes', ['today', 'reviews', 'insights'].every((a) => kindsCard?.apps?.includes(a)) && !/because|caused|leads to|due to|makes you/i.test(`${kindsCard?.text} ${kindsCard?.need}`), kindsCard?.apps);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

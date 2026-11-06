@@ -18,6 +18,8 @@ import { useInbox, useMe, useRefreshAll } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { useParamState } from '../lib/useParamState';
 import { TeamInvites } from '../components/TeamInvites';
+import { ErrorLine } from '../components/ErrorLine';
+import { FIELD_LINE } from '../lib/ui';
 
 /** The icon for each kind of note; a kind this list does not know gets the bell. */
 const ICON: Record<string, LucideIcon> = { reply: MessageCircle, mention: AtSign, thread: MessagesSquare, order: ShoppingBag, lead: Mail, booking: CalendarCheck, follow: UserPlus, broadcast: Megaphone, reminder: AlarmClock, review: Star, affiliate: Handshake, moderation: ShieldAlert, coach: Target, team: Wrench, party: PartyPopper, circle: UsersRound, run: Footprints, season: Medal, agency: BriefcaseBusiness, invoice: ReceiptText };
@@ -38,14 +40,37 @@ export function Inbox() {
   const q = useInbox(pg.query, tab, show);
   const me = useMe();
   const refresh = useRefreshAll();
-  const readAll = useMutation({ mutationFn: () => api.readAll(tab), onSuccess: () => refresh() });
-  const readOne = useMutation({ mutationFn: (id: string) => api.readOne(id), onSuccess: () => refresh() });
-  const archive = useMutation({ mutationFn: (v: { id: string; archived: boolean }) => api.archiveNote(v.id, v.archived), onSuccess: () => refresh() });
-  const archiveRead = useMutation({ mutationFn: () => api.archiveRead(tab), onSuccess: () => refresh() });
+  // The note just archived, offered back for about ten seconds or until the next action ("Archived. Undo").
+  const [undo, setUndo] = useState<{ id: string; unread: boolean } | null>(null);
+  useEffect(() => {
+    if (!undo) return;
+    const t = window.setTimeout(() => setUndo(null), 10_000);
+    return () => window.clearTimeout(t);
+  }, [undo]);
+  const readAll = useMutation({ mutationFn: () => api.readAll(tab), onMutate: () => setUndo(null), onSuccess: () => refresh() });
+  const readOne = useMutation({ mutationFn: (id: string) => api.readOne(id), onMutate: () => setUndo(null), onSuccess: () => refresh() });
+  const archive = useMutation({
+    mutationFn: (v: { id: string; archived: boolean; unread: boolean }) => api.archiveNote(v.id, v.archived),
+    onMutate: () => setUndo(null),
+    onSuccess: (_r, v) => {
+      if (v.archived) setUndo({ id: v.id, unread: v.unread });
+      refresh();
+    },
+  });
+  const unarchive = useMutation({
+    mutationFn: (v: { id: string; unread: boolean }) => api.archiveNote(v.id, false, v.unread),
+    // The line and its Undo stay until the restore lands, so a failed one can be tried again.
+    onSuccess: () => {
+      setUndo(null);
+      refresh();
+    },
+  });
+  const archiveRead = useMutation({ mutationFn: () => api.archiveRead(tab), onMutate: () => setUndo(null), onSuccess: () => refresh() });
   // Deleting for good always asks first: one note (its id) or everything archived in this tab ('all').
   const [toDelete, setToDelete] = useState<string | 'all' | null>(null);
   const remove = useMutation({
     mutationFn: (what: string) => (what === 'all' ? api.deleteArchived(tab) : api.deleteNote(what)),
+    onMutate: () => setUndo(null),
     onSuccess: () => {
       setToDelete(null);
       refresh();
@@ -58,6 +83,8 @@ export function Inbox() {
   }, [me.data]);
   const saveTime = useMutation({ mutationFn: (t: string | null) => api.updateMe({ reminderTime: t }), onSuccess: () => refresh() });
   const list = q.data?.notifications ?? [];
+  // Mark all read follows the tab's own unread count, not only what is on this page.
+  const tabUnread = q.data?.tabs.find((t) => t.tab === tab)?.unread ?? 0;
 
   return (
     <Screen>
@@ -65,7 +92,7 @@ export function Inbox() {
         back={{ to: '/apps', label: 'Apps' }}
         title="Inbox"
         actions={
-          list.some((n) => !n.readAt) ? (
+          tabUnread > 0 || list.some((n) => !n.readAt) ? (
             <Button variant="ghost" onClick={() => readAll.mutate()} disabled={readAll.isPending}>
               Mark all read
             </Button>
@@ -81,7 +108,7 @@ export function Inbox() {
           {me.data?.user.reminderTime ? `Set for ${me.data.user.reminderTime} in ${me.data.user.timezone}. A nudge lands here at that time on any day you have not checked in yet.` : 'Off. Pick a time, and a nudge lands here then on any day you have not checked in yet.'}
         </p>
         <div className="mt-sm flex gap-xs">
-          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} aria-label="Reminder time" className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} aria-label="Reminder time" className={`${FIELD_LINE} min-w-0 flex-1`} />
           <Button onClick={() => saveTime.mutate(time || null)} disabled={saveTime.isPending || time === (me.data?.user.reminderTime ?? '')}>
             {saveTime.isPending ? 'Saving' : !time && me.data?.user.reminderTime ? 'Turn off' : 'Save'}
           </Button>
@@ -97,24 +124,50 @@ export function Inbox() {
           label="Tabs"
           items={(q.data?.tabs ?? [{ tab: 'all' as InboxTab, unread: 0 }]).map((t) => ({ key: t.tab, label: `${INBOX_TAB_META[t.tab].name}${t.unread > 0 ? ` (${t.unread})` : ''}` }))}
           value={tab}
-          onChange={setTab}
+          onChange={(k) => {
+            setUndo(null);
+            setTab(k);
+          }}
         />
-        <div className="mt-xs flex flex-wrap items-center gap-xs" role="group" aria-label="Show">
+        {/* The view (Inbox, Unread, Archived) at the left and its one action at the right of one row, centred on each other (the founder,
+            2026-11-06, as List and Board on Agency); in a row under 34rem (a phone) the three views fill their line in equal parts and the
+            action takes the next, at the right. */}
+        <div className="@container mt-xs flex flex-wrap items-center justify-between gap-xs">
+          <div className="grid basis-full grid-cols-3 gap-xs @min-[34rem]:flex @min-[34rem]:basis-auto" role="group" aria-label="Show">
           {SHOWS.map(([k, label]) => (
-            <button key={k} type="button" aria-pressed={show === k} onClick={() => setShow(k)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${show === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={k} type="button" aria-pressed={show === k} onClick={() => {
+              setUndo(null);
+              setShow(k);
+            }} className={`toy min-h-[44px] min-w-0 rounded-pill border-2 px-sm py-xs text-subhead font-medium ${show === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {label}
             </button>
           ))}
+          </div>
           {show !== 'archived' && list.some((n) => n.readAt) && (
-            <Button size="sm" variant="ghost" onClick={() => archiveRead.mutate()} disabled={archiveRead.isPending}>
+            <Button size="sm" variant="ghost" className="ml-auto" onClick={() => archiveRead.mutate()} disabled={archiveRead.isPending}>
               <AnimatedIcon name={archiveRead.isPending ? 'loading' : 'archive'} size={16} />
               Archive the read ones
             </Button>
           )}
           {show === 'archived' && list.length > 0 && (
-            <Button size="sm" variant="ghost" onClick={() => setToDelete('all')}>
+            <Button size="sm" variant="ghost" className="ml-auto" onClick={() => {
+              setUndo(null);
+              setToDelete('all');
+            }}>
               Delete all archived
             </Button>
+          )}
+        </div>
+        {/* One quiet line after archiving a note, with the way back; always in the tree so a reader hears it. */}
+        <div role="status" className={undo ? 'mt-xs flex flex-wrap items-center gap-xs text-subhead text-ink-soft' : 'sr-only'}>
+          {undo && (
+            <>
+              <span>Archived.</span>
+              <button type="button" className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center font-semibold text-ink underline underline-offset-4" onClick={() => unarchive.mutate(undo)} disabled={unarchive.isPending}>
+                Undo
+              </button>
+              {unarchive.variables?.id === undo.id && <ErrorLine e={unarchive.error} className="w-full" />}
+            </>
           )}
         </div>
         {q.isPending && <SkeletonList className="mt-sm" count={4} lines={2} label="Loading your inbox" />}
@@ -153,7 +206,7 @@ export function Inbox() {
                 </span>
                 <button
                   type="button"
-                  onClick={() => archive.mutate({ id: n.id, archived: !n.archivedAt })}
+                  onClick={() => archive.mutate({ id: n.id, archived: !n.archivedAt, unread: !n.readAt })}
                   disabled={archive.isPending}
                   aria-label={n.archivedAt ? `Bring back "${n.title}"` : `Archive "${n.title}"`}
                   title={n.archivedAt ? 'Bring back' : 'Archive'}
@@ -165,7 +218,10 @@ export function Inbox() {
                 {n.archivedAt && (
                   <button
                     type="button"
-                    onClick={() => setToDelete(n.id)}
+                    onClick={() => {
+                      setUndo(null);
+                      setToDelete(n.id);
+                    }}
                     aria-label={`Delete "${n.title}" for good`}
                     title="Delete for good"
                     className="toy toy-soft flex w-[48px] shrink-0 flex-col items-center justify-center gap-xs rounded-tile border-2 border-r1/40 bg-card text-r1 hover:bg-r1/10"

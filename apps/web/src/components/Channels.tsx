@@ -123,13 +123,39 @@ export function ChannelTabs() {
  * Channels for one app: the list, and the one that is open (kept in the URL as `channel`, so Back and a notice's link both land on it).
  * Community channels are public rooms guides open. Bond channels are private rooms a member opens for friends.
  */
-export function ChannelsPanel({ scope }: { scope: ChannelScope }) {
+export function ChannelsPanel({ scope, create = true }: { scope: ChannelScope; create?: boolean }) {
   const [open, setOpen] = useParamState('channel', '');
   if (open) return <ChannelView scope={scope} id={open} onBack={() => setOpen('')} />;
-  return <ChannelList scope={scope} onOpen={setOpen} />;
+  return <ChannelList scope={scope} onOpen={setOpen} create={create} />;
 }
 
-function ChannelList({ scope, onOpen }: { scope: ChannelScope; onOpen: (id: string) => void }) {
+/**
+ * "New channel" on its own, for a screen that puts it at its section's top right (Bond), with `create={false}` on the panel.
+ * Shown only while the list is showing, never inside an open channel. Only for Bond, where anyone may open a channel.
+ */
+export function NewChannelButton({ scope, className = '' }: { scope: ChannelScope; className?: string }) {
+  const [open, setOpen] = useParamState('channel', '');
+  const [making, setMaking] = useState(false);
+  const qc = useQueryClient();
+  if (open) return null;
+  return (
+    <div className={className}>
+      <Button variant="outline" onClick={() => setMaking(true)}>New channel</Button>
+      <NewChannelSheet
+        scope={scope}
+        open={making}
+        onClose={() => setMaking(false)}
+        onMade={(id) => {
+          void qc.invalidateQueries({ queryKey: ['channels', scope] });
+          void qc.invalidateQueries({ queryKey: ['channels-unread', scope] });
+          setOpen(id);
+        }}
+      />
+    </div>
+  );
+}
+
+function ChannelList({ scope, onOpen, create }: { scope: ChannelScope; onOpen: (id: string) => void; create: boolean }) {
   const pg = usePage('ch');
   const me = useMe();
   const [closed, setClosed] = useState(false);
@@ -146,10 +172,12 @@ function ChannelList({ scope, onOpen }: { scope: ChannelScope; onOpen: (id: stri
   const isGuide = Boolean(me.data && isStaffFor(me.data.user, 'moderation') && scope === 'community');
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-sm">
-        {scope === 'community' ? <p className="m-0 min-w-0 flex-1 text-subhead text-ink-soft">Rooms for one topic each. Join one to write in it. You can write under your name or a made-up one.</p> : <span className="flex-1" aria-hidden="true" />}
-        {q.data?.canCreate && <Button variant="outline" onClick={() => setMaking(true)}>New channel</Button>}
-      </div>
+      {(scope === 'community' || (create && q.data?.canCreate)) && (
+        <div className="flex flex-wrap items-center justify-between gap-sm">
+          {scope === 'community' ? <p className="m-0 min-w-0 flex-1 text-subhead text-ink-soft">Rooms for one topic each. Join one to write in it. You can write under your name or a made-up one.</p> : <span className="flex-1" aria-hidden="true" />}
+          {create && q.data?.canCreate && <Button variant="outline" onClick={() => setMaking(true)}>New channel</Button>}
+        </div>
+      )}
       {isGuide && (
         <label className="mt-sm flex min-h-[44px] cursor-pointer items-center gap-xs text-subhead text-ink-soft">
           <input type="checkbox" checked={closed} onChange={(e) => setClosed(e.target.checked)} className="size-[18px] accent-ink" />
@@ -572,7 +600,7 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
                     canTakeDown={l.mine || (canManage && (scope === 'bond' || l.rank === null || canModerate(myRank, l.rank)))}
                     canMuteIt={scope === 'community' && !l.mine && Boolean(l.userId) && l.rank !== null && canMute(myRank, l.rank)}
                     onReply={() => setReply(l)}
-                    onTakeDown={() => unsay.mutate(l.id)}
+                    onTakeDown={() => setAsk({ title: 'Take this line down?', body: l.mine ? 'Your line is removed for everyone in the channel. This cannot be undone.' : 'The line is removed for everyone in the channel. This cannot be undone.', action: 'Yes, take it down', run: () => unsay.mutate(l.id) })}
                     onReport={() => setAsk({ title: 'Tell the team about this line?', body: 'The team reads the line and decides what to do. The writer is not told who sent it.', action: 'Yes, tell the team', run: () => report.mutate(l.id) })}
                     onBlock={() => setAsk({ title: `Block ${l.name}?`, body: "You will not see each other's lines, and any friendship ends. You can undo it under Bond.", action: 'Yes, block', run: () => block.mutate(l.id) })}
                     onMute={() => setAsk({ title: `Mute ${l.name} in Community?`, body: 'They can still read but cannot write.', action: 'Yes, mute', run: () => mute.mutate(l.userId) })}

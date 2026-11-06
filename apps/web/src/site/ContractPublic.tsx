@@ -134,7 +134,7 @@ export function ContractPublic() {
                   </p>
                 )}
                 <div className="mt-sm">
-                  <Button type="submit" disabled={!name.trim() || !agree || accept.isPending}>
+                  <Button type="submit" full disabled={!name.trim() || !agree || accept.isPending}>
                     {accept.isPending ? 'Accepting' : 'Accept'}
                   </Button>
                 </div>
@@ -178,7 +178,7 @@ export function ContractPublic() {
                   )}
                   {sent && <p role="status" className="mt-xs m-0 text-subhead font-semibold">Sent. They have been told.</p>}
                   <div className="mt-xs">
-                    <Button type="submit" size="sm" variant="outline" disabled={comment.isPending || !ask.trim()}>
+                    <Button type="submit" size="sm" variant="outline" full disabled={comment.isPending || !ask.trim()}>
                       {comment.isPending ? 'Sending' : 'Send'}
                     </Button>
                   </div>

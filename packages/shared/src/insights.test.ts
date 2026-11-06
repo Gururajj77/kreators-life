@@ -665,3 +665,120 @@ describe('count it as a habit', () => {
     expect(tieOf(insightsFor(facts(flagged(false, 4, 2, 14))))).toBeUndefined();
   });
 });
+
+describe('time blocks kept', () => {
+  const blocks = [{ id: 'deep', seed: 'deep', name: 'Deep work', tag: 'Focus', color: 'red' as const, area: 'financial' as const, pillar: 'servant_leader' as const, sort: 0 }];
+  const templates = [{ id: 'every', seed: 'everyday', sourceKind: null, name: 'Everyday', lead: 'servant_leader' as const, second: 'self' as const, why: null, source: null, isDefault: true, sort: 0, color: null, slots: [{ blockId: 'deep', start: 600, end: 780 }] }];
+  const timeBlocks = { blocks, templates, defaultId: 'every', pattern: [null, null, null, null, null, null, null], overrides: {} as Record<string, string> };
+  const inBlock = (i: number, hhmm: string) => ({ ...tick(`Deep ${i}`, ago(i + 1), hhmm, 'servant_leader'), timeBlockId: 'deep' });
+  it('says nothing for an account without blocks, and watches until ten tasks', () => {
+    expect(insightsFor(facts()).some((x) => x.key === 'block-kept')).toBe(false);
+    const few = insightsFor(facts({ timeBlocks, done: [inBlock(1, '10:30')] })).find((x) => x.key === 'block-kept');
+    expect(few?.state).toBe('watching');
+    expect(few?.need).toMatch(/9 more tasks you put in Deep work/);
+  });
+  it('counts the tasks ticked inside the block', () => {
+    const done = [...Array.from({ length: 14 }, (_, i) => inBlock(i, '11:00')), ...Array.from({ length: 6 }, (_, i) => inBlock(i + 14, '18:00'))];
+    const line = insightsFor(facts({ timeBlocks, done })).find((x) => x.key === 'block-kept')!;
+    expect(line.state).toBe('ready');
+    expect(line.text).toBe('You ticked 14 of 20 Deep work tasks inside the block.');
+    expect(line.basis).toContain(INSIGHT_BASIS_TAIL);
+    expect(line.action?.to).toBe('/time-blocks');
+    expect(line.strength).toBeGreaterThanOrEqual(50);
+    for (const w of CAUSE_WORDS) expect(line.text.toLowerCase()).not.toContain(w);
+  });
+});
+
+describe('your kinds of day (the last four weeks by day template)', () => {
+  const blocks = [
+    { id: 'deep', seed: 'deep', name: 'Deep work', tag: 'Focus', color: 'red' as const, area: 'financial' as const, pillar: 'servant_leader' as const, sort: 0 },
+    { id: 'sleep', seed: 'sleep', name: 'Sleep', tag: 'Recovery', color: 'slate' as const, area: 'physical' as const, pillar: 'self' as const, sort: 1 },
+  ];
+  const tpl = (id: string, name: string, isDefault = false) => ({ id, seed: null, sourceKind: null, name, lead: 'servant_leader' as const, second: null, why: null, source: null, isDefault, sort: 0, color: null, slots: [{ blockId: 'deep', start: 600, end: 780 }, { blockId: 'sleep', start: 1380, end: 420 }] });
+  const templates = [tpl('every', 'Everyday', true), tpl('t-deep', 'Deep focus'), tpl('t-mine', 'Studio day')];
+  // TODAY is a Wednesday: Mondays are 2, 9, 16 and 23 days ago. The weekly pattern makes every Monday "Deep focus"; five dates are "Studio day".
+  const studio = [ago(1), ago(3), ago(4), ago(5), ago(6)];
+  const overrides: Record<string, string> = Object.fromEntries(studio.map((d) => [d, 't-mine']));
+  const timeBlocks = { blocks, templates, defaultId: 'every', pattern: ['t-deep', null, null, null, null, null, null], overrides };
+  const done = days(42).flatMap((d, i) => {
+    const n = (i + 1) % 7 === 2 ? 5 : studio.includes(d) ? 3 : 1;
+    return Array.from({ length: n }, (_, k) => tick(`Task ${i}-${k}`, d));
+  });
+  const dayTypes = studio.map((d) => ({ day: d, kind: 'template' }));
+  const rowsOf = (i: Insight) => (i.chart?.kind === 'kinds' ? i.chart.rows : []);
+  it('counts set and patterned days, names them by the template, keeps the default days apart and says what went together', () => {
+    const line = byKey(insightsFor(facts({ timeBlocks, done, dayTypes })), 'daytype-done')!;
+    expect(line.state).toBe('ready');
+    expect(line.headline).toBe('9 of 28 days');
+    expect(line.apps).toEqual(['today', 'reviews', 'insights']);
+    const chart = line.chart?.kind === 'kinds' ? line.chart : null;
+    expect(chart?.parts.map((p) => [p.name, p.days, p.color])).toEqual([
+      ['Studio day', 5, 'red'],
+      ['Deep focus', 4, 'red'],
+    ]);
+    expect(chart?.none).toBe(19);
+    expect(rowsOf(line).map((r) => [r.name, r.n, r.tasks])).toEqual([
+      ['Studio days', 5, 3],
+      ['Deep focus days', 4, 5],
+      ['Days on Everyday', 19, 1],
+    ]);
+    expect(line.text).toBe('Deep focus days and more ticked tasks went together: 5.0 a day, against 1.4 on other days.');
+    expect(line.basis).toContain(INSIGHT_BASIS_TAIL);
+    expect(line.action?.to).toBe('/time-blocks');
+    for (const w of CAUSE_WORDS) expect(line.text.toLowerCase()).not.toContain(w);
+  });
+  it('reads mood and focus only while their apps are on', () => {
+    const wellbeing = days(28).map((d) => ({ kind: 'mood', date: d, value: studio.includes(d) ? 4.5 : 3 }));
+    const focus = studio.map((d) => ({ day: d, minutes: 60 }));
+    const on = byKey(insightsFor(facts({ timeBlocks, done, dayTypes, wellbeing, focus })), 'daytype-done')!;
+    expect(rowsOf(on)[0]).toMatchObject({ name: 'Studio days', mood: 4.5, focus: 60 });
+    expect(on.private).toBe(true);
+    const off = byKey(insightsFor(facts({ timeBlocks, done, dayTypes, wellbeing, focus, apps: ALL_APPS.filter((a) => a !== 'mood' && a !== 'mindful') })), 'daytype-done')!;
+    expect(rowsOf(off)[0]).toMatchObject({ mood: null, focus: null });
+    expect(off.private).toBe(false);
+    expect(off.reads).not.toContain('wellbeing');
+  });
+  it('leaves out the days before the account, follows a rename, and watches before time blocks exist', () => {
+    const since = byKey(insightsFor(facts({ timeBlocks: { ...timeBlocks, since: ago(10) }, done, dayTypes })), 'daytype-done')!;
+    expect(since.headline).toBe('7 of 10 days');
+    const renamed = { ...timeBlocks, templates: templates.map((t) => (t.id === 't-deep' ? { ...t, name: 'Maker Monday' } : t)) };
+    expect(byKey(insightsFor(facts({ timeBlocks: renamed, done, dayTypes })), 'daytype-done')!.text).toMatch(/^Maker Monday days and more/);
+    const none = byKey(insightsFor(facts({ done, dayTypes })), 'daytype-done')!;
+    expect(none.state).toBe('watching');
+    expect(none.need).toBe('Give a day a kind on Daily, or set your usual week in Time blocks.');
+  });
+  it('sets a kind beside the other days only with 4 days of it and 7 others, else shows the mix alone', () => {
+    // Three Deep focus days (the Monday of 23 days ago falls before the account), every other day a Studio day or Everyday.
+    const few = byKey(insightsFor(facts({ timeBlocks: { ...timeBlocks, overrides: {}, since: ago(22) }, done, dayTypes: [] })), 'daytype-done')!;
+    expect(few.state).toBe('ready');
+    expect(few.text).toBe('Your last four weeks: 3 Deep focus days and 19 on Everyday.');
+    expect(few.basis).not.toMatch(/beside/);
+    expect(rowsOf(few).map((r) => [r.name, r.n])).toEqual([
+      ['Deep focus days', 3],
+      ['Days on Everyday', 19],
+    ]);
+    // Four Deep focus days (the Mondays, five ticks each) and only six other days the app was used: still no comparison; a seventh brings it.
+    const mondays = [ago(2), ago(9), ago(16), ago(23)];
+    const used = (others: string[]) => [...mondays.flatMap((d) => Array.from({ length: 5 }, (_, k) => tick(`Mon ${d}-${k}`, d))), ...others.map((d) => tick(`Day ${d}`, d))];
+    const tb = { ...timeBlocks, overrides: {} };
+    const six = byKey(insightsFor(facts({ timeBlocks: tb, done: used(days(6, 3)), dayTypes: [] })), 'daytype-done')!;
+    expect(six.text).toMatch(/^Your last four weeks:/);
+    const seven = byKey(insightsFor(facts({ timeBlocks: tb, done: used([...days(6, 3), ago(10)]), dayTypes: [] })), 'daytype-done')!;
+    expect(seven.text).toBe('Deep focus days and more ticked tasks went together: 5.0 a day, against 1.0 on other days.');
+  });
+  it('draws a kind in its own colour, and lists a kind with days but no app use on them', () => {
+    const tb = { ...timeBlocks, templates: [...templates, { ...tpl('t-trip', 'Trip day'), color: 'teal' as const }], pattern: [null, null, null, null, null, null, null], overrides: { [ago(12)]: 't-trip', [ago(13)]: 't-trip' } };
+    const line = byKey(insightsFor(facts({ timeBlocks: tb, done: days(6, 3).map((d) => tick(`Day ${d}`, d)), dayTypes: [] })), 'daytype-done')!;
+    const chart = line.chart?.kind === 'kinds' ? line.chart : null;
+    expect(chart?.parts.map((p) => [p.name, p.days, p.color])).toEqual([['Trip day', 2, 'teal']]);
+    expect(rowsOf(line).map((r) => [r.name, r.n])).toEqual([
+      ['Trip days', 0],
+      ['Days on Everyday', 6],
+    ]);
+  });
+  it('watches while no day has a kind', () => {
+    const w = byKey(insightsFor(facts({ timeBlocks: { ...timeBlocks, pattern: [null, null, null, null, null, null, null], overrides: {} }, done })), 'daytype-done')!;
+    expect(w.state).toBe('watching');
+    expect(w.need).toBe('Give a day a kind on Daily, or set your usual week in Time blocks.');
+  });
+});

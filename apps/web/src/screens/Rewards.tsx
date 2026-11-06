@@ -13,6 +13,7 @@ import { tie } from '../lib/text';
 import { useCardGames, useRefreshAll, useRewards } from '../lib/queries';
 import { LockedButton } from '../components/LockedButton';
 import { ConfirmSpend } from '../components/ConfirmSpend';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 import { AppIcon } from '../components/AppIcon';
 import { RollNumber } from '../components/fx/RollNumber';
 import { SkeletonList } from '../components/Skeleton';
@@ -41,9 +42,11 @@ export function Rewards() {
     },
     onError: (e) => setError(e instanceof Error ? e.message : 'Could not reserve that.'),
   });
+  const [askingCancel, setAskingCancel] = useState<{ id: string; name: string; points: number } | null>(null);
   const cancel = useMutation({
     mutationFn: (id: string) => api.cancelRedemption(id),
     onSuccess: () => {
+      setAskingCancel(null);
       refresh();
       setError(null);
     },
@@ -113,7 +116,7 @@ export function Rewards() {
                         </span>
                       </span>
                       {x.status === 'reserved' && (
-                        <Button variant="ghost" onClick={() => cancel.mutate(x.id)} disabled={cancel.isPending}>
+                        <Button variant="ghost" onClick={() => setAskingCancel({ id: x.id, name: r?.name ?? x.rewardKey, points: x.points })} disabled={cancel.isPending}>
                           Cancel
                         </Button>
                       )}
@@ -205,6 +208,17 @@ export function Rewards() {
         action={asking?.game ? `Unlock ${formatCount(asking.cost)} pts` : `Reserve ${formatCount(asking?.cost ?? 0)} pts`}
         busy={redeem.isPending}
         onConfirm={() => asking && redeem.mutate(asking.key)}
+      />
+      <ConfirmDelete
+        open={askingCancel !== null}
+        title={`Cancel ${askingCancel?.name ?? 'this reservation'}?`}
+        body={`Your ${formatCount(askingCancel?.points ?? 0)} points come back and the reservation is gone. To have it again you reserve it again, if it is still there.`}
+        yes="Yes, cancel it"
+        keep="Keep it"
+        pending={cancel.isPending}
+        failed={cancel.isError}
+        onYes={() => askingCancel && cancel.mutate(askingCancel.id)}
+        onClose={() => setAskingCancel(null)}
       />
     </Screen>
   );

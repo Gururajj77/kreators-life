@@ -11,7 +11,7 @@ import { DocStyleSheet } from '../components/DocStyleSheet';
 import { blanksIn, FillDetailsSheet } from '../components/FillDetails';
 import { HouseTemplateSheet, useSuperAdmin } from '../components/HouseTemplateButton';
 import { Icon } from '../components/Icon';
-import { DocPassword } from '../components/AgencyLifecycle';
+import { DocPasswordFold, revealIn } from '../components/AgencyLifecycle';
 import { MoreMenu, type MoreMenuItem } from '../components/MoreMenu';
 import { Busy, Skeleton, SkeletonCard } from '../components/Skeleton';
 import type { SheetStamp } from '../components/PrintSheet';
@@ -28,6 +28,9 @@ import { fileTitle, printAs, useAutoPrint } from '../lib/printDoc';
 import { tie } from '../lib/text';
 import { FIELD } from '../lib/ui';
 import { useAutosave } from '../lib/useAutosave';
+
+/** Where a document page's password fold sits, so More's Password item can open it and move focus there. */
+export const PAPER_PASSWORD_ID = 'paper-password';
 
 export const COPY = {
   law: 'Typed acceptance, not a certified e-signature. A starting point, not legal advice: have a lawyer read it before you rely on it.',
@@ -100,7 +103,7 @@ export function SaveLine({ words, canUndo, onUndo }: { words: string; canUndo: b
 }
 
 /** The top of a document page: back, the title, one status, the save line, then one main action, Download and More. Nothing else. */
-export function DocHeader({ back, backLabel, title, tone, status, save, primary, onDownload, more, moreLabel, error }: { back: string; backLabel: string; title: string; tone: TagTone; status: string; save: ReactNode; primary: ReactNode; onDownload: () => void; more: MoreMenuItem[]; moreLabel: string; error: unknown }) {
+export function DocHeader({ back, backLabel, title, tone, status, save, primary, onDownload, more, moreLabel, error, below }: { back: string; backLabel: string; title: string; tone: TagTone; status: string; save: ReactNode; primary: ReactNode; onDownload: () => void; more: MoreMenuItem[]; moreLabel: string; error: unknown; below?: ReactNode }) {
   const hint = useId();
   return (
     <AppCover
@@ -131,34 +134,53 @@ export function DocHeader({ back, backLabel, title, tone, status, save, primary,
         </>
       }
     >
-      {Boolean(error) && (
-        <p role="alert" className="m-0 rounded-tile p-sm text-subhead" style={{ background: 'var(--tint-red)' }}>
-          {error instanceof ApiError ? error.message : 'That did not work. Try again.'}
-        </p>
+      {(Boolean(error) || below) && (
+        <>
+          {Boolean(error) && (
+            <p role="alert" className="m-0 mb-sm rounded-tile p-sm text-subhead" style={{ background: 'var(--tint-red)' }}>
+              {error instanceof ApiError ? error.message : 'That did not work. Try again.'}
+            </p>
+          )}
+          {below}
+        </>
       )}
     </AppCover>
   );
 }
 
-/** The sheets behind More that a document page shares: the client, comments and activity, and saving as a template. */
-export function ClientSheet({ open, onClose, value, onChange, clients }: { open: boolean; onClose: () => void; value: string | null; onChange: (id: string | null) => void; clients: { id: string; name: string }[] }) {
+/**
+ * Under a document page's header, on the page itself (2026-11-06, the popups pass: these were two sheets behind More): who it is for, a
+ * dropdown, and the client's one permission, writing comments, as a switch with the line on what they can always do. The More menu's
+ * Client and Client permissions items move focus here (`revealIn`). Shown while the paper can change, as the menu items were.
+ */
+export const PAPER_CLIENT_ID = 'paper-client';
+export const PAPER_CAN_ID = 'paper-can';
+export function DocClientBar({ value, onChange, clients, comments, onComments, always }: { value: string | null; onChange: (id: string | null) => void; clients: { id: string; name: string }[]; comments: boolean; onComments: (on: boolean) => void; always: string }) {
+  const can = useId();
   return (
-    <Sheet open={open} onClose={onClose} title="Client">
-      <label className="block text-subhead font-semibold" htmlFor="paper-client">
-        Who it is for
-        <select id="paper-client" value={value ?? ''} onChange={(e) => onChange(e.target.value || null)} className={FIELD}>
-          <option value="">No client</option>
-          {clients.map((cl) => (
-            <option key={cl.id} value={cl.id}>
-              {cl.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <div className="mt-md pb-xl">
-        <Button onClick={onClose}>Done</Button>
+    <div className="grid gap-md rounded-card bg-card p-md shadow-toy-soft md:grid-cols-2">
+      <div className="min-w-0">
+        <label className="block text-subhead font-semibold" htmlFor={PAPER_CLIENT_ID}>
+          Who it is for
+          <select id={PAPER_CLIENT_ID} value={value ?? ''} onChange={(e) => onChange(e.target.value || null)} className={FIELD}>
+            <option value="">No client</option>
+            {clients.map((cl) => (
+              <option key={cl.id} value={cl.id}>
+                {cl.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="m-0 text-caption text-ink-soft">It goes to this client's link and email.</p>
       </div>
-    </Sheet>
+      <div id={PAPER_CAN_ID} role="group" aria-labelledby={can} className="min-w-0">
+        <span id={can} className="block text-subhead font-semibold">
+          Client permissions
+        </span>
+        <Toggle compact on={comments} onChange={onComments} label="Write comments" hint="They can ask for a change at their link." />
+        <p className="m-0 text-caption text-ink-soft">{always}</p>
+      </div>
+    </div>
   );
 }
 
@@ -208,11 +230,11 @@ export function TemplateSheet({ open, onClose, defaultName, kind, fromId, before
       )}
       <div className="mt-md flex flex-wrap gap-xs pb-xl">
         {same && (
-          <Button onClick={() => save.mutate(same.id)} disabled={save.isPending || Boolean(done)}>
+          <Button className="flex-1" onClick={() => save.mutate(same.id)} disabled={save.isPending || Boolean(done)}>
             Replace it
           </Button>
         )}
-        <Button variant={same ? 'outline' : 'primary'} onClick={() => save.mutate(null)} disabled={save.isPending || !name.trim() || Boolean(done)}>
+        <Button variant={same ? 'outline' : 'primary'} className={same ? '' : 'flex-1'} onClick={() => save.mutate(null)} disabled={save.isPending || !name.trim() || Boolean(done)}>
           {save.isPending ? 'Saving' : same ? 'Save as a new one' : 'Save template'}
         </Button>
         <Button variant="ghost" onClick={onClose}>
@@ -252,7 +274,7 @@ export function ThreadSheet({ open, onClose, type, id, comments, reply, setReply
         </label>
         <textarea id={fieldId} value={reply} onChange={(e) => setReply(e.target.value)} rows={3} maxLength={600} className={FIELD} />
         <div className="mt-xs">
-          <Button type="submit" size="sm" disabled={sending || !reply.trim()}>
+          <Button type="submit" size="sm" full disabled={sending || !reply.trim()}>
             {sending ? 'Sending' : 'Add reply'}
           </Button>
         </div>
@@ -260,13 +282,13 @@ export function ThreadSheet({ open, onClose, type, id, comments, reply, setReply
       <h3 className="mt-md mb-xs text-headline">Activity</h3>
       <DocLog type={type} id={id} />
       <div className="mt-md pb-xl">
-        <Button onClick={onClose}>Done</Button>
+        <Button full onClick={onClose}>Done</Button>
       </div>
     </Sheet>
   );
 }
 
-type Open = 'fill' | 'client' | 'can' | 'thread' | 'template' | 'house' | 'style' | 'email' | 'password' | 'draft' | 'void' | 'delete' | null;
+type Open = 'fill' | 'thread' | 'template' | 'house' | 'style' | 'email' | 'draft' | 'void' | 'delete' | null;
 
 /**
  * An agreement: the paper is the page. The header has back, the title, one status with the quiet save line, then one action for where it
@@ -284,6 +306,7 @@ export function AgencyContract() {
   const c = q.data?.contract;
   const editable = c?.status === 'draft' || c?.status === 'sent';
   const [open, setOpen] = useState<Open>(null);
+  const [pwOpen, setPwOpen] = useState(false);
   const [said, setSaid] = useSaid();
   const save = useCallback(
     async (s: PaperState, version: string) => {
@@ -397,9 +420,17 @@ export function AgencyContract() {
     { key: 'email', label: 'Email a copy', icon: Mail, onSelect: () => setOpen('email') },
     { key: 'text', label: 'Copy text', icon: ClipboardCopy, onSelect: () => void copy(contractAsText(doc, { reference: ref, date: c.sentAt ?? c.createdAt, answers: c.answers, acceptance: c.acceptance }), 'The text') },
     { key: 'thread', label: 'Comments', icon: MessageSquare, hint: waiting ? `${waiting} new` : comments.length ? String(comments.length) : undefined, onSelect: () => setOpen('thread') },
-    ...(editable ? [{ key: 'client', label: 'Client', icon: UserRound, hint: clientName || 'None', onSelect: () => setOpen('client') }] : []),
-    ...(editable ? [{ key: 'can', label: 'Client permissions', icon: ShieldCheck, hint: doc.show.comments ? 'Comments on' : 'Comments off', onSelect: () => setOpen('can') }] : []),
-    { key: 'password', label: 'Password', icon: KeyRound, onSelect: () => setOpen('password') },
+    ...(editable ? [{ key: 'client', label: 'Client', icon: UserRound, hint: clientName || 'None', onSelect: () => revealIn(PAPER_CLIENT_ID) }] : []),
+    ...(editable ? [{ key: 'can', label: 'Client permissions', icon: ShieldCheck, hint: doc.show.comments ? 'Comments on' : 'Comments off', onSelect: () => revealIn(PAPER_CAN_ID) }] : []),
+    {
+      key: 'password',
+      label: 'Password',
+      icon: KeyRound,
+      onSelect: () => {
+        setPwOpen(true);
+        revealIn(PAPER_PASSWORD_ID, 'button');
+      },
+    },
     ...(c.status !== 'signed' ? [{ key: 'dup', label: 'Duplicate', icon: CopyPlus, onSelect: () => duplicate.mutate(), disabled: duplicate.isPending }] : []),
     { key: 'tpl', label: 'Save as template', icon: LayoutTemplate, onSelect: () => setOpen('template') },
     ...(superAdmin && c.status !== 'void' ? [{ key: 'house', label: 'Save as house template', icon: Building2, onSelect: () => setOpen('house') }] : []),
@@ -441,6 +472,18 @@ export function AgencyContract() {
         more={more}
         moreLabel="More for this agreement"
         error={error}
+        below={
+          editable ? (
+            <DocClientBar
+              value={clientId}
+              onChange={(v) => setState((s) => (s ? { ...s, clientId: v } : s))}
+              clients={pick}
+              comments={doc.show.comments}
+              onComments={(on) => edit((d) => ({ ...d, show: { ...d.show, comments: on } }))}
+              always="Once it is sent, they can always read it, answer the brief, accept and download it."
+            />
+          ) : null
+        }
       />
 
       <section className="mt-md" aria-label="The agreement">
@@ -456,6 +499,8 @@ export function AgencyContract() {
           onFill={() => setOpen('fill')}
         />
       </section>
+
+      <DocPasswordFold id={PAPER_PASSWORD_ID} open={pwOpen} onOpenChange={setPwOpen} clientId={clientId} clientName={clientName} savedClientId={c.clientId} />
 
       <FillDetailsSheet
         open={open === 'fill'}
@@ -481,20 +526,6 @@ export function AgencyContract() {
         onSaved={setSaid}
       />
 
-      <ClientSheet open={open === 'client'} onClose={close} value={clientId} onChange={(v) => setState((s) => (s ? { ...s, clientId: v } : s))} clients={pick} />
-      <Sheet open={open === 'can'} onClose={close} title="Client permissions">
-        <Toggle on={doc.show.comments} onChange={(on) => edit((d) => ({ ...d, show: { ...d.show, comments: on } }))} label="Write comments" hint="They can ask for a change at their link." />
-        <p className="mt-sm m-0 text-subhead text-ink-soft">Once it is sent, they can always read it, answer the brief, accept and download it.</p>
-        <div className="mt-md pb-xl">
-          <Button onClick={close}>Done</Button>
-        </div>
-      </Sheet>
-      <Sheet open={open === 'password'} onClose={close} title="Password">
-        <DocPassword clientId={clientId} clientName={clientName} savedClientId={c.clientId} />
-        <div className="mt-md pb-xl">
-          <Button onClick={close}>Done</Button>
-        </div>
-      </Sheet>
       <ThreadSheet open={open === 'thread'} onClose={close} type="contract" id={id} comments={comments} reply={reply} setReply={setReply} onSend={() => send.mutate()} sending={send.isPending} fieldId="c-reply" />
       <DocStyleSheet open={open === 'style'} onClose={close} value={parseDocStyle(doc.style)} onChange={(style) => edit((d) => ({ ...d, style }))} disabled={!editable} />
       <EmailCopySheet open={open === 'email'} onClose={close} route="contracts" id={id} defaultTo={pick.find((cl) => cl.id === clientId)?.contactEmail ?? ''} context={emailCtx} noLinkYet={c.status === 'draft' || c.status === 'void'} />

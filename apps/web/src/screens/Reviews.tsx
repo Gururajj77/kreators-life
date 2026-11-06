@@ -1,12 +1,11 @@
-import { BackLink } from '../components/PageHeader';
-import { MOODS, PERIOD_KINDS, PERIOD_META, periodFor, periodLabel, RELATIONSHIP_BY_KEY, RELATIONSHIPS, REVIEW_ANSWER_MAX, REVIEW_HIGHLIGHT_MAX, REVIEW_NAME_MAX, type Period, type PeriodKind, type ReviewFlagged, type ReviewTemplate, type ReviewsResponse, type Page, LOCALE, formatCount } from '@kreators/shared';
+import { PageHeader } from '../components/PageHeader';
+import { MOODS, PERIOD_KINDS, PERIOD_META, periodFor, periodLabel, RELATIONSHIP_BY_KEY, RELATIONSHIPS, REVIEW_ANSWER_MAX, REVIEW_HIGHLIGHT_MAX, REVIEW_NAME_MAX, type Period, type PeriodKind, type ReviewFlagged, type ReviewTemplate, type ReviewsResponse, type Page, LOCALE } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router';
 import { BusinessMetrics } from '../components/BusinessMetrics';
 import { Button } from '../components/Button';
 import { AreaLine, Donut, Legend } from '../components/Charts';
-import { Hero } from '../components/Hero';
 import { Inert } from '../components/Inert';
 import { MoodFace } from '../components/MoodFace';
 import { PeriodFilter } from '../components/PeriodFilter';
@@ -14,16 +13,18 @@ import { ReviewCalendar } from '../components/ReviewCalendar';
 import { StatusTag } from '../components/StatusTag';
 import { SummaryTiles, type SummaryPart } from '../components/PeriodPanel';
 import { Screen } from '../components/Screen';
+import { Section, SeeAll } from '../components/Section';
 import { Pager, usePage } from '../components/Pager';
 import { Sheet } from '../components/Sheet';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 import { api } from '../lib/api';
 import { prettyDate, todayLocal } from '../lib/date';
 import { useAuthed } from '../lib/queries';
 import { FIELD } from '../lib/ui';
 import { FactTag } from '../components/FactTag';
-import { EmergenceSlot } from '../components/EmergenceSlot';
+import { EmergenceSlot, KindsSlot } from '../components/EmergenceSlot';
 
-const PARTS: readonly SummaryPart[] = ['daily', 'notToDo', 'wellbeing', 'journal', 'finance', 'shop', 'school', 'work', 'people'];
+const PARTS: readonly SummaryPart[] = ['daily', 'kinds', 'notToDo', 'wellbeing', 'journal', 'finance', 'shop', 'school', 'work', 'people'];
 
 /** Weekly, monthly, quarterly and mid-year reviews: the numbers from every app for the period, and what you make of them. */
 export function Reviews() {
@@ -86,46 +87,29 @@ export function Reviews() {
     mutationFn: () => api.saveReview({ kind: period.kind, date: period.start, templateId: template && !template.builtIn ? template.id : null, answers, rating, highlight }),
     onSuccess: invalidate,
   });
-  const remove = useMutation({ mutationFn: (id: string) => api.deleteReview(id), onSuccess: invalidate });
+  const [askingRemove, setAskingRemove] = useState<string | null>(null);
+  const remove = useMutation({
+    mutationFn: (id: string) => api.deleteReview(id),
+    onSuccess: () => {
+      setAskingRemove(null);
+      invalidate();
+    },
+  });
   const [editing, setEditing] = useState<ReviewTemplate | 'new' | null>(null);
 
   const s = d?.summary;
   const meta = PERIOD_META[period.kind];
-  const ratingMeta = rating ? MOODS.find((m) => m.value === rating) : null;
   const areaSegments = s ? RELATIONSHIPS.filter((r) => (s.xpByArea[r.key] ?? 0) > 0).map((r) => ({ value: s.xpByArea[r.key] ?? 0, color: r.color, label: r.name })) : [];
   const labels = s ? s.series.map((p, i, all) => (period.kind === 'week' ? new Date(`${p.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short' }) : i === 0 || i === all.length - 1 || i % Math.ceil(all.length / 6) === 0 ? String(Number(p.date.slice(8, 10))) : '')) : [];
 
   return (
     <Screen columns={false}>
-      <header className="pt-lg">
-        <BackLink to="/apps">Apps</BackLink>
-        <h1 className="text-large-title">Reviews</h1>
-        <p className="mt-xs m-0 text-subhead text-ink-soft">Pick a week, a month, a quarter or half a year. The numbers come from every app you use. The words are yours. Only you see this.</p>
-        <div className="mt-md">
-          <PeriodFilter period={period} onChange={setPeriod} today={today} />
-        </div>
-        {s && (
-          <Hero color="var(--color-r5)" deep="var(--deep-self)" className="mt-md" character="self" mood={rating ? (rating >= 4 ? 'excited' : rating >= 3 ? 'happy' : 'sleepy') : 'happy'}>
-            <p className="m-0 text-eyebrow uppercase opacity-90">{meta.name}</p>
-            <p className="mt-xs m-0 text-title1">{periodLabel(period)}</p>
-            <p className="mt-xs m-0 text-subhead opacity-90">
-              {d?.review ? `Written ${prettyDate(d.review.updatedAt.slice(0, 10))}${ratingMeta ? `, felt ${ratingMeta.name.toLowerCase()}` : ''}.` : meta.blurb}
-            </p>
-            <div className="mt-sm flex flex-wrap gap-md">
-              {[
-                ['Xp', formatCount(s.now.xp)],
-                ['Tasks', String(s.now.tasksDone)],
-                ['Check-ins', `${s.now.checkins} of ${s.now.days}`],
-              ].map(([k, v]) => (
-                <span key={k} className="min-w-0">
-                  <span className="block text-title2 type-figure leading-none">{v}</span>
-                  <span className="block text-caption opacity-90">{k}</span>
-                </span>
-              ))}
-            </div>
-          </Hero>
-        )}
-      </header>
+      {/* The app cover (2026-11-06, the founder: "the hero cover with back button, title and helper text in a card/cover like the other
+          pages"): Reviews wears the cover, so by the hero rule no coloured Hero; the period's numbers are under The numbers. */}
+      <PageHeader back={{ to: '/apps', label: 'Apps' }} title="Reviews" lede="Look back on a week, a month, a quarter or half a year, with numbers from every app you use. Only you see this." />
+      <div className="mt-md">
+        <PeriodFilter period={period} onChange={setPeriod} today={today} />
+      </div>
 
       {q.isError && (
         <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-subhead">
@@ -137,15 +121,13 @@ export function Reviews() {
 
       {s && (
         <>
-          <section className="mt-lg" aria-labelledby="numbers-heading">
-            <h2 id="numbers-heading" className="text-title2">
-              The numbers
-            </h2>
-            <p className="mt-xs m-0 text-subhead text-ink-soft">Each one next to {meta.previous}. Tap a tile to go where it comes from.</p>
-            <div className="mt-sm">
-              <SummaryTiles summary={s} parts={PARTS} />
-            </div>
-          </section>
+          {/* "See what's emerging" at the top right like every other section's link, and the patterns themselves (your kinds of day, then
+              Emerging) right under the numbers when one is ready (the founder, 2026-11-06). */}
+          <Section id="numbers-heading" title="The numbers" lede={`Each one next to ${meta.previous}. Tap a tile to go where it comes from.`} action={<SeeAll to="/insights">See what&apos;s emerging</SeeAll>}>
+            <SummaryTiles summary={s} parts={PARTS} />
+          </Section>
+          <KindsSlot />
+          <EmergenceSlot app="reviews" max={2} exclude={['daytype-done']} />
 
           {flagged.length > 0 && (
             <section className="mt-lg" aria-labelledby="brought-heading">
@@ -267,17 +249,27 @@ export function Reviews() {
                   That did not save. Try again.
                 </p>
               )}
-              <div className="mt-md flex flex-wrap gap-xs">
-                <Button type="submit" disabled={save.isPending}>
+              {/* The main Save takes the width and Remove sits at its right on the same line (2026-11-06, the founder's form rule). */}
+              <div className="mt-md flex gap-xs">
+                <Button type="submit" disabled={save.isPending} className="min-w-0 flex-1">
                   {save.isPending ? 'Saving' : d?.review ? 'Save changes' : 'Save this review'}
                 </Button>
                 {d?.review && (
-                  <Button variant="outline" onClick={() => remove.mutate(d.review!.id)} disabled={remove.isPending}>
+                  <Button variant="outline" onClick={() => setAskingRemove(d.review!.id)} disabled={remove.isPending}>
                     Remove
                   </Button>
                 )}
               </div>
             </form>
+            <ConfirmDelete
+              open={askingRemove !== null}
+              title="Delete this review?"
+              body={`Your answers for ${periodLabel(period)} are gone for good. This cannot be undone.`}
+              pending={remove.isPending}
+              failed={remove.isError}
+              onYes={() => askingRemove && remove.mutate(askingRemove)}
+              onClose={() => setAskingRemove(null)}
+            />
           </section>
 
           <section className="mt-lg" aria-labelledby="templates-heading">
@@ -338,8 +330,6 @@ export function Reviews() {
         </>
       )}
 
-      <EmergenceSlot app="reviews" max={2} />
-
       <TemplateEditor editing={editing} kind={period.kind} onClose={() => setEditing(null)} onSaved={invalidate} />
     </Screen>
   );
@@ -368,9 +358,11 @@ function TemplateEditor({ editing, kind, onClose, onSaved }: { editing: ReviewTe
       onClose();
     },
   });
+  const [asking, setAsking] = useState(false);
   const remove = useMutation({
     mutationFn: () => api.reviewTemplateRemove(existing!.id),
     onSuccess: () => {
+      setAsking(false);
       onSaved();
       onClose();
     },
@@ -411,17 +403,27 @@ function TemplateEditor({ editing, kind, onClose, onSaved }: { editing: ReviewTe
             That did not save. Try again.
           </p>
         )}
-        <div className="mt-md flex flex-wrap gap-xs">
-          <Button type="submit" disabled={!name.trim() || prompts.length === 0 || save.isPending}>
+        <div className="mt-md flex gap-xs">
+          <Button type="submit" disabled={!name.trim() || prompts.length === 0 || save.isPending} className="min-w-0 flex-1">
             {existing ? 'Save changes' : 'Add template'}
           </Button>
           {existing && (
-            <Button variant="outline" onClick={() => remove.mutate()} disabled={remove.isPending}>
+            <Button variant="outline" onClick={() => setAsking(true)} disabled={remove.isPending}>
               Remove
             </Button>
           )}
         </div>
       </form>
+      <ConfirmDelete
+        open={asking}
+        title="Remove this template?"
+        body={`“${existing?.name ?? ''}” and its questions are gone. Reviews already saved keep their questions.`}
+        yes="Yes, remove it"
+        pending={remove.isPending}
+        failed={remove.isError}
+        onYes={() => remove.mutate()}
+        onClose={() => setAsking(false)}
+      />
     </Sheet>
   );
 }

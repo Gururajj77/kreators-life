@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Building2, ClipboardCopy, CopyPlus, KeyRound, LayoutTemplate, Link2, ListChecks, Mail, MessageSquare, Palette, Send, ShieldCheck, Trash2, Undo2, UserRound } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
-import { DocPassword } from '../components/AgencyLifecycle';
+import { DocPasswordFold, revealIn } from '../components/AgencyLifecycle';
 import { Button } from '../components/Button';
 import { ContractView, paperDate } from '../components/ContractView';
 import { ConfirmSheet, EmailCopySheet, type EmailContext } from '../components/DocActions';
@@ -16,15 +16,13 @@ import { BackLink } from '../components/PageHeader';
 import { AppCover } from '../components/AppCover';
 import type { SheetStamp } from '../components/PrintSheet';
 import { Screen } from '../components/Screen';
-import { Sheet } from '../components/Sheet';
 import { Busy, Skeleton, SkeletonCard } from '../components/Skeleton';
-import { Toggle } from '../components/Toggle';
 import { api } from '../lib/api';
 import { copyPlain } from '../lib/clipboard';
 import { fileTitle, printAs, useAutoPrint } from '../lib/printDoc';
-import { ClientSheet, DocHeader, SaveLine, TemplateSheet, ThreadSheet, usePaperDoc, useSaid, waitingFrom, type PaperState } from './AgencyContract';
+import { DocClientBar, DocHeader, PAPER_CAN_ID, PAPER_CLIENT_ID, PAPER_PASSWORD_ID, SaveLine, TemplateSheet, ThreadSheet, usePaperDoc, useSaid, waitingFrom, type PaperState } from './AgencyContract';
 
-type Open = 'fill' | 'client' | 'can' | 'thread' | 'template' | 'house' | 'style' | 'email' | 'password' | 'draft' | 'delete' | null;
+type Open = 'fill' | 'thread' | 'template' | 'house' | 'style' | 'email' | 'draft' | 'delete' | null;
 
 /**
  * An Agency document that is not an invoice or an agreement: a strategy session summary, trial video terms, a retainer proposal or a
@@ -43,6 +41,7 @@ export function AgencyDoc() {
   const d = q.data?.doc;
   const editable = d?.status === 'draft' || d?.status === 'sent' || d?.status === 'revised';
   const [open, setOpen] = useState<Open>(null);
+  const [pwOpen, setPwOpen] = useState(false);
   const [said, setSaid] = useSaid();
   const save = useCallback(
     async (s: PaperState, version: string) => {
@@ -146,9 +145,17 @@ export function AgencyDoc() {
     { key: 'email', label: 'Email a copy', icon: Mail, onSelect: () => setOpen('email') },
     { key: 'text', label: 'Copy text', icon: ClipboardCopy, onSelect: () => void copy(contractAsText(doc, { reference: d.ref, date: d.sentAt ?? d.createdAt, answers: d.answers, acceptance: d.acceptance }), 'The text') },
     { key: 'thread', label: 'Comments', icon: MessageSquare, hint: waiting ? `${waiting} new` : comments.length ? String(comments.length) : undefined, onSelect: () => setOpen('thread') },
-    ...(editable ? [{ key: 'client', label: 'Client', icon: UserRound, hint: clientName || 'None', onSelect: () => setOpen('client') }] : []),
-    ...(editable ? [{ key: 'can', label: 'Client permissions', icon: ShieldCheck, hint: doc.show.comments ? 'Comments on' : 'Comments off', onSelect: () => setOpen('can') }] : []),
-    { key: 'password', label: 'Password', icon: KeyRound, onSelect: () => setOpen('password') },
+    ...(editable ? [{ key: 'client', label: 'Client', icon: UserRound, hint: clientName || 'None', onSelect: () => revealIn(PAPER_CLIENT_ID) }] : []),
+    ...(editable ? [{ key: 'can', label: 'Client permissions', icon: ShieldCheck, hint: doc.show.comments ? 'Comments on' : 'Comments off', onSelect: () => revealIn(PAPER_CAN_ID) }] : []),
+    {
+      key: 'password',
+      label: 'Password',
+      icon: KeyRound,
+      onSelect: () => {
+        setPwOpen(true);
+        revealIn(PAPER_PASSWORD_ID, 'button');
+      },
+    },
     ...(d.status !== 'approved' ? [{ key: 'dup', label: 'Duplicate', icon: CopyPlus, onSelect: () => duplicate.mutate(), disabled: duplicate.isPending }] : []),
     { key: 'tpl', label: 'Save as template', icon: LayoutTemplate, onSelect: () => setOpen('template') },
     ...(superAdmin ? [{ key: 'house', label: 'Save as house template', icon: Building2, onSelect: () => setOpen('house') }] : []),
@@ -188,11 +195,25 @@ export function AgencyDoc() {
         more={more}
         moreLabel="More for this document"
         error={error}
+        below={
+          editable ? (
+            <DocClientBar
+              value={clientId}
+              onChange={(v) => setState((s) => (s ? { ...s, clientId: v } : s))}
+              clients={pick}
+              comments={doc.show.comments}
+              onComments={(on) => edit((x) => ({ ...x, show: { ...x.show, comments: on } }))}
+              always="Once it is sent, they can always read it, approve it and download it."
+            />
+          ) : null
+        }
       />
 
       <section className="mt-md" aria-label="The document">
         <ContractView audience="owner" kind="document" doc={doc} answers={d.answers} acceptance={d.acceptance} reference={d.ref} date={d.sentAt ?? d.createdAt} stamp={sheetStamp} onDocChange={editable ? (x) => edit(() => x) : undefined} onFill={() => setOpen('fill')} />
       </section>
+
+      <DocPasswordFold id={PAPER_PASSWORD_ID} open={pwOpen} onOpenChange={setPwOpen} clientId={clientId} clientName={clientName} savedClientId={d.clientId} />
 
       <FillDetailsSheet
         open={open === 'fill'}
@@ -217,20 +238,6 @@ export function AgencyDoc() {
         onSaved={setSaid}
       />
 
-      <ClientSheet open={open === 'client'} onClose={close} value={clientId} onChange={(v) => setState((s) => (s ? { ...s, clientId: v } : s))} clients={pick} />
-      <Sheet open={open === 'can'} onClose={close} title="Client permissions">
-        <Toggle on={doc.show.comments} onChange={(on) => edit((x) => ({ ...x, show: { ...x.show, comments: on } }))} label="Write comments" hint="They can ask for a change at their link." />
-        <p className="mt-sm m-0 text-subhead text-ink-soft">Once it is sent, they can always read it, approve it and download it.</p>
-        <div className="mt-md pb-xl">
-          <Button onClick={close}>Done</Button>
-        </div>
-      </Sheet>
-      <Sheet open={open === 'password'} onClose={close} title="Password">
-        <DocPassword clientId={clientId} clientName={clientName} savedClientId={d.clientId} />
-        <div className="mt-md pb-xl">
-          <Button onClick={close}>Done</Button>
-        </div>
-      </Sheet>
       <ThreadSheet open={open === 'thread'} onClose={close} type="doc" id={id} comments={comments} reply={reply} setReply={setReply} onSend={() => send.mutate()} sending={send.isPending} fieldId="d-reply" />
       <DocStyleSheet open={open === 'style'} onClose={close} value={parseDocStyle(doc.style)} onChange={(style) => edit((x) => ({ ...x, style }))} disabled={!editable} />
       <EmailCopySheet open={open === 'email'} onClose={close} route="docs" id={id} defaultTo={pick.find((cl) => cl.id === clientId)?.contactEmail ?? ''} context={emailCtx} noLinkYet={d.status === 'draft'} />

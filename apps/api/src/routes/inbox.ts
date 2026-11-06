@@ -66,9 +66,14 @@ inbox.post('/:id/read', async (c) => {
 
 // Put a note away, or bring it back. Putting it away also marks it read.
 inbox.post('/:id/archive', async (c) => {
-  const body = await c.req.json<{ archived?: unknown }>().catch(() => ({}) as { archived?: unknown });
+  const body = await c.req.json<{ archived?: unknown; unread?: unknown }>().catch(() => ({}) as { archived?: unknown; unread?: unknown });
   const now = nowIso();
   const away = body.archived !== false;
+  // Undo right after archiving an unread note brings it back unread too (`unread: true`, only when bringing it back).
+  if (!away && body.unread === true) {
+    await c.env.DB.prepare('UPDATE notifications SET archived_at = NULL, read_at = NULL WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+    return c.json({ ok: true, archived: false });
+  }
   await c.env.DB.prepare('UPDATE notifications SET archived_at = ?, read_at = COALESCE(read_at, ?) WHERE id = ? AND user_id = ?').bind(away ? now : null, now, c.req.param('id'), c.get('user').id).run();
   return c.json({ ok: true, archived: away });
 });

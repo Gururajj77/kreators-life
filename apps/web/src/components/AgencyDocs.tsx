@@ -12,7 +12,7 @@ import {
   type RetainerInput,
 } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useAgencyCan } from '../lib/agencyWorkspace';
 import { api, ApiError } from '../lib/api';
@@ -169,7 +169,7 @@ export function NewDocSheet({ open, onClose, clientId, retainer }: { open: boole
 const day = (iso: string) => docDate(iso);
 
 /** The other documents, a page at a time, for every client or one: a kind filter, a row for each with its buttons, and a New document button. */
-export function AgencyDocsList({ clientId, retainer }: { clientId?: string; retainer?: Partial<RetainerInput> }) {
+export function AgencyDocsList({ clientId, retainer, kinds }: { clientId?: string; retainer?: Partial<RetainerInput>; /** The kind-of-paper switch, at the right of this row (Paperwork). */ kinds?: ReactNode }) {
   const [kind, setKind] = useParamState('adkind', 'all');
   const pg = usePage('ad');
   const [adding, setAdding] = useState(false);
@@ -184,7 +184,7 @@ export function AgencyDocsList({ clientId, retainer }: { clientId?: string; reta
   return (
     <div>
       {/* The kind filter is only worth its space once there are more documents than fit on a page; a chosen kind keeps it in sight. */}
-      <div className="flex flex-wrap items-end justify-between gap-sm">
+      <div className={`flex flex-wrap justify-between gap-sm ${kinds ? '@container items-center' : 'items-end'}`}>
         {(kind !== 'all' || pg.page > 1 || (list.data && (list.data.docs.length > 10 || list.data.page.more))) ? (
           <div className="min-w-0">
             <label htmlFor={`adkind-${clientId ?? 'all'}`} className="block text-subhead font-semibold">
@@ -207,14 +207,17 @@ export function AgencyDocsList({ clientId, retainer }: { clientId?: string; reta
               ))}
             </select>
           </div>
-        ) : (
+        ) : kinds ? null : (
           <span />
         )}
+        {/* Full width in a row under 34rem (a phone, under the switch); from there up its own width at the top left, centred on the switch
+            at the right (the founder, 2026-11-06). It comes before the switch in the page, so the keyboard meets it where the eye does. */}
         {edit && (
-          <Button size="sm" plusToX onClick={() => setAdding(true)}>
+          <Button size="sm" plusToX className={kinds ? 'order-last basis-full justify-center @min-[34rem]:order-none @min-[34rem]:basis-auto' : ''} onClick={() => setAdding(true)}>
             New document
           </Button>
         )}
+        {kinds}
       </div>
       {list.isError && (
         <p role="alert" className="mt-sm m-0 text-subhead">

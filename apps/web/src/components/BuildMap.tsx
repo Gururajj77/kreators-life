@@ -42,9 +42,10 @@ function Block({ item }: { item: BuildItem }) {
         <span className="sr-only">{s.name}: </span>
         {/* An item whose note is an app's path wears that app's icon (the labels hold no emoji). */}
         {mod && <AppIcon name={mod.icon} size={14} className="mr-xs inline-block align-[-2px]" />}
-        {/* A label of two clauses ("White on colour everywhere; yellow takes brown") keeps each whole, so it breaks at the semicolon. */}
-        {label.includes('; ')
-          ? label.split(/(?<=;) /).map((part, i) => (
+        {/* A label of two clauses ("White on colour everywhere; yellow takes brown", "Modules feed it too: opportunities, …") keeps each
+            whole, so it breaks at the semicolon, colon or comma. */}
+        {/ [^ ]+[;:,] /.test(` ${label} `)
+          ? label.split(/(?<=[;:,]) /).map((part, i) => (
               <Fragment key={i}>
                 {i > 0 && ' '}
                 <span className="inline-block">{part}</span>

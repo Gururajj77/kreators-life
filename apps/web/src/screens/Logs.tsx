@@ -128,9 +128,12 @@ export function Logs() {
               </select>
             </label>
           </div>
-          <div className="mt-sm flex flex-wrap items-center gap-xs">
-            <Toggle compact on={live} onChange={setLive} label="Look again every fifteen seconds" />
-            <Button size="sm" variant="outline" onClick={() => void d.refetch()} disabled={d.isFetching}>
+          {/* The switch at the left and the Look now that belongs with it at the right, on one line (P3). */}
+          <div className="mt-sm flex flex-wrap items-end justify-between gap-xs">
+            <div className="min-w-0 flex-[1_1_220px]">
+              <Toggle compact on={live} onChange={setLive} label="Look again every fifteen seconds" />
+            </div>
+            <Button size="sm" variant="outline" className="ml-auto" onClick={() => void d.refetch()} disabled={d.isFetching}>
               {d.isFetching ? 'Looking' : 'Look now'}
             </Button>
           </div>

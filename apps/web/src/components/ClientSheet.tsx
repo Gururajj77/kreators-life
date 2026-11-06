@@ -350,7 +350,7 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
           )}
           {billing.taxIds.length < 4 && (
             <div className="mt-xs">
-              <Button variant="outline" size="sm" onClick={() => setBilling({ ...billing, taxIds: [...billing.taxIds, { label: '', value: '' }] })}>
+              <Button variant="outline" size="sm" full onClick={() => setBilling({ ...billing, taxIds: [...billing.taxIds, { label: '', value: '' }] })}>
                 Add a tax number
               </Button>
             </div>
@@ -420,7 +420,7 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
         </p>
       )}
       <div className="mt-md flex flex-wrap items-center gap-xs">
-        <Button type="submit" disabled={save.isPending || !name.trim() || badRetainer || Boolean(badPin) || (!client && (!contactEmail.trim() || !password || Boolean(passwordBad)))}>
+        <Button type="submit" className="flex-1" disabled={save.isPending || !name.trim() || badRetainer || Boolean(badPin) || (!client && (!contactEmail.trim() || !password || Boolean(passwordBad)))}>
           {save.isPending ? 'Saving' : client ? 'Save changes' : 'Add'}
         </Button>
         {client &&
@@ -485,7 +485,7 @@ function Invite({ name, contactName, token, password, profile, onClose }: { name
         <ShownOnce password={password} note={COPY.separately} />
       </div>
       <div className="mt-md">
-        <Button variant="outline" onClick={onClose}>
+        <Button variant="outline" full onClick={onClose}>
           Done
         </Button>
       </div>

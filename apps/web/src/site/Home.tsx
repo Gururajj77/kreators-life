@@ -4,7 +4,9 @@ import { useQuery } from '@tanstack/react-query';
 import { m as motion } from 'motion/react';
 import { Link } from 'react-router';
 import { Avatar } from '../components/Avatar';
+import { Phrases } from '../components/Phrases';
 import { FractalGlass } from '../components/fx/FractalGlass';
+import { PeekGuides } from './PeekGuides';
 import { LiquidMetal } from '../components/fx/LiquidMetal';
 import { MorphShapes } from '../components/fx/MorphShapes';
 import { BorderBeam } from '../components/fx/BorderBeam';
@@ -424,7 +426,10 @@ export function Home() {
               className={`min-w-0 rounded-card bg-card p-md shadow-toy-soft ${['sm:col-span-2 lg:col-span-2 bento-feature', 'lg:col-span-2', 'lg:col-span-2', 'lg:col-span-3', 'lg:col-span-3'][i]}`}
             >
               <dt className="type-hook text-display-3">{x.w}</dt>
-              <dd className="mt-xs m-0 text-balance text-subhead text-ink-soft">{x.text}</dd>
+              {/* Each clause kept whole, so a narrow cell breaks after a comma, colon or full stop on purpose (Text is a rectangle). */}
+              <dd className="mt-xs m-0 text-balance text-subhead text-ink-soft">
+                <Phrases text={x.text} at={/(?<=[,:.]) /} />
+              </dd>
             </SpotlightCard>
           ))}
         </dl>
@@ -661,14 +666,7 @@ export function Home() {
             </Magnet>
           </div>
           {/* The seven peek up from the card's bottom edge: drawn whole, the card clips their lower half. */}
-          <div className="peek-row relative z-10 mt-lg flex justify-center gap-xs sm:gap-md" aria-hidden="true">
-            {RELATIONSHIPS.map((r, i) => (
-              // Each takes a seventh of the row up to 72px, so all seven fit a phone and none is cut at the side.
-              <div key={r.key} className="peek-guide w-[12%] max-w-[72px]" style={{ '--peek-delay': `${i * 0.12}s` } as CSSProperties}>
-                <Avatar relationship={r.key} size={72} mood={i % 2 ? 'happy' : 'excited'} decorative className="block h-auto w-full" />
-              </div>
-            ))}
-          </div>
+          <PeekGuides />
         </motion.div>
       </section>
     </SiteLayout>

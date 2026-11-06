@@ -391,7 +391,7 @@ export function Public() {
                   </label>
                   <label className="block">
                     <span className="block text-subhead font-semibold">Message</span>
-                    <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={3} maxLength={1000} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+                    <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={3} maxLength={1000} className={FIELD} />
                   </label>
                   {lead.isError && (
                     <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">

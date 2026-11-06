@@ -14,7 +14,11 @@ import { Pager, usePage } from '../components/Pager';
 import { FIELD } from '../lib/ui';
 import { copyPlain } from '../lib/clipboard';
 import { StatTile } from '../components/Charts';
+import { Fold } from '../components/Fold';
 
+/** Agency's PAPER_FILL (components/AgencyInvoices.tsx), copied so this page does not pull the Agency chunk in: equal parts on a
+ * phone's row, each its own width from 34rem. */
+const PAPER_FILL = 'flex w-full *:flex-1 *:px-xs @min-[34rem]:inline-flex @min-[34rem]:w-auto @min-[34rem]:*:flex-none @min-[34rem]:*:px-sm';
 const chip = (on: boolean) => `min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`;
 
 
@@ -46,24 +50,30 @@ export function ContentResults() {
       </section>
 
       <section className="mt-lg" aria-labelledby="posts-heading">
-        <div className="flex items-center justify-between gap-sm">
-          <h2 id="posts-heading" className="text-title2">
-            Posts
-          </h2>
-          <Button onClick={() => setAdding(true)}>Add a post</Button>
-        </div>
-        <div className="mt-sm flex gap-xs" role="group" aria-label="Sort posts">
-          {(
-            [
-              ['revenue', 'By revenue'],
-              ['views', 'By views'],
-              ['recent', 'Newest'],
-            ] as const
-          ).map(([k, label]) => (
-            <button key={k} type="button" aria-pressed={sort === k} onClick={() => setSort(k)} className={chip(sort === k)}>
-              {label}
-            </button>
-          ))}
+        <h2 id="posts-heading" className="text-title2">
+          Posts
+        </h2>
+        {/* The sort at the left and Add a post at the right of one row, like Agency's List and Board (the founder, 2026-11-06); in a row
+            under 34rem (a phone) the sort fills its line in equal parts and the button takes the next, full width. */}
+        <div className="@container mt-sm flex flex-wrap items-center justify-between gap-sm">
+          <div className="basis-full @min-[34rem]:basis-auto">
+            <div className={`gap-xs ${PAPER_FILL}`} role="group" aria-label="Sort posts">
+              {(
+                [
+                  ['revenue', 'By revenue'],
+                  ['views', 'By views'],
+                  ['recent', 'Newest'],
+                ] as const
+              ).map(([k, label]) => (
+                <button key={k} type="button" aria-pressed={sort === k} onClick={() => setSort(k)} className={chip(sort === k)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <Button className="basis-full justify-center @min-[34rem]:basis-auto" onClick={() => setAdding(true)}>
+            Add a post
+          </Button>
         </div>
         {d && d.items.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">No posts yet. Add the link to a Reel, post or video and you get a tracked link for it.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -170,15 +180,15 @@ function ContentCard({ item, onChange }: { item: ContentItem; onChange: () => vo
             refresh.mutate({ views: Number(views) || 0, likes: Number(likes) || 0, comments: Number(comments) || 0 });
           }}
         >
-          <label className="block w-[96px]">
+          <label className="block min-w-[96px] flex-1">
             <span className="block text-caption">Views</span>
             <input type="number" min={0} value={views} onChange={(e) => setViews(e.target.value)} className={FIELD} />
           </label>
-          <label className="block w-[96px]">
+          <label className="block min-w-[96px] flex-1">
             <span className="block text-caption">Likes</span>
             <input type="number" min={0} value={likes} onChange={(e) => setLikes(e.target.value)} className={FIELD} />
           </label>
-          <label className="block w-[96px]">
+          <label className="block min-w-[96px] flex-1">
             <span className="block text-caption">Comments</span>
             <input type="number" min={0} value={comments} onChange={(e) => setComments(e.target.value)} className={FIELD} />
           </label>
@@ -238,24 +248,22 @@ function LinkCard({ link, goBase, onChange }: { link: TrackedLink; goBase: strin
         <Button variant="outline" onClick={() => void copy()}>
           {copied ? 'Copied' : 'Copy'}
         </Button>
-        <Button variant="outline" onClick={() => setQrOpen(true)}>
-          QR
-        </Button>
         <button type="button" disabled={remove.isPending} onClick={() => setDeleting(true)} className={DELETE_BTN}>
           Remove
         </button>
       </div>
       <ConfirmDelete open={deleting} title="Delete this link?" body="The link stops working. Sales already credited stay. This cannot be undone." pending={remove.isPending} failed={remove.isError} onYes={() => remove.mutate()} onClose={() => setDeleting(false)} />
-      <Sheet open={qrOpen} onClose={() => setQrOpen(false)} title={link.label || `Link ${link.code}`}>
-        <div className="flex flex-col items-center gap-sm text-center">
-          {qr ? <img src={qr} width={160} height={160} alt={`QR code for ${url}`} className="rounded-tile bg-white p-xs" /> : qrError ? <p className="m-0 text-subhead">{qrError}</p> : <p className="m-0 text-subhead text-ink-soft">Drawing the code</p>}
+      {/* The QR code folds out inside the link's own card (2026-11-06: no sheet for a picture and a copy button). */}
+      <Fold title="QR code" open={qrOpen} onOpenChange={setQrOpen} className="mt-sm">
+        <div className="flex flex-col items-center gap-sm rounded-tile bg-paper p-sm">
+          {qr ? <img src={qr} width={160} height={160} alt={`QR code for ${url}`} className="rounded-tile bg-white p-xs" /> : qrError ? <p className="m-0 text-subhead">{qrError}</p> : <p role="status" className="m-0 text-subhead text-ink-soft">Drawing the code</p>}
           <p className="m-0 break-all text-subhead">{url}</p>
           <p className="m-0 text-caption text-ink-soft">Put it on a slide, a poster or a video end card. Every scan is credited to this link.</p>
           <Button variant="outline" onClick={() => void copy()}>
             {copied ? 'Copied' : 'Copy link'}
           </Button>
         </div>
-      </Sheet>
+      </Fold>
     </li>
   );
 }

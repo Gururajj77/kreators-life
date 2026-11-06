@@ -424,7 +424,7 @@ function lineOrder(round: number): number[] {
  * there are lines (about a year); the lines alternate between a philosopher and the app, and each round is shuffled anew. The first line of a round
  * is never the last of the one before. Nothing is stored: the same day always gives the same line.
  */
-export function lineForDay(day: string): DailyLine & { round: number; position: number } {
+export function lineForDay(day: string): DailyLine & { key: string; round: number; position: number } {
   const [y, m, d] = day.split('-').map(Number);
   const n = Math.floor(Date.UTC(y ?? 2026, (m ?? 1) - 1, d ?? 1) / 86_400_000) - Math.floor(Date.UTC(2026, 0, 1) / 86_400_000);
   const size = DAILY_LINE_COUNT;
@@ -437,5 +437,99 @@ export function lineForDay(day: string): DailyLine & { round: number; position: 
     if (order[0] === lastBefore) [order[0], order[1]] = [order[1]!, order[0]!];
   }
   const idx = order[position]!;
-  return idx < PHILOSOPHER_LINES.length ? { text: PHILOSOPHER_LINES[idx]![0], by: PHILOSOPHER_LINES[idx]![1], own: false, round, position } : { text: APP_LINES[idx - PHILOSOPHER_LINES.length]!, by: '', own: true, round, position };
+  const key = idx < PHILOSOPHER_LINES.length ? `p${idx}` : `a${idx - PHILOSOPHER_LINES.length}`;
+  return idx < PHILOSOPHER_LINES.length ? { text: PHILOSOPHER_LINES[idx]![0], by: PHILOSOPHER_LINES[idx]![1], own: false, key, round, position } : { text: APP_LINES[idx - PHILOSOPHER_LINES.length]!, by: '', own: true, key, round, position };
+}
+
+/**
+ * Tips for the line of the day's "Another one" (the founder, 2026-11-06: "shuffle between tip or quotes", "make sense in the context of
+ * what we are building"): small things to do for the seven relationships, the work and the day, in the app's plain words. No claim, no
+ * promise. A new tip is added here and nowhere else.
+ */
+const TIP_LINES: readonly string[] = [
+  'Pick one small act for a pillar that has gone quiet. Two minutes is enough to start.',
+  'Tick a task only on the day you did it. A tick is a record, not a wish.',
+  'Name one thing to stay away from this week, and put it on your not to do list.',
+  'Give each task a length. A plan with times in it is easier to keep than a list.',
+  'At the end of the week, ask which of your seven relationships got none of your time.',
+  'Drink a glass of water before your first coffee.',
+  'A short review at the end of the month shows what a busy month hid.',
+  'When a day goes wrong, keep the bar low: one check-in still counts.',
+  'Call someone in your family this week, for no reason at all.',
+  'Keep your phone in another room for the first hour of work.',
+  'Plan the week on one day, then only look at it each morning.',
+  'Write the reason under each goal. A goal without a why is easy to drop.',
+  'Do the hardest task before you open any messages.',
+  'Finish one task before you start the next. Half-done work weighs on you.',
+  'A focus round of 25 minutes is long enough to start and short enough to keep.',
+  'When you feel rushed, breathe out for longer than you breathe in.',
+  'Go to sleep at the same time on weekdays and weekends.',
+  'Thank a teacher, coach or mentor in writing this month.',
+  'Spend time with a friend where neither of you is working on anything.',
+  'Tell your partner one thing they did for you this week.',
+  'Move a set amount to savings on the day money comes in, before you spend.',
+  'Send an invoice on the day the work is done, not at the end of the month.',
+  'Post less, and finish what you post. One good piece beats three rushed ones.',
+  'Keep a list of ideas and pick from it, instead of waiting for one to arrive.',
+  'Learn one skill at a time, until you can use it without notes.',
+  'When work feels endless, ask who it serves. Work that serves someone is easier to start.',
+  'Put a rest day in the week before the week fills it for you.',
+  'Write three lines tonight: what went well, what did not, and what comes next.',
+  'Walk for ten minutes after lunch. A short walk counts.',
+  'Tell one person your goal. A goal someone knows about is harder to drop quietly.',
+  'Clear your desk at the end of the day, so the next one starts clean.',
+  'Say no to one thing this week that does not serve your seven relationships.',
+  'Check in on a friend who has gone quiet. People rarely ask first.',
+  'Spend five quiet minutes on what you believe in, before the day gets loud.',
+  'Count what you finished this week, not only what is left.',
+  'If a task keeps moving to tomorrow, make it smaller.',
+  'Turn off the alerts you do not need. Each one is someone else’s plan for your time.',
+  'Eat one meal today without a screen.',
+  'When a task feels pointless, follow it up your pyramid to the reason you started.',
+  'Read ten pages of a book instead of ten minutes of a feed.',
+  'Ask a client about their goal before you start the work.',
+  'Keep one evening a week for family, and guard it like a meeting.',
+  'Set a time to stop work today, and stop at it.',
+  'Notice the days that feel good, and do more of what they had in common.',
+];
+
+/** A line by its key: `p<n>` a philosopher, `a<n>` one of the app's own thoughts, `t<n>` a tip. */
+export interface LineOfDay extends DailyLine {
+  key: string;
+  /** True for a tip (something to do); false for a quote or a thought. */
+  tip: boolean;
+}
+const LINE_KEYS: readonly string[] = [...PHILOSOPHER_LINES.map((_, i) => `p${i}`), ...APP_LINES.map((_, i) => `a${i}`), ...TIP_LINES.map((_, i) => `t${i}`)];
+/** Every line "Another one" can show: the philosophers, the app's thoughts and the tips. */
+export const LINE_POOL_SIZE = LINE_KEYS.length;
+export const TIP_COUNT = TIP_LINES.length;
+
+export function lineByKey(key: string): LineOfDay | null {
+  const n = Number(key.slice(1));
+  if (!Number.isInteger(n) || n < 0) return null;
+  if (key[0] === 'p' && PHILOSOPHER_LINES[n]) return { text: PHILOSOPHER_LINES[n]![0], by: PHILOSOPHER_LINES[n]![1], own: false, tip: false, key };
+  if (key[0] === 'a' && APP_LINES[n]) return { text: APP_LINES[n]!, by: '', own: true, tip: false, key };
+  if (key[0] === 't' && TIP_LINES[n]) return { text: TIP_LINES[n]!, by: '', own: true, tip: true, key };
+  return null;
+}
+
+/**
+ * The next line for "Another line", the one rule. `seen` is every key shown on this device in the current round (the day's own line
+ * included), `last` the one showing now. It never gives a key in `seen`; it alternates a tip and a quote (a philosopher or one of the
+ * app's thoughts) while both are left; the order is a shuffle seeded by `seed`, so the same history gives the same next line. When the
+ * whole pool has been shown it starts a new round (`fresh`, and the caller clears `seen`), never opening on `last`. `fits` (optional)
+ * says whether a line suits the place it is shown (the card on a laptop keeps the quote to one row, 2026-11-06, the founder: "never make
+ * the quote more than one line on desktop"): a line that does not fit is passed over, and a round ends when only such lines are left.
+ */
+export function nextLine(seen: readonly string[], seed: number, last: string | null, fits?: (line: LineOfDay) => boolean): { line: LineOfDay; fresh: boolean } {
+  const done = new Set(seen);
+  const suits = (k: string) => !fits || fits(lineByKey(k)!);
+  const order = seededShuffle(LINE_KEYS, seed);
+  const wantTip = last ? !last.startsWith('t') : true;
+  const left = order.filter((k) => !done.has(k) && suits(k));
+  const pick = left.find((k) => k.startsWith('t') === wantTip) ?? left[0];
+  if (pick) return { line: lineByKey(pick)!, fresh: false };
+  const roomy = seededShuffle(LINE_KEYS, seed + 1).filter((k) => k !== last && suits(k));
+  const again = roomy.find((k) => k.startsWith('t') === wantTip) ?? roomy[0] ?? LINE_KEYS.find((k) => k !== last)!;
+  return { line: lineByKey(again)!, fresh: true };
 }

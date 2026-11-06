@@ -1,4 +1,4 @@
-import { MODULES, roleRank, rolloutBucket, type ModuleAccess, type ModuleSetting, type Role } from '@kreators/shared';
+import { ADMIN_GUIDE_COHORT, ADMIN_GUIDE_PROGRAM, MODULES, roleRank, rolloutBucket, type ModuleAccess, type ModuleSetting, type Role } from '@kreators/shared';
 import type { UserRow } from './env';
 import { orgIdsOf, parseModules } from './db';
 
@@ -37,6 +37,8 @@ export const MODULE_FOR_PREFIX: Record<string, readonly string[]> = {
   // The coach's side and the directory. The student's own side (answers, what they share, ending a link) lives
   // under /me/coach, which is core, so switching Coaching off never stops anyone from saying no or ending it.
   coach: ['coaching'],
+  // Not listed on purpose: `time-blocks` (time blocks, day templates and the weekly pattern, docs/time-blocks.md). It is core like
+  // /today, which reads it for every Daily, so it is always open.
   // Not listed on purpose: `me/teams` (an Agency team invite's answer, leaving, and a client member's read-only view). It is core like
   // /me/coach, so a person can always say no or leave a team even when Agency is off for them. The owner's side, /agency/team, is gated by `agency`.
   assistant: ['assistant'],
@@ -74,6 +76,19 @@ export function modulesForPath(path: string): readonly string[] | null {
   const parts = path.replace(/^\/api\//, '').split('/').filter(Boolean);
   const two = parts.length > 1 ? `${parts[0]}/${parts[1]}` : '';
   return MODULE_FOR_PREFIX[two] ?? MODULE_FOR_PREFIX[parts[0] ?? ''] ?? null;
+}
+
+/**
+ * The Admin guide is a School cohort only admins can open (scripts/admin-guide). An admin reaches it, and its discussion, whatever
+ * School's flag, rollout or minimum role says, so the guide never shuts on the team. That covers editing it from /admin/guide too:
+ * adding a lesson to its program, and changing, moving or removing a lesson (`/school/items/...`, which an admin may do to any lesson
+ * anyway; the route still checks accessTo). Everyone else goes through the gate as before.
+ */
+export function adminGuideBypass(path: string, role: Role | string): boolean {
+  if (role !== 'admin') return false;
+  const rest = path.replace(/^\/api\//, '/');
+  const under = (base: string) => rest === base || rest.startsWith(`${base}/`);
+  return under(`/school/cohorts/${ADMIN_GUIDE_COHORT}`) || under(`/school/programs/${ADMIN_GUIDE_PROGRAM}`) || under('/school/items');
 }
 
 interface SettingRow {

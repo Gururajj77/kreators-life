@@ -8,10 +8,11 @@ import { Pager, usePage } from '../components/Pager';
 import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 import { Toggle } from '../components/Toggle';
 import { api } from '../lib/api';
 import { shortDate, todayLocal } from '../lib/date';
-import { FIELD } from '../lib/ui';
+import { FIELD, FIELD_LINE } from '../lib/ui';
 import { useParamState } from '../lib/useParamState';
 import { Fold } from '../components/Fold';
 
@@ -307,7 +308,14 @@ function MonthBars({ months, currency }: { months: FinanceSummary['months']; cur
 }
 
 function TxRow({ t, currency, onChange }: { t: FinanceTransaction; currency: string; onChange: () => void }) {
-  const del = useMutation({ mutationFn: () => api.deleteTransaction(t.id), onSuccess: onChange });
+  const [asking, setAsking] = useState(false);
+  const del = useMutation({
+    mutationFn: () => api.deleteTransaction(t.id),
+    onSuccess: () => {
+      setAsking(false);
+      onChange();
+    },
+  });
   const paySplit = useMutation({
     mutationFn: (i: number) => api.updateTransaction(t.id, { splits: t.splits.map((s, j) => (j === i ? { ...s, status: s.status === 'paid' ? 'due' : 'paid' } : s)) }),
     onSuccess: onChange,
@@ -331,7 +339,7 @@ function TxRow({ t, currency, onChange }: { t: FinanceTransaction; currency: str
         </span>
         <span className="shrink-0 text-headline">{money(t.kind === 'income' ? t.amountCents : -t.amountCents, t.currency || currency)}</span>
         {t.source === 'manual' && (
-          <button type="button" onClick={() => del.mutate()} disabled={del.isPending} aria-label="Remove" className="toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink-soft">
+          <button type="button" onClick={() => setAsking(true)} disabled={del.isPending} aria-label="Remove" className="toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink-soft">
             ×
           </button>
         )}
@@ -350,13 +358,29 @@ function TxRow({ t, currency, onChange }: { t: FinanceTransaction; currency: str
           ))}
         </ul>
       )}
+      <ConfirmDelete
+        open={asking}
+        title="Delete this transaction?"
+        body={`${t.category}, ${money(t.amountCents, t.currency || currency)}, comes off your books and your totals. This cannot be undone.`}
+        pending={del.isPending}
+        failed={del.isError}
+        onYes={() => del.mutate()}
+        onClose={() => setAsking(false)}
+      />
     </li>
   );
 }
 
 function DueRow({ due, currency, onChange }: { due: FinanceDue; currency: string; onChange: () => void }) {
   const settle = useMutation({ mutationFn: () => api.settleDue(due.id, todayLocal()), onSuccess: onChange });
-  const del = useMutation({ mutationFn: () => api.deleteDue(due.id), onSuccess: onChange });
+  const [asking, setAsking] = useState(false);
+  const del = useMutation({
+    mutationFn: () => api.deleteDue(due.id),
+    onSuccess: () => {
+      setAsking(false);
+      onChange();
+    },
+  });
   const overdue = due.status === 'open' && due.dueDate && due.dueDate < todayLocal();
   return (
     <li className={`rounded-tile bg-card p-sm shadow-toy-soft ${due.status === 'settled' ? 'opacity-70' : ''}`}>
@@ -379,18 +403,35 @@ function DueRow({ due, currency, onChange }: { due: FinanceDue; currency: string
           <Button onClick={() => settle.mutate()} disabled={settle.isPending}>
             {due.direction === 'owed' ? 'Received' : 'Paid'}
           </Button>
-          <Button variant="ghost" onClick={() => del.mutate()} disabled={del.isPending}>
+          <Button variant="ghost" onClick={() => setAsking(true)} disabled={del.isPending}>
             Remove
           </Button>
         </div>
       )}
+      <ConfirmDelete
+        open={asking}
+        title="Remove this due?"
+        body={`${due.direction === 'owed' ? `What ${due.counterparty} owes you` : `What you owe ${due.counterparty}`} is no longer tracked. This cannot be undone.`}
+        yes="Yes, remove it"
+        pending={del.isPending}
+        failed={del.isError}
+        onYes={() => del.mutate()}
+        onClose={() => setAsking(false)}
+      />
     </li>
   );
 }
 
 function RecurringRow({ r, currency, onChange }: { r: FinanceRecurring; currency: string; onChange: () => void }) {
   const set = useMutation({ mutationFn: (active: boolean) => api.setRecurring(r.id, active), onSuccess: onChange });
-  const del = useMutation({ mutationFn: () => api.deleteRecurring(r.id), onSuccess: onChange });
+  const [asking, setAsking] = useState(false);
+  const del = useMutation({
+    mutationFn: () => api.deleteRecurring(r.id),
+    onSuccess: () => {
+      setAsking(false);
+      onChange();
+    },
+  });
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
       <Toggle
@@ -400,9 +441,19 @@ function RecurringRow({ r, currency, onChange }: { r: FinanceRecurring; currency
         hint={`Day ${r.dayOfMonth} of the month, next on ${day(r.nextDate)}${r.note ? `, ${r.note}` : ''}`}
         disabled={set.isPending}
       />
-      <Button variant="ghost" className="mt-xs" onClick={() => del.mutate()} disabled={del.isPending}>
+      <Button variant="ghost" className="mt-xs" onClick={() => setAsking(true)} disabled={del.isPending}>
         Remove
       </Button>
+      <ConfirmDelete
+        open={asking}
+        title="Remove this monthly item?"
+        body={`${r.category} stops being added each month. What it already added stays. This cannot be undone.`}
+        yes="Yes, remove it"
+        pending={del.isPending}
+        failed={del.isError}
+        onYes={() => del.mutate()}
+        onClose={() => setAsking(false)}
+      />
     </li>
   );
 }
@@ -416,7 +467,14 @@ function GoalRow({ goal, currency, onChange }: { goal: FinanceGoal; currency: st
       onChange();
     },
   });
-  const del = useMutation({ mutationFn: () => api.deleteGoal(goal.id), onSuccess: onChange });
+  const [asking, setAsking] = useState(false);
+  const del = useMutation({
+    mutationFn: () => api.deleteGoal(goal.id),
+    onSuccess: () => {
+      setAsking(false);
+      onChange();
+    },
+  });
   const pct = Math.min(100, Math.round((goal.progressCents / Math.max(1, goal.targetCents)) * 100));
   return (
     <li className="rounded-tile bg-card p-sm shadow-toy-soft">
@@ -437,23 +495,34 @@ function GoalRow({ goal, currency, onChange }: { goal: FinanceGoal; currency: st
       </p>
       <div className="mt-xs flex flex-wrap items-center gap-xs">
         {goal.kind === 'save' && (
+          // The amount field grows to fill the row, Add beside it and Remove at the end (the form rules, 2026-11-06).
           <form
-            className="flex gap-xs"
+            className="flex min-w-0 flex-1 basis-[220px] gap-xs"
             onSubmit={(e) => {
               e.preventDefault();
               if (toCents(amount) !== 0) add.mutate();
             }}
           >
-            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Put aside" aria-label="Amount to put aside" className="w-[140px] rounded-pill border-2 border-line bg-paper px-sm py-xs text-subhead" />
+            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Put aside" aria-label="Amount to put aside" className={`${FIELD_LINE} min-w-0 flex-1`} />
             <Button variant="outline" type="submit" disabled={add.isPending || toCents(amount) === 0}>
               Add
             </Button>
           </form>
         )}
-        <Button variant="ghost" onClick={() => del.mutate()} disabled={del.isPending}>
+        <Button variant="ghost" onClick={() => setAsking(true)} disabled={del.isPending}>
           Remove
         </Button>
       </div>
+      <ConfirmDelete
+        open={asking}
+        title="Remove this goal?"
+        body={`“${goal.title}” and its progress are gone. This cannot be undone.`}
+        yes="Yes, remove it"
+        pending={del.isPending}
+        failed={del.isError}
+        onYes={() => del.mutate()}
+        onClose={() => setAsking(false)}
+      />
     </li>
   );
 }
@@ -531,15 +600,15 @@ function AddSheet({ kind, onClose, onDone }: { kind: 'income' | 'expense' | null
           <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
             {splits.map((s, i) => (
               <li key={i} className="grid grid-cols-[1fr_120px_44px] gap-xs">
-                <input aria-label="Name" value={s.name} onChange={(e) => setSplits(splits.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} placeholder="Who" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
-                <input aria-label="Share" inputMode="decimal" value={s.amount} onChange={(e) => setSplits(splits.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))} placeholder="0.00" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+                <input aria-label="Name" value={s.name} onChange={(e) => setSplits(splits.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} placeholder="Who" className={FIELD_LINE} />
+                <input aria-label="Share" inputMode="decimal" value={s.amount} onChange={(e) => setSplits(splits.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))} placeholder="0.00" className={FIELD_LINE} />
                 <button type="button" onClick={() => setSplits(splits.filter((_, j) => j !== i))} aria-label="Remove split" className="toy toy-soft rounded-tile bg-paper text-ink-soft">
                   ×
                 </button>
               </li>
             ))}
           </ul>
-          <Button variant="ghost" className="mt-xs" onClick={() => setSplits([...splits, { name: '', amount: '' }])}>
+          <Button variant="ghost" className="mt-xs" full onClick={() => setSplits([...splits, { name: '', amount: '' }])}>
             Add a split
           </Button>
           {splitTotal > toCents(amount) && toCents(amount) > 0 && (
@@ -786,7 +855,7 @@ function BudgetSheet({ open, summary, onClose, onDone }: { open: boolean; summar
         {EXPENSE_CATEGORIES.map((c) => (
           <label key={c} className="grid grid-cols-[1fr_120px] items-center gap-xs">
             <span className="text-subhead font-semibold">{c}</span>
-            <input inputMode="decimal" value={values[c] ?? ''} onChange={(e) => setValues({ ...values, [c]: e.target.value })} placeholder="0" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+            <input inputMode="decimal" value={values[c] ?? ''} onChange={(e) => setValues({ ...values, [c]: e.target.value })} placeholder="0" className={FIELD_LINE} />
           </label>
         ))}
         <Button type="submit" size="lg" full disabled={save.isPending}>

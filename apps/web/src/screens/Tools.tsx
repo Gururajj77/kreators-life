@@ -15,7 +15,6 @@ import { FIELD } from '../lib/ui';
 import { ErrorLine } from '../components/ErrorLine';
 import { MoreMenu } from '../components/MoreMenu';
 import { SkeletonList } from '../components/Skeleton';
-import { CardHead } from '../components/CardHead';
 import { FactTag, IconTag } from '../components/FactTag';
 import { StatusTag } from '../components/StatusTag';
 import '../components/fx/spotlight';
@@ -30,12 +29,31 @@ function ToolRow({ t, reviewer, onChange }: { t: Tool; reviewer: boolean; onChan
   const [editingMedia, setEditingMedia] = useState(false);
   const mediaItem = useMediaMenuItem('tool', t.id, () => setEditingMedia(true));
   return (
-    // The name at the top left, Verified or Waiting in the corner of every card, the words under it, then at the foot the marks on the
-    // left and Open or Get it at the bottom right with the More beside it (2026-11-05, the founder's card rules).
+    // The name at the top left with the More beside it, the words under it, then at the foot the marks (Verified or Waiting first) on
+    // the left and Open or Get it at the bottom right (2026-11-05 card rules, with the 2026-11-06 card head).
     <li className={`fx-spot flex h-full flex-col rounded-tile bg-card p-sm ${featured ? 'border-2 border-r3 shadow-toy' : 'border-2 border-transparent shadow-toy-soft'}`}>
-      <CardHead tag={t.verified ? <FactTag kind="verified">Verified</FactTag> : <StatusTag tone="warn">Waiting for review</StatusTag>}>
-        <span className="block text-balance text-card-title">{t.name}</span>
-      </CardHead>
+      {/* The name and the "…" on one row, centred on each other; Verified or Waiting for review is a tag with the others at the foot
+          (the founder, 2026-11-06, School's program card). */}
+      <div className="flex items-center justify-between gap-xs">
+        <p className="m-0 min-w-0 flex-1 text-balance text-card-title">{t.name}</p>
+        {(reviewer || mediaItem) && (
+          <MoreMenu
+            label={`Review actions for ${t.name}`}
+            title={t.name}
+            items={[
+              ...(mediaItem ? [mediaItem] : []),
+              ...(reviewer
+                ? [
+                    ...(!t.verified ? [{ key: 'verify', label: 'Verify', disabled: set.isPending, onSelect: () => set.mutate({ verified: true }) }] : []),
+                    { key: 'affiliate', label: t.affiliate ? 'Not a partner link' : 'Mark as partner link', disabled: set.isPending, onSelect: () => set.mutate({ affiliate: !t.affiliate }) },
+                    { key: 'feature', label: featured ? 'Take off the top' : 'Feature for a week', disabled: set.isPending, onSelect: () => set.mutate({ featured: !featured }) },
+                    { key: 'remove', label: 'Remove', destructive: true, disabled: remove.isPending, onSelect: () => setRemoving(true) },
+                  ]
+                : []),
+            ]}
+          />
+        )}
+      </div>
       {t.description && <span className="mt-xs block text-card-note text-ink-soft">{t.description}</span>}
       {!t.unlock.ok && (
         <div className="mt-sm">
@@ -44,12 +62,11 @@ function ToolRow({ t, reviewer, onChange }: { t: Tool; reviewer: boolean; onChan
       )}
       <div className="mt-auto flex items-end justify-between gap-sm pt-sm">
         <span className="flex min-w-0 flex-col items-start gap-xs">
-          {(featured || t.clicks > 0) && (
-            <span className="fill-row-all flex min-w-0 flex-wrap gap-xs">
-              {featured && <FeaturedTag />}
-              {t.clicks > 0 && <IconTag tone="neutral" icon="TrendingUp">{`${formatCount(t.clicks)} ${t.clicks === 1 ? 'tap' : 'taps'}`}</IconTag>}
-            </span>
-          )}
+          <span className="fill-row-all flex min-w-0 flex-wrap gap-xs">
+            {t.verified ? <FactTag kind="verified">Verified</FactTag> : <StatusTag tone="warn">Waiting for review</StatusTag>}
+            {featured && <FeaturedTag />}
+            {t.clicks > 0 && <IconTag tone="neutral" icon="TrendingUp">{`${formatCount(t.clicks)} ${t.clicks === 1 ? 'tap' : 'taps'}`}</IconTag>}
+          </span>
           {(!t.verified || t.affiliate || (t.unlock.ok && (t.minPoints > 0 || t.minXp > 0 || t.badge))) && (
             <span className="block text-caption text-ink-mute">
               {[!t.verified ? `Suggested by ${t.suggestedByName}.` : '', t.affiliate ? 'Partner link. Kreators may earn a share.' : '', t.unlock.ok && (t.minPoints > 0 || t.minXp > 0 || t.badge) ? `${unlockAt(t.unlock)}. You have it.` : ''].filter(Boolean).join(' ')}
@@ -57,23 +74,6 @@ function ToolRow({ t, reviewer, onChange }: { t: Tool; reviewer: boolean; onChan
           )}
         </span>
         <span className="flex shrink-0 items-center gap-xs">
-            {(reviewer || mediaItem) && (
-              <MoreMenu
-                label={`Review actions for ${t.name}`}
-                title={t.name}
-                items={[
-                  ...(mediaItem ? [mediaItem] : []),
-                  ...(reviewer
-                    ? [
-                        ...(!t.verified ? [{ key: 'verify', label: 'Verify', disabled: set.isPending, onSelect: () => set.mutate({ verified: true }) }] : []),
-                        { key: 'affiliate', label: t.affiliate ? 'Not a partner link' : 'Mark as partner link', disabled: set.isPending, onSelect: () => set.mutate({ affiliate: !t.affiliate }) },
-                        { key: 'feature', label: featured ? 'Take off the top' : 'Feature for a week', disabled: set.isPending, onSelect: () => set.mutate({ featured: !featured }) },
-                        { key: 'remove', label: 'Remove', destructive: true, disabled: remove.isPending, onSelect: () => setRemoving(true) },
-                      ]
-                    : []),
-                ]}
-              />
-            )}
           {!t.unlock.ok ? null : t.affiliate && t.verified ? (
             // The same outline look as Open, so the page keeps one solid button, Suggest a tool.
             <a href={`/out/tool/${t.id}`} target="_blank" rel="noreferrer" className="toy toy-ink inline-flex min-h-[44px] items-center rounded-pill border-2 border-ink bg-card px-sm text-subhead font-semibold">
@@ -252,7 +252,8 @@ function SuggestSheet({ open, onClose, onDone, categories, reviewer }: { open: b
               <span className="block text-subhead font-semibold">Points of at least</span>
               <input type="number" min={0} value={minPoints} onChange={(e) => setMinPoints(e.target.value)} className={FIELD} />
             </label>
-            <label className="block">
+            {/* The third field takes the whole second row, so the row is filled (the form rules, 2026-11-06). */}
+            <label className="col-span-2 block">
               <span className="block text-subhead font-semibold">Holds the badge</span>
               <select value={badge} onChange={(e) => setBadge(e.target.value)} className={FIELD}>
                 <option value="">Any badge or none</option>

@@ -2,7 +2,7 @@ import { AGENCY_HEALTH_NAME, AGENCY_STATUS_NAME, CLIENT_HEALTH_TONE, CLIENT_STAT
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Clock, ArrowUpRight, FilePlus, Pencil, ReceiptText } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { AgencyContracts } from '../components/AgencyContracts';
 import { ClientDocs } from '../components/AgencyDocs';
 import { LifecycleCard, RetainerCard } from '../components/AgencyLifecycle';
@@ -25,6 +25,7 @@ import { Ring } from '../components/Ring';
 import { Screen } from '../components/Screen';
 import { Section } from '../components/Section';
 import { Sheet } from '../components/Sheet';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 import { Busy, Skeleton, SkeletonCard } from '../components/Skeleton';
 import { StatusTag } from '../components/StatusTag';
 import { Toggle } from '../components/Toggle';
@@ -32,7 +33,7 @@ import { api } from '../lib/api';
 import { bento } from '../lib/bento';
 import { prettyDate, todayLocal } from '../lib/date';
 import { useAuthed } from '../lib/queries';
-import { useParamState } from '../lib/useParamState';
+import { useParamState, writeParams } from '../lib/useParamState';
 import { useCopy } from '../lib/clipboard';
 import { FIELD } from '../lib/ui';
 
@@ -82,6 +83,7 @@ export function AgencyClient() {
   const today = todayLocal();
   const q = useAuthed(['agency', 'client', id], () => api.agencyClient(id));
   const [segRaw, setSeg] = useParamState('cseg', 'work');
+  const [, setParams] = useSearchParams();
   const seg: Segment = isSegment(segRaw) ? segRaw : 'work';
   const [editing, setEditing] = useState(false);
   const [timing, setTiming] = useState(false);
@@ -107,7 +109,15 @@ export function AgencyClient() {
       invalidate();
     },
   });
-  const removeTime = useMutation({ mutationFn: (entry: string) => api.agencyTimeRemove(entry), onSuccess: invalidate });
+  const removeTime = useMutation({
+    mutationFn: (entry: string) => api.agencyTimeRemove(entry),
+    onSuccess: () => {
+      setDroppingTime(null);
+      invalidate();
+    },
+  });
+  // A time entry's remove asks first, with the entry it is about.
+  const [droppingTime, setDroppingTime] = useState<{ id: string; label: string } | null>(null);
   const makeInvoice = useMutation({ mutationFn: () => api.agencyInvoiceFromClient(id), onSuccess: (r) => nav(`/agency/invoices/${r.invoice.id}`) });
 
   const d = q.data;
@@ -174,6 +184,8 @@ export function AgencyClient() {
       ),
       hint: m.overdue > 0 ? 'Late means past their day' : 'In review now',
       ring: null,
+      // Opens this client's pipeline as a list of what the hint names: the late pieces while there are any, else the ones in review.
+      go: () => showPieces(m.overdue > 0 ? { pdue: 'late' } : { pstage: 'review' }),
     },
   ];
   const facts = [
@@ -189,6 +201,14 @@ export function AgencyClient() {
   const minutes = parseDuration(minutesText);
   const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-callout';
   const portalUrl = c.portalToken ? `${window.location.origin}/a/${c.portalToken}` : '';
+  /** Work, this client's pipeline as a list with only this filter on, scrolled into view (one change of the URL). */
+  const showPieces = (f: { pstage?: string; pdue?: string }) => {
+    setSeg('work');
+    writeParams(setParams, { pview: 'list', pchannel: null, ppage: null, pstage: f.pstage ?? null, pdue: f.pdue ?? null });
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => document.getElementById('pipeline-heading')?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })),
+    );
+  };
   const openTime = () => {
     setSeg('work');
     setTiming(true);
@@ -253,7 +273,7 @@ export function AgencyClient() {
 
       <div className="mt-md grid grid-cols-2 gap-sm md:grid-cols-3">
         {tiles.map((t, i) => (
-          <StatTile key={t.label} label={t.label} value={t.value} hint={t.hint} className={bento(i, tiles.length, 2, 3)}>
+          <StatTile key={t.label} label={t.label} value={t.value} hint={t.hint} className={bento(i, tiles.length, 2, 3)} onClick={'go' in t ? t.go : undefined}>
             {t.ring !== null && (
               <span className="mt-xs block">
                 <Ring value={t.ring} size={40} stroke={5} color="var(--color-r4)" label={`${m.published} of ${planned} published`} />
@@ -321,7 +341,11 @@ export function AgencyClient() {
                     )}
                   </div>
                   <StatusTag tone={t.billable ? 'good' : 'neutral'}>{t.billable ? 'Billable' : 'Not billable'}</StatusTag>
-                  <Button variant="ghost" size="sm" onClick={() => removeTime.mutate(t.id)} disabled={removeTime.isPending} aria-label={`Remove ${minutesLabel2(t.minutes)} on ${t.day}`}>
+                  <Button variant="ghost" size="sm" onClick={() => {
+                      removeTime.reset();
+                      setDroppingTime({ id: t.id, label: `${minutesLabel2(t.minutes)} on ${prettyDate(t.day)}` });
+                    }}
+                    disabled={removeTime.isPending} aria-label={`Remove ${minutesLabel2(t.minutes)} on ${t.day}`}>
                     Remove
                   </Button>
                 </li>
@@ -381,17 +405,33 @@ export function AgencyClient() {
         </Section>
       )}
 
+      <ConfirmDelete
+        open={droppingTime !== null}
+        title="Remove this time?"
+        body={`${droppingTime?.label ?? ''}. It comes off the hours and any invoice made from them later. This cannot be undone.`}
+        pending={removeTime.isPending}
+        failed={removeTime.isError}
+        onYes={() => droppingTime && removeTime.mutate(droppingTime.id)}
+        onClose={() => setDroppingTime(null)}
+        yes="Yes, remove it"
+      />
       <Sheet open={timing} onClose={() => setTiming(false)} title="Log time">
         <form onSubmit={submit}>
           <div className="grid grid-cols-2 gap-sm">
-            <label className="block text-subhead font-semibold">
-              How long
-              <input value={minutesText} onChange={(e) => setMinutesText(e.target.value)} placeholder="1h 30m" inputMode="text" className={field} />
-            </label>
-            <label className="block text-subhead font-semibold">
-              Day
-              <input type="date" value={day} max={today} onChange={(e) => setDay(e.target.value)} className={field} />
-            </label>
+            <div className="min-w-0">
+              <label className="block text-subhead font-semibold">
+                How long
+                <input value={minutesText} onChange={(e) => setMinutesText(e.target.value)} placeholder="1h 30m" inputMode="text" className={field} />
+              </label>
+              <span className="block text-subhead text-ink-soft">Like 90, 1:30 or 1h 30m.</span>
+            </div>
+            <div className="min-w-0">
+              <label className="block text-subhead font-semibold">
+                Day
+                <input type="date" value={day} max={today} onChange={(e) => setDay(e.target.value)} className={field} />
+              </label>
+              <span className="block text-subhead text-ink-soft">Today or an earlier day.</span>
+            </div>
           </div>
           <label className="mt-sm block text-subhead font-semibold">
             Deliverable, if it was for one
@@ -404,10 +444,12 @@ export function AgencyClient() {
               ))}
             </select>
           </label>
+          <span className="block text-subhead text-ink-soft">Its title shows beside the time in the list.</span>
           <label className="mt-sm block text-subhead font-semibold">
             Note
             <input value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="Optional" className={field} />
           </label>
+          <span className="block text-subhead text-ink-soft">Up to 200 characters. The client never sees it.</span>
           <div className="mt-sm">
             <Toggle compact on={billable} onChange={setBillable} label="Billable" hint="Counts towards the hours the client pays for." />
           </div>
@@ -417,7 +459,7 @@ export function AgencyClient() {
             </p>
           )}
           <div className="mt-md pb-xl">
-            <Button type="submit" disabled={logTime.isPending || !minutes || !day}>
+            <Button type="submit" full disabled={logTime.isPending || !minutes || !day}>
               {logTime.isPending ? 'Saving' : 'Log time'}
             </Button>
           </div>
@@ -507,7 +549,9 @@ function TheirAnswers({ clientId, answers }: { clientId: string; answers: Onboar
   const rows = ANSWER_FIELDS.filter((f) => answers[f.key].trim());
   return (
     <>
-      <dl className="m-0 grid gap-xs sm:grid-cols-2">
+      {/* Edit at the bottom right, in line with the last of the answers (the founder, 2026-11-06), never on a line of its own under them. */}
+      <div className="flex items-end justify-between gap-sm">
+      <dl className="m-0 grid min-w-0 flex-1 gap-xs sm:grid-cols-2">
         {rows.map((f) => (
           <div key={f.key}>
             <dt className="text-caption text-ink-soft">{f.label}</dt>
@@ -525,8 +569,7 @@ function TheirAnswers({ clientId, answers }: { clientId: string; answers: Onboar
           </div>
         )}
       </dl>
-      <div className="mt-sm">
-        <Button size="sm" variant="outline" onClick={() => { setDraft(answers); setEditing(true); }}>
+        <Button size="sm" variant="outline" className="shrink-0" onClick={() => { setDraft(answers); setEditing(true); }}>
           Edit
         </Button>
       </div>
@@ -549,7 +592,7 @@ function TheirAnswers({ clientId, answers }: { clientId: string; answers: Onboar
             </p>
           )}
           <div className="mt-md pb-xl">
-            <Button type="submit" disabled={save.isPending}>
+            <Button type="submit" full disabled={save.isPending}>
               {save.isPending ? 'Saving' : 'Save'}
             </Button>
           </div>

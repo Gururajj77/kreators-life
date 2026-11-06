@@ -9,13 +9,14 @@ import { BackLink } from '../components/PageHeader';
 import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 import { api, errorText } from '../lib/api';
 import { todayLocal, clockTime, longDate, dateTime } from '../lib/date';
 import { useAuthed, useLibrary, useRefreshAll } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { Icon } from '../components/Icon';
 import { Play, Star } from 'lucide-react';
-import { FIELD } from '../lib/ui';
+import { FIELD, FIELD_LINE } from '../lib/ui';
 import { StatusTag } from '../components/StatusTag';
 
 const clock = clockTime;
@@ -39,7 +40,14 @@ function Mine() {
   const certs = useAuthed(['certificates'], api.certificates);
   const dms = useAuthed(['my-dm'], api.myDmRequests);
   const refresh = useRefreshAll();
-  const cancel = useMutation({ mutationFn: (id: string) => api.cancelBooking(id), onSuccess: () => refresh() });
+  const [askingCancel, setAskingCancel] = useState<Booking | null>(null);
+  const cancel = useMutation({
+    mutationFn: (id: string) => api.cancelBooking(id),
+    onSuccess: () => {
+      setAskingCancel(null);
+      refresh();
+    },
+  });
   const [moving, setMoving] = useState<Booking | null>(null);
   const d = q.data;
   return (
@@ -107,7 +115,7 @@ function Mine() {
                         Reschedule
                       </Button>
                     )}
-                    <Button variant="ghost" onClick={() => cancel.mutate(b.id)}>
+                    <Button variant="ghost" onClick={() => setAskingCancel(b)} disabled={cancel.isPending}>
                       Cancel
                     </Button>
                   </div>
@@ -116,6 +124,17 @@ function Mine() {
             ))}
           </ul>
           <RescheduleSheet booking={moving} onClose={() => setMoving(null)} onDone={() => refresh()} />
+          <ConfirmDelete
+            open={askingCancel !== null}
+            title="Cancel this booking?"
+            body={askingCancel ? `${askingCancel.productTitle} with ${askingCancel.ownerName}, ${dateTime(askingCancel.startsAt)}, is called off. To meet, you would book again.` : ''}
+            yes="Yes, cancel it"
+            keep="Keep it"
+            pending={cancel.isPending}
+            failed={cancel.isError}
+            onYes={() => askingCancel && cancel.mutate(askingCancel.id)}
+            onClose={() => setAskingCancel(null)}
+          />
         </section>
       )}
       {dms.data && dms.data.requests.length > 0 && (
@@ -464,7 +483,7 @@ function Owned({ id }: { id: string }) {
                     </button>
                   ))}
                 </div>
-                <textarea value={reviewText} onChange={(e) => setReviewText(e.target.value)} rows={3} maxLength={600} aria-label="Your review" placeholder="A few honest words" className="w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+                <textarea value={reviewText} onChange={(e) => setReviewText(e.target.value)} rows={3} maxLength={600} aria-label="Your review" placeholder="A few honest words" className={FIELD_LINE} />
                 {review.isError && <p className="m-0 text-subhead">{errorText(review.error, 'Could not send.')}</p>}
                 <Button type="submit" full disabled={review.isPending || !reviewText.trim()}>
                   Send review
@@ -486,16 +505,23 @@ function Quiz({ lesson, onDone }: { lesson: Lesson; onDone: () => void }) {
   const filled = lesson.quiz.every((_, i) => (answers[i] ?? -1) >= 0);
   return (
     <div className="mt-xs rounded-tile bg-paper p-sm">
-      <p className="m-0 text-subhead font-semibold">
-        Quiz, {lesson.quiz.length} {lesson.quiz.length === 1 ? 'question' : 'questions'}
-        {lesson.passScore > 0 ? `, pass at ${lesson.passScore}%` : ''}.
-        {typeof lesson.quizScore === 'number' ? ` Your best: ${lesson.quizScore}%${lesson.quizPassed ? ', passed' : ''}.` : ''}
-      </p>
-      {!open ? (
-        <Button variant="outline" className="mt-xs" onClick={() => setOpen(true)}>
-          {typeof lesson.quizScore === 'number' ? 'Try again' : 'Take the quiz'}
-        </Button>
-      ) : (
+      {/* The quiz line on the left and its button at the bottom right of the same block (the founder, 2026-11-06, like "Schedule a
+          review" beside Coming up); on a narrow phone the button wraps under the words, still at the right. */}
+      <div className="flex flex-wrap items-end justify-between gap-sm">
+        <p className="m-0 min-w-0 flex-[1_1_220px] text-subhead font-semibold">
+          Quiz, {lesson.quiz.length} {lesson.quiz.length === 1 ? 'question' : 'questions'}
+          {lesson.passScore > 0 ? `, pass at ${lesson.passScore}%` : ''}.
+          {typeof lesson.quizScore === 'number' ? ` Your best: ${lesson.quizScore}%${lesson.quizPassed ? ', passed' : ''}.` : ''}
+        </p>
+        {!open && (
+          <div className="ml-auto">
+            <Button variant="outline" onClick={() => setOpen(true)}>
+              {typeof lesson.quizScore === 'number' ? 'Try again' : 'Take the quiz'}
+            </Button>
+          </div>
+        )}
+      </div>
+      {!open ? null : (
         <form
           className="mt-sm flex flex-col gap-md"
           onSubmit={(e) => {

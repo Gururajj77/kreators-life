@@ -1,5 +1,10 @@
 import { LOCALE, RELATIONSHIP_BY_KEY } from './core.ts';
 import type { RelationshipKey } from './core.ts';
+import type { LifeAreaKey } from './life.ts';
+import { LIFE_AREA_ORDER, LIFE_AREAS } from './life.ts';
+import { blockDayMinutes, blockOfTask, blocksInDay, slotOrder, suggestBlock, TASK_GROUP_NONE } from './timeBlocks.ts';
+import type { BlockColor, GroupableTask, TaskGroup, TemplateSlot, TimeBlock } from './timeBlocks.ts';
+import type { KindDay } from './dayKinds.ts';
 import { addDays, asDay, DATE_PATTERN, daysBetween, daysInMonth, fromDay, isoWeekday, zonedToUtc } from './dates.ts';
 
 // ---- repeating tasks: daily, on weekdays, weekly on chosen days, monthly, yearly; every N of them; until a day, or for ever ----
@@ -154,6 +159,8 @@ export interface MonthTask {
   day: string;
   status: 'active' | 'done';
   priority: Priority | null;
+  /** The area of life it carries, or null for none. */
+  lifeArea: LifeAreaKey | null;
   /** HH:MM, when the task has a time. */
   time: string | null;
   estimateMin: number | null;
@@ -177,6 +184,12 @@ export interface TodayMonthResponse {
   tasks: MonthTask[];
   more: boolean;
   projects: MonthProject[];
+  /**
+   * Kinds of day (2026-11-06): every day of the month with its kind (`kindsOfDays`: null on the default template or before the
+   * account) and where it came from, the person's templates with their colours (`templateColor`), the default and the weekly pattern,
+   * so a day can show its kind's colour and its sheet can set the kind for that date.
+   */
+  kinds?: { days: KindDay[]; templates: { id: string; name: string; color: BlockColor | null }[]; defaultId: string; pattern: (string | null)[] };
 }
 
 /** One line in a task's checklist. */
@@ -209,6 +222,8 @@ export const TASK_SORTS = [
   { key: 'priority', name: 'Priority', blurb: 'P0 first, then the day.' },
   { key: 'due', name: 'Due date', blurb: 'The soonest deadline first; no deadline last.' },
   { key: 'context', name: 'By context', blurb: 'P0 first; inside each priority, the pillar your kind of day leads with.' },
+  { key: 'block', name: 'By time block', blurb: 'Grouped by the blocks of your day; inside each, P0 first, then area, then day.' },
+  { key: 'area', name: 'By area', blurb: 'Grouped by area of life; inside each, P0 first, then the block, then day.' },
 ] as const;
 export type TaskSort = (typeof TASK_SORTS)[number]['key'];
 export const isTaskSort = (v: unknown): v is TaskSort => TASK_SORTS.some((s) => s.key === v);
@@ -217,7 +232,27 @@ export const isTaskSort = (v: unknown): v is TaskSort => TASK_SORTS.some((s) => 
 export interface TaskContext {
   lead: RelationshipKey;
   second?: RelationshipKey | null;
+  /** The day template's slots and the person's blocks, for the block and area sorts (`DayPlan` on GET /today). */
+  slots?: readonly TemplateSlot[];
+  blocks?: readonly TimeBlock[];
 }
+
+/** Where a task's block comes in the day: the day's blocks in clock order, then picked blocks with no slot that day (by their own order), then none. */
+function blockRanker(context: TaskContext | null | undefined): (t: { timeBlockId?: string | null; dueTime: string | null }) => number {
+  const slots = context?.slots ?? [];
+  const blocks = context?.blocks ?? [];
+  const inDay = blocksInDay(slots, blocks).map((b) => b.id);
+  return (t) => {
+    const hit = blockOfTask(t, slots);
+    if (!hit) return 100_000;
+    const i = inDay.indexOf(hit.blockId);
+    if (i >= 0) return i;
+    const known = blocks.findIndex((b) => b.id === hit.blockId);
+    return known >= 0 ? 1_000 + known : 100_000;
+  };
+}
+/** An area's place in LIFE_AREA_ORDER; none last. */
+const areaRank = (t: { lifeArea?: LifeAreaKey | null }): number => (t.lifeArea ? LIFE_AREA_ORDER.indexOf(t.lifeArea) : LIFE_AREA_ORDER.length);
 
 /**
  * The one ordering for a list of tasks. Stable: ties keep the order given. A task with no priority sorts after P3.
@@ -225,12 +260,13 @@ export interface TaskContext {
  * priority the day's lead pillar comes first, then its second, then the rest, each in the Day order. Without a context it is the
  * priority order.
  */
-export function sortTasks<T extends { doDate: string | null; dueDate: string | null; dueTime: string | null; priority: Priority | null; relationship?: RelationshipKey }>(
+export function sortTasks<T extends { doDate: string | null; dueDate: string | null; dueTime: string | null; priority: Priority | null; relationship?: RelationshipKey; timeBlockId?: string | null; lifeArea?: LifeAreaKey | null }>(
   list: T[],
   by: TaskSort,
   context?: TaskContext | null,
 ): T[] {
   const pri = (t: T) => (t.priority === null ? 4 : t.priority);
+  const block = by === 'block' || by === 'area' ? blockRanker(context) : () => 0;
   const rank = (t: T) => (!context ? 0 : t.relationship === context.lead ? 0 : context.second && t.relationship === context.second ? 1 : 2);
   const day = (t: T) => t.doDate ?? t.dueDate ?? '9999-99-99';
   const due = (t: T) => t.dueDate ?? '9999-99-99';
@@ -239,9 +275,63 @@ export function sortTasks<T extends { doDate: string | null; dueDate: string | n
     if (by === 'priority') return pri(a) - pri(b) || day(a).localeCompare(day(b)) || time(a).localeCompare(time(b));
     if (by === 'due') return due(a).localeCompare(due(b)) || pri(a) - pri(b) || day(a).localeCompare(day(b));
     if (by === 'context') return pri(a) - pri(b) || rank(a) - rank(b) || day(a).localeCompare(day(b)) || time(a).localeCompare(time(b));
+    // Grouped views: the group first, then the priority is balanced first inside it, and the day after.
+    if (by === 'block') return block(a) - block(b) || pri(a) - pri(b) || areaRank(a) - areaRank(b) || day(a).localeCompare(day(b)) || time(a).localeCompare(time(b));
+    if (by === 'area') return areaRank(a) - areaRank(b) || pri(a) - pri(b) || block(a) - block(b) || day(a).localeCompare(day(b)) || time(a).localeCompare(time(b));
     return day(a).localeCompare(day(b)) || time(a).localeCompare(time(b)) || pri(a) - pri(b);
   };
   return list.map((t, i) => ({ t, i })).sort((x, y) => cmp(x.t, y.t) || x.i - y.i).map((x) => x.t);
+}
+
+/**
+ * Daily's coloured boxes. By block: one group per block of the day in the order its first slot comes (empty ones too, so a box can say
+ * "Nothing here yet"), then picked blocks with no slot that day (by their own order), then 'none' only when it holds tasks. By area:
+ * LIFE_AREA_ORDER, then 'none' ("No area"), only the ones with tasks. Inside every group the tasks are in `sortTasks` order for that view.
+ */
+export function groupTasks<T extends GroupableTask>(list: T[], by: 'block' | 'area', ctx: { slots: readonly TemplateSlot[]; blocks: readonly TimeBlock[]; lead?: RelationshipKey; second?: RelationshipKey | null }): TaskGroup<T>[] {
+  const sorted = sortTasks(list, by, { lead: ctx.lead ?? 'servant_leader', second: ctx.second ?? null, slots: ctx.slots, blocks: ctx.blocks });
+  const est = (t: T) => t.estimateMin ?? PLAN_DEFAULT_MINUTES;
+  const fill = <G extends TaskGroup<T>>(g: G, tasks: T[]): G => ({ ...g, tasks, plannedMin: tasks.reduce((n, t) => n + est(t), 0) });
+  const none = (name: string): TaskGroup<T> => ({ key: TASK_GROUP_NONE, kind: 'none', name, color: null, area: null, ranges: [], inDay: true, minutes: 0, plannedMin: 0, tasks: [] });
+  if (by === 'area') {
+    const out: TaskGroup<T>[] = [];
+    for (const key of LIFE_AREA_ORDER) {
+      const tasks = sorted.filter((t) => t.lifeArea === key);
+      if (tasks.length) out.push(fill({ key, kind: 'area', name: LIFE_AREAS[key].name, color: null, area: key, ranges: [], inDay: true, minutes: 0, plannedMin: 0, tasks: [] }, tasks));
+    }
+    const rest = sorted.filter((t) => !t.lifeArea);
+    if (rest.length) out.push(fill(none('No area'), rest));
+    return out;
+  }
+  const ordered = slotOrder(ctx.slots);
+  const inDay = blocksInDay(ctx.slots, ctx.blocks);
+  const byTask = new Map<T, string | null>(sorted.map((t) => [t, blockOfTask(t, ctx.slots)?.blockId ?? null]));
+  const known = new Set(ctx.blocks.map((b) => b.id));
+  const group = (b: TimeBlock, day: boolean): TaskGroup<T> =>
+    fill(
+      {
+        key: b.id,
+        kind: 'block',
+        name: b.name,
+        color: b.color,
+        area: b.area,
+        ranges: ordered.filter((s) => s.blockId === b.id).map((s) => ({ start: s.start, end: s.end })),
+        inDay: day,
+        minutes: day ? blockDayMinutes(b.id, ctx.slots) : 0,
+        plannedMin: 0,
+        tasks: [],
+      },
+      sorted.filter((t) => byTask.get(t) === b.id),
+    );
+  const out = inDay.map((b) => group(b, true));
+  const dayIds = new Set(inDay.map((b) => b.id));
+  for (const b of ctx.blocks) if (!dayIds.has(b.id) && sorted.some((t) => byTask.get(t) === b.id)) out.push(group(b, false));
+  const rest = sorted.filter((t) => {
+    const id = byTask.get(t);
+    return !id || !known.has(id);
+  });
+  if (rest.length) out.push(fill(none('No block yet'), rest));
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -275,9 +365,16 @@ export interface PlanTask {
   dueDate: string | null;
   /** Made from a pillar by the strategy session or the vibe check. */
   fromPillar?: boolean;
+  /** The block the person picked for it, its area of life and its time (for the block a planned task falls in). */
+  timeBlockId?: string | null;
+  lifeArea?: LifeAreaKey | null;
+  dueTime?: string | null;
 }
 export interface WeekPlanDay {
   date: string;
+  /** With time blocks: the day's template. */
+  templateId?: string;
+  templateName?: string;
   /** Minutes already on the day, and minutes the suggestions would add. */
   plannedMin: number;
   suggestedMin: number;
@@ -291,6 +388,10 @@ export interface WeekPlanSuggestion {
   estimateMin: number;
   day: string;
   reason: string;
+  /** The block it keeps (its own), else the block its time falls in that day, else one suggested from its area and pillar (`suggestBlock`); null without time blocks or no fit. */
+  blockId: string | null;
+  /** How `blockId` was found: `picked` (its own), `time` (its time falls in it, so Keep leaves the block unpinned), `suggested`; absent with no block. */
+  blockHow?: 'picked' | 'time' | 'suggested';
 }
 export interface PlanStrength {
   score: number;
@@ -322,7 +423,7 @@ export interface PlanTaskRef {
 }
 /** One thing worth a look. `kind` says what to offer: move (a heavy day or a late task), size (no estimate), fill (empty days), room (did not fit). */
 export interface PlanAttention {
-  kind: 'heavy' | 'late' | 'empty' | 'noRoom' | 'unsized' | 'start';
+  kind: 'heavy' | 'late' | 'empty' | 'noRoom' | 'unsized' | 'start' | 'blockFull' | 'blockEmpty';
   text: string;
   tasks: PlanTaskRef[];
   /** For an empty-days line: the days, as dates. */
@@ -359,7 +460,13 @@ export function planStrength(load: readonly { min: number; tasks: number }[], ca
  * pillar, each on the lightest day it fits in, so the week is spread and not packed. A day over the capacity is flagged, not filled.
  * Nothing here writes anything: the screen keeps what the person keeps, one task at a time, through the ordinary edit.
  */
-export function planWeek(today: string, tasks: readonly PlanTask[], capacityMin: number = PLAN_DAY_MINUTES): WeekPlan {
+/** Time blocks for the week plan: each day's template and slots, and the person's blocks. */
+export interface PlanBlocking {
+  days: { date: string; slots: TemplateSlot[]; templateId: string; templateName: string }[];
+  blocks: TimeBlock[];
+}
+
+export function planWeek(today: string, tasks: readonly PlanTask[], capacityMin: number = PLAN_DAY_MINUTES, blocking?: PlanBlocking): WeekPlan {
   const dates = Array.from({ length: WEEK_PLAN_DAYS }, (_, i) => planAddDays(today, i));
   const last = dates[dates.length - 1]!;
   const est = (t: PlanTask) => t.estimateMin ?? PLAN_DEFAULT_MINUTES;
@@ -385,6 +492,28 @@ export function planWeek(today: string, tasks: readonly PlanTask[], capacityMin:
     total += 1;
     if (t.estimateMin) estimated += 1;
   }
+  // With time blocks: what is already in each block on each day, so a suggestion goes where there is room.
+  const daySlots = (d: string): TemplateSlot[] => blocking?.days.find((x) => x.date === d)?.slots ?? [];
+  const used = new Map<string, Record<string, number>>(dates.map((d) => [d, {}]));
+  const inBlock = new Map<string, { t: PlanTask; day: string }[]>();
+  const putIn = (t: PlanTask, day: string, blockId: string | null, need: number) => {
+    if (!blockId) return;
+    const u = used.get(day);
+    if (u) u[blockId] = (u[blockId] ?? 0) + need;
+    const key = `${day}|${blockId}`;
+    inBlock.set(key, [...(inBlock.get(key) ?? []), { t, day }]);
+  };
+  const suggestedBlock = (t: PlanTask, day: string, need: number): { blockId: string | null; blockHow?: 'picked' | 'time' | 'suggested' } => {
+    const own = t.timeBlockId && blocking?.blocks.some((b) => b.id === t.timeBlockId) ? t.timeBlockId : null;
+    // The block picked in its form, else the block its time falls in on that day, else one from its area and pillar.
+    const byTime = own ? null : (blockOfTask({ timeBlockId: null, dueTime: t.dueTime ?? null }, daySlots(day))?.blockId ?? null);
+    const guess = (own ?? byTime) ? null : suggestBlock(t, daySlots(day), blocking?.blocks ?? [], used.get(day));
+    const id = own ?? byTime ?? guess;
+    putIn(t, day, id, need);
+    if (!id) return { blockId: null };
+    return { blockId: id, blockHow: own ? 'picked' : byTime ? 'time' : 'suggested' };
+  };
+  if (blocking) for (const p of placed) putIn(p.t, p.at, blockOfTask({ timeBlockId: p.t.timeBlockId ?? null, dueTime: p.t.dueTime ?? null }, daySlots(p.at))?.blockId ?? null, est(p.t));
   const rank = (t: PlanTask) => (t.priority ?? 9) * 2 + (t.fromPillar ? 0 : 1);
   const sorted = [...open].sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title));
   const suggestions: WeekPlanSuggestion[] = [];
@@ -413,13 +542,20 @@ export function planWeek(today: string, tasks: readonly PlanTask[], capacityMin:
       estimateMin: need,
       day: fit,
       reason: t.priority !== null && t.priority <= 1 ? `P${t.priority}, so it comes early` : t.fromPillar ? 'From your pillar' : 'It had no day yet',
+      ...(blocking ? suggestedBlock(t, fit, need) : { blockId: null }),
     });
     total += 1;
     if (t.estimateMin) sEst += 1;
   }
   const days: WeekPlanDay[] = dates.map((d) => {
     const l = load.get(d)!;
-    return { date: d, plannedMin: l.min - l.suggested, suggestedMin: l.suggested, tasks: l.tasks, overloaded: l.min > capacityMin };
+    const tpl = blocking?.days.find((x) => x.date === d);
+    const day: WeekPlanDay = { date: d, plannedMin: l.min - l.suggested, suggestedMin: l.suggested, tasks: l.tasks, overloaded: l.min > capacityMin };
+    if (tpl) {
+      day.templateId = tpl.templateId;
+      day.templateName = tpl.templateName;
+    }
+    return day;
   });
   const withLoad = dates.map((d) => ({ min: load.get(d)!.min, tasks: load.get(d)!.tasks }));
   const nowLoad = dates.map((d) => ({ min: load.get(d)!.min - load.get(d)!.suggested, tasks: load.get(d)!.tasks - suggestions.filter((s) => s.day === d).length }));
@@ -438,7 +574,33 @@ export function planWeek(today: string, tasks: readonly PlanTask[], capacityMin:
   const unsized = placed.filter((p) => !p.t.estimateMin);
   if (unsized.length > 0) add('unsized', `${unsized.length} ${unsized.length === 1 ? 'task has' : 'tasks have'} no time estimate. Add one so the days add up.`, unsized.slice(0, 12).map((p) => ref(p.t, p.at)));
   if (tasks.length === 0) add('start', 'Add a few tasks first, then plan the week around them.');
-  const shown = attention.slice(0, 4);
+  if (blocking) {
+    const short = (d: string) => dayName(d).slice(0, 3);
+    const named = (id: string) => blocking.blocks.find((b) => b.id === id);
+    // A block whose planned minutes on a day pass its length: the fullest one.
+    let full: { day: string; id: string; min: number; len: number } | null = null;
+    for (const d of dates)
+      for (const [id, min] of Object.entries(used.get(d) ?? {})) {
+        const len = blockDayMinutes(id, daySlots(d));
+        if (len > 0 && min > len && (!full || min - len > full.min - full.len)) full = { day: d, id, min, len };
+      }
+    if (full && named(full.id))
+      add('blockFull', `${named(full.id)!.name} on ${short(full.day)} holds ${hm(full.min)} of ${hm(full.len)}.`, (inBlock.get(`${full.day}|${full.id}`) ?? []).slice(0, 12).map((x) => ref(x.t, x.day)), [full.day]);
+    // A Focus-tagged block with nothing planned in it: the first such block, on every day it is empty.
+    const isFocus = (b: TimeBlock) => b.tag.trim().toLowerCase() === 'focus';
+    const emptyFocus = new Map<string, string[]>();
+    for (const d of dates)
+      for (const b of blocksInDay(daySlots(d), blocking.blocks))
+        if (isFocus(b) && !(used.get(d) ?? {})[b.id]) emptyFocus.set(b.id, [...(emptyFocus.get(b.id) ?? []), d]);
+    const firstEmpty = [...emptyFocus.entries()][0];
+    if (firstEmpty && named(firstEmpty[0])) {
+      const [id, ds] = firstEmpty;
+      const loose = open.filter((t) => !t.timeBlockId).slice(0, 5);
+      const list = ds.length <= 2 ? ds.map(short).join(' and ') : `${ds.slice(0, 2).map(short).join(', ')} and ${ds.length - 2} more ${ds.length - 2 === 1 ? 'day' : 'days'}`;
+      add('blockEmpty', `${named(id)!.name} is empty on ${list}.`, loose.map((t) => ref(t, null)), ds);
+    }
+  }
+  const shown = attention.slice(0, blocking ? 6 : 4);
   return { from: today, capacityMin, days, suggestions, noRoom, strengthNow, strengthWith, notes: shown.map((a) => a.text), attention: shown };
 }
 

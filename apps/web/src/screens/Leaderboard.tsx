@@ -8,7 +8,10 @@ import { Pager, usePage } from '../components/Pager';
 import { StatTile } from '../components/Charts';
 import { Section } from '../components/Section';
 import { Fold } from '../components/Fold';
-import { useLeaderboard, useAuthed, useMe } from '../lib/queries';
+import { useLeaderboard, useAuthed, useMe, useRefreshAll } from '../lib/queries';
+import { useMutation } from '@tanstack/react-query';
+import { Toggle } from '../components/Toggle';
+import { ErrorLine } from '../components/ErrorLine';
 import { bento } from '../lib/bento';
 import { api } from '../lib/api';
 import { Medal } from 'lucide-react';
@@ -130,7 +133,12 @@ export function Leaderboard() {
   const choices: LeaderboardOption[] = scope === 'all' ? [] : (options.data?.[scope] ?? []);
   // A board with nobody on it is still listed, but the first pick is one that has people.
   // The city board opens on the person's own city when it is on the list (Profile already knows it), else the first that has people.
-  const myCity = (useMe().data?.user.city ?? '').trim().toLowerCase();
+  const meQ = useMe();
+  const myCity = (meQ.data?.user.city ?? '').trim().toLowerCase();
+  // People appear only after they opt in and finish setup, so the switch shows only once setup is done.
+  const setUp = Boolean(meQ.data?.user.onboardedAt);
+  const refresh = useRefreshAll();
+  const join = useMutation({ mutationFn: () => api.updateMe({ leaderboardOptIn: true }), onSuccess: () => refresh() });
   const own = scope === 'city' && myCity ? choices.find((o) => o.value.toLowerCase() === myCity) : undefined;
   const value = scope === 'all' ? '' : valueRaw || own?.value || (choices.find((o) => o.count > 0) ?? choices[0])?.value || '';
   const q = useLeaderboard(by, scope, value, paging.query);
@@ -151,7 +159,7 @@ export function Leaderboard() {
       <AppCover back={{ to: '/apps', label: 'Apps' }} title="Leaderboard" lede="See where you stand by goal, pillar, city and more.">
         <ul className="m-0 flex list-disc flex-col gap-xs pl-md text-caption text-ink-soft">
           <li>Each month is a season, and its top three get the Season top three honor.</li>
-          <li>You show only after you opt in under Profile.</li>
+          <li>You show only after you opt in, here or under Profile.</li>
           <li>Journal and wellbeing never count.</li>
         </ul>
       </AppCover>
@@ -198,14 +206,20 @@ export function Leaderboard() {
               <StatTile label="On this board" value={q.data.people} hint={q.data.people >= LEADERBOARD_POOL ? 'Top of many' : q.data.people === 1 ? 'person' : 'people'} />
               <StatTile label="Season ends" value={daysLeft === null ? '·' : `${daysLeft}d`} hint={q.data.season.label} />
             </div>
-            {!q.data.optedIn && (
+            {meQ.data && !setUp ? (
               <p className="mt-sm m-0 rounded-tile bg-card p-sm text-subhead shadow-toy-soft">
-                You are hidden from every board. Turn it on under{' '}
-                <Link to="/you" className="underline underline-offset-4">
-                  Profile
+                You show on the boards once setup is done.{' '}
+                <Link to="/onboarding" className="font-semibold underline underline-offset-4">
+                  Finish setup
                 </Link>
-                .
               </p>
+            ) : (
+              !q.data.optedIn && (
+                <div className="mt-sm">
+                  <Toggle on={join.isPending || join.isSuccess} onChange={(on) => on && !join.isPending && !join.isSuccess && join.mutate()} disabled={join.isPending || join.isSuccess} label="Show me on the boards" hint="You are hidden from every board now. You can turn it off under Profile." />
+                  <ErrorLine e={join.error} className="mt-xs" />
+                </div>
+              )
             )}
             {q.data.entries.length === 0 ? (
               <div className="mt-md rounded-card border-2 border-dashed border-line p-md text-center">

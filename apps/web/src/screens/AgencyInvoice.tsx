@@ -22,7 +22,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { Field, FIELD, InvoiceView, LABEL, ShowSwitches, invoiceDate, type InvoiceEditor } from '../components/InvoiceView';
-import { DocPassword } from '../components/AgencyLifecycle';
+import { DocPasswordFold, revealIn } from '../components/AgencyLifecycle';
 import { Button } from '../components/Button';
 import { ConfirmSheet, DocLog, EmailCopySheet, type EmailContext } from '../components/DocActions';
 import { DocStyleSheet } from '../components/DocStyleSheet';
@@ -63,7 +63,10 @@ function nextHint(number: string): string {
   return m ? `${m[1]}${String(Number(m[2]) + 1).padStart((m[2] ?? '').length, '0')}` : '';
 }
 
-type Panel = 'show' | 'activity' | 'style' | 'password';
+/** Where the invoice's password fold sits, so More's Password item can open it and move focus there. */
+const INVOICE_PASSWORD_ID = 'invoice-password';
+
+type Panel = 'show' | 'activity' | 'style';
 
 /**
  * One invoice: the paper, edited where it is. The header holds the number, one status tag, the one action for where it stands (Send to client,
@@ -83,6 +86,7 @@ export function AgencyInvoice() {
   const [note, setNote] = useState('');
   const [confirm, setConfirm] = useState<'void' | 'remove' | 'unpay' | null>(null);
   const [panel, setPanel] = useState<Panel | null>(null);
+  const [pwOpen, setPwOpen] = useState(false);
   const [houseOpen, setHouseOpen] = useState(false);
   const [dupOpen, setDupOpen] = useState(false);
   const [tplOpen, setTplOpen] = useState(false);
@@ -282,7 +286,19 @@ export function AgencyInvoice() {
     { key: 'tpl', label: 'Save as template', icon: LayoutTemplate, onSelect: () => setTplOpen(true) },
     ...(superAdmin ? [{ key: 'house', label: 'Save as house template', icon: Building2, onSelect: () => setHouseOpen(true) }] : []),
     { key: 'style', label: 'Style and design', icon: Palette, disabled: !editable, onSelect: () => setPanel('style') },
-    ...(inv.agencyClientId ? [{ key: 'password', label: 'Password', icon: KeyRound, onSelect: () => setPanel('password') }] : []),
+    ...(inv.agencyClientId
+      ? [
+          {
+            key: 'password',
+            label: 'Password',
+            icon: KeyRound,
+            onSelect: () => {
+              setPwOpen(true);
+              revealIn(INVOICE_PASSWORD_ID, 'button');
+            },
+          },
+        ]
+      : []),
     ...(inv.status === 'paid' ? [{ key: 'unpay', label: 'Mark as sent again', icon: Undo2, destructive: true, onSelect: () => setConfirm('unpay') }] : []),
     ...(inv.status === 'sent' ? [{ key: 'void', label: 'Void', icon: Ban, destructive: true, onSelect: () => setConfirm('void') }] : []),
     ...(inv.status === 'void' ? [{ key: 'restore', label: 'Restore', icon: ArchiveRestore, disabled: restore.isPending, onSelect: () => restore.mutate() }] : []),
@@ -346,17 +362,13 @@ export function AgencyInvoice() {
         <InvoiceView invoice={paper} totals={totals} editor={editor} />
       </div>
 
+      {inv.agencyClientId && <DocPasswordFold id={INVOICE_PASSWORD_ID} open={pwOpen} onOpenChange={setPwOpen} clientId={inv.agencyClientId} clientName={inv.clientName} />}
+
       <Sheet open={panel === 'show'} onClose={() => setPanel(null)} title="What the client sees">
         <p className="mt-0 mb-sm text-subhead text-ink-soft">What is off is never sent to your client.</p>
         <ShowSwitches value={draft.doc.show} onChange={(show) => setDoc({ show })} />
         <div className="mt-md pb-xl">
-          <Button onClick={() => setPanel(null)}>Done</Button>
-        </div>
-      </Sheet>
-
-      <Sheet open={panel === 'password'} onClose={() => setPanel(null)} title="Password">
-        <div className="pb-xl">
-          <DocPassword clientId={inv.agencyClientId} clientName={inv.clientName} />
+          <Button full onClick={() => setPanel(null)}>Done</Button>
         </div>
       </Sheet>
 
@@ -379,14 +391,14 @@ export function AgencyInvoice() {
         </label>
         <textarea id="inv-reply" rows={2} maxLength={600} value={reply} onChange={(e) => setReply(e.target.value)} className={FIELD} />
         <div className="mt-xs flex flex-wrap gap-xs">
-          <Button variant="outline" onClick={() => sendReply.mutate()} disabled={!reply.trim() || sendReply.isPending}>
+          <Button variant="outline" full onClick={() => sendReply.mutate()} disabled={!reply.trim() || sendReply.isPending}>
             Send reply
           </Button>
         </div>
         <h3 className="mt-md mb-xs text-headline">Activity</h3>
         <DocLog type="invoice" id={inv.id} />
         <div className="mt-md pb-xl">
-          <Button onClick={() => setPanel(null)}>Done</Button>
+          <Button full onClick={() => setPanel(null)}>Done</Button>
         </div>
       </Sheet>
       <DocStyleSheet
@@ -455,7 +467,10 @@ function DuplicateSheet({ open, onClose, inv }: { open: boolean; onClose: () => 
     <Sheet open={open} onClose={onClose} title="Duplicate this invoice">
       <div className="grid gap-sm pb-xl">
         <p className="m-0 text-subhead text-ink-soft">The copy is a draft with the same lines, design and details.</p>
-        <Field id="dup-issue" label="Date for the copy" type="date" value={issue} onChange={setIssue} />
+        <div>
+          <Field id="dup-issue" label="Date for the copy" type="date" value={issue} onChange={setIssue} />
+          <span className="block text-subhead text-ink-soft">The copy's issue date. It starts on today.</span>
+        </div>
         <p className="m-0 text-subhead">
           Number: {nextHint(inv.number) || 'the next free one'}
           <br />

@@ -1,9 +1,13 @@
 import { Hono } from 'hono';
-import { addDays, daysBetween, isNodeKind, isRelationshipKey, nextOccurrence, parentKind, parsePriority, parseRepeat, taskReadyAt, WAIT, XP, type CompleteResponse, type RippleEvent } from '@kreators/shared';
+import { addDays, daysBetween, isNodeKind, isRelationshipKey, lifeAreaProblem, nextOccurrence, parentKind, parseLifeArea, parsePriority, parseRepeat, taskReadyAt, WAIT, XP, type CompleteResponse, type RippleEvent } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { TIME_RE } from '@kreators/shared';
 import { ancestorsOf, badgesNow, DATE_RE, diffBadges, getNode, newId, nowIso, readyFromNow, toNode, type NodeRow, taskGate, readyAtFor, withSubtasks } from '../db';
 import { dateNearToday, shiftDate } from '../db';
+import { blockFromBody, ensureTimeBlocks } from '../timeBlocks';
+
+/** Whether a request names a block, by id or by name. */
+const namesBlock = (b: NodeBody): boolean => (b.timeBlockId !== undefined) || (b.timeBlock !== undefined);
 
 export const nodes = new Hono<AppEnv>();
 
@@ -60,6 +64,12 @@ export interface NodeBody {
   forReview?: unknown;
   /** "Count it as a habit": true or false is the person's pick, null goes back to the old rule (a repeating task is one). */
   habit?: unknown;
+  /** The area of life: a key or name, or null (or "none") for none. An unknown value is refused (`lifeAreaProblem`). */
+  lifeArea?: unknown;
+  /** The time block picked for it: one of the person's own block ids, or null, '' or 'none' to clear it (then it falls in the block its time sits in). */
+  timeBlockId?: unknown;
+  /** The same by name (the assistant sends names; screens send ids). 'none' clears it. */
+  timeBlock?: unknown;
   dueTime?: unknown;
   estimateMin?: unknown;
   status?: unknown;
@@ -101,6 +111,16 @@ export async function createNode(db: D1Database, ownerId: string, body: NodeBody
   const repeat = kind === 'task' ? parseRepeat(body.repeat) : null;
   if (doDate && dueDate && doDate > dueDate) return { error: DATES_PROBLEM, status: 400 };
   if (repeat && !doDate && !dueDate) return { error: 'Pick a do date or a due date for it to repeat from.', status: 400 };
+  const areaProblem = kind === 'task' ? lifeAreaProblem(body.lifeArea) : null;
+  if (areaProblem) return { error: areaProblem, status: 400 };
+  // The block it sits in: the person's own, checked before anything is written.
+  let timeBlockId: string | null = null;
+  if (kind === 'task' && namesBlock(body)) {
+    await ensureTimeBlocks(db, { id: ownerId });
+    const picked = await blockFromBody(db, ownerId, body);
+    if (picked && 'error' in picked) return { error: picked.error, status: 400 };
+    timeBlockId = picked?.id ?? null;
+  }
 
   const now = nowIso();
   const id = newId();
@@ -119,7 +139,8 @@ export async function createNode(db: D1Database, ownerId: string, body: NodeBody
   const remind = kind === 'task' && body.remind === true ? 1 : 0;
   const forReview = kind === 'task' && body.forReview === true ? 1 : 0;
   const habit = kind === 'task' ? habitValue(body.habit) : null;
-  if (doDate || repeat || priority !== null || remind || forReview || habit !== null) await db.prepare('UPDATE nodes SET do_date = ?, repeat_json = ?, priority = ?, remind = ?, for_review = ?, habit = ? WHERE id = ?').bind(doDate, repeat ? JSON.stringify(repeat) : null, priority, remind, forReview, habit, id).run();
+  const lifeArea = kind === 'task' ? parseLifeArea(body.lifeArea) : null;
+  if (doDate || repeat || priority !== null || remind || forReview || habit !== null || lifeArea || timeBlockId) await db.prepare('UPDATE nodes SET do_date = ?, repeat_json = ?, priority = ?, remind = ?, for_review = ?, habit = ?, life_area = ?, time_block_id = ? WHERE id = ?').bind(doDate, repeat ? JSON.stringify(repeat) : null, priority, remind, forReview, habit, lifeArea, timeBlockId, id).run();
   const row = await getNode(db, ownerId, id);
   return row ? { row } : { error: 'not found', status: 404 };
 }
@@ -162,6 +183,14 @@ export async function editNode(db: D1Database, row: NodeRow, body: NodeBody): Pr
   if (row.kind === 'task' && 'forReview' in body) await db.prepare('UPDATE nodes SET for_review = ? WHERE id = ?').bind(body.forReview === true ? 1 : 0, row.id).run();
   // Count it as a habit: the person's own pick, or null to go back to the old rule.
   if (row.kind === 'task' && 'habit' in body) await db.prepare('UPDATE nodes SET habit = ? WHERE id = ?').bind(habitValue(body.habit), row.id).run();
+  // The area of life: a tag and a filter, never a change to what a tick pays. A value the route did not check is left alone.
+  if (row.kind === 'task' && 'lifeArea' in body && !lifeAreaProblem(body.lifeArea)) await db.prepare('UPDATE nodes SET life_area = ? WHERE id = ?').bind(parseLifeArea(body.lifeArea), row.id).run();
+  // The time block: the person's own (the task's owner, so a coach can only pick the student's), or cleared. A value that is not theirs is left alone.
+  if (row.kind === 'task' && namesBlock(body)) {
+    await ensureTimeBlocks(db, { id: row.user_id });
+    const picked = await blockFromBody(db, row.user_id, body);
+    if (picked && !('error' in picked)) await db.prepare('UPDATE nodes SET time_block_id = ? WHERE id = ? AND user_id = ?').bind(picked.id, row.id, row.user_id).run();
+  }
   return (await getNode(db, row.user_id, row.id)) ?? row;
 }
 
@@ -190,10 +219,10 @@ async function spawnNext(db: D1Database, row: NodeRow, today: string): Promise<N
   const sortRow = await db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM nodes WHERE user_id = ? AND kind = ? AND relationship = ?').bind(row.user_id, 'task', row.relationship).first<{ next: number }>();
   await db
     .prepare(
-      `INSERT INTO nodes (id, user_id, kind, parent_id, relationship, title, note, status, xp, due_date, completed_at, ready_at, sort_order, created_at, updated_at, due_time, estimate_min, added_by, do_date, repeat_json, spawned_from, priority, remind, for_review, habit)
-       VALUES (?, ?, 'task', ?, ?, ?, ?, 'active', 0, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO nodes (id, user_id, kind, parent_id, relationship, title, note, status, xp, due_date, completed_at, ready_at, sort_order, created_at, updated_at, due_time, estimate_min, added_by, do_date, repeat_json, spawned_from, priority, remind, for_review, habit, life_area, time_block_id)
+       VALUES (?, ?, 'task', ?, ?, ?, ?, 'active', 0, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(id, row.user_id, row.parent_id, row.relationship, row.title, row.note, dueDate, readyFromNow(), sortRow?.next ?? 0, now, now, row.due_time, row.estimate_min, row.added_by ?? null, doDate, carried, row.id, row.priority ?? null, row.remind ?? 0, row.for_review ?? 0, row.habit ?? null)
+    .bind(id, row.user_id, row.parent_id, row.relationship, row.title, row.note, dueDate, readyFromNow(), sortRow?.next ?? 0, now, now, row.due_time, row.estimate_min, row.added_by ?? null, doDate, carried, row.id, row.priority ?? null, row.remind ?? 0, row.for_review ?? 0, row.habit ?? null, row.life_area ?? null, row.time_block_id ?? null)
     .run();
   // The checklist comes back too, all unticked.
   await db
@@ -223,6 +252,15 @@ nodes.patch('/:id', async (c) => {
     if (body.repeat && !parseRepeat(body.repeat)) return c.json({ error: 'That is not a way to repeat.' }, 400);
     if (body.priority !== undefined && body.priority !== null && parsePriority(body.priority) === null) return c.json({ error: 'A priority is P0, P1, P2 or P3.' }, 400);
     if (body.repeat && !doNext && !dueNext) return c.json({ error: 'Pick a do date or a due date for it to repeat from.' }, 400);
+    if ('lifeArea' in body) {
+      const areaProblem = lifeAreaProblem(body.lifeArea);
+      if (areaProblem) return c.json({ error: areaProblem }, 400);
+    }
+    if (namesBlock(body)) {
+      await ensureTimeBlocks(db, user);
+      const picked = await blockFromBody(db, user.id, body);
+      if (picked && 'error' in picked) return c.json({ error: picked.error }, 400);
+    }
     // Moving a task to another project (and with it, maybe another pillar): only an open task, and only under one of the person's own
     // active projects. The task takes that project's pillar. A ticked task stays where its xp was earned.
     if (body.parentId !== undefined && body.parentId !== row.parent_id) {

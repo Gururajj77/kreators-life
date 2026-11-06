@@ -1,4 +1,4 @@
-import { PRODUCT_KIND_META, productHasOwnCover, productPayWays, unlockAt, type DiscountCheck, money, formatCount } from '@kreators/shared';
+import { PRODUCT_KIND_META, productHasOwnCover, productPayWays, productStatusLabel, unlockAt, type DiscountCheck, money, formatCount } from '@kreators/shared';
 import { dateTime } from '../lib/date';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
@@ -193,7 +193,24 @@ export function ProductPage() {
               {p.rating ? `, rated ${p.rating} by buyers` : ''}
             </p>
             <h1 className="text-large-title">{p.title}</h1>
-            <div className="mt-xs flex flex-wrap items-center gap-xs">
+            {/* The state note on the left and Edit in Studio at its bottom right, in line with it (the founder, 2026-11-06, like "Edit kind
+                of day"); on a narrow phone the link wraps under the note, still at the right. */}
+            {(p.status !== 'live' || d.canEdit) && (
+              <div className="mt-xs flex flex-wrap items-end justify-between gap-x-sm">
+                {p.status !== 'live' && (
+                  <p className="m-0 min-w-0 flex-[1_1_240px] rounded-tile bg-paper px-sm py-xs text-subhead text-ink-soft">
+                    {stateNote(p.status, d.canEdit)}
+                  </p>
+                )}
+                {d.canEdit && (
+                  <Link to={`/shop/products/${p.id}`} className={`inline-flex min-h-[44px] items-center text-subhead font-semibold underline ${p.status !== 'live' ? 'ml-auto' : ''}`}>
+                    Edit in Studio
+                  </Link>
+                )}
+              </div>
+            )}
+            {/* Top-aligned: the badge now folds out its breakdown under itself, and the caption stays level with the badge's line. */}
+            <div className="mt-xs flex flex-wrap items-start gap-xs">
               <TrustBadge trust={d.seller.trust} size="sm" />
               <span className="text-caption text-ink-soft">The seller's trust, from what they earned here.</span>
             </div>
@@ -228,6 +245,8 @@ export function ProductPage() {
             <Link to={`/library/${p.id}`} className="toy mt-md flex min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
               Open in my purchases
             </Link>
+          ) : p.status === 'draft' || p.status === 'archived' ? (
+            <p className="mt-md m-0 text-subhead text-ink-soft">{productStatusLabel(p.status, p.kind)}: nobody can buy it right now.</p>
           ) : !token ? (
             <Link to={`/signin?next=${encodeURIComponent(`${loc.pathname}${loc.search}`)}`} className="toy mt-md flex min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
               Join to {meta.buy.toLowerCase()}
@@ -349,4 +368,12 @@ export function ProductPage() {
       )}
     </Screen>
   );
+}
+
+/** One line for a page that is not open to everyone: what state it is in and who can see it. */
+function stateNote(status: 'draft' | 'private' | 'archived', canEdit: boolean): string {
+  if (status === 'private') return canEdit ? 'Private course. Only the people invited can see this page.' : 'Private course. You were invited to it.';
+  if (status === 'draft') return 'Draft. Only its maker and admins can see this page.';
+  // Only the maker and admins can open a draft or archived page (`canSeeProduct`); a buyer keeps it under My purchases.
+  return 'Archived. Only its maker and admins can see this page.';
 }

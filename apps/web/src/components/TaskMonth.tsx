@@ -1,5 +1,5 @@
-import { PRIORITIES, RELATIONSHIP_BY_KEY, MONTH_TASKS_MAX, monthGrid, monthShift, priorityTag, timeLabel, type MonthProject, type MonthTask, LOCALE } from '@kreators/shared';
-import { useMutation } from '@tanstack/react-query';
+import { PRIORITIES, RELATIONSHIP_BY_KEY, MONTH_TASKS_MAX, isoWeekday, monthGrid, monthShift, priorityTag, timeLabel, type KindDay, type MonthProject, type MonthTask, type TodayMonthResponse, LOCALE } from '@kreators/shared';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router';
@@ -9,6 +9,9 @@ import { dueLabel, prettyDate, weekday } from '../lib/date';
 import { printAs } from '../lib/printDoc';
 import { useAuthed, useRefreshAll } from '../lib/queries';
 import { useActionQueue } from '../lib/useActionQueue';
+import { tbClass, tbStyle } from '../lib/blockColor';
+import { FIELD, FIELD_LINE } from '../lib/ui';
+import { ErrorLine } from './ErrorLine';
 import { minutesUntil, useNow } from '../lib/useNow';
 import { Button } from './Button';
 import { useCelebrate } from './Celebration';
@@ -23,7 +26,10 @@ import { StatusTag } from './StatusTag';
 
 const COPY = {
   lede: 'Tap a day to see its tasks or add one. A task sits on its do date, or on its due date when it has no do date.',
-  legend: 'A number is tasks still to do. A tick means every task that day is done. The dot is the priority.',
+  legend: 'A number is tasks still to do. A tick means every task that day is done.',
+  // One line for both dots, so "dot" never means two things unsaid (2026-11-06).
+  dots: 'The small dot beside a task is its priority.',
+  kinds: 'The small dot is the priority, the coloured dot beside the date is the kind of day. Open a day to change it.',
   empty: 'Nothing planned on this day yet.',
   noProject: 'Tasks need a project. Set up a pillar first, then come back to add one here.',
   past: 'This day has passed. The task shows on Daily as late, and a new task can be ticked ten minutes after you write it.',
@@ -47,6 +53,8 @@ export function TaskMonth({ today }: { today: string }) {
     for (const t of d?.tasks ?? []) m.set(t.day, [...(m.get(t.day) ?? []), t]);
     return m;
   }, [d]);
+  const kindOn = useMemo(() => new Map((d?.kinds?.days ?? []).map((k) => [k.date, k])), [d]);
+  const kindTpl = (k: KindDay | undefined) => (k?.templateId ? d?.kinds?.templates.find((t) => t.id === k.templateId) : undefined);
 
   const print = () => printAs(`Tasks ${month}`, 'printing-month');
 
@@ -93,17 +101,22 @@ export function TaskMonth({ today }: { today: string }) {
               const list = byDay.get(day) ?? [];
               const open = list.filter((t) => t.status === 'active').length;
               const done = list.length - open;
+              const kind = kindTpl(kindOn.get(day));
               return (
                 <button
                   key={day}
                   type="button"
                   onClick={() => setPicked(day)}
-                  aria-label={`${prettyDate(day)}, ${list.length === 0 ? 'no tasks' : `${list.length} ${list.length === 1 ? 'task' : 'tasks'}${done > 0 ? `, ${done} done` : ''}`}`}
+                  aria-label={`${prettyDate(day)}${kind ? `, ${kind.name}` : ''}, ${list.length === 0 ? 'no tasks' : `${list.length} ${list.length === 1 ? 'task' : 'tasks'}${done > 0 ? `, ${done} done` : ''}`}`}
                   style={ring(day)}
                   className={`toy toy-flat flex min-w-0 flex-col items-stretch gap-xs rounded-tile bg-paper p-xs text-left ${cellHeight}`}
                 >
-                  <span className="flex items-center justify-between gap-xs">
-                    <span className="text-subhead font-semibold">{dayNumber(day)}</span>
+                  {/* Wraps in a phone's narrow cell, so the count drops under the date and its kind's dot instead of covering them. */}
+                  <span className="flex flex-wrap items-center justify-between gap-xs">
+                    <span className={`flex min-w-0 items-center gap-xs ${kind ? tbClass(kind.color) : ''}`} style={kind ? tbStyle(kind.color) : undefined}>
+                      <span className="text-subhead font-semibold">{dayNumber(day)}</span>
+                      {kind && <span className="tb-dot" title={kind.name} aria-hidden="true" />}
+                    </span>
                     {open > 0 ? (
                       <span className="rounded-pill bg-ink px-xs text-caption font-medium leading-[20px] text-on-ink">{open}</span>
                     ) : done > 0 ? (
@@ -126,6 +139,7 @@ export function TaskMonth({ today }: { today: string }) {
             })}
           </div>
           <p className="mt-sm m-0 text-caption text-ink-soft">{COPY.legend}</p>
+          <p className="mt-xs m-0 text-caption text-ink-soft">{d.kinds?.days.some((k) => k.templateId) ? COPY.kinds : COPY.dots}</p>
           {d.more && <p className="mt-xs m-0 text-caption">{COPY.more}</p>}
           <div className="mt-sm flex flex-wrap items-center gap-xs">
             <Button variant="outline" size="sm" onClick={print}>
@@ -141,7 +155,7 @@ export function TaskMonth({ today }: { today: string }) {
         </>
       )}
 
-      <DaySheet day={picked} tasks={picked ? (byDay.get(picked) ?? []) : []} projects={d?.projects ?? []} today={today} queue={queue} onClose={() => setPicked(null)} />
+      <DaySheet day={picked} tasks={picked ? (byDay.get(picked) ?? []) : []} projects={d?.projects ?? []} kinds={d?.kinds} today={today} queue={queue} onClose={() => setPicked(null)} />
     </div>
   );
 }
@@ -197,11 +211,12 @@ function DayTask({ t, today, queue }: { t: MonthTask; today: string; queue: Retu
 }
 
 /** A day opened: its tasks to tick, and a form to add one with the day already picked. */
-function DaySheet({ day, tasks, projects, today, queue, onClose }: { day: string | null; tasks: MonthTask[]; projects: MonthProject[]; today: string; queue: ReturnType<typeof useActionQueue>; onClose: () => void }) {
+function DaySheet({ day, tasks, projects, kinds, today, queue, onClose }: { day: string | null; tasks: MonthTask[]; projects: MonthProject[]; kinds: TodayMonthResponse['kinds']; today: string; queue: ReturnType<typeof useActionQueue>; onClose: () => void }) {
   return (
     <Sheet open={day !== null} onClose={onClose} title={day ? prettyDate(day) : ''}>
       {day && (
         <div className="flex flex-col gap-md pb-xl">
+          {kinds && kinds.templates.length > 0 && <DayKind key={day} day={day} kinds={kinds} />}
           {tasks.length === 0 ? (
             <p className="m-0 text-subhead text-ink-soft">{COPY.empty}</p>
           ) : (
@@ -217,6 +232,57 @@ function DaySheet({ day, tasks, projects, today, queue, onClose }: { day: string
         </div>
       )}
     </Sheet>
+  );
+}
+
+/**
+ * The day's kind (2026-11-06): its day template, set for this date or given by the weekly pattern, and a select to set it for this date
+ * (past or future) through the ordinary PUT /time-blocks/days; "Follow your week" clears the date's own pick. The default template's days
+ * have no kind and count in no tally.
+ */
+function DayKind({ day, kinds }: { day: string; kinds: NonNullable<TodayMonthResponse['kinds']> }) {
+  const qc = useQueryClient();
+  const k = kinds.days.find((x) => x.date === day);
+  const byId = new Map(kinds.templates.map((t) => [t.id, t]));
+  const weekId = kinds.pattern[isoWeekday(day) - 1];
+  const week = (weekId && byId.get(weekId)) || byId.get(kinds.defaultId);
+  const own = k?.from === 'date' ? (k.templateId ?? kinds.defaultId) : '';
+  const kind = k?.templateId ? byId.get(k.templateId) : undefined;
+  const save = useMutation({
+    mutationFn: (id: string | null) => api.setDayTemplates([day], id),
+    onSuccess: () => {
+      for (const key of ['today', 'timeBlocks', 'weekPlan', 'dayType', 'insights', 'reviews'] as const) void qc.invalidateQueries({ queryKey: [key] });
+    },
+  });
+  const where = k?.from === null ? 'Before your account began, so it counts as no kind.' : !kind ? `No kind: ${byId.get(kinds.defaultId)?.name ?? 'your default'} days count as none.` : k?.from === 'date' ? 'Set for this day only.' : 'From your usual week.';
+  return (
+    <div className={`rounded-tile bg-paper p-sm ${kind ? tbClass(kind.color) : ''}`} style={kind ? tbStyle(kind.color) : undefined}>
+      <label className="flex flex-wrap items-center gap-xs">
+        <span className="flex shrink-0 items-center gap-xs text-subhead font-semibold">
+          {kind && <span className="tb-dot" aria-hidden="true" />}
+          Kind of day
+        </span>
+        <select className={`${FIELD_LINE} min-w-0 flex-1`} value={own} disabled={save.isPending} onChange={(e) => save.mutate(e.target.value || null)}>
+          <option value="">Follow your week ({week?.name ?? 'your default'})</option>
+          {kinds.templates.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {/* The line under the select on the left and "Edit kind of day" at its bottom right, as on Daily's own note (DayTypeNote); the
+          link's 44px tap area is its ::after, so it adds no height. */}
+      <div className="mt-xs flex flex-wrap items-end justify-between gap-x-sm">
+        <p className="m-0 min-w-0 flex-[1_1_200px] text-caption text-ink-soft" aria-live="polite">
+          {save.isPending ? 'Saving…' : where}
+        </p>
+        <Link to="/time-blocks" className="relative ml-auto whitespace-nowrap text-caption font-semibold text-ink underline underline-offset-4 after:absolute after:inset-x-0 after:top-1/2 after:h-[44px] after:-translate-y-1/2 after:content-['']">
+          Edit kind of day
+        </Link>
+      </div>
+      {save.error ? <ErrorLine e={save.error} className="mt-xs" /> : null}
+    </div>
   );
 }
 
@@ -269,19 +335,22 @@ function AddOnDay({ day, today, projects, onAdded, autoFocus = false }: { day: s
         if (title.trim()) create.mutate();
       }}
     >
+      {/* A helper line under every field, like the plan fields below (2026-11-06), and the one field look (FIELD). */}
       <label className="block">
         <span className="block text-subhead font-semibold">What is the task?</span>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus={autoFocus} maxLength={140} required placeholder="One clear thing you can finish" className="mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-body" />
+        <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus={autoFocus} maxLength={140} required placeholder="One clear thing you can finish" className={FIELD} />
+        <span className="mt-xs block text-caption text-ink-soft">A few words, up to 140 letters. It is the title on Daily.</span>
       </label>
       <label className="block">
-        <span className="block text-subhead">Which project does it hold up?</span>
-        <select value={project?.id ?? ''} onChange={(e) => setProjectId(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-body">
+        <span className="block text-subhead font-semibold">Which project does it hold up?</span>
+        <select value={project?.id ?? ''} onChange={(e) => setProjectId(e.target.value)} className={FIELD}>
           {projects.map((p) => (
             <option key={p.id} value={p.id}>
               {p.title} ({RELATIONSHIP_BY_KEY[p.relationship].name})
             </option>
           ))}
         </select>
+        <span className="mt-xs block text-caption text-ink-soft">A tick on it counts toward that project and its pillar.</span>
       </label>
       <TaskPlanFields
         plan={plan}

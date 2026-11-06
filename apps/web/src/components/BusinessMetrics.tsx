@@ -23,6 +23,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import { Button } from './Button';
+import { ConfirmDelete } from './ConfirmDelete';
 import { Sparkline } from './Charts';
 import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
@@ -155,6 +156,7 @@ function Card({ r, currency, date, onEdit }: { r: KpiReading; currency: string; 
   const auto = k.source !== 'manual';
   const [typed, setTyped] = useState<number | null>(r.value);
   const [note, setNote] = useState(r.note);
+  const [clearing, setClearing] = useState(false);
   const stamp = `${r.value}:${r.note}:${date}`;
   useEffect(() => {
     setTyped(r.value);
@@ -163,7 +165,10 @@ function Card({ r, currency, date, onEdit }: { r: KpiReading; currency: string; 
   }, [stamp]);
   const save = useMutation({
     mutationFn: (value: number | null) => api.kpiValue(k.id, { date, value, note: value === null ? '' : note }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['reviews', 'kpis'] }),
+    onSuccess: (_res, value) => {
+      if (value === null) setClearing(false);
+      void qc.invalidateQueries({ queryKey: ['reviews', 'kpis'] });
+    },
   });
   const st = STATUS[kpiStatus(r.value, k.target, k.direction)];
   const max = Math.max(1, k.target, ...r.series.map((v) => v ?? 0));
@@ -184,10 +189,16 @@ function Card({ r, currency, date, onEdit }: { r: KpiReading; currency: string; 
         <Sparkline values={r.series} max={max} color="var(--color-r5)" width={96} height={36} />
       </div>
       {moved && <p className="mt-xs m-0 text-subhead text-ink-soft">{moved}</p>}
+      {/* "Edit this metric" at the bottom right, in line with the card's last line (the founder, 2026-11-06), never a line of its own. */}
       {auto ? (
-        <p className="mt-sm m-0 text-caption text-ink-mute">
-          {COPY.auto}: {KPI_AUTO_BY_KEY[k.source]?.name ?? k.source}
-        </p>
+        <div className="mt-sm flex items-end justify-between gap-sm">
+          <p className="m-0 min-w-0 text-caption text-ink-mute">
+            {COPY.auto}: {KPI_AUTO_BY_KEY[k.source]?.name ?? k.source}
+          </p>
+          <Button size="sm" variant="ghost" className="shrink-0" onClick={onEdit}>
+            Edit this metric
+          </Button>
+        </div>
       ) : (
         <form
           className="mt-sm"
@@ -204,7 +215,7 @@ function Card({ r, currency, date, onEdit }: { r: KpiReading; currency: string; 
             A note
           </label>
           <input id={`n-${k.id}`} value={note} maxLength={KPI_NOTE_MAX} onChange={(e) => setNote(e.target.value)} className={FIELD} />
-          {save.isError && (
+          {save.isError && !clearing && (
             <p role="alert" className="mt-xs m-0 text-subhead">
               {save.error instanceof ApiError ? save.error.message : 'That did not save. Try again.'}
             </p>
@@ -214,18 +225,35 @@ function Card({ r, currency, date, onEdit }: { r: KpiReading; currency: string; 
               {save.isPending ? 'Saving' : 'Save'}
             </Button>
             {r.value !== null && (
-              <Button size="sm" variant="ghost" onClick={() => save.mutate(null)} disabled={save.isPending}>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  save.reset();
+                  setClearing(true);
+                }}
+                disabled={save.isPending}
+              >
                 Clear
               </Button>
             )}
+            <Button size="sm" variant="ghost" className="ml-auto" onClick={onEdit}>
+              Edit this metric
+            </Button>
           </div>
+          <ConfirmDelete
+            open={clearing}
+            title="Clear this period's number?"
+            body={`The number and the note for ${k.name} this period are cleared. You can type them in again.`}
+            pending={save.isPending}
+            failed={save.isError}
+            onYes={() => save.mutate(null)}
+            onClose={() => setClearing(false)}
+            yes="Yes, clear it"
+            keep="Keep it"
+          />
         </form>
       )}
-      <div className="mt-xs">
-        <Button size="sm" variant="ghost" onClick={onEdit}>
-          Edit this metric
-        </Button>
-      </div>
     </div>
   );
 }
@@ -278,8 +306,14 @@ function MetricSheet({ editing, kind, onClose, currency }: { editing: Kpi | 'new
     },
     onSuccess: done,
   });
-  const remove = useMutation({ mutationFn: () => api.kpiRemove(prev!.id), onSuccess: done });
-  const error = (save.error ?? remove.error) as unknown;
+  const remove = useMutation({
+    mutationFn: () => api.kpiRemove(prev!.id),
+    onSuccess: () => {
+      setArmed(false);
+      done();
+    },
+  });
+  const error = save.error as unknown;
 
   return (
     <Sheet open={open} onClose={onClose} title={prev ? 'Change this metric' : 'Add a metric'}>
@@ -312,29 +346,37 @@ function MetricSheet({ editing, kind, onClose, currency }: { editing: Kpi | 'new
             </select>
           </label>
         )}
+        {!prev && <p className="mt-xs m-0 text-subhead text-ink-soft">An Agency number fills in by itself.</p>}
         <label className="mt-sm block text-subhead font-semibold" htmlFor="m-name">
           Name
         </label>
         <input id="m-name" value={name} maxLength={KPI_NAME_MAX} onChange={(e) => setName(e.target.value)} placeholder={def?.name ?? 'Sales calls'} className={FIELD} />
+        <p className="mt-xs m-0 text-subhead text-ink-soft">{`Up to ${KPI_NAME_MAX} characters.`}</p>
         {!def && (
           <div className="mt-sm grid gap-sm md:grid-cols-2">
-            <label className="block text-subhead font-semibold">
-              What it counts
-              <select value={unit} onChange={(e) => setUnit(e.target.value as KpiUnit)} className={FIELD}>
-                {KPI_UNITS.map((u) => (
-                  <option key={u} value={u}>
-                    {KPI_UNIT_NAME[u]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-subhead font-semibold">
-              Which way is good
-              <select value={direction} onChange={(e) => setDirection(e.target.value as 'up' | 'down')} className={FIELD}>
-                <option value="up">More is better</option>
-                <option value="down">Less is better</option>
-              </select>
-            </label>
+            <div className="min-w-0">
+              <label className="block text-subhead font-semibold">
+                What it counts
+                <select value={unit} onChange={(e) => setUnit(e.target.value as KpiUnit)} className={FIELD}>
+                  {KPI_UNITS.map((u) => (
+                    <option key={u} value={u}>
+                      {KPI_UNIT_NAME[u]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">The kind of number you track.</p>
+            </div>
+            <div className="min-w-0">
+              <label className="block text-subhead font-semibold">
+                Which way is good
+                <select value={direction} onChange={(e) => setDirection(e.target.value as 'up' | 'down')} className={FIELD}>
+                  <option value="up">More is better</option>
+                  <option value="down">Less is better</option>
+                </select>
+              </label>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">Aim to land above the target, or under it.</p>
+            </div>
           </div>
         )}
         {def && <p className="mt-xs m-0 text-subhead text-ink-soft">This one is {KPI_UNIT_NAME[def.unit].toLowerCase()}, and more is better. It comes from Agency, so there is nothing to type.</p>}
@@ -348,17 +390,19 @@ function MetricSheet({ editing, kind, onClose, currency }: { editing: Kpi | 'new
             </option>
           ))}
         </select>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">It shows on your reviews of this length.</p>
         <label className="mt-sm block text-subhead font-semibold" htmlFor="m-target">
           Target, {unitHint(shownUnit, currency)}
         </label>
         <NumberField id="m-target" unit={shownUnit} stored={target} onChange={setTarget} label="Target" />
+        <p className="mt-xs m-0 text-subhead text-ink-soft">For each period. Leave it empty for no target.</p>
         {error != null && (
           <p role="alert" className="mt-sm m-0 text-subhead">
             {error instanceof ApiError ? error.message : 'That did not work. Try again.'}
           </p>
         )}
         <div className="mt-md flex flex-wrap gap-xs">
-          <Button type="submit" disabled={save.isPending || !body.name}>
+          <Button type="submit" className="flex-1" disabled={save.isPending || !body.name}>
             {save.isPending ? 'Saving' : prev ? 'Save changes' : 'Add this metric'}
           </Button>
           <Button variant="outline" onClick={onClose}>
@@ -368,16 +412,28 @@ function MetricSheet({ editing, kind, onClose, currency }: { editing: Kpi | 'new
             <Button
               variant="ghost"
               onClick={() => {
-                if (armed) remove.mutate();
-                else setArmed(true);
+                remove.reset();
+                setArmed(true);
               }}
               disabled={remove.isPending}
             >
-              {armed ? 'Tap again to remove' : 'Remove'}
+              Remove
             </Button>
           )}
         </div>
       </form>
+      {prev && (
+        <ConfirmDelete
+          open={armed}
+          title="Remove this metric?"
+          body={`${prev.name} and every number typed for it go. This cannot be undone.`}
+          pending={remove.isPending}
+          failed={remove.isError}
+          onYes={() => remove.mutate()}
+          onClose={() => setArmed(false)}
+          yes="Yes, remove it"
+        />
+      )}
     </Sheet>
   );
 }

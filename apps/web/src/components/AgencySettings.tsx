@@ -31,6 +31,7 @@ import { InvoiceTemplates, PaperLoading } from './AgencyInvoices';
 import { Button } from './Button';
 import { DocStyleSheet } from './DocStyleSheet';
 import { FillDetailsSheet } from './FillDetails';
+import { Fold } from './Fold';
 import { Icon } from './Icon';
 import { Field, FIELD, InvoiceView, LABEL, MoneyCell, PaperText, ShowSwitches, type InvoiceEditor } from './InvoiceView';
 import { MoreMenu } from './MoreMenu';
@@ -102,7 +103,9 @@ export function AgencySettings() {
   const [savedJson, setSavedJson] = useState('');
   const [undo, setUndo] = useState<Settings | null>(null);
   const [note, setNote] = useState('');
-  const [panel, setPanel] = useState<'fill' | 'show' | 'style' | 'hours' | 'templates' | null>(null);
+  const [panel, setPanel] = useState<'fill' | 'show' | 'style' | 'templates' | null>(null);
+  // Currency and hours sit on the page in a Fold (2026-11-06, was a sheet); More's item opens it and moves focus to the currency.
+  const [hoursOpen, setHoursOpen] = useState(false);
   const [docStyle, setDocStyle] = useState<DocStyle>(parseDocStyle(undefined));
   const [sample, setSample] = useState<InvoiceItem[] | null>(null);
   // What only the sample shows (the client, a discount, the GST split, the date, the number as typed): typed on the paper, never saved.
@@ -228,7 +231,21 @@ export function AgencySettings() {
         setPanel('style');
       },
     },
-    { key: 'hours', label: 'Currency and hours', icon: Clock, onSelect: () => setPanel('hours') },
+    {
+      key: 'hours',
+      label: 'Currency and hours',
+      icon: Clock,
+      onSelect: () => {
+        setHoursOpen(true);
+        window.requestAnimationFrame(() =>
+          window.requestAnimationFrame(() => {
+            const el = document.getElementById('set-currency');
+            el?.scrollIntoView({ block: 'center' });
+            el?.focus({ preventScroll: true });
+          }),
+        );
+      },
+    },
   ];
 
   return (
@@ -271,6 +288,28 @@ export function AgencySettings() {
         )}
       </p>
 
+      <Fold className="mt-xs" title="Currency and hours" hint={`${draft.currency}, ${draft.weeklyHours} hours a week`} open={hoursOpen} onOpenChange={setHoursOpen}>
+        <div className="grid gap-sm md:grid-cols-2">
+          <div className="min-w-0">
+            <label htmlFor="set-currency" className={LABEL}>
+              Currency
+            </label>
+            <select id="set-currency" value={draft.currency} onChange={(e) => setDraft({ ...draft, currency: e.target.value })} className={FIELD}>
+              {AGENCY_CURRENCIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            <p className="mt-xs m-0 text-caption text-ink-soft">What new invoices, agreements and retainers are priced in.</p>
+          </div>
+          <div className="min-w-0">
+            <Field id="set-weekly" label="Hours a week" inputMode="numeric" value={String(draft.weeklyHours)} onChange={(v) => setDraft({ ...draft, weeklyHours: Math.max(1, Math.min(100, Math.round(Number.parseFloat(v) || 1))) })} />
+            <p className="mt-xs m-0 text-caption text-ink-soft">Used to work out how much of your week is paid work.</p>
+          </div>
+        </div>
+      </Fold>
+
       <h3 className="mt-sm mb-xs text-headline">Your invoice</h3>
       <div className="legal-host">
         <div aria-hidden="true" />
@@ -301,7 +340,7 @@ export function AgencySettings() {
         <p className="mt-0 mb-sm text-subhead text-ink-soft">What every new invoice shows. Change it on any one invoice too.</p>
         <ShowSwitches value={p.show} onChange={(show) => set({ show })} />
         <div className="mt-md pb-xl">
-          <Button onClick={() => setPanel(null)}>Done</Button>
+          <Button full onClick={() => setPanel(null)}>Done</Button>
         </div>
       </Sheet>
       <DocStyleSheet
@@ -328,26 +367,6 @@ export function AgencySettings() {
           </div>
         }
       />
-      <Sheet open={panel === 'hours'} onClose={() => setPanel(null)} title="Currency and hours">
-        <div className="grid gap-sm pb-xl md:grid-cols-2">
-          <div className="min-w-0">
-            <label htmlFor="set-currency" className={LABEL}>
-              Currency
-            </label>
-            <select id="set-currency" value={draft.currency} onChange={(e) => setDraft({ ...draft, currency: e.target.value })} className={FIELD}>
-              {AGENCY_CURRENCIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="min-w-0">
-            <Field id="set-weekly" label="Hours a week" inputMode="numeric" value={String(draft.weeklyHours)} onChange={(v) => setDraft({ ...draft, weeklyHours: Math.max(1, Math.min(100, Math.round(Number.parseFloat(v) || 1))) })} />
-            <p className="mt-xs m-0 text-caption text-ink-soft">Used to work out how much of your week is paid work.</p>
-          </div>
-        </div>
-      </Sheet>
     </div>
   );
 }

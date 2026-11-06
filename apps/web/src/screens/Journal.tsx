@@ -1,10 +1,12 @@
 import { MODULE_BY_KEY, MOODS, STRESSORS, type JournalEntry, LOCALE } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import gsap from 'gsap';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { CalendarGrid } from '../components/Charts';
+import { CloseButton } from '../components/CloseButton';
 import { Hero } from '../components/Hero';
 import { MoodFace } from '../components/MoodFace';
 import { BackLink } from '../components/PageHeader';
@@ -13,6 +15,7 @@ import { Screen } from '../components/Screen';
 import { SkeletonList } from '../components/Skeleton';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
+import { FIELD } from '../lib/ui';
 import { todayLocal } from '../lib/date';
 import { lazyNamed } from '../lib/lazy';
 import { useJournal, useRefreshAll } from '../lib/queries';
@@ -83,6 +86,19 @@ export function Journal() {
           </div>
         </Hero>
       )}
+      {/* The day tapped on the calendar opens here, under it, never in a popup: its entries and a way to write another. */}
+      <DayPanel
+        date={day}
+        onClose={() => setDay(null)}
+        onOpen={(e) => {
+          setNewFor(undefined);
+          setEditing(e);
+        }}
+        onNew={(date) => {
+          setNewFor(date);
+          setEditing('new');
+        }}
+      />
       <Button full size="lg" className="mt-md" onClick={() => setEditing('new')}>
         New entry
       </Button>
@@ -136,18 +152,6 @@ export function Journal() {
         <Pager page={q.data?.page} label="entries" />
       </section>
 
-      <DaySheet
-        date={day}
-        onClose={() => setDay(null)}
-        onOpen={(e) => {
-          setNewFor(undefined);
-          setEditing(e);
-        }}
-        onNew={(date) => {
-          setNewFor(date);
-          setEditing('new');
-        }}
-      />
       <EntrySheet
         entry={editing}
         date={newFor}
@@ -166,38 +170,88 @@ export function Journal() {
   );
 }
 
-/** One day of the calendar: what was written that day, a way to open each entry, and a way to add another. */
-function DaySheet({ date, onClose, onOpen, onNew }: { date: string | null; onClose: () => void; onOpen: (e: JournalEntry) => void; onNew: (date: string) => void }) {
+/**
+ * One day of the calendar, shown in a card right under it (the day keeps its ring on the calendar): what was written that day, a way to
+ * open each entry, and a way to add another. Focus moves to its heading when a day is picked; Escape or the close button folds it and
+ * hands focus back to the day that opened it. New entry stays the screen's one solid button, so the panel's button is an outline.
+ */
+function DayPanel({ date, onClose, onOpen, onNew }: { date: string | null; onClose: () => void; onOpen: (e: JournalEntry) => void; onNew: (date: string) => void }) {
   const q = useQuery({ queryKey: ['journal-day', date], queryFn: () => api.journalDay(date!), enabled: Boolean(date) });
   const entries = q.data?.entries ?? [];
   const pretty = date ? new Date(`${date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long' }) : '';
+  const box = useRef<HTMLElement>(null);
+  const head = useRef<HTMLHeadingElement>(null);
+  const back = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!date) return;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const from = document.activeElement;
+    if (from instanceof HTMLElement && !box.current?.contains(from)) back.current = from;
+    head.current?.focus({ preventScroll: true });
+    head.current?.scrollIntoView({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
+    const el = box.current;
+    if (!el) return;
+    if (reduced) {
+      gsap.set(el, { opacity: 1, y: 0 });
+      return;
+    }
+    const tween = gsap.fromTo(el, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.3, ease: 'expo.out' });
+    return () => {
+      tween.kill();
+    };
+  }, [date]);
+  if (!date) return null;
+  const close = () => {
+    const to = back.current;
+    back.current = null;
+    onClose();
+    to?.focus({ preventScroll: true });
+  };
   return (
-    <Sheet open={date !== null} onClose={onClose} title={pretty}>
-      <div className="flex flex-col gap-sm pb-xl">
+    <section
+      ref={box}
+      aria-labelledby="journal-day-heading"
+      className="mt-md rounded-card bg-card p-md shadow-toy-soft"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && !e.defaultPrevented && box.current?.contains(e.target as Node)) {
+          e.preventDefault();
+          close();
+        }
+      }}
+    >
+      <div className="flex items-start justify-between gap-sm">
+        <h2 id="journal-day-heading" ref={head} tabIndex={-1} className="m-0 min-w-0 text-title3 outline-none">
+          {pretty}
+        </h2>
+        <CloseButton onClick={close} label="Close this day" />
+      </div>
+      <div className="mt-sm flex flex-col gap-sm">
         {q.isPending && <SkeletonList count={1} lines={2} label="Opening" />}
         {q.data && entries.length === 0 && <p className="m-0 text-subhead text-ink-soft">Nothing written on this day yet.</p>}
-        <ul className="m-0 flex list-none flex-col gap-xs p-0">
-          {entries.map((e) => {
-            const m = e.emotion ? MOODS.find((x) => x.value === e.emotion) : null;
-            return (
-              <li key={e.id}>
-                <button type="button" onClick={() => onOpen(e)} className="toy toy-soft flex w-full items-center gap-sm rounded-tile bg-card p-sm text-left">
-                  {m && <MoodFace value={m.value} size={36} />}
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-card-title">{e.title}</span>
-                    <span className="block truncate text-card-note text-ink-soft">{e.body}</span>
-                  </span>
-                  <span className="text-subhead text-ink-soft">Edit</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-        <Button full onClick={() => date && onNew(date)}>
+        {entries.length > 0 && (
+          <ul className="m-0 flex list-none flex-col gap-xs p-0">
+            {entries.map((e) => {
+              const m = e.emotion ? MOODS.find((x) => x.value === e.emotion) : null;
+              return (
+                <li key={e.id}>
+                  <button type="button" onClick={() => onOpen(e)} className="toy toy-soft flex w-full items-center gap-sm rounded-tile bg-paper p-sm text-left">
+                    {m && <MoodFace value={m.value} size={36} />}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-card-title">{e.title}</span>
+                      <span className="block truncate text-card-note text-ink-soft">{e.body}</span>
+                    </span>
+                    <span className="text-subhead text-ink-soft">Edit</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <Button variant="outline" full onClick={() => onNew(date)}>
           {entries.length > 0 ? 'Add another entry for this day' : 'Write an entry for this day'}
         </Button>
       </div>
-    </Sheet>
+    </section>
   );
 }
 
@@ -249,14 +303,14 @@ function EntrySheet({ entry, date, start, onClose, onSaved }: { entry: JournalEn
       >
         <label className="block">
           <span className="block text-subhead font-semibold">Title</span>
-          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Feeling good today" className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Feeling good today" className={FIELD} />
         </label>
         <label className="block">
           <span className="flex justify-between text-subhead">
             <span>Say anything that is on your mind</span>
             <span className="text-ink-soft">{words} words</span>
           </span>
-          <textarea value={body} onChange={(e) => setBody(e.target.value)} maxLength={5000} rows={6} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+          <textarea value={body} onChange={(e) => setBody(e.target.value)} maxLength={5000} rows={6} className={FIELD} />
         </label>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-subhead font-semibold">Emotion</legend>
@@ -294,14 +348,17 @@ function EntrySheet({ entry, date, start, onClose, onSaved }: { entry: JournalEn
             {save.error instanceof Error ? save.error.message : 'Could not save.'}
           </p>
         )}
-        <Button type="submit" size="lg" full disabled={save.isPending || (!body.trim() && !title.trim())}>
-          {existing ? 'Save changes' : 'Save entry'}
-        </Button>
-        {existing && !asking && (
-          <Button variant="ghost" disabled={remove.isPending} onClick={() => setAsking(true)}>
-            Delete entry
+        {/* The main save takes the free width, with Delete at its right on the same line (the founder's form rule, 2026-11-06). */}
+        <div className="flex flex-wrap items-center gap-xs">
+          <Button type="submit" size="lg" className="flex-1" disabled={save.isPending || (!body.trim() && !title.trim())}>
+            {existing ? 'Save changes' : 'Save entry'}
           </Button>
-        )}
+          {existing && !asking && (
+            <Button variant="ghost" disabled={remove.isPending} onClick={() => setAsking(true)}>
+              Delete entry
+            </Button>
+          )}
+        </div>
         {existing && asking && (
           <div className="grid gap-sm rounded-tile bg-card p-sm" role="group" aria-label="Delete this entry?">
             <p className="m-0 text-headline">Delete this entry?</p>

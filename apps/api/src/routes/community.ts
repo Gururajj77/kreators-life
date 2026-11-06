@@ -346,21 +346,30 @@ community.post('/:id/replies', async (c) => {
 });
 
 // Block the person behind a post or reply without learning who it is, which is how an anonymous author is blocked.
+// An anonymous one is blocked under the made-up name the reader saw (the post's own scope, as presentPosts and presentReplies use).
 community.post('/posts/:id/block-author', async (c) => {
-  const row = await c.env.DB.prepare('SELECT user_id FROM community_posts WHERE id = ?').bind(c.req.param('id')).first<{ user_id: string }>();
-  return blockBehind(c, row?.user_id);
+  const row = await c.env.DB.prepare('SELECT id, user_id, anonymous FROM community_posts WHERE id = ?').bind(c.req.param('id')).first<{ id: string; user_id: string; anonymous: number }>();
+  return blockBehind(c, row?.user_id, row?.anonymous === 1 ? await anonAlias(c.env, row.user_id, row.id) : null);
 });
 community.post('/replies/:id/block-author', async (c) => {
-  const row = await c.env.DB.prepare('SELECT user_id FROM community_replies WHERE id = ?').bind(c.req.param('id')).first<{ user_id: string }>();
-  return blockBehind(c, row?.user_id);
+  const row = await c.env.DB.prepare('SELECT post_id, user_id, anonymous FROM community_replies WHERE id = ?').bind(c.req.param('id')).first<{ post_id: string; user_id: string; anonymous: number }>();
+  return blockBehind(c, row?.user_id, row?.anonymous === 1 ? await anonAlias(c.env, row.user_id, row.post_id) : null);
 });
-export async function blockBehind(c: Context<AppEnv>, target: string | undefined) {
+/** The one block-by-what-they-wrote. With `alias` (the writer was anonymous) the block is kept behind that made-up name
+ * (`block_aliases`, migration 0099), so Bond lists the name and never the person; without it, it is an ordinary block by name.
+ * The answer is the same either way. */
+export async function blockBehind(c: Context<AppEnv>, target: string | undefined, alias: string | null = null) {
   const me = c.get('user');
   if (!target) return c.json({ error: 'not found' }, 404);
   if (target === me.id) return c.json({ error: 'that is you' }, 400);
-  await c.env.DB.batch([
-    c.env.DB.prepare('INSERT OR REPLACE INTO blocks (blocker_id, blocked_id, reason, created_at) VALUES (?, ?, ?, ?)').bind(me.id, target, '', nowIso()),
-    c.env.DB.prepare('DELETE FROM friendships WHERE (requester_id = ?1 AND recipient_id = ?2) OR (requester_id = ?2 AND recipient_id = ?1)').bind(me.id, target),
+  const db = c.env.DB;
+  const now = nowIso();
+  await db.batch([
+    alias
+      ? db.prepare('INSERT INTO blocks (blocker_id, blocked_id, reason, created_at, by_name) VALUES (?, ?, ?, ?, 0) ON CONFLICT (blocker_id, blocked_id) DO NOTHING').bind(me.id, target, '', now)
+      : db.prepare('INSERT OR REPLACE INTO blocks (blocker_id, blocked_id, reason, created_at, by_name) VALUES (?, ?, ?, ?, 1)').bind(me.id, target, '', now),
+    ...(alias ? [db.prepare('INSERT OR IGNORE INTO block_aliases (id, blocker_id, blocked_id, alias, created_at) VALUES (?, ?, ?, ?, ?)').bind(newId(), me.id, target, alias, now)] : []),
+    db.prepare('DELETE FROM friendships WHERE (requester_id = ?1 AND recipient_id = ?2) OR (requester_id = ?2 AND recipient_id = ?1)').bind(me.id, target),
   ]);
   return c.json({ ok: true }, 201);
 }

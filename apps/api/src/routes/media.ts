@@ -3,6 +3,7 @@ import { MAX_MEDIA_CAPTION, MAX_MEDIA_ITEMS, MAX_UPLOAD_BYTES, MEDIA_OWNERS, med
 import type { AppEnv, UserRow } from '../env';
 import { audit, can, newId, nowIso, orgRole, str } from '../db';
 import { cache } from '../cachecontrol';
+import { accessTo } from './school';
 
 /**
  * Pictures, GIFs and videos on listings and lessons. Uploaded files are small (the browser shrinks
@@ -40,6 +41,8 @@ mediaPublic.get('/for/:type/:id', async (c) => {
   const type = c.req.param('type');
   // A lesson's media is for the people in its program, so it is only read after sign-in.
   if (!isOwner(type) || type === 'lesson') return c.json({ items: [] });
+  // A program's pictures show without signing in only while it is public; a draft, private or archived one shows nothing here.
+  if (type === 'program' && !(await c.env.DB.prepare('SELECT 1 FROM programs WHERE id = ? AND published = 1').bind(c.req.param('id')).first())) return c.json({ items: [] });
   return c.json({ items: await itemsOf(c.env.DB, type, c.req.param('id')) });
 });
 
@@ -100,13 +103,12 @@ export async function canEditMedia(db: D1Database, user: UserRow, type: MediaOwn
       const r = await first<{ created_by: string | null }>('SELECT created_by FROM circle_events WHERE id = ?');
       return Boolean(r && (r.created_by === user.id || can(user, 'events')));
     }
-    case 'program': {
-      const r = await first<{ created_by: string | null }>('SELECT created_by FROM programs WHERE id = ?');
-      return Boolean(r && (r.created_by === user.id || can(user, 'cohorts')));
-    }
+    // A program and its lessons follow School's own rule (`accessTo(...).edit`): whoever runs it, or the cohorts team on a public one.
+    case 'program':
+      return (await accessTo(db, user, id))?.edit ?? false;
     case 'lesson': {
-      const r = await first<{ created_by: string | null }>('SELECT p.created_by FROM learning_items i JOIN programs p ON p.id = i.program_id WHERE i.id = ?');
-      return Boolean(r && (r.created_by === user.id || can(user, 'cohorts')));
+      const r = await first<{ program_id: string }>('SELECT program_id FROM learning_items WHERE id = ?');
+      return Boolean(r && (await accessTo(db, user, r.program_id))?.edit);
     }
     case 'campaign': {
       const r = await first<{ owner_user_id: string | null; organization_id: string }>('SELECT owner_user_id, organization_id FROM campaigns WHERE id = ?');
@@ -125,6 +127,21 @@ export async function canEditMedia(db: D1Database, user: UserRow, type: MediaOwn
       return Boolean(r && r.seller_id === user.id);
     }
   }
+}
+
+/** A program's pictures are for those School shows it to; a lesson's for them and anyone enrolled in one of its cohorts. Other owners
+ * are not School's and are read as before. */
+async function canSeeSchoolMedia(db: D1Database, user: UserRow, type: MediaOwner, id: string): Promise<boolean> {
+  if (type === 'program') return (await accessTo(db, user, id))?.visible ?? false;
+  if (type !== 'lesson') return true;
+  const r = await db.prepare('SELECT program_id FROM learning_items WHERE id = ?').bind(id).first<{ program_id: string }>();
+  if (!r) return false;
+  if ((await accessTo(db, user, r.program_id))?.visible) return true;
+  const enrolled = await db
+    .prepare("SELECT 1 FROM enrollments e JOIN cohorts k ON k.id = e.cohort_id WHERE k.program_id = ? AND e.learner_user_id = ? AND e.status != 'withdrawn'")
+    .bind(r.program_id, user.id)
+    .first();
+  return Boolean(enrolled);
 }
 
 // ---- signed in
@@ -150,7 +167,9 @@ media.get('/for/:type/:id', async (c) => {
   const type = c.req.param('type');
   const id = c.req.param('id');
   if (!isOwner(type)) return c.json({ error: 'not found' }, 404);
-  return c.json({ items: await itemsOf(c.env.DB, type, id), canEdit: await canEditMedia(c.env.DB, c.get('user'), type, id), max: MAX_MEDIA_ITEMS });
+  const canEdit = await canEditMedia(c.env.DB, c.get('user'), type, id);
+  if (!canEdit && !(await canSeeSchoolMedia(c.env.DB, c.get('user'), type, id))) return c.json({ items: [], canEdit: false, max: MAX_MEDIA_ITEMS });
+  return c.json({ items: await itemsOf(c.env.DB, type, id), canEdit, max: MAX_MEDIA_ITEMS });
 });
 
 // Replace the whole set: what is sent is what stays, in that order.

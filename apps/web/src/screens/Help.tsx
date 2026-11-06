@@ -72,8 +72,9 @@ function Ticket({ t, agent, onChange }: { t: SupportTicket; agent: boolean; onCh
             <span className="block text-caption">Reply</span>
             <textarea value={reply} onChange={(e) => setReply(e.target.value)} maxLength={4000} rows={3} className={FIELD} />
           </label>
+          {/* The select grows to fill the row, Send reply at its right (fields in a row fill it). */}
           <div className="flex flex-wrap items-end gap-xs">
-            <label className="block">
+            <label className="block min-w-0 flex-[1_1_160px]">
               <span className="block text-caption">Then mark it</span>
               <select value={status} onChange={(e) => setStatus(e.target.value as SupportTicket['status'])} className={FIELD}>
                 <option value="answered">answered</option>
@@ -218,7 +219,7 @@ export function Help() {
           ))}
         </ul>
         <p className="mt-sm m-0 text-subhead text-ink-soft">
-          Switch parts of the app on or off under{' '}
+          Hide or unhide apps under{' '}
           <Link to="/you#features" className="underline underline-offset-4">
             Profile, Features
           </Link>
@@ -230,6 +231,13 @@ export function Help() {
             Emerging
           </Link>
           . Only you see them.
+        </p>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">
+          Shape each day with blocks and day templates on{' '}
+          <Link to="/time-blocks" className="underline underline-offset-4">
+            Time blocks
+          </Link>
+          .
         </p>
       </section>
 

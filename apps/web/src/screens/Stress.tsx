@@ -1,6 +1,6 @@
 import { STRESS_LEVELS, STRESSORS, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { Button } from '../components/Button';
@@ -23,8 +23,20 @@ export function Stress() {
   const logs = useLogs('stress', 30);
   const today = todayLocal();
   const current = logs.data?.logs.find((l) => l.date === today) ?? null;
-  const [level, setLevel] = useState(current?.value ?? 2);
-  const [picked, setPicked] = useState<string[]>((current?.extra.stressors as string[] | undefined) ?? []);
+  // The form fills once the entries arrive (and again on a new day), like Mood. Each field keeps its own touch for the day,
+  // so a field the person moved stays as they set it and the other still takes the logged value.
+  // With nothing logged today it starts from the last level logged, with nothing picked; with nothing at all, from 2.
+  const [level, setLevel] = useState(2);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [touched, setTouched] = useState<{ day: string; level?: boolean; stressors?: boolean }>({ day: '' });
+  useEffect(() => {
+    if (!logs.data) return;
+    const t = touched.day === today ? touched : { day: today };
+    const last = current ? null : logs.data.logs.reduce<(typeof logs.data.logs)[number] | null>((a, l) => (l.date < today && (!a || l.date > a.date) ? l : a), null);
+    if (!t.level) setLevel(current ? current.value : last?.value ?? 2);
+    if (!t.stressors) setPicked(current && Array.isArray(current.extra.stressors) ? (current.extra.stressors as string[]) : []);
+  }, [logs.data, current, today, touched]);
+  const touch = (field: 'level' | 'stressors') => setTouched((t) => ({ ...(t.day === today ? t : { day: today }), [field]: true }));
   const save = useMutation({ mutationFn: () => api.log('stress', { date: today, value: level, extra: { stressors: picked } }), onSuccess: () => refresh() });
   const latest = wb.data?.parts.find((p) => p.kind === 'stress')?.latest ?? null;
   const avg7 = wb.data?.parts.find((p) => p.kind === 'stress')?.avg7 ?? null;
@@ -64,7 +76,7 @@ export function Stress() {
           Right now
         </h2>
         <p className="mt-md text-center text-large-title leading-none">{STRESS_LEVELS[level - 1]}</p>
-        <input type="range" min={1} max={5} value={level} onChange={(e) => setLevel(Number(e.target.value))} aria-label="Stress level" className="mt-md h-[44px] w-full cursor-pointer accent-ink" />
+        <input type="range" min={1} max={5} value={level} onChange={(e) => (touch('level'), setLevel(Number(e.target.value)))} aria-label="Stress level" className="mt-md h-[44px] w-full cursor-pointer accent-ink" />
         <p className="mt-md m-0 text-subhead font-semibold">What is behind it</p>
         <div className="fill-row-all mt-xs flex flex-wrap gap-xs" role="group" aria-label="Stressors">
           {STRESSORS.map((s) => {
@@ -74,7 +86,7 @@ export function Stress() {
                 key={s}
                 type="button"
                 aria-pressed={on}
-                onClick={() => setPicked((p) => (on ? p.filter((x) => x !== s) : [...p, s]))}
+                onClick={() => (touch('stressors'), setPicked((p) => (on ? p.filter((x) => x !== s) : [...p, s])))}
                 className={`min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}
               >
                 {s}
@@ -95,7 +107,7 @@ export function Stress() {
             .
           </p>
         )}
-        <Button full size="lg" className="mt-md" onClick={() => save.mutate()} disabled={save.isPending}>
+        <Button full size="lg" className="mt-md" onClick={() => save.mutate()} disabled={save.isPending || !logs.data}>
           {current ? 'Update today' : 'Save today'}
         </Button>
       </section>

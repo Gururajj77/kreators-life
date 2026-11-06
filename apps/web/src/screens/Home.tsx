@@ -2,11 +2,11 @@ import { QuoteOfTheDay } from '../components/QuoteOfTheDay';
 import { RemindersSection } from '../components/Reminders';
 import { badgeRoleOf, greetingFor, knowledgeKindIcon, LIFE_AREAS, MODULE_BY_KEY, MODULE_GROUP_ACCENT, MODULE_GROUPS, money, MOODS, RELATIONSHIP_BY_KEY, STRESS_LEVELS, type HomeResponse, type ModuleGroup, type RelationshipKey, formatCount } from '@kreators/shared';
 import type { CSSProperties, ReactNode } from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useId, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { Link } from 'react-router';
 import type { LucideIcon } from 'lucide-react';
-import { ArrowDownLeft, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, CalendarClock, CalendarDays, Check, Clock, Coins, Compass, FaceSlightlySmiling, Flame, Footprints, HandCoins, HeartPulse, MessageCircle, MessageCirclePlus, NotebookPen, PartyPopper, Pencil, Receipt, Sparkles, Star, UserRound, Users, UsersRound } from 'lucide-react';
+import { ArrowDownLeft, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, CalendarClock, CalendarDays, Check, Clock, Coins, Compass, EyeOff, FaceSlightlySmiling, Flame, Footprints, HandCoins, HeartPulse, MessageCircle, MessageCirclePlus, NotebookPen, PartyPopper, Pencil, Receipt, Sparkles, Star, UserRound, Users, UsersRound } from 'lucide-react';
 import { AppIcon } from '../components/AppIcon';
 import { Icon } from '../components/Icon';
 import { PeriodPanel } from '../components/PeriodPanel';
@@ -34,16 +34,19 @@ import { BENTO_SIZE, bento } from '../lib/bento';
 import { tie } from '../lib/text';
 import { useWide } from '../lib/useWide';
 import { prettyDate, todayLocal, weekday, eventTime } from '../lib/date';
-import { useGroupOrder, useModules } from '../lib/modules';
+import { useFits, useGroupOrder, useHiddenApps, useModules } from '../lib/modules';
 import { useAuthed, useMe } from '../lib/queries';
 import { SkeletonList } from '../components/Skeleton';
 import { StatusTag } from '../components/StatusTag';
 import { IconTag } from '../components/FactTag';
 import { CardHead } from '../components/CardHead';
 import { Reveal } from '../components/fx/Reveal';
-import { ToggleChevron } from '../components/ToggleMark';
+import { ToggleChevron, ToggleIcon } from '../components/ToggleMark';
+import { lazyNamed } from '../lib/lazy';
 import { useFocusPortal } from '../lib/focusPortal';
 
+/** Go to's hidden-apps panel, downloaded only when its button is first opened (Home is in the first download). */
+const HiddenAppsPanel = lazyNamed(() => import('../components/AppGroups'), 'HiddenAppsPanel');
 const SHORTCUT_ORDER: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'manage'];
 const when = eventTime;
 /** What is coming up wears its app's icon: a Party event, a run, a circle, or a calendar for a session or booking. */
@@ -116,6 +119,12 @@ export function Home() {
   // A steady ref callback, so the slot is set once and the living clock is not moved out and back on every render.
   const setFocusSlot = useCallback((el: HTMLDivElement | null) => setTarget(el, 'home'), [setTarget]);
   const shortcutGroups = useGroupOrder(SHORTCUT_ORDER);
+  // Go to's hidden-apps button, as on Apps: one inline panel under the title with every hidden app, the ones that fit the person first.
+  const hiddenApps = useHiddenApps(shortcutGroups).reduce((n, x) => n + x.list.length, 0);
+  const [showHidden, setShowHidden] = useState(false);
+  const hiddenPanel = useId();
+  const fits = useFits();
+  const hiddenLabel = showHidden ? 'Close hidden apps' : `Hidden apps (${hiddenApps})`;
   const [xpView, setXpView] = useParamState('xp', 'day');
   const d = q.data;
   // The three half-width extras pair up in two columns; when one is left over it takes the whole row, so nothing stands alone.
@@ -203,8 +212,8 @@ export function Home() {
         </div>
       </header>
 
-      {/* One solid button a screen: with Breathe and focus here (its Start is solid), + Glass takes the outline look, as on Journal. */}
-      <RemindersSection always quiet={mindfulOn} />
+      {/* + Glass in the water green on Home too (the founder, 2026-11-06), beside Breathe and focus's own Start. */}
+      <RemindersSection always />
       <QuoteOfTheDay date={date} />
       {/* Breathe and focus, the same living panel as Mindfulness (FocusRoundsHost moves it here while Home is showing), above the daily
           brief (the founder, 2026-11-06). */}
@@ -304,7 +313,7 @@ export function Home() {
             </div>
           </Section>
 
-          <EmergenceSlot app="home" max={3} />
+          <EmergenceSlot app="home" max={3} always />
 
           <Section id="home-today" title="Daily" lede="Tick each box when you have done it." action={<SeeAll to="/today">Open</SeeAll>}>
             <div data-pillar="lover_partner" className="relative flex flex-col overflow-hidden rounded-card bg-r4 p-md text-on-fill">
@@ -464,14 +473,16 @@ export function Home() {
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-headline">{u.title}</span>
-                          {/* The time never breaks ("2:13 / am"): it stays whole, and the note follows it. */}
+                          {/* The time never breaks ("2:13 / am"): it stays whole, and the note follows it, as a part of its own after the comma, so
+                              a narrow card breaks there on purpose ("Mon, 9 Nov, 2:47 pm," over "chat opens 8 Nov"). */}
                           <span className="block text-caption text-ink-soft">
-                            <span className="whitespace-nowrap">
+                            <span className="inline-block whitespace-nowrap">
                               <Icon icon={Clock} size={12} className="mr-xs inline-block align-[-2px]" />
                               {when(u.at)}
                               {u.note ? ',' : ''}
                             </span>
-                            {u.note ? ` ${u.note}` : ''}
+                            {u.note ? ' ' : ''}
+                            {u.note ? <span className="inline-block">{u.note}</span> : null}
                           </span>
                         </span>
                         <Icon icon={ArrowUpRight} size={18} className="transition-transform motion-safe:group-hover:translate-x-xs motion-safe:group-hover:-translate-y-xs text-ink-mute" />
@@ -693,7 +704,27 @@ export function Home() {
             </Section>
           )}
 
-          <Section id="home-go" title="Go to" lede="Every app you have switched on." action={<SeeAll to="/apps">All apps</SeeAll>} span>
+          <Section
+            id="home-go"
+            title="Go to"
+            lede="Every app you have not hidden."
+            action={
+              <div className="flex items-center gap-xs">
+                {(hiddenApps > 0 || showHidden) && (
+                  <button type="button" className="mf-round toy shrink-0" data-at="tr" data-tip={hiddenLabel} aria-label={hiddenLabel} title={hiddenLabel} aria-expanded={showHidden} aria-controls={hiddenPanel} onClick={() => setShowHidden((v) => !v)}>
+                    <ToggleIcon open={showHidden} icon={EyeOff} />
+                  </button>
+                )}
+                <SeeAll to="/apps">All apps</SeeAll>
+              </div>
+            }
+            span
+          >
+            {showHidden && (
+              <Suspense fallback={null}>
+                <HiddenAppsPanel groups={shortcutGroups} id={hiddenPanel} fits={fits} empty="No hidden apps. Hide one under Apps." />
+              </Suspense>
+            )}
             {shortcutGroups.map((g) => {
               const list = modules.filter((m) => m.on && m.group === g);
               if (list.length === 0) return null;

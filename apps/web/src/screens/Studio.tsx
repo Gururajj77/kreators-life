@@ -1,4 +1,4 @@
-import { money, PRODUCT_KIND_META, PRODUCT_KINDS, productHasOwnCover, type Booking, type Order, type Product, type ProductKind, LOCALE, formatCount } from '@kreators/shared';
+import { money, PRODUCT_KIND_META, PRODUCT_KINDS, productHasOwnCover, productStatusLabel, type Booking, type Order, type Product, type ProductKind, LOCALE, formatCount } from '@kreators/shared';
 import { longDate, dateTime } from '../lib/date';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -10,12 +10,17 @@ import { AreaLine, Donut, Legend, StatTile } from '../components/Charts';
 import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 import { api, downloadCsv as fetchCsv, errorText } from '../lib/api';
 import { useAuthed, useMe, useRefreshAll, useStudio } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { Stars } from '../components/Stars';
 import { TabRow } from '../components/TabRow';
-import { FIELD } from '../lib/ui';
+import { FIELD, FIELD_LINE, LABEL } from '../lib/ui';
+import { FieldLabel } from '../components/Field';
+import { IconButton } from '../components/IconButton';
+import { CloseButton } from '../components/CloseButton';
+import { Check } from 'lucide-react';
 import { useCopy } from '../lib/clipboard';
 import { RowCard } from '../components/RowCard';
 import { StatusTag } from '../components/StatusTag';
@@ -143,7 +148,7 @@ export function Studio({ tab = 'home' }: { tab?: ShopTab }) {
                     }
                     facts={[
                       <FactTag key="kind" kind="category">{PRODUCT_KIND_META[p.kind].name}</FactTag>,
-                      <StatusTag key="status" tone={p.status === 'live' ? 'good' : 'neutral'}>{p.status.charAt(0).toUpperCase() + p.status.slice(1)}</StatusTag>,
+                      <StatusTag key="status" tone={p.status === 'live' ? 'good' : p.status === 'private' ? 'info' : 'neutral'}>{productStatusLabel(p.status, p.kind)}</StatusTag>,
                       <IconTag key="sold" tone="neutral" icon="ShoppingBag">{`${formatCount(p.sold)} sold`}</IconTag>,
                     ]}
                   />
@@ -268,6 +273,8 @@ function NewProductSheet({ open, onClose, onCreated }: { open: boolean; onClose:
       >
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-subhead font-semibold">What are you selling?</legend>
+          {/* A quiet line under every field's label, or under none (the founder, 2026-11-06). */}
+          <span className="block text-caption text-ink-soft">You can change the rest after.</span>
           <div className="mt-xs grid grid-cols-2 gap-xs">
             {PRODUCT_KINDS.map((k) => (
               <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={`min-h-[56px] rounded-tile border-2 p-xs text-left text-subhead ${kind === k ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
@@ -278,16 +285,13 @@ function NewProductSheet({ open, onClose, onCreated }: { open: boolean; onClose:
             ))}
           </div>
         </fieldset>
-        <label className="block">
-          <span className="block text-subhead font-semibold">Title</span>
-          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
-        </label>
+        <FieldLabel label="Title" hint="Shown on its card and its page.">
+          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required className={FIELD} />
+        </FieldLabel>
         {kind !== 'link' && (
-          <label className="block">
-            <span className="block text-subhead font-semibold">Price in points</span>
-            <input type="number" min={0} value={price} onChange={(e) => setPrice(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
-            <span className="mt-xs block text-caption text-ink-soft">Zero makes it free. Money prices, pay what you want and the rest are on the next screen.</span>
-          </label>
+          <FieldLabel label="Price in points" hint="Zero makes it free. Money prices, pay what you want and the rest are on the next screen.">
+            <input type="number" min={0} value={price} onChange={(e) => setPrice(e.target.value)} className={FIELD} />
+          </FieldLabel>
         )}
         {create.isError && (
           <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
@@ -328,12 +332,12 @@ function PageTab() {
           <span className="block text-subhead font-semibold">Page name</span>
           <div className="mt-xs flex items-center gap-xs">
             <span className="text-headline text-ink-soft">/u/</span>
-            <input value={handle} onChange={(e) => setHandle(e.target.value.toLowerCase())} maxLength={20} pattern="[a-z0-9_]{3,20}" placeholder="yourname" className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+            <input value={handle} onChange={(e) => setHandle(e.target.value.toLowerCase())} maxLength={20} pattern="[a-z0-9_]{3,20}" placeholder="yourname" className={`${FIELD_LINE} min-w-0 flex-1`} />
           </div>
         </label>
         <label className="block">
           <span className="block text-subhead font-semibold">Bio</span>
-          <textarea value={bio} onChange={(e) => setBio(e.target.value)} maxLength={200} rows={3} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+          <textarea value={bio} onChange={(e) => setBio(e.target.value)} maxLength={200} rows={3} className={FIELD} />
         </label>
         {save.isError && (
           <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
@@ -375,7 +379,18 @@ function BookingsTab() {
   const [end, setEnd] = useState('12:00');
   const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
   const add = useMutation({ mutationFn: () => api.addAvailability({ weekday, startMin: toMin(start), endMin: toMin(end) }), onSuccess: () => avail.refetch() });
-  const remove = useMutation({ mutationFn: (id: string) => api.removeAvailability(id), onSuccess: () => avail.refetch() });
+  const remove = useMutation({
+    mutationFn: (id: string) => api.removeAvailability(id),
+    onSuccess: () => {
+      setRemoving(null);
+      avail.refetch();
+    },
+  });
+  // A window and a booking decline each ask first; a booking confirm opens a field for the meeting link in place.
+  const [removing, setRemoving] = useState<{ id: string; label: string } | null>(null);
+  const [declining, setDeclining] = useState<Booking | null>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [meetingUrl, setMeetingUrl] = useState('');
   const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
   return (
@@ -397,38 +412,45 @@ function BookingsTab() {
               <span className="flex-1 text-headline">
                 {DAYS[a.weekday]} {fmt(a.startMin)} to {fmt(a.endMin)}
               </span>
-              <Button variant="ghost" onClick={() => remove.mutate(a.id)}>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  remove.reset();
+                  setRemoving({ id: a.id, label: `${DAYS[a.weekday]} ${fmt(a.startMin)} to ${fmt(a.endMin)}` });
+                }}
+                aria-label={`Remove ${DAYS[a.weekday]} ${fmt(a.startMin)} to ${fmt(a.endMin)}`}
+              >
                 Remove
               </Button>
             </li>
           ))}
         </ul>
+        {/* The three fields fill the row in equal parts, then Add across the full width (the design rules for forms, 2026-11-06). */}
         <form
-          className="mt-sm flex flex-wrap items-end gap-xs rounded-card bg-card p-md shadow-toy-soft"
+          className="mt-sm flex flex-col gap-sm rounded-card bg-card p-md shadow-toy-soft"
           onSubmit={(e) => {
             e.preventDefault();
             add.mutate();
           }}
         >
-          <label className="block">
-            <span className="block text-caption">Day</span>
-            <select value={weekday} onChange={(e) => setWeekday(Number(e.target.value))} className="mt-xs rounded-tile border-2 border-line bg-paper px-sm py-sm text-body">
-              {DAYS.map((d, i) => (
-                <option key={d} value={i}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="block text-caption">From</span>
-            <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="mt-xs rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
-          </label>
-          <label className="block">
-            <span className="block text-caption">To</span>
-            <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="mt-xs rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
-          </label>
-          <Button type="submit" disabled={add.isPending}>
+          <div className="grid grid-cols-3 gap-xs">
+            <FieldLabel label="Day" className="min-w-0">
+              <select value={weekday} onChange={(e) => setWeekday(Number(e.target.value))} className={FIELD}>
+                {DAYS.map((d, i) => (
+                  <option key={d} value={i}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </FieldLabel>
+            <FieldLabel label="From" className="min-w-0">
+              <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className={FIELD} />
+            </FieldLabel>
+            <FieldLabel label="To" className="min-w-0">
+              <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className={FIELD} />
+            </FieldLabel>
+          </div>
+          <Button type="submit" full disabled={add.isPending}>
             Add
           </Button>
         </form>
@@ -449,13 +471,71 @@ function BookingsTab() {
                 {dateTime(b.startsAt)}, {b.status}
                 {b.note ? `. ${b.note}` : ''}
               </p>
-              {b.status === 'requested' && (
+              {b.status === 'requested' && confirming !== b.id && (
                 <div className="mt-sm flex gap-xs">
-                  <Button onClick={() => set.mutate({ id: b.id, body: { status: 'confirmed', meetingUrl: window.prompt('Meeting link (optional)') ?? undefined } })}>Confirm</Button>
-                  <Button variant="outline" onClick={() => set.mutate({ id: b.id, body: { status: 'cancelled' } })}>
+                  <Button
+                    onClick={() => {
+                      set.reset();
+                      setMeetingUrl('');
+                      setConfirming(b.id);
+                    }}
+                  >
+                    Confirm
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      set.reset();
+                      setDeclining(b);
+                    }}
+                  >
                     Decline
                   </Button>
                 </div>
+              )}
+              {b.status === 'requested' && confirming === b.id && (
+                // The small-input card of the design rules, where Confirm was: the label, a quiet example, then the field with a tick
+                // that confirms and a cross that goes back.
+                <form
+                  className="mt-sm"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    set.mutate({ id: b.id, body: { status: 'confirmed', meetingUrl: meetingUrl.trim() || undefined } }, { onSuccess: () => setConfirming(null) });
+                  }}
+                >
+                  <label htmlFor={`meet-${b.id}`} className={LABEL}>
+                    Meeting link
+                  </label>
+                  <p className="m-0 text-caption text-ink-soft">Optional. A Zoom or Meet link, like https://meet.google.com/abc-defg-hij.</p>
+                  <div className="mt-xs flex items-center gap-xs">
+                    <input
+                      id={`meet-${b.id}`}
+                      type="url"
+                      inputMode="url"
+                      value={meetingUrl}
+                      onChange={(e) => setMeetingUrl(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          e.preventDefault();
+                          setConfirming(null);
+                        }
+                      }}
+                      placeholder="https://"
+                      maxLength={500}
+                      className={`${FIELD_LINE} min-w-0 flex-1`}
+                      autoFocus
+                    />
+                    <IconButton
+                      icon={Check}
+                      label="Confirm the booking"
+                      tip="br"
+                      onClick={() => set.mutate({ id: b.id, body: { status: 'confirmed', meetingUrl: meetingUrl.trim() || undefined } }, { onSuccess: () => setConfirming(null) })}
+                      disabled={set.isPending}
+                    />
+                    <CloseButton onClick={() => setConfirming(null)} label="Back" />
+                  </div>
+                  {set.isError && <p role="alert" className="mt-xs m-0 text-subhead text-r1">{errorText(set.error, 'That did not save. Try again.')}</p>}
+                </form>
               )}
               {b.status === 'confirmed' && (
                 <Button variant="outline" className="mt-sm" onClick={() => set.mutate({ id: b.id, body: { status: 'done' } })}>
@@ -467,6 +547,26 @@ function BookingsTab() {
         </ul>
         <Pager page={q.data?.page} prefix="b" label="bookings" />
       </section>
+      <ConfirmDelete
+        open={removing !== null}
+        title="Remove this window?"
+        body={`${removing?.label ?? ''}. Buyers can no longer book a session in it. You can add it again.`}
+        pending={remove.isPending}
+        failed={remove.isError}
+        onYes={() => removing && remove.mutate(removing.id)}
+        onClose={() => setRemoving(null)}
+        yes="Yes, remove it"
+      />
+      <ConfirmDelete
+        open={declining !== null}
+        title="Decline this booking?"
+        body={declining ? `${declining.buyerName}, ${declining.productTitle}, ${dateTime(declining.startsAt)}. They are told it was cancelled. This cannot be undone.` : ''}
+        pending={set.isPending}
+        failed={set.isError}
+        onYes={() => declining && set.mutate({ id: declining.id, body: { status: 'cancelled' } }, { onSuccess: () => setDeclining(null) })}
+        onClose={() => setDeclining(null)}
+        yes="Yes, decline it"
+      />
     </>
   );
 }
@@ -480,7 +580,15 @@ function OverridesSection() {
   const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
   const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
   const set = useMutation({ mutationFn: (ranges: { startMin: number; endMin: number }[]) => api.setOverride(date, ranges), onSuccess: () => overrides.refetch() });
-  const remove = useMutation({ mutationFn: (d: string) => api.removeOverride(d), onSuccess: () => overrides.refetch() });
+  const remove = useMutation({
+    mutationFn: (d: string) => api.removeOverride(d),
+    onSuccess: () => {
+      setRemoving(null);
+      overrides.refetch();
+    },
+  });
+  // Removing a day's own hours asks first, with the day it is about.
+  const [removing, setRemoving] = useState<{ date: string; label: string } | null>(null);
   const ready = /^\d{4}-\d{2}-\d{2}$/.test(date);
   return (
     <section className="mt-lg" aria-labelledby="overrides-heading">
@@ -495,37 +603,56 @@ function OverridesSection() {
               {new Date(`${o.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', day: 'numeric', month: 'short' })}
               <span className="text-ink-soft">{o.ranges.length === 0 ? ', day off' : `, ${o.ranges.map((r) => `${fmt(r.startMin)} to ${fmt(r.endMin)}`).join(', ')}`}</span>
             </span>
-            <Button variant="ghost" onClick={() => remove.mutate(o.date)} disabled={remove.isPending}>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                remove.reset();
+                setRemoving({ date: o.date, label: new Date(`${o.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', day: 'numeric', month: 'short' }) });
+              }}
+              disabled={remove.isPending}
+            >
               Remove
             </Button>
           </li>
         ))}
       </ul>
-      <div className="mt-sm flex flex-wrap items-end gap-xs rounded-card bg-card p-md shadow-toy-soft">
-        <label className="block">
-          <span className="block text-caption">Date</span>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-xs rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
-        </label>
-        <Button variant="outline" onClick={() => set.mutate([])} disabled={!ready || set.isPending}>
-          Block this day
-        </Button>
-        <label className="block">
-          <span className="block text-caption">Or custom hours from</span>
-          <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="mt-xs rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
-        </label>
-        <label className="block">
-          <span className="block text-caption">to</span>
-          <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="mt-xs rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
-        </label>
-        <Button onClick={() => set.mutate([{ startMin: toMin(start), endMin: toMin(end) }])} disabled={!ready || set.isPending || toMin(end) <= toMin(start)}>
-          Set hours
-        </Button>
+      {/* The date, its own hours filling the row, then Set hours taking the free width with Block this day at its right. */}
+      <div className="mt-sm flex flex-col gap-sm rounded-card bg-card p-md shadow-toy-soft">
+        <FieldLabel label="Date">
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={FIELD} />
+        </FieldLabel>
+        <div className="grid grid-cols-2 gap-xs">
+          <FieldLabel label="Its own hours from" className="min-w-0">
+            <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className={FIELD} />
+          </FieldLabel>
+          <FieldLabel label="To" className="min-w-0">
+            <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className={FIELD} />
+          </FieldLabel>
+        </div>
+        <div className="flex flex-wrap items-center gap-xs">
+          <Button className="flex-1" onClick={() => set.mutate([{ startMin: toMin(start), endMin: toMin(end) }])} disabled={!ready || set.isPending || toMin(end) <= toMin(start)}>
+            Set hours
+          </Button>
+          <Button variant="outline" onClick={() => set.mutate([])} disabled={!ready || set.isPending}>
+            Block this day
+          </Button>
+        </div>
       </div>
       {set.isError && (
         <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           {set.error instanceof Error ? set.error.message : 'Could not save that day.'}
         </p>
       )}
+      <ConfirmDelete
+        open={removing !== null}
+        title="Remove this day's hours?"
+        body={`${removing?.label ?? ''}. The day goes back to your weekly windows. You can set it again.`}
+        pending={remove.isPending}
+        failed={remove.isError}
+        onYes={() => removing && remove.mutate(removing.date)}
+        onClose={() => setRemoving(null)}
+        yes="Yes, remove it"
+      />
     </section>
   );
 }

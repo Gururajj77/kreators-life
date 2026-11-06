@@ -1,6 +1,6 @@
 import { DEFAULT_PAGE_SIZE, pageQuery, type ContractDoc, type HouseTemplate, type Invoice, type InvoiceDoc, type InvoiceItem, type Page, type PageSize } from '@kreators/shared';
 import { Building2, PencilLine } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { adminApi } from '../lib/api';
 import { todayLocal } from '../lib/date';
@@ -12,7 +12,6 @@ import { DataTable } from './DataTable';
 import { InvoiceView } from './InvoiceView';
 import { MoreMenu } from './MoreMenu';
 import { BackLink } from './PageHeader';
-import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
 import { FIELD } from '../lib/ui';
 
@@ -133,6 +132,15 @@ function HouseTemplatePaper({ adminKey, id, onBack }: { adminKey: string; id: st
   const [paper, setPaper] = useState<Paper | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rename, setRename] = useState<string | null>(null);
+  const renameRef = useRef<HTMLInputElement>(null);
+  const renaming = rename !== null;
+  useEffect(() => {
+    if (renaming) renameRef.current?.select();
+  }, [renaming]);
+  const stopRename = () => {
+    setRename(null);
+    window.requestAnimationFrame(() => document.getElementById('house-paper-heading')?.focus());
+  };
   const read = useCallback(async () => {
     try {
       const r = await adminApi.houseTemplate(adminKey, id);
@@ -192,9 +200,41 @@ function HouseTemplatePaper({ adminKey, id, onBack }: { adminKey: string; id: st
         <button type="button" onClick={onBack} className="min-h-[44px] text-subhead text-ink-soft underline underline-offset-2">
           House templates
         </button>
-        <h2 id="house-paper-heading" className="text-large-title">
+        {/* Rename happens in place, where the name is (2026-11-06, no sheet): the field takes focus, Escape or Cancel puts the name back. */}
+        <h2 id="house-paper-heading" tabIndex={-1} className={rename === null ? 'text-large-title' : 'sr-only'}>
           {meta.name}
         </h2>
+        {rename !== null && (
+          <form
+            className="mt-xs flex flex-col gap-xs"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const name = rename.trim();
+              stopRename();
+              if (name && name !== meta.name) void patch({ name });
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                stopRename();
+              }
+            }}
+          >
+            <label className="block text-subhead font-semibold" htmlFor="house-name">
+              Name
+            </label>
+            <input ref={renameRef} id="house-name" value={rename} maxLength={60} onChange={(e) => setRename(e.target.value)} className={FIELD} />
+            {/* The Save takes the width, Cancel at its right on the same line (P8). */}
+            <div className="flex items-center gap-xs">
+              <Button type="submit" variant="outline" full className="flex-1">
+                Save
+              </Button>
+              <Button variant="ghost" onClick={stopRename}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        )}
         <div className="mt-xs flex flex-wrap items-center gap-sm">
           <StatusTag tone={meta.status === 'active' ? 'good' : 'neutral'}>{meta.status === 'active' ? 'Active' : 'Retired'}</StatusTag>
           <SaveLine words={auto.words} canUndo={auto.canUndo} onUndo={auto.undo} />
@@ -229,26 +269,6 @@ function HouseTemplatePaper({ adminKey, id, onBack }: { adminKey: string; id: st
           />
         )}
       </div>
-      <Sheet open={rename !== null} onClose={() => setRename(null)} title="Rename">
-        <label className="block text-subhead font-semibold" htmlFor="house-name">
-          Name
-        </label>
-        <input id="house-name" value={rename ?? ''} maxLength={60} onChange={(e) => setRename(e.target.value)} className={FIELD} />
-        <div className="mt-md flex flex-wrap gap-xs pb-xl">
-          <Button
-            onClick={() => {
-              const name = (rename ?? '').trim();
-              setRename(null);
-              if (name) void patch({ name });
-            }}
-          >
-            Save
-          </Button>
-          <Button variant="ghost" onClick={() => setRename(null)}>
-            Cancel
-          </Button>
-        </div>
-      </Sheet>
     </section>
   );
 }

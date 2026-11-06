@@ -115,7 +115,7 @@ export function DocStyleSheet({ open, onClose, value, onChange, disabled = false
         <div className="flex flex-wrap gap-xs">
           {asDefault ? (
             <>
-              <Button onClick={() => makeDefault.mutate()} disabled={makeDefault.isPending || !settings.data}>
+              <Button className="flex-1" onClick={() => makeDefault.mutate()} disabled={makeDefault.isPending || !settings.data}>
                 {makeDefault.isPending ? 'Saving' : 'Save as my default'}
               </Button>
               <Button variant="outline" onClick={onClose}>
@@ -124,7 +124,7 @@ export function DocStyleSheet({ open, onClose, value, onChange, disabled = false
             </>
           ) : (
             <>
-              <Button onClick={onClose}>Done</Button>
+              <Button className="flex-1" onClick={onClose}>Done</Button>
               <Button variant="outline" onClick={() => makeDefault.mutate()} disabled={makeDefault.isPending || !settings.data}>
                 {makeDefault.isPending ? 'Saving' : 'Make this my default'}
               </Button>

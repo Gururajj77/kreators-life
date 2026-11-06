@@ -62,18 +62,22 @@ function NoticeForm({ kind }: { kind: 'notice' | 'counter' }) {
         Your full name
       </label>
       <input id={id('name')} required value={v.name} onChange={set('name')} maxLength={120} autoComplete="name" className={FIELD} />
+      <p className="mt-xs m-0 text-caption text-ink-mute">We need it to act on this.</p>
       <label className="mt-sm block text-subhead font-semibold" htmlFor={id('email')}>
         Your email
       </label>
       <input id={id('email')} required type="email" value={v.email} onChange={set('email')} maxLength={200} autoComplete="email" className={FIELD} />
+      <p className="mt-xs m-0 text-caption text-ink-mute">We write back to this address.</p>
       <label className="mt-sm block text-subhead font-semibold" htmlFor={id('work')}>
         {counter ? 'What was removed, and where it was shown before' : 'The work that was copied'}
       </label>
       <textarea id={id('work')} required value={v.work} onChange={set('work')} rows={3} maxLength={1000} className={FIELD} />
+      <p className="mt-xs m-0 text-caption text-ink-mute">{counter ? 'Its title, or a few words on what it was.' : 'Its title, or a link to your own copy.'}</p>
       <label className="mt-sm block text-subhead font-semibold" htmlFor={id('urls')}>
         {counter ? 'The addresses where it was shown' : 'The addresses (links) on kreators.app where it is shown'}
       </label>
       <textarea id={id('urls')} required value={v.urls} onChange={set('urls')} rows={3} maxLength={2000} className={FIELD} />
+      <p className="mt-xs m-0 text-caption text-ink-mute">{counter ? 'One link on each line.' : 'One link on each line, from kreators.app.'}</p>
       <label className="mt-sm block text-subhead font-semibold" htmlFor={id('statement')}>
         {counter ? 'Your statement, with your address and phone number' : 'Your statement'}
       </label>
@@ -87,6 +91,7 @@ function NoticeForm({ kind }: { kind: 'notice' | 'counter' }) {
         Your signature (type your full name)
       </label>
       <input id={id('signature')} required value={v.signature} onChange={set('signature')} maxLength={120} className={FIELD} />
+      <p className="mt-xs m-0 text-caption text-ink-mute">Type the same name you gave at the top.</p>
       {error && (
         <p role="alert" className="mt-sm m-0 text-subhead">
           {error}
@@ -94,7 +99,7 @@ function NoticeForm({ kind }: { kind: 'notice' | 'counter' }) {
       )}
       <div className="mt-md">
         {/* One solid button a page: the notice is the main form, the counter-notice wears the site's secondary look. */}
-        <Button type="submit" variant={counter ? 'outline' : 'primary'} disabled={busy}>
+        <Button type="submit" variant={counter ? 'outline' : 'primary'} full disabled={busy}>
           {busy ? 'Sending' : counter ? 'Send the counter-notice' : 'Send the notice'}
         </Button>
       </div>

@@ -5,6 +5,7 @@ import { Link } from 'react-router';
 import { api } from '../lib/api';
 import { useAuthed, useRefreshAll } from '../lib/queries';
 import { Button } from './Button';
+import { ConfirmDelete } from './ConfirmDelete';
 import { Nudge } from './Nudge';
 import { Pager, usePage } from './Pager';
 import { RoleBadge } from './RoleBadge';
@@ -34,6 +35,7 @@ export function MyCoachSection({ id = 'coach', title = 'Your life coach', inCoac
   const q = useAuthed(['my-coach', pg.query], () => api.myCoach(pg.query));
   const refresh = useRefreshAll();
   const [ending, setEnding] = useState<CoachLink | null>(null);
+  const [unasking, setUnasking] = useState<CoachLink | null>(null);
   const done = () => {
     refresh();
     void q.refetch();
@@ -44,6 +46,7 @@ export function MyCoachSection({ id = 'coach', title = 'Your life coach', inCoac
     mutationFn: (linkId: string) => api.endCoach(linkId),
     onSuccess: () => {
       setEnding(null);
+      setUnasking(null);
       done();
     },
   });
@@ -109,7 +112,7 @@ export function MyCoachSection({ id = 'coach', title = 'Your life coach', inCoac
                   </>
                 )}
                 {waiting && !mineToAnswer && (
-                  <Button variant="ghost" disabled={end.isPending} onClick={() => end.mutate(l.id)}>
+                  <Button variant="ghost" disabled={end.isPending} onClick={() => { end.reset(); setUnasking(l); }}>
                     Take back the ask
                   </Button>
                 )}
@@ -130,6 +133,17 @@ export function MyCoachSection({ id = 'coach', title = 'Your life coach', inCoac
         </p>
       )}
       <Nudge className="mt-xs" text={`Up to ${MAX_COACHES} coaches at once. Every change is logged ${inCoaching ? 'further down this page' : 'under Coaching'}.`} />
+      <ConfirmDelete
+        open={unasking !== null}
+        title={`Take back your ask to ${unasking?.coach.name ?? 'this coach'}?`}
+        body="They no longer see it waiting. You can ask again later."
+        pending={end.isPending}
+        failed={end.isError}
+        onYes={() => unasking && end.mutate(unasking.id)}
+        onClose={() => setUnasking(null)}
+        yes="Yes, take it back"
+        keep="Keep the ask"
+      />
       <Sheet open={Boolean(ending)} onClose={() => setEnding(null)} title={`End coaching with ${ending?.coach.name ?? 'your coach'}?`}>
         <p className="m-0 text-callout">They stop seeing your progress at once and are told. Their notes and the change log stay with you.</p>
         <div className="mt-md flex flex-col gap-xs">

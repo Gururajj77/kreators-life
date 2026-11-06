@@ -18,6 +18,7 @@ import {
   REWARD_BY_KEY,
   ROLE_META,
   ROLES,
+  roleRank,
   TOOL_CATEGORIES,
   type AdminFunnel,
   type AdminKyc,
@@ -54,10 +55,11 @@ import { X } from 'lucide-react';
 import { adminApi } from '../lib/api';
 import { useMe } from '../lib/queries';
 import { useParamState } from '../lib/useParamState';
-import { FIELD } from '../lib/ui';
+import { FIELD, FIELD_LINE } from '../lib/ui';
 import { dateTime, longDate } from '../lib/date';
 import { StatusTag } from '../components/StatusTag';
 import { Fold } from '../components/Fold';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 
 const ADMIN_HONORS = HONORS.filter((h) => h.source === 'admin' && h.key !== 'pro');
 const KEY_STORE = 'kreators.adminKey';
@@ -80,6 +82,8 @@ const planByName = (name: string): PlanKey => PLAN_KEYS.find((k) => planName(k) 
 const creditsOf = (u: AdminUser) => u.planCredits + u.extraCredits;
 const when = (iso: string | null | undefined) => (iso ? dateTime(iso) : '');
 const day = (iso: string | null | undefined) => (iso ? longDate(iso) : '');
+/** "1 override", "3 overrides", for a bulk removal's question. */
+const count = (n: number, one: string, many: string) => `${formatCount(n)} ${n === 1 ? one : many}`;
 
 function readKey(): string {
   try {
@@ -134,8 +138,9 @@ export function Admin() {
   const [q, setQ] = useState('');
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [selected, setSelected] = useState<AdminUser | null>(null);
-  // The account the delete sheet is asking about; null when it is closed.
-  const [deleting, setDeleting] = useState<AdminUser | null>(null);
+  // The one removal the confirm sheet is asking about (an account, an honor, an override, a refund...); null when it is closed.
+  const [confirming, setConfirming] = useState<{ title: string; body: string; yes: string; keep?: string; act: () => Promise<void> } | null>(null);
+  const [confirmFailed, setConfirmFailed] = useState(false);
   const [honor, setHonor] = useState(ADMIN_HONORS[0]?.key ?? 'founder');
   const [note, setNote] = useState('');
   const [amount, setAmount] = useState('100');
@@ -204,6 +209,25 @@ export function Admin() {
     } finally {
       setBusy(false);
     }
+  };
+
+  /** Like `run`, but a failure also reaches the caller, so a confirm sheet stays open and says it did not work. */
+  const runOrThrow = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That did not work. Try again.');
+      throw e;
+    } finally {
+      setBusy(false);
+    }
+  };
+  /** Every removal asks first (the founder, 2026-11-06), in a sheet with a red yes and an outline Keep. */
+  const askFirst = (c: NonNullable<typeof confirming>) => {
+    setConfirmFailed(false);
+    setConfirming(c);
   };
 
   const load = () =>
@@ -371,6 +395,16 @@ export function Admin() {
         back={{ to: '/apps', label: 'Apps' }}
         title="Admin"
         lede={sessionAdmin ? 'You are signed in as an admin, so no key is needed.' : 'Paste the admin key, or sign in with an admin account. Every change here is written to the audit log.'}
+        actions={
+          // The Admin guide is a private School program only an admin account can open, so it shows only with an admin session. It opens
+          // at /admin/guide, outside School's switch, so an admin who switched School off still reaches it.
+          // With one, the key form is gone and this is the cover's one solid action.
+          sessionAdmin ? (
+            <Link to="/admin/guide" className="toy btn-primary inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill bg-ink px-md text-headline text-on-ink select-none">
+              Admin guide
+            </Link>
+          ) : undefined
+        }
       />
 
       {!sessionAdmin && (
@@ -447,9 +481,36 @@ export function Admin() {
                       ),
                     },
                     { key: 'email', label: 'Email', get: (u) => u.email ?? '', wide: true },
-                    { key: 'role', label: 'Role', get: (u) => ROLE_META[u.role].name, filter: true, edit: { kind: 'select', options: ROLE_OPTIONS, onEdit: (u, v) => run(async () => applyUser((await adminApi.setRole(key, u.id, roleByName(String(v)))).user)) } },
+                    { key: 'role', label: 'Role', get: (u) => ROLE_META[u.role].name, filter: true, edit: {
+                        kind: 'select',
+                        options: ROLE_OPTIONS,
+                        onEdit: (u, v) => {
+                          const next = roleByName(String(v));
+                          const change = async () => applyUser((await adminApi.setRole(key, u.id, next)).user);
+                          // Taking a role down takes away every power it carried, so it asks first.
+                          if (roleRank(next) < roleRank(u.role))
+                            askFirst({
+                              title: `Make ${u.displayName || 'this person'} ${next === 'user' ? 'a creator' : 'staff'}?`,
+                              body: next === 'user' ? 'They lose every staff power. You can give it back later.' : 'They lose every admin power and keep only their staff permissions. You can give it back later.',
+                              yes: 'Yes, change the role',
+                              act: change,
+                            });
+                          else return run(change);
+                        },
+                      },
+                    },
                     { key: 'coach', label: 'Life coach', get: (u) => (u.permissions.includes('coach') ? 'Yes' : u.coachAskedAt ? 'Asked' : 'No'), filter: true },
-                    { key: 'plan', label: 'Plan', get: (u) => planName(u.plan), filter: true, edit: { kind: 'select', options: PLAN_OPTIONS, onEdit: (u, v) => run(async () => applyUser((await adminApi.setPlan(key, u.id, planByName(String(v)), PLAN_DAYS)).user)) } },
+                    { key: 'plan', label: 'Plan', get: (u) => planName(u.plan), filter: true, edit: {
+                        kind: 'select',
+                        options: PLAN_OPTIONS,
+                        onEdit: (u, v) => {
+                          const next = planByName(String(v));
+                          const change = async () => applyUser((await adminApi.setPlan(key, u.id, next, PLAN_DAYS)).user);
+                          if (next === 'none' && u.plan !== 'none') askFirst({ title: `End ${u.displayName || 'this person'}'s plan?`, body: 'Their plan ends now and its plan credits go. Extra credits stay.', yes: 'Yes, end the plan', act: change });
+                          else return run(change);
+                        },
+                      },
+                    },
                     { key: 'credits', label: 'Credits', get: (u) => creditsOf(u), render: (u) => formatCount(creditsOf(u)), align: 'right' },
                     { key: 'perms', label: 'Permissions', get: (u) => (u.role === 'admin' ? 'all' : u.permissions.map((p) => PERMISSION_NAMES[p]).join(', ')), wide: true, wrap: true },
                     { key: 'xp', label: 'XP', get: (u) => u.xp, render: (u) => formatCount(u.xp), align: 'right' },
@@ -470,7 +531,17 @@ export function Admin() {
                           aria-label={`Delete ${u.displayName || 'this account'}`}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setDeleting(u);
+                            askFirst({
+                              title: `Delete ${u.displayName || 'this account'}?`,
+                              body: 'Their details and what they made go. Money records stay, without their name. This cannot be undone.',
+                              yes: 'Yes, delete it',
+                              keep: 'Keep this account',
+                              act: async () => {
+                                await adminApi.deleteUser(key, u.id);
+                                setSelected((s) => (s?.id === u.id ? null : s));
+                                await refreshUsers(asks.users);
+                              },
+                            });
                           }}
                           className="toy flex size-[44px] items-center justify-center rounded-pill text-ink-soft hover:text-r1 disabled:opacity-30"
                         >
@@ -480,51 +551,38 @@ export function Admin() {
                     },
                   ]}
                   bulk={[
-                    { label: 'Make creator', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setRole(key, u.id, 'user')).user))) },
-                    { label: 'Make staff', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setRole(key, u.id, 'sub_admin')).user))) },
+                    {
+                      label: 'Make creator',
+                      confirm: { title: (n) => (n === 1 ? 'Make 1 person a creator?' : `Make ${formatCount(n)} people creators?`), body: 'Anyone who was staff or an admin loses those powers. You can give them back later.', yes: 'Yes, change the role' },
+                      onClick: (rows) => runOrThrow(() => each(rows, async (u) => applyUser((await adminApi.setRole(key, u.id, 'user')).user))),
+                    },
+                    {
+                      label: 'Make staff',
+                      confirm: { title: (n) => (n === 1 ? 'Make 1 person staff?' : `Make ${formatCount(n)} people staff?`), body: 'An admin among them loses every admin power and keeps only their staff permissions. You can give it back later.', yes: 'Yes, change the role' },
+                      onClick: (rows) => runOrThrow(() => each(rows, async (u) => applyUser((await adminApi.setRole(key, u.id, 'sub_admin')).user))),
+                    },
                     { label: 'Make admin', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setRole(key, u.id, 'admin')).user))) },
                     { label: 'Make life coach', onClick: (rows) => run(() => each(rows, (u) => makeCoach(u.id, true))) },
                     { label: 'Start Pro', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setPlan(key, u.id, 'pro', PLAN_DAYS)).user))) },
-                    { label: 'End plan', variant: 'ghost', onClick: (rows) => run(() => each(rows, async (u) => applyUser((await adminApi.setPlan(key, u.id, 'none', PLAN_DAYS)).user))) },
+                    {
+                      label: 'End plan',
+                      variant: 'ghost',
+                      confirm: { title: (n) => `End the plan for ${count(n, 'person', 'people')}?`, body: 'Their plans end now and the plan credits go. Extra credits stay.', yes: 'Yes, end the plans' },
+                      onClick: (rows) => runOrThrow(() => each(rows, async (u) => applyUser((await adminApi.setPlan(key, u.id, 'none', PLAN_DAYS)).user))),
+                    },
                   ]}
                 />
               </div>
 
-              <Sheet open={deleting !== null} onClose={() => setDeleting(null)} title={`Delete ${deleting?.displayName || 'this account'}?`}>
-                <p className="m-0 text-subhead text-ink-soft">Their details and what they made go. Money records stay, without their name. This cannot be undone.</p>
-                <div className="mt-md flex flex-col gap-xs">
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => {
-                      const u = deleting;
-                      if (!u) return;
-                      setDeleting(null);
-                      void run(async () => {
-                        await adminApi.deleteUser(key, u.id);
-                        if (selected?.id === u.id) setSelected(null);
-                        await refreshUsers(asks.users);
-                      });
-                    }}
-                    className="toy inline-flex min-h-[56px] items-center justify-center gap-xs rounded-pill bg-r1 px-md text-headline text-on-fill disabled:opacity-50"
-                  >
-                    Yes, delete
-                  </button>
-                  <Button variant="outline" size="lg" onClick={() => setDeleting(null)}>
-                    Keep this account
-                  </Button>
-                </div>
-              </Sheet>
 
               {selected && (
                 <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-                  <div className="flex items-start justify-between gap-sm">
-                    <div className="min-w-0">
-                      <h3 className="text-title2">{selected.displayName || 'Anonymous climber'}</h3>
-                      <p className="mt-xs m-0 text-caption text-ink-mute">{selected.id}</p>
-                    </div>
+                  {/* The name and its close share one row, centred on each other; the id is the line under them. */}
+                  <div className="flex items-center justify-between gap-sm">
+                    <h3 className="min-w-0 text-title2">{selected.displayName || 'Anonymous climber'}</h3>
                     <CloseButton onClick={() => setSelected(null)} label="Close this person" />
                   </div>
+                  <p className="mt-xs m-0 text-caption text-ink-mute">{selected.id}</p>
 
                   <p className="mt-md m-0 text-subhead font-semibold">Permissions</p>
                   <p className="m-0 text-caption text-ink-soft">A permission is a job someone is trusted with. Admins hold all of them but Life coach. A creator can hold Mentor, Life coach and Moderation (a guide in Community); the rest need the Staff role.</p>
@@ -537,7 +595,16 @@ export function Admin() {
                           type="button"
                           aria-pressed={on}
                           disabled={busy || (selected.role === 'admin' && p !== 'coach')}
-                          onClick={() => run(async () => applyUser((await adminApi.setPermissions(key, selected.id, on ? selected.permissions.filter((x) => x !== p) : [...selected.permissions, p])).user))}
+                          onClick={() => {
+                            const change = async () => applyUser((await adminApi.setPermissions(key, selected.id, on ? selected.permissions.filter((x) => x !== p) : [...selected.permissions, p])).user);
+                            if (!on) return void run(change);
+                            askFirst({
+                              title: `Take ${PERMISSION_NAMES[p]} from ${selected.displayName || 'this person'}?`,
+                              body: p === 'coach' ? 'Every coaching link of theirs ends and their students are told. You can give it back later.' : 'They can no longer do what it lets them do. You can give it back later.',
+                              yes: 'Yes, take it away',
+                              act: change,
+                            });
+                          }}
                           className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${on || (selected.role === 'admin' && p !== 'coach') ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
                         >
                           {PERMISSION_NAMES[p]}
@@ -547,10 +614,11 @@ export function Admin() {
                   </div>
 
                   <p className="mt-md m-0 text-subhead font-semibold">Honors</p>
+                  <p className="m-0 text-caption text-ink-soft">An honor shows on their profile and counts for unlocks.</p>
                   <div className="mt-xs flex flex-wrap gap-xs">
                     {selected.honors.length === 0 && <span className="text-subhead text-ink-soft">None yet.</span>}
                     {selected.honors.map((h) => (
-                      <button key={h} type="button" disabled={busy} onClick={() => run(async () => applyUser((await adminApi.revokeHonor(key, selected.id, h)).user))} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-paper px-sm text-subhead font-medium" aria-label={`Remove ${HONOR_BY_KEY[h]?.name ?? h}`}>
+                      <button key={h} type="button" disabled={busy} onClick={() => askFirst({ title: `Take ${HONOR_BY_KEY[h]?.name ?? h} from ${selected.displayName || 'this person'}?`, body: 'The honor comes off their profile. You can grant it again later.', yes: 'Yes, take it away', act: async () => applyUser((await adminApi.revokeHonor(key, selected.id, h)).user) })} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-paper px-sm text-subhead font-medium" aria-label={`Remove ${HONOR_BY_KEY[h]?.name ?? h}`}>
                         <AppIcon name={HONOR_BY_KEY[h]?.icon} size={16} />
                         {HONOR_BY_KEY[h]?.name ?? h}
                         <Icon icon={X} size={14} />
@@ -558,7 +626,7 @@ export function Admin() {
                     ))}
                   </div>
                   <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
-                    <select value={honor} onChange={(e) => setHonor(e.target.value)} aria-label="Honor" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-body">
+                    <select value={honor} onChange={(e) => setHonor(e.target.value)} aria-label="Honor" className={FIELD_LINE}>
                       {ADMIN_HONORS.map((h) => (
                         <option key={h.key} value={h.key}>
                           {h.name}
@@ -570,10 +638,12 @@ export function Admin() {
                     </Button>
                   </div>
                   <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional)" aria-label="Note" className={FIELD} />
+                  <p className="mt-xs m-0 text-caption text-ink-soft">Saved with each honor, points, xp or badge you give, and in the audit log.</p>
 
                   <p className="mt-md m-0 text-subhead font-semibold">Points</p>
+                  <p className="m-0 text-caption text-ink-soft">A whole number. A minus takes some away, down to zero.</p>
                   <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
-                    <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Amount" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+                    <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Amount" className={FIELD_LINE} />
                     <Button variant="outline" disabled={busy || !Number(amount)} onClick={() => run(async () => applyUser((await adminApi.addPoints(key, selected.id, Number(amount), note)).user))}>
                       Add
                     </Button>
@@ -582,7 +652,7 @@ export function Admin() {
                   <p className="mt-md m-0 text-subhead font-semibold">XP</p>
                   <p className="m-0 text-caption text-ink-soft">Moves their level and the leaderboard. A minus takes some away, down to zero. The note and your name are kept in the audit log.</p>
                   <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
-                    <input type="number" value={xpAmount} onChange={(e) => setXpAmount(e.target.value)} aria-label="XP amount" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+                    <input type="number" value={xpAmount} onChange={(e) => setXpAmount(e.target.value)} aria-label="XP amount" className={FIELD_LINE} />
                     <Button variant="outline" disabled={busy || !Number(xpAmount)} onClick={() => run(async () => applyUser((await adminApi.addXp(key, selected.id, Number(xpAmount), note)).user))}>
                       Add
                     </Button>
@@ -593,7 +663,7 @@ export function Admin() {
                   <div className="mt-xs flex flex-wrap gap-xs">
                     {selected.grantedBadges.length === 0 && <span className="text-subhead text-ink-soft">None given.</span>}
                     {selected.grantedBadges.map((b) => (
-                      <button key={b} type="button" disabled={busy} onClick={() => run(async () => applyUser((await adminApi.revokeBadge(key, selected.id, b)).user))} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-paper px-sm text-subhead font-medium" aria-label={`Remove ${BADGES.find((x) => x.key === b)?.name ?? b}`}>
+                      <button key={b} type="button" disabled={busy} onClick={() => askFirst({ title: `Take ${BADGES.find((x) => x.key === b)?.name ?? b} from ${selected.displayName || 'this person'}?`, body: 'The badge you gave comes off. One they earned stays. You can give it again later.', yes: 'Yes, take it away', act: async () => applyUser((await adminApi.revokeBadge(key, selected.id, b)).user) })} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-paper px-sm text-subhead font-medium" aria-label={`Remove ${BADGES.find((x) => x.key === b)?.name ?? b}`}>
                         <AppIcon name={BADGES.find((x) => x.key === b)?.icon} size={16} />
                         {BADGES.find((x) => x.key === b)?.name ?? b}
                         <Icon icon={X} size={14} />
@@ -601,7 +671,7 @@ export function Admin() {
                     ))}
                   </div>
                   <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
-                    <select value={badgeKey} onChange={(e) => setBadgeKey(e.target.value)} aria-label="Badge" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-body">
+                    <select value={badgeKey} onChange={(e) => setBadgeKey(e.target.value)} aria-label="Badge" className={FIELD_LINE}>
                       {BADGES.map((b) => (
                         <option key={b.key} value={b.key}>
                           {b.name} ({b.family})
@@ -619,7 +689,7 @@ export function Admin() {
                     {selected.planUntil ? ` until ${selected.planUntil.slice(0, 10)}` : ''}. {formatCount(selected.planCredits)} plan credits, {formatCount(selected.extraCredits)} extra. Payments are not live, so plans start here. A new plan grants its credits fresh; extra credits stay until used.
                   </p>
                   <div className="mt-xs grid grid-cols-[1fr_auto_auto] gap-xs">
-                    <select value={plan} onChange={(e) => setPlan(e.target.value as PlanKey)} aria-label="Plan" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-body">
+                    <select value={plan} onChange={(e) => setPlan(e.target.value as PlanKey)} aria-label="Plan" className={FIELD_LINE}>
                       {PLAN_KEYS.map((k) => (
                         <option key={k} value={k}>
                           {planName(k)}
@@ -627,17 +697,25 @@ export function Admin() {
                       ))}
                     </select>
                     <input type="number" min={1} max={366} value={planDays} onChange={(e) => setPlanDays(e.target.value)} aria-label="Days" className="w-[96px] rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
-                    <Button variant="outline" disabled={busy || (plan !== 'none' && !(Number(planDays) >= 1))} onClick={() => run(async () => applyUser((await adminApi.setPlan(key, selected.id, plan, Number(planDays) || PLAN_DAYS)).user))}>
+                    <Button variant="outline" disabled={busy || (plan !== 'none' && !(Number(planDays) >= 1))} onClick={() => {
+                        const change = async () => applyUser((await adminApi.setPlan(key, selected.id, plan, Number(planDays) || PLAN_DAYS)).user);
+                        if (plan === 'none') askFirst({ title: `End ${selected.displayName || 'this person'}'s plan?`, body: 'Their plan ends now and its plan credits go. Extra credits stay.', yes: 'Yes, end the plan', act: change });
+                        else void run(change);
+                      }}
+                    >
                       {plan === 'none' ? 'End plan' : 'Start'}
                     </Button>
                   </div>
+                  <p className="mt-xs m-0 text-caption text-ink-soft">The plan runs this many days from now, 1 to 366.</p>
                   <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
-                    <input type="number" min={1} max={MAX_CREDIT_GRANT} value={grant} onChange={(e) => setGrant(e.target.value)} aria-label="Credits to add" className="rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+                    <input type="number" min={1} max={MAX_CREDIT_GRANT} value={grant} onChange={(e) => setGrant(e.target.value)} aria-label="Credits to add" className={FIELD_LINE} />
                     <Button variant="outline" disabled={busy || !(Number.isInteger(Number(grant)) && Number(grant) >= 1 && Number(grant) <= MAX_CREDIT_GRANT)} onClick={() => run(async () => applyUser((await adminApi.addCredits(key, selected.id, Number(grant), grantNote)).user))}>
                       Add credits
                     </Button>
                   </div>
+                  <p className="mt-xs m-0 text-caption text-ink-soft">Extra credits, from 1 to {formatCount(MAX_CREDIT_GRANT)} at a time.</p>
                   <input value={grantNote} onChange={(e) => setGrantNote(e.target.value)} placeholder="Why, for the history (optional)" aria-label="Why the credits" className={FIELD} />
+                  <p className="mt-xs m-0 text-caption text-ink-soft">They see it in their credit history. Empty reads Added by the team.</p>
 
                   <Button variant="ghost" className="mt-md" disabled={busy} onClick={() => run(async () => { await refreshFlags(); setPreview(await adminApi.previewAccess(key, selected.id)); })}>
                     What does this person see?
@@ -658,10 +736,15 @@ export function Admin() {
                               setPreview(await adminApi.previewAccess(key, selected.id));
                             });
                           const reset = () =>
-                            run(async () => {
-                              for (const o of mine) await adminApi.removeOverride(key, o.id);
-                              await refreshFlags();
-                              setPreview(await adminApi.previewAccess(key, selected.id));
+                            askFirst({
+                              title: `Reset ${m.name} for ${selected.displayName || 'this person'}?`,
+                              body: 'What you set for them goes, and the usual rules decide again.',
+                              yes: 'Yes, reset it',
+                              act: async () => {
+                                for (const o of mine) await adminApi.removeOverride(key, o.id);
+                                await refreshFlags();
+                                setPreview(await adminApi.previewAccess(key, selected.id));
+                              },
                             });
                           return (
                             <li key={m.key} className={`flex items-center gap-xs rounded-inner-sm px-xs py-xs ${allowed ? 'bg-paper' : 'bg-line'}`}>
@@ -679,7 +762,7 @@ export function Admin() {
                                 </span>
                               </label>
                               {mine.length > 0 && (
-                                <button type="button" onClick={() => void reset()} disabled={busy} className="inline-flex min-h-[44px] shrink-0 items-center rounded-pill px-xs text-caption font-medium text-ink-soft underline underline-offset-4">
+                                <button type="button" onClick={reset} disabled={busy} className="inline-flex min-h-[44px] shrink-0 items-center rounded-pill px-xs text-caption font-medium text-ink-soft underline underline-offset-4">
                                   Reset
                                 </button>
                               )}
@@ -746,11 +829,18 @@ export function Admin() {
                     { key: 'reason', label: 'Reason', get: (o) => o.reason, wide: true, wrap: true },
                   ]}
                   actions={(o) => (
-                    <Button variant="ghost" size="sm" disabled={busy} onClick={() => run(async () => { await adminApi.removeOverride(key, o.id); await refreshFlags(asks.overrides); })}>
+                    <Button variant="ghost" size="sm" disabled={busy} onClick={() => askFirst({ title: 'Remove this override?', body: `${MODULE_BY_KEY[o.flagKey]?.name ?? o.flagKey} goes back to the usual rules for this ${o.subjectType === 'organization' ? 'brand' : o.subjectType === 'role' ? 'role' : 'person'}.`, yes: 'Yes, remove it', act: async () => { await adminApi.removeOverride(key, o.id); await refreshFlags(asks.overrides); } })}>
                       Remove
                     </Button>
                   )}
-                  bulk={[{ label: 'Remove', variant: 'ghost', onClick: (rows) => run(async () => { await each(rows, (o) => adminApi.removeOverride(key, o.id).then(() => undefined)); await refreshFlags(asks.overrides); }) }]}
+                  bulk={[
+                    {
+                      label: 'Remove',
+                      variant: 'ghost',
+                      confirm: { title: (n) => `Remove ${count(n, 'override', 'overrides')}?`, body: 'Each app goes back to the usual rules for whoever it was set for.', yes: 'Yes, remove them' },
+                      onClick: (rows) => runOrThrow(async () => { await each(rows, (o) => adminApi.removeOverride(key, o.id).then(() => undefined)); await refreshFlags(asks.overrides); }),
+                    },
+                  ]}
                   page={pages.overrides}
                   onPage={turn('overrides', refreshFlags)}
                 />
@@ -828,7 +918,21 @@ export function Admin() {
                     { key: 'title', label: 'Title', get: (l) => l.title, wrap: true, render: (l) => <span className="font-semibold">{l.title}</span> },
                     { key: 'by', label: 'By', get: (l) => l.by, filter: true, wide: true },
                     { key: 'facts', label: 'Facts', get: (l) => l.facts.map((f) => f.text).join(', '), wide: true, wrap: true },
-                    { key: 'live', label: 'Live', get: (l) => l.live, filter: true, edit: { kind: 'toggle', onEdit: (l, v) => run(async () => { await adminApi.setListing(key, l.type, l.id, { live: Boolean(v) }); await refreshListings(); }) } },
+                    { key: 'live', label: 'Live', get: (l) => l.live, filter: true, edit: {
+                        kind: 'toggle',
+                        onEdit: (l, v) => {
+                          // Hiding takes it off the public site, so it asks first, like the bulk Hide; publishing runs at once.
+                          if (!v && l.live)
+                            askFirst({
+                              title: `Hide ${l.title}?`,
+                              body: 'It leaves the public site until you publish it again.',
+                              yes: 'Yes, hide it',
+                              act: async () => { await adminApi.setListing(key, l.type, l.id, { live: false }); await refreshListings(); },
+                            });
+                          else return run(async () => { await adminApi.setListing(key, l.type, l.id, { live: Boolean(v) }); await refreshListings(); });
+                        },
+                      },
+                    },
                     { key: 'featured', label: 'Featured', get: (l) => l.featured, filter: true, edit: { kind: 'toggle', disabled: (l) => l.type === 'tool' || l.type === 'campaign' || l.type === 'circle', onEdit: (l, v) => run(async () => { await adminApi.setListing(key, l.type, l.id, { featured: Boolean(v) }); await refreshListings(); }) } },
                     { key: 'created', label: 'Created', get: (l) => l.createdAt.slice(0, 10), render: (l) => day(l.createdAt), wide: true },
                   ]}
@@ -839,7 +943,11 @@ export function Admin() {
                   )}
                   bulk={[
                     { label: 'Publish', onClick: (rows) => run(async () => { await each(rows, (l) => adminApi.setListing(key, l.type, l.id, { live: true }).then(() => undefined)); await refreshListings(); }) },
-                    { label: 'Hide', onClick: (rows) => run(async () => { await each(rows, (l) => adminApi.setListing(key, l.type, l.id, { live: false }).then(() => undefined)); await refreshListings(); }) },
+                    {
+                      label: 'Hide',
+                      confirm: { title: (n) => `Hide ${count(n, 'listing', 'listings')}?`, body: 'They leave the public site until you publish them again.', yes: 'Yes, hide them' },
+                      onClick: (rows) => runOrThrow(async () => { await each(rows, (l) => adminApi.setListing(key, l.type, l.id, { live: false }).then(() => undefined)); await refreshListings(); }),
+                    },
                     { label: 'Feature', onClick: (rows) => run(async () => { await each(rows.filter((l) => l.type !== 'tool' && l.type !== 'campaign' && l.type !== 'circle'), (l) => adminApi.setListing(key, l.type, l.id, { featured: true }).then(() => undefined)); await refreshListings(); }) },
                     { label: 'Unfeature', variant: 'ghost', onClick: (rows) => run(async () => { await each(rows.filter((l) => l.type !== 'tool' && l.type !== 'campaign' && l.type !== 'circle'), (l) => adminApi.setListing(key, l.type, l.id, { featured: false }).then(() => undefined)); await refreshListings(); }) },
                   ]}
@@ -1085,14 +1193,19 @@ export function Admin() {
                       <Button size="sm" disabled={busy} onClick={() => run(async () => { await adminApi.setRedemption(key, r.id, 'fulfilled'); setRedemptions((all) => all.filter((x) => x.id !== r.id)); })}>
                         Fulfilled
                       </Button>
-                      <Button size="sm" variant="outline" disabled={busy} onClick={() => run(async () => { await adminApi.setRedemption(key, r.id, 'cancelled'); setRedemptions((all) => all.filter((x) => x.id !== r.id)); })}>
+                      <Button size="sm" variant="outline" disabled={busy} onClick={() => askFirst({ title: `Cancel ${REWARD_BY_KEY[r.rewardKey]?.name ?? 'this reward'} for ${r.userName}?`, body: 'The reservation ends and its points go back to them. This cannot be undone.', yes: 'Yes, cancel and refund', keep: 'Keep it reserved', act: async () => { await adminApi.setRedemption(key, r.id, 'cancelled'); setRedemptions((all) => all.filter((x) => x.id !== r.id)); } })}>
                         Cancel and refund
                       </Button>
                     </>
                   )}
                   bulk={[
                     { label: 'Mark fulfilled', onClick: (rows) => run(async () => { await each(rows, (r) => adminApi.setRedemption(key, r.id, 'fulfilled').then(() => undefined)); setRedemptions((all) => all.filter((x) => !rows.some((r) => r.id === x.id))); }) },
-                    { label: 'Cancel and refund', variant: 'ghost', onClick: (rows) => run(async () => { await each(rows, (r) => adminApi.setRedemption(key, r.id, 'cancelled').then(() => undefined)); setRedemptions((all) => all.filter((x) => !rows.some((r) => r.id === x.id))); }) },
+                    {
+                      label: 'Cancel and refund',
+                      variant: 'ghost',
+                      confirm: { title: (n) => `Cancel and refund ${count(n, 'reward', 'rewards')}?`, body: 'Each reservation ends and its points go back. This cannot be undone.', yes: 'Yes, cancel and refund', keep: 'Keep them reserved' },
+                      onClick: (rows) => runOrThrow(async () => { await each(rows, (r) => adminApi.setRedemption(key, r.id, 'cancelled').then(() => undefined)); setRedemptions((all) => all.filter((x) => !rows.some((r) => r.id === x.id))); }),
+                    },
                   ]}
                 />
               </div>
@@ -1148,8 +1261,8 @@ export function Admin() {
               </div>
               {orderDetail && (
                 <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-                  <div className="flex items-start justify-between gap-sm">
-                    <h3 className="text-title2">
+                  <div className="flex items-center justify-between gap-sm">
+                    <h3 className="min-w-0 text-title2">
                       {orderDetail.order.productTitle} <span className="text-subhead text-ink-mute">#{orderDetail.order.id.slice(0, 8)}</span>
                     </h3>
                     <CloseButton onClick={() => setOrderDetail(null)} label="Close this order" />
@@ -1198,18 +1311,26 @@ export function Admin() {
                         variant="outline"
                         className="mt-xs"
                         disabled={busy}
-                        onClick={() =>
-                          run(async () => {
-                            setRefundError(null);
-                            try {
-                              await adminApi.refundOrder(key, orderDetail.order.id, refundReason);
-                              setOrderDetail(await adminApi.order(key, orderDetail.order.id));
-                              setOrders((list) => (list ?? []).map((x) => (x.id === orderDetail.order.id ? { ...x, status: 'refunded' } : x)));
-                            } catch (e) {
-                              setRefundError(e instanceof Error ? e.message : 'The refund was refused.');
-                            }
-                          })
-                        }
+                        onClick={() => {
+                          const id = orderDetail.order.id;
+                          askFirst({
+                            title: `Refund ${orderDetail.order.points > 0 ? `${formatCount(orderDetail.order.points)} points` : money(orderDetail.order.cents, orderDetail.order.currency)} in full?`,
+                            body: `${orderDetail.order.buyerName} gets the whole amount back and the order is marked refunded. This cannot be undone.`,
+                            yes: 'Yes, refund it',
+                            keep: 'Keep the order',
+                            act: async () => {
+                              setRefundError(null);
+                              try {
+                                await adminApi.refundOrder(key, id, refundReason);
+                              } catch (e) {
+                                setRefundError(e instanceof Error ? e.message : 'The refund was refused.');
+                                throw e;
+                              }
+                              setOrderDetail(await adminApi.order(key, id));
+                              setOrders((list) => (list ?? []).map((x) => (x.id === id ? { ...x, status: 'refunded' } : x)));
+                            },
+                          });
+                        }}
                       >
                         Refund in full
                       </Button>
@@ -1266,9 +1387,10 @@ export function Admin() {
                 Payout details
               </h2>
               <p className="mt-xs m-0 text-subhead text-ink-soft">Only the last digits are stored here. Approve once the bank account and PAN match the legal name. Type a note in the row before deciding, if the person should hear why.</p>
-              <div className="mt-sm flex flex-wrap gap-xs" role="group" aria-label="Status">
+              {/* Three equal choices across the full width in equal parts (as PeriodFilter); three stay on one row, so none is left alone. */}
+              <div className="mt-sm grid grid-cols-3 gap-xs" role="group" aria-label="Status">
                 {(['pending', 'approved', 'rejected'] as const).map((s) => (
-                  <button key={s} type="button" aria-pressed={kycStatus === s} onClick={() => { setKycStatus(s); void loadKyc(s); }} className={`toy inline-flex min-h-[44px] items-center rounded-pill border-2 px-sm text-subhead font-medium ${kycStatus === s ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                  <button key={s} type="button" aria-pressed={kycStatus === s} onClick={() => { setKycStatus(s); void loadKyc(s); }} className={`toy inline-flex min-h-[44px] min-w-0 items-center justify-center rounded-pill border-2 px-sm text-subhead font-medium ${kycStatus === s ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                     {s}
                   </button>
                 ))}
@@ -1406,7 +1528,12 @@ export function Admin() {
                   ]}
                   bulk={[
                     { label: 'Make life coach', onClick: (rows) => run(() => each(rows, (r) => makeCoach(r.userId, true)).then(() => loadCoaches())) },
-                    { label: 'Say no', variant: 'ghost', onClick: (rows) => run(() => each(rows, (r) => adminApi.declineCoachAsk(key, r.userId).then(() => undefined)).then(() => loadCoaches())) },
+                    {
+                      label: 'Say no',
+                      variant: 'ghost',
+                      confirm: { title: (n) => `Say no to ${count(n, 'ask', 'asks')}?`, body: 'Each ask is closed and the person is told. They can ask again later.', yes: 'Yes, say no', keep: 'Keep them waiting' },
+                      onClick: (rows) => runOrThrow(() => each(rows, (r) => adminApi.declineCoachAsk(key, r.userId).then(() => undefined)).then(() => loadCoaches())),
+                    },
                   ]}
                 />
               </div>
@@ -1427,7 +1554,14 @@ export function Admin() {
                     { key: 'email', label: 'Email', get: (r) => r.email ?? '', wide: true },
                     { key: 'students', label: 'Students', get: (r) => r.students, align: 'right' },
                   ]}
-                  bulk={[{ label: 'Take the badge', variant: 'ghost', onClick: (rows) => run(() => each(rows, (r) => makeCoach(r.id, false)).then(() => loadCoaches())) }]}
+                  bulk={[
+                    {
+                      label: 'Take the badge',
+                      variant: 'ghost',
+                      confirm: { title: (n) => `Take the Life coach badge from ${count(n, 'coach', 'coaches')}?`, body: 'Every coaching link of theirs ends and their students are told. You can give it back later.', yes: 'Yes, take it away' },
+                      onClick: (rows) => runOrThrow(() => each(rows, (r) => makeCoach(r.id, false)).then(() => loadCoaches())),
+                    },
+                  ]}
                 />
               </div>
 
@@ -1466,9 +1600,11 @@ export function Admin() {
               </form>
               {linked && <p className="mt-xs m-0 text-subhead font-semibold">{linked}</p>}
 
-              <h3 className="mt-md text-headline">Every link</h3>
-              <div className="mt-sm flex flex-wrap gap-xs">
+              {/* The status filter sits at the top right, level with its heading (P5); on a narrow phone it wraps under it, at the right. */}
+              <div className="mt-md flex flex-wrap items-center justify-between gap-sm">
+                <h3 className="text-headline">Every link</h3>
                 <Select
+                  className="ml-auto"
                   value={linkStatus}
                   onChange={(e) => {
                     setLinkStatus(e.target.value);
@@ -1503,7 +1639,14 @@ export function Admin() {
                     { key: 'since', label: 'Since', get: (r) => r.createdAt, render: (r) => day(r.createdAt) },
                     { key: 'ended', label: 'Ended', get: (r) => r.endedAt ?? '', render: (r) => day(r.endedAt), wide: true },
                   ]}
-                  bulk={[{ label: 'End', variant: 'ghost', onClick: (rows) => run(() => each(rows.filter((r) => r.status === 'pending' || r.status === 'active'), (r) => adminApi.endCoachLink(key, r.id).then(() => undefined)).then(() => loadCoaches())) }]}
+                  bulk={[
+                    {
+                      label: 'End',
+                      variant: 'ghost',
+                      confirm: { title: (n) => `End ${count(n, 'coaching link', 'coaching links')}?`, body: 'The coach stops seeing what the student shared. Links already over stay as they are. This cannot be undone.', yes: 'Yes, end them' },
+                      onClick: (rows) => runOrThrow(() => each(rows.filter((r) => r.status === 'pending' || r.status === 'active'), (r) => adminApi.endCoachLink(key, r.id).then(() => undefined)).then(() => loadCoaches())),
+                    },
+                  ]}
                 />
               </div>
             </section>
@@ -1651,6 +1794,25 @@ export function Admin() {
           )}
         </>
       )}
+      <ConfirmDelete
+        open={confirming !== null}
+        title={confirming?.title ?? ''}
+        body={confirming?.body ?? ''}
+        yes={confirming?.yes}
+        keep={confirming?.keep}
+        pending={busy}
+        failed={confirmFailed}
+        onClose={() => setConfirming(null)}
+        onYes={() => {
+          const c = confirming;
+          if (!c) return;
+          setConfirmFailed(false);
+          void runOrThrow(c.act).then(
+            () => setConfirming(null),
+            () => setConfirmFailed(true),
+          );
+        }}
+      />
     </Screen>
   );
 }

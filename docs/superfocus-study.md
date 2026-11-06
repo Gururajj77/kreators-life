@@ -28,7 +28,7 @@ A read of the site's own home page and its founding-members page (both loaded). 
 | Coach notes | A few plain notes from rules ("Monday has 5h 30m planned"). No model, so no credits. | Daily, in Plan my week |
 | Focus quality | Rate a finished focus session from scattered to deep; the average shows on the focus dashboard. Private, pays nothing. | Mindful minutes |
 | Focus music | A synthesized **Lo-fi** background sound, made in the browser. No song, nothing to license. | Mindful minutes |
-| Time blocking | **Time blocks**: the day's timed tasks as blocks of their estimated length, with the free time between and overlaps flagged. | Daily |
+| Time blocking | **Time blocks**: the day's timed tasks as blocks of their estimated length, with the free time between and overlaps flagged. Since 2026-11-06 the blocks are the person's own (Deep work, Recovery, Sleep...), laid out by day templates and a weekly pattern, and tasks fall into them (docs/time-blocks.md). | Daily |
 | Calendar sync | A **private calendar link** to subscribe to from Google, Apple or Outlook Calendar. One way: tasks appear in the calendar. | Profile |
 | Goal trajectory | A project's **pace**: on track, slipping or behind, from the share of tasks done against the share of time gone, with "Day X of Y". | Pillars |
 

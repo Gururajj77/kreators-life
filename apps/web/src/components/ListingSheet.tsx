@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { prettyDate } from '../lib/date';
 import { useSession } from '../lib/store';
 import { Button } from './Button';
+import { ConfirmDelete } from './ConfirmDelete';
 import { MediaSection } from './MediaSection';
 import { money } from './PeriodPanel';
 import { Sheet } from './Sheet';
@@ -14,6 +15,9 @@ import { FIELD } from '../lib/ui';
 import { FactTag } from './FactTag';
 
 const offerWord: Record<PreownedOffer['status'], string> = { open: 'waiting', accepted: 'accepted', declined: 'declined', withdrawn: 'withdrawn' };
+
+/** The step asked again before it happens: an offer taken back or declined, the listing taken down or deleted. */
+type Ask = { kind: 'withdraw' | 'decline'; offerId: string; who: string } | { kind: 'down' | 'delete' };
 
 interface Props {
   id: string | null;
@@ -39,6 +43,7 @@ export function ListingSheet({ id, onClose, feature }: Props) {
   const [text, setText] = useState('');
   const [buyer, setBuyer] = useState<string | null>(null);
   const [soldFor, setSoldFor] = useState('');
+  const [ask, setAsk] = useState<Ask | null>(null);
   const thread = useQuery({ queryKey: ['market', 'thread', id, buyer], queryFn: () => api.marketMessages(id!, buyer!), enabled: Boolean(token && id && buyer && l?.mine), refetchInterval: 10_000 });
 
   // A typed amount is read from its digits with `typedCents` ("1,250.50" reads right); anything that is not an amount is refused here
@@ -51,7 +56,7 @@ export function ListingSheet({ id, onClose, feature }: Props) {
     },
     onSuccess: () => { setCents(''); setNote(''); refresh(); },
   });
-  const decide = useMutation({ mutationFn: (v: { offerId: string; action: 'accept' | 'decline' | 'withdraw' }) => api.marketDecide(v.offerId, v.action), onSuccess: refresh });
+  const decide = useMutation({ mutationFn: (v: { offerId: string; action: 'accept' | 'decline' | 'withdraw' }) => api.marketDecide(v.offerId, v.action), onSuccess: (_r, v) => { if (v.action !== 'accept') setAsk(null); refresh(); } });
   const send = useMutation({ mutationFn: () => api.marketSend(id!, text, l?.mine ? (buyer ?? undefined) : undefined), onSuccess: () => { setText(''); refresh(); void thread.refetch(); } });
   const sold = useMutation({
     mutationFn: () => {
@@ -62,9 +67,9 @@ export function ListingSheet({ id, onClose, feature }: Props) {
     },
     onSuccess: refresh,
   });
-  const status = useMutation({ mutationFn: (s: 'live' | 'withdrawn') => api.marketUpdateListing(id!, { status: s }), onSuccess: refresh });
+  const status = useMutation({ mutationFn: (s: 'live' | 'withdrawn') => api.marketUpdateListing(id!, { status: s }), onSuccess: (_r, s) => { if (s === 'withdrawn') setAsk(null); refresh(); } });
   const promote = useMutation({ mutationFn: () => api.marketFeature('listing', id!), onSuccess: refresh });
-  const remove = useMutation({ mutationFn: () => api.marketRemoveListing(id!), onSuccess: () => { refresh(); onClose(); } });
+  const remove = useMutation({ mutationFn: () => api.marketRemoveListing(id!), onSuccess: () => { setAsk(null); refresh(); onClose(); } });
   const err = (m: { isError: boolean; error: unknown }) => (m.isError ? <p role="alert" className="mt-xs m-0 text-subhead">{m.error instanceof Error ? m.error.message : 'That did not work. Try again.'}</p> : null);
 
   const messages = l?.mine ? (thread.data?.messages ?? []) : (d?.messages ?? []);
@@ -132,7 +137,7 @@ export function ListingSheet({ id, onClose, feature }: Props) {
                     </p>
                     {d.myOffer.note && <p className="mt-xs m-0 text-subhead text-ink-soft">{d.myOffer.note}</p>}
                     {d.myOffer.status === 'open' && (
-                      <Button variant="outline" size="sm" className="mt-sm" onClick={() => decide.mutate({ offerId: d.myOffer!.id, action: 'withdraw' })} disabled={decide.isPending}>
+                      <Button variant="outline" size="sm" className="mt-sm" onClick={() => { decide.reset(); setAsk({ kind: 'withdraw', offerId: d.myOffer!.id, who: l.sellerName }); }} disabled={decide.isPending}>
                         Take it back
                       </Button>
                     )}
@@ -185,7 +190,7 @@ export function ListingSheet({ id, onClose, feature }: Props) {
                           <Button size="sm" onClick={() => decide.mutate({ offerId: o.id, action: 'accept' })} disabled={decide.isPending}>
                             Accept
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => decide.mutate({ offerId: o.id, action: 'decline' })} disabled={decide.isPending}>
+                          <Button size="sm" variant="outline" onClick={() => { decide.reset(); setAsk({ kind: 'decline', offerId: o.id, who: o.buyerName }); }} disabled={decide.isPending}>
                             Decline
                           </Button>
                         </div>
@@ -239,7 +244,7 @@ export function ListingSheet({ id, onClose, feature }: Props) {
                     </Button>
                   )}
                   {l.status === 'live' && (
-                    <Button variant="outline" size="sm" onClick={() => status.mutate('withdrawn')} disabled={status.isPending}>
+                    <Button variant="outline" size="sm" onClick={() => { status.reset(); setAsk({ kind: 'down' }); }} disabled={status.isPending}>
                       Take it down
                     </Button>
                   )}
@@ -248,18 +253,42 @@ export function ListingSheet({ id, onClose, feature }: Props) {
                       Put it back up
                     </Button>
                   )}
-                  <Button variant="ghost" size="sm" onClick={() => remove.mutate()} disabled={remove.isPending}>
+                  <Button variant="ghost" size="sm" onClick={() => { remove.reset(); setAsk({ kind: 'delete' }); }} disabled={remove.isPending}>
                     Delete
                   </Button>
                 </div>
                 <p className="mt-xs m-0 text-caption text-ink-soft">You have {feature.points} points.</p>
                 {err(promote)}
                 {err(sold)}
+                {err(status)}
               </section>
             </>
           )}
         </div>
       )}
+      <ConfirmDelete
+        open={ask !== null}
+        title={ask?.kind === 'withdraw' ? 'Take your offer back?' : ask?.kind === 'decline' ? `Decline ${ask.who}'s offer?` : ask?.kind === 'down' ? 'Take the listing down?' : 'Delete this listing?'}
+        body={
+          ask?.kind === 'withdraw'
+            ? `${ask.who} no longer sees it as open. This cannot be undone.`
+            : ask?.kind === 'decline'
+              ? 'The offer is closed as declined. This cannot be undone.'
+              : ask?.kind === 'down'
+                ? 'Nobody can find it or make an offer until you put it back up.'
+                : 'The listing is gone for good. This cannot be undone.'
+        }
+        yes={ask?.kind === 'withdraw' ? 'Yes, take it back' : ask?.kind === 'decline' ? 'Yes, decline it' : ask?.kind === 'down' ? 'Yes, take it down' : 'Yes, delete it'}
+        pending={ask?.kind === 'delete' ? remove.isPending : ask?.kind === 'down' ? status.isPending : decide.isPending}
+        failed={ask?.kind === 'delete' ? remove.isError : ask?.kind === 'down' ? status.isError : decide.isError}
+        onYes={() => {
+          if (!ask) return;
+          if (ask.kind === 'withdraw' || ask.kind === 'decline') decide.mutate({ offerId: ask.offerId, action: ask.kind });
+          else if (ask.kind === 'down') status.mutate('withdrawn');
+          else remove.mutate();
+        }}
+        onClose={() => setAsk(null)}
+      />
     </Sheet>
   );
 }

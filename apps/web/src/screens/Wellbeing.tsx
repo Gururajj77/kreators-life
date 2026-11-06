@@ -1,15 +1,22 @@
 import { MODULE_BY_KEY, MOODS, STRESS_LEVELS, type LogKind, LOCALE } from '@kreators/shared';
 import { AppIcon } from '../components/AppIcon';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
+import { useMutation } from '@tanstack/react-query';
+import { useId, useState } from 'react';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { Donut, EmojiRow, Gauge, Legend, Sparkline } from '../components/Charts';
 import { Hero } from '../components/Hero';
 import { MoodFace } from '../components/MoodFace';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
-import { useMe, useWellbeing } from '../lib/queries';
+import { useMe, useRefreshAll, useWellbeing } from '../lib/queries';
+import { useModules } from '../lib/modules';
+import { api } from '../lib/api';
+import { Button } from '../components/Button';
+import { StatusTag } from '../components/StatusTag';
+import { ToggleIcon } from '../components/ToggleMark';
 import { EmergenceSlot } from '../components/EmergenceSlot';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, EyeOff } from 'lucide-react';
 import { CardHead } from '../components/CardHead';
 import { Icon } from '../components/Icon';
 import '../components/fx/spotlight';
@@ -30,6 +37,42 @@ export function Wellbeing() {
   const me = useMe();
   const d = q.data;
   const streak = me.data?.user.streak ?? 0;
+  const navigate = useNavigate();
+  const refresh = useRefreshAll();
+  const { modules } = useModules();
+  // A tracker this person may switch (available, not locked) and has hidden. Hidden ones stay listed, tagged, and a tap shows them
+  // again with the same per-person switch the Apps page's Unhide uses, never a dead end on an "off" page.
+  const modOf = (kind: LogKind) => modules.find((m) => m.key === kind) ?? null;
+  const switchable = ROWS.filter((r) => {
+    const m = modOf(r.kind);
+    return m && m.available && !m.locked;
+  });
+  const hiddenRows = switchable.filter((r) => !modOf(r.kind)?.on);
+  const isHidden = (kind: LogKind) => hiddenRows.some((r) => r.kind === kind);
+  const [showHidden, setShowHidden] = useState(false);
+  const panel = useId();
+  const [said, setSaid] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const show = useMutation({
+    mutationFn: ({ kind }: { kind: LogKind; name: string; open?: string }) => api.setModule(kind, true),
+    onMutate: ({ kind }) => {
+      setBusy(kind);
+      setFailed(null);
+    },
+    onSuccess: async (_r, { name, open }) => {
+      await refresh();
+      setSaid(`${name} is shown again.`);
+      if (open) navigate(open);
+    },
+    onError: (_e, { kind, name }) => {
+      setFailed(kind);
+      setSaid(`Could not show ${name}. Try again.`);
+    },
+    onSettled: () => setBusy(null),
+  });
+  const trackersOn = switchable.length - hiddenRows.length;
+  const hiddenLabel = showHidden ? 'Close hidden trackers' : `Hidden trackers (${hiddenRows.length})`;
   // The same arithmetic as the server, so the donut explains the number above it.
   const part = (kind: LogKind) => d?.parts.find((p) => p.kind === kind) ?? null;
   const moodAvg = part('mood')?.avg7 ?? null;
@@ -98,13 +141,57 @@ export function Wellbeing() {
             </div>
           </section>
 
+          {/* How many trackers are on, and at its right the hidden-trackers button (the Apps page's eye), which opens the hidden ones in
+              place, each with Show. */}
+          <p role="status" aria-live="polite" className="sr-only">
+            {said}
+          </p>
+          {switchable.length > 0 && (
+            <div className="mt-md flex items-center justify-between gap-sm">
+              <p className="m-0 min-w-0 text-subhead text-ink-soft">
+                {trackersOn} of {switchable.length} trackers on
+              </p>
+              {(hiddenRows.length > 0 || showHidden) && (
+                <button type="button" className="mf-round toy shrink-0" data-at="br" data-tip={hiddenLabel} aria-label={hiddenLabel} title={hiddenLabel} aria-expanded={showHidden} aria-controls={panel} onClick={() => setShowHidden((v) => !v)}>
+                  <ToggleIcon open={showHidden} icon={EyeOff} />
+                </button>
+              )}
+            </div>
+          )}
+          {showHidden && (
+            <section id={panel} aria-label="Hidden trackers" className="mt-sm rounded-card bg-card p-sm shadow-toy-soft">
+              {hiddenRows.length === 0 ? (
+                <p className="m-0 text-subhead text-ink-soft">Every tracker is on.</p>
+              ) : (
+                <ul className="m-0 flex list-none flex-col gap-xs p-0">
+                  {hiddenRows.map((r) => (
+                    <li key={r.kind} className="flex items-center justify-between gap-sm">
+                      <span className="flex min-w-0 items-center gap-sm">
+                        <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink" style={{ background: r.tint }} aria-hidden="true">
+                          <AppIcon name={MODULE_BY_KEY[r.kind]?.icon} size={20} />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-headline">{r.name}</span>
+                          {failed === r.kind && <span className="block text-card-note text-ink-soft">Could not show it. Try again.</span>}
+                        </span>
+                      </span>
+                      <Button variant="outline" size="sm" disabled={busy === r.kind} aria-label={`Show ${r.name}`} onClick={() => show.mutate({ kind: r.kind, name: r.name })}>
+                        Show
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+
           <ul className="mt-md flex list-none flex-col gap-xs p-0 m-0">
             {ROWS.map((r) => {
               const p = d.parts.find((x) => x.kind === r.kind);
               const series = d.week.map((w) => (r.kind === 'mindful' ? w.mindful : r.kind === 'move' ? null : w[r.kind]));
-              return (
-                <li key={r.kind}>
-                  <Link to={r.path} data-pillar={r.pillar} className="toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm">
+              const hidden = isHidden(r.kind);
+              const inner = (
+                <>
                     {r.kind === 'mood' && p?.latest ? (
                       <MoodFace value={p.latest} size={48} />
                     ) : (
@@ -113,11 +200,28 @@ export function Wellbeing() {
                       </span>
                     )}
                     <span className="min-w-0 flex-1">
-                      <span className="block text-card-title">{r.name}</span>
-                      <span className="block text-card-note text-ink-soft">{r.format(p?.latest ?? null)}</span>
+                      <span className="flex flex-wrap items-center gap-xs">
+                        <span className="text-card-title">{r.name}</span>
+                        {hidden && <StatusTag tone="neutral">Hidden</StatusTag>}
+                      </span>
+                      <span className="block text-card-note text-ink-soft">{hidden ? (failed === r.kind ? 'Could not show it. Try again.' : 'Tap to show it and log today.') : r.format(p?.latest ?? null)}</span>
                     </span>
                     <Sparkline values={series} max={r.max} color={r.color} width={96} height={40} />
-                  </Link>
+                </>
+              );
+              const cls = 'toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm';
+              return (
+                <li key={r.kind}>
+                  {hidden ? (
+                    // A hidden tracker: the tap shows it again (the per-person switch) and then opens it, never the "off" page.
+                    <button type="button" data-pillar={r.pillar} className={`${cls} w-full text-left text-ink disabled:opacity-50`} disabled={busy === r.kind} aria-label={`${r.name} is hidden. Show it and open it`} onClick={() => show.mutate({ kind: r.kind, name: r.name, open: r.path })}>
+                      {inner}
+                    </button>
+                  ) : (
+                    <Link to={r.path} data-pillar={r.pillar} className={cls}>
+                      {inner}
+                    </Link>
+                  )}
                 </li>
               );
             })}

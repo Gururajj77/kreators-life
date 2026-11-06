@@ -1,18 +1,27 @@
 /* Every block of text reads as a rectangle (the founder, 2026-11-05: "keep all text boxes look like rectangles, not long lines followed
    by short one"). CSS balances every block of up to about six lines (`text-wrap: balance` on html in app.css); a longer block, or a
    short one whose words still fall unevenly, gets here. For each block with a line under RATIO of the widest line above it (since the
-   last break made on purpose, so a slow taper counts as much as one short last line), this tries, in
-   order: a little more padding on the side the text runs out to (a few pixels at a time, never past MAX_TRIM of its width), with the
-   block's own wrapping and with the other one (plain for a balanced block, `pretty` for a long one); then the first line held shorter so
-   the lines grow going down (the founder's other shape); then both; and only then one more line, never ending on one word. It keeps the
-   first shape that holds, else the best one with the same lines, else nothing. Only the inside of the box changes: its outer size, the
-   words and printed paper are untouched. scripts/smoke/rag-probe.js measures the same way and is the check. Downloaded after the first
-   paint (Root in App.tsx). */
+   last break made on purpose, so a slow taper counts as much as one short last line), this tries, widest first (the founder,
+   2026-11-06: "rectangles can be wider"): the other wrapping at full width (plain for a balanced block, `pretty` for a long one); then
+   the first line held shorter so the lines grow going down (the founder's other shape), which leaves the rest of the block at full
+   width; then one more line at full width, never ending on one word; and only then a little more padding on the side the text runs out
+   to (a few pixels at a time, never past MAX_TRIM, about 6% of its width), alone, with a first line held short, and with one more line.
+   Whatever the shape, its widest line never ends up more than MAX_TRIM narrower than the block's widest line was (`wide`), so a fixed
+   block keeps its width; only when no such shape makes a rectangle does it go on to the balanced wrap and up to FALLBACK_TRIM (15%)
+   narrower, and last of all to the balanced wrap and the lines that grow at any width, since the rectangle comes first and width
+   second; all of it inside the same sliced, MAX_TRIES-bounded search. It keeps the first shape that holds, else the best one with the same lines, else nothing. Only the inside of
+   the box changes: its outer size, the words and printed paper are untouched. scripts/smoke/rag-probe.js measures the same way and is
+   the check. Downloaded after the first paint (Root in App.tsx). */
 
 const RATIO = 0.8;
 /** What a fixed block aims for: a little over RATIO, so a line the probe rounds to the pixel still holds. */
 const AIM = RATIO + 0.01;
-const MAX_TRIM = 0.15;
+/** The most a block may narrow: the extra side padding, and how much its widest line may lose against the widest line it had (was 0.15,
+    which left blocks looking narrow; 2026-11-06). */
+const MAX_TRIM = 0.06;
+/** The rectangle comes first: when no shape within MAX_TRIM evens a block out (a two-line paragraph that ends on a stub), the search goes
+    on with the balanced wrap and up to FALLBACK_TRIM narrower, the width it had before 2026-11-06, rather than leave the stub. */
+const FALLBACK_TRIM = 0.15;
 /** How much shorter than the rest a first line held short on purpose may be. */
 const MAX_FIRST = 0.5;
 /** The shortest a first line held short may end up against the line under it: under half, it reads as a stub ("A curated / membership
@@ -25,6 +34,9 @@ const MAX_TRIES = 900;
 const SKIP = '.legal-doc, .legal-root, .legal-invoice, .print-doc, .month-print-sheet, [contenteditable]:not([contenteditable="false"]), pre, code, svg, .sr-only, input, textarea, select, script, style';
 /** A line that ends on purpose after one of these (a <br>, or the end of an inline-block) may be followed by a shorter one. */
 const ENDS = /[,.;:?!…][”’"')\]]*$/;
+/** A first line held short never ends on one of these small words ("What you, as an / admin", "Step three: the / scorecard"): the break
+    would cut a phrase in two. */
+const SMALL = /^(a|an|the|to|as|of|your|my|our|their|his|her|its)$/i;
 const BLOCK = /^(block|list-item|flow-root|table-cell)$/;
 const INLINE = /^(inline|contents|inline-block)$/;
 
@@ -213,6 +225,11 @@ export function startRectText(): () => void {
     if (lines.length < 2) return;
     const base = worst(lines);
     if (base >= AIM) return;
+    const widest = Math.max(...lines.map((l) => l.right - l.left));
+    /** How much a shape may narrow the block: MAX_TRIM first, FALLBACK_TRIM once no wide shape holds. */
+    let cap = MAX_TRIM;
+    /** A shape's widest line may lose at most `cap` of the block's widest line (a pixel spare for rounding), so it stays wide. */
+    const wide = (now: Line[]) => Math.max(...now.map((l) => l.right - l.left)) >= widest * (1 - cap) - 1;
     const was: Kept = { start: el.style.paddingInlineStart, end: el.style.paddingInlineEnd, wrap: el.style.getPropertyValue('text-wrap'), max: el.style.maxInlineSize };
     const start = parseFloat(cs.paddingInlineStart) || 0;
     const end = parseFloat(cs.paddingInlineEnd) || 0;
@@ -249,9 +266,14 @@ export function startRectText(): () => void {
       }
       const now = linesOf(el, keepsNewLines, out);
       if (now.length < lines.length) return false;
+      // Never narrower than `cap` under the width the block had (a balanced spread over one more line would otherwise shrink it).
+      if (!wide(now)) return false;
       // A first line held short must still read as a line, not a stub.
       const [one, two] = now;
-      if (shape.first && one && two && one.right - one.left < (two.right - two.left) * FIRST_FLOOR) return false;
+      // (A label that ends on a colon, "Essentials:" over the rest, is a break on purpose, not a stub.)
+      if (shape.first && one && two && !/:[”’"')\]]*$/.test(one.last) && one.right - one.left < (two.right - two.left) * FIRST_FLOOR) return false;
+      // ... and it ends where a phrase can end, never on a small word ("What you, as an / admin", "Step three: the / scorecard").
+      if (shape.first && one && !ENDS.test(one.last) && SMALL.test(one.last.replace(/[^\p{L}]/gu, ''))) return false;
       // Never a short word alone on a line ("To" over the rest), which reads worse than the short line it would mend; a word that ends
       // at a comma or a full stop ("Sleep," over the rest) is a break the founder asked for.
       if (now.some((l) => l.words < 2 && l.right - l.left < inner * 0.25 && !ENDS.test(l.last))) return false;
@@ -263,17 +285,45 @@ export function startRectText(): () => void {
     // The first line held shorter needs the ::before in app.css free (centred text also takes as much indent, so it stays centred).
     const free = /^(none|normal)$/.test(getComputedStyle(el, '::before').content);
     const firstMost = inner * (align === 'center' ? MAX_FIRST / 2 : MAX_FIRST);
-    const trimMost = inner * MAX_TRIM;
-    /** Every shape, in the order they are tried. */
-    function* shapes(extra: boolean): Generator<Shape> {
-      // First the rectangle: the inside a little narrower, with the block's own wrapping and the other one.
-      for (let trim = 0; trim <= trimMost; trim += step) for (const wrap of trim || extra ? ['', other] : [other]) if (trim || !extra) yield { trim, wrap, first: 0, extra };
+
+    /** The shapes at full width (no padding added), in the order they are tried. */
+    function* fullWidth(extra: boolean): Generator<Shape> {
+      // The other wrapping (the block's own at full width is the shape it already has).
+      yield { trim: 0, wrap: other, first: 0, extra };
       if (!free) return;
-      // Then lines that grow going down, so a short block such as "No streak yet. / Today can be day one." breaks early; then both.
+      // Lines that grow going down, so a short block such as "No streak yet. / Today can be day one." breaks early; every line under the
+      // first keeps the full width.
       for (let first = step; first <= firstMost; first += step) yield { trim: 0, wrap: 'wrap', first, extra };
+    }
+    /** The shapes that narrow the inside, never past `cap`: alone with either wrapping, then with a first line held short. */
+    function* narrower(extra: boolean): Generator<Shape> {
+      const trimMost = inner * cap;
+      for (let trim = step; trim <= trimMost; trim += step) for (const wrap of ['', other]) yield { trim, wrap, first: 0, extra };
+      if (!free) return;
       for (let first = inner * 0.03; first <= firstMost; first += inner * 0.03) {
-        for (let trim = inner * 0.02; trim <= trimMost; trim += inner * 0.02) yield { trim, wrap: 'wrap', first, extra };
+        for (let trim = inner * 0.015; trim <= trimMost; trim += inner * 0.015) yield { trim, wrap: 'wrap', first, extra };
       }
+    }
+    /** Every shape, widest first: full width with the same lines, full width with one more line, then a little narrower each way; and
+        only when none of those makes a rectangle, the balanced wrap and up to FALLBACK_TRIM narrower (a rectangle before width). */
+    function* shapes(): Generator<Shape> {
+      yield* fullWidth(false);
+      yield* fullWidth(true);
+      yield* narrower(false);
+      yield* narrower(true);
+      cap = FALLBACK_TRIM;
+      yield { trim: 0, wrap: 'balance', first: 0, extra: false };
+      yield* narrower(false);
+      yield* narrower(true);
+    }
+    /** Last of all, a rectangle at any width: the balanced wrap, then the lines that grow, with no cap. A two-line block that ends on a
+        stub ("We do not sell … on other / sites.", "Riya ran a free editing workshop, / so the team thanks her.") has no even shape
+        within FALLBACK_TRIM, and the rectangle comes before the width (Text is a rectangle, CLAUDE.md). It runs in the same sliced
+        loop as the rest, so no block measures in one long task, and is tried even when the shapes above used up MAX_TRIES. */
+    function* lastResort(): Generator<Shape> {
+      cap = 1;
+      yield { trim: 0, wrap: 'balance', first: 0, extra: false };
+      yield* fullWidth(false);
     }
     let found: Shape | null = null;
     let finished = false;
@@ -282,25 +332,30 @@ export function startRectText(): () => void {
     /** The shape the block was left in, then every other. */
     function* thenAll(first: Shape): Generator<Shape> {
       yield first;
-      yield* shapes(false);
+      yield* shapes();
     }
     try {
       let tries = 0;
       let until = performance.now() + SLICE;
-      search: for (const extra of [false, true]) {
-        for (const shape of extra || !prior ? shapes(extra) : thenAll(prior)) {
-          if (holds(shape)) {
-            found = shape;
-            break search;
-          }
-          if ((tries += 1) >= MAX_TRIES) break search;
-          if (performance.now() > until) {
-            // The page gets its turn, with the block shown in its best shape so far; on the way back the block must still be the same.
-            put(best);
-            yield;
-            if (!el.isConnected || done.get(el) !== key || el.offsetWidth !== width) return;
-            until = performance.now() + SLICE;
-          }
+      /** The main search, MAX_TRIES shapes at most, then the last resort's few shapes; one slice clock for both. */
+      function* all(): Generator<Shape> {
+        for (const shape of prior ? thenAll(prior) : shapes()) {
+          yield shape;
+          if ((tries += 1) >= MAX_TRIES) break;
+        }
+        yield* lastResort();
+      }
+      for (const shape of all()) {
+        if (holds(shape)) {
+          found = shape;
+          break;
+        }
+        if (performance.now() > until) {
+          // The page gets its turn, with the block shown in its best shape so far; on the way back the block must still be the same.
+          put(best);
+          yield;
+          if (!el.isConnected || done.get(el) !== key || el.offsetWidth !== width) return;
+          until = performance.now() + SLICE;
         }
       }
       finished = true;

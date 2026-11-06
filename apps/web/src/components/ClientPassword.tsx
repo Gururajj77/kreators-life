@@ -1,7 +1,7 @@
 import { PORTAL_PASSWORD_MIN, makePortalPassword, portalPasswordProblem, type ClientLifecycle } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { MoreHorizontal, ShieldOff, Sparkles, X } from 'lucide-react';
-import { useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useState, type CSSProperties, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { ApiError, api } from '../lib/api';
 import { useCopy } from '../lib/clipboard';
@@ -15,6 +15,7 @@ import { MoreMenu, type MoreMenuItem } from './MoreMenu';
 import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
 import { CardHead } from './CardHead';
+import { ToggleChevron } from './ToggleMark';
 
 /**
  * The password on a client's link, in one module (2026-11-04, wave 11). The password is the owner's: only they set, change, generate or
@@ -178,6 +179,10 @@ export function ShownOnce({ password, note = COPY.shownOnce }: { password: strin
   );
 }
 
+/** The red yes of a confirm sheet (the look `ConfirmSheet` and Sign out use), beside an outline Keep. */
+const RED_YES = 'toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill disabled:opacity-50';
+const RED_YES_STYLE = { '--toy-color': 'var(--deep-servant_leader)' } as CSSProperties;
+
 type Done = null | { kind: 'saved'; password: string | null } | { kind: 'removed' } | { kind: 'dismissed' };
 
 /**
@@ -217,6 +222,15 @@ export function ClientPassword({
   const [done, setDone] = useState<Done>(null);
   const [menu, setMenu] = useState(false);
   const ask = state.request;
+  const own = useId();
+  const mainId = `${own}-set`;
+  const panelId = `${own}-panel`;
+  const fieldId = `${own}-pw`;
+  // Closing the set panel (Cancel, Escape or a save) hands focus back to the button that opened it.
+  const closeSetting = (back = true) => {
+    setSetting(false);
+    if (back) window.requestAnimationFrame(() => document.getElementById(mainId)?.focus());
+  };
 
   const generate = useMutation({
     mutationFn: () => setPassword(link, clientId, { generate: true }),
@@ -294,8 +308,8 @@ export function ClientPassword({
   ];
   const soloMore = more.length === 1 ? more[0] : undefined;
 
-  // The sheets go to the body, not inside the card: a blurred card, or the document page's own Password sheet (translated on a laptop),
-  // is the containing block for anything fixed inside it, which clipped these sheets to that box.
+  // The menu and the confirm sheet go to the body, not inside the card: a blurred card is the containing block for anything fixed
+  // inside it, which would clip them to that box.
   return (
     <>
       <section
@@ -316,9 +330,20 @@ export function ClientPassword({
 
         {/* One main action across the row with its round button at the right end (wave 15). With only "Generate one" to offer,
             that button is the action itself, not a menu of one. */}
+        {/* The main action opens the set form right under it, in the card (2026-11-06, was a sheet): a toggle with its chevron. */}
         <div className="mt-sm flex items-center gap-xs">
-          <Button size="sm" full className="flex-1" variant={primary ? 'primary' : 'outline'} onClick={() => setSetting(true)}>
+          <Button
+            id={mainId}
+            size="sm"
+            full
+            className="flex-1"
+            variant={primary && !setting ? 'primary' : 'outline'}
+            onClick={() => (setting ? closeSetting(false) : setSetting(true))}
+            aria-expanded={setting}
+            aria-controls={setting ? panelId : undefined}
+          >
             {mainLabel}
+            <ToggleChevron open={setting} />
           </Button>
           {soloMore ? (
             <IconButton icon={soloMore.icon ?? Sparkles} label={soloMore.label} onClick={soloMore.onSelect} disabled={soloMore.disabled} />
@@ -335,6 +360,23 @@ export function ClientPassword({
             </button>
           )}
         </div>
+
+        {setting && (
+          <div id={panelId} className="mt-sm">
+            <SetPassword
+              fieldId={fieldId}
+              clientId={clientId}
+              clientName={clientName}
+              link={link}
+              solid={primary}
+              onCancel={() => closeSetting()}
+              onSaved={() => {
+                setDone({ kind: 'saved', password: null });
+                closeSetting();
+              }}
+            />
+          </div>
+        )}
 
         {done?.kind === 'saved' && done.password && (
           <div className="mt-sm">
@@ -356,20 +398,6 @@ export function ClientPassword({
       {createPortal(
         <>
           <MoreMenu label={team ? 'More for the team link password' : 'More for the password'} title="Password" items={more} trigger={null} open={menu} onOpenChange={setMenu} />
-          <Sheet open={setting} onClose={() => setSetting(false)} title={ask || state.set ? 'Set a new password' : 'Set a password'}>
-            {setting && (
-              <SetPassword
-                clientId={clientId}
-                clientName={clientName}
-                link={link}
-                onSaved={() => {
-                  setDone({ kind: 'saved', password: null });
-                  setSetting(false);
-                }}
-              />
-            )}
-          </Sheet>
-
           <Sheet open={removing} onClose={() => setRemoving(false)} title="Remove the password?">
             <p className="m-0 text-callout">{words.removeAsk}</p>
             {remove.isError && (
@@ -378,9 +406,9 @@ export function ClientPassword({
               </p>
             )}
             <div className="mt-md flex flex-wrap gap-xs pb-xl">
-              <Button onClick={() => remove.mutate()} disabled={remove.isPending}>
+              <button type="button" onClick={() => remove.mutate()} disabled={remove.isPending} className={RED_YES} style={RED_YES_STYLE}>
                 {remove.isPending ? 'Removing' : 'Yes, remove it'}
-              </Button>
+              </button>
               <Button variant="outline" onClick={() => setRemoving(false)}>
                 Keep it
               </Button>
@@ -393,10 +421,16 @@ export function ClientPassword({
   );
 }
 
-/** The set sheet: the one field, then Save. The owner copies the password before saving; after, the card says every session ended. */
-function SetPassword({ clientId, clientName, onSaved, link = 'client' }: { clientId: string; clientName: string; onSaved: () => void; link?: PasswordLink }) {
+/**
+ * The set form, in the card under its button: the one field, then Save and Cancel. Focus moves into the field when it opens and Escape
+ * cancels. The owner copies the password before saving; after, the card says every session ended.
+ */
+function SetPassword({ fieldId, clientId, clientName, onSaved, onCancel, solid = false, link = 'client' }: { fieldId: string; clientId: string; clientName: string; onSaved: () => void; onCancel: () => void; solid?: boolean; link?: PasswordLink }) {
   const qc = useQueryClient();
   const [pw, setPw] = useState('');
+  useEffect(() => {
+    document.getElementById(fieldId)?.focus();
+  }, [fieldId]);
   const problem = pw ? portalPasswordProblem(pw, clientName) : null;
   const save = useMutation({
     mutationFn: () => setPassword(link, clientId, { password: pw }),
@@ -407,21 +441,31 @@ function SetPassword({ clientId, clientName, onSaved, link = 'client' }: { clien
   });
   return (
     <form
+      className="rounded-tile bg-paper p-sm"
       onSubmit={(e: FormEvent) => {
         e.preventDefault();
         if (pw && !problem) save.mutate();
       }}
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape' || e.nativeEvent.isComposing) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onCancel();
+      }}
     >
-      <PasswordField value={pw} onChange={setPw} clientName={clientName} required />
+      <PasswordField id={fieldId} value={pw} onChange={setPw} clientName={clientName} required />
       <p className="mt-sm m-0 text-subhead text-ink-soft">{link === 'team' ? 'Saving ends every open session on the team link.' : 'Saving ends every open session on their link.'}</p>
       {save.isError && (
         <p role="alert" className="mt-xs m-0 text-subhead">
           {failed(save.error)}
         </p>
       )}
-      <div className="mt-md pb-xl">
-        <Button type="submit" disabled={save.isPending || !pw || Boolean(problem)}>
+      <div className="mt-sm flex flex-wrap gap-xs">
+        <Button type="submit" size="sm" variant={solid ? 'primary' : 'outline'} className="flex-1" disabled={save.isPending || !pw || Boolean(problem)}>
           {save.isPending ? 'Saving' : 'Save the password'}
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={onCancel}>
+          Cancel
         </Button>
       </div>
     </form>

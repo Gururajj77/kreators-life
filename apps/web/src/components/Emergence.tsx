@@ -1,12 +1,13 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { EyeOff, HelpCircle, ListChecks } from 'lucide-react';
-import { formatCount, money, NOT_TO_DO_TITLE_MAX, RELATIONSHIP_BY_KEY, RELATIONSHIPS, type Insight, type InsightApp, type InsightKey, type InsightChart, type RelationshipKey, type Repeat, type TagTone } from '@kreators/shared';
+import { formatCount, LOCALE, money, NOT_TO_DO_TITLE_MAX, RELATIONSHIP_BY_KEY, RELATIONSHIPS, taskKey, type HabitTie, type LifeAreaKey, type Node, type Insight, type InsightApp, type InsightKey, type InsightChart, type RelationshipKey, type Repeat, type TagTone } from '@kreators/shared';
 import { api } from '../lib/api';
 import { useMe } from '../lib/queries';
 import { todayLocal } from '../lib/date';
 import { fillVar } from '../lib/relFill';
+import { tbClass, tbStyle } from '../lib/blockColor';
 import { bento } from '../lib/bento';
 import { FIELD, LABEL } from '../lib/ui';
 import { HBars, PillBars, Donut, Legend, WeekDots } from './Charts';
@@ -19,7 +20,11 @@ import { Button } from './Button';
 import { RepeatPicker } from './RepeatPicker';
 import { ErrorLine } from './ErrorLine';
 import { Reveal } from './fx/Reveal';
+import { AnimatedIcon } from './AnimatedIcon';
 import { useInsights } from './EmergenceSlot';
+import { AreaTag } from './TaskPlan';
+import { ToggleChevron } from './ToggleMark';
+import { useHiddenInsightIds } from '../lib/insightsHidden';
 
 export { useInsights };
 
@@ -29,31 +34,92 @@ export { useInsights };
  * it shows only the ready lines that touch that app and draws nothing at all when there are none.
  */
 
-/** "Not now" hides a card on this device only (a viewer's convenience, never needed for the page to work). */
-function useHidden(): [Set<string>, (id: string) => void] {
+/**
+ * "Not now" hides a card on this device only (a viewer's convenience, never needed for the page to work); "Show again" (`show`, from the
+ * set-aside list under a block or on /insights) takes it off the list, so nothing set aside is gone for good.
+ */
+function useHidden(): [Set<string>, (id: string) => void, (id: string) => void] {
   const me = useMe();
-  const key = me.data ? `kreators.insightsHidden:${me.data.user.id}` : null;
-  const read = (): string[] => {
-    if (!key) return [];
-    try {
-      const raw = JSON.parse(localStorage.getItem(key) ?? '[]') as unknown;
-      return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string').slice(-100) : [];
-    } catch {
-      return [];
-    }
-  };
-  const [ids, setIds] = useState<string[] | null>(null);
-  const list = ids ?? read();
-  const hide = (id: string) => {
-    const next = [...list.filter((x) => x !== id), id].slice(-100);
-    setIds(next);
-    try {
-      if (key) localStorage.setItem(key, JSON.stringify(next));
-    } catch {
-      /* private window: hidden for this visit only */
-    }
-  };
-  return [new Set(list), hide];
+  // One store for every block (lib/insightsHidden.ts): each hide and Show again starts from what is stored, so two blocks on one screen never undo each other.
+  return useHiddenInsightIds(me.data?.user.id);
+}
+
+/**
+ * The cards set aside with Not now, listed in place (2026-11-06): each one's words on the left and an outline "Show again" at the right,
+ * which puts the card back where it was. On this device only, like Not now.
+ */
+export function SetAsideList({ id, list, onShow }: { id?: string; list: readonly Insight[]; onShow: (id: string) => void }) {
+  return (
+    <ul id={id} aria-label="Set aside" className="m-0 flex list-none flex-col gap-xs p-0">
+      {list.map((i) => {
+        const title = i.tie?.title ?? i.headline;
+        return (
+          <li key={i.id} className="flex flex-wrap-reverse items-center gap-sm rounded-tile bg-card p-sm">
+            <div className="min-w-[60%] flex-1">
+              <p className="m-0 text-card-title">{title}</p>
+              <p className="m-0 text-card-note text-ink-soft">{i.text}</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => onShow(i.id)} aria-label={`Show again: ${title}`}>
+              Show again
+            </Button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** Moves focus to a block's heading (made focusable for the moment, never a tab stop), when the control that had it is about to go. */
+export function focusHeading(id: string | undefined) {
+  const el = id ? document.getElementById(id) : null;
+  if (!el) return;
+  if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+  el.focus();
+}
+
+/**
+ * One quiet line at the foot of a block whose place has cards set aside: "Show 2 set aside", an inline toggle that opens the list in
+ * place. Draws nothing when none are set aside. Focus goes back to the toggle after "Show again", since that row leaves the list; after
+ * the last one the fold closes (so the next Not now starts it closed) and focus moves to the block's heading (`heading`, its id).
+ */
+export function SetAsideFold({ list, onShow, heading }: { list: readonly Insight[]; onShow: (id: string) => void; heading?: string }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const toggle = useRef<HTMLButtonElement>(null);
+  if (!list.length) return null;
+  const n = formatCount(list.length);
+  return (
+    <div className="mt-sm flex flex-col gap-xs">
+      <div>
+        <button
+          ref={toggle}
+          type="button"
+          aria-expanded={open}
+          aria-controls={id}
+          onClick={() => setOpen((o) => !o)}
+          className="toy toy-flat inline-flex min-h-[44px] items-center gap-xs rounded-pill px-sm text-subhead text-ink-soft"
+        >
+          {open ? `Hide ${n} set aside` : `Show ${n} set aside`}
+          <ToggleChevron open={open} size={14} />
+        </button>
+      </div>
+      {open && (
+        <SetAsideList
+          id={id}
+          list={list}
+          onShow={(x) => {
+            const last = list.length <= 1;
+            onShow(x);
+            if (!last) toggle.current?.focus();
+            else {
+              setOpen(false);
+              focusHeading(heading);
+            }
+          }}
+        />
+      )}
+    </div>
+  );
 }
 
 const TAG: Record<Insight['key'], { tone: TagTone; word: string }> = {
@@ -66,7 +132,7 @@ const TAG: Record<Insight['key'], { tone: TagTone; word: string }> = {
   'sleep-mood': { tone: 'calm', word: 'Same days' },
   'focus-tasks': { tone: 'calm', word: 'Same days' },
   'stress-calm': { tone: 'calm', word: 'Same days' },
-  'daytype-done': { tone: 'calm', word: 'Same days' },
+  'daytype-done': { tone: 'calm', word: 'Kinds of day' },
   'money-stress': { tone: 'calm', word: 'Same days' },
   'slips-sleep': { tone: 'calm', word: 'Same days' },
   'routine-tasks': { tone: 'calm', word: 'Same days' },
@@ -74,11 +140,14 @@ const TAG: Record<Insight['key'], { tone: TagTone; word: string }> = {
   'review-since': { tone: 'info', word: 'Since review' },
   'discover-strength': { tone: 'calm', word: 'Strength' },
   'agency-load': { tone: 'calm', word: 'Same days' },
+  'block-kept': { tone: 'calm', word: 'Time blocks' },
 };
 
 function tagOf(i: Insight): { tone: TagTone; word: string } {
   // A quiet focus pillar is worth a look; every other line keeps its plain tone.
   if (i.key === 'pillar-balance' && i.strength >= 60) return { tone: 'warn', word: 'Worth a look' };
+  // Time blocks kept: good when 60% or more of a block's tasks were ticked inside it (the line's strength is 50 or more then).
+  if (i.key === 'block-kept' && i.strength >= 50) return { tone: 'good', word: 'Blocks kept' };
   // A good or bad habit: the word is always shown, so the colour is never the only sign.
   if (i.tie) return i.tie.verdict === 'good' ? { tone: 'good', word: 'Good habit' } : { tone: 'bad', word: 'Bad habit' };
   return TAG[i.key];
@@ -141,6 +210,7 @@ function InsightChartView({ chart, insight }: { chart: InsightChart; insight: In
       </div>
     );
   }
+  if (chart.kind === 'kinds') return <KindsChart chart={chart} />;
   // Four weeks of days, one row of seven dots each.
   const weeks: { date: string; on: boolean }[][] = [];
   for (let i = 0; i < chart.days.length; i += 7) weeks.push(chart.days.slice(i, i + 7));
@@ -153,17 +223,78 @@ function InsightChartView({ chart, insight }: { chart: InsightChart; insight: In
   );
 }
 
+const daysWord = (n: number) => `${formatCount(n)} ${n === 1 ? 'day' : 'days'}`;
+/** An average to one place in LOCALE, with no ".0": 1.4, 2, 12.5. */
+const avgWord = (v: number) => v.toLocaleString(LOCALE, { maximumFractionDigits: 1 });
+/** A group's facts in plain words: "No tasks ticked", "1 task a day", "2.5 tasks a day", then focus and mood when they are read. */
+function kindFacts(r: { n: number; tasks: number; focus: number | null; mood: number | null }): string[] {
+  if (r.n === 0) return ['No app use those days'];
+  const tasks = r.tasks === 0 ? 'No tasks ticked' : `${avgWord(r.tasks)} ${r.tasks === 1 ? 'task' : 'tasks'} a day`;
+  const focus = r.focus === null ? null : Math.round(r.focus) === 0 ? (r.focus > 0 ? 'under 1 min focus' : 'no focus') : `${formatCount(Math.round(r.focus))} min focus`;
+  return [tasks, focus, r.mood !== null ? `mood ${avgWord(r.mood)}` : null].filter((f): f is string => Boolean(f));
+}
+
+/**
+ * Your kinds of day: the four weeks as one strip, each kind in its template's colour (`templateColor` in shared: its own colour, else its
+ * longest block's) and the days with no kind left in the strip's own ground, then each group of days with how it went (a kind with no
+ * app use on its days still has its row, saying so). The strip is decoration;
+ * the list under it says the same in words.
+ */
+function KindsChart({ chart }: { chart: Extract<InsightChart, { kind: 'kinds' }> }) {
+  const total = chart.parts.reduce((s, p) => s + p.days, 0) + chart.none;
+  let left = 0;
+  const pct = (n: number) => (total > 0 ? (n / total) * 100 : 0);
+  return (
+    <div className="flex flex-col gap-sm">
+      <div className="tb-strip" aria-hidden="true">
+        {chart.parts.map((p) => {
+          const at = left;
+          left += pct(p.days);
+          return <span key={p.templateId} className={tbClass(p.color)} style={tbStyle(p.color, { left: `${at}%`, width: `${pct(p.days)}%` })} />;
+        })}
+      </div>
+      <ul className="m-0 flex list-none flex-col gap-xs p-0">
+        {chart.rows.map((r) => {
+          const part = r.templateId ? chart.parts.find((p) => p.templateId === r.templateId) : null;
+          const days = part ? part.days : chart.none;
+          const facts = kindFacts(r);
+          return (
+            <li key={r.templateId ?? 'none'} className={`flex items-start gap-xs ${part ? tbClass(part.color) : ''}`} style={part ? tbStyle(part.color) : ({ '--tb': 'var(--line)' } as CSSProperties)}>
+              <span className="tb-dot mt-[4px]" aria-hidden="true" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-subhead font-semibold">
+                  {r.name} <span className="whitespace-nowrap font-normal text-ink-soft">· {daysWord(days)}</span>
+                </span>
+                <span className="block text-footnote text-ink-soft">
+                  {/* Each fact stays whole ("125 min focus" never splits on a phone); the dot goes with the fact after it. */}
+                  {facts.map((f, i) => (
+                    <span key={i} className="whitespace-nowrap">
+                      {i > 0 ? ' · ' : ''}
+                      {f}
+                    </span>
+                  ))}
+                  {r.n > 0 && r.n < days ? (
+                    <>
+                      , on the <span className="whitespace-nowrap">{r.n === 1 ? 'one day' : `${formatCount(r.n)} days`}</span> you used the app
+                    </>
+                  ) : null}
+                </span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 const ACTION = 'toy toy-ink btn-outline inline-flex min-h-[48px] min-w-0 flex-1 items-center justify-center rounded-pill border border-ink/30 bg-card-strong px-md text-center text-callout text-ink';
 
-/** One pattern: the number first, one sentence, a small chart, where it came from, and one outline action. */
-/** A card's foot: its one outline action (a link, Make it a habit, or Add to not to do), the More menu, and their sheets. */
-function InsightActions({ insight, onHide, compact = false }: { insight: Insight; onHide?: () => void; compact?: boolean }) {
-  const [habitOpen, setHabitOpen] = useState(false);
-  const [ntdOpen, setNtdOpen] = useState(false);
+/** The card's More menu: where the habit lives (unless the main action already goes there), Not now and How this works. */
+function InsightMore({ insight, onHide }: { insight: Insight; onHide?: () => void }) {
   const navigate = useNavigate();
   const a = insight.action;
   const tie = insight.tie;
-  const cls = compact ? ACTION.replace('min-h-[48px]', 'min-h-[44px]').replace('text-callout', 'text-subhead') : ACTION;
   // Tied back to the task: the card's More menu always opens where it lives, unless the main action already does.
   const openTie = tie && !(a?.kind === 'link' && a.to === tie.to) ? [{ key: 'open', label: tie.toLabel, icon: ListChecks, onSelect: () => navigate(tie.to) }] : [];
   const more = [
@@ -171,28 +302,57 @@ function InsightActions({ insight, onHide, compact = false }: { insight: Insight
     ...(onHide ? [{ key: 'hide', label: 'Not now', icon: EyeOff, hint: 'On this device', onSelect: onHide }] : []),
     { key: 'how', label: 'How this works', icon: HelpCircle, onSelect: () => navigate('/help#faq') },
   ];
+  return <MoreMenu items={more} label={`More about this pattern`} title="This pattern" />;
+}
+
+/**
+ * A card's foot: its one outline action (a link, Make it a habit, or Add to not to do), the More menu, the habit sheet and the not to do
+ * fold under it. `lead` puts a tag at the foot's left, beside the action, which takes the rest of the width; `menu={false}` leaves the
+ * More menu out, for a card that carries it in its title row.
+ */
+function InsightActions({
+  insight,
+  onHide,
+  compact = false,
+  lead,
+  menu = true,
+}: {
+  insight: Insight;
+  onHide?: () => void;
+  compact?: boolean;
+  lead?: ReactNode;
+  menu?: boolean;
+}) {
+  const [habitOpen, setHabitOpen] = useState(false);
+  const [ntdOpen, setNtdOpen] = useState(false);
+  const ntdId = useId();
+  const a = insight.action;
+  const tie = insight.tie;
+  const cls = compact ? ACTION.replace('min-h-[48px]', 'min-h-[44px]').replace('text-callout', 'text-subhead') : ACTION;
   return (
     <>
       <div className={`${compact ? '' : 'mt-auto pt-xs'} flex items-center gap-sm`}>
+        {lead}
         {a && a.kind === 'habit' && insight.habit ? (
           <button type="button" className={cls} onClick={() => setHabitOpen(true)} aria-haspopup="dialog">
             {a.label}
           </button>
         ) : a && a.kind === 'notToDo' && tie ? (
-          <button type="button" className={cls} onClick={() => setNtdOpen(true)} aria-haspopup="dialog">
+          <button type="button" className={`${cls} gap-xs`} onClick={() => setNtdOpen((o) => !o)} aria-expanded={ntdOpen} aria-controls={ntdId}>
             {a.label}
+            <AnimatedIcon name="plusToX" size={16} active={ntdOpen} className="text-ink-soft" />
           </button>
         ) : a ? (
           <Link to={a.to} className={cls}>
             {a.label}
           </Link>
-        ) : (
+        ) : menu ? (
           <span className="flex-1" />
-        )}
-        <MoreMenu items={more} label={`More about this pattern`} title="This pattern" />
+        ) : null}
+        {menu && <InsightMore insight={insight} onHide={onHide} />}
       </div>
       {insight.habit && habitOpen && <HabitSheet insight={insight} onClose={() => setHabitOpen(false)} />}
-      {tie && ntdOpen && <NotToDoSheet title={tie.title} relationship={tie.relationship} onClose={() => setNtdOpen(false)} />}
+      {tie && ntdOpen && <NotToDoFold id={ntdId} title={tie.title} relationship={tie.relationship} onClose={() => setNtdOpen(false)} />}
     </>
   );
 }
@@ -200,11 +360,14 @@ function InsightActions({ insight, onHide, compact = false }: { insight: Insight
 /** One pattern: the number first, one sentence, a small chart, where it came from, and one outline action. */
 export function InsightCard({ insight, onHide }: { insight: Insight; onHide?: () => void }) {
   const tag = tagOf(insight);
+  // Every card carries its "…" in the title row, centred on the number, and its state tag in the foot on the left, beside the outline
+  // action that takes the rest of the width (2026-11-06, the founder's card rule: a card's title and "…" share one row, a state tag goes
+  // in the row of tags), so every pattern card in a list has one layout.
   return (
     <article className="flex h-full w-full flex-col gap-sm rounded-tile bg-card p-md shadow-toy-soft" aria-label={insight.text}>
-      <div className="flex items-start justify-between gap-sm">
+      <div className="flex items-center justify-between gap-sm">
         <p className={`m-0 min-w-0 tabular-nums ${insight.headline.length > 10 ? 'text-title2' : 'text-title1'}`}>{insight.headline}</p>
-        <StatusTag tone={tag.tone}>{tag.word}</StatusTag>
+        <InsightMore insight={insight} onHide={onHide} />
       </div>
       <p className="m-0 text-balance text-callout">{insight.text}</p>
       {/* Beside a taller card the chart takes the room left and sits in its middle, so the card never ends in an empty band (2026-11-05). */}
@@ -214,7 +377,7 @@ export function InsightCard({ insight, onHide }: { insight: Insight; onHide?: ()
         </div>
       )}
       {insight.basis && <p className="m-0 text-caption text-ink-soft">{insight.basis}</p>}
-      <InsightActions insight={insight} onHide={onHide} />
+      <InsightActions insight={insight} onHide={onHide} menu={false} lead={<StatusTag tone={tag.tone}>{tag.word}</StatusTag>} />
     </article>
   );
 }
@@ -286,14 +449,24 @@ export function HabitSheet({ insight, onClose }: { insight: Insight; onClose: ()
 }
 
 /**
- * "Add to not to do" for a bad habit: the task's words, which can be changed, go on the not to do list through the ordinary
- * create (POST /today/not-to-do, at most seven). Nothing is added until "Add it".
+ * "Add to not to do" for a bad habit, folded open inside the pattern card (2026-11-06, no sheet): the task's words, which can be
+ * changed, go on the not to do list through the ordinary create (POST /today/not-to-do, at most seven). Nothing is added until
+ * "Add it". Focus moves into the field when it opens; Escape or Cancel folds it again, back to the button that opened it.
  */
-export function NotToDoSheet({ title, relationship, onClose }: { title: string; relationship: RelationshipKey | null; onClose: () => void }) {
+export function NotToDoFold({ id, title, relationship, onClose }: { id: string; title: string; relationship: RelationshipKey | null; onClose: () => void }) {
   const qc = useQueryClient();
+  const field = useId();
+  const input = useRef<HTMLInputElement>(null);
   const [words, setWords] = useState(title.slice(0, NOT_TO_DO_TITLE_MAX));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<unknown>(null);
+  useEffect(() => {
+    input.current?.focus();
+  }, []);
+  const close = () => {
+    onClose();
+    document.querySelector<HTMLElement>(`[aria-controls="${id}"]`)?.focus();
+  };
   const add = async () => {
     const t = words.trim();
     if (!t) {
@@ -312,20 +485,37 @@ export function NotToDoSheet({ title, relationship, onClose }: { title: string; 
       setBusy(false);
     }
   };
+  const onKeyDown = (e: KeyboardEvent<HTMLFormElement>) => {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    close();
+  };
   return (
-    <Sheet open onClose={onClose} title="Add to not to do">
-      <div className="flex flex-col gap-md pb-xl md:pb-0">
-        <label className="block">
-          <span className={LABEL}>Stay away from</span>
-          <input className={FIELD} value={words} maxLength={NOT_TO_DO_TITLE_MAX} onChange={(e) => setWords(e.target.value)} />
-        </label>
-        <p className="m-0 text-subhead text-ink-soft">It goes on your not to do list on Daily. Tick it each day you stay away from it.</p>
-        {err ? <ErrorLine e={err} /> : null}
-        <Button full onClick={add} disabled={busy}>
+    <form
+      id={id}
+      aria-label="Add to not to do"
+      onKeyDown={onKeyDown}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void add();
+      }}
+      className="flex flex-col gap-sm rounded-inner bg-paper p-sm"
+    >
+      <label className="block" htmlFor={field}>
+        <span className={LABEL}>Stay away from</span>
+        <input id={field} ref={input} className={FIELD} value={words} maxLength={NOT_TO_DO_TITLE_MAX} onChange={(e) => setWords(e.target.value)} />
+      </label>
+      <p className="m-0 text-subhead text-ink-soft">It goes on your not to do list on Daily. Tick it each day you stay away from it.</p>
+      {err ? <ErrorLine e={err} /> : null}
+      <div className="flex flex-wrap gap-xs">
+        <Button type="submit" variant="outline" disabled={busy}>
           {busy ? 'Adding…' : 'Add it'}
         </Button>
+        <Button variant="outline" onClick={close}>
+          Cancel
+        </Button>
       </div>
-    </Sheet>
+    </form>
   );
 }
 
@@ -346,14 +536,19 @@ export function InsightGrid({ list, onHide }: { list: Insight[]; onHide?: (id: s
  * The block each screen carries: "Emerging", the ready patterns that touch this app (at most `max`), and See all. Nothing at all when
  * there are none, so an app never shows an empty card.
  */
-export function EmergenceBlock({ app, rel, max, lede = 'Patterns in what you log.', className = '', exclude }: { app: InsightApp; rel?: RelationshipKey | null; max?: number; lede?: ReactNode; className?: string; /** Keys another block on the screen shows (Daily's Habits). */ exclude?: readonly InsightKey[] }) {
+export function EmergenceBlock({ app, rel, max, lede = 'Patterns in what you log.', className = '', exclude, quietWhenAllAside = false }: { app: InsightApp; rel?: RelationshipKey | null; max?: number; lede?: ReactNode; className?: string; /** Keys another block on the screen shows (Daily's Habits). */ exclude?: readonly InsightKey[]; /** Home and Life: with every card here set aside the slot shows its light section instead, so this block steps aside. */ quietWhenAllAside?: boolean }) {
   const q = useInsights(app, rel);
-  const [hidden, hide] = useHidden();
-  const list = (q.data?.insights ?? []).filter((i) => i.state === 'ready' && !hidden.has(i.id) && !exclude?.includes(i.key)).slice(0, max ?? 2);
-  if (!list.length) return null;
+  const [hidden, hide, show] = useHidden();
+  const here = (q.data?.insights ?? []).filter((i) => i.state === 'ready' && !exclude?.includes(i.key));
+  const list = here.filter((i) => !hidden.has(i.id)).slice(0, max ?? 2);
+  const aside = here.filter((i) => hidden.has(i.id));
+  const id = `emerging-${app}${rel ? `-${rel}` : ''}`;
+  // With everything here set aside the block stays, holding only the way to bring the cards back (Home and Life show their light section instead).
+  if (!list.length && (!aside.length || quietWhenAllAside)) return null;
   return (
-    <Section id={`emerging-${app}${rel ? `-${rel}` : ''}`} title="Emerging" lede={lede} span className={className} action={<SeeAll to="/insights">See all</SeeAll>}>
-      <InsightGrid list={list} onHide={hide} />
+    <Section id={id} title="Emerging" lede={list.length ? lede : 'You set these aside.'} span className={className} action={<SeeAll to="/insights">See all</SeeAll>}>
+      {list.length > 0 && <InsightGrid list={list} onHide={hide} />}
+      <SetAsideFold list={aside} onShow={show} heading={id} />
     </Section>
   );
 }
@@ -363,28 +558,65 @@ export function EmergenceBlock({ app, rel, max, lede = 'Patterns in what you log
  * words, Good habit or Bad habit in the corner, the one sentence, where it came from, and the same one action and More as the card.
  * The charts stay on /insights (See all).
  */
-export function HabitsBlock({ app, className = '' }: { app: InsightApp; className?: string }) {
+/** The area of life a habit's task carries, found among the tasks the screen already holds: by the task it opens, else by its words. */
+function areaOfTie(tie: HabitTie, tasks: readonly Node[]): LifeAreaKey | null {
+  if (tie.kind !== 'task') return null;
+  const id = /[?&]task=([^&#]+)/.exec(tie.to)?.[1];
+  const hit = (id && tasks.find((t) => t.id === id)) || tasks.find((t) => t.lifeArea && t.relationship === tie.relationship && taskKey(t.title) === tie.key);
+  return hit ? hit.lifeArea : null;
+}
+
+export function HabitsBlock({ app, className = '', tasks = [] }: { app: InsightApp; className?: string; /** The screen's tasks, so a habit shows its area of life. */ tasks?: readonly Node[] }) {
   const q = useInsights(app);
-  const [hidden, hide] = useHidden();
-  const list = (q.data?.insights ?? []).filter((i) => i.state === 'ready' && i.key === 'habit-tie' && i.tie && !hidden.has(i.id));
-  if (!list.length) return null;
+  const [hidden, hide, show] = useHidden();
+  const ties = (q.data?.insights ?? []).filter((i) => i.state === 'ready' && i.key === 'habit-tie' && i.tie);
+  const list = ties.filter((i) => !hidden.has(i.id));
+  const aside = ties.filter((i) => hidden.has(i.id));
+  // With every habit set aside the block stays, holding only the way to bring them back.
+  if (!list.length && !aside.length) return null;
   return (
-    <Section id={`habits-${app}`} title="Habits" lede="Tasks you keep doing, beside how those days went." span className={className} action={<SeeAll to="/insights?habits=all">See all</SeeAll>}>
-      <ul className="m-0 flex list-none flex-col gap-xs p-0">
-        {list.map((i) => {
-          const good = i.tie!.verdict === 'good';
-          return (
-            <li key={i.id} data-pillar={i.tie!.relationship ?? undefined} className="flex flex-col gap-xs rounded-tile bg-card p-sm shadow-toy-soft">
-              <CardHead tag={<StatusTag fit tone={good ? 'good' : 'bad'}>{good ? 'Good habit' : 'Bad habit'}</StatusTag>}>
-                <p className="m-0 text-card-title">{i.tie!.title}</p>
-              </CardHead>
-              <p className="m-0 text-card-note text-ink-soft">{i.text}</p>
-              {i.basis && <p className="m-0 text-caption text-ink-soft">{i.basis}</p>}
-              <InsightActions insight={i} onHide={() => hide(i.id)} compact />
-            </li>
-          );
-        })}
-      </ul>
+    <Section id={`habits-${app}`} title="Habits" lede={list.length ? 'Tasks you keep doing, beside how those days went.' : 'You set these aside.'} span className={className} action={<SeeAll to="/insights?habits=all">See all</SeeAll>}>
+      {list.length > 0 && (
+        <ul className="m-0 flex list-none flex-col gap-xs p-0">
+          {list.map((i) => {
+            const good = i.tie!.verdict === 'good';
+            const area = areaOfTie(i.tie!, tasks);
+            return (
+              <li key={i.id} data-pillar={i.tie!.relationship ?? undefined} className="flex flex-col gap-xs rounded-tile bg-card p-sm shadow-toy-soft">
+                <CardHead tag={<StatusTag fit tone={good ? 'good' : 'bad'}>{good ? 'Good habit' : 'Bad habit'}</StatusTag>}>
+                  <p className="m-0 text-card-title">{i.tie!.title}</p>
+                </CardHead>
+                <p className="m-0 text-card-note text-ink-soft">{i.text}</p>
+                {i.basis && <p className="m-0 text-caption text-ink-soft">{i.basis}</p>}
+                {area && (
+                  <div className="flex">
+                    <AreaTag area={area} />
+                  </div>
+                )}
+                <InsightActions insight={i} onHide={() => hide(i.id)} compact />
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <SetAsideFold list={aside} onShow={show} heading={`habits-${app}`} />
+    </Section>
+  );
+}
+
+/**
+ * Your kinds of day (2026-11-06) as a block of its own on Daily, the Time blocks page and Reviews, so it always has its room there (their
+ * Emerging blocks leave it out): the one card from the person's whole list, with Not now like any card. On the Time blocks page (`here`)
+ * the card's link to that page is left off.
+ */
+export function KindsBlock({ className = '', here = false }: { className?: string; here?: boolean }) {
+  const q = useInsights('insights');
+  const [hidden, hide] = useHidden();
+  const card = (q.data?.insights ?? []).find((i) => i.key === 'daytype-done' && i.state === 'ready' && !hidden.has(i.id));
+  if (!card) return null;
+  return (
+    <Section id="kinds-of-day" title="Your kinds of day" lede="What kind each day was, and how it went." span className={className} action={<SeeAll to="/insights">See all</SeeAll>}>
+      <InsightCard insight={here ? { ...card, action: null } : card} onHide={() => hide(card.id)} />
     </Section>
   );
 }

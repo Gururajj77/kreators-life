@@ -4,6 +4,7 @@ import { Inert } from '../components/Inert';
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 import { StatTile, WeekDots } from '../components/Charts';
 import { CoachFace, MyCoachSection } from '../components/MyCoach';
 import { Nudge } from '../components/Nudge';
@@ -165,12 +166,13 @@ function CoachSide({ hub, onChange }: { hub: CoachHub; onChange: () => void }) {
   const [who, setWho] = useState('');
   const [sent, setSent] = useState<string | null>(null);
   const [about, setAbout] = useState(hub.profile.about);
+  const [unasking, setUnasking] = useState<CoachLink | null>(null);
   const after = () => {
     refresh();
     onChange();
   };
   const answer = useMutation({ mutationFn: (v: { id: string; yes: boolean }) => api.answerCoach(v.id, v.yes), onSuccess: after });
-  const takeBack = useMutation({ mutationFn: (id: string) => api.endCoach(id), onSuccess: after });
+  const takeBack = useMutation({ mutationFn: (id: string) => api.endCoach(id), onSuccess: () => { setUnasking(null); after(); } });
   const ask = useMutation({
     mutationFn: () => api.askStudent(who),
     onSuccess: (r) => {
@@ -239,7 +241,7 @@ function CoachSide({ hub, onChange }: { hub: CoachHub; onChange: () => void }) {
           <ul className="m-0 flex list-none flex-col gap-xs p-0">
             {hub.sent.map((l) => (
               <AskRow key={l.id} l={l} who={l.student}>
-                <Button size="sm" variant="ghost" disabled={takeBack.isPending} onClick={() => takeBack.mutate(l.id)}>
+                <Button size="sm" variant="ghost" disabled={takeBack.isPending} onClick={() => { takeBack.reset(); setUnasking(l); }}>
                   Take back
                 </Button>
               </AskRow>
@@ -248,11 +250,22 @@ function CoachSide({ hub, onChange }: { hub: CoachHub; onChange: () => void }) {
           <Pager page={hub.sentPage} prefix="o" label="asks out" />
         </Section>
       )}
+      <ConfirmDelete
+        open={unasking !== null}
+        title={`Take back your ask to ${unasking?.student.name ?? 'this person'}?`}
+        body="They no longer see it waiting. You can ask again later."
+        pending={takeBack.isPending}
+        failed={takeBack.isError}
+        onYes={() => unasking && takeBack.mutate(unasking.id)}
+        onClose={() => setUnasking(null)}
+        yes="Yes, take it back"
+        keep="Keep the ask"
+      />
 
       <Section id="line-heading" title="Your line in the directory" lede="What you help with, in a sentence or two. Students find you by it.">
         <textarea value={about} onChange={(e) => setAbout(e.target.value)} maxLength={COACH_ABOUT_MAX} rows={3} placeholder="I help creators keep a steady routine and finish what they start." aria-label="What you help with" className={FIELD_LINE} />
         <div className="mt-xs flex flex-wrap items-center gap-xs">
-          <Button variant="outline" disabled={save.isPending || about === hub.profile.about} onClick={() => save.mutate({ about })}>
+          <Button full variant="outline" disabled={save.isPending || about === hub.profile.about} onClick={() => save.mutate({ about })}>
             Save my line
           </Button>
         </div>
@@ -351,7 +364,7 @@ function BecomeCoach({ askedAt, about: saved, onChange }: { askedAt: string | nu
       ) : (
         <>
           <textarea value={about} onChange={(e) => setAbout(e.target.value)} maxLength={COACH_ABOUT_MAX} rows={3} placeholder="Who you coach, and how" aria-label="Who you coach, and how" className={FIELD_LINE} />
-          <Button className="mt-xs" variant="outline" disabled={apply.isPending} onClick={() => apply.mutate()}>
+          <Button full className="mt-xs" variant="outline" disabled={apply.isPending} onClick={() => apply.mutate()}>
             Ask the team
           </Button>
           <Problem e={apply.error} />

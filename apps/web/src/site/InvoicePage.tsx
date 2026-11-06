@@ -13,6 +13,7 @@ import { todayLocal } from '../lib/date';
 import { publicApi, type PublicInvoice } from '../lib/api';
 import { fileTitle, useAutoPrint } from '../lib/printDoc';
 import { SiteLayout } from './SiteLayout';
+import { FIELD } from '../lib/ui';
 
 /**
  * The few things a client opens an invoice for, first: how much, by when, and whether it is paid. The due day and the total in words
@@ -125,9 +126,9 @@ export function InvoicePage() {
                       Your note
                     </label>
                     {/* Opened by a tap, so the keyboard lands in it at once. */}
-                    <textarea id="inv-ask-text" autoFocus rows={3} maxLength={600} value={text} onChange={(e) => setText(e.target.value)} className="mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+                    <textarea id="inv-ask-text" autoFocus rows={3} maxLength={600} value={text} onChange={(e) => setText(e.target.value)} className={FIELD} />
                     <div className="mt-xs flex flex-wrap items-center gap-sm">
-                      <Button onClick={() => send.mutate()} disabled={!text.trim() || send.isPending}>
+                      <Button className="flex-1" onClick={() => send.mutate()} disabled={!text.trim() || send.isPending}>
                         {send.isPending ? 'Sending' : 'Send'}
                       </Button>
                       <Button variant="ghost" onClick={() => setAsking(false)}>

@@ -546,6 +546,12 @@
     font: inherit;
     color: inherit;
   }
+  /* What a person types wraps plainly: the page-wide balance (on html) would re-shape their lines as they type. */
+  textarea,
+  input,
+  [contenteditable] {
+    text-wrap: wrap;
+  }
   /* The ring every control shows when the keyboard is on it, 3:1 or better on the page and on a card in both modes; the
      corners are the control's own. It is the system's focus blue (deep sky, lighter in dark mode), never ink: a dark ring
      beside a solid ink pill read as a second picked pill. */
@@ -808,6 +814,15 @@
 /* A row of pills or cards that scrolls sideways. A scroll box clips on both axes, so the box
    bleeds 16px into the gutters and pads the same inside: a toy that lifts, and its shadow,
    stay whole. Put any top margin on a wrapper, never on the row itself. */
+/* Reading paragraphs fill their width (the founder, 2026-11-06: "rectangles can be wider"): a long paragraph wraps by `pretty`, which
+   fills each line and only guards the last, instead of the page-wide `balance`, which shortens every line to even them; the rectangle
+   fixer (lib/rectText.ts) still steps in if the last line comes out short. */
+@layer components {
+  .prose-long,
+  .prose-long :where(p, li) {
+    text-wrap: pretty;
+  }
+}
 @layer components {
   .scroll-row {
     display: flex;
@@ -2511,8 +2526,8 @@ select.inv-edit { appearance: none; cursor: pointer; }
   --color-card: rgba(255, 255, 255, 0.075);
   --color-card-strong: rgba(15, 18, 30, 0.985);
   --color-line: rgba(255, 255, 255, 0.16);
-  /* The keyboard ring and the tick box's ring read in the dark theme's light blue, not the light theme's deep one. */
-  --deep-self: #9ccdf2;
+  /* The keyboard ring and the tick box's ring in the water green (light enough to read on the slate), never the light theme's deep blue. */
+  --deep-self: color-mix(in oklab, var(--color-r4) 55%, #ffffff);
   --edge: rgba(255, 255, 255, 0.12);
   --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f2f2f2' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
 }
@@ -2583,17 +2598,156 @@ select.inv-edit { appearance: none; cursor: pointer; }
     max-width: 320px;
     text-align: center;
   }
-  /* Under the buttons the week is a short strip, so the stacked panel stays short. */
-  .water-grid-week > [role='img'] {
-    height: 96px;
+  /* Under the buttons the week is a short row of glasses, so the stacked panel stays short. */
+  .water-day {
+    height: 56px;
+  }
+  /* A narrow card (the bubble, a phone) takes a smaller glass. */
+  .water-glass {
+    width: 96px;
+    height: 120px;
   }
 }
 /* Its small lines sit close to what they belong to: 12px from the row above, 8px under a heading (the focus panel's own lines keep 16). */
-.water-night > .mf-line {
+.water-pane > .mf-line {
   margin-top: var(--spacing-sm);
 }
-.water-night > h3 + .mf-line {
+.water-pane > h3 + .mf-line {
   margin-top: var(--spacing-xs);
+}
+/* The card's three buttons (Water, Settings, Reminders), round icons whose names slide out on hover or keyboard focus (the founder,
+   2026-11-06: "keep it icons only but expand the text when hovered"; .expand-btn-words), centred at every size; each opens its panel
+   in place. */
+.water-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--spacing-xs);
+}
+/* At the top right of the card (the founder, 2026-11-06), centred in the bottom-left bubble on Daily and Journal and on a phone. */
+.water-tabs[data-center] {
+  justify-content: center;
+}
+@media not ((width >= 48rem) and (height >= 30rem)) {
+  .water-tabs {
+    justify-content: center;
+  }
+}
+
+.water-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 var(--spacing-xs);
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: var(--text-subhead);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--text-subhead--letter-spacing);
+  color: var(--mf-dim);
+}
+/* The names slide out slowly on the water card (the founder, 2026-11-06: "too fast on hover"). */
+.water-tab .expand-btn-words,
+.water-close .expand-btn-words {
+  transition: max-width 700ms var(--ease-open), opacity 500ms ease, margin 700ms var(--ease-open);
+}
+@media (prefers-reduced-motion: reduce) {
+  .water-tab .expand-btn-words,
+  .water-close .expand-btn-words {
+    transition: none;
+  }
+}
+/* The open one is the water green, like the card's + glass button (the founder, 2026-11-06: "keep it green"). */
+.water-tab[aria-selected='true'] {
+  border-color: transparent;
+  background-color: var(--color-r4);
+  color: #ffffff;
+}
+.water-pane {
+  min-width: 0;
+}
+/* A new reminder's days: seven pills on one row, so a pill gives its word the whole width (no side padding). */
+.water-night [aria-label='Days'] .mf-mini {
+  padding: 0;
+}
+/* A new reminder's days: two letters until the card is wide enough for three to sit whole in each pill. */
+.water-wd-long {
+  display: none;
+}
+@container mf (width >= 460px) {
+  .water-wd-short {
+    display: none;
+  }
+  .water-wd-long {
+    display: inline;
+  }
+}
+/* The last seven days: each day a small glass filled against the goal from the bottom, what was drunk above it, its day under it; a
+   tick when the goal was met, today ringed in the accent. */
+.water-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--spacing-xs);
+  margin: var(--spacing-sm) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.water-days > li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-width: 0;
+}
+.water-day-amount,
+.water-day-name {
+  font-size: var(--text-caption2);
+  line-height: var(--text-caption2--line-height);
+  font-variant-numeric: tabular-nums;
+  color: var(--mf-dim);
+  white-space: nowrap;
+}
+.water-days > li[data-today] .water-day-name,
+.water-days > li[data-today] .water-day-amount {
+  color: #ffffff;
+  font-weight: var(--font-weight-semibold);
+}
+.water-day {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  max-width: 28px;
+  height: 72px;
+  overflow: hidden;
+  border-radius: 8px 8px 12px 12px;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+.water-days > li[data-today] .water-day {
+  box-shadow: inset 0 0 0 2px var(--mf-a-text);
+}
+.water-day-fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: bottom;
+  background: linear-gradient(180deg, var(--water-glass-top), var(--water-glass-deep));
+}
+.water-days > li:not([data-today]) .water-day-fill {
+  opacity: 0.7;
+}
+.water-day-tick {
+  position: relative;
+  margin-top: calc(var(--spacing-xs) / 2);
+  color: #ffffff;
+}
+/* The water card sits inside another card (the section, the bubble), so it keeps a 16px edge at every width. */
+.water-night.mf-panel {
+  padding: var(--spacing-md);
 }
 /* Its five pickers: two to a row whatever the screen (the panel is narrow), the hours together on the last row. */
 .water-night .mf-sets {
@@ -5434,3 +5588,201 @@ li.sort-lifted {
   font-weight: var(--font-weight-semibold);
 }
 
+
+/* Breathe and focus: the music pane and the keyboard shortcuts fold inside the card (components/FocusRounds.tsx, 2026-11-06; they were
+   sheets). The card is the night slate in both themes, so the dark theme's colours are pinned on these two (the base tokens and the
+   aliases Tailwind reads), as on the water panel, so the sound tiles, switches, the volume slider and the fold read on the slate. The
+   shortcuts fold is for a keyboard: a touch screen has no keys to list. */
+.mf-pinned {
+  color-scheme: dark;
+  --ink: #eef0f8;
+  --ink-soft: #d6dbe9;
+  --ink-mute: #c0c7db;
+  --on-ink: #10131f;
+  --paper: rgba(255, 255, 255, 0.05);
+  --card: rgba(255, 255, 255, 0.075);
+  --card-strong: rgba(15, 18, 30, 0.985);
+  --line: rgba(255, 255, 255, 0.16);
+  --color-ink: #eef0f8;
+  --color-ink-soft: #d6dbe9;
+  --color-ink-mute: #c0c7db;
+  --color-on-ink: #10131f;
+  --color-paper: rgba(255, 255, 255, 0.05);
+  --color-card: rgba(255, 255, 255, 0.075);
+  --color-card-strong: rgba(15, 18, 30, 0.985);
+  --color-line: rgba(255, 255, 255, 0.16);
+  /* The keyboard ring in the panel's orange, light enough to keep 3:1 on the slate, never the light theme's deep blue. */
+  --deep-self: color-mix(in oklab, var(--color-r2) 55%, #ffffff);
+  --edge: rgba(255, 255, 255, 0.12);
+  color: var(--ink);
+}
+.mf-pane {
+  margin-bottom: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-inner);
+  background: rgba(255, 255, 255, 0.08);
+}
+.mf-keys {
+  margin-top: var(--spacing-sm);
+}
+/* A touch screen hides it until a key is pressed (`data-kbd`, set by the ? key), so a tablet with a keyboard still gets the list. */
+@media (hover: none) and (pointer: coarse) {
+  .mf-keys:not([data-kbd]) {
+    display: none;
+  }
+}
+/* End of the Breathe and focus music pane and shortcuts fold. */
+
+/* Trust badge fold-out (2026-11-06, the popups pass): what a trust score is made of folds out under the badge, in the page. In a cover's
+   top-right corner it opens from the right edge, and the row holding it lines up at the top while it is open, so nothing centres on it. */
+.app-cover-top .trust-badge {
+  align-items: flex-end;
+}
+.app-cover-top:has(.trust-badge[data-open]) {
+  align-items: flex-start;
+}
+/* The row beside it (Pro on a public page) wraps above it rather than pushing the open panel past the card's edge. */
+.app-cover-top :has(> .trust-badge[data-open]) {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+/* End of the trust badge fold-out. */
+
+/* Time blocks (2026-11-06, docs/time-blocks.md). A block's colour is a swatch KEY (TIME_BLOCK_SWATCHES in shared): each `.tb-<key>`
+   sets `--tb` to a token (the twelve wheel colours below, or an older theme token); a person's own "#rrggbb" sets `--tb` inline
+   (lib/blockColor.ts). Words on a box
+   stay ink and ink-soft, so AA never depends on the swatch. */
+:root {
+  /* The colour wheel the founder gave for the picker (2026-11-06), yellow first and clockwise; the same in both themes. */
+  --wheel-yellow: #f8e33c;
+  --wheel-amber: #fbc02d;
+  --wheel-orange: #f7952b;
+  --wheel-vermilion: #ec6233;
+  --wheel-red: #e2292f;
+  --wheel-magenta: #c3177e;
+  --wheel-purple: #763a92;
+  --wheel-indigo: #4a4597;
+  --wheel-blue: #3e84c4;
+  --wheel-teal: #12999a;
+  --wheel-green: #1fb35c;
+  --wheel-lime: #a4d04d;
+}
+.tb-yellow { --tb: var(--wheel-yellow); }
+.tb-amber { --tb: var(--wheel-amber); }
+.tb-orange { --tb: var(--wheel-orange); }
+.tb-vermilion { --tb: var(--wheel-vermilion); }
+.tb-red { --tb: var(--wheel-red); }
+.tb-magenta { --tb: var(--wheel-magenta); }
+.tb-purple { --tb: var(--wheel-purple); }
+.tb-indigo { --tb: var(--wheel-indigo); }
+.tb-blue { --tb: var(--wheel-blue); }
+.tb-teal { --tb: var(--wheel-teal); }
+.tb-green { --tb: var(--wheel-green); }
+.tb-lime { --tb: var(--wheel-lime); }
+/* Colours a block may still carry from before the wheel. */
+.tb-sky { --tb: var(--color-r5); }
+.tb-earth { --tb: var(--color-earth); }
+.tb-gold { --tb: var(--color-scale-gold); }
+.tb-violet { --tb: var(--color-scale-violet); }
+.tb-silver { --tb: var(--color-scale-silver); }
+.tb-slate { --tb: var(--color-ink-soft); }
+/* A box of tasks or a row of the timeline: a faint wash of the block's colour over the strong card (its corners come from the
+   element's own rounded-card or rounded-tile). */
+.tb-box {
+  background: color-mix(in oklab, var(--tb, var(--color-ink-soft)) 12%, var(--card-strong));
+}
+/* The block's dot: solid, with a hairline so silver still shows on white. */
+.tb-dot {
+  display: inline-block;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--tb, var(--color-ink-soft));
+  border: 1px solid var(--separator);
+}
+/* A 4px bar down the side of a timeline row. */
+.tb-band {
+  flex: none;
+  width: 4px;
+  align-self: stretch;
+  border-radius: 999px;
+  background: var(--tb, var(--color-ink-soft));
+}
+/* A template's day as one strip of coloured parts, midnight to midnight (decoration; the slots are read out as text). */
+.tb-strip {
+  position: relative;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+.tb-strip > span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--tb, var(--color-ink-soft));
+}
+/* The colour picker's swatch: a 44px round button holding the colour, ringed in ink while picked. */
+.tb-swatch {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background: transparent;
+}
+.tb-swatch > span {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--tb);
+  border: 1px solid var(--separator);
+}
+.tb-swatch[aria-checked='true'] {
+  border-color: var(--color-ink);
+}
+.tb-swatch:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+/* The last swatch, your own colour: a white pipette on the ink until a colour is set, then on that colour (a soft shadow keeps the white
+   readable on a pale one). */
+.tb-swatch-own > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--tb, var(--color-ink-fixed));
+  color: var(--color-on-fill);
+}
+.tb-swatch-own > span > svg {
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.6));
+}
+/* The own-colour card floats over the form, so it is the strong card with the glass blur under it (nothing behind shows through), and
+   turns solid where blur is off, like every glass surface. */
+.tb-own-card {
+  background: var(--card-strong);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .tb-own-card {
+    background: var(--paper-solid, var(--card-strong));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+/* The own-colour card's preview dot of what is typed (an empty dashed ring until it is a colour). */
+.tb-own-preview {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--tb, transparent);
+  border: 1px dashed var(--separator);
+}
+
+/* End of time blocks. */

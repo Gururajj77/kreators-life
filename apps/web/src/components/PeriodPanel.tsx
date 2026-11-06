@@ -7,9 +7,10 @@ import { StatTile } from './Charts';
 import { MoodFace } from './MoodFace';
 import { PeriodFilter } from './PeriodFilter';
 import { bento } from '../lib/bento';
+import { tbClass, tbStyle } from '../lib/blockColor';
 import { Section, SeeAll } from './Section';
 
-export type SummaryPart = 'daily' | 'notToDo' | 'wellbeing' | 'journal' | 'finance' | 'shop' | 'school' | 'work' | 'people';
+export type SummaryPart = 'daily' | 'kinds' | 'notToDo' | 'wellbeing' | 'journal' | 'finance' | 'shop' | 'school' | 'work' | 'people';
 
 /** A whole-unit amount for a tile (no cents), unlike shared `money()`, which keeps them. To the nearest whole rupee (or dollar), with its symbol and the person's grouping: "₹12,500". Integer maths only. */
 export const moneyRounded = (cents: number, currency: string) => sharedMoney(Math.round(cents / 100) * 100, currency);
@@ -60,6 +61,29 @@ export function SummaryTiles({ summary, parts }: { summary: ReviewSummary; parts
         { label: 'Small acts', value: now.smallActs, hint: delta(now.smallActs, before.smallActs, prev), to: '/today' },
         { label: 'Xp earned', value: formatCount(now.xp), hint: delta(now.xp, before.xp, prev), to: '/tower' },
       );
+    }
+    if (part === 'kinds') {
+      // Kinds of day (2026-11-06): the period's days so far with a kind (set for the date or given by the week; the default has none),
+      // the kind used most beside it. A review saved before then has no count, so it shows a dash. The count runs only to today, so a
+      // period still going says "so far" beside the whole period before it (no other tile counts days, so none says it).
+      const n = now.kindDays;
+      const top = now.kinds?.[0];
+      const day = todayLocal();
+      const soFar = summary.period.start <= day && day <= summary.period.end;
+      tiles.push({
+        label: 'Kinds of day',
+        value:
+          n === undefined ? (
+            '–'
+          ) : (
+            <span className={`flex items-center gap-xs ${top ? tbClass(top.color) : ''}`} style={top ? tbStyle(top.color) : undefined}>
+              {top && <span className="tb-dot" aria-hidden="true" />}
+              {`${formatCount(n)} ${n === 1 ? 'day' : 'days'}`}
+            </span>
+          ),
+        hint: n === undefined ? 'not counted then' : `${soFar ? 'so far · ' : ''}${top ? `${top.name} most · ` : ''}${delta(n, before.kindDays ?? null, prev)}`,
+        to: '/time-blocks',
+      });
     }
     if (part === 'notToDo') {
       tiles.push({ label: 'Kept days', value: now.notToDoKept, hint: `${now.notToDoSlipped} ${now.notToDoSlipped === 1 ? 'slip' : 'slips'} · ${delta(now.notToDoKept, before.notToDoKept, prev)}`, to: '/today' });

@@ -9,6 +9,7 @@ import { useAuthed } from '../lib/queries';
 import { FIELD, LABEL } from '../lib/ui';
 import { AnimatedIcon } from './AnimatedIcon';
 import { Button } from './Button';
+import { ConfirmDelete } from './ConfirmDelete';
 import { Field } from './InvoiceView';
 import { Sheet } from './Sheet';
 
@@ -189,6 +190,7 @@ function AddOnce({ gap, clientId, settings }: { gap: EmailGap; clientId?: string
       <Button size="sm" type="submit" disabled={!value.trim() || save.isPending}>
         {save.isPending ? 'Saving' : gap.where === 'client' ? 'Save to the client' : 'Save to your profile'}
       </Button>
+      <p className="m-0 w-full text-caption text-ink-soft">{gap.where === 'client' ? 'Saved on the client. Every note after this fills it in.' : 'Saved on your profile. Every note after this fills it in.'}</p>
       {err && <p role="alert" className="m-0 w-full text-subhead text-r1">{err}</p>}
     </form>
   );
@@ -221,10 +223,11 @@ function EmailNote({ ctx, onChange }: { ctx: EmailContext; onChange: (n: { subje
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [typed, setTyped] = useState(false);
-  // Saving, renaming and removing a note of your own: one small form at a time, and Remove asks twice.
+  // Saving, renaming and removing a note of your own: one small form at a time, and Remove asks first in a sheet.
   const [naming, setNaming] = useState<'save' | 'rename' | null>(null);
   const [name, setName] = useState('');
   const [armed, setArmed] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [msg, setMsg] = useState('');
   const picked = key.startsWith(OWN) ? own.find((t) => `${OWN}${t.id}` === key) : undefined;
   const varsKey = JSON.stringify(f.vars);
@@ -318,6 +321,7 @@ function EmailNote({ ctx, onChange }: { ctx: EmailContext; onChange: (n: { subje
           )}
         </select>
         {t && <p className="mt-xs m-0 text-caption text-ink-soft">{t.when}</p>}
+        {picked && <p className="mt-xs m-0 text-caption text-ink-soft">Your own note, as you saved it.</p>}
         {picked && (
           <div className="mt-xs flex flex-wrap gap-xs">
             <Button size="sm" variant="outline" onClick={() => { setName(picked.name); setNaming('rename'); setMsg(''); }}>
@@ -329,31 +333,58 @@ function EmailNote({ ctx, onChange }: { ctx: EmailContext; onChange: (n: { subje
               className="!text-r1"
               disabled={remove.isPending}
               onClick={() => {
-                if (armed) remove.mutate(picked.id);
-                else {
-                  setArmed(true);
-                  window.setTimeout(() => setArmed(false), 4000);
-                }
+                remove.reset();
+                setArmed(true);
               }}
             >
-              {armed ? 'Tap again to remove it' : 'Remove'}
+              Remove
             </Button>
           </div>
         )}
+        {picked && (
+          <ConfirmDelete
+            open={armed}
+            title="Remove this note?"
+            body={`Your note “${picked.name}” goes from Your notes. The notes to start from stay. This cannot be undone.`}
+            pending={remove.isPending}
+            failed={remove.isError}
+            onYes={() => remove.mutate(picked.id)}
+            onClose={() => setArmed(false)}
+            yes="Yes, remove it"
+          />
+        )}
       </div>
       {!picked && <AddOnceLines missing={f.missing} clientId={ctx.clientId} settings={f.settings} />}
-      <Field id="en-subject" label="Subject" value={subject} onChange={(v) => { setSubject(v); setTyped(true); }} max={EMAIL_SUBJECT_MAX} />
+      <div>
+        <Field id="en-subject" label="Subject" value={subject} onChange={(v) => { setSubject(v); setTyped(true); }} max={EMAIL_SUBJECT_MAX} />
+        <p className="mt-xs m-0 text-caption text-ink-soft">The line they see first in their inbox.</p>
+      </div>
       <div>
         <label htmlFor="en-body" className={LABEL}>
           The email
         </label>
         <textarea id="en-body" rows={14} value={body} maxLength={EMAIL_NOTE_MAX} onChange={(e) => { setBody(e.target.value); setTyped(true); }} className={`${FIELD} leading-snug [text-wrap:wrap]`} />
+        <p className="mt-xs m-0 text-caption text-ink-soft">Send it from here and the link to the page goes under your words.</p>
         <div className="mt-xs flex flex-wrap gap-xs">
           {typed && (
-            <Button size="sm" variant="ghost" onClick={() => setTyped(false)}>
+            <Button size="sm" variant="ghost" onClick={() => setResetting(true)}>
               Start again from the note
             </Button>
           )}
+          <ConfirmDelete
+            open={resetting}
+            title="Start again from the note?"
+            body="The words you typed in this email are replaced by the note's own words."
+            pending={false}
+            failed={false}
+            onYes={() => {
+              setResetting(false);
+              setTyped(false);
+            }}
+            onClose={() => setResetting(false)}
+            yes="Yes, start again"
+            keep="Keep my words"
+          />
           {naming === null && (
             <Button
               size="sm"
@@ -372,10 +403,13 @@ function EmailNote({ ctx, onChange }: { ctx: EmailContext; onChange: (n: { subje
       </div>
       {naming && (
         <div className="grid gap-xs rounded-tile bg-paper p-sm">
-          <Field id="en-save-name" label={naming === 'rename' ? 'New name' : 'Name for this note'} value={name} onChange={setName} max={TEMPLATE_NAME_MAX} />
+          <div>
+            <Field id="en-save-name" label={naming === 'rename' ? 'New name' : 'Name for this note'} value={name} onChange={setName} max={TEMPLATE_NAME_MAX} />
+            <p className="mt-xs m-0 text-caption text-ink-soft">You pick it under Your notes next time.</p>
+          </div>
           {naming === 'save' && sameName && <p className="m-0 text-subhead text-ink-soft">{`You have a note called "${sameName.name}". Saving puts these words in it.`}</p>}
           <div className="flex flex-wrap gap-xs">
-            <Button size="sm" onClick={() => keep.mutate()} disabled={!name.trim() || keep.isPending}>
+            <Button size="sm" className="flex-1" onClick={() => keep.mutate()} disabled={!name.trim() || keep.isPending}>
               {keep.isPending ? 'Saving' : naming === 'rename' ? 'Rename it' : 'Save the note'}
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setNaming(null)}>
@@ -422,7 +456,10 @@ export function EmailCopySheet({ open, onClose, route, id, defaultTo, context, n
       <div className="grid gap-sm pb-xl">
         <p className="m-0 text-subhead text-ink-soft">Pick a note, check the words, then send it from here with a link to the page, or copy it and send it from your own email with the PDF attached.</p>
         {noLinkYet && <p className="m-0 rounded-tile p-sm text-subhead" style={{ background: 'var(--tint-yellow)' }}>It has not been sent yet, so there is no link. Send it first.</p>}
-        <Field id="email-copy-to" label="Send to" type="email" value={to} onChange={setTo} max={120} placeholder="the client's email" />
+        <div>
+          <Field id="email-copy-to" label="Send to" type="email" value={to} onChange={setTo} max={120} placeholder="the client's email" />
+          <p className="mt-xs m-0 text-caption text-ink-soft">Left empty, it goes to the client's email on record.</p>
+        </div>
         {open && <EmailNote ctx={context} onChange={onNote} />}
         {msg && (
           <p role="status" className="m-0 text-subhead">
@@ -430,7 +467,7 @@ export function EmailCopySheet({ open, onClose, route, id, defaultTo, context, n
           </p>
         )}
         <div className="flex flex-wrap gap-xs">
-          <Button onClick={() => send.mutate()} disabled={send.isPending || noLinkYet || !note.body.trim()}>
+          <Button className="flex-1" onClick={() => send.mutate()} disabled={send.isPending || noLinkYet || !note.body.trim()}>
             <AnimatedIcon name={send.isPending ? 'loading' : 'mail'} size={18} />
             {send.isPending ? 'Sending' : 'Send the email'}
           </Button>

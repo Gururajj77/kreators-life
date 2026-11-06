@@ -1,4 +1,4 @@
-import { anonAliasFrom, normalizeCode, DEFAULT_ZONE, isCurrency, parseAppPrefs, isRealDay, pageSizeOf, parseIdentities, parseRepeat, parsePriority, parseIntake, parseLinkBlocks, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
+import { anonAliasFrom, normalizeCode, DEFAULT_ZONE, isCurrency, parseAppPrefs, isRealDay, pageSizeOf, parseIdentities, parseRepeat, parsePriority, parseIntake, parseLifeArea, parseLinkBlocks, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
 import { BADGE_STATS, BADGES, badgesFrom, communityRankOf, type CommunityRank, EMPTY_SOCIALS, isPrivateBadge, parsePublicSettings, HONORS, isStaffFor, levelFromXp, PERMISSIONS, roleRank, taskReadyAt, timeHonors, type BadgeFacts, type BadgesResponse, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
 import type { Context, Next } from 'hono';
 import type { AppEnv } from './env';
@@ -21,6 +21,10 @@ export interface NodeRow {
   remind?: number;
   for_review?: number;
   habit?: number | null;
+  /** The area of life it carries (migration 0085), or null for none. */
+  life_area?: string | null;
+  /** The time block the person picked for it (migration 0089), or null: it falls in the block its time sits in, or none. */
+  time_block_id?: string | null;
   do_date?: string | null;
   repeat_json?: string | null;
   spawned_from?: string | null;
@@ -348,6 +352,8 @@ export function toNode(r: NodeRow, gate?: TaskGate): Node {
     remind: (r.remind ?? 0) === 1,
     forReview: (r.for_review ?? 0) === 1,
     habit: r.habit === null || r.habit === undefined ? null : r.habit === 1,
+    lifeArea: parseLifeArea(r.life_area),
+    timeBlockId: r.time_block_id ?? null,
     dueTime: r.due_time ?? null,
     estimateMin: r.estimate_min ?? null,
     completedAt: r.completed_at,

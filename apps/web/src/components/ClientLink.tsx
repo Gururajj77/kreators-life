@@ -1,7 +1,7 @@
 import { PORTAL_ACTIONS, PORTAL_NEVER, PORTAL_PARTS, type AgencyClient, type ClientLifecycle, type PortalActionKey, type PortalPartKey } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowUpRight, Link2Off, RefreshCw } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { api } from '../lib/api';
 import { Button } from './Button';
 import { Fold } from './Fold';
@@ -16,10 +16,16 @@ const COPY = {
   never: 'These stay private, whatever you switch on.',
   freshTitle: 'Make a fresh link?',
   freshHint: 'A fresh link closes the old one at once. Send the new one to your client.',
+  offTitle: 'Switch the link off?',
+  offHint: 'Your client can no longer open their page. Switching it on later makes a new link.',
   failed: 'That did not save. Try again.',
 };
 
 const ALL_SWITCHES = [...PORTAL_PARTS, ...PORTAL_ACTIONS];
+
+/** The red yes of a confirm sheet (the look `ConfirmSheet` and Sign out use), beside an outline Keep. */
+const RED_YES = 'toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill disabled:opacity-50';
+const RED_YES_STYLE = { '--toy-color': 'var(--deep-servant_leader)' } as CSSProperties;
 
 /**
  * The client link, summed up in one row: on or off, the password, how many parts the client sees, and Copy link. What they see opens
@@ -36,7 +42,13 @@ export function ClientLink({ client, life }: { client: AgencyClient; life: Clien
   const shown = ALL_SWITCHES.filter((p) => client.portal[p.key]).length;
   const [copied, setCopied] = useState(false);
   const [manual, setManual] = useState(false);
-  const [sheet, setSheet] = useState<null | 'see' | 'fresh'>(null);
+  const [sheet, setSheet] = useState<null | 'see' | 'fresh' | 'off'>(null);
+  // Where Keep it on goes back to: the switches sheet when the off came from its toggle.
+  const [offBack, setOffBack] = useState<null | 'see'>(null);
+  const askOff = (from: null | 'see') => {
+    setOffBack(from);
+    setSheet('off');
+  };
   const timers = useRef<number[]>([]);
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
 
@@ -63,7 +75,7 @@ export function ClientLink({ client, life }: { client: AgencyClient; life: Clien
       <div className="flex flex-wrap items-center gap-sm">
         <div className="min-w-0 flex-1">
           <h3 className="m-0 text-card-title">Client link</h3>
-          <p className="m-0 text-card-note text-ink-soft">{summary}</p>
+          {!on && <p className="m-0 text-card-note text-ink-soft">{summary}</p>}
         </div>
         {on ? (
           <Button size="sm" onClick={copy}>
@@ -81,14 +93,12 @@ export function ClientLink({ client, life }: { client: AgencyClient; life: Clien
               ? [
                   { key: 'preview', label: 'Open preview', icon: ArrowUpRight, onSelect: () => window.open(url, '_blank', 'noopener') },
                   { key: 'fresh', label: 'Make a fresh link', icon: RefreshCw, onSelect: () => setSheet('fresh') },
-                  { key: 'off', label: 'Switch the link off', icon: Link2Off, destructive: true, onSelect: () => send.mutate({ on: false }) },
+                  { key: 'off', label: 'Switch the link off', icon: Link2Off, destructive: true, onSelect: () => askOff(null) },
                 ]
               : []),
           ]}
         />
       </div>
-
-      {!on && <p className="mt-sm m-0 text-subhead text-ink-soft">{COPY.off}</p>}
 
       {on && manual && (
         <div className="mt-sm">
@@ -99,8 +109,11 @@ export function ClientLink({ client, life }: { client: AgencyClient; life: Clien
         </div>
       )}
 
-      <div className="mt-sm flex flex-wrap gap-xs">
-        <Button size="sm" variant="outline" onClick={() => setSheet('see')}>
+      {/* "Change what they see" at the bottom right, in line with the line it changes (the founder, 2026-11-06): while the link is on,
+          that is the summary of what is shown, so the summary moves down here beside it. */}
+      <div className="mt-sm flex flex-wrap items-end justify-between gap-sm">
+        {!on ? <p className="m-0 min-w-0 flex-1 basis-[200px] text-subhead text-ink-soft">{COPY.off}</p> : <p className="m-0 min-w-0 flex-1 basis-[120px] text-card-note text-ink-soft">{summary}</p>}
+        <Button size="sm" variant="outline" className="ml-auto" onClick={() => setSheet('see')}>
           Change what they see
         </Button>
       </div>
@@ -112,7 +125,7 @@ export function ClientLink({ client, life }: { client: AgencyClient; life: Clien
     </div>
 
       <Sheet open={sheet === 'see'} onClose={() => setSheet(null)} title="What your client sees">
-        <Toggle compact on={on} onChange={(v) => send.mutate({ on: v })} disabled={send.isPending} label="Client link" hint={on ? COPY.on : COPY.off} />
+        <Toggle compact on={on} onChange={(v) => (v ? send.mutate({ on: true }) : askOff('see'))} disabled={send.isPending} label="Client link" hint={on ? COPY.on : COPY.off} />
         <h3 className="mt-md text-headline">What they can see</h3>
         <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
           {PORTAL_PARTS.map((p) => (
@@ -143,24 +156,48 @@ export function ClientLink({ client, life }: { client: AgencyClient; life: Clien
           </p>
         )}
         <div className="mt-md pb-xl">
-          <Button onClick={() => setSheet(null)}>Done</Button>
+          <Button full onClick={() => setSheet(null)}>Done</Button>
         </div>
       </Sheet>
 
       <Sheet open={sheet === 'fresh'} onClose={() => setSheet(null)} title={COPY.freshTitle}>
         <p className="m-0 text-subhead text-ink-soft">{COPY.freshHint}</p>
         <div className="mt-md flex flex-wrap gap-xs pb-xl">
-          <Button
+          <button
+            type="button"
             onClick={() => {
               send.mutate({ fresh: true });
               setSheet(null);
             }}
             disabled={send.isPending}
+            className={RED_YES}
+            style={RED_YES_STYLE}
           >
             Yes, make a fresh link
-          </Button>
+          </button>
           <Button variant="outline" onClick={() => setSheet(null)}>
             Keep this one
+          </Button>
+        </div>
+      </Sheet>
+
+      <Sheet open={sheet === 'off'} onClose={() => setSheet(offBack)} title={COPY.offTitle}>
+        <p className="m-0 text-subhead text-ink-soft">{COPY.offHint}</p>
+        <div className="mt-md flex flex-wrap gap-xs pb-xl">
+          <button
+            type="button"
+            onClick={() => {
+              send.mutate({ on: false });
+              setSheet(null);
+            }}
+            disabled={send.isPending}
+            className={RED_YES}
+            style={RED_YES_STYLE}
+          >
+            Yes, switch it off
+          </button>
+          <Button variant="outline" onClick={() => setSheet(offBack)}>
+            Keep it on
           </Button>
         </div>
       </Sheet>

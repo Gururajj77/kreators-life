@@ -11,6 +11,7 @@ import { Ring } from '../components/Ring';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
+import { FIELD_LINE } from '../lib/ui';
 import { useAuthed, useWellbeing } from '../lib/queries';
 import { AppIcon } from '../components/AppIcon';
 import { Icon } from '../components/Icon';
@@ -97,7 +98,8 @@ export function Life() {
       )}
 
       <PeriodPanel id="life-period" parts={['daily', 'notToDo', 'wellbeing', 'journal', 'finance', 'school']} />
-      <EmergenceSlot app="life" max={2} />
+      {/* Always shown here, as on Home (the founder, 2026-11-06: "previously there was emergence in life app, add it back"). */}
+      <EmergenceSlot app="life" max={2} always />
       {d?.areas.map((a) => (
         <AreaCard key={a.key} area={a} />
       ))}
@@ -114,7 +116,7 @@ export function Life() {
             move.mutate();
           }}
         >
-          <input type="number" min={1} max={600} value={minutes} onChange={(e) => setMinutes(e.target.value)} aria-label="Minutes" className="w-[120px] rounded-pill border-2 border-line bg-card px-md py-sm text-body" />
+          <input type="number" min={1} max={600} value={minutes} onChange={(e) => setMinutes(e.target.value)} aria-label="Minutes" className={`${FIELD_LINE} min-w-0 flex-1`} />
           <Button type="submit" disabled={move.isPending}>
             {move.isSuccess ? 'Logged' : 'Add minutes'}
           </Button>
@@ -136,10 +138,19 @@ function AreaCard({ area }: { area: LifeArea }) {
             <span className="text-title3 type-figure">{area.score}</span>
           </Ring>
           <div className="min-w-0 flex-1">
-            <h2 id={`area-${area.key}`} className="m-0 flex items-center gap-xs text-title2">
-              <AppIcon name={meta.icon} size={24} />
-              {meta.name}
-            </h2>
+            {/* The title and its link share the top row, the link at the right; on a narrow phone the link wraps under, still at the right.
+                The link's box is one title line tall and centres on it, so its 44px tap area never pushes the lines below down. */}
+            <div className="flex flex-wrap items-center justify-between gap-x-sm">
+              <h2 id={`area-${area.key}`} className="m-0 flex min-w-0 items-center gap-xs text-title2">
+                <AppIcon name={meta.icon} size={24} />
+                {meta.name}
+              </h2>
+              <div className="ml-auto flex h-[26px] shrink-0 items-center">
+                <Link to={meta.path} className="inline-flex min-h-[44px] items-center text-subhead font-semibold underline-offset-4 hover:underline" style={{ color: `var(--deep-${rel.key})` }}>
+                  Open {meta.name.toLowerCase()} tools
+                </Link>
+              </div>
+            </div>
             {/* Each part up to a comma kept whole, so a narrow phone breaks the line there and never leaves a short one (the rectangle rule). */}
             <p className="m-0 text-subhead text-ink-soft">
               {meta.blurb.split(', ').map((part, i, all) => (
@@ -176,9 +187,6 @@ function AreaCard({ area }: { area: LifeArea }) {
             </li>
           ))}
         </ul>
-        <Link to={meta.path} className="mt-sm inline-flex min-h-[44px] items-center text-subhead font-semibold underline-offset-4 hover:underline" style={{ color: `var(--deep-${rel.key})` }}>
-          Open {meta.name.toLowerCase()} tools
-        </Link>
       </div>
     </section>
   );

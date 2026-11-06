@@ -1,17 +1,23 @@
 import { groupStartsOpen, MODULE_GROUP_ACCENT, MODULE_GROUP_BLURB, MODULE_GROUPS, orderInGroup, RELATIONSHIP_BY_KEY, type AppPrefs, type ModuleGroup } from '@kreators/shared';
-import { useMutation } from '@tanstack/react-query';
+import { Phrases } from './Phrases';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { MeResponse } from '@kreators/shared';
 import gsap from 'gsap';
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { ArrowDown, ArrowUp, ArrowUpRight, RotateCcw } from 'lucide-react';
 import { api } from '../lib/api';
 import { useKept } from '../lib/kept';
-import { useAppPrefs, useModules, useSaveAppPrefs, type ModuleView } from '../lib/modules';
-import { useMe, useRefreshAll } from '../lib/queries';
+import { useAppPrefs, useHiddenApps, useModules, useSaveAppPrefs, type ModuleView } from '../lib/modules';
+// The two hooks live in lib/modules.ts so Home can count hidden apps without downloading this file; re-exported for the screens.
+export { useFits, useHiddenApps } from '../lib/modules';
+import { keys, useMe, useRefreshAll } from '../lib/queries';
 import { tie } from '../lib/text';
+import { AnimatedIcon } from './AnimatedIcon';
 import { AppIcon } from './AppIcon';
 import { Avatar } from './Avatar';
 import { Button } from './Button';
+import { Fold } from './Fold';
 import { tick } from './fx/haptics';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
@@ -20,9 +26,10 @@ import { Toggle } from './Toggle';
 import { ToggleChevron } from './ToggleMark';
 
 /**
- * The apps, grouped, each group one big accordion in its pillar's colour. Opening a group shows every app in it, on or off: the name
- * opens an app that is on, and the switch on the right turns it on or off right there. Used on Apps and under Profile, Features, so
- * switching happens in the same place the apps are listed.
+ * The apps, grouped, each group one big accordion in its pillar's colour. Opening a group shows the apps that are shown, each name
+ * opening the app and a Hide button at its right; the hidden ones sit at the end in a short, full-width "Hidden apps" fold, each with
+ * Unhide (the founder, 2026-11-06: hide and unhide, never an on and off switch, and a hidden app leaves the list). The fold starts closed
+ * on Apps and open under Profile, Features. Hiding is the same per-person module switch as before (`api.setModule`).
  *
  * How a group starts is the person's own pick, saved on the account (`appPrefs`): on Apps (and in the sidebar and the phone menu)
  * Contribution and Essentials start open and the rest closed until they pick (`GROUP_OPEN_DEFAULT`); Profile, Features opens every
@@ -43,28 +50,15 @@ export function AppGroups({ groups, unread = 0, fits, open, where }: { groups: r
     const ok = await savePrefs(next);
     setSaid(ok ? done : 'Could not save that. Try again.');
   };
-  const refresh = useRefreshAll();
-  const [busy, setBusy] = useState<string | null>(null);
-  const [failed, setFailed] = useState<string | null>(null);
-  const toggle = useMutation({
-    mutationFn: ({ key, on }: { key: string; on: boolean }) => api.setModule(key, on),
-    onMutate: ({ key }) => {
-      setBusy(key);
-      setFailed(null);
-    },
-    onSuccess: async () => {
-      await refresh();
-    },
-    onError: (_e, { key }) => setFailed(key),
-    onSettled: () => setBusy(null),
-  });
+  const { busy, failed, toggle } = useAppSwitch(setSaid);
 
   return (
     <div className="flex flex-col gap-sm">
       {editing && (
-        <div className="flex items-center justify-between gap-sm">
-          <p className="m-0 min-w-0 text-subhead text-ink-soft">{arrange ? 'Drag a handle or use the arrows. Apps stay in their group.' : 'Pick how each group starts, and the order of its apps.'}</p>
-          <Button variant="outline" size="sm" aria-pressed={arrange} onClick={() => setArrange((a) => !a)} className="shrink-0">
+        // The line at the left and Arrange apps at its bottom right, in line with it (the founder, 2026-11-06); a narrow phone wraps it under, still at the right.
+        <div className="flex flex-wrap items-end justify-between gap-sm">
+          <p className="m-0 min-w-0 flex-[1_1_220px] text-subhead text-ink-soft">{arrange ? 'Drag a handle or use the arrows. Apps stay in their group.' : 'Pick how each group starts, and the order of its apps.'}</p>
+          <Button variant="outline" size="sm" aria-pressed={arrange} onClick={() => setArrange((a) => !a)} className="ml-auto shrink-0">
             {arrange ? 'Done' : 'Arrange apps'}
           </Button>
         </div>
@@ -106,7 +100,8 @@ export function AppGroups({ groups, unread = 0, fits, open, where }: { groups: r
             failed={failed}
             scope={scope}
             startOpen={startOpen}
-            onToggle={(key, on) => toggle.mutate({ key, on })}
+            hiddenOpen={editing}
+            onToggle={(key, on) => toggle.mutate({ key, on, name: nameIn(list, key) })}
             controls={
               editing ? (
                 <div className="mx-sm mb-sm flex items-center gap-xs">
@@ -125,17 +120,100 @@ export function AppGroups({ groups, unread = 0, fits, open, where }: { groups: r
   );
 }
 
+/**
+ * Hide or unhide one app for this person (the per-person module switch), with which one is busy or failed and a line for screen readers.
+ * The change shows at once (the founder, 2026-11-06: the "N of M shown" count and the Hidden apps fold must not wait for the reload): the
+ * cached account is updated before the call, put back if the server refuses, and read again after.
+ */
+function useAppSwitch(say: (line: string) => void) {
+  const refresh = useRefreshAll();
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const toggle = useMutation({
+    mutationFn: ({ key, on }: { key: string; on: boolean; name: string }) => api.setModule(key, on),
+    onMutate: ({ key, on }) => {
+      setBusy(key);
+      setFailed(null);
+      const was = qc.getQueryData<MeResponse>(keys.me);
+      if (was) {
+        const access = was.access?.[key] ? { ...was.access, [key]: { ...was.access[key], on } } : was.access;
+        qc.setQueryData<MeResponse>(keys.me, { ...was, access, user: { ...was.user, modules: { ...was.user.modules, [key]: on } } });
+      }
+      return { was };
+    },
+    onSuccess: async (_r, { on, name }) => {
+      say(on ? `${name} is shown again.` : `${name} is hidden. Find it under Hidden apps.`);
+      await refresh();
+    },
+    onError: (_e, { key }, ctx) => {
+      if (ctx?.was) qc.setQueryData<MeResponse>(keys.me, ctx.was);
+      setFailed(key);
+    },
+    onSettled: () => setBusy(null),
+  });
+  return { busy, failed, toggle };
+}
+
+/**
+ * Every hidden app in one place (the hidden-apps button on Apps and on Home's Go to, the founder 2026-11-06): under each group's name in its colour, the
+ * apps with Unhide, so one can be brought back without opening its group. An inline panel under its button, never a sheet.
+ */
+export function HiddenAppsPanel({ groups, id, fits, empty = 'No hidden apps. Hide one from its group below.' }: { groups: readonly ModuleGroup[]; id: string; /** Apps that fit the person (`useFits`): listed first in each group, with "Fits you" and why. */ fits?: Map<string, string>; /** The line when nothing is hidden. */ empty?: string }) {
+  // Inside each group the apps that fit come first; the rest keep the group's own order (a stable sort).
+  const sets = useHiddenApps(groups).map((x) => (fits && fits.size > 0 ? { ...x, list: [...x.list].sort((a, b) => Number(fits.has(b.key)) - Number(fits.has(a.key))) } : x));
+  const [said, setSaid] = useState('');
+  const { busy, failed, toggle } = useAppSwitch(setSaid);
+  return (
+    <section id={id} aria-label="Hidden apps" className="rounded-card bg-card p-sm shadow-toy-soft">
+      <p role="status" aria-live="polite" className="sr-only">
+        {said}
+      </p>
+      {sets.length === 0 ? (
+        <p className="m-0 text-subhead text-ink-soft">{empty}</p>
+      ) : (
+        <div className="flex flex-col gap-sm">
+          {sets.map(({ group, list }) => {
+            const rel = RELATIONSHIP_BY_KEY[MODULE_GROUP_ACCENT[group]];
+            return (
+              <div key={group} data-pillar={rel.key}>
+                <p className="m-0 mb-xs text-eyebrow uppercase" style={{ color: `var(--deep-${rel.key})` }}>
+                  {MODULE_GROUPS[group]}
+                </p>
+                <ul className="fx-inset m-0 list-none p-0">
+                  {list.map((m) => (
+                    <li key={m.key}>
+                      <Row m={m} color={rel.color} tint={`var(--soft-${rel.key})`} unread={0} why={fits?.get(m.key)} busy={busy === m.key} failed={failed === m.key} onToggle={(v) => toggle.mutate({ key: m.key, on: v, name: m.name })} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 /** An app's name in a group's list, for the line a screen reader hears after a move. */
 const nameIn = (list: ModuleView[], key: string) => list.find((m) => m.key === key)?.name ?? key;
 
-function Group({ group, list, unread, fits, busy, failed, scope, startOpen, onToggle, controls, arrange }: { group: ModuleGroup; list: ModuleView[]; unread: number; fits?: Map<string, string>; busy: string | null; failed: string | null; scope: string; startOpen: boolean; onToggle: (key: string, on: boolean) => void; /** Profile, Features: the "Starts open" switch and the group's More menu, under its header. */ controls: ReactNode; /** Arranging (Profile, Features): rows get a drag handle and Move up and Move down, and this moves one. */ arrange: ((from: number, to: number) => void) | null }) {
+function Group({ group, list, unread, fits, busy, failed, scope, startOpen, hiddenOpen, onToggle, controls, arrange }: { group: ModuleGroup; list: ModuleView[]; unread: number; fits?: Map<string, string>; busy: string | null; failed: string | null; scope: string; startOpen: boolean; /** The Hidden apps fold starts open (Profile, Features) or closed (Apps). */ hiddenOpen: boolean; onToggle: (key: string, on: boolean) => void; /** Profile, Features: the "Starts open" switch and the group's More menu, under its header. */ controls: ReactNode; /** Arranging (Profile, Features): rows get a drag handle and Move up and Move down, and this moves one. */ arrange: ((from: number, to: number) => void) | null }) {
   // Open or closed is remembered for this tab and this person (lib/kept.ts): it stays as left while moving around the app, and resets on
   // a reload, on sign-out, or on another device.
   const [open, setOpen] = useKept<boolean>(scope, group, startOpen);
   const body = useRef<HTMLDivElement>(null);
   const id = useId();
   const rel = RELATIONSHIP_BY_KEY[MODULE_GROUP_ACCENT[group]];
-  const on = list.filter((m) => m.on).length;
+  const shown = list.filter((m) => m.on);
+  const hidden = list.filter((m) => !m.on);
+  const on = shown.length;
+  const row = (m: ModuleView) => (
+    <li key={m.key}>
+      <Row m={m} color={rel.color} tint={`var(--soft-${rel.key})`} unread={m.key === 'notifications' ? unread : 0} why={fits?.get(m.key)} busy={busy === m.key} failed={failed === m.key} onToggle={(v) => onToggle(m.key, v)} />
+    </li>
+  );
 
   // A group that starts open shows open at once; only a tap slides it.
   const first = useRef(true);
@@ -185,24 +263,40 @@ function Group({ group, list, unread, fits, busy, failed, scope, startOpen, onTo
           </span>
         </span>
         <span className="shrink-0 rounded-pill bg-card-strong px-sm text-caption font-medium leading-[26px]" style={{ color: `var(--deep-${rel.key})` }}>
-          {on} of {list.length} on
+          {on} of {list.length} shown
         </span>
         <ToggleChevron open={open} size={20} className="text-ink-soft" />
       </button>
       {controls}
       <div ref={body} id={`${id}-b`} hidden={!open} className="overflow-hidden">
         {arrange ? (
-          <SortableList items={list} keyOf={(m) => m.key} onMove={arrange} className="fx-inset m-0 mx-sm mb-sm list-none p-0">
-            {(m, i, handle) => <ArrangeRow m={m} index={i} count={list.length} color={rel.color} handle={handle} onMove={arrange} />}
-          </SortableList>
+          // .fx-inset sets its own margins to 0, so the room either side and under the list comes from a wrapper.
+          <div className="mx-sm mb-sm">
+            <SortableList items={list} keyOf={(m) => m.key} onMove={arrange} className="fx-inset m-0 list-none p-0">
+              {(m, i, handle) => <ArrangeRow m={m} index={i} count={list.length} color={rel.color} handle={handle} onMove={arrange} />}
+            </SortableList>
+          </div>
         ) : (
-          <ul className="fx-inset m-0 mx-sm mb-sm list-none p-0">
-            {list.map((m) => (
-              <li key={m.key}>
-                <Row m={m} color={rel.color} tint={`var(--soft-${rel.key})`} unread={m.key === 'notifications' ? unread : 0} why={fits?.get(m.key)} busy={busy === m.key} failed={failed === m.key} onToggle={(v) => onToggle(m.key, v)} />
-              </li>
-            ))}
-          </ul>
+          <>
+            {shown.length > 0 ? (
+              // .fx-inset sets its own margins to 0, so the room either side and under the list comes from a wrapper (the founder,
+              // 2026-11-06: space on the left and right inside a group).
+              <div className="mx-sm mb-sm">
+                <ul className="fx-inset m-0 list-none p-0">{shown.map(row)}</ul>
+              </div>
+            ) : (
+              <p className="m-0 mx-sm mb-sm text-subhead text-ink-soft">Every app here is hidden.</p>
+            )}
+            {/* The hidden apps at the end of the shown ones: one short fold across the full width, each inside with Unhide. */}
+            {hidden.length > 0 && (
+              // The fold lines up with the list above (its wrapper's room), and its rows sit one small gap under its button.
+              <Fold className="mx-sm mb-sm" title="Hidden apps" hint={String(hidden.length)} defaultOpen={hiddenOpen}>
+                <div className="mt-xs">
+                  <ul className="fx-inset m-0 list-none p-0">{hidden.map(row)}</ul>
+                </div>
+              </Fold>
+            )}
+          </>
         )}
       </div>
     </section>
@@ -210,6 +304,13 @@ function Group({ group, list, unread, fits, busy, failed, scope, startOpen, onTo
 }
 
 function Row({ m, color, tint, unread, why, busy, failed, onToggle }: { m: ModuleView; color: string; tint: string; unread: number; why?: string; busy: boolean; failed: boolean; onToggle: (on: boolean) => void }) {
+  // The eye plays its turn first, then the row moves; a failed change (the row stays) brings the eye back.
+  const [flipping, setFlipping] = useState(false);
+  const timer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  useEffect(() => {
+    if (failed) setFlipping(false);
+  }, [failed]);
   const words = (
     <>
       <span className={`flex size-[44px] shrink-0 items-center justify-center rounded-pill ${m.on ? 'text-ink' : 'text-ink-mute'}`} style={{ background: m.on ? tint : 'var(--color-line)' }}>
@@ -221,11 +322,15 @@ function Row({ m, color, tint, unread, why, busy, failed, onToggle }: { m: Modul
           {unread > 0 && m.on && <span className="rounded-pill bg-r1 px-xs text-caption2 font-semibold leading-[18px] text-on-fill">{unread}</span>}
           {m.on && <Icon icon={ArrowUpRight} size={16} className="text-ink-mute" />}
         </span>
-        <span className="mt-[2px] block text-footnote text-ink-soft">{tie(m.blurb)}</span>
+        {/* Each part after a colon is kept whole, so a narrow row breaks there on purpose ("Brand campaigns:" over the rest; Text is a
+            rectangle). */}
+        <span className="mt-[2px] block text-footnote text-ink-soft">
+          <Phrases text={tie(m.blurb)} />
+        </span>
         {why && <span className="mt-[2px] block text-caption text-ink-mute">Fits you: {why}</span>}
         {failed && (
           <span role="alert" className="mt-[2px] block text-caption text-r1">
-            Could not switch it. Try again.
+            Could not {m.on ? 'hide' : 'unhide'} it. Try again.
           </span>
         )}
       </span>
@@ -240,20 +345,23 @@ function Row({ m, color, tint, unread, why, busy, failed, onToggle }: { m: Modul
       ) : (
         <span className="flex min-h-[44px] min-w-0 flex-1 items-center gap-sm">{words}</span>
       )}
+      {/* Hide and Unhide are a quiet eye (the founder, 2026-11-06: not a dominant button): the round 44px icon button the arrange arrows
+          already use, the useanimations eye turning to its slashed state (or back) before the row moves to its new list. */}
       <button
         type="button"
-        role="switch"
-        aria-checked={m.on}
-        aria-label={`${m.name}: ${m.on ? 'on' : 'off'}`}
-        disabled={busy}
+        aria-label={`${m.on ? 'Hide' : 'Unhide'} ${m.name}`}
+        title={m.on ? 'Hide' : 'Unhide'}
+        disabled={busy || flipping}
         onClick={() => {
           tick();
-          onToggle(!m.on);
+          const go = () => onToggle(!m.on);
+          if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return go();
+          setFlipping(true);
+          timer.current = window.setTimeout(go, 360);
         }}
-        className="fx-switch shrink-0"
-        style={{ '--switch-on': color } as CSSProperties}
+        className="toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-ink disabled:pointer-events-none"
       >
-        <span className="fx-switch-knob" aria-hidden="true" />
+        <AnimatedIcon name="visibility" size={20} active={m.on ? flipping : !flipping} />
       </button>
     </div>
   );

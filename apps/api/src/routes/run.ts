@@ -736,6 +736,7 @@ run.post('/talk/:runId/messages/:mid/report', async (c) => {
 run.post('/talk/:runId/messages/:mid/block-author', async (c) => {
   const t = await talkFor(c.env.DB, c.get('user'), c.req.param('runId'));
   if (!t) return c.json({ error: 'not found' }, 404);
-  const line = await c.env.DB.prepare('SELECT user_id FROM run_messages WHERE id = ? AND run_id = ?').bind(c.req.param('mid'), t.id).first<{ user_id: string }>();
-  return blockBehind(c, line?.user_id);
+  const line = await c.env.DB.prepare('SELECT user_id, anonymous FROM run_messages WHERE id = ? AND run_id = ?').bind(c.req.param('mid'), t.id).first<{ user_id: string; anonymous: number }>();
+  // An anonymous writer is blocked under the run's made-up name for them, so Bond never names them.
+  return blockBehind(c, line?.user_id, line?.anonymous === 1 ? await anonAlias(c.env, line.user_id, `run:${t.id}`) : null);
 });

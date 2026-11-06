@@ -1,31 +1,35 @@
+import gsap from 'gsap';
 import { CloseButton } from './CloseButton';
 import { LOCALE, MAX_CUSTOM_REMINDERS, REMINDER_TIME, REMINDER_TITLE_MAX, WATER_EVERY_CHOICES, WATER_GLASS_MAX, WATER_GLASS_MIN, WATER_GOAL_MAX, WATER_GOAL_MIN, WEEKDAY_NAMES, weekdaysLabel, type CustomReminder } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { lazyNamed } from '../lib/lazy';
 import { useLocation } from 'react-router';
 import { api } from '../lib/api';
 import { dayLabel, todayLocal } from '../lib/date';
 import { useSession } from '../lib/store';
 import { useDialogFocus } from '../lib/useDialogFocus';
 import { Button } from './Button';
+import { ConfirmDelete } from './ConfirmDelete';
 import { WaterFill } from './fx/WaterFill';
 import { WaterGlass } from './fx/WaterGlass';
+import { prefersReducedMotion } from './fx/env';
 import { Sheet } from './Sheet';
 import { Icon } from './Icon';
-import { Check, ChevronLeft, ChevronRight, Droplet, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Droplet, Undo2, X } from 'lucide-react';
 import { FIELD } from '../lib/ui';
 import { Toggle } from './Toggle';
 import { ToggleChevron } from './ToggleMark';
 import { ChipSelect } from './ChipSelect';
-import { RoundButton } from './RoundButton';
 import { AnimatedIcon } from './AnimatedIcon';
+import { useWide } from '../lib/useWide';
 
-const msg = (e: unknown) => (e instanceof Error ? e.message : 'That did not work. Try again.');
+export const msg = (e: unknown) => (e instanceof Error ? e.message : 'That did not work. Try again.');
 // 2 L, 2.25 L, 10 L: trailing zeros go only after a decimal point (the old one turned 10,000 ml into 1 L).
-const litres = (ml: number) => (ml >= 1000 ? `${Number((ml / 1000).toFixed(2))} L` : `${ml} ml`);
+export const litres = (ml: number) => (ml >= 1000 ? `${Number((ml / 1000).toFixed(2))} L` : `${ml} ml`);
 
 /** "Tue 3 Nov" for a day typed as YYYY-MM-DD. */
-const shortDay = dayLabel;
+export const shortDay = dayLabel;
 
 function useReminders() {
   const token = useSession((s) => s.token);
@@ -36,26 +40,33 @@ function useReminders() {
   return { q, day, refresh };
 }
 
+/** Whether a task tagged Remember has no day yet: Water and reminders then links to Daily's To remember (`#remember-heading`), so
+ * Daily keeps that heading even while its Area filter hides every one of them. Shares the section's own query. */
+export function useUndatedRemember(): boolean {
+  const { q } = useReminders();
+  return (q.data?.tasks ?? []).some((t) => !t.day);
+}
+
 function Drop({ size = 20 }: { size?: number }) {
   return (
     <Icon icon={Droplet} size={size} filled />
   );
 }
 
-const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
-const minutesOf = (t: string) => {
+export const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+export const minutesOf = (t: string) => {
   const [h, m] = t.split(':').map(Number);
   return (h ?? 0) * 60 + (m ?? 0);
 };
 /** A picker's choices, with the value now in effect always among them (a goal typed as 2,150 ml stays pickable). */
-const withNow = (list: number[], now: number, label: (n: number) => string) => [...new Set([...list, now])].sort((a, b) => a - b).map((value) => ({ value, label: label(value) }));
-const GOALS = Array.from({ length: (WATER_GOAL_MAX - WATER_GOAL_MIN) / 250 + 1 }, (_, i) => WATER_GOAL_MIN + i * 250);
-const GLASSES = [100, 150, 200, 250, 300, 350, 400, 500, 750, 1000].filter((n) => n >= WATER_GLASS_MIN && n <= WATER_GLASS_MAX);
-const HOURS = Array.from({ length: 19 }, (_, i) => (5 + i) * 60);
-const everyLabel = (w: { everyMin: number }) => (w.everyMin >= 60 ? `${w.everyMin / 60} h` : `${w.everyMin} min`);
+export const withNow = (list: number[], now: number, label: (n: number) => string) => [...new Set([...list, now])].sort((a, b) => a - b).map((value) => ({ value, label: label(value) }));
+export const GOALS = Array.from({ length: (WATER_GOAL_MAX - WATER_GOAL_MIN) / 250 + 1 }, (_, i) => WATER_GOAL_MIN + i * 250);
+export const GLASSES = [100, 150, 200, 250, 300, 350, 400, 500, 750, 1000].filter((n) => n >= WATER_GLASS_MIN && n <= WATER_GLASS_MAX);
+export const HOURS = Array.from({ length: 19 }, (_, i) => (5 + i) * 60);
+export const everyLabel = (w: { everyMin: number }) => (w.everyMin >= 60 ? `${w.everyMin / 60} h` : `${w.everyMin} min`);
 
 /** Every write the water block makes, in one place, so the panel and its two sheets share them. */
-function useWaterActions() {
+export function useWaterActions() {
   const { q, day, refresh } = useReminders();
   const qc = useQueryClient();
   const touchDaily = () => {
@@ -84,23 +95,21 @@ const weekdayOf = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateStrin
  * already shows the count, a glass and Undo) leaves the count and Undo out. The panel pins the dark theme's colours on itself
  * (`.water-night`), so it reads the same in both themes.
  */
-function WaterPanel({ summary = true }: { summary?: boolean }) {
+function WaterPanel({ summary = true, undoHere = true }: { summary?: boolean; /** Undo beside the amount picker (a laptop's Home); on a phone and in the bubble it is in the icon row instead. */ undoHere?: boolean }) {
   const { q, drink, undo } = useWaterActions();
   const w = q.data?.water;
   const [picked, setPicked] = useState<number | null>(null);
   const failed = drink.error ?? undo.error;
-  if (!w)
-    return (
-      <div className="night-card mf-panel water-night rounded-card" data-accent="r4">
-        <p className="mf-line m-0" role="status">{q.isError ? 'Could not load.' : 'Loading'}</p>
-      </div>
-    );
-  const max = Math.max(w.goalMl, ...w.week.map((d) => d.ml));
+  if (!w) return null;
   const amounts = amountsFor(w.glassMl);
   const amount = picked !== null && amounts.includes(picked) ? picked : w.glassMl;
   const at = amounts.indexOf(amount);
+  const met = w.week.filter((d) => d.ml >= w.goalMl).length;
+  const average = Math.round(w.week.reduce((n, d) => n + d.ml, 0) / Math.max(1, w.week.length));
+  // Above each day, what was drunk in short: 750, 1.5L.
+  const short = (ml: number) => (ml < 1000 ? String(ml) : `${Number((ml / 1000).toFixed(1))}L`);
   return (
-    <div className="night-card mf-panel water-night rounded-card" data-accent="r4" data-pillar="lover_partner">
+    <>
       <div className="water-grid">
         <div className="water-grid-glass flex flex-col items-center">
           <WaterGlass value={w.ml} max={w.goalMl} size={150} />
@@ -120,323 +129,205 @@ function WaterPanel({ summary = true }: { summary?: boolean }) {
             <Icon icon={ChevronLeft} size={18} />
           </button>
           {/* The bubble opens with focus here (data-autofocus), on the one main action, so Enter adds the amount shown. */}
-          {/* Inside the section its row's + Glass is the screen's solid button, so here the amount is an outline pill. */}
-          <button type="button" data-autofocus="" className={`${summary ? 'mf-start' : 'mf-mini'} toy min-w-[112px]`} onClick={() => drink.mutate(amount === w.glassMl ? undefined : amount)} disabled={drink.isPending}>
+          {/* The water green everywhere, in the section on Home, Daily and Journal too (the founder, 2026-11-06). */}
+          <button type="button" data-autofocus="" className="mf-start toy min-w-[112px]" onClick={() => drink.mutate(amount === w.glassMl ? undefined : amount)} disabled={drink.isPending}>
             +{amount} ml
           </button>
           <button type="button" className="mf-mini toy flex w-[44px] items-center justify-center px-0" onClick={() => setPicked(amounts[Math.min(amounts.length - 1, at + 1)]!)} disabled={at >= amounts.length - 1} aria-label="A larger amount">
             <Icon icon={ChevronRight} size={18} />
           </button>
-          {summary && (
+          {summary && undoHere && (
             <button type="button" className="mf-mini toy ml-xs" onClick={() => undo.mutate()} disabled={undo.isPending || w.ml === 0}>
               Undo
             </button>
           )}
         </div>
 
-        {/* The last seven days, each bar its day, today the brightest. */}
+        {/* The last seven days (the founder, 2026-11-06: "use better indicators"): each day a small glass filled against the goal, what
+            was drunk above it, a tick when the goal was met, today ringed; and how many days met it, and the average. */}
         <div className="water-grid-week min-w-0">
           <p className="mf-line m-0">Last seven days</p>
-          <div className="mt-sm flex h-[140px] items-end gap-xs" role="img" aria-label={`Water, last seven days: ${w.week.map((d) => `${weekdayOf(d.day)} ${litres(d.ml)}`).join(', ')}`}>
-            {w.week.map((d) => (
-              <span key={d.day} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-xs">
-                <span className="w-full rounded-pill" style={{ height: `${Math.max(6, (d.ml / max) * 100)}%`, background: 'var(--mf-a-text)', opacity: d.day === w.day ? 1 : 0.4 }} />
-                <span className="text-caption2 text-[color:var(--mf-dim)]" aria-hidden="true">{weekdayOf(d.day)}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
-      {failed && <p role="alert" className="mf-line">{msg(failed)}</p>}
-    </div>
-  );
-}
-
-/** The water settings, in a sheet from the gear: the reminder switch and five pickers (goal, glass, how often, from and to). */
-function WaterSettings() {
-  const { q, settle } = useWaterActions();
-  const w = q.data?.water;
-  if (!w) return <p className="m-0 text-subhead text-ink-soft" role="status">{q.isError ? 'Could not load.' : 'Loading'}</p>;
-  const every = everyLabel(w);
-  return (
-    <div className="night-card mf-panel water-night rounded-card" data-accent="r4">
-      <Toggle
-        compact
-        on={w.on}
-        onChange={(on) => settle.mutate({ on })}
-        disabled={settle.isPending}
-        label={
-          <>
-            <span className="block text-row-title text-ink">Remind me to drink</span>
-            <span className="block text-card-note text-ink-soft">Until the goal is met. Notes land in your Inbox.</span>
-          </>
-        }
-      />
-      {/* Five pickers in the look of the focus panel's: two to a row, How often across its own. */}
-      <div className="mf-sets" role="group" aria-label="Water settings">
-        <ChipSelect label="Daily goal" value={w.goalMl} valueLabel={litres(w.goalMl)} options={withNow(GOALS, w.goalMl, litres)} onChange={(goalMl) => settle.mutate({ goalMl })} />
-        <ChipSelect label="A glass" value={w.glassMl} valueLabel={`${w.glassMl} ml`} options={withNow(GLASSES, w.glassMl, (n) => `${n} ml`)} onChange={(glassMl) => settle.mutate({ glassMl })} />
-        <ChipSelect label="How often" value={w.everyMin} valueLabel={`Every ${every}`} options={WATER_EVERY_CHOICES.map((m) => ({ value: m, label: `Every ${m / 60} hours` }))} onChange={(everyMin) => settle.mutate({ everyMin })} />
-        <ChipSelect label="From" value={minutesOf(w.from)} valueLabel={w.from} options={withNow(HOURS, minutesOf(w.from), hhmm)} onChange={(m) => settle.mutate({ from: hhmm(m) })} />
-        <ChipSelect label="To" value={minutesOf(w.to)} valueLabel={w.to} options={withNow(HOURS, minutesOf(w.to), hhmm)} onChange={(m) => settle.mutate({ to: hhmm(m) })} />
-      </div>
-      <p className="mf-line">{w.on ? `A note every ${every}, ${w.from} to ${w.to}, until you reach ${litres(w.goalMl)}.` : 'Reminders are off. Your goal still shows on the panel.'}</p>
-      {settle.error && <p role="alert" className="mf-line">{msg(settle.error)}</p>}
-    </div>
-  );
-}
-
-/** A tick box drawn by the app over the real checkbox, which stays for screen readers and the keyboard. */
-function TickBox() {
-  return (
-    <span aria-hidden="true" className="flex size-[24px] shrink-0 items-center justify-center rounded-[8px] border-2 border-line text-on-ink peer-checked:border-ink peer-checked:bg-ink peer-checked:[&_svg]:opacity-100 peer-focus-visible:outline-3 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[color:var(--deep-self)]">
-      <Icon icon={Check} size={16} strokeWidth={3} className="opacity-0" />
-    </span>
-  );
-}
-
-/**
- * The person's own reminders and the tasks they asked to remember, in a sheet from the reminders button. `tasks={false}` (Daily, which
- * lists them under To remember) points there instead of listing them.
- */
-function YourReminders({ tasks = true, onLeave }: { tasks?: boolean; /** Close the sheet, so a link to the page under it can be seen. */ onLeave?: () => void }) {
-  const { q, day, refresh, touchDaily } = useWaterActions();
-  const custom = q.data?.custom ?? [];
-  const remembered = q.data?.tasks ?? [];
-  const [adding, setAdding] = useState(false);
-  const [title, setTitle] = useState('');
-  const [time, setTime] = useState('18:00');
-  const [days, setDays] = useState<number[]>([1, 2, 3, 4, 5, 6, 7]);
-  const [picking, setPicking] = useState(false);
-  const [pickId, setPickId] = useState('');
-  const [pickDay, setPickDay] = useState(day);
-  const [pickTime, setPickTime] = useState('09:00');
-  const open = useQuery({ queryKey: ['reminders', 'pick'], queryFn: () => api.focusTasks(), enabled: picking });
-  const pickable = (open.data?.tasks ?? []).filter((t) => !(t.remind && t.dueDate));
-  const chosen = pickable.find((t) => t.id === pickId);
-  // A task with a day keeps it; one with none gets the day picked here, since the inbox note goes out on a day.
-  const remember = useMutation({
-    mutationFn: () => api.updateNode(pickId, { remind: true, dueTime: pickTime, ...(chosen?.dueDate ? {} : { doDate: pickDay }) }),
-    onSuccess: () => { setPicking(false); setPickId(''); touchDaily(); },
-  });
-  const forget = useMutation({ mutationFn: (id: string) => api.updateNode(id, { remind: false }), onSuccess: touchDaily });
-  const add = useMutation({ mutationFn: () => api.addReminder({ title, time, days }), onSuccess: () => { setTitle(''); setAdding(false); refresh(); } });
-  const change = useMutation({ mutationFn: (v: { id: string; r: Partial<CustomReminder> }) => api.changeReminder(v.id, v.r), onSuccess: refresh });
-  const remove = useMutation({ mutationFn: (id: string) => api.removeReminder(id), onSuccess: refresh });
-  const failed = add.error ?? change.error ?? remove.error ?? remember.error ?? forget.error;
-  return (
-    <div className="night-card mf-panel water-night rounded-card" data-accent="r4">
-      <h3 className="m-0 text-headline">Your reminders</h3>
-      {custom.length === 0 && !adding && <p className="mf-line mt-xs">Stretch, take medicine, call someone. Each lands in your Inbox on time.</p>}
-      {custom.length > 0 && (
-        <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-          {custom.map((r) => (
-            <li key={r.id} className="flex items-center gap-xs rounded-inner-sm bg-card p-xs">
-              <label className="toy toy-flat flex min-h-[44px] min-w-0 flex-1 cursor-pointer items-center gap-sm rounded-tile px-xs">
-                <input type="checkbox" checked={r.enabled} onChange={(e) => change.mutate({ id: r.id, r: { enabled: e.target.checked } })} className="peer sr-only" />
-                <TickBox />
-                <span className="min-w-0">
-                  <span className={`block text-row-title ${r.enabled ? '' : 'text-ink-soft line-through'}`}>{r.title}</span>
-                  <span className="block text-card-note text-ink-soft">
-                    {r.time} · {weekdaysLabel(r.days)}
-                  </span>
-                </span>
-              </label>
-              <button type="button" className="mf-mini toy" onClick={() => remove.mutate(r.id)} disabled={remove.isPending} aria-label={`Remove ${r.title}`}>
-                Remove
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {adding ? (
-        <form
-          className="mt-sm flex flex-col gap-sm rounded-inner bg-card p-sm"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (title.trim()) add.mutate();
-          }}
-        >
-          <label className="block">
-            <span className="block text-caption">Remind me to</span>
-            <input value={title} maxLength={REMINDER_TITLE_MAX} onChange={(e) => setTitle(e.target.value)} placeholder="Stretch for five minutes" className={FIELD} />
-          </label>
-          <label className="block">
-            <span className="block text-caption">At</span>
-            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={FIELD} />
-          </label>
-          <div role="group" aria-label="Days" className="grid grid-cols-7 gap-xs">
-            {WEEKDAY_NAMES.map((n, i) => {
-              const d = i + 1;
-              const on = days.includes(d);
+          <ol className="water-days" aria-label={`Water, last seven days: ${w.week.map((d) => `${weekdayOf(d.day)} ${litres(d.ml)}${d.ml >= w.goalMl ? ', goal met' : ''}`).join('; ')}`}>
+            {w.week.map((d) => {
+              const full = d.ml >= w.goalMl;
               return (
-                <button key={n} type="button" aria-pressed={on} onClick={() => setDays((x) => (on ? x.filter((y) => y !== d) : [...x, d].sort()))} className="mf-mini toy min-w-0 px-0 text-caption">
-                  {/* Two letters on a phone, three from sm up (the display class only in the variant, for Tailwind 4's order). */}
-                  <span className="sm:hidden">{n.slice(0, 2)}</span>
-                  <span className="hidden sm:inline">{n}</span>
-                </button>
+                <li key={d.day} aria-hidden="true" data-today={d.day === w.day ? '' : undefined} data-met={full ? '' : undefined}>
+                  <span className="water-day-amount">{d.ml > 0 ? short(d.ml) : '0'}</span>
+                  <span className="water-day">
+                    <span className="water-day-fill" style={{ transform: `scaleY(${Math.min(1, d.ml / Math.max(1, w.goalMl))})` }} />
+                    {full && <Icon icon={Check} size={14} strokeWidth={3} className="water-day-tick" />}
+                  </span>
+                  <span className="water-day-name">{weekdayOf(d.day)}</span>
+                </li>
               );
             })}
-          </div>
-          <div className="flex gap-xs">
-            <button type="submit" className="mf-mini toy" disabled={add.isPending || !title.trim() || days.length === 0}>
-              Save reminder
-            </button>
-            <button type="button" className="mf-mini toy" onClick={() => setAdding(false)}>
-              Cancel
-            </button>
-          </div>
-        </form>
-      ) : (
-        <div className="mf-actions">
-          <button type="button" className="mf-mini toy" onClick={() => setAdding(true)} disabled={custom.length >= MAX_CUSTOM_REMINDERS}>
-            + Add a reminder
-          </button>
-        </div>
-      )}
-
-      <h3 className="mt-lg m-0 text-headline">Tasks to remember</h3>
-      <p className="mf-line mt-xs">A task you ask to remember sends one note to your Inbox on its day.</p>
-      {!tasks ? (
-        remembered.some((t) => !t.day) && (
-          <p className="mf-line mt-xs">
-            <a
-              href="#remember-heading"
-              onClick={(e) => {
-                // The sheet covers the page: close it first, then go to the list once it is gone.
-                e.preventDefault();
-                onLeave?.();
-                window.setTimeout(() => document.getElementById('remember-heading')?.scrollIntoView({ block: 'start' }), 250);
-              }}
-              className="inline-flex min-h-[44px] items-center underline underline-offset-4"
-            >
-              Tasks to remember are under Tasks below
-            </a>
+          </ol>
+          <p className="mf-line">
+            <span className="inline-block">Goal met on {met} of 7 days,</span> <span className="inline-block">about {litres(average)} a day.</span>
           </p>
-        )
-      ) : (
-        remembered.length > 0 && (
-          <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-            {remembered.map((t) => (
-              <li key={t.id} className="rounded-inner-sm bg-card p-xs">
-                <label className="toy toy-flat flex min-h-[44px] cursor-pointer items-center gap-sm rounded-tile px-xs">
-                  <input type="checkbox" checked onChange={() => forget.mutate(t.id)} disabled={forget.isPending} aria-label={`Stop reminding me about ${t.title}`} className="peer sr-only" />
-                  <TickBox />
-                  <span className="min-w-0">
-                    <span className="block text-row-title">{t.title}</span>
-                    <span className="block text-card-note text-ink-soft">{t.day ? `${shortDay(t.day)} · ${t.time ?? '09:00'}` : 'No day yet, so no note'}</span>
-                  </span>
-                </label>
-              </li>
-            ))}
-          </ul>
-        )
-      )}
-      {picking ? (
-        <form
-          className="mt-sm flex flex-col gap-sm rounded-inner bg-card p-sm"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (chosen && REMINDER_TIME.test(pickTime)) remember.mutate();
-          }}
-        >
-          <label className="block">
-            <span className="block text-caption">Task</span>
-            <select value={pickId} onChange={(e) => setPickId(e.target.value)} className={FIELD}>
-              <option value="">{open.isLoading ? 'Loading' : pickable.length === 0 ? 'No open tasks' : 'Pick a task'}</option>
-              {pickable.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.title}
-                </option>
-              ))}
-            </select>
-          </label>
-          {chosen && !chosen.dueDate && (
-            <label className="block">
-              <span className="block text-caption">On</span>
-              <input type="date" value={pickDay} min={day} onChange={(e) => setPickDay(e.target.value)} className={FIELD} />
-              <span className="mt-xs block text-caption text-ink-soft">It will show on Daily from that day.</span>
-            </label>
-          )}
-          <label className="block">
-            <span className="block text-caption">At</span>
-            <input type="time" value={pickTime} onChange={(e) => setPickTime(e.target.value)} className={FIELD} />
-          </label>
-          <div className="flex gap-xs">
-            <button type="submit" className="mf-mini toy" disabled={remember.isPending || !chosen || !REMINDER_TIME.test(pickTime) || (!chosen.dueDate && pickDay < day)}>
-              Remind me
-            </button>
-            <button type="button" className="mf-mini toy" onClick={() => setPicking(false)}>
-              Cancel
-            </button>
-          </div>
-        </form>
-      ) : (
-        <div className="mf-actions">
-          <button type="button" className="mf-mini toy" onClick={() => { setPickDay(day); setPicking(true); }}>
-            + Remind me about a task
-          </button>
         </div>
-      )}
+      </div>
       {failed && <p role="alert" className="mf-line">{msg(failed)}</p>}
-    </div>
+    </>
   );
 }
 
+const WaterSettings = lazyNamed(() => import('./ReminderPanels'), 'WaterSettings');
+const YourReminders = lazyNamed(() => import('./ReminderPanels'), 'YourReminders');
+
+const WATER_PANES = [
+  { key: 'today', name: 'Water' },
+  { key: 'reminders', name: 'Reminders' },
+  { key: 'settings', name: 'Settings' },
+] as const;
+
 /**
- * The water block, laid out like Mindfulness's Breathe and focus: the heading and today's line on the left, round glass buttons at the
- * right (the reminder switch, settings, your reminders, and Close in the laptop's bubble), the dark panel under them, and settings and
- * reminders each in a sheet. On Home before the daily brief, in the laptop's bubble on Daily and Journal, in the card table's sheet, and
- * (without its heading and summary) inside the phone's section. `heading={false}` keeps only the round buttons, at the right.
+ * The water block (2026-11-06, the founder: "put the buttons inside the card on full width, on mobile and all screens just use the
+ * buttons as a way to go left, swipe cards with that data, as it's already a container box, instead of opening a popup"): one dark card
+ * whose three round icon buttons (Water, Settings, Reminders, centred) switch the card between its panels in place, and a sideways swipe
+ * on a touch screen does the same. Nothing opens over the page. Only the open panel is shown, so the card is its height and nothing is
+ * ever clipped; it eases in from the side it came from (GSAP, set under reduced motion). The heading (and Close in the laptop's bubble) sits above the card; `heading={false}` leaves it out (inside the
+ * section, whose row already says it). The card pins the dark theme's colours on itself (`.water-night`).
  */
 export function WaterBlock({ tasks = true, summary = true, heading = true, onClose, className = '' }: { tasks?: boolean; summary?: boolean; heading?: boolean; onClose?: () => void; className?: string }) {
-  const { q, settle } = useWaterActions();
+  const { q, undo } = useWaterActions();
   const w = q.data?.water;
-  const [sheet, setSheet] = useState<'settings' | 'reminders' | null>(null);
+  const id = useId();
+  const [pane, setPane] = useState(0);
+  // On a phone and in the laptop's bubble (it has Close), Undo is the fourth icon in the row (the founder, 2026-11-06); on a laptop's
+  // Home it stays beside the amount picker and the section's row.
+  const wideScreen = useWide();
+  const undoInRow = Boolean(onClose) || !wideScreen;
+  // Which way the last move went (1 to the next panel, -1 back), so the panel arriving eases in from that side.
+  const dir = useRef(1);
+  const panes = useRef<(HTMLDivElement | null)[]>([]);
+  const swipe = useRef<{ x: number; y: number } | null>(null);
+  const first = useRef(true);
+
+  // Only the open panel is in the page (the others are hidden, keeping what was typed in them); it eases in from the side it came
+  // from, by transform and opacity, and is placed at once under reduced motion or on the first paint.
+  useLayoutEffect(() => {
+    const el = panes.current[pane];
+    if (!el) return;
+    if (first.current || prefersReducedMotion()) {
+      first.current = false;
+      gsap.set(el, { x: 0, opacity: 1 });
+      return;
+    }
+    gsap.fromTo(el, { x: 24 * dir.current, opacity: 0 }, { x: 0, opacity: 1, duration: 0.35, ease: 'power3.out' });
+    return () => {
+      gsap.killTweensOf(el);
+    };
+  }, [pane, Boolean(w)]);
+
+  const go = (i: number) => {
+    const next = Math.max(0, Math.min(WATER_PANES.length - 1, i));
+    if (next === pane) return;
+    dir.current = next > pane ? 1 : -1;
+    setPane(next);
+  };
+  const leave = () => go(0);
+
   return (
-    <section className={className} aria-labelledby={heading ? 'water-heading' : undefined} aria-label={heading ? undefined : 'Water and reminders'} data-pillar="lover_partner">
-      <div className="flex flex-wrap items-end justify-between gap-sm">
-        {heading && (
-          <div className="min-w-0 flex-[1_1_180px]">
-            <h2 id="water-heading" className="text-title2">
-              Water
-            </h2>
-            <p className="mt-xs m-0 text-subhead text-ink-soft">{w ? `${w.glasses} of ${w.goalGlasses} glasses today, ${litres(w.ml)} of ${litres(w.goalMl)}.` : 'Loading'}</p>
-          </div>
-        )}
-        <div className="mf-rounds ml-auto" role="group" aria-label="Water tools">
-          {w && (
-            <RoundButton at="bc" label={w.on ? 'Water reminders are on. Turn them off' : 'Water reminders are off. Turn them on'} pressed={w.on} onClick={() => !settle.isPending && settle.mutate({ on: !w.on })}>
-              <AnimatedIcon name="notification" size={20} active={!w.on} />
-            </RoundButton>
+    <section className={className} aria-labelledby={heading ? `${id}-h` : undefined} aria-label={heading ? undefined : 'Water and reminders'} data-pillar="lover_partner">
+      {(heading || onClose) && (
+        <div className="mb-sm flex items-start justify-between gap-sm">
+          {heading && (
+            <div className="min-w-0">
+              <h2 id={`${id}-h`} className="text-title2">
+                Water
+              </h2>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">{w ? `${w.glasses} of ${w.goalGlasses} glasses today, ${litres(w.ml)} of ${litres(w.goalMl)}.` : 'Loading'}</p>
+            </div>
           )}
-          <RoundButton at="bc" label="Water settings" opens onClick={() => setSheet('settings')}>
-            <AnimatedIcon name="settings" size={20} />
-          </RoundButton>
-          <RoundButton at="tr" label="Reminders and tasks" opens onClick={() => setSheet('reminders')}>
-            <AnimatedIcon name="calendar" size={20} />
-          </RoundButton>
           {onClose && (
-            <RoundButton at="tr" label="Close water and reminders" onClick={onClose}>
+            // Close says what it does by sliding its word out on hover or keyboard focus (the ExpandButton look, slowed like the card's
+            // icons): a tooltip above it would be cut by the bubble's scrolling box (the founder, 2026-11-06).
+            <button type="button" onClick={onClose} aria-label="Close water and reminders" className="water-close expand-btn toy toy-soft ml-auto inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-pill border-2 border-line bg-card px-xs text-subhead font-medium text-ink">
               <Icon icon={X} size={20} />
-            </RoundButton>
+              <span className="expand-btn-words" aria-hidden="true">
+                Close
+              </span>
+            </button>
           )}
         </div>
-      </div>
-      {settle.error && (
-        <p role="alert" className="mt-xs m-0 text-subhead">
-          {msg(settle.error)}
-        </p>
       )}
-      <div className="mt-sm">
-        <WaterPanel summary={summary} />
+      <div className="night-card mf-panel water-night rounded-card" data-accent="r4">
+        {!w ? (
+          <p className="mf-line m-0" role="status">{q.isError ? 'Could not load.' : 'Loading'}</p>
+        ) : (
+          <>
+            {/* The three buttons at the top right of the card, centred in the bubble (it has Close) and on a phone: each opens its panel in place. */}
+            <div className="water-tabs" data-center={onClose ? '' : undefined}>
+            <div role="tablist" aria-label="Water" className="contents">
+              {WATER_PANES.map((p, i) => (
+                // Icons only; the name slides out on hover or keyboard focus (the ExpandButton look), and is the tab's name for screen readers.
+                <button key={p.key} type="button" role="tab" id={`${id}-t${i}`} aria-selected={pane === i} aria-controls={`${id}-p${i}`} aria-label={p.name} title={p.name} onClick={() => go(i)} className="water-tab expand-btn toy">
+                  {p.key === 'today' ? <Drop size={20} /> : <AnimatedIcon name={p.key === 'settings' ? 'settings' : 'calendar'} size={20} />}
+                  <span className="expand-btn-words" aria-hidden="true">
+                    {p.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+              {undoInRow && (
+                // Not a tab: it takes back the last glass, in the same look, its word sliding out on hover or keyboard focus.
+                <button type="button" aria-label="Undo the last glass" title="Undo the last glass" onClick={() => undo.mutate()} disabled={undo.isPending || w.ml === 0} className="water-tab expand-btn toy disabled:opacity-50">
+                  <Icon icon={Undo2} size={20} />
+                  <span className="expand-btn-words" aria-hidden="true">
+                    Undo
+                  </span>
+                </button>
+              )}
+            </div>
+            <div
+              className="mt-md"
+              // A sideways swipe on a touch screen moves one panel (touch events: a pointer can be cancelled when the browser takes the gesture).
+              onTouchStart={(e) => {
+                // A sheet opened from a row is portalled to the body, but React still bubbles its touches here: only a touch that began
+                // inside the card itself may swipe, so a swipe in the confirm sheet never switches the panel behind it.
+                if (!(e.currentTarget as Node).contains(e.target as Node)) {
+                  swipe.current = null;
+                  return;
+                }
+                const t = e.touches[0];
+                swipe.current = t && e.touches.length === 1 ? { x: t.clientX, y: t.clientY } : null;
+              }}
+              onTouchEnd={(e) => {
+                if (!(e.currentTarget as Node).contains(e.target as Node)) {
+                  swipe.current = null;
+                  return;
+                }
+                const s0 = swipe.current;
+                const t = e.changedTouches[0];
+                swipe.current = null;
+                if (!s0 || !t) return;
+                const dx = t.clientX - s0.x;
+                if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(t.clientY - s0.y) * 1.5) go(pane + (dx < 0 ? 1 : -1));
+              }}
+              onTouchCancel={() => {
+                swipe.current = null;
+              }}
+            >
+              {WATER_PANES.map((p, i) => (
+                <div
+                  key={p.key}
+                  ref={(el) => {
+                    panes.current[i] = el;
+                  }}
+                  id={`${id}-p${i}`}
+                  role="tabpanel"
+                  aria-labelledby={`${id}-t${i}`}
+                  hidden={pane !== i}
+                  className="water-pane"
+                >
+                  {p.key === 'today' ? <WaterPanel summary={summary} undoHere={!undoInRow} /> : <Suspense fallback={null}>{p.key === 'settings' ? <WaterSettings /> : <YourReminders tasks={tasks} onLeave={leave} />}</Suspense>}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
-      <Sheet open={sheet === 'settings'} onClose={() => setSheet(null)} title="Water settings">
-        <WaterSettings />
-      </Sheet>
-      <Sheet open={sheet === 'reminders'} onClose={() => setSheet(null)} title="Reminders and tasks">
-        <YourReminders tasks={tasks} onLeave={() => setSheet(null)} />
-      </Sheet>
     </section>
   );
 }
@@ -466,12 +357,17 @@ export function RemindersSection({ always = false, tasks = true, quiet = false }
           <ToggleChevron open={open} size={16} strokeWidth={3} />
         </button>
         <div className="flex gap-xs sm:shrink-0">
-          <Button size="md" variant={quiet ? 'outline' : undefined} className="flex-1 sm:flex-none" onClick={() => drink.mutate()} disabled={drink.isPending || !w} aria-label="Add a glass of water">
+          {/* The water green (the founder, 2026-11-06), the same as the card's + glass; Journal keeps the outline, its New entry is the solid button. */}
+          <Button size="md" variant={quiet ? 'outline' : 'color'} color={quiet ? undefined : 'linear-gradient(140deg, var(--color-r4), color-mix(in oklab, var(--color-r4) 72%, var(--fill-shade)))'} deep="var(--deep-lover_partner)" className={`flex-1 sm:flex-none ${quiet ? '' : 'text-on-fill'}`} onClick={() => drink.mutate()} disabled={drink.isPending || !w} aria-label="Add a glass of water">
             + Glass
           </Button>
-          <Button size="md" variant="outline" onClick={() => undo.mutate()} disabled={undo.isPending || !w || w.ml === 0}>
-            Undo
-          </Button>
+          {/* On a phone Undo is in the open card's icon row instead (the founder, 2026-11-06); from the tablet up it stays here. The wrapper
+              carries the display classes, since Tailwind orders inline-flex after hidden. */}
+          <span className="hidden md:block">
+            <Button size="md" variant="outline" onClick={() => undo.mutate()} disabled={undo.isPending || !w || w.ml === 0}>
+              Undo
+            </Button>
+          </span>
         </div>
       </div>
       <WaterFill className="mt-sm" value={w?.ml} max={w?.goalMl} />
@@ -500,7 +396,10 @@ export function ReminderBubble() {
   if (!here) return null;
   const w = q.data?.water;
   return (
-    <div className="fixed bottom-md left-[calc(var(--nav-w)+var(--spacing-md))] z-40 hidden md:block" data-pillar="lover_partner">
+    // Open, the panel rises over the privacy card (z-45), which waits just above the bubble until it is answered: the person asked for
+    // water, so the water comes first; closed, the card is on top again. While a modal sheet asks (a reminder's Remove), the bubble drops
+    // to the scrim's level: the sheet's portal comes later in the body, so its scrim dims the bubble and takes its clicks.
+    <div className={`fixed bottom-md left-[calc(var(--nav-w)+var(--spacing-md))] hidden md:block ${open ? 'z-[46]' : 'z-40'} [body:has([role=dialog][aria-modal=true])_&]:z-40`} data-pillar="lover_partner">
       {open && (
         // The water block on a strong card: its heading and round buttons on the card, the dark panel under them.
         <div ref={panel} className="mb-sm max-h-[80vh] w-[380px] overflow-y-auto rounded-card border border-line bg-card-strong p-md shadow-toy-soft" role="dialog" aria-label="Water and reminders">

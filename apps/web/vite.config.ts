@@ -57,6 +57,14 @@ export default defineConfig({
           // The legal lists (versions, consent purposes, retention, subprocessors) are a leaf too (legal.ts imports nothing), split off
           // for the same reason once Emerging's one-list read (2026-11-05) took the shared chunk past 400 kB.
           if (id.includes('/packages/shared/src/legal.ts')) return 'shared-legal';
+          // The focus clock's tab record (a subpath export, not in the barrel) is a leaf only Mindfulness's panel reads, so it loads
+          // with that panel. And six small leaves the rest of shared builds on (core, dates, books, store, activity, circles: each
+          // imports nothing but types) are one chunk of their own, which kept the shared chunk under 400 kB once time blocks came in
+          // (2026-11-06; circles joined when the block colours took it to 400.1 kB; dayKinds, the kinds-of-day reading and
+          // `templateForDate`, joined with "Your kinds of day", importing only dates.ts beside it).
+          // Each must stay a leaf, for the reason above.
+          if (id.includes('/packages/shared/src/focusRun.ts')) return 'shared-focus-run';
+          if (/\/packages\/shared\/src\/(core|dates|books|store|activity|circles|dayKinds)\.ts$/.test(id)) return 'shared-base';
           if (id.includes('/packages/shared/src/')) return 'shared';
           // The icons the shared registries name (every app, setup tag, role...) are one map the shell needs, so it is a
           // chunk of its own: preloaded with the first download, but kept out of the entry's 480 kB budget.

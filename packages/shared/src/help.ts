@@ -29,7 +29,12 @@ export const TERMS: Record<string, string> = {
   bumling: 'The app’s own guide. Bumling helps you set things up and runs the chats about the whole app, not one relationship.',
   'do date': 'The day you will do a task. It shows on Daily from that day, and cannot be ticked before it.',
   'due date': 'The day a task must be done by. After it the task says Overdue, but you can still tick it.',
-  'day type': 'What kind of day it is, picked on Daily: deep work, money, family, rest and more. Sorted By context, P0 stays on top and each priority starts with the pillar that kind of day leads with.',
+  'day type': 'The kind of day is now a day template. Sorted By context, P0 stays on top and each priority starts with the pillar the template leads with. A day counts as the kind set for it, else the one your week gives; Everyday counts as none.',
+  'time block': 'A named stretch of your day with a colour and a tag, like Deep work from 10 am to 1 pm. A task can sit in one.',
+  'day template': 'A day’s blocks laid on the clock, with the pillar that leads. Deep work day, Family day, Travel day. It is your kind of day.',
+  'weekly pattern': 'Which day template each weekday uses. A change to one date leaves it alone.',
+  'by time block': 'A way to sort Daily. Tasks sit in coloured boxes, one for each block of your day in clock order. Inside each box P0 comes first, then the area of life, then the day.',
+  'by area': 'A way to sort Daily. Tasks sit in one box for each area of life: physical, financial, mental, emotional, spiritual. Inside each box P0 comes first, then the block, then the day.',
   priority: 'A tag from P0 to P3 on a task. P0 is do now, P1 important, P2 normal and P3 whenever. It helps you choose and sort, and never changes what a tick pays.',
   habit: 'A task that repeats every day, week, month or year. When you tick it, the next one appears.',
   'good habit': 'A task you keep doing, set beside how your days went. On days you did it, your mood, sleep, stress or other tasks were clearly better than on days you did not. It says they went together, not that one caused the other.',
@@ -123,7 +128,7 @@ export const isAutoHandle = (handle: string | null | undefined): boolean => !han
 /** The glossary's categories, in the order they are shown. Every word in TERMS is in exactly one; the words inside each are sorted A to Z by `termGroups`. */
 export const TERM_GROUPS: { name: string; terms: string[] }[] = [
   { name: 'Pillars and pyramids', terms: ['pillar', 'pyramid', 'foundation', 'guiding principle', 'value goal', 'goal outcome', 'project', 'task', 'ripple', 'map', 'life map', 'strategy session', 'routine', 'contract', 'core', 'floor'] },
-  { name: 'Daily and progress', terms: ['small act', 'check-in', 'daily three', 'do date', 'due date', 'priority', 'day type', 'habit', 'good habit', 'bad habit', 'emerging', 'subtask', 'remember', 'not scheduled', 'daily brief', 'not-to-do', 'kept day', 'streak', 'xp', 'points', 'level', 'who you are becoming', 'life score', 'five areas of life', 'period', 'review', 'season'] },
+  { name: 'Daily and progress', terms: ['small act', 'check-in', 'daily three', 'do date', 'due date', 'priority', 'day type', 'time block', 'day template', 'weekly pattern', 'by time block', 'by area', 'habit', 'good habit', 'bad habit', 'emerging', 'subtask', 'remember', 'not scheduled', 'daily brief', 'not-to-do', 'kept day', 'streak', 'xp', 'points', 'level', 'who you are becoming', 'life score', 'five areas of life', 'period', 'review', 'season'] },
   { name: 'You and your page', terms: ['strength', 'personality type', 'love language', 'signs', 'human design', 'gate', 'channel', 'sidereal', 'numerology', 'master number', 'username', 'identity tag', 'setup chat', 'public page', 'badge', 'honor', 'trust', 'unlock'] },
   { name: 'Friends and community', terms: ['friend code', 'chat channel', 'alias', 'circle', 'reaction', 'mention', 'guide', 'life coach', 'student', 'change log', 'run club', 'start code', 'attendee code', 'deck', 'focus mode', 'focus session'] },
   { name: 'Learn and earn', terms: ['cohort', 'campaign', 'bounty', 'Club', 'collab', 'giveaway', 'retainer', 'deliverable', 'client link', 'utilisation', 'paperwork', 'team member', 'first pass', 'plan strength', 'pace'] },
@@ -181,15 +186,25 @@ export const HOW_TO: Record<string, HowTo> = {
     ],
     terms: ['emerging', 'habit', 'good habit', 'bad habit', 'not-to-do', 'pillar', 'streak', 'period', 'day type'],
   },
+  timeBlocks: {
+    steps: [
+      'A block has a name, a tag, a colour from 11 swatches or your own and, if you like, an area of life and a pillar. You start with 14, like Deep work from 10 am to 1 pm and Sleep from 11 pm to 7 am, and can keep up to 24.',
+      'A day template places blocks on the clock, up to 24 slots. Slots may cross midnight and never overlap, and a gap shows as free time. You start with 14 templates, like Deep work day, Family day and Travel day. Change or copy any of them, and delete any but your default.',
+      'Your usual week gives each weekday a template, and every day starts on Everyday. Tap a day in the week, or in the month calendar on Daily, to see or change its kind. A change to one date leaves the week alone. A day counts as the kind set for it, else the one your week gives, and Everyday counts as none: This month, Your kinds of day and the Reviews tile add them up.',
+      'A task sits in the block you pick, else the one its time falls in. Plan my week suggests one from its area and pillar, and nothing changes until you keep it.',
+      'On Daily, sort By time block or By area to see tasks in coloured boxes you can open and fold. P0 stays first in every box, then the area or the block, then the day.',
+    ],
+    terms: ['time block', 'day template', 'weekly pattern', 'by time block', 'by area', 'day type', 'five areas of life', 'pillar', 'plan strength'],
+  },
   today: {
     steps: [
       'Daily is three boxes a day: check in, do the small act, tick one task. Checking in pays 10 xp and 10 points and keeps your streak; every seventh day in a row pays 50 points more. The small act is a two-minute thing for your weakest pillar and pays 15 xp. Your routine from the strategy session sits under the first box.',
       'Tasks come from the pillars you set up. Each pays 20 xp and sends a ripple up its pyramid. A task has a do date, the day you will do it, and can have a due date, the deadline. It shows here from its do date and cannot be ticked before it. After its due date it says Overdue, but you can still tick it. A new task waits ten minutes before it can be ticked.',
-      'Tap the pencil on a task to plan it. Tag it P0 (do now), P1, P2 or P3 (whenever), in red, orange, purple and grey, and sort the list by day, priority or due date. Pick what kind of day it is under Tasks, a deep work day say, and the list sorts By context: P0 stays on top, and inside each priority the pillar that day leads with comes first. Make it repeat every day, week, month or year, and the next one appears when you tick it; that makes it a habit. Add subtasks, say how many minutes it takes, tag it Remember, and start a focus session on it. Remember tasks with no day wait in a To remember list on Daily, and with a day they also send a note to your inbox.',
-      'A task with no date waits under Not scheduled yet. It stays out of Tasks until you pick a do date or a due date, and then it moves up. Plan my week suggests a day for each one, spread so no day is overloaded, and shows how strong the plan is; nothing changes until you keep it. Tasks with a time show as time blocks, with the free time between. Open Month calendar to see the whole month: tap a day to tick its tasks or add one, and tap Print this month for a paper copy.',
+      'Tap the pencil on a task to plan it. Tag it P0 (do now), P1, P2 or P3 (whenever), in red, orange, purple and grey, and sort the list by day, priority or due date. Pick the kind of day, a day template like Deep work day, and the list sorts By context: P0 stays on top, and inside each priority the pillar the template leads with comes first. Sort By time block or By area to see tasks in coloured boxes; P0 stays first in each. Make it repeat every day, week, month or year, and the next one appears when you tick it; that makes it a habit. Add subtasks, say how many minutes it takes, tag it Remember, and start a focus session on it. Remember tasks with no day wait in a To remember list on Daily, and with a day they also send a note to your inbox.',
+      'A task with no date waits under Not scheduled yet. It stays out of Tasks until you pick a do date or a due date, and then it moves up. Plan my week suggests a day for each one, spread so no day is overloaded, and shows how strong the plan is; nothing changes until you keep it. Your day shows its time blocks with the tasks in each and the free time left; open Time blocks to shape each day and your usual week. Open Month calendar to see the whole month: tap a day to tick its tasks or add one, and tap Print this month for a paper copy.',
       'Under the tasks, the not-to-do list holds up to seven things you are staying away from. Tick one to say you kept it today: a kept day pays 5 xp and grows that item’s streak. At the bottom, who you are becoming shows the figure your xp is filling in.',
     ],
-    terms: ['daily three', 'check-in', 'small act', 'task', 'do date', 'due date', 'priority', 'day type', 'plan strength', 'habit', 'subtask', 'remember', 'not scheduled', 'not-to-do', 'kept day', 'who you are becoming', 'routine', 'assistant'],
+    terms: ['daily three', 'check-in', 'small act', 'task', 'do date', 'due date', 'priority', 'day type', 'time block', 'day template', 'weekly pattern', 'by time block', 'by area', 'plan strength', 'habit', 'subtask', 'remember', 'not scheduled', 'not-to-do', 'kept day', 'who you are becoming', 'routine', 'assistant'],
   },
   tower: {
     steps: [
@@ -203,10 +218,10 @@ export const HOW_TO: Record<string, HowTo> = {
   },
   apps: {
     steps: [
-      'Apps lists only what is on, in groups by what they are for: Contribution, Creation, Connection, Reflection, Essentials and Operations. Tap one to open it.',
-      'The button at the top, Turn apps on or off, leads to Profile, Features, the one place every app is switched on or off.',
-      'An app you switch on joins this list, the laptop sidebar under its group, and the phone menu under the top-right button.',
-      'The setup chat at the start switches on the apps that fit who you are and what you want, and leaves the rest off. Run it again from Profile, or switch any app yourself.',
+      'Apps lists your apps in groups by what they are for: Contribution, Reflection, Connection, Creation, Essentials and Operations. Tap one to open it.',
+      'Hide an app you do not use. It moves to Hidden apps at the end of its group, and leaves the sidebar and the phone menu.',
+      'Unhide it from Hidden apps any time. Nothing is deleted when an app is hidden.',
+      'The setup chat at the start shows the apps that fit who you are and what you want, and hides the rest. Run it again from Profile, or hide and unhide apps yourself.',
     ],
     terms: ['setup chat', 'identity tag'],
   },
@@ -215,7 +230,7 @@ export const HOW_TO: Record<string, HowTo> = {
       'Who you are sits at the top: the identity tags from the setup chat. Run the setup again to change them and the apps that fit. Your account, badges, honors and life coach live here too: say yes to a coach, pick what they see, or end it.',
       'Badges are medals the app earns for you by its own count: ticks, streaks, pillars, community, your shop, runs, lessons and levels. Each is bronze, silver, gold or platinum, and the gallery says the next step for every one. Badges from your journal, money and focus time stay private. Honors are given by the team or unlocked by time here.',
       'Under Account, add an email and password so your progress survives this device, change the password, export your data, or delete the account.',
-      'Under Features, switch apps on or off, in the same groups and colours as the Apps page. An app that fits your tags says why. Appearance picks light, dark or auto.',
+      'Under Features, hide or unhide apps, in the same groups and colours as the Apps page. Hidden apps sit open at the end of each group. An app that fits your tags says why. Appearance picks light, dark or auto.',
       'See my public page shows exactly what other people see at your address.',
     ],
     terms: ['identity tag', 'setup chat', 'badge', 'honor', 'life coach', 'who you are becoming', 'public page'],

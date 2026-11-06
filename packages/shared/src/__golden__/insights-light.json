@@ -630,20 +630,23 @@
    "state": "watching",
    "apps": [
     "today",
+    "reviews",
     "insights"
    ],
    "reads": [
     "dayTypes",
-    "tasks"
+    "tasks",
+    "timeBlocks",
+    "wellbeing"
    ],
    "private": false,
    "relationship": null,
    "headline": "",
-   "text": "Kinds of day",
+   "text": "Your kinds of day",
    "basis": "",
    "chart": null,
    "action": null,
-   "need": "Pick a kind of day on Daily on 4 more days.",
+   "need": "Give a day a kind on Daily, or set your usual week in Time blocks.",
    "strength": 0
   },
   {

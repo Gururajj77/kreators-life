@@ -10,7 +10,7 @@ import { slotsFor, type AvailabilityOverride } from '@kreators/shared';
 import { paymentsConfig, providerFor } from '../payments';
 import { logEvent, sendEmail, track } from '../ops';
 import { quoteCode, redeem, release, type Quoted } from '../discounts';
-import { BOOKING_SELECT, ORDER_SELECT, PRODUCT_SELECT, TESTIMONIAL_SELECT, toBooking, toLesson, toOrder, toProduct, toTestimonial, type BookingRow, type LessonRow, type OrderRow, type ProductRow } from './studio';
+import { BOOKING_SELECT, ORDER_SELECT, PRODUCT_SELECT, TESTIMONIAL_SELECT, canSeeProduct, isSuperAdmin, toBooking, toLesson, toOrder, toProduct, toTestimonial, type BookingRow, type LessonRow, type OrderRow, type ProductRow } from './studio';
 
 /** Public: no session needed. */
 export const publicPage = new Hono<AppEnv>();
@@ -57,7 +57,7 @@ async function pageFor(c: Context<AppEnv>, owner: UserRow): Promise<PublicPage> 
   };
   const [products, testimonials, followers, following, portfolio] = await Promise.all([
     db.prepare(`${PRODUCT_SELECT} WHERE p.owner_id = ? AND p.status = 'live' ORDER BY p.sort_order ASC, p.created_at DESC`).bind(owner.id).all<ProductRow>(),
-    db.prepare(`${TESTIMONIAL_SELECT} WHERE t.owner_id = ? AND t.approved = 1 ORDER BY t.created_at DESC LIMIT 20`).bind(owner.id).all<Parameters<typeof toTestimonial>[0]>(),
+    db.prepare(`${TESTIMONIAL_SELECT} WHERE t.owner_id = ? AND t.approved = 1 AND p.status = 'live' ORDER BY t.created_at DESC LIMIT 20`).bind(owner.id).all<Parameters<typeof toTestimonial>[0]>(),
     db.prepare('SELECT COUNT(*) AS n FROM follows WHERE owner_id = ?').bind(owner.id).first<{ n: number }>(),
     viewer ? db.prepare('SELECT 1 FROM follows WHERE owner_id = ? AND follower_id = ?').bind(owner.id, viewer.id).first() : Promise.resolve(null),
     db.prepare("SELECT * FROM portfolio_items WHERE user_id = ? AND visibility = 'public' ORDER BY created_at DESC LIMIT 30").bind(owner.id).all<{ id: string; title: string; description: string; url: string; visibility: 'public' | 'private'; created_at: string }>(),
@@ -143,16 +143,16 @@ publicPage.post('/:handle/lead', async (c) => {
 
 publicPage.get('/products/:id', async (c) => {
   const db = c.env.DB;
-  const row = await db.prepare(`${PRODUCT_SELECT} WHERE p.id = ? AND p.status = 'live'`).bind(c.req.param('id')).first<ProductRow>();
-  if (!row) return c.json({ error: 'not found' }, 404);
+  const [row, viewer] = await Promise.all([db.prepare(`${PRODUCT_SELECT} WHERE p.id = ?`).bind(c.req.param('id')).first<ProductRow>(), sessionUser(c)]);
+  // A live product is for anyone; a draft, private or archived one only for whom `canSeeProduct` lets in, and the same 404 for the rest.
+  if (!row || !(await canSeeProduct(db, viewer, row))) return c.json({ error: 'not found' }, 404);
   const [lessons, testimonials] = await Promise.all([
     db.prepare('SELECT COUNT(*) AS n FROM lessons WHERE product_id = ?').bind(row.id).first<{ n: number }>(),
     db.prepare(`${TESTIMONIAL_SELECT} WHERE t.product_id = ? AND t.approved = 1 ORDER BY t.created_at DESC LIMIT 20`).bind(row.id).all<Parameters<typeof toTestimonial>[0]>(),
   ]);
-  const viewer = await sessionUser(c);
   const owned = viewer ? await db.prepare("SELECT 1 FROM orders WHERE buyer_id = ? AND product_id = ? AND status IN ('paid','test')").bind(viewer.id, row.id).first() : null;
   const have = viewer ? await haveFor(db, viewer) : null;
-  return c.json({ product: toProduct(row), lessonCount: lessons?.n ?? 0, testimonials: testimonials.results.map(toTestimonial), owned: Boolean(owned) || viewer?.id === row.owner_id, seller: { trust: await trustFor(db, row.owner_id) }, unlock: unlockFor({ minPoints: row.min_points, minXp: row.min_xp, badge: row.badge }, have) });
+  return c.json({ product: toProduct(row), lessonCount: lessons?.n ?? 0, testimonials: testimonials.results.map(toTestimonial), owned: Boolean(owned) || viewer?.id === row.owner_id, seller: { trust: await trustFor(db, row.owner_id) }, unlock: unlockFor({ minPoints: row.min_points, minXp: row.min_xp, badge: row.badge }, have), canEdit: Boolean(viewer) && (viewer?.id === row.owner_id || isSuperAdmin(viewer)) });
 });
 
 /** Buyer side: needs a session. */
@@ -186,8 +186,9 @@ async function attribution(db: D1Database, c: { req: { header: (k: string) => st
 store.post('/:productId/checkout', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const product = await db.prepare(`${PRODUCT_SELECT} WHERE p.id = ? AND p.status = 'live'`).bind(c.req.param('productId')).first<ProductRow>();
-  if (!product) return c.json({ error: 'not found' }, 404);
+  // Only a live product, or a private course for the people invited to it (and an admin), takes an order; anyone else gets the same 404.
+  const product = await db.prepare(`${PRODUCT_SELECT} WHERE p.id = ? AND p.status IN ('live','private')`).bind(c.req.param('productId')).first<ProductRow>();
+  if (!product || !(await canSeeProduct(db, user, product))) return c.json({ error: 'not found' }, 404);
   if (product.owner_id === user.id) return c.json({ error: 'that is your own product' }, 400);
   // Some things are for people who have earned their way: a points balance, a badge, or both.
   if (product.min_points > 0 || product.min_xp > 0 || product.badge) {

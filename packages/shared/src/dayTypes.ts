@@ -131,5 +131,8 @@ export const isDayTypeKey = (raw: unknown): raw is DayTypeKey => dayTypeOf(raw) 
 /** What `GET /today/day-type` answers: the kind picked for that day, or null. */
 export interface DayTypeResponse {
   date: string;
+  /** The day template's old kind (null for a template made from none, or no change to the date). */
   kind: DayTypeKey | null;
+  /** The day template picked for that date (docs/time-blocks.md), or null when the date follows the week. */
+  templateId?: string | null;
 }

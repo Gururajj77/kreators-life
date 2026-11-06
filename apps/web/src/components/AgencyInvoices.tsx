@@ -1,6 +1,6 @@
 import { INVOICE_STARTERS, invoiceAsText, invoiceForClient, INVOICE_STATUS_NAME, INVOICE_STATUS_TONE, INVOICE_STATUSES, money, pageQuery, TEMPLATE_NAME_MAX, type AgencyTemplate, type Invoice } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useAgencyCan } from '../lib/agencyWorkspace';
 import { api } from '../lib/api';
@@ -17,6 +17,7 @@ import { shortDate } from '../lib/date';
 import { KanbanBoard } from './KanbanBoard';
 import { Pager, usePage } from './Pager';
 import { Sheet } from './Sheet';
+import { ConfirmDelete } from './ConfirmDelete';
 import { StatusTag } from './StatusTag';
 import { useView, ViewToggle } from './ViewToggle';
 
@@ -85,11 +86,16 @@ function Card({ inv }: { inv: Invoice }) {
   );
 }
 
+/** On Paperwork, a segmented control that fills its row in equal parts on a phone and is its own width from 34rem of row up. */
+export const PAPER_FILL = 'flex w-full *:flex-1 *:px-xs @min-[34rem]:inline-flex @min-[34rem]:w-auto @min-[34rem]:*:flex-none @min-[34rem]:*:px-md';
+/** The row that holds List and Board with the kinds of paper: the container PAPER_FILL measures. */
+export const paperRow = (kinds: unknown) => (kinds ? '@container' : '');
+
 /**
  * The invoices pipeline: a board by status or a paged list, for every client or one. On the Agency screen the header holds the one New
  * invoice button (`adding`, `onAdding`); on a client's page this draws its own.
  */
-export function AgencyInvoices({ clientId, adding: outside, onAdding }: { clientId?: string; adding?: boolean; onAdding?: (open: boolean) => void }) {
+export function AgencyInvoices({ clientId, adding: outside, onAdding, kinds }: { clientId?: string; adding?: boolean; onAdding?: (open: boolean) => void; /** The kind-of-paper switch, at the right of List and Board (Paperwork). */ kinds?: ReactNode }) {
   const [view, setView] = useView('inv');
   const qc = useQueryClient();
   const nav = useNavigate();
@@ -98,6 +104,8 @@ export function AgencyInvoices({ clientId, adding: outside, onAdding }: { client
   const { page, size, reset } = usePage('inv');
   const [msg, setMsg] = useState('');
   const [rowNote, setRowNote] = useState<{ id: string; text: string } | null>(null);
+  // A move to Void on the board asks first, with the invoice it is about.
+  const [voiding, setVoiding] = useState<{ id: string; number: string } | null>(null);
   const [own, setOwn] = useState(false);
   const adding = onAdding ? Boolean(outside) : own;
   const setAdding = (v: boolean) => (onAdding ? onAdding(v) : setOwn(v));
@@ -133,8 +141,11 @@ export function AgencyInvoices({ clientId, adding: outside, onAdding }: { client
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-sm">
-        <ViewToggle view={view} onChange={setView} label="Invoices view" />
+      <div className={`flex flex-wrap items-center justify-between gap-sm ${paperRow(kinds)}`}>
+        <div className={kinds ? 'basis-full @min-[34rem]:basis-auto' : ''}>
+          <ViewToggle view={view} onChange={setView} label="Invoices view" className={kinds ? PAPER_FILL : undefined} />
+        </div>
+        {kinds}
         {!onAdding && edit && <Button onClick={() => setAdding(true)}>New invoice</Button>}
       </div>
       {msg && (
@@ -162,6 +173,11 @@ export function AgencyInvoices({ clientId, adding: outside, onAdding }: { client
                   setMsg('A void invoice is kept for the record. Restore it from its More menu, or duplicate it.');
                   return;
                 }
+                if (to === 'void') {
+                  move.reset();
+                  setVoiding({ id: inv.id, number: inv.number });
+                  return;
+                }
                 move.mutate({ id: inv.id, to: to as Invoice['status'] });
               }}
               canMoveTo={(_inv, from) => from !== 'void'}
@@ -172,7 +188,7 @@ export function AgencyInvoices({ clientId, adding: outside, onAdding }: { client
       )}
 
       {view === 'list' && (
-        <div className="mt-sm">
+        <div className="@container mt-sm">
           <select
             aria-label="Invoice status"
             value={status}
@@ -180,7 +196,7 @@ export function AgencyInvoices({ clientId, adding: outside, onAdding }: { client
               setStatus(e.target.value);
               reset();
             }}
-            className={FILTER_SELECT}
+            className={`${FILTER_SELECT} w-full @min-[34rem]:w-auto`}
           >
             <option value="all">Status: All{list.data ? ` (${total})` : ''}</option>
             {INVOICE_STATUSES.map((st) => (
@@ -256,6 +272,20 @@ export function AgencyInvoices({ clientId, adding: outside, onAdding }: { client
           setAdding(false);
           nav(`/agency/invoices/${id}`);
         }}
+      />
+      <ConfirmDelete
+        open={voiding !== null}
+        title="Void this invoice?"
+        body={`${voiding?.number ?? ''}. It is kept for the record and stops counting as owed. You can restore it from its More menu.`}
+        pending={move.isPending}
+        failed={move.isError}
+        onYes={() => voiding && move.mutate({ id: voiding.id, to: 'void' }, { onSuccess: () => setVoiding(null) })}
+        onClose={() => {
+          setVoiding(null);
+          // The board put the card in Void while it asked; reading the columns again puts it back where it was.
+          void board.refetch();
+        }}
+        yes="Yes, void it"
       />
     </div>
   );
@@ -347,7 +377,7 @@ function NewInvoice({ open, clientId, onClose, onMade }: { open: boolean; client
 }
 
 /**
- * The person's own invoice templates: rename in two steps, remove with two taps. They are made from an invoice with Save as template.
+ * The person's own invoice templates: rename in two steps, remove after a sheet asks. They are made from an invoice with Save as template.
  * Shown in Agency settings, under Templates.
  */
 export function InvoiceTemplates() {
@@ -355,7 +385,8 @@ export function InvoiceTemplates() {
   const q = useAuthed(['agency', 'templates', 'invoice'], () => api.agencyTemplates('invoice'));
   const [renaming, setRenaming] = useState<AgencyTemplate | null>(null);
   const [name, setName] = useState('');
-  const [sure, setSure] = useState('');
+  // A template's remove asks first, with the template it is about.
+  const [dropping, setDropping] = useState<AgencyTemplate | null>(null);
   const [msg, setMsg] = useState('');
   const refresh = () => qc.invalidateQueries({ queryKey: ['agency'] });
   const rename = useMutation({
@@ -370,7 +401,7 @@ export function InvoiceTemplates() {
   const remove = useMutation({
     mutationFn: (id: string) => api.agencyTemplateRemove(id),
     onSuccess: async () => {
-      setSure('');
+      setDropping(null);
       setMsg('Removed.');
       await refresh();
     },
@@ -414,13 +445,22 @@ export function InvoiceTemplates() {
                     onClick={() => {
                       setRenaming(t);
                       setName(t.name);
-                      setSure('');
                     }}
                   >
                     Rename
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => (sure === t.id ? remove.mutate(t.id) : setSure(t.id))} disabled={remove.isPending}>
-                    {sure === t.id ? 'Tap again to remove' : 'Remove'}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      remove.reset();
+                      setMsg('');
+                      setDropping(t);
+                    }}
+                    disabled={remove.isPending}
+                    aria-label={`Remove template ${t.name}`}
+                  >
+                    Remove
                   </Button>
                 </div>
               </div>
@@ -433,6 +473,16 @@ export function InvoiceTemplates() {
           {msg}
         </p>
       )}
+      <ConfirmDelete
+        open={dropping !== null}
+        title="Remove this template?"
+        body={`"${dropping?.name ?? ''}". Invoices already made from it stay as they are. This cannot be undone.`}
+        pending={remove.isPending}
+        failed={remove.isError}
+        onYes={() => dropping && remove.mutate(dropping.id)}
+        onClose={() => setDropping(null)}
+        yes="Yes, remove it"
+      />
     </div>
   );
 }

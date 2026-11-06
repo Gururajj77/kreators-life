@@ -4,6 +4,7 @@
 import { RELATIONSHIPS, type RelationshipKey } from './core.ts';
 import { addDays, zonedToUtc } from './dates.ts';
 import type { InsightFacts, InsightOpenTaskFact, InsightTaskFact } from './insights.ts';
+import type { DayTemplate } from './timeBlocks.ts';
 import type { PeriodNumbers } from './periods.ts';
 
 /** mulberry32: a small seeded generator, so the same seed gives the same person every run. */
@@ -152,6 +153,20 @@ export function goldenFacts(o: GoldenOptions): InsightFacts {
     review: o.rich && o.apps.includes('reviews') ? { kind: 'week', start: addDays(o.today, -16), end: addDays(o.today, -10), then: BASE_NUMBERS, since: { ...BASE_NUMBERS, tasksDone: 62, sleepAvg: 6.1, moodAvg: 3.9 }, sinceStart: addDays(o.today, -9), sinceEnd: addDays(o.today, -3), ended: true } : null,
     discover: o.rich && o.apps.includes('discover') ? { growth: 'parent_child', steps: true } : null,
     agencyDue,
+    timeBlocks: goldenTimeBlocks(dayTypes),
+  };
+}
+
+/** The starting set's shape for the golden people: one block, the default template and one template a kind, each date's pick a change. */
+function goldenTimeBlocks(dayTypes: InsightFacts['dayTypes']): NonNullable<InsightFacts['timeBlocks']> {
+  const kinds: [string, string][] = [['deep', 'Deep work'], ['admin', 'Admin'], ['rest', 'Rest and body'], ['make', 'Create']];
+  const tpl = (id: string, name: string, isDefault: boolean, sort: number): DayTemplate => ({ id, seed: id, sourceKind: null, name, lead: 'servant_leader', second: null, why: null, source: null, isDefault, sort, color: null, slots: [{ blockId: 'deep', start: 600, end: 780 }] });
+  return {
+    blocks: [{ id: 'deep', seed: 'deep', name: 'Deep work', tag: 'Focus', color: 'red', area: 'financial', pillar: 'servant_leader', sort: 0 }],
+    templates: [tpl('every', 'Everyday', true, 0), ...kinds.map(([id, name], i) => tpl(`t-${id}`, name, false, i + 1))],
+    defaultId: 'every',
+    pattern: [null, null, null, null, null, null, null],
+    overrides: Object.fromEntries(dayTypes.map((d) => [d.day, `t-${d.kind}`])),
   };
 }
 

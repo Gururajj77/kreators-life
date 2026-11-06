@@ -6,6 +6,7 @@ import { me } from './routes/me';
 import { onboarding } from './routes/onboarding';
 import { nodes } from './routes/nodes';
 import { today } from './routes/today';
+import { timeBlocks } from './routes/timeBlocks';
 import insights from './routes/insights';
 import { leaderboard } from './routes/leaderboard';
 import { rewards } from './routes/rewards';
@@ -27,6 +28,7 @@ import { manage } from './routes/manage';
 import { orgs } from './routes/orgs';
 import { army } from './routes/army';
 import { school } from './routes/school';
+import { cohortTalk } from './routes/cohortTalk';
 import { work } from './routes/work';
 import { party } from './routes/party';
 import { club } from './routes/club';
@@ -46,7 +48,7 @@ import { rateLimit } from './ops';
 import { isOpenDoor, ROUTE_LIMITS } from './limits';
 import { legalPublic, meLegal } from './routes/legal';
 import { pruneVitals, vitalsPublic } from './routes/vitals';
-import { modulesForPath, resolveAccess } from './access';
+import { adminGuideBypass, modulesForPath, resolveAccess } from './access';
 import { MODULE_BY_KEY } from '@kreators/shared';
 import { finance, publicInvoices } from './routes/finance';
 import { internal } from './routes/internal';
@@ -190,8 +192,10 @@ app.use('*', async (c, next) => {
 // A switched-off module is refused here, not only hidden by the client: the global flag, an override,
 // the rollout and the minimum role all count. The person's own on/off is a preference the client keeps.
 app.use('*', async (c, next) => {
-  const keys = modulesForPath(new URL(c.req.url).pathname);
+  const path = new URL(c.req.url).pathname;
+  const keys = modulesForPath(path);
   if (!keys) return next();
+  if (adminGuideBypass(path, c.get('user').role)) return next();
   const { access } = await resolveAccess(c.env.DB, c.get('user'));
   if (keys.some((k) => access[k]?.available)) return next();
   const name = MODULE_BY_KEY[keys[0] ?? '']?.name ?? 'That app';
@@ -218,6 +222,7 @@ app.route('/onboarding', onboarding);
 app.route('/session', session);
 app.route('/nodes', nodes);
 app.route('/today', today);
+app.route('/time-blocks', timeBlocks);
 // Emerging: patterns from the person's own rows, core and owner only (no line in MODULE_FOR_PREFIX).
 app.route('/insights', insights);
 app.route('/leaderboard', leaderboard);
@@ -246,6 +251,8 @@ app.route('/manage', manage);
 app.route('/manage/resources', manageResources);
 app.route('/orgs', orgs);
 app.route('/army', army);
+// A cohort's discussion sits under /school/cohorts, so the module gate reads School for it.
+app.route('/school/cohorts', cohortTalk);
 app.route('/school', school);
 app.route('/work', work);
 app.route('/party', party);

@@ -1,4 +1,4 @@
-import { inGroupOrder, matchSetup, MODULES, moduleState, setupSwitchable, type AppModule, type AppPrefs, type MeResponse, type ModuleAccess, type ModuleGroup } from '@kreators/shared';
+import { inGroupOrder, matchSetup, MODULES, moduleState, orderInGroup, setupSwitchable, type AppModule, type AppPrefs, type MeResponse, type ModuleAccess, type ModuleGroup } from '@kreators/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { api } from './api';
@@ -85,4 +85,31 @@ export function useSaveAppPrefs(): (next: AppPrefs) => Promise<boolean> {
     },
     [qc],
   );
+}
+
+/**
+ * The apps that fit this person, each with why, from the setup chat's answers (the same `matchSetup` the chat and Features use):
+ * Profile, Features marks them "Fits you", and the hidden-apps panel (Apps, Home's Go to) lists them first. Empty before any answers.
+ */
+export function useFits(): Map<string, string> {
+  const me = useMe();
+  const { modules } = useModules();
+  const user = me.data?.user;
+  const key = user ? `${user.identities.join('|')}#${user.intake.goals.join('|')}#${user.intake.blockers.join('|')}` : '';
+  return useMemo(() => {
+    if (!user || (user.identities.length === 0 && user.intake.goals.length === 0)) return new Map<string, string>();
+    const setup = { identities: user.identities, goals: user.intake.goals, blockers: user.intake.blockers };
+    const m = matchSetup(setup, modules.filter((x) => setupSwitchable(x) && x.available).map((x) => x.key));
+    return new Map([...m.apps, ...m.more].map((a) => [a.key, a.why]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, modules]);
+}
+
+/** The apps this person hid, in group order and each group's own order. */
+export function useHiddenApps(groups: readonly ModuleGroup[]) {
+  const { modules } = useModules();
+  const prefs = useAppPrefs();
+  return groups
+    .map((g) => ({ group: g, list: orderInGroup(modules.filter((m) => m.group === g && m.available && !m.locked && !m.on), prefs.order[g]) }))
+    .filter((x) => x.list.length > 0);
 }

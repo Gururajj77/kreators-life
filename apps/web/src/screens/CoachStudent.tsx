@@ -5,6 +5,7 @@ import gsap from 'gsap';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { Button } from '../components/Button';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 import { FactTag } from '../components/FactTag';
 import { StatusTag } from '../components/StatusTag';
 import { AreaLine, Gauge, HBars, MultiLine, StatTile, WeekDots } from '../components/Charts';
@@ -196,6 +197,7 @@ export function CoachStudent() {
   const q = useAuthed(['coach-student', id, query], () => api.coachStudent(id, query));
   const [editing, setEditing] = useState<Editing | null>(null);
   const [note, setNote] = useState('');
+  const [unnoting, setUnnoting] = useState<string | null>(null);
   const write = useMutation({
     mutationFn: () => api.coachNote(id, note),
     onSuccess: () => {
@@ -203,7 +205,7 @@ export function CoachStudent() {
       void q.refetch();
     },
   });
-  const takeBack = useMutation({ mutationFn: (noteId: string) => api.removeCoachNote(id, noteId), onSuccess: () => void q.refetch() });
+  const takeBack = useMutation({ mutationFn: (noteId: string) => api.removeCoachNote(id, noteId), onSuccess: () => { setUnnoting(null); void q.refetch(); } });
   const d = q.data;
   if (q.isError)
     return (
@@ -484,7 +486,7 @@ export function CoachStudent() {
             Leave the note
           </Button>
         </form>
-        <Problem e={write.error ?? takeBack.error} />
+        <Problem e={write.error} />
         <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
           {d.notes.map((n) => (
             <li key={n.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
@@ -492,7 +494,7 @@ export function CoachStudent() {
               <div className="mt-xs flex flex-wrap items-center justify-between gap-xs">
                 <span className="text-caption text-ink-soft">{when(n.createdAt)}</span>
                 {n.mine && (
-                  <Button size="sm" variant="ghost" disabled={takeBack.isPending} onClick={() => takeBack.mutate(n.id)}>
+                  <Button size="sm" variant="ghost" disabled={takeBack.isPending} onClick={() => { takeBack.reset(); setUnnoting(n.id); }}>
                     Take back
                   </Button>
                 )}
@@ -501,6 +503,16 @@ export function CoachStudent() {
           ))}
         </ul>
         <Pager page={d.notesPage} prefix="note" label="notes" />
+        <ConfirmDelete
+          open={unnoting !== null}
+          title="Take this note back?"
+          body="It is removed from their notes. This cannot be undone."
+          pending={takeBack.isPending}
+          failed={takeBack.isError}
+          onYes={() => unnoting && takeBack.mutate(unnoting)}
+          onClose={() => setUnnoting(null)}
+          yes="Yes, take it back"
+        />
       </Section>
 
       <Section id="log-heading" title="Change log" lede="Every ask, yes, note and task change between you two, with when it happened. They see the same lines.">

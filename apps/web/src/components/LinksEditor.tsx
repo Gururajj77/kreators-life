@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { useAuthed, useRefreshAll } from '../lib/queries';
 import { Button } from './Button';
 import { Sheet } from './Sheet';
+import { ConfirmDelete } from './ConfirmDelete';
 import { AppIcon } from './AppIcon';
 import { FIELD } from '../lib/ui';
 import { StatusTag } from './StatusTag';
@@ -28,7 +29,7 @@ function problem(b: LinkBlock): string {
 }
 
 /**
- * The creator's own links page, edited in place: add a block, change it, move it, hide it, remove it.
+ * The creator's own links page, edited in place: add a block, change it, move it, hide it, remove it (asked first in a sheet).
  * Every change saves straight away. The clicks column shows what people actually open.
  */
 export function LinksEditor({ initial }: { initial: LinkBlock[] }) {
@@ -36,6 +37,7 @@ export function LinksEditor({ initial }: { initial: LinkBlock[] }) {
   const [blocks, setBlocks] = useState<LinkBlock[]>(initial);
   const [editing, setEditing] = useState<LinkBlock | null>(null);
   const [isNew, setIsNew] = useState(false);
+  const [removing, setRemoving] = useState<LinkBlock | null>(null);
   const clicks = useAuthed(['link-clicks'], api.linkClicks);
   const save = useMutation({
     mutationFn: (next: LinkBlock[]) => api.updateMe({ links: next }),
@@ -135,7 +137,17 @@ export function LinksEditor({ initial }: { initial: LinkBlock[] }) {
                 <Button variant="outline" size="sm" onClick={() => commit(blocks.map((x) => (x.id === b.id ? { ...x, on: !x.on } : x)))}>
                   {b.on ? 'Hide' : 'Show'}
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => commit(blocks.filter((x) => x.id !== b.id))}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={save.isPending}
+                  aria-haspopup="dialog"
+                  aria-label={`Remove ${b.title || LINK_BLOCK_META[b.type].name}`}
+                  onClick={() => {
+                    save.reset();
+                    setRemoving(b);
+                  }}
+                >
                   Remove
                 </Button>
               </div>
@@ -143,6 +155,24 @@ export function LinksEditor({ initial }: { initial: LinkBlock[] }) {
           ))}
         </ul>
       )}
+
+      <ConfirmDelete
+        open={removing !== null}
+        title="Remove this block?"
+        body={removing ? `“${removing.title || LINK_BLOCK_META[removing.type].name}” goes from your public page. This cannot be undone.` : ''}
+        pending={save.isPending}
+        failed={save.isError}
+        onYes={() => {
+          if (!removing) return;
+          const gone = removing.id;
+          save.mutate(
+            blocks.filter((x) => x.id !== gone),
+            { onSuccess: () => setRemoving(null) },
+          );
+        }}
+        onClose={() => setRemoving(null)}
+        yes="Yes, remove it"
+      />
 
       <Sheet open={Boolean(editing)} onClose={() => setEditing(null)} title={editing ? `${isNew ? 'Add' : 'Edit'} ${LINK_BLOCK_META[editing.type].name.toLowerCase()}` : 'Block'}>
         {editing && (
@@ -203,7 +233,7 @@ export function LinksEditor({ initial }: { initial: LinkBlock[] }) {
                     );
                   })}
                 </ul>
-                <Button variant="outline" size="sm" className="mt-xs" disabled={editing.items.length >= MAX_CAROUSEL_ITEMS} onClick={() => setEditing({ ...editing, items: [...editing.items, { id: newId(), title: '', url: '', image: '' }] })}>
+                <Button variant="outline" size="sm" full className="mt-xs" disabled={editing.items.length >= MAX_CAROUSEL_ITEMS} onClick={() => setEditing({ ...editing, items: [...editing.items, { id: newId(), title: '', url: '', image: '' }] })}>
                   Add a card
                 </Button>
               </fieldset>
