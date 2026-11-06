@@ -333,11 +333,14 @@ export function SetupChat() {
           : 'Want to go deeper some day? The strategy session in Pillars is there whenever you are.';
     // Discover is offered beside the strategy session every time: it is the quicker way in and it makes the next steps personal.
     const discoverChip: ChatChoice = { value: 'discover', label: 'Take the Discover quiz' };
+    // The strategy session is always the last choice, on a line of its own, and the pills before it fill their lines, so none is left alone.
+    const sessionChip: ChatChoice = { value: '/session', label: 'Start the strategy session', row: true };
     const chips: ChatChoice[] =
       m.session === 'now'
-        ? [{ value: '/session', label: 'Start the strategy session' }, discoverChip, { value: '/home', label: 'Maybe later. Go to Home' }]
-        : [{ value: '/home', label: 'Go to Home' }, ...(top ? [{ value: top.path, label: `Open ${top.name}` }] : []), ...(m.session === 'soon' ? [{ value: '/session', label: 'Start the strategy session' }] : []), discoverChip];
-    setChat((c) => ({ ...c, doneChips: chips }));
+        ? [discoverChip, { value: '/home', label: 'Maybe later. Go to Home' }]
+        : [{ value: '/home', label: 'Go to Home' }, ...(top ? [{ value: top.path, label: `Open ${top.name}` }] : []), discoverChip];
+    const withSession = [...chips, sessionChip];
+    setChat((c) => ({ ...c, doneChips: withSession }));
     say(
       [
         `All set! 🎉 ${on.length === 1 ? "I've switched on your app." : `I've switched on your ${on.length} apps.`}`,
@@ -350,7 +353,7 @@ export function SetupChat() {
         'Or start with Discover, a quiz that shows your strengths and shapes your next steps to fit you.',
         'One more thing, if you like: add your interests, so people who like the same things can find you.',
       ],
-      { part: 'done', ask: { kind: 'chips', chips: [...chips, { value: 'profile', label: 'Add my interests' }] } },
+      { part: 'done', ask: { kind: 'chips', chips: [...chips, { value: 'profile', label: 'Add my interests' }, sessionChip] } },
     );
   };
 

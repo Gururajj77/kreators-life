@@ -10,6 +10,7 @@ import { ORDER_SELECT, type OrderRow } from './studio';
 import { nameOf, notify } from '../db';
 import type { Env } from '../env';
 import { FEATURE_KEYS } from '../sitemap';
+import { handleCallPayment } from '../liveCall';
 
 /** Tracked redirects at /go/:code. The click is written after the redirect is sent. */
 export const go = new Hono<AppEnv>();
@@ -100,7 +101,7 @@ export async function handlePaymentEvent(db: D1Database, env: Env, parsed: { typ
   const o = parsed.providerOrderId
     ? await db.prepare(`${ORDER_SELECT} WHERE o.provider_order_id = ?`).bind(parsed.providerOrderId).first<OrderRow & { owner_id: string; intake_json: string }>()
     : await db.prepare(`${ORDER_SELECT} WHERE o.provider_payment_id = ?`).bind(parsed.providerPaymentId).first<OrderRow & { owner_id: string; intake_json: string }>();
-  if (!o) return 'no order matches';
+  if (!o) return (await handleCallPayment(db, parsed)) ?? 'no order matches';
   const now = new Date().toISOString();
   if (parsed.type === 'payment.captured' || parsed.type === 'order.paid') {
     // A payment can be captured after the cron gave up on the order (a slow UPI or bank approval) or after a failed first try on

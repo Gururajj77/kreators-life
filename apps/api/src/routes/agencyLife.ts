@@ -18,6 +18,7 @@ import {
   PASSWORD_REQUEST_REASON_MAX,
   contractGaps,
   contractVarsFor,
+  onboardingFromRecord,
   onboardingProblem,
   onboardingToBilling,
   parseContractDoc,
@@ -35,7 +36,7 @@ import { dayFromDevice, nameOf, newId, notify, nowIso, num, randomCode, shiftDat
 import { sendEmail } from '../ops';
 import { ownLogo, publicUrl } from '../agencyPaper';
 import { dateOrNull, moneyIn } from '../agencyUtil';
-import { clientRow, settingsFor } from './agency';
+import { billingOf, clientRow, settingsFor } from './agency';
 import { runAgencyCycles } from '../agencyCycles';
 import { applyStageEvent, closePasswordRequest, logStmt, moveStage, syncStageFromAgreements, type RetainerRow } from '../lifecycle';
 import { actorOf } from '../agencyTeamAccess';
@@ -425,8 +426,10 @@ agencyLifePublic.get('/:token/onboarding', async (c) => {
   if ('res' in door) return door.res;
   const { client } = door;
   const questions = briefOf(await trialTemplate(c.env.DB, client.user_id));
+  // What the owner already keeps on the client (billing, contact) fills the empty fields, so the client is never asked for it again.
+  const draft = onboardingFromRecord(parseOnboarding(savedDraft(client.onboarding_json), questions), { name: client.name, contactName: client.contact_name, contactEmail: client.contact_email, billing: billingOf(client) });
   return c.json({
-    draft: parseOnboarding(savedDraft(client.onboarding_json), questions),
+    draft,
     questions,
     prefill: { brand: client.name, email: client.contact_email },
     done: Boolean(client.onboarded_at),

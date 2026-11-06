@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { useAuthed, useMe } from '../lib/queries';
 import { Avatar } from './Avatar';
+import { LiveCallLine } from './LiveCall';
 import { MapLadder, PlacementChart, ScoreRow } from './LifeMap';
 import { Ring } from './Ring';
 import { RoutinePanel } from './RoutinePanel';
@@ -200,6 +201,7 @@ export function LifeMapPanel() {
             <li>A short week: {PENALTIES.find((p) => p.key === d.contract?.penalty)?.name.toLowerCase() ?? 'the streak breaks'}.</li>
             <li>Weekly check on {d.contract.nextWeekly}. Monthly review on {d.contract.nextMonthly}.</li>
           </ul>
+          <LiveCallLine />
         </Section>
       )}
     </section>

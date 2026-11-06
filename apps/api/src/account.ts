@@ -102,6 +102,9 @@ export async function deleteAccount(db: D1Database, userId: string): Promise<voi
     db.prepare('DELETE FROM routines WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM contracts WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM routine_days WHERE user_id = ?').bind(userId),
+    // An ask for the live call goes; one that was paid stays for the books with its amount and loses who it was for.
+    db.prepare("DELETE FROM call_requests WHERE user_id = ? AND status NOT IN ('paid', 'booked', 'done')").bind(userId),
+    db.prepare('UPDATE call_requests SET user_id = NULL WHERE user_id = ?').bind(userId),
     // The content strategist's folders hold research and drafts about the person's brands: they go too.
     db.prepare('DELETE FROM brand_pieces WHERE brand_id IN (SELECT id FROM brands WHERE owner_id = ?)').bind(userId),
     db.prepare('DELETE FROM research_runs WHERE brand_id IN (SELECT id FROM brands WHERE owner_id = ?)').bind(userId),

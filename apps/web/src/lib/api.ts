@@ -1,4 +1,4 @@
-import type { AppPrefs, ConsentChoices } from '@kreators/shared';
+import type { AppPrefs, ConsentChoices, LiveCallAnswer, LiveCallRequest } from '@kreators/shared';
 import type { AdminDiscountCode, DiscountArea, DiscountCheck } from '@kreators/shared';
 import type { ActivityYear, BadgesResponse, Page, Unlock } from '@kreators/shared';
 import type { Channel, ChannelLine, ChannelMember, ChannelScope } from '@kreators/shared';
@@ -348,7 +348,7 @@ export const api = {
     socials?: Socials;
       publicSettings?: Partial<PublicSettings>;
       links?: LinkBlock[];
-  }) => patch<{ user: User }>('/me', body),
+  }) => patch<{ user: User; coach?: 'asked' | 'waiting' }>('/me', body),
   exportMe: () => request<Record<string, unknown>>('/me/export'),
   deleteMe: () => request<{ ok: true }>('/me', { method: 'DELETE', body: JSON.stringify({ confirm: 'DELETE' }) }),
   trackEvent: (name: TrackedEvent, props?: Record<string, unknown>) => post<{ ok: true }>('/me/events', { name, props }),
@@ -935,6 +935,9 @@ export const api = {
   setSessionAway: (relationship: RelationshipKey, away: boolean, date: string) => put<SessionResponse>('/session/away', { relationship, away, date }),
   submitPlan: (body: { focus: RelationshipKey[]; practices: Practices; contract: Pick<Contract, 'minDays' | 'checkinTime' | 'penalty' | 'signedName'>; date: string }) => post<SessionResponse>('/session/plan', body),
   markRoutineDay: (body: { date: string; dayType: DayType; steps: string[] }) => post<SessionResponse>('/session/day', body),
+  /** The live call with a coach: the open ask, and a yes that keeps the ask and, only while payments are live, the order to pay it. */
+  liveCall: () => request<{ request: LiveCallRequest | null; live: boolean }>('/session/call'),
+  askLiveCall: () => post<LiveCallAnswer>('/session/call', {}),
   updateRoutine: (body: { date: string; general?: RoutineBlock[]; exceptional?: RoutineBlock[] }) => patch<SessionResponse>('/session/routine', body),
 
   // content strategist: brand folders

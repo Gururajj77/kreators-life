@@ -40,7 +40,7 @@ export function usePeriodSummary(period: Period) {
 }
 
 /** The period's numbers as tiles, each next to the period before. Which parts show depends on the dashboard. */
-export function SummaryTiles({ summary, parts }: { summary: ReviewSummary; parts: readonly SummaryPart[] }) {
+export function SummaryTiles({ summary, parts, keep }: { summary: ReviewSummary; parts: readonly SummaryPart[]; /** Which tiles stay, by the page they open (Home drops the tiles of apps that are off). */ keep?: (to: string | undefined) => boolean }) {
   const { now, before, currency } = summary;
   const prev = PERIOD_META[summary.period.kind].previous;
   const tiles: { label: string; value: ReactNode; hint: string; to?: string }[] = [];
@@ -133,17 +133,18 @@ export function SummaryTiles({ summary, parts }: { summary: ReviewSummary; parts
       );
     }
   }
+  const shown = keep ? tiles.filter((t) => keep(t.to)) : tiles;
   return (
     <div className="grid grid-cols-2 gap-xs md:grid-cols-4">
-      {tiles.map((t, i) => (
-        <StatTile key={t.label} label={t.label} value={t.value} hint={t.hint} to={t.to} className={bento(i, tiles.length, 2, 4)} />
+      {shown.map((t, i) => (
+        <StatTile key={t.label} label={t.label} value={t.value} hint={t.hint} to={t.to} className={bento(i, shown.length, 2, 4)} />
       ))}
     </div>
   );
 }
 
 /** The period filter and its numbers, dropped into any dashboard. Which parts show is the dashboard's choice. */
-export function PeriodPanel({ id, parts, title = 'By period', span = false }: { id: string; parts: readonly SummaryPart[]; title?: string; span?: boolean }) {
+export function PeriodPanel({ id, parts, title = 'By period', span = false, keep }: { id: string; parts: readonly SummaryPart[]; title?: string; span?: boolean; /** Which tiles and links stay, by the page they open (Home drops those of apps that are off). */ keep?: (to: string | undefined) => boolean }) {
   const today = todayLocal();
   const [period, setPeriod] = useState<Period>(() => periodFor('week', today));
   const q = usePeriodSummary(period);
@@ -153,12 +154,12 @@ export function PeriodPanel({ id, parts, title = 'By period', span = false }: { 
       title={title}
       lede="The same numbers by week, month, quarter or half year, next to the one before."
       span={span}
-      action={<SeeAll to="/reviews">Review it</SeeAll>}
+      action={!keep || keep('/reviews') ? <SeeAll to="/reviews">Review it</SeeAll> : undefined}
     >
       <PeriodFilter period={period} onChange={setPeriod} today={today} />
       <div className="mt-sm">
         {q.data ? (
-          <SummaryTiles summary={q.data} parts={parts} />
+          <SummaryTiles summary={q.data} parts={parts} keep={keep} />
         ) : (
           <p className="m-0 text-subhead text-ink-soft" role="status">
             {q.isError ? 'Could not load this period. Try another one.' : 'Adding up your numbers'}

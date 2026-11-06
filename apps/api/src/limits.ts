@@ -86,6 +86,13 @@ export const LIMITS = {
   docEmail: { max: 10, windowSec: 3600 },
   /** A client at their link: approving, sending back, commenting, accepting. The link is the only key, so it is counted per address. */
   portal: { max: 30, windowSec: 600 },
+  /**
+   * A client's onboarding form saving as they go, per address: every field left saves, so a long form makes many saves. A budget of its
+   * own, so the saves never use up `portal` and the one Send at the end is never refused.
+   */
+  onboardingSave: { max: 300, windowSec: 600 },
+  /** Sending the onboarding form, per address: it is sent once, so ten in ten minutes is room for a retry after a typing slip. */
+  onboardingSubmit: { max: 10, windowSec: 600 },
   /** The password on a client link, per address: five tries in ten minutes. */
   portalLogin: { max: 5, windowSec: 600 },
   /** The same password, per client whatever the address, so many addresses cannot share the guessing. */
@@ -187,6 +194,8 @@ export const ROUTE_LIMITS: readonly {
   { method: 'DELETE', path: '/wellbeing/focus/:id', limit: 'prefs' },
   { method: 'POST', path: '/me/calendar', limit: 'prefs' },
   { method: 'PUT', path: '/session/away', limit: 'prefs' },
+  // A yes to the live call: a paid service, so it shares the checkout budget (a provider order is made only while payments are live).
+  { method: 'POST', path: '/session/call', limit: 'checkout' },
   { method: 'PUT', path: '/today/day-type', limit: 'prefs' },
   // Time blocks, day templates and the weekly pattern (docs/time-blocks.md): settings, so under `prefs` like the kind of day.
   { method: 'POST', path: '/time-blocks/blocks', limit: 'prefs' },
@@ -275,8 +284,8 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/public/agency/doc/:token/unlock', limit: 'portalLogin', by: 'address' },
   { method: 'POST', path: '/public/agency/:token/retainer', limit: 'portal' },
   // Client onboarding at the link (saved as they go, sent once) and the ask for a new password, all per address: the link is the only key.
-  { method: 'PUT', path: '/public/agency/:token/onboarding', limit: 'portal', by: 'address' },
-  { method: 'POST', path: '/public/agency/:token/onboarding/submit', limit: 'portal', by: 'address' },
+  { method: 'PUT', path: '/public/agency/:token/onboarding', limit: 'onboardingSave', by: 'address' },
+  { method: 'POST', path: '/public/agency/:token/onboarding/submit', limit: 'onboardingSubmit', by: 'address' },
   { method: 'POST', path: '/public/agency/password-request', limit: 'portalPasswordAsk', by: 'address' },
   // The team link (the client's own team): its unlock per address, and a note or approval from it per address like the client link.
   { method: 'POST', path: '/public/team-link/:token/unlock', limit: 'teamLinkLogin', by: 'address' },

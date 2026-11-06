@@ -4,7 +4,7 @@ import { addDays, asDay, DATE_PATTERN, daysBetween, fromDay } from './dates.ts';
 import { nextOccurrence } from './tasks.ts';
 import type { Repeat } from './tasks.ts';
 import type { Period, PeriodKind } from './periods.ts';
-import { normalizePhone, passwordProblem, phoneProblem, pinCodeProblem } from './account.ts';
+import { INDIAN_STATES, normalizePhone, passwordProblem, phoneProblem, pinCodeProblem } from './account.ts';
 import { feeBps, money, typedCents } from './money.ts';
 import type { Invoice, INVOICE_STATUSES } from './money.ts';
 import type { BusinessProfile, InvoiceParty } from './invoice.ts';
@@ -849,6 +849,44 @@ export function onboardingToBilling(o: ClientOnboarding, brandName: string): Inv
   const taxIds = [o.gstin ? { label: 'GSTIN', value: o.gstin } : null, o.pan ? { label: 'PAN', value: o.pan } : null].filter((x): x is { label: string; value: string } => x !== null);
   const address = [o.addressLine.trim(), o.city.trim(), [o.state.trim(), o.pin.trim()].filter(Boolean).join(' ')].filter(Boolean).join(', ').slice(0, 300);
   return { name: brandName.trim() || o.brands.trim(), line: o.legalName.trim(), taxIds, address, email: (o.billingEmail.trim() || o.email.trim()).slice(0, 120), phone: o.phone.trim() ? normalizePhone(o.phone) : '' };
+}
+
+/**
+ * The client's form with what their record already holds filled in where the form is still empty: the legal name, the address (read back
+ * into its parts when it was written as "line, city, state PIN"), GSTIN, PAN, phone, contact and billing email. A field the client typed
+ * is never changed, so a step the record already answers opens finished and the form goes straight to what is still missing.
+ */
+export function onboardingFromRecord(o: ClientOnboarding, rec: { name: string; contactName: string; contactEmail: string; billing: InvoiceParty }): ClientOnboarding {
+  const out: ClientOnboarding = { ...o, brief: { ...o.brief }, references: [...o.references] };
+  const b = rec.billing;
+  const fill = <K extends 'legalName' | 'brands' | 'gstin' | 'pan' | 'pocName' | 'email' | 'phone' | 'billingEmail'>(k: K, v: string) => {
+    if (!out[k].trim() && v.trim()) out[k] = v.trim().slice(0, OB_FIELDS[k]);
+  };
+  fill('brands', b.name || rec.name);
+  fill('legalName', b.line);
+  const tax = (label: string) => b.taxIds.find((t) => t.label.trim().toUpperCase() === label)?.value.replace(/\s+/g, '').toUpperCase() ?? '';
+  fill('gstin', tax('GSTIN'));
+  fill('pan', tax('PAN'));
+  // A GSTIN carries the PAN inside it (characters 3 to 12).
+  if (!out.pan && /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]/.test(out.gstin)) out.pan = out.gstin.slice(2, 12);
+  fill('pocName', rec.contactName);
+  fill('email', rec.contactEmail);
+  fill('phone', b.phone);
+  if (b.email.trim() && b.email.trim().toLowerCase() !== out.email.trim().toLowerCase()) fill('billingEmail', b.email);
+  if (!out.addressLine.trim() && !out.city.trim() && !out.state.trim() && !out.pin.trim() && b.address.trim()) {
+    const parts = b.address.split(',').map((x) => x.trim()).filter(Boolean);
+    const last = parts[parts.length - 1] ?? '';
+    const pin = /(?:^|\s)([1-9][0-9]{5})$/.exec(last)?.[1] ?? '';
+    const stateText = (pin ? last.slice(0, last.length - pin.length) : last).trim().toLowerCase();
+    const state = INDIAN_STATES.find((x) => x.toLowerCase() === stateText) ?? '';
+    if ((state || pin) && parts.length >= 3) {
+      out.state = state;
+      out.pin = pin;
+      out.city = parts[parts.length - 2]!.slice(0, OB_FIELDS.city);
+      out.addressLine = parts.slice(0, -2).join(', ').slice(0, OB_FIELDS.addressLine);
+    } else out.addressLine = b.address.trim().slice(0, OB_FIELDS.addressLine);
+  }
+  return out;
 }
 
 // ---- changes (revisions) on a piece

@@ -18,43 +18,7 @@ import { storedRef, useSession } from '../lib/store';
 import { Stars } from '../components/Stars';
 import { FIELD } from '../lib/ui';
 import { Fold } from '../components/Fold';
-
-
-interface RazorpayOptions {
-  key: string;
-  amount: number;
-  currency: string;
-  order_id: string;
-  name: string;
-  description: string;
-  handler: () => void;
-  modal?: { ondismiss?: () => void };
-}
-declare global {
-  interface Window {
-    Razorpay?: new (options: RazorpayOptions) => { open: () => void };
-  }
-}
-
-/** Loads Razorpay Checkout once and resolves when it is ready. */
-function loadRazorpay(): Promise<void> {
-  if (window.Razorpay) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>('script[data-razorpay]');
-    if (existing) {
-      existing.addEventListener('load', () => resolve());
-      existing.addEventListener('error', () => reject(new Error('Could not load the payment window.')));
-      return;
-    }
-    const s = document.createElement('script');
-    s.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    s.async = true;
-    s.dataset.razorpay = '1';
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error('Could not load the payment window.'));
-    document.head.appendChild(s);
-  });
-}
+import { loadRazorpay } from '../lib/razorpay';
 
 export function ProductPage() {
   const { id = '' } = useParams();

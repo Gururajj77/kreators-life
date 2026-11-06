@@ -130,7 +130,7 @@ export function DayTypeNote({ template, contextual, failed, ownSort }: { templat
       {/* The line on the left and "Edit kind of day" at its bottom right, level with the row's right edge (the founder, 2026-11-06); the
           link's 44px tap area is its ::after, so it adds no height to the line. */}
       {text && (
-        <div className="mt-xs flex flex-wrap items-end justify-between gap-x-sm">
+        <div className="mt-sm flex flex-wrap items-end justify-between gap-x-sm">
           <p className="m-0 min-w-0 flex-[1_1_240px] text-caption text-ink-soft" aria-live="polite">
             {text}
             {template?.source ? <span className="text-ink-mute"> Source: {wholeRanges(template.source)}.</span> : null}

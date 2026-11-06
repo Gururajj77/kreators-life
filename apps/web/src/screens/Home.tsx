@@ -111,9 +111,10 @@ export function Home() {
   const hour = new Date().getHours();
   const q = useAuthed(['home', date], () => api.home(date, hour));
   const { modules } = useModules();
-  // Breathe and focus shows on Home whenever the team has not switched Mindfulness off (the person's own switch starts off, and the
-  // founder wants the panel on Home for everyone); its routes are open to anyone with a wellbeing app available.
-  const mindfulOn = modules.find((m) => m.key === 'mindful')?.available ?? false;
+  // A widget on Home belongs to its app: it shows only while that app is on for the person (the founder, 2026-11-06: "when apps are
+  // toggled off then widget should go off in home"). Home's own numbers, Daily, the pillars and xp are core and always show.
+  const isOn = (key: string) => modules.some((m) => m.key === key && m.on);
+  const mindfulOn = isOn('mindful');
   const setTarget = useFocusPortal((s) => s.setTarget);
   const focusHeight = useFocusPortal((s) => s.height);
   // A steady ref callback, so the slot is set once and the living clock is not moved out and back on every render.
@@ -128,8 +129,41 @@ export function Home() {
   const [xpView, setXpView] = useParamState('xp', 'day');
   const d = q.data;
   // The three half-width extras pair up in two columns; when one is left over it takes the whole row, so nothing stands alone.
-  const extras = d ? ([d.life ? 'life' : null, d.resources.length > 0 ? 'reads' : null, d.money ? 'money' : null].filter(Boolean) as string[]) : [];
+  const listWords = (xs: string[]) => (xs.length < 2 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+  const lifeOn = isOn('life');
+  const readsOn = isOn('knowledge');
+  const moneyOn = isOn('finance');
+  const extras = d ? ([d.life && lifeOn ? 'life' : null, d.resources.length > 0 && readsOn ? 'reads' : null, d.money && moneyOn ? 'money' : null].filter(Boolean) as string[]) : [];
   const lastOptional = extras.length % 2 === 1 ? extras[extras.length - 1] : null;
+  // The four halves under the brief pair up the same way: Daily always, then Trackers, Up next and the Companion while their apps are on.
+  const trackerKeys = ['mindful', 'sleep', 'journal', 'stress', 'mood'].filter(isOn);
+  const upApps = { event: 'party', run: 'run', circle: 'circles', session: 'library', booking: 'shop' } as const;
+  const upNext = d ? d.upNext.filter((u) => isOn(upApps[u.kind])) : [];
+  const upOn = upNext.length > 0 || ['party', 'run', 'circles'].some(isOn);
+  const UP_WORDS: [string, string, string][] = [
+    ['party', 'Events', 'meetups are under Party'],
+    ['run', 'runs', 'run clubs under Kreators Run'],
+    ['circles', 'circles', 'small groups near you under Circles'],
+  ];
+  const upShown = UP_WORDS.filter(([k]) => isOn(k));
+  const upWords = upShown.length > 0 ? upShown.map(([, w], i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w.toLowerCase())) : ['Sessions'];
+  const upWhereRaw = listWords(upShown.map(([, , w]) => w));
+  const upWhere = upShown.length > 0 ? upWhereRaw.charAt(0).toUpperCase() + upWhereRaw.slice(1) : 'Your bookings show here';
+  const halves = ['today', trackerKeys.length > 0 ? 'trackers' : null, upOn ? 'next' : null, isOn('companion') ? 'companion' : null].filter(Boolean) as string[];
+  const lastHalf = halves.length % 2 === 1 ? halves[halves.length - 1] : null;
+  // The metric cards: the Life score (Life), Mood and Wellbeing, each while its app is on. All three make the bento (a large Life beside
+  // two); two sit side by side as halves; one takes the whole row.
+  const metricKeys = ['life', 'mood', 'wellbeing'].filter(isOn);
+  const metricSize = (key: string) => (metricKeys.length === 1 ? BENTO_SIZE.wide : metricKeys.length === 3 && key === 'life' ? BENTO_SIZE.large : BENTO_SIZE.medium);
+  const lifeLarge = metricKeys.length === 3;
+  // The week's lines: sleep, calm and mood, each while its tracker is on.
+  const trendKeys = ['sleep', 'stress', 'mood'].filter(isOn);
+  const TREND_WORDS: Record<string, [string, string]> = { sleep: ['sleep', 'a night'], stress: ['calm', 'a stress level'], mood: ['mood', 'a mood'] };
+  const trendNames = listWords(trendKeys.map((k) => TREND_WORDS[k]![0]));
+  const trendWords = trendNames.charAt(0).toUpperCase() + trendNames.slice(1);
+  const trendLog = trendKeys.map((k) => TREND_WORDS[k]![1]).reduce((a, b, i, xs) => (i === 0 ? b : `${a}${i === xs.length - 1 ? ' or ' : ', '}${b}`), '');
+  // A period tile that opens an app shows only while that app is on (Daily's and the pillars' tiles always show).
+  const keepTile = (to: string | undefined) => !to || modules.every((m) => m.path !== to || m.on);
   const user = me.data?.user;
   const firstName = user?.displayName?.split(' ')[0] ?? '';
   // The bell swings once when the unread count goes up while Home is open (never on the first load); still under reduced motion.
@@ -198,11 +232,15 @@ export function Home() {
                   <Icon icon={Flame} size={14} className="mr-xs inline-block align-[-2px]" />
                   {d.today.streak} {d.today.streak === 1 ? 'day' : 'days'}
                 </Link>
-                <span aria-hidden="true" className="hidden sm:inline">·</span>
-                <Link to="/mood" className="inline-flex min-h-[44px] items-center underline-offset-4 hover:underline">
-                  {moodToday ? <MoodFace value={moodToday.value} size={16} className="mr-xs inline-block align-[-3px]" /> : <Icon icon={FaceSlightlySmiling} size={14} className="mr-xs inline-block align-[-2px]" />}
-                  {moodToday ? moodToday.name : 'Log your mood'}
-                </Link>
+                {isOn('mood') && (
+                  <>
+                    <span aria-hidden="true" className="hidden sm:inline">·</span>
+                    <Link to="/mood" className="inline-flex min-h-[44px] items-center underline-offset-4 hover:underline">
+                      {moodToday ? <MoodFace value={moodToday.value} size={16} className="mr-xs inline-block align-[-3px]" /> : <Icon icon={FaceSlightlySmiling} size={14} className="mr-xs inline-block align-[-2px]" />}
+                      {moodToday ? moodToday.name : 'Log your mood'}
+                    </Link>
+                  </>
+                )}
               </p>
             )}
           </div>
@@ -237,24 +275,28 @@ export function Home() {
 
       {d && (
         <>
-          <Section id="home-metrics" title="Your metrics" lede="Where you stand today. Tap one for the detail." action={<SeeAll to="/life">Life</SeeAll>} span>
+          {metricKeys.length > 0 && (
+          <Section id="home-metrics" title="Your metrics" lede="Where you stand today. Tap one for the detail." action={lifeOn ? <SeeAll to="/life">Life</SeeAll> : undefined} span>
             <ul className="bento-md -mx-md flex snap-x scroll-px-md list-none gap-xs overflow-x-auto px-md pb-xs scrollbar-none m-0 md:mx-0 md:overflow-visible md:px-0">
-              <li data-pillar="lover_partner" className={`w-[168px] shrink-0 snap-start md:w-auto md:[&>a]:h-full ${BENTO_SIZE.large}`}>
+              {lifeOn && (
+              <li data-pillar="lover_partner" className={`w-[168px] shrink-0 snap-start md:w-auto md:[&>a]:h-full ${metricSize('life')}`}>
                 <MetricCard to="/life" title="Life score" icon={Compass} tone="var(--color-r4)" deep="var(--deep-lover_partner)" corner={<Avatar relationship="lover_partner" size={36} decorative mood={(d.life?.overall ?? 0) >= 60 ? 'excited' : 'happy'} />}>
                   <span className="flex flex-1 items-center justify-center">
                     {/* In proportion to its card: 140px in the phone's sideways row, 240px in the large bento cell beside two cards. */}
-                    <Gauge value={(d.life?.overall ?? 0) / 100} size={wideMetrics ? 240 : 140} stroke={wideMetrics ? 20 : 13} color={WHITE} track={WHITE_TRACK} label={`Life ${d.life?.overall ?? 0} of 100`}>
+                    <Gauge value={(d.life?.overall ?? 0) / 100} size={wideMetrics && lifeLarge ? 240 : 140} stroke={wideMetrics && lifeLarge ? 20 : 13} color={WHITE} track={WHITE_TRACK} label={`Life ${d.life?.overall ?? 0} of 100`}>
                       <span className="flex flex-col items-center leading-none">
-                        <span className={`font-display ${wideMetrics ? 'text-[56px] font-[500]' : 'text-[34px] font-bold'}`}>
+                        <span className={`font-display ${wideMetrics && lifeLarge ? 'text-[56px] font-[500]' : 'text-[34px] font-bold'}`}>
                           <CountUp value={d.life?.overall ?? 0} />
                         </span>
-                        <span className={`mt-xs font-medium opacity-90 ${wideMetrics ? 'text-callout' : 'text-caption'}`}>{d.life?.label ?? ''}</span>
+                        <span className={`mt-xs font-medium opacity-90 ${wideMetrics && lifeLarge ? 'text-callout' : 'text-caption'}`}>{d.life?.label ?? ''}</span>
                       </span>
                     </Gauge>
                   </span>
                 </MetricCard>
               </li>
-              <li data-pillar="friendship" className={`w-[168px] shrink-0 snap-start md:w-auto ${BENTO_SIZE.medium}`}>
+              )}
+              {isOn('mood') && (
+              <li data-pillar="friendship" className={`w-[168px] shrink-0 snap-start md:w-auto ${metricSize('mood')}`}>
                 <MetricCard to="/mood" title="Mood" tone="var(--color-r2)" deep="var(--deep-friendship)" corner={<MoodFace value={moodToday?.value ?? 3} size={40} color="rgba(255,255,255,0.25)" face="var(--color-on-fill)" />}>
                   <span className="block text-title2">{moodToday ? moodToday.name : 'Not logged'}</span>
                   <span className="mt-xs block flex-1">
@@ -262,7 +304,9 @@ export function Home() {
                   </span>
                 </MetricCard>
               </li>
-              <li data-pillar="guru" className={`w-[168px] shrink-0 snap-start md:w-auto ${BENTO_SIZE.medium}`}>
+              )}
+              {isOn('wellbeing') && (
+              <li data-pillar="guru" className={`w-[168px] shrink-0 snap-start md:w-auto ${metricSize('wellbeing')}`}>
                 <MetricCard to="/wellbeing" title="Wellbeing" icon={HeartPulse} tone="var(--color-r6)" deep="var(--deep-guru)" corner={<Avatar relationship="guru" size={36} decorative mood={d.trackers.score >= 60 ? 'excited' : 'happy'} />}>
                   <span className="flex flex-1 items-center justify-center">
                     <Ring value={d.trackers.score / 100} size={104} stroke={11} color={WHITE} track={WHITE_TRACK} label={`Wellbeing ${d.trackers.score} of 100`}>
@@ -276,8 +320,10 @@ export function Home() {
                   </span>
                 </MetricCard>
               </li>
+              )}
             </ul>
           </Section>
+          )}
 
           <Section id="home-stats" title="Your numbers" lede="Results first. Everything below is what moves them." span>
             <div className="grid grid-cols-2 gap-xs md:grid-cols-4">
@@ -293,29 +339,33 @@ export function Home() {
                       <Nudge className="mt-sm" text={`${d.xp.span - d.xp.into} xp to level ${d.xp.level + 1}. A ticked task is 20, a check-in 10.`} />
           </Section>
 
-          <PeriodPanel id="home-period" parts={['daily', 'wellbeing', 'finance', 'shop']} span />
-          <Section id="home-trends" title="This week" lede="Sleep, calm and mood as scores out of a hundred, day by day. Where the lines dip is where to look." action={<SeeAll to="/wellbeing">Wellbeing</SeeAll>} span>
+          <PeriodPanel id="home-period" parts={['daily', 'wellbeing', 'finance', 'shop']} keep={keepTile} span />
+          {trendKeys.length > 0 && (
+          <Section id="home-trends" title="This week" lede={`${trendWords} as ${trendKeys.length === 1 ? 'a score' : 'scores'} out of a hundred, day by day. Where ${trendKeys.length === 1 ? 'the line dips' : 'the lines dip'} is where to look.`} action={isOn('wellbeing') ? <SeeAll to="/wellbeing">Wellbeing</SeeAll> : undefined} span>
             <div className="rounded-card bg-card p-md shadow-toy-soft">
               {/* Physical, mental, emotional: the order of the five areas, the same as Life's chart. */}
               <MultiLine
                 series={[
-                  { values: d.trackers.sleep.week.map((h) => (h === null ? null : (Math.max(4, Math.min(8, h)) - 4) * 25)), color: 'var(--color-r6)', label: 'Sleep' },
-                  { values: d.trackers.stress.week.map((st) => (st === null ? null : ((5 - st) / 4) * 100)), color: 'var(--color-r2)', label: 'Calm' },
-                  { values: d.trackers.mood.week.map((m) => (m === null ? null : ((m - 1) / 4) * 100)), color: 'var(--color-r3)', label: 'Mood' },
-                ]}
+                  { key: 'sleep', values: d.trackers.sleep.week.map((h) => (h === null ? null : (Math.max(4, Math.min(8, h)) - 4) * 25)), color: 'var(--color-r6)', label: 'Sleep' },
+                  { key: 'stress', values: d.trackers.stress.week.map((st) => (st === null ? null : ((5 - st) / 4) * 100)), color: 'var(--color-r2)', label: 'Calm' },
+                  { key: 'mood', values: d.trackers.mood.week.map((m) => (m === null ? null : ((m - 1) / 4) * 100)), color: 'var(--color-r3)', label: 'Mood' },
+                ]
+                  .filter((x) => trendKeys.includes(x.key))
+                  .map(({ key: _k, ...x }) => x)}
                 max={100}
                 labels={d.days.slice(-7).map((x) => weekday(x.date))}
                 allLabels
                 height={180}
-                label="Sleep, calm and mood as scores out of a hundred for the last seven days"
-                empty="Log a night, a stress level or a mood and the lines appear."
+                label={`${trendWords} as scores out of a hundred for the last seven days`}
+                empty={`Log ${trendLog} and the ${trendKeys.length === 1 ? 'line appears' : 'lines appear'}.`}
               />
             </div>
           </Section>
+          )}
 
           <EmergenceSlot app="home" max={3} always />
 
-          <Section id="home-today" title="Daily" lede="Tick each box when you have done it." action={<SeeAll to="/today">Open</SeeAll>}>
+          <Section id="home-today" title="Daily" lede="Tick each box when you have done it." action={<SeeAll to="/today">Open</SeeAll>} span={lastHalf === 'today'}>
             <div data-pillar="lover_partner" className="relative flex flex-col overflow-hidden rounded-card bg-r4 p-md text-on-fill">
               <HeroBlobs kind="daisy" />
               <div className="relative flex flex-1 flex-col">
@@ -365,7 +415,8 @@ export function Home() {
             </div>
           </Section>
 
-          <Section id="home-trackers" title="Trackers" lede="Tap a row to log today." action={<SeeAll to="/wellbeing">Wellbeing</SeeAll>}>
+          {trackerKeys.length > 0 && (
+          <Section id="home-trackers" title="Trackers" lede="Tap a row to log today." action={isOn('wellbeing') ? <SeeAll to="/wellbeing">Wellbeing</SeeAll> : undefined} span={lastHalf === 'trackers'}>
             <ul className="flex list-none flex-col gap-xs p-0 m-0">
               {[
                 {
@@ -417,7 +468,9 @@ export function Home() {
                       </span>
                     ),
                 },
-              ].map((r) => (
+              ]
+                .filter((r) => trackerKeys.includes(r.key))
+                .map((r) => (
                 <li key={r.key}>
                   <Link to={r.to} data-pillar={r.pillar} className="toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm text-ink">
                     {r.key === 'mood' && moodToday ? (
@@ -437,22 +490,26 @@ export function Home() {
               ))}
             </ul>
           </Section>
+          )}
 
-          <Section id="home-next" title="Up next" lede="Events, runs and circles you joined." action={<SeeAll to="/party">Party</SeeAll>}>
+          {upOn && (
+          <Section id="home-next" title="Up next" lede={`${listWords(upWords)} you joined.`} action={isOn('party') ? <SeeAll to="/party">Party</SeeAll> : undefined} span={lastHalf === 'next'}>
             <div data-pillar="lover_partner" className="flex flex-col rounded-card bg-card p-md shadow-toy-soft">
               <div className="flex items-center justify-between gap-sm">
                 <p className="m-0 flex items-baseline gap-xs">
-                  <span className="text-figure-lg type-figure leading-none">{d.upNext.length}</span>
+                  <span className="text-figure-lg type-figure leading-none">{upNext.length}</span>
                   <span className="text-headline">coming up</span>
                 </p>
+                {isOn('party') && (
                 <Link to="/party" aria-label="Open Party" className="toy flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-r4 text-on-fill" style={{ '--toy-color': 'var(--deep-lover_partner)' } as CSSProperties}>
 <Icon icon={ArrowUpRight} size={20} />
                 </Link>
+                )}
               </div>
               {/* With nothing booked the line sits in the middle of the card (beside the taller Companion), never under an empty band. */}
-              <p className={`mt-xs m-0 flex flex-wrap gap-sm text-caption text-ink-soft ${d.upNext.length === 0 ? 'flex-1 content-center' : ''}`}>
+              <p className={`mt-xs m-0 flex flex-wrap gap-sm text-caption text-ink-soft ${upNext.length === 0 ? 'flex-1 content-center' : ''}`}>
                 {(['event', 'run', 'session', 'booking', 'circle'] as const).map((k) => {
-                  const n = d.upNext.filter((u) => u.kind === k).length;
+                  const n = upNext.filter((u) => u.kind === k).length;
                   if (n === 0) return null;
                   return (
                     <span key={k}>
@@ -461,11 +518,11 @@ export function Home() {
                     </span>
                   );
                 })}
-                {d.upNext.length === 0 && <span>Nothing booked. Meetups are under Party, run clubs under Kreators Run, small groups near you under Circles.</span>}
+                {upNext.length === 0 && <span>Nothing booked. {upWhere}.</span>}
               </p>
-              {d.upNext.length > 0 && (
+              {upNext.length > 0 && (
                 <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-                  {d.upNext.map((u) => (
+                  {upNext.map((u) => (
                     <li key={`${u.kind}-${u.path}-${u.at}`}>
                       <Link to={u.path} className="group toy toy-flat flex items-center gap-sm rounded-tile bg-paper p-sm text-ink">
                         <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-card text-ink-soft shadow-toy-soft">
@@ -491,18 +548,26 @@ export function Home() {
                   ))}
                 </ul>
               )}
+              {(isOn('party') || isOn('circles')) && (
               <div className="mt-auto flex justify-center gap-md pt-sm">
+                {isOn('party') && (
                 <Link to="/party" className="inline-flex min-h-[44px] items-center text-subhead text-ink-mute underline-offset-4 hover:underline">
                   All events
                 </Link>
+                )}
+                {isOn('circles') && (
                 <Link to="/circles" className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-subhead text-ink-mute underline-offset-4 hover:underline">
                   Circles
                 </Link>
+                )}
               </div>
+              )}
             </div>
           </Section>
+          )}
 
-          <Section id="home-companion" title="Companion" lede="A chat that knows how you are doing. Not a therapist.">
+          {isOn('companion') && (
+          <Section id="home-companion" title="Companion" lede="A chat that knows how you are doing. Not a therapist." span={lastHalf === 'companion'}>
             {/* Centred in its half: when Up next beside it is taller, the room goes above and below, never one band at the foot. */}
             <div data-pillar="guru" className="relative flex flex-col justify-center overflow-hidden rounded-card bg-ink p-md text-on-ink">
               <HeroBlobs opacity={0.06} kind="violet" />
@@ -513,9 +578,11 @@ export function Home() {
                   <Icon icon={MessageCircle} size={14} className="mr-xs inline-block align-[-2px]" />
                   {d.companion.messages === 0 ? 'Say what is on your mind.' : 'Pick up where you left off.'}
                 </p>
+                {isOn('journal') && (
                 <p className="m-0 text-subhead opacity-80">
                   <Icon icon={NotebookPen} size={14} className="mr-xs inline-block align-[-2px]" />Or write it in the journal.
                 </p>
+                )}
               </div>
               <span className="pointer-events-none absolute top-1/2 right-md -translate-y-1/2 opacity-90" aria-hidden="true">
                 <Avatar relationship="guru" size={112} decorative mood="happy" />
@@ -524,12 +591,15 @@ export function Home() {
                 <Link to="/companion" aria-label="Talk to the companion" className="toy flex size-[56px] items-center justify-center rounded-pill bg-r4 text-on-fill" style={{ '--toy-color': 'var(--deep-lover_partner)' } as CSSProperties}>
 <Icon icon={MessageCirclePlus} size={24} />
                 </Link>
+                {isOn('journal') && (
                 <Link to="/journal" aria-label="Write in the journal" className="toy flex size-[56px] items-center justify-center rounded-pill bg-r2 text-on-fill" style={{ '--toy-color': 'var(--deep-friendship)' } as CSSProperties}>
 <Icon icon={Pencil} size={22} />
                 </Link>
+                )}
               </div>
             </div>
           </Section>
+          )}
 
           <MoreOnHome>
           {/* One question, one box: how much xp came in over the last two weeks, by day or by what earned it. The tab lives in the URL. */}
@@ -579,7 +649,7 @@ export function Home() {
           </Section>
           </MoreOnHome>
 
-          {d.life && (
+          {d.life && lifeOn && (
             <Section id="home-life" title="Life" lede="Your five areas. Only you see this." action={<SeeAll to="/life">Open</SeeAll>} span={lastOptional === 'life'}>
               {/* One row per area, like a task row (2026-11-05): who it is on the left (a small gauge in the area's pillar colour with the
                   score counting up inside, then the name), how it moved on the right (up, down or Same, the same place on every row), so a name
@@ -613,7 +683,7 @@ export function Home() {
             </Section>
           )}
 
-          {d.resources.length > 0 && (
+          {d.resources.length > 0 && readsOn && (
             <Section id="home-reads" title="Knowledge" lede="Reads and guides from the library." action={<SeeAll to="/knowledge">See all</SeeAll>} span={lastOptional === 'reads'}>
               {/* Beside another half (Life or Money) the reads stack one to a row, so a title keeps the card's width and the card is not a
                   tall empty box; across the whole width they sit four to a row. A phone stacks them too. */}
@@ -652,7 +722,7 @@ export function Home() {
             </Section>
           )}
 
-          {d.money && (
+          {d.money && moneyOn && (
             <Section id="home-money" title="Money this month" lede="From Finance. Only you see this." action={<SeeAll to="/finance">Open</SeeAll>} span={lastOptional === 'money'}>
               <div className="grid grid-cols-2 gap-xs">
                 <KitTile to="/finance" tone="bg-r4" icon={ArrowDownLeft} value={money(d.money.incomeCents, d.money.currency)} label="in" hint="this month" />
@@ -687,7 +757,7 @@ export function Home() {
             <BookShelf href={(b) => `/book#${b.slug}`} />
           </Section>
 
-          {d.shop && (
+          {d.shop && isOn('shop') && (
             <Section id="home-shop" title="Shop this month" lede={`${d.shop.products} ${d.shop.products === 1 ? 'product' : 'products'} live or in draft.`} action={<SeeAll to="/shop">Open</SeeAll>} span>
               <div className="rounded-card bg-card p-md shadow-toy-soft">
                 <div className="grid grid-cols-3 gap-xs">

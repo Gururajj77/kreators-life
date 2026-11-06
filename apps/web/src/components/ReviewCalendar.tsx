@@ -10,7 +10,6 @@ import { tie } from '../lib/text';
 import { Button } from './Button';
 import { CalendarGrid } from './Charts';
 import { CloseButton } from './CloseButton';
-import { ConfirmDelete } from './ConfirmDelete';
 import { Fold } from './Fold';
 import { Inert } from './Inert';
 import { RepeatPicker } from './RepeatPicker';
@@ -141,12 +140,17 @@ export function ReviewCalendar({ today, onOpenPeriod }: { today: string; onOpenP
 type DayData = { scheduled: { id: string; kind: PeriodKind; time: string; name: string }[]; written: { kind: PeriodKind; start: string; end: string }[] };
 
 /**
- * One day of the calendar, in a card right under it: the reminders that fall on it (Edit opens the schedule form, Remove asks first in a
- * sheet with a red yes) and the reviews written for a period that ended on it. Focus moves to its heading when a day is picked; Escape or
+ * One day of the calendar, in a card right under it: the reminders that fall on it (Edit opens the schedule form, Remove asks for a second
+ * tap, "Tap again to remove", which lapses after four seconds) and the reviews written for a period that ended on it. Focus moves to its heading when a day is picked; Escape or
  * the close button folds it and hands focus back to the day that opened it. Its buttons are outlines, so the screen keeps one solid one.
  */
 function DayPanel({ day, data, loading, schedules, onClose, onAdd, onEdit, onOpen, onChanged }: { day: string | null; data: DayData | undefined; loading: boolean; schedules: ReviewSchedule[]; onClose: () => void; onAdd: (day: string) => void; onEdit: (s: ReviewSchedule) => void; onOpen: (p: Period) => void; onChanged: () => void }) {
-  const [sure, setSure] = useState<{ id: string; series: boolean } | null>(null);
+  const [sure, setSure] = useState<string | null>(null);
+  useEffect(() => {
+    if (!sure) return;
+    const t = window.setTimeout(() => setSure(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [sure]);
   const box = useRef<HTMLElement>(null);
   const head = useRef<HTMLHeadingElement>(null);
   const back = useRef<HTMLElement | null>(null);
@@ -155,12 +159,13 @@ function DayPanel({ day, data, loading, schedules, onClose, onAdd, onEdit, onOpe
     onSuccess: () => {
       onChanged();
       setSure(null);
-      // The removed row's Remove button is gone, so the sheet cannot hand focus back to it: bring it to the day's heading instead.
+      // The removed row's Remove button is gone, so focus cannot stay on it: bring it to the day's heading instead.
       requestAnimationFrame(() => head.current?.focus({ preventScroll: true }));
     },
   });
   useEffect(() => {
     setSure(null);
+    remove.reset(); // a failed remove on another day does not follow the person here
     if (!day) return;
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const from = document.activeElement;
@@ -226,8 +231,8 @@ function DayPanel({ day, data, loading, schedules, onClose, onAdd, onEdit, onOpe
                     Edit
                   </Button>
                 )}
-                <Button variant="outline" size="sm" disabled={remove.isPending} onClick={() => setSure({ id: s.id, series })}>
-                  {series ? 'Remove the series' : 'Remove'}
+                <Button variant="outline" size="sm" disabled={remove.isPending} onClick={() => (sure === s.id ? remove.mutate(s.id) : setSure(s.id))}>
+                  <span aria-live="polite">{sure === s.id ? (series ? 'Tap again to remove the whole series' : 'Tap again to remove') : series ? 'Remove the series' : 'Remove'}</span>
                 </Button>
               </div>
             </div>
@@ -244,23 +249,15 @@ function DayPanel({ day, data, loading, schedules, onClose, onAdd, onEdit, onOpe
             </Button>
           </div>
         ))}
+        {remove.isError && (
+          <p role="alert" className="m-0 text-subhead">
+            That did not work. Try again.
+          </p>
+        )}
         <Button variant="outline" full onClick={() => onAdd(day)}>
           Add a review reminder on this day
         </Button>
       </div>
-      <ConfirmDelete
-        open={sure !== null}
-        title={sure?.series ? 'Remove the whole series?' : 'Remove this reminder?'}
-        body={sure?.series ? 'Every reminder in this series goes. Reviews you wrote stay.' : 'This reminder goes. Reviews you wrote stay.'}
-        yes={sure?.series ? 'Yes, remove the series' : 'Yes, remove it'}
-        pending={remove.isPending}
-        failed={remove.isError}
-        onYes={() => sure && remove.mutate(sure.id)}
-        onClose={() => {
-          setSure(null);
-          remove.reset();
-        }}
-      />
     </section>
   );
 }
@@ -275,6 +272,11 @@ function ScheduleForm({ state, today, onClose, onSaved }: { state: FormState | n
   const [name, setName] = useState('');
   const [sure, setSure] = useState(false);
   useEffect(() => {
+    if (!sure) return;
+    const t = window.setTimeout(() => setSure(false), 4000);
+    return () => window.clearTimeout(t);
+  }, [sure]);
+  useEffect(() => {
     if (!state) return;
     setKind(state.existing?.kind ?? 'week');
     setDay(state.day || addDays(today, 1));
@@ -282,6 +284,7 @@ function ScheduleForm({ state, today, onClose, onSaved }: { state: FormState | n
     setRepeat(state.existing?.repeat ?? null);
     setName(state.existing?.name ?? '');
     setSure(false);
+    remove.reset(); // a failed remove from the last time the form was open is not shown again
   }, [state, today]);
   const problem = !repeat && day < today ? COPY.pastOnce : null;
   const save = useMutation({
@@ -342,9 +345,9 @@ function ScheduleForm({ state, today, onClose, onSaved }: { state: FormState | n
             {problem}
           </p>
         )}
-        {save.isError && (
+        {(save.isError || remove.isError) && (
           <p role="alert" className="m-0 text-subhead">
-            {(save.error as Error | null)?.message || 'That did not save. Try again.'}
+            {((save.error ?? remove.error) as Error | null)?.message || 'That did not save. Try again.'}
           </p>
         )}
         <div className="flex flex-wrap gap-xs">
@@ -352,25 +355,12 @@ function ScheduleForm({ state, today, onClose, onSaved }: { state: FormState | n
             {save.isPending ? 'Saving' : existing ? 'Save changes' : 'Schedule it'}
           </Button>
           {existing && (
-            <Button variant="outline" disabled={remove.isPending} onClick={() => setSure(true)}>
-              {existing.repeat ? 'Remove the series' : 'Remove'}
+            <Button variant="outline" disabled={remove.isPending} onClick={() => (sure ? remove.mutate() : setSure(true))}>
+              <span aria-live="polite">{sure ? (existing.repeat ? 'Tap again to remove the whole series' : 'Tap again to remove') : existing.repeat ? 'Remove the series' : 'Remove'}</span>
             </Button>
           )}
         </div>
       </form>
-      <ConfirmDelete
-        open={sure}
-        title={existing?.repeat ? 'Remove the whole series?' : 'Remove this reminder?'}
-        body={existing?.repeat ? 'Every reminder in this series goes. Reviews you wrote stay.' : 'This reminder goes. Reviews you wrote stay.'}
-        yes={existing?.repeat ? 'Yes, remove the series' : 'Yes, remove it'}
-        pending={remove.isPending}
-        failed={remove.isError}
-        onYes={() => remove.mutate()}
-        onClose={() => {
-          setSure(false);
-          remove.reset();
-        }}
-      />
     </Sheet>
   );
 }

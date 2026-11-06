@@ -137,6 +137,7 @@ export const BREATH_PATTERNS: readonly BreathPattern[] = [
   { key: 'even', name: 'Even', counts: '5 · 5', line: 'In for 5, out for 5: about six slow breaths a minute.', steps: [{ kind: 'in', seconds: 5 }, { kind: 'out', seconds: 5 }] },
   { key: 'triangle', name: 'Triangle', counts: '4 · 4 · 4', line: 'In for 4, hold for 4, out for 4.', steps: [{ kind: 'in', seconds: 4 }, { kind: 'hold', seconds: 4 }, { kind: 'out', seconds: 4 }] },
   { key: 'longout', name: 'Longer out', counts: '4 · 6', line: 'In for 4, out for 6. No holding.', steps: [{ kind: 'in', seconds: 4 }, { kind: 'out', seconds: 6 }] },
+  { key: 'pranayam', name: 'Pranayam', counts: '4 · 4 · 8', line: 'In through the nose into the belly for 4, hold for 4, out slowly for 8.', steps: [{ kind: 'in', seconds: 4 }, { kind: 'hold', seconds: 4 }, { kind: 'out', seconds: 8 }] },
   { key: 'sigh', name: 'Sigh', counts: '2 + 1 · 6', line: 'Breathe in, then a little more on top, then a long breath out.', steps: [{ kind: 'in', seconds: 2 }, { kind: 'in', seconds: 1 }, { kind: 'out', seconds: 6 }] },
 ];
 export const BREATH_BY_KEY: Record<string, BreathPattern> = Object.fromEntries(BREATH_PATTERNS.map((p) => [p.key, p]));

@@ -103,6 +103,31 @@ export const PLAN_DAYS = 30;
 export const PLAN_CURRENCY = 'INR';
 /** The live strategy call, in paise: Rs 10,000. */
 export const LIVE_CALL_CENTS = 1_000_000;
+/**
+ * A yes to the live call is a paid service the person asked for (`call_requests`, migration 0100). `asked` waits for the
+ * team while payments are not live; `paying` has a provider order open; `paid` is set only by the payment webhook after its
+ * signature is checked; `booked` and `done` are the team's; `cancelled` ends an ask that was never paid.
+ */
+export const LIVE_CALL_STATUSES = ['asked', 'paying', 'paid', 'booked', 'done', 'cancelled'] as const;
+export type LiveCallStatus = (typeof LIVE_CALL_STATUSES)[number];
+export interface LiveCallRequest {
+  id: string;
+  status: LiveCallStatus;
+  amountCents: number;
+  currency: string;
+  createdAt: string;
+  paidAt: string | null;
+}
+/** What `POST /session/call` answers: the ask, and the provider order to pay it with only while payments are live. */
+export interface LiveCallAnswer {
+  request: LiveCallRequest;
+  /** Present only when payments are live and the call is still to be paid: what the browser opens the payment window with. */
+  payment: { mode: 'razorpay'; keyId: string | null; providerOrderId: string; amountCents: number; currency: string } | null;
+  /** Whether a payment provider takes money for it now (`PAYMENTS_LIVE` and a provider with keys). */
+  live: boolean;
+  /** One plain line on what happens next, said as it is. */
+  note: string;
+}
 /** About what one assistant message costs, to say how far credits go. A guess, and said as one. */
 export const TYPICAL_MESSAGE_CREDITS = 12;
 export const messagesFor = (credits: number): number => Math.floor(Math.max(0, credits) / TYPICAL_MESSAGE_CREDITS);

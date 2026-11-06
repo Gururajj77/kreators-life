@@ -1,6 +1,6 @@
 import { INVOICE_STARTERS, invoiceAsText, invoiceForClient, INVOICE_STATUS_NAME, INVOICE_STATUS_TONE, INVOICE_STATUSES, money, pageQuery, TEMPLATE_NAME_MAX, type AgencyTemplate, type Invoice } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useAgencyCan } from '../lib/agencyWorkspace';
 import { api } from '../lib/api';
@@ -377,7 +377,7 @@ function NewInvoice({ open, clientId, onClose, onMade }: { open: boolean; client
 }
 
 /**
- * The person's own invoice templates: rename in two steps, remove after a sheet asks. They are made from an invoice with Save as template.
+ * The person's own invoice templates: rename in two steps, remove with two taps. They are made from an invoice with Save as template.
  * Shown in Agency settings, under Templates.
  */
 export function InvoiceTemplates() {
@@ -385,9 +385,14 @@ export function InvoiceTemplates() {
   const q = useAuthed(['agency', 'templates', 'invoice'], () => api.agencyTemplates('invoice'));
   const [renaming, setRenaming] = useState<AgencyTemplate | null>(null);
   const [name, setName] = useState('');
-  // A template's remove asks first, with the template it is about.
-  const [dropping, setDropping] = useState<AgencyTemplate | null>(null);
+  // Remove takes a second tap: the first arms it on that template, and the arm clears after four seconds.
+  const [sure, setSure] = useState('');
   const [msg, setMsg] = useState('');
+  useEffect(() => {
+    if (!sure) return;
+    const t = window.setTimeout(() => setSure(''), 4000);
+    return () => window.clearTimeout(t);
+  }, [sure]);
   const refresh = () => qc.invalidateQueries({ queryKey: ['agency'] });
   const rename = useMutation({
     mutationFn: () => api.agencyTemplateUpdate(renaming!.id, { name: name.trim() }),
@@ -401,7 +406,7 @@ export function InvoiceTemplates() {
   const remove = useMutation({
     mutationFn: (id: string) => api.agencyTemplateRemove(id),
     onSuccess: async () => {
-      setDropping(null);
+      setSure('');
       setMsg('Removed.');
       await refresh();
     },
@@ -445,6 +450,7 @@ export function InvoiceTemplates() {
                     onClick={() => {
                       setRenaming(t);
                       setName(t.name);
+                      setSure('');
                     }}
                   >
                     Rename
@@ -453,14 +459,18 @@ export function InvoiceTemplates() {
                     size="sm"
                     variant="outline"
                     onClick={() => {
+                      if (sure === t.id) {
+                        remove.mutate(t.id);
+                        return;
+                      }
                       remove.reset();
                       setMsg('');
-                      setDropping(t);
+                      setSure(t.id);
                     }}
                     disabled={remove.isPending}
-                    aria-label={`Remove template ${t.name}`}
+                    aria-label={sure === t.id ? `Tap again to remove template ${t.name}` : `Remove template ${t.name}`}
                   >
-                    Remove
+                    {sure === t.id ? 'Tap again to remove' : 'Remove'}
                   </Button>
                 </div>
               </div>
@@ -473,16 +483,6 @@ export function InvoiceTemplates() {
           {msg}
         </p>
       )}
-      <ConfirmDelete
-        open={dropping !== null}
-        title="Remove this template?"
-        body={`"${dropping?.name ?? ''}". Invoices already made from it stay as they are. This cannot be undone.`}
-        pending={remove.isPending}
-        failed={remove.isError}
-        onYes={() => dropping && remove.mutate(dropping.id)}
-        onClose={() => setDropping(null)}
-        yes="Yes, remove it"
-      />
     </div>
   );
 }

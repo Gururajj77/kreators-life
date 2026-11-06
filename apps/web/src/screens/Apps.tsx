@@ -35,13 +35,14 @@ export function Apps() {
         <CondensedTitle title="Apps">
           <h1 className="type-large">Apps</h1>
         </CondensedTitle>
-        {/* The count at the left and the hidden-apps button at its right, on one line. */}
+        {/* The count at the left and the hidden-apps button at its right, on one line. The button's 44px reaches past the line above and
+            below (`-my-sm`), so the count keeps its place under the title whether the button shows or not. */}
         <div className="mt-xs flex items-center justify-between gap-sm">
           <p className="m-0 min-w-0 text-subhead text-ink-soft">
             {on} shown{hidden > 0 ? `, ${hidden} hidden` : ''}. Open a group to see its apps, or hide one.
           </p>
           {(hidden > 0 || showHidden) && (
-            <button type="button" className="mf-round toy shrink-0" data-at="br" data-tip={label} aria-label={label} title={label} aria-expanded={showHidden} aria-controls={panel} onClick={() => setShowHidden((v) => !v)}>
+            <button type="button" className="mf-round toy -my-sm shrink-0" data-at="br" data-tip={label} aria-label={label} title={label} aria-expanded={showHidden} aria-controls={panel} onClick={() => setShowHidden((v) => !v)}>
               <ToggleIcon open={showHidden} icon={EyeOff} />
             </button>
           )}
@@ -51,7 +52,8 @@ export function Apps() {
             <HiddenAppsPanel groups={groupOrder} id={panel} fits={fits} />
           </div>
         )}
-        <div className="mt-md">
+        {/* A gap past the round button's reach when it shows, so it never crowds the search. */}
+        <div className={hidden > 0 && !showHidden ? 'mt-lg' : 'mt-md'}>
           <SearchBox placeholder="Search tasks, journals, library, products, people" />
         </div>
       </header>

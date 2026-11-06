@@ -20,6 +20,7 @@ import { resolveAccess } from '../access';
 import { hashPassword, randomHex, safeEqual } from './auth';
 import { sendEmail, track } from '../ops';
 import { deleteAccount } from '../account';
+import { askToCoach, isCoach } from '../coaching';
 import { currencyOf, parseSocials } from '../db';
 import { appPrefsProblem, isAutoHandle, isCurrency, MAX_INTERESTS, parseAppPrefs, parseIdentities, parseLinkBlocks, passwordProblem, TRACKED_EVENTS, type TrackedEvent } from '@kreators/shared';
 import type { Organization, PortfolioItem } from '@kreators/shared';
@@ -206,8 +207,11 @@ me.patch('/', async (c) => {
     .bind(displayName, focus, optIn, bio, reminderTime, handle, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, identities, city, area, lat, lng, timezone, currency, appPrefs, avatarUrl, socials, publicJson, links, phone, user.id)
     .run();
   if (handle && isAutoHandle(user.handle) && !isAutoHandle(handle)) await track(db, user.id, 'profile_published', { minutesSinceSignup: Math.round((Date.now() - new Date(user.created_at).getTime()) / 60_000) });
+  // Picking the Life coach tag on Profile asks to become one, as the setup chat does (askToCoach tells the admins once).
+  const hadCoach = (() => { try { return (JSON.parse(user.identities || '[]') as unknown[]).includes('coach'); } catch { return false; } })();
+  const coach = !hadCoach && (JSON.parse(identities || '[]') as unknown[]).includes('coach') && !isCoach(user) ? await askToCoach(db, user, '') : null;
   const fresh = await getUser(db, user.id);
-  return c.json({ user: fresh ? toUser(fresh) : null });
+  return c.json({ user: fresh ? toUser(fresh) : null, ...(coach ? { coach } : {}) });
 });
 
 interface PortfolioRow { id: string; title: string; description: string; url: string; visibility: 'public' | 'private'; created_at: string }
@@ -274,6 +278,7 @@ me.get('/export', async (c) => {
     ['routines', 'SELECT * FROM routines WHERE user_id = ?'],
     ['contracts', 'SELECT * FROM contracts WHERE user_id = ?'],
     ['routineDays', 'SELECT * FROM routine_days WHERE user_id = ?'],
+    ['callRequests', 'SELECT id, status, amount_cents, currency, created_at, paid_at FROM call_requests WHERE user_id = ?'],
     ['brands', 'SELECT * FROM brands WHERE owner_id = ?'],
     ['brandSources', 'SELECT s.* FROM brand_sources s JOIN brands b ON b.id = s.brand_id WHERE b.owner_id = ?'],
     ['brandPieces', 'SELECT p.* FROM brand_pieces p JOIN brands b ON b.id = p.brand_id WHERE b.owner_id = ?'],
@@ -428,7 +433,7 @@ me.post('/reset', async (c) => {
     db.prepare('DELETE FROM routines WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM contracts WHERE user_id = ?').bind(user.id),
     db.prepare('DELETE FROM routine_days WHERE user_id = ?').bind(user.id),
-    // Starting over clears what the assistant did; a plan and its credits are paid for, so they stay, and so do unlocked card games. Attendee claims
+    // Starting over clears what the assistant did; a plan and its credits are paid for, so they stay, and so do unlocked card games and an ask for the live call. Attendee claims
     // and run entries stay too: clearing them would let the same event's code, or the same run, pay again. A life
     // coach stays as well, with the notes and the change log: that is a person, not progress. The tasks a coach
     // added go with the pyramids.

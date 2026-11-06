@@ -1,4 +1,5 @@
 import { FOCUS_DEFAULTS, focusGoalMet, parseFocusSettings, AMBIENT_SOUNDS, BREAK_BEATS, rulerClamp, rulerIndex, rulerTicks, rulerValueAt } from './index';
+import { ladderOptions, projectTasks } from './ladderChoices';
 import { parseFaq, MAX_FAQ } from './index';
 import { lineForDay, DAILY_LINE_COUNT } from './index';
 import { numberValue, computeNumerology, personalCycle, numerologyInsights, nameWords, NUMBER_READINGS, KARMIC_DEBTS, YEAR_THEMES, type NumerologyContext } from './index';
@@ -25,7 +26,7 @@ import { MAX_NOT_TO_DO, notToDoStreak, notToDoWeek, shiftDay } from './index';
 import { DISCOVER_KEYS as K } from '../../../apps/api/src/discoverKeys';
 import { AGENT_LIMITS, AGENTS, ASSISTANT_MODELS, centsFrom, creditsFor, FALLBACK_PRICE, isPaidPlan, isCurrency, CURRENCIES, LIVE_CALL_CENTS, messagesFor, PLAN_CURRENCY, planPriceLabel, microsFrom, MODEL_PRICES, PAID_PLANS, PLANS, priceOf, spendSplit, TOPUP_PACKS } from './index';
 import { describe, expect, it } from 'vitest';
-import { bountyPayout, COMPLEMENTS, dressCodeFor, feeBps, greetingFor, INTEREST_GROUPS, INTERESTS, ladderOptions, MAX_INTERESTS, MODULE_GROUPS, MODULES, moduleState, nextWeek, passwordProblem, matchCircles, matchScore, money, nudgeFor, rolloutBucket, slotsFor, timeLabel, zonedToUtc } from './index';
+import { bountyPayout, COMPLEMENTS, dressCodeFor, feeBps, greetingFor, INTEREST_GROUPS, INTERESTS, LADDERS, taskPaceLine, MAX_INTERESTS, MODULE_GROUPS, MODULES, moduleState, nextWeek, passwordProblem, matchCircles, matchScore, money, nudgeFor, rolloutBucket, slotsFor, timeLabel, zonedToUtc } from './index';
 
 describe('money', () => {
   it('fees use integer maths in basis points', () => {
@@ -394,10 +395,42 @@ describe('apps', () => {
     expect(moduleState(obs, 'admin', {}, {}).on).toBe(true);
     for (const m of MODULES) expect(MODULE_GROUPS[m.group]).toBeTruthy();
   });
-  it('offers a few value goals and projects per floor', () => {
+  it('offers five or six value goals and projects per pillar, each with why it matters', () => {
     const o = ladderOptions('friendship');
-    expect(o.valueGoals.length).toBeGreaterThanOrEqual(3);
-    expect(o.projects).toContain('Real hangs');
+    expect(o.projects.map((p) => p.title)).toContain('Real hangs');
+    for (const r of RELATIONSHIPS) {
+      const { valueGoals, projects } = ladderOptions(r.key);
+      for (const list of [valueGoals, projects]) {
+        expect(list.length).toBeGreaterThanOrEqual(5);
+        expect(list.length).toBeLessThanOrEqual(6);
+        expect(new Set(list.map((c) => c.title)).size).toBe(list.length);
+        for (const c of list) {
+          expect(c.title.length).toBeLessThanOrEqual(60);
+          expect(c.why.length).toBeGreaterThan(20);
+          expect(c.why.length).toBeLessThanOrEqual(130);
+          expect(`${c.title} ${c.why}`).not.toMatch(/\bspark\b|\btower\b|\bfloors?\b|\brung\b|\bladder\b|\bhabits?\b|\bvices?\b|\bcure|\bdiagnos|\bguarantee|—|–/i);
+        }
+      }
+      // Every pyramid the vibe check can build offers its own value goal and project, and every project has first tasks.
+      for (const t of Object.values(LADDERS[r.key])) {
+        expect(valueGoals.map((c) => c.title)).toContain(t.valueGoal);
+        expect(projects.map((c) => c.title)).toContain(t.project);
+      }
+      for (const p of projects) {
+        for (const branch of ['low', 'high'] as const) {
+          const tasks = projectTasks(r.key, p.title, branch);
+          expect(tasks?.length).toBe(3);
+          for (const task of tasks ?? []) expect(task).not.toMatch(/\bspark\b|\bhabits?\b|—|–/i);
+        }
+      }
+      expect(projectTasks(r.key, 'Something I wrote myself', 'low')).toBeNull();
+    }
+    // The tasks follow the project: a project from another pyramid brings its own.
+    expect(projectTasks('friendship', 'Weekly ritual', 'low')).toEqual(LADDERS.friendship.rituals!.starterTasks);
+  });
+  it('says in plain words why the first tasks are gentle or bolder', () => {
+    expect(taskPaceLine('parent_child', 100, 'high')).toBe('Sunny, guide to family: your answers scored 100 of 100, so your first tasks are bolder ones.');
+    expect(taskPaceLine('self', 25, 'low')).toMatch(/scored 25 of 100, so your first tasks start small and gentle\.$/);
   });
 });
 

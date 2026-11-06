@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BREATH_CUES, BREATH_PATTERNS, BREATH_SAY, BREATH_WORDS, breathAt, breathPatternFor, breathRounds, FOCUS_DEFAULTS, parseFocusSettings } from './index';
+import { BREATHING, BREATH_CUES, BREATH_PATTERNS, BREATH_SAY, BREATH_WORDS, breathAt, breathPatternFor, breathRounds, FOCUS_DEFAULTS, parseFocusSettings } from './index';
 
 describe('breathing patterns', () => {
   it('every pattern has a unique key, a name, counts, a plain line and steps of whole seconds', () => {
@@ -20,6 +20,16 @@ describe('breathing patterns', () => {
       // No health claims.
       expect(p.line).not.toMatch(/cure|treat|anxiety|insomnia|heal|proven|guarantee/i);
     }
+  });
+
+  it('Pranayam is offered in the strategy session and in Mindfulness, with a longer breath out and no claim', () => {
+    const session = BREATHING.find((b) => b.key === 'pranayam');
+    expect(session?.name).toBe('Pranayam');
+    expect(session?.blurb).not.toMatch(/cure|treat|anxiety|insomnia|heal|proven|guarantee/i);
+    const p = breathPatternFor('pranayam');
+    expect(p.key).toBe('pranayam');
+    const len = (k: string) => p.steps.filter((s) => s.kind === k).reduce((t, s) => t + s.seconds, 0);
+    expect(len('out')).toBeGreaterThan(len('in'));
   });
 
   it('the default is the calm exhale, 4 in, 4 hold, 6 out, 2 rest', () => {

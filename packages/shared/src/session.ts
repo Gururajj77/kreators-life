@@ -418,6 +418,7 @@ export const BREATHING = [
   { key: 'box', name: 'Box breathing', blurb: 'In four, hold four, out four, hold four.' },
   { key: '478', name: 'Four seven eight', blurb: 'In four, hold seven, out eight.' },
   { key: 'nostril', name: 'Alternate nostril', blurb: 'One side in, the other out, slow.' },
+  { key: 'pranayam', name: 'Pranayam', blurb: 'Slow, deep breaths into the belly, the breath out longer than the breath in.' },
 ] as const;
 export interface Practices {
   mantra: (typeof MANTRAS)[number]['key'];

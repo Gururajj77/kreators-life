@@ -1,4 +1,4 @@
-import { byKey, RELATIONSHIPS } from './core.ts';
+import { byKey, characterTitle, RELATIONSHIPS } from './core.ts';
 import type { RelationshipKey } from './core.ts';
 
 // ---------------------------------------------------------------------------
@@ -525,10 +525,10 @@ export function deriveLadder(relationship: RelationshipKey, answers: Answers): D
   };
 }
 
-/** Every value goal and project a floor's ladders know, so the person can pick one before the floor is built. */
-export function ladderOptions(relationship: RelationshipKey): { valueGoals: string[]; projects: string[] } {
-  const ts = Object.values(LADDERS[relationship]);
-  return { valueGoals: [...new Set(ts.map((t) => t.valueGoal))], projects: [...new Set(ts.map((t) => t.project))] };
+/** Why a pillar's first tasks are gentle or bolder, said in plain words: "Sunny, guide to family: your answers scored 100 of 100, so your first tasks are bolder ones." */
+export function taskPaceLine(relationship: RelationshipKey, score: number, branch: Branch): string {
+  const pace = branch === 'low' ? 'so your first tasks start small and gentle' : 'so your first tasks are bolder ones';
+  return `${characterTitle(relationship)}: your answers scored ${score} of 100, ${pace}.`;
 }
 
 /** What the person chose or wrote for a floor: the value goal and the project, and the foundation in their own words. Free text is allowed. */

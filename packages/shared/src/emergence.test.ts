@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BRIEF_MOOD_LOW, BRIEF_SLEEP_LOW, briefFor, buildCalendar, ICS_CATEGORY_LINE, icsTaskTitle, INBOX_TAB_META, INBOX_TABS, type BriefFacts } from './index';
+import { BRIEF_MOOD_LOW, BRIEF_SLEEP_LOW, briefFor, briefPath, buildCalendar, ICS_CATEGORY_LINE, icsTaskTitle, INBOX_TAB_META, INBOX_TABS, type BriefFacts } from './index';
 
 // The 2026-11-03 emergence wave: Agency on the brief, wellbeing feeding pillar steps, the calendar feed's new entries, the Agency inbox tab.
 
@@ -125,5 +125,28 @@ describe('the inbox has an Agency tab', () => {
     expect(INBOX_TAB_META.agency.kinds).toEqual(['agency']);
     expect(INBOX_TABS.indexOf('agency')).toBe(INBOX_TABS.indexOf('coaching') + 1);
     expect(INBOX_TABS.at(-1)).toBe('team');
+  });
+});
+
+describe('the brief never points at an app that is off', () => {
+  it('keeps a link only while its app is on, longest app path first', () => {
+    expect(briefPath('/party/e1', [])).toBeNull();
+    expect(briefPath('/party/e1', ['party'])).toBe('/party/e1');
+    expect(briefPath('/shop/content?tab=create', ['shop'])).toBeNull();
+    expect(briefPath('/shop/content?tab=create', ['content'])).toBe('/shop/content?tab=create');
+    // Locked apps and paths outside every app keep their link.
+    expect(briefPath('/today', [])).toBe('/today');
+    expect(briefPath('/realm/self', [])).toBe('/realm/self');
+    expect(briefPath('/you#coach', [])).toBe('/you#coach');
+    expect(briefPath(null, [])).toBeNull();
+  });
+  it('drops the link of the next event and the coach note when their apps are off', () => {
+    const facts = { ...QUIET, nextEvent: { title: 'Meetup', when: 'tomorrow', to: '/party/e1' }, coachNotes: 1 };
+    const off = briefFor(facts);
+    for (const line of [...off.signals, ...off.actions]) if (line.to) expect(line.to.startsWith('/party') || line.to.startsWith('/coaching')).toBe(false);
+    expect(off.signals.find((x) => x.key === 'coach-note')?.to).toBe('/you#coach');
+    const on = briefFor({ ...facts, apps: ['party', 'coaching'] });
+    expect(on.signals.find((x) => x.key === 'event')?.to).toBe('/party/e1');
+    expect(on.signals.find((x) => x.key === 'coach-note')?.to).toBe('/coaching');
   });
 });

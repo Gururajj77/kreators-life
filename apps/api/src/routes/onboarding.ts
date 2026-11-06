@@ -19,6 +19,7 @@ import {
   type OnboardingResponse,
   type RelationshipKey,
 } from '@kreators/shared';
+import { projectTasks } from '@kreators/shared/ladderChoices';
 import { resolveAccess } from '../access';
 import { getUser, parseList, parseModules, str, toUser } from '../db';
 import { askToCoach, isCoach } from '../coaching';
@@ -89,7 +90,9 @@ function withPicks(ladder: DerivedLadder, picks: LadderPicks): DerivedLadder {
   const pillar = str(p.pillar, 120);
   const valueGoal = str(p.valueGoal, 120);
   const project = str(p.project, 120);
-  return { ...ladder, pillar: pillar || ladder.pillar, valueGoal: valueGoal || ladder.valueGoal, project: project || ladder.project };
+  // A project picked from the offered list brings its own first tasks; one the person wrote keeps the pillar's.
+  const tasks = project ? (projectTasks(ladder.relationship, project, ladder.branch) ?? ladder.tasks) : ladder.tasks;
+  return { ...ladder, pillar: pillar || ladder.pillar, valueGoal: valueGoal || ladder.valueGoal, project: project || ladder.project, tasks };
 }
 
 function readPicks(raw: unknown): LadderPicks {

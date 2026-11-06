@@ -9,7 +9,6 @@ import { useAuthed } from '../lib/queries';
 import { FIELD, LABEL } from '../lib/ui';
 import { AnimatedIcon } from './AnimatedIcon';
 import { Button } from './Button';
-import { ConfirmDelete } from './ConfirmDelete';
 import { Field } from './InvoiceView';
 import { Sheet } from './Sheet';
 
@@ -223,12 +222,21 @@ function EmailNote({ ctx, onChange }: { ctx: EmailContext; onChange: (n: { subje
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [typed, setTyped] = useState(false);
-  // Saving, renaming and removing a note of your own: one small form at a time, and Remove asks first in a sheet.
+  // Saving, renaming and removing a note of your own: one small form at a time. Remove and Start again ask with a second tap, which
+  // clears itself after four seconds.
   const [naming, setNaming] = useState<'save' | 'rename' | null>(null);
   const [name, setName] = useState('');
   const [armed, setArmed] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [msg, setMsg] = useState('');
+  useEffect(() => {
+    if (!armed && !resetting) return;
+    const timer = window.setTimeout(() => {
+      setArmed(false);
+      setResetting(false);
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [armed, resetting]);
   const picked = key.startsWith(OWN) ? own.find((t) => `${OWN}${t.id}` === key) : undefined;
   const varsKey = JSON.stringify(f.vars);
   // The words follow the note and the records until the person types in them; "Start again" gives the control back. A saved note is its
@@ -271,6 +279,7 @@ function EmailNote({ ctx, onChange }: { ctx: EmailContext; onChange: (n: { subje
       setMsg(r.note);
       setKey(`${OWN}${r.id}`);
       setTyped(false);
+      setResetting(false);
     },
     onError: (e: Error) => setMsg(e.message),
   });
@@ -279,6 +288,7 @@ function EmailNote({ ctx, onChange }: { ctx: EmailContext; onChange: (n: { subje
     onSuccess: async () => {
       await refresh();
       setArmed(false);
+      setResetting(false);
       setMsg('Removed.');
       setKey(null);
       setTyped(false);
@@ -299,6 +309,7 @@ function EmailNote({ ctx, onChange }: { ctx: EmailContext; onChange: (n: { subje
             setTyped(false);
             setNaming(null);
             setArmed(false);
+            setResetting(false);
             setMsg('');
           }}
           className={FIELD}
@@ -333,25 +344,16 @@ function EmailNote({ ctx, onChange }: { ctx: EmailContext; onChange: (n: { subje
               className="!text-r1"
               disabled={remove.isPending}
               onClick={() => {
-                remove.reset();
-                setArmed(true);
+                if (armed) remove.mutate(picked.id);
+                else {
+                  setResetting(false);
+                  setArmed(true);
+                }
               }}
             >
-              Remove
+              <span aria-live="polite">{armed ? 'Tap again to remove it' : 'Remove'}</span>
             </Button>
           </div>
-        )}
-        {picked && (
-          <ConfirmDelete
-            open={armed}
-            title="Remove this note?"
-            body={`Your note “${picked.name}” goes from Your notes. The notes to start from stay. This cannot be undone.`}
-            pending={remove.isPending}
-            failed={remove.isError}
-            onYes={() => remove.mutate(picked.id)}
-            onClose={() => setArmed(false)}
-            yes="Yes, remove it"
-          />
         )}
       </div>
       {!picked && <AddOnceLines missing={f.missing} clientId={ctx.clientId} settings={f.settings} />}
@@ -367,24 +369,22 @@ function EmailNote({ ctx, onChange }: { ctx: EmailContext; onChange: (n: { subje
         <p className="mt-xs m-0 text-caption text-ink-soft">Send it from here and the link to the page goes under your words.</p>
         <div className="mt-xs flex flex-wrap gap-xs">
           {typed && (
-            <Button size="sm" variant="ghost" onClick={() => setResetting(true)}>
-              Start again from the note
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                if (resetting) {
+                  setResetting(false);
+                  setTyped(false);
+                } else {
+                  setArmed(false);
+                  setResetting(true);
+                }
+              }}
+            >
+              <span aria-live="polite">{resetting ? 'Tap again to start again' : 'Start again from the note'}</span>
             </Button>
           )}
-          <ConfirmDelete
-            open={resetting}
-            title="Start again from the note?"
-            body="The words you typed in this email are replaced by the note's own words."
-            pending={false}
-            failed={false}
-            onYes={() => {
-              setResetting(false);
-              setTyped(false);
-            }}
-            onClose={() => setResetting(false)}
-            yes="Yes, start again"
-            keep="Keep my words"
-          />
           {naming === null && (
             <Button
               size="sm"

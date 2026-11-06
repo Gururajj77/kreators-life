@@ -3,6 +3,7 @@ import type { LifeAreaKey } from './life.ts';
 import { DISCOVER_STRENGTHS, LOVE_LANGUAGES } from './discover.ts';
 import type { LoveKey } from './discover.ts';
 import { DESIGN_TYPES, STRENGTH_PATH } from './design.ts';
+import { MODULES } from './modules.ts';
 import type { DiscoverProfile, ExtrasProfile } from './design.ts';
 
 // ---------------------------------------------------------------------------
@@ -246,12 +247,25 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 const one1 = (n: number) => Math.round(n * 10) / 10;
 
 /** The one rule for the brief: every line that applies, ranked, the top three of each. */
+/**
+ * The brief's one link check: a path that lies inside an app (the longest app path it starts with) keeps its link only while that app is
+ * on; a locked app (Daily, Pillars, Home) is always on, and a path outside every app (`/you`, `/realm/...`) is left alone.
+ */
+export function briefPath(to: string | null, apps: readonly string[]): string | null {
+  if (!to) return null;
+  const path = to.split(/[?#]/)[0]!;
+  let owner: (typeof MODULES)[number] | null = null;
+  for (const m of MODULES) if ((path === m.path || path.startsWith(`${m.path}/`)) && (!owner || m.path.length > owner.path.length)) owner = m;
+  return !owner || owner.locked || apps.includes(owner.key) ? to : null;
+}
+
 export function briefFor(f: BriefFacts): { signals: BriefLine[]; actions: BriefLine[] } {
   const on = (app: string) => f.apps.includes(app);
   const signals: (BriefLine & { rank: number })[] = [];
   const actions: (BriefLine & { rank: number })[] = [];
-  const sig = (rank: number, key: string, tone: BriefTone, text: string, to: string | null) => signals.push({ rank, key, tone, text, to });
-  const act = (rank: number, key: string, text: string, to: string | null) => actions.push({ rank, key, tone: 'neutral', text, to });
+  // A line never points at an app that is off: a path inside an app the person switched off (or cannot have) loses its link and keeps its words.
+  const sig = (rank: number, key: string, tone: BriefTone, text: string, to: string | null) => signals.push({ rank, key, tone, text, to: briefPath(to, f.apps) });
+  const act = (rank: number, key: string, text: string, to: string | null) => actions.push({ rank, key, tone: 'neutral', text, to: briefPath(to, f.apps) });
 
   if (!f.checkedIn && f.streak >= 3 && f.hour >= 17) sig(100, 'streak-risk', 'watch', `Your ${f.streak}-day streak ends tonight unless you check in.`, '/today');
   else if (f.checkedIn && f.streak >= 3 && f.streak >= f.bestStreak) sig(70, 'streak-best', 'good', `A new best: ${plural(f.streak, 'day')} in a row.`, '/today');
@@ -268,7 +282,7 @@ export function briefFor(f: BriefFacts): { signals: BriefLine[]; actions: BriefL
   if (f.routineWeek !== null && f.contractDays !== null)
     sig(f.routineWeek < f.contractDays ? 58 : 35, 'routine', f.routineWeek < f.contractDays ? 'watch' : 'good', `Routine: ${f.routineWeek} of the last 7 days, against a deal of ${f.contractDays}.`, '/today');
   if (f.nextEvent) sig(68, 'event', 'neutral', `${f.nextEvent.title} is ${f.nextEvent.when}.`, f.nextEvent.to);
-  if (f.coachNotes > 0) sig(72, 'coach-note', 'neutral', f.coachNotes === 1 ? 'Your life coach left you a note.' : `Your life coach left you ${f.coachNotes} notes.`, '/coaching');
+  if (f.coachNotes > 0) sig(72, 'coach-note', 'neutral', f.coachNotes === 1 ? 'Your life coach left you a note.' : `Your life coach left you ${f.coachNotes} notes.`, on('coaching') ? '/coaching' : '/you#coach');
   if (f.coachAsks > 0) sig(74, 'coach-ask', 'neutral', f.coachAsks === 1 ? 'A life coach asked to work with you.' : `${f.coachAsks} life coaches asked to work with you.`, '/you#coach');
   const ag = on('agency') ? f.agency : undefined;
   const agTo = ag?.changeClientId ? `/agency/${ag.changeClientId}` : '/agency';

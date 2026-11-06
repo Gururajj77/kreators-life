@@ -47,6 +47,8 @@ export interface ChatChoice {
   icon?: IconName;
   /** A mood from 1 to 5: the choice wears that mood's face (moods are `MoodFace`, never emoji). */
   mood?: number;
+  /** Takes a whole line of its own at the end of a row of pills (the setup chat's strategy session); the pills before it fill their lines. */
+  row?: boolean;
   /** A line under the label turns the choice into a card; on a pick-some pill it sits small after the label. */
   blurb?: string;
 }
@@ -327,7 +329,7 @@ export function ChoiceChips({ choices, onPick, wide = false, full = false }: { c
     );
   }
   return (
-    <div role="group" aria-label="Your answer" className={cards ? `grid grid-cols-1 gap-xs ${wide ? 'md:grid-cols-2' : ''}` : 'flex flex-wrap gap-xs'}>
+    <div role="group" aria-label="Your answer" className={cards ? `grid grid-cols-1 gap-xs ${wide ? 'md:grid-cols-2' : ''}` : `flex flex-wrap gap-xs ${choices.some((c) => c.row) ? 'fill-row-all' : ''}`}>
       {choices.map((c) =>
         cards ? (
           <button key={c.value} type="button" onClick={() => onPick(c)} className="toy toy-flat w-full rounded-tile border-2 border-line bg-card p-sm text-left">
@@ -338,7 +340,7 @@ export function ChoiceChips({ choices, onPick, wide = false, full = false }: { c
             {c.blurb && <span className="block text-subhead text-ink-soft">{c.blurb}</span>}
           </button>
         ) : (
-          <button key={c.value} type="button" onClick={() => onPick(c)} className="toy toy-soft min-h-[44px] rounded-pill border-2 border-line bg-card px-sm text-subhead font-medium">
+          <button key={c.value} type="button" onClick={() => onPick(c)} className={`toy toy-soft min-h-[44px] rounded-pill border-2 border-line bg-card px-sm text-subhead font-medium ${c.row ? 'basis-full' : ''}`}>
             <Mark c={c} />
             {c.label}
           </button>

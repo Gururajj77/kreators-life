@@ -1,4 +1,4 @@
-import { FOCUS_OPTIONS, HONORS, IDENTITY_BY_KEY, OWN_TAG_ICON, IDENTITY_STAGES, identityLabel, identityLine, levelFromXp, passwordProblem, POINTS, RELATIONSHIPS, BADGE_META, badgeRoleOf, type MeResponse, MODULE_GROUP_ORDER, nextBadge, LOCALE } from '@kreators/shared';
+import { FOCUS_OPTIONS, HONORS, IDENTITY_STAGES, identityLine, levelFromXp, passwordProblem, POINTS, RELATIONSHIPS, BADGE_META, badgeRoleOf, type MeResponse, MODULE_GROUP_ORDER, nextBadge, LOCALE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Suspense, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -27,7 +27,7 @@ import { lazyNamed } from '../lib/lazy';
 import { CalendarLink } from '../components/CalendarLink';
 import { PrivacyChoices } from '../components/PrivacyChoices';
 import { UserRound, WandSparkles } from 'lucide-react';
-import { AppIcon } from '../components/AppIcon';
+import { TagPicker } from '../components/TagPicker';
 import { Icon } from '../components/Icon';
 import { StatTile } from '../components/Charts';
 
@@ -169,29 +169,20 @@ function YouView({ data }: { data: MeResponse }) {
       </AppCover>
 
       <section className="mt-lg" aria-labelledby="who-heading">
-        <h2 id="who-heading" className="text-title2">
-          Who you are
-        </h2>
-        {whoLine && <p className="mt-xs m-0 text-subhead text-ink-soft">{whoLine}</p>}
-        {/* The tags (or, with none yet, what they are for) on the left, and the way to change them at the right of the same line. */}
-        <div className="mt-sm flex flex-wrap items-center justify-between gap-xs">
-          {user.identities.length === 0 && <p className="m-0 min-w-0 flex-[1_1_220px] text-subhead text-ink-soft">No tags yet. A short chat sets them, and switches on the apps that fit.</p>}
-          {user.identities.length > 0 && (
-            <ul className="flex min-w-0 list-none flex-wrap gap-xs p-0 m-0" aria-label="Your tags">
-              {user.identities.map((k) => (
-                <li key={k} className="inline-flex items-center gap-xs rounded-pill bg-card px-sm py-xs text-subhead font-medium shadow-toy-soft">
-                  <AppIcon name={IDENTITY_BY_KEY[k]?.icon ?? OWN_TAG_ICON} size={16} className="text-ink-soft" />
-                  {identityLabel(k)}
-                </li>
-              ))}
-            </ul>
-          )}
+        {/* The title at the left and the way to match the apps again at its right (a section's link sits at its top right); a narrow phone wraps it under, still at the right. */}
+        <div className="flex flex-wrap items-center justify-between gap-xs">
+          <h2 id="who-heading" className="min-w-0 text-title2">
+            Who you are
+          </h2>
           <Link to="/onboarding?fresh=1" className="toy toy-soft ml-auto inline-flex min-h-[48px] shrink-0 items-center rounded-pill bg-card px-md text-subhead font-semibold text-ink">
-            {user.identities.length ? 'Change my tags and apps' : 'Set my tags and apps'}
+            Match my apps again
           </Link>
         </div>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">{whoLine || 'No tags yet. Pick the ones that fit you.'}</p>
+        {/* Every tag as a tile to pick, saved as you tap (components/TagPicker.tsx). */}
+        <TagPicker identities={user.identities} />
         {/* Two short lines: what tags do, then the privacy promise with the way to read more. */}
-        <p className="mt-xs m-0 text-caption text-ink-soft">Tags pick your apps and fill in your skills and interests.</p>
+        <p className="mt-xs m-0 text-caption text-ink-soft">Tags mark the apps that fit you.</p>
         <Nudge text="They never show on your public page." />
       </section>
 

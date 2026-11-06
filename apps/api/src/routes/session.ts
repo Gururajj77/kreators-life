@@ -39,6 +39,7 @@ import {
 import type { AppEnv } from '../env';
 import { DATE_RE, newId, nowIso, num, oneOf, shiftDate, str } from '../db';
 import { localDay } from '../coaching';
+import { askForCall, callPaymentsLive, openCall } from '../liveCall';
 
 /** The strategy session: the assessment, the plan it produces, and the morning routine day by day. */
 export const session = new Hono<AppEnv>();
@@ -105,6 +106,21 @@ const dateOf = (v: string | undefined, zone: string) => {
 };
 
 session.get('/', async (c) => c.json(await latest(c.env.DB, c.get('user').id, dateOf(c.req.query('date'), c.get('user').timezone))));
+
+/**
+ * The live call with a coach, a paid service (liveCall.ts). GET is the person's open ask, if any. POST is the yes from the
+ * contract card: it keeps the ask (one open per person), tells the admins once, and carries a provider order to pay with
+ * only while payments are live; otherwise it says plainly that nothing was charged. Owner only; never part of what a
+ * coach reads through `latest`.
+ */
+session.get('/call', async (c) => c.json({ request: await openCall(c.env.DB, c.get('user').id), live: callPaymentsLive(c.env) }));
+session.post('/call', async (c) => {
+  try {
+    return c.json(await askForCall(c.env.DB, c.env, c.get('user')), 201);
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : 'The ask for a live call did not go through. Nothing was charged; try again.' }, 502);
+  }
+});
 
 /** The assessment: seven placements, fears, insecurities, the scorecard, the real day. The rules run here, not in the browser. */
 session.post('/assessment', async (c) => {

@@ -138,6 +138,57 @@ const STOPS: readonly [number, string][] = [
   [18.5 / n, 'var(--color-r2)'],
   [1, 'var(--color-r1)'],
 ];
+/** A level's colour in the funnel: the stop nearest its row's middle, so a tag beside a level wears the colour the picture gives it. */
+export function scaleColor(value: number): string {
+  const i = SCALE.findIndex((l) => l.value === value);
+  if (i < 0) return 'var(--color-ink-mute)';
+  const at = (i + 0.5) / n;
+  let best = STOPS[0]!;
+  for (const s of STOPS) if (Math.abs(s[0] - at) < Math.abs(best[0] - at)) best = s;
+  return best[1];
+}
+/** The dimension a level sits in, as the funnel names it (the four rows the map's own levels fall in). */
+export function dimensionOf(value: number): { short: string; full: string } {
+  if (value >= 540) return { short: '5th Dimension', full: '5th Dimension' };
+  if (value >= 400) return { short: 'New Humanity', full: 'New Humanity Consciousness' };
+  if (value >= 200) return { short: '4th Dimension', full: '4th Dimension' };
+  return { short: '3rd Dimension', full: '3rd Dimension' };
+}
+/** The category a band sits under on the chart's right side, with its colour there. */
+const categoryOf = (band: MapBand) => CATEGORIES.find((c) => c.band === band)!;
+
+/**
+ * Where a level sits on the picture above it, as two tags: its number on the scale in the funnel's colour for that row,
+ * and its dimension in the colour of its category (Self-Realization, Self-Empowerment, Victim/Abuser). The tag look is
+ * the app's own: a pale wash of the colour, a dot in the full colour and ink words, so it reads in both themes. A ticked
+ * level's wash deepens. The words are always there, so colour is never the only sign.
+ */
+export function LevelTags({ value, on = false, stack = false, className = '' }: { value: number; on?: boolean; stack?: boolean; className?: string }) {
+  const level = levelByValue(value);
+  if (!level) return null;
+  const dim = dimensionOf(value);
+  const cat = categoryOf(level.band);
+  const wash = (c: string) => `color-mix(in srgb, ${c} ${on ? 30 : 16}%, transparent)`;
+  const tag = 'tag inline-flex shrink-0 items-center gap-xs rounded-pill px-sm text-caption font-medium leading-[24px] text-ink';
+  const dot = (c: string) => <span aria-hidden="true" className="inline-block size-[8px] shrink-0 rounded-pill" style={{ background: c }} />;
+  return (
+    // `stack` puts the two tags one over the other on a phone (the top right corner of a narrow row), side by side from `md`.
+    <span className={`${stack ? 'flex flex-col items-end gap-xs md:flex-row md:flex-wrap md:items-center md:justify-end' : 'flex flex-wrap items-center justify-end gap-xs'} ${className}`}>
+      {/* Each tag holds its widest value's width (the numbers 20 to 540, the dimensions), so on a list of levels the dots and words line
+          up in two columns whatever the row says. */}
+      <span className={`${tag} type-figure min-w-[64px]`} style={{ background: wash(scaleColor(value)) }} title={`Level ${value} on the map of consciousness`}>
+        {dot(scaleColor(value))}
+        <span className="sr-only">Level </span>
+        {value}
+      </span>
+      <span className={`${tag} min-w-[128px]`} style={{ background: wash(cat.color) }} title={`${dim.full}, ${cat.lines.join(' ')}`}>
+        {dot(cat.color)}
+        {dim.short}
+      </span>
+    </span>
+  );
+}
+
 // A row of 22 for each level, in the drawing's own units.
 const Y0 = 30;
 const R = 22;

@@ -156,7 +156,13 @@ function Card({ r, currency, date, onEdit }: { r: KpiReading; currency: string; 
   const auto = k.source !== 'manual';
   const [typed, setTyped] = useState<number | null>(r.value);
   const [note, setNote] = useState(r.note);
-  const [clearing, setClearing] = useState(false);
+  // Clear is a second tap (the founder, 2026-11-06): the period's number can be typed in again.
+  const [clearArmed, setClearArmed] = useState(false);
+  useEffect(() => {
+    if (!clearArmed) return;
+    const t = window.setTimeout(() => setClearArmed(false), 4000);
+    return () => window.clearTimeout(t);
+  }, [clearArmed]);
   const stamp = `${r.value}:${r.note}:${date}`;
   useEffect(() => {
     setTyped(r.value);
@@ -165,10 +171,7 @@ function Card({ r, currency, date, onEdit }: { r: KpiReading; currency: string; 
   }, [stamp]);
   const save = useMutation({
     mutationFn: (value: number | null) => api.kpiValue(k.id, { date, value, note: value === null ? '' : note }),
-    onSuccess: (_res, value) => {
-      if (value === null) setClearing(false);
-      void qc.invalidateQueries({ queryKey: ['reviews', 'kpis'] });
-    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['reviews', 'kpis'] }),
   });
   const st = STATUS[kpiStatus(r.value, k.target, k.direction)];
   const max = Math.max(1, k.target, ...r.series.map((v) => v ?? 0));
@@ -204,6 +207,7 @@ function Card({ r, currency, date, onEdit }: { r: KpiReading; currency: string; 
           className="mt-sm"
           onSubmit={(e) => {
             e.preventDefault();
+            setClearArmed(false);
             if (typed !== null) save.mutate(typed);
           }}
         >
@@ -215,7 +219,7 @@ function Card({ r, currency, date, onEdit }: { r: KpiReading; currency: string; 
             A note
           </label>
           <input id={`n-${k.id}`} value={note} maxLength={KPI_NOTE_MAX} onChange={(e) => setNote(e.target.value)} className={FIELD} />
-          {save.isError && !clearing && (
+          {save.isError && (
             <p role="alert" className="mt-xs m-0 text-subhead">
               {save.error instanceof ApiError ? save.error.message : 'That did not save. Try again.'}
             </p>
@@ -228,30 +232,25 @@ function Card({ r, currency, date, onEdit }: { r: KpiReading; currency: string; 
               <Button
                 size="sm"
                 variant="ghost"
+                aria-live="polite"
                 onClick={() => {
-                  save.reset();
-                  setClearing(true);
+                  if (clearArmed) {
+                    setClearArmed(false);
+                    save.mutate(null);
+                  } else {
+                    save.reset();
+                    setClearArmed(true);
+                  }
                 }}
                 disabled={save.isPending}
               >
-                Clear
+                {clearArmed ? 'Tap again to clear' : 'Clear'}
               </Button>
             )}
             <Button size="sm" variant="ghost" className="ml-auto" onClick={onEdit}>
               Edit this metric
             </Button>
           </div>
-          <ConfirmDelete
-            open={clearing}
-            title="Clear this period's number?"
-            body={`The number and the note for ${k.name} this period are cleared. You can type them in again.`}
-            pending={save.isPending}
-            failed={save.isError}
-            onYes={() => save.mutate(null)}
-            onClose={() => setClearing(false)}
-            yes="Yes, clear it"
-            keep="Keep it"
-          />
         </form>
       )}
     </div>

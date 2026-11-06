@@ -3,7 +3,7 @@ import {
   FOCUS_OPTIONS,
   isRelationshipKey,
   KIND_META,
-  ladderOptions,
+  taskPaceLine,
   nextQuestionId,
   QUESTION_BY_ID,
   RELATIONSHIPS,
@@ -16,6 +16,7 @@ import {
   type Question,
   type RelationshipKey,
 } from '@kreators/shared';
+import { ladderOptions, projectTasks, type LadderChoice } from '@kreators/shared/ladderChoices';
 import { useMutation } from '@tanstack/react-query';
 import { AnimatePresence, m as motion, useReducedMotion } from 'motion/react';
 import gsap from 'gsap';
@@ -524,7 +525,7 @@ function Ladders({ result, floors: asked, onDone }: { result: OnboardingResponse
                 <Avatar relationship={r.key} size={56} mood={on ? 'excited' : 'neutral'} decorative />
                 <div className="min-w-0 flex-1">
                   <p className="m-0 text-subhead font-semibold" style={{ color: `var(--deep-${r.key})` }}>
-                    {r.character}, {result.scores[r.key]}%, {l.branch === 'low' ? 'gentle start' : 'stretch tasks'}
+                    {taskPaceLine(r.key, result.scores[r.key], l.branch)}
                   </p>
                   <h2 className="mt-xs text-title2">{l.pillar}</h2>
                 </div>
@@ -542,7 +543,7 @@ function Ladders({ result, floors: asked, onDone }: { result: OnboardingResponse
               <Picker label={KIND_META.value_goal.label} options={opts.valueGoals} chosen={mine.valueGoal ?? l.valueGoal} color={r.color} deep={`var(--deep-${r.key})`} onPick={(v) => pick(r.key, 'valueGoal', v)} />
               <Picker label={KIND_META.project.label} options={opts.projects} chosen={mine.project ?? l.project} color={r.color} deep={`var(--deep-${r.key})`} onPick={(v) => pick(r.key, 'project', v)} />
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0 text-subhead">
-                {l.tasks.map((t) => (
+                {(projectTasks(r.key, mine.project ?? l.project, l.branch) ?? l.tasks).map((t) => (
                   <li key={t} className="flex gap-xs">
                     <span className="mt-xs size-[8px] shrink-0 rounded-pill" style={{ background: r.color }} aria-hidden="true" />
                     {t}
@@ -659,8 +660,10 @@ function AboutYou({ onNext }: { onNext: () => void }) {
 
 
 /** A few options as chips, plus a line to write your own. The chosen one is filled in the floor's colour. */
-function Picker({ label, options, chosen, color, deep, onPick }: { label: string; options: string[]; chosen: string; color: string; deep: string; onPick: (v: string) => void }) {
-  const custom = !options.includes(chosen);
+function Picker({ label, options, chosen, color, deep, onPick }: { label: string; options: LadderChoice[]; chosen: string; color: string; deep: string; onPick: (v: string) => void }) {
+  const custom = !options.some((o) => o.title === chosen);
+  // The picked option's why sits under the pills, so each choice explains itself as it is picked.
+  const why = options.find((o) => o.title === chosen)?.why ?? '';
   const [own, setOwn] = useState(custom ? chosen : '');
   return (
     <div className="mt-sm">
@@ -669,17 +672,22 @@ function Picker({ label, options, chosen, color, deep, onPick }: { label: string
       </p>
       <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label={label}>
         {options.map((o) => (
-          <button key={o} type="button" aria-pressed={chosen === o} onClick={() => onPick(o)} className="toy toy-soft min-h-[44px] rounded-pill border-2 px-sm py-xs text-left text-subhead font-medium" style={chosen === o ? { background: color, borderColor: color, color: 'var(--color-on-fill)' } : { background: 'var(--color-card)', borderColor: 'transparent' }}>
-            {o}
+          <button key={o.title} type="button" aria-pressed={chosen === o.title} onClick={() => onPick(o.title)} className="toy toy-soft min-h-[44px] rounded-pill border-2 px-sm py-xs text-left text-subhead font-medium" style={chosen === o.title ? { background: color, borderColor: color, color: 'var(--color-on-fill)' } : { background: 'var(--color-card)', borderColor: 'transparent' }}>
+            {o.title}
           </button>
         ))}
       </div>
+      {why && (
+        <p className="mt-xs m-0 text-card-note text-ink-soft" aria-live="polite">
+          {why}
+        </p>
+      )}
       <input
         value={own}
         onChange={(e) => {
           setOwn(e.target.value);
           if (e.target.value.trim()) onPick(e.target.value.trim());
-          else onPick(options[0] ?? '');
+          else onPick(options[0]?.title ?? '');
         }}
         maxLength={120}
         placeholder="Or write your own"

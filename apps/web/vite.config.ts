@@ -50,6 +50,8 @@ export default defineConfig({
           // The journal prompts (a large list of text) download only when Prompt me opens, so they are not in the shared chunk.
           if (id.includes('/packages/shared/src/journalPrompts')) return 'journal-prompts';
           if (id.includes('/packages/shared/src/agencyEmail')) return 'agency-email';
+          // The value goals and projects on offer (a subpath export, text only the strategy session and the vibe check read).
+          if (id.includes('/packages/shared/src/ladderChoices')) return 'ladder-choices';
           // The line of the day (a long list of text) is a chunk of its own, which keeps the shared chunk under the 400 kB a chunk may
           // be. It must stay a leaf (lines.ts imports nothing): a split-off file that imports the rest of shared makes a cycle between
           // the two chunks and the app stops at "Cannot access before initialization" (design.ts did, 2026-11-04).

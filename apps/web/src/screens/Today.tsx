@@ -408,7 +408,7 @@ export function Today() {
                 the title, its count and the kind of day share the first line and the two buttons half each under it; under 30rem (a phone) the
                 title and its count alone on the first line, the kind of day on the next at full width, then the two buttons half each. */}
             <div className="@container">
-              <div className="flex flex-wrap items-baseline gap-x-sm gap-y-xs">
+              <div className="flex flex-wrap items-baseline gap-x-sm gap-y-sm">
                 <h2 id="tasks-heading" className="text-title2">
                   Tasks
                 </h2>
@@ -445,7 +445,7 @@ export function Today() {
             </div>
             {/* The Area filter and the sort share one line from the laptop width up; the sort keeps 420px or wraps onto a line of its own.
                 There is no Block filter: By time block draws the blocks as boxes that fold (the founder, 2026-11-06). */}
-            <div className="mt-xs flex w-full flex-col gap-xs lg:flex-row lg:flex-wrap lg:items-center lg:gap-x-md">
+            <div className="mt-sm flex w-full flex-col gap-xs lg:flex-row lg:flex-wrap lg:items-center lg:gap-x-md">
               {showArea && (
                 <div className="min-w-0 lg:w-[200px] lg:flex-none">
                   <FilterSelect label="Area" value={area} items={AREA_PICKS} onChange={(k) => setAreaRaw(k)} />
@@ -458,7 +458,8 @@ export function Today() {
               )}
             </div>
             <DayTypeNote template={tpl.template} contextual={tpl.contextual} failed={tpl.failed} ownSort={ownSort && ownSort !== 'context' ? (TASK_SORTS.find((s) => s.key === ownSort)?.name.replace(/^By /, '').toLowerCase() ?? null) : null} />
-            <Fold className="mt-xs" title="Month calendar">
+            {/* The controls above (kind of day, sort, the note) end here: a wider gap before the day's own content. */}
+            <Fold className="mt-md" title="Month calendar">
               <Suspense fallback={<Skeleton className="h-[320px]" />}>
                 <TaskMonth today={date} />
               </Suspense>

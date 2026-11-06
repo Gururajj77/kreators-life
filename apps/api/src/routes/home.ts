@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { latestExtras, latestProfile, settingsOf } from './discover';
-import { briefFor, formatCount, LOCALE, gettingStarted, isAutoHandle, levelProgress, nudgeFor, parseCoachShare, periodFor, RELATIONSHIPS, type BriefLine, type DailyBrief, type HomeFloor, type HomeResponse, type HomeUpNext, type RelationshipKey } from '@kreators/shared';
+import { briefFor, briefPath, formatCount, LOCALE, gettingStarted, isAutoHandle, levelProgress, nudgeFor, parseCoachShare, periodFor, RELATIONSHIPS, type BriefLine, type DailyBrief, type HomeFloor, type HomeResponse, type HomeUpNext, type RelationshipKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { can, liveUser, nameOf, nowIso, parseList, shiftDate } from '../db';
 import { resolveAccess } from '../access';
@@ -390,7 +390,9 @@ home.get('/brief', async (c) => {
     team = team.slice(0, 3);
   }
 
-  const brief: DailyBrief = { ...base, coach, team };
+  // The coach's and the team's lines follow the brief's rule too: no link into an app that is off for this person.
+  const linked = (xs: BriefLine[] | null) => xs?.map((x) => ({ ...x, to: briefPath(x.to, apps) })) ?? null;
+  const brief: DailyBrief = { ...base, coach: linked(coach), team: linked(team) };
   const ageDays = Math.floor((Date.now() - Date.parse(user.created_at)) / 86_400_000);
   const started = gettingStarted(
     {

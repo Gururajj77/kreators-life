@@ -1,6 +1,6 @@
 import { contractAsText, docRef, CONTRACT_STATUSES, CONTRACT_STATUS_NAME, CONTRACT_STATUS_TONE, CONTRACT_TEMPLATES, type AgencyTemplate, type BoardColumn, type ContractListItem, type ContractStatus, LOCALE } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useAgencyCan } from '../lib/agencyWorkspace';
 import { api, ApiError } from '../lib/api';
@@ -349,8 +349,14 @@ export function AgreementTemplates() {
   const templates: AgencyTemplate[] = (q.data?.templates ?? []).filter((t) => t.scope === 'own');
   const [editing, setEditing] = useState<string | null>(null);
   const [name, setName] = useState('');
-  // A template's remove asks first, with the template it is about.
-  const [dropping, setDropping] = useState<AgencyTemplate | null>(null);
+  // A template's remove is a second tap (the founder, 2026-11-06: small, recoverable removes are a tap again, not a pop-up): the first
+  // tap arms it for about four seconds, the second removes it.
+  const [armed, setArmed] = useState<string | null>(null);
+  useEffect(() => {
+    if (!armed) return;
+    const t = window.setTimeout(() => setArmed(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [armed]);
   const done = () => qc.invalidateQueries({ queryKey: ['agency'] });
   const rename = useMutation({
     mutationFn: ({ id, to }: { id: string; to: string }) => api.agencyTemplateUpdate(id, { name: to }),
@@ -361,11 +367,17 @@ export function AgreementTemplates() {
   });
   const remove = useMutation({
     mutationFn: (id: string) => api.agencyTemplateRemove(id),
-    onSuccess: () => {
-      setDropping(null);
-      void done();
-    },
+    onSuccess: () => void done(),
   });
+  const armRemove = (id: string) => {
+    if (armed === id) {
+      setArmed(null);
+      remove.mutate(id);
+      return;
+    }
+    remove.reset();
+    setArmed(id);
+  };
   return (
     <div>
       <p className="m-0 text-subhead text-ink-soft">Make one from any agreement: open it and tap "Save as template". It keeps the sections, not the names filled in.</p>
@@ -410,6 +422,7 @@ export function AgreementTemplates() {
                     size="sm"
                     variant="outline"
                     onClick={() => {
+                      setArmed(null);
                       setEditing(t.id);
                       setName(t.name);
                     }}
@@ -419,13 +432,10 @@ export function AgreementTemplates() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => {
-                      remove.reset();
-                      setDropping(t);
-                    }}
-                    aria-label={`Remove template ${t.name}`}
+                    onClick={() => armRemove(t.id)}
+                    aria-label={armed === t.id ? `Tap again to remove template ${t.name}` : `Remove template ${t.name}`}
                   >
-                    Remove
+                    <span aria-live="polite">{armed === t.id ? 'Tap again to remove' : 'Remove'}</span>
                   </Button>
                 </span>
               </div>
@@ -433,16 +443,11 @@ export function AgreementTemplates() {
           </li>
         ))}
       </ul>
-      <ConfirmDelete
-        open={dropping !== null}
-        title="Remove this template?"
-        body={`"${dropping?.name ?? ''}". Agreements already made from it stay as they are. This cannot be undone.`}
-        pending={remove.isPending}
-        failed={remove.isError}
-        onYes={() => dropping && remove.mutate(dropping.id)}
-        onClose={() => setDropping(null)}
-        yes="Yes, remove it"
-      />
+      {remove.isError && (
+        <p role="alert" className="mt-xs m-0 text-subhead">
+          {remove.error instanceof ApiError ? remove.error.message : 'That did not remove. Try again.'}
+        </p>
+      )}
     </div>
   );
 }

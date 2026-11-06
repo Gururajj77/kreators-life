@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./journalPrompts": "./src/journalPrompts.ts",
     "./agencyEmail": "./src/agencyEmail.ts",
-    "./focusRun": "./src/focusRun.ts"
+    "./focusRun": "./src/focusRun.ts",
+    "./ladderChoices": "./src/ladderChoices.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

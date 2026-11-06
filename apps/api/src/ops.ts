@@ -57,7 +57,7 @@ export async function sendEmail(db: D1Database, env: Env, msg: { userId?: string
 }
 
 /** One line in an order's or booking's timeline. */
-export async function logEvent(db: D1Database, entity: 'order' | 'booking' | 'user' | 'kyc', entityId: string, type: string, data: unknown = ''): Promise<void> {
+export async function logEvent(db: D1Database, entity: 'order' | 'booking' | 'user' | 'kyc' | 'call', entityId: string, type: string, data: unknown = ''): Promise<void> {
   await db.prepare('INSERT INTO timeline_events (id, entity, entity_id, type, data_json, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(newId(), entity, entityId, type, typeof data === 'string' ? data : JSON.stringify(data).slice(0, 2000), nowIso()).run();
 }
 

@@ -11,7 +11,8 @@ import { RulerPicker } from './RulerPicker';
 import { Toggle } from './Toggle';
 import { FIELD, FIELD_LINE } from '../lib/ui';
 import { useTimeBlocks } from '../lib/useTimeBlocks';
-import { ConfirmDelete } from './ConfirmDelete';
+import { ConfirmDelete, DELETE_BTN } from './ConfirmDelete';
+import { FieldLabel } from './Field';
 
 // The row's marks live in TaskMarks.tsx (in the first download); this file is the plan form, loaded when a plan opens.
 export { AreaTag, BlockMark, PriorityChip, TaskTags } from './TaskMarks';
@@ -404,11 +405,32 @@ export function TaskPanel({ task, today }: { task: Node; today: string }) {
   const month = today.slice(0, 7);
   const projectsQ = useAuthed(['today', 'month', month, today], () => api.todayMonth(month, today), task.status === 'active');
   const [parentId, setParentId] = useState(task.parentId ?? '');
-  const problem = planProblem(plan);
-  const save = useMutation({ mutationFn: () => api.updateNode(task.id, { ...planBody(plan), ...(parentId && parentId !== task.parentId ? { parentId } : {}) }), onSuccess: () => refresh() });
+  // The task's own words, changed through the same PATCH /nodes/:id as the pillar page's edit sheet (140 characters, never blank).
+  const [title, setTitle] = useState(task.title);
+  const renamed = title.trim() !== '' && title.trim() !== task.title;
+  const problem = title.trim() ? planProblem(plan) : 'Give the task a name.';
+  const save = useMutation({ mutationFn: () => api.updateNode(task.id, { ...(renamed ? { title: title.trim() } : {}), ...planBody(plan), ...(parentId && parentId !== task.parentId ? { parentId } : {}) }), onSuccess: () => refresh() });
+  // Delete: the pillar page's own remove (DELETE /nodes/:id; its checklist goes with it), asked first.
+  const [asking, setAsking] = useState(false);
+  const remove = useMutation({ mutationFn: () => api.deleteNode(task.id), onSuccess: () => { setAsking(false); refresh(); } });
   const projects = projectsQ.data?.projects ?? [];
   return (
     <div className="mt-xs flex flex-col gap-md rounded-card bg-card p-md shadow-toy-soft">
+      {task.status === 'active' && (
+        <FieldLabel label="Task">
+          <input
+            value={title}
+            onChange={(e) => {
+              save.reset();
+              setTitle(e.target.value);
+            }}
+            maxLength={140}
+            required
+            className={FIELD}
+          />
+          <span className="mt-xs block text-caption text-ink-soft">Changing the words makes it a new task, so the ten-minute wait starts again.</span>
+        </FieldLabel>
+      )}
       {task.status === 'active' && projects.length > 0 && (
         <ProjectSelect
           projects={projects}
@@ -437,6 +459,32 @@ export function TaskPanel({ task, today }: { task: Node; today: string }) {
       </button>
       <Subtasks task={task} />
       <StartFocus task={{ ...task, estimateMin: Number(plan.minutes) > 0 ? Number(plan.minutes) : task.estimateMin }} />
+      {task.status === 'active' && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            disabled={remove.isPending}
+            onClick={() => {
+              remove.reset();
+              setAsking(true);
+            }}
+            className={DELETE_BTN}
+          >
+            Delete task
+          </button>
+        </div>
+      )}
+      <ConfirmDelete
+        open={asking}
+        title="Delete this task?"
+        body={`“${task.title}” goes from Daily and its pyramid, with its subtasks. This cannot be undone.`}
+        pending={remove.isPending}
+        failed={remove.isError}
+        error={remove.error instanceof Error ? remove.error.message : undefined}
+        onYes={() => remove.mutate()}
+        onClose={() => setAsking(false)}
+      />
     </div>
   );
 }

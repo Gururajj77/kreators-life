@@ -9,7 +9,7 @@ import {
   FEAR_OPTIONS,
   firstQuestionId,
   KIND_META,
-  ladderOptions,
+  taskPaceLine,
   levelByValue,
   MANTRAS,
   mantraLine,
@@ -57,12 +57,14 @@ import {
   characterHello,
   LIVE_CALL_CENTS,
   money,
+  PAYMENTS_LIVE,
   PLAN_CURRENCY,
 } from '@kreators/shared';
+import { ladderOptions, projectTasks, type LadderChoice } from '@kreators/shared/ladderChoices';
 import { Check } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { AccountForm } from '../components/AccountForm';
 import { ProfileCard } from '../components/ProfileCard';
 import { Avatar } from '../components/Avatar';
@@ -71,9 +73,9 @@ import { Fold } from '../components/Fold';
 import { Icon } from '../components/Icon';
 import { AnimatedIcon } from '../components/AnimatedIcon';
 import { Toggle } from '../components/Toggle';
-import { ConsciousnessMap, PlacementChart } from '../components/LifeMap';
+import { ConsciousnessMap, LevelTags, PlacementChart } from '../components/LifeMap';
 import { Pyramid } from '../components/Pyramid';
-import { Sheet } from '../components/Sheet';
+import { payForCall } from '../components/LiveCall';
 import { ChatActions, ChatLinks, ChatScreen, ChoiceChips, ChoiceGroups, chip, typingTime } from '../components/Chat';
 import { api, errorText } from '../lib/api';
 import { FIELD } from '../lib/ui';
@@ -374,32 +376,39 @@ function MapForm({ initial, initialAway, onSend }: { initial: Partial<Record<Rel
         ) : (
           <>
             <p className="mt-sm m-0 text-subhead">Pick all that you feel here, on good days and on bad ones.</p>
+            <p className="mt-xs m-0 text-caption text-ink-soft">The tags place each feeling on the map of consciousness: its number on the scale and its dimension.</p>
             {/* Each band: its name and its line, then 12px of room before the list it introduces (the founder, 2026-11-05). */}
             {[...MAP_BANDS].reverse().map((b) => (
               <div key={b} className="mt-md">
                 <p className="m-0 text-eyebrow uppercase text-ink-soft">{MAP_BAND_META[b].name}</p>
                 <p className="m-0 text-caption text-ink-soft">{BAND_STATEMENTS[r.key][b]}</p>
-                <ul className="fx-inset mt-sm">
-                  {MAP_LEVELS.filter((l) => l.band === b)
-                    .slice()
-                    .reverse()
-                    .map((l) => {
-                      const on = mine.includes(l.value);
-                      return (
-                        <li key={l.value}>
-                          <button type="button" role="checkbox" aria-checked={on} onClick={() => toggle(l.value)} className="fx-row">
-                            <span aria-hidden="true" className={`flex size-[24px] shrink-0 items-center justify-center rounded-[8px] border-2 ${on ? 'border-ink bg-ink text-on-ink' : 'border-line'}`}>
-                              {on && <Icon icon={Check} size={16} strokeWidth={3} />}
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block text-row-title">{l.name}</span>
-                              <span className="block text-card-note text-ink-soft">“{l.sounds}”</span>
-                            </span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                </ul>
+                {/* .fx-inset zeroes its own margins, so the 12px under the band's line comes from a wrapper. */}
+                <div className="mt-sm">
+                  <ul className="fx-inset">
+                    {MAP_LEVELS.filter((l) => l.band === b)
+                      .slice()
+                      .reverse()
+                      .map((l) => {
+                        const on = mine.includes(l.value);
+                        return (
+                          <li key={l.value}>
+                            <button type="button" role="checkbox" aria-checked={on} onClick={() => toggle(l.value)} className="fx-row">
+                              <span aria-hidden="true" className={`flex size-[24px] shrink-0 items-center justify-center rounded-[8px] border-2 ${on ? 'border-ink bg-ink text-on-ink' : 'border-line'}`}>
+                                {on && <Icon icon={Check} size={16} strokeWidth={3} />}
+                              </span>
+                              {/* The words at the left and the tags at the right. On a phone the tags stand one over the other in the row's
+                                  top right corner, level with the name (the founder, 2026-11-06); from `md` they sit side by side, centred on the row. */}
+                              <span className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-sm">
+                                <span className="col-start-1 row-start-1 block text-row-title">{l.name}</span>
+                                <span className="col-start-1 row-start-2 block text-card-note text-ink-soft">“{l.sounds}”</span>
+                                <LevelTags value={l.value} on={on} stack className="col-start-2 row-span-2 row-start-1 md:self-center" />
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                  </ul>
+                </div>
               </div>
             ))}
             <Fold className="mt-sm" title="Say it in your own words">
@@ -808,7 +817,7 @@ function ContractForm({ initial, placeholder, onSend }: { initial: Data['contrac
       </label>
       {/* The live call, once and optional: a line in the plan rather than a step of its own. */}
       <div className="mt-md">
-        <Toggle on={call} onChange={setCall} label="I would like a live call with a coach" hint={`A person goes through your answers with you, for ${money(LIVE_CALL_CENTS, PLAN_CURRENCY)}. The app works without it, and saying no changes nothing.`} />
+        <Toggle on={call} onChange={setCall} label="I would like a live call with a coach" hint={`A person goes through your answers with you, for ${money(LIVE_CALL_CENTS, PLAN_CURRENCY)}. ${PAYMENTS_LIVE ? 'You pay once you sign.' : 'Nothing is charged yet: the team writes to you to set a time.'} Saying no changes nothing.`} />
       </div>
       <ChatActions full next="Sign it" ready={Boolean(c.signedName.trim())} onNext={() => onSend({ minDays: String(c.minDays), checkinTime: c.checkinTime, penalty: c.penalty, signedName: c.signedName.trim(), call: call ? 'yes' : 'no' }, `${c.minDays} days a week, check-in at ${c.checkinTime}, ${PENALTIES.find((p) => p.key === c.penalty)?.name.toLowerCase()}. Signed ${c.signedName.trim()}.${call ? ' And I would like a live call.' : ''}`)} />
     </div>
@@ -819,22 +828,32 @@ function ContractForm({ initial, placeholder, onSend }: { initial: Data['contrac
 function PicksForm({ focus, result, own: ownWords = {}, onSend }: { focus: RelationshipKey[]; result: OnboardingResponse; own?: LadderPicks; onSend: Send }) {
   const [v, setV] = useState<LadderPicks>(Object.fromEntries(focus.map((k) => [k, { valueGoal: result.ladders[k].valueGoal, project: result.ladders[k].project }])));
   const [own, setOwn] = useState<Record<string, boolean>>({});
-  const pick = (k: RelationshipKey, f: 'valueGoal' | 'project', list: string[]) => {
+  const pick = (k: RelationshipKey, f: 'valueGoal' | 'project', list: LadderChoice[]) => {
     const cur = v[k]?.[f] ?? '';
-    const isOwn = own[`${k}.${f}`] || (cur !== '' && !list.includes(cur));
+    const isOwn = own[`${k}.${f}`] || (cur !== '' && !list.some((o) => o.title === cur));
+    // The picked option's why sits under the field, so each choice explains itself as it is picked.
+    const why = isOwn ? '' : (list.find((o) => o.title === cur)?.why ?? '');
+    const whyId = `why-${k}-${f}`;
     return (
-      <label className="block text-caption text-ink-soft">
-        {f === 'valueGoal' ? KIND_META.value_goal.label : KIND_META.project.label}
-        <select value={isOwn ? '__own' : cur} onChange={(e) => { if (e.target.value === '__own') { setOwn({ ...own, [`${k}.${f}`]: true }); setV({ ...v, [k]: { ...v[k], [f]: '' } }); } else { setOwn({ ...own, [`${k}.${f}`]: false }); setV({ ...v, [k]: { ...v[k], [f]: e.target.value } }); } }} className={FIELD}>
-          {list.map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-          <option value="__own">Write my own</option>
-        </select>
-        {isOwn && <input value={cur} onChange={(e) => setV({ ...v, [k]: { ...v[k], [f]: e.target.value } })} maxLength={120} placeholder="Your words" className={FIELD} />}
-      </label>
+      <div>
+        <label className="block text-caption text-ink-soft">
+          {f === 'valueGoal' ? KIND_META.value_goal.label : KIND_META.project.label}
+          <select value={isOwn ? '__own' : cur} aria-describedby={why ? whyId : undefined} onChange={(e) => { if (e.target.value === '__own') { setOwn({ ...own, [`${k}.${f}`]: true }); setV({ ...v, [k]: { ...v[k], [f]: '' } }); } else { setOwn({ ...own, [`${k}.${f}`]: false }); setV({ ...v, [k]: { ...v[k], [f]: e.target.value } }); } }} className={FIELD}>
+            {list.map((o) => (
+              <option key={o.title} value={o.title}>
+                {o.title}
+              </option>
+            ))}
+            <option value="__own">Write my own</option>
+          </select>
+          {isOwn && <input value={cur} onChange={(e) => setV({ ...v, [k]: { ...v[k], [f]: e.target.value } })} maxLength={120} placeholder="Your words" className={FIELD} />}
+        </label>
+        {why && (
+          <p id={whyId} className="mt-xs m-0 text-card-note text-ink-soft">
+            {why}
+          </p>
+        )}
+      </div>
     );
   };
   const ready = focus.every((k) => (v[k]?.valueGoal ?? '').trim() && (v[k]?.project ?? '').trim());
@@ -850,7 +869,7 @@ function PicksForm({ focus, result, own: ownWords = {}, onSend }: { focus: Relat
                 <Avatar relationship={k} size={44} decorative still />
                 <div className="min-w-0 flex-1">
                   <p className="m-0 text-subhead font-semibold" style={{ color: `var(--deep-${k})` }}>
-                    {who(k)}, {result.scores[k]}%, {l.branch === 'low' ? 'gentle start' : 'stretch tasks'}
+                    {taskPaceLine(k, result.scores[k], l.branch)}
                   </p>
                   <p className="mt-xs m-0 text-subhead">
                     {KIND_META.pillar.label}: {ownWords[k]?.pillar || l.pillar}. {KIND_META.principle.label}: {l.principle}. {KIND_META.outcome.label}: {l.outcome}.
@@ -876,7 +895,7 @@ function PyramidsCard({ focus, result, picks }: { focus: RelationshipKey[]; resu
     <div className="grid gap-sm md:grid-cols-2">
       {focus.map((k) => {
         const l = result.ladders[k];
-        const words: Partial<Record<NodeKind, string>> = { pillar: picks[k]?.pillar || l.pillar, principle: l.principle, value_goal: picks[k]?.valueGoal || l.valueGoal, outcome: l.outcome, project: picks[k]?.project || l.project, task: l.tasks[0] ?? 'Your first task' };
+        const words: Partial<Record<NodeKind, string>> = { pillar: picks[k]?.pillar || l.pillar, principle: l.principle, value_goal: picks[k]?.valueGoal || l.valueGoal, outcome: l.outcome, project: picks[k]?.project || l.project, task: projectTasks(k, picks[k]?.project || l.project, l.branch)?.[0] ?? l.tasks[0] ?? 'Your first task' };
         return (
           <div key={k} className="rounded-card bg-card p-md shadow-toy-soft">
             <p className="m-0 flex items-center gap-xs text-subhead font-semibold" style={{ color: `var(--deep-${k})` }}>
@@ -941,7 +960,6 @@ export function SessionChat() {
   const [history, setHistory] = useKept<Chat[]>(scope, 'history', []);
   const [typing, setTyping] = useKept<Host | null>(scope, 'typing', null);
   const [notice, setNotice] = useKept<string | null>(scope, 'notice', null);
-  const [callOpen, setCallOpen] = useState(false);
   const [multi, setMulti] = useKept<string[]>(scope, 'multi', []);
   const ids = useKeptRef(scope, 'ids', 0);
   const timers = useKeptRef<number[]>(scope, 'timers', []);
@@ -1061,8 +1079,12 @@ export function SessionChat() {
   const goPillars = (data: Data, lead: string[] = []) => {
     const first = data.focus[0];
     if (!first) return goSteps(data);
-    say('bumling', [...lead, 'Last part: your pillars. Each relationship you chose gets its own pyramid: a foundation, a guiding principle, a value goal, a goal outcome, a project and a first task.', 'Answer three quick questions for each one, and the pyramid is built from your answers.', `${who(first)}, ${RELATIONSHIP_BY_KEY[first].role}, asks first.`], { stage: { part: 'pillars', id: firstQuestionId(first), history: [] }, ask: null });
-    timers.current.push(window.setTimeout(() => askQuestion(firstQuestionId(first), [], true), reduce ? 0 : 1100));
+    const lines = [...lead, 'Last part: your pillars. Each relationship you chose gets its own pyramid: a foundation, a guiding principle, a value goal, a goal outcome, a project and a first task.', 'Answer three quick questions for each one, and the pyramid is built from your answers.', `${who(first)}, ${RELATIONSHIP_BY_KEY[first].role}, asks first.`];
+    say('bumling', lines, { stage: { part: 'pillars', id: firstQuestionId(first), history: [] }, ask: null });
+    // The first question waits until every line above has been typed: asking sooner cleared their timers, so "Signed!" and the
+    // live call's line never showed (the founder's "the flow breaks", 2026-11-06).
+    const typed = 450 + lines.reduce((t, l) => t + typingTime(l), 0);
+    timers.current.push(window.setTimeout(() => askQuestion(firstQuestionId(first), [], true), reduce ? 0 : typed + 600));
   };
 
   const askQuestion = (id: string, history: string[], intro: boolean) => {
@@ -1129,14 +1151,31 @@ export function SessionChat() {
       });
   };
 
+  /** Ask for the live call and, while payments are live, open the payment window. Answers the line the chat says next. */
+  const askForLiveCall = async (): Promise<string> => {
+    try {
+      const a = await api.askLiveCall();
+      const paid = await payForCall(a);
+      if (paid === 'opened-paid') return 'Thank you! Your payment for the live call is being confirmed. The team will write to you to set a time.';
+      if (paid === 'closed') return 'The payment window closed, so nothing was charged. You can ask again from the contract on your life map, under Pillars.';
+      return a.note;
+    } catch (e) {
+      return `Your plan is saved, but the ask for a live call did not go through (${errorText(e, 'it did not work')}). Nothing was charged. You can ask again from the contract on your life map, under Pillars.`;
+    }
+  };
+
   const submitPlan = (data: Data, call: boolean) => {
     say('bumling', [], { ask: { kind: 'wait', text: 'Filing the contract' } });
     api
       .submitPlan({ focus: data.focus, practices: { ...data.practices, affirmation: data.practices.affirmation || affirmationFor(data.focus) }, contract: data.contract, date: todayLocal() })
       .then(async () => {
         await refresh();
-        if (call) setCallOpen(true);
-        goPillars(data, ['Signed! Your plan is saved, and Daily will show your routine from tomorrow morning.', ...(call ? ['I opened the details for a live call. Read them when you like; the chat waits here.'] : [])]);
+        const signed = 'Signed! Your plan is saved, and Daily will show your routine from tomorrow morning.';
+        if (!call) return goPillars(data, [signed]);
+        // A yes to the live call is a paid service: the ask is kept and the team told (POST /session/call). The payment window
+        // opens only when the server sent an order, which it does only while payments are live. The chat goes on either way.
+        say('bumling', [], { ask: { kind: 'wait', text: 'Asking the team for your live call' } });
+        goPillars(data, [signed, await askForLiveCall()]);
       })
       .catch((e) => {
         setNotice(errorText(e, 'That did not work.'));
@@ -1465,12 +1504,6 @@ export function SessionChat() {
         notice={notice}
         composer={{ placeholder: 'Ask about any word', onSend: askAbout, disabled: Boolean(typing) || chat.stage.part === 'account' }}
       />
-      <Sheet open={callOpen} onClose={() => setCallOpen(false)} title="Book a live call">
-        <p className="m-0 text-callout text-ink-soft">A live strategy call with the coach is {money(LIVE_CALL_CENTS, PLAN_CURRENCY)}. Booking opens once payments are connected. Until then, write to the team under Help and we will set a time by hand.</p>
-        <Link to="/help" className="toy mt-md inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md text-headline text-on-ink">
-          Write to the team
-        </Link>
-      </Sheet>
     </>
   );
 }

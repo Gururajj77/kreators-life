@@ -8,6 +8,7 @@ import {
   emptyOnboarding,
   gstinProblem,
   onboardingProblem,
+  onboardingFromRecord,
   onboardingToBilling,
   panProblem,
   parseOnboarding,
@@ -163,6 +164,29 @@ describe('onboardingToBilling', () => {
     expect(b.email).toBe('accounts@example.test');
     expect(b.taxIds).toEqual([]);
     expect(b.name).toBe('Example Bites');
+  });
+});
+
+describe('onboardingFromRecord', () => {
+  const rec = {
+    name: 'Example Bites',
+    contactName: 'Asha Rao',
+    contactEmail: 'asha@example.test',
+    billing: { name: '', line: 'Example Foods Private Limited', taxIds: [{ label: 'GSTIN', value: '29ABCDE1234F1Z5' }], address: '12 Main Road, Indiranagar, Bengaluru, Karnataka 560038', email: 'accounts@example.test', phone: '+919876543210' },
+  };
+  it('fills what the record holds, reading the address back into its parts and the PAN from the GSTIN', () => {
+    const o = onboardingFromRecord(emptyOnboarding(), rec);
+    expect(o).toMatchObject({ legalName: 'Example Foods Private Limited', brands: 'Example Bites', addressLine: '12 Main Road, Indiranagar', city: 'Bengaluru', state: 'Karnataka', pin: '560038', gstin: '29ABCDE1234F1Z5', pan: 'ABCDE1234F', pocName: 'Asha Rao', email: 'asha@example.test', phone: '+919876543210', billingEmail: 'accounts@example.test' });
+  });
+  it('never changes what the client typed, and keeps an address it cannot read as one line', () => {
+    const o = onboardingFromRecord({ ...emptyOnboarding(), legalName: 'Typed Ltd' }, { ...rec, billing: { ...rec.billing, address: 'Somewhere far' } });
+    expect(o.legalName).toBe('Typed Ltd');
+    expect(o.addressLine).toBe('Somewhere far');
+    expect(o.city).toBe('');
+  });
+  it('turns the round trip of onboardingToBilling back into the same form fields', () => {
+    const back = onboardingFromRecord(emptyOnboarding(), { name: 'Example Bites', contactName: 'Asha Rao', contactEmail: 'asha@example.test', billing: onboardingToBilling(filled(), 'Example Bites') });
+    for (const k of ['legalName', 'addressLine', 'city', 'state', 'pin', 'gstin', 'pan', 'pocName', 'email'] as const) expect(back[k]).toBe(filled()[k]);
   });
 });
 
