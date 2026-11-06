@@ -2240,6 +2240,9 @@ ol.grid > li > .toy:only-child {
 /* A section marked "not printed" stays on the screen and at the client's link and leaves the printed page; one line says where it went.
    The print note is for paper only. */
 .legal-print-note { display: none; }
+/* A line to write on stays one line, cut at its column's edge on a narrow screen (ReadText in ContractView); on paper it prints whole. */
+.legal-writeon { display: inline-block; max-width: 100%; overflow: hidden; white-space: nowrap; vertical-align: bottom; }
+@media print { .legal-writeon { display: inline; max-width: none; overflow: visible; } }
 .legal-text { margin: var(--spacing-xs) 0 0; padding: var(--spacing-sm); max-height: 420px; overflow: auto; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; line-height: 1.5; border-radius: var(--radius-tile); background: var(--color-paper); user-select: text; }
 
 /* Paragraph lines typed on their own (the parties) stay their own lines; a block that follows with no blank line between sits close. */

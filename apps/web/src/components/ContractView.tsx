@@ -52,8 +52,27 @@ const KEEP = 'whitespace-nowrap print:whitespace-normal';
 const KEEP_WORD = 'whitespace-nowrap';
 const HYPHEN_WORD = /(?<![\p{L}\p{N}./:@-])([\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)+)(?![\p{L}\p{N}/@-]|\.[\p{L}\p{N}])/u;
 
-/** Read-only text: hyphened words kept whole, everything else through Inert so an address stays plain text. */
+/** A line left to write on by hand (a run of underscores): one unbroken line, cut at the edge of its column, so a narrow phone never leaves a
+ * short "__" stub on the next line. The characters are the same; only how much of the line shows changes (print shows it whole). */
+const WRITE_ON_RUN = /(_{8,})/;
+
+/** Read-only text: hyphened words kept whole, lines to write on kept to one line, everything else through Inert so an address stays plain text. */
 function ReadText({ text }: { text: string }) {
+  if (WRITE_ON_RUN.test(text)) {
+    return (
+      <>
+        {text.split(WRITE_ON_RUN).map((p, i) =>
+          i % 2 === 1 ? (
+            <span key={i} className="legal-writeon">
+              {p}
+            </span>
+          ) : p ? (
+            <ReadText key={i} text={p} />
+          ) : null,
+        )}
+      </>
+    );
+  }
   const parts = text.split(HYPHEN_WORD);
   return (
     <>

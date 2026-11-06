@@ -65,7 +65,8 @@ export function JumpToBar({ targetId, label }: { targetId: string; label: string
     window.setTimeout(() => first?.focus({ preventScroll: true }), still ? 0 : 400);
   };
   return (
-    <div className="no-print sticky bottom-[calc(var(--spacing-sm)+env(safe-area-inset-bottom))] z-30 mt-md md:hidden">
+    // Inset by the paper's own side padding, so on a phone the button lines up with the words above it (the founder, 2026-11-07).
+    <div className="no-print sticky bottom-[calc(var(--spacing-sm)+env(safe-area-inset-bottom))] z-30 mt-md px-lg md:hidden">
       <Button full onClick={jump}>
         {label}
       </Button>

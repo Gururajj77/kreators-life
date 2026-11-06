@@ -101,7 +101,7 @@ export function PrintSheet({ kind, title, subtitle, reference = '', date, dateLa
   return (
     <div ref={rootRef} className="legal-root" data-kind={kind} data-layout={s.layout ?? 'legal'} data-font={s.font} data-size={s.size} data-accent={s.accent} data-heading={s.heading} data-sign={s.signLayout} data-margin={s.margin} data-boxes={boxes ? '1' : '0'}>
       <style>{pageCss(s, title, typed ? '' : reference, boxes)}</style>
-      <article className="legal-doc print-doc rounded-card bg-card-strong p-md text-ink shadow-toy-soft md:p-lg" aria-label={runTitle}>
+      <article className="legal-doc print-doc rounded-card bg-card-strong px-lg py-md text-ink shadow-toy-soft md:p-lg" aria-label={runTitle}>
         {stamp && (
           <div className="legal-stamp" aria-hidden="true">
             {/* A faint watermark, drawn from the attribute so it is decoration and not text; the status is said in words elsewhere on the page. */}
