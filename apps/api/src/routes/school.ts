@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { ADMIN_GUIDE_PROGRAM, LESSON_BODY_MAX, LESSON_TITLE_MAX, MAX_PROGRAM_INVITES, isProgramVisibility, lessonBodyProblem, programTakesEnrolment, programVisibleTo, type Cohort, type CohortSession, type CourseAssignment, type Enrollment, type LearningItem, type Program, type ProgramInvite, type ProgramVisibility, type Submission } from '@kreators/shared';
 import { LESSON_RESOURCE_REPEAT, LESSON_RESOURCES_FULL, MAX_LESSON_RESOURCES, lessonResourceKindOf, lessonResourceLink, parseLessonResources, storedLessonResources } from '@kreators/shared/lessonResources';
 import type { AppEnv, UserRow } from '../env';
-import { audit, badLink, blockedEither, can, DELETED_NAME, inBatches, liveUser, LINK_PROBLEM, nameOf, newId, notify, nowIso, num, objectBody, oneOf, personBy, str, pageOf, paged, httpUrl } from '../db';
+import { audit, badLink, blockedEither, can, DELETED_NAME, inBatches, liveUser, LINK_PROBLEM, nameOf, newId, notify, nowIso, num, objectBody, oneOf, personBy, str, pageOf, paged, httpUrl, TEN_A_PAGE } from '../db';
 
 export const school = new Hono<AppEnv>();
 
@@ -116,7 +116,14 @@ school.get('/', async (c) => {
       )
       .bind(user.id, ask.limit, ask.offset)
       .all<VisRow & { creator_name: string | null; manages: number }>(),
-    db.prepare(`${COHORT_SELECT} WHERE k.status != 'cancelled' ORDER BY k.start_at`).all<CohortRow>(),
+    // Only the cohorts of this page's programs (the same view, order and page), never every cohort there is (2026-11-07).
+    db
+      .prepare(
+        `${COHORT_SELECT} WHERE k.status != 'cancelled' AND k.program_id IN (SELECT p.id FROM programs p ${where}
+           ORDER BY CASE ${VIS} WHEN 'public' THEN 0 WHEN 'private' THEN 1 WHEN 'draft' THEN 2 ELSE 3 END, ${PROGRAM_ORDER} LIMIT ?2 OFFSET ?3) ORDER BY k.start_at`,
+      )
+      .bind(user.id, ask.limit, ask.offset)
+      .all<CohortRow>(),
     db.prepare(`${COHORT_SELECT} WHERE k.id IN (SELECT cohort_id FROM enrollments WHERE learner_user_id = ? AND status != 'withdrawn')`).bind(user.id).all<CohortRow>(),
     db.prepare(`${COHORT_SELECT} WHERE k.manager_user_id = ?`).bind(user.id).all<CohortRow>(),
     // For an admin, where each program sits inside its state in this view, read from the whole list rather than guessed from the page.
@@ -650,18 +657,39 @@ school.get('/cohorts/:id', async (c) => {
   const mentor = role?.mentor ?? false;
   const enrolled = await db.prepare('SELECT 1 FROM enrollments WHERE cohort_id = ? AND learner_user_id = ? AND status != \'withdrawn\'').bind(k.id, user.id).first();
   if (!enrolled && !mentor) return role?.access.visible ? c.json({ error: 'you are not in this cohort' }, 403) : c.json({ error: 'not found' }, 404);
-  const [items, resourceRows, assigns, subs, fbs, sessions, att, enrolls] = await Promise.all([
+  // Learners, for whoever runs it, a page at a time (prefix `l`, ten by default, 2026-11-07): a cohort open all year can hold thousands.
+  // Each row's progress is counted in the same statement, so a page never reads every hand-in to work it out.
+  const lAsk = pageOf(c, 'l', TEN_A_PAGE);
+  const [items, resourceRows, assigns, subs, fbs, sessions, att, enrolls, learnerCount] = await Promise.all([
     db.prepare('SELECT * FROM learning_items WHERE program_id = ? AND published = 1 ORDER BY sequence').bind(k.program_id).all<ItemRow>(),
     db.prepare('SELECT r.item_id, r.id, r.kind, r.ref, r.label FROM lesson_resources r JOIN learning_items i ON i.id = r.item_id WHERE i.program_id = ? AND i.published = 1 ORDER BY r.item_id, r.position, r.id').bind(k.program_id).all<ResourceRow & { item_id: string }>(),
     db.prepare('SELECT * FROM course_assignments WHERE program_id = ? ORDER BY sequence').bind(k.program_id).all<AssignRow>(),
     mentor
       ? db.prepare('SELECT s.*, u.display_name AS learner_name FROM submissions s JOIN users u ON u.id = s.learner_user_id WHERE s.cohort_id = ? ORDER BY s.submitted_at DESC').bind(k.id).all<SubRow>()
       : db.prepare('SELECT s.*, u.display_name AS learner_name FROM submissions s JOIN users u ON u.id = s.learner_user_id WHERE s.cohort_id = ? AND s.learner_user_id = ?').bind(k.id, user.id).all<SubRow>(),
-    db.prepare('SELECT f.*, u.display_name AS reviewer_name FROM submission_feedback f JOIN users u ON u.id = f.reviewer_user_id WHERE f.submission_id IN (SELECT id FROM submissions WHERE cohort_id = ?) ORDER BY f.created_at').bind(k.id).all<FbRow>(),
+    // A learner reads only the feedback on their own hand-ins and their own attendance; the whole cohort's is for whoever runs it.
+    mentor
+      ? db.prepare('SELECT f.*, u.display_name AS reviewer_name FROM submission_feedback f JOIN users u ON u.id = f.reviewer_user_id WHERE f.submission_id IN (SELECT id FROM submissions WHERE cohort_id = ?) ORDER BY f.created_at').bind(k.id).all<FbRow>()
+      : db.prepare('SELECT f.*, u.display_name AS reviewer_name FROM submission_feedback f JOIN users u ON u.id = f.reviewer_user_id WHERE f.submission_id IN (SELECT id FROM submissions WHERE cohort_id = ? AND learner_user_id = ?) ORDER BY f.created_at').bind(k.id, user.id).all<FbRow>(),
     db.prepare('SELECT * FROM cohort_sessions WHERE cohort_id = ? ORDER BY starts_at').bind(k.id).all<SessionRow>(),
-    db.prepare('SELECT a.session_id, a.user_id, a.status, u.display_name FROM attendance a JOIN users u ON u.id = a.user_id WHERE a.session_id IN (SELECT id FROM cohort_sessions WHERE cohort_id = ?)').bind(k.id).all<{ session_id: string; user_id: string; status: string; display_name: string }>(),
-    mentor ? db.prepare("SELECT e.*, u.display_name AS learner_name FROM enrollments e JOIN users u ON u.id = e.learner_user_id WHERE e.cohort_id = ? AND e.status != 'withdrawn'").bind(k.id).all<{ id: string; cohort_id: string; learner_user_id: string; learner_name: string; status: Enrollment['status']; payment_status: Enrollment['paymentStatus']; enrolled_at: string; completed_at: string | null }>() : Promise.resolve({ results: [] }),
+    db
+      .prepare(`SELECT a.session_id, a.user_id, a.status, u.display_name FROM attendance a JOIN users u ON u.id = a.user_id WHERE a.session_id IN (SELECT id FROM cohort_sessions WHERE cohort_id = ?)${mentor ? '' : ' AND a.user_id = ?'}`)
+      .bind(...(mentor ? [k.id] : [k.id, user.id]))
+      .all<{ session_id: string; user_id: string; status: string; display_name: string }>(),
+    mentor
+      ? db
+          .prepare(
+            `SELECT e.*, u.display_name AS learner_name,
+               (SELECT COUNT(*) FROM submissions s WHERE s.cohort_id = e.cohort_id AND s.learner_user_id = e.learner_user_id AND s.status = 'approved') AS approved,
+               (SELECT COUNT(*) FROM attendance a JOIN cohort_sessions cs ON cs.id = a.session_id WHERE cs.cohort_id = e.cohort_id AND a.user_id = e.learner_user_id) AS attended
+             FROM enrollments e JOIN users u ON u.id = e.learner_user_id WHERE e.cohort_id = ? AND e.status != 'withdrawn' ORDER BY e.enrolled_at, e.id LIMIT ? OFFSET ?`,
+          )
+          .bind(k.id, lAsk.limit, lAsk.offset)
+          .all<{ id: string; cohort_id: string; learner_user_id: string; learner_name: string; status: Enrollment['status']; payment_status: Enrollment['paymentStatus']; enrolled_at: string; completed_at: string | null; approved: number; attended: number }>()
+      : Promise.resolve({ results: [] }),
+    mentor ? db.prepare("SELECT COUNT(*) AS n FROM enrollments WHERE cohort_id = ? AND status != 'withdrawn'").bind(k.id).first<{ n: number }>() : Promise.resolve(null),
   ]);
+  const learners = paged(enrolls.results, lAsk);
   const resourcesByItem = new Map<string, ResourceRow[]>();
   for (const r of resourceRows.results) resourcesByItem.set(r.item_id, [...(resourcesByItem.get(r.item_id) ?? []), r]);
   const visibleSubs = subs.results.filter((s) => mentor || s.learner_user_id === user.id);
@@ -673,7 +701,7 @@ school.get('/cohorts/:id', async (c) => {
     sessionsAttended: att.results.filter((a) => a.user_id === learnerId).length,
     sessionsTotal: sessions.results.length,
   });
-  const enrollments: Enrollment[] = enrolls.results.map((e) => ({ id: e.id, cohortId: e.cohort_id, learnerId: e.learner_user_id, learnerName: nameOf({ display_name: e.learner_name }), status: e.status, paymentStatus: e.payment_status, enrolledAt: e.enrolled_at, completedAt: e.completed_at, progress: progressFor(e.learner_user_id) }));
+  const enrollments: Enrollment[] = learners.items.map((e) => ({ id: e.id, cohortId: e.cohort_id, learnerId: e.learner_user_id, learnerName: nameOf({ display_name: e.learner_name }), status: e.status, paymentStatus: e.payment_status, enrolledAt: e.enrolled_at, completedAt: e.completed_at, progress: { assignmentsApproved: e.approved, assignmentsTotal: assigns.results.length, sessionsAttended: e.attended, sessionsTotal: sessions.results.length } }));
   const me = await db.prepare('SELECT * FROM enrollments WHERE cohort_id = ? AND learner_user_id = ?').bind(k.id, user.id).first<{ status: Enrollment['status']; completed_at: string | null }>();
   return c.json({
     cohort: toCohort(k),
@@ -682,6 +710,8 @@ school.get('/cohorts/:id', async (c) => {
     submissions,
     sessions: sess,
     enrollments,
+    learnersPage: mentor ? learners.page : null,
+    learnerCount: learnerCount?.n ?? 0,
     manager,
     mentor,
     myProgress: enrolled ? progressFor(user.id) : null,

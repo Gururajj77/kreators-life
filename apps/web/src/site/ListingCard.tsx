@@ -25,14 +25,14 @@ function cardBlurb(text: string, max = 16): string {
 const FACT_ORDER: FactKind[] = ['price', 'free', 'when', 'place', 'online', 'availability', 'verified', 'status', 'category'];
 
 /** The kind of thing (a meetup, a gig, short video) joins the eyebrow; the rest are the card's facts, most weighed first, three at most. */
-function splitFacts(facts: ListingFact[], by: string): { kind: string | null; shown: ListingFact[] } {
+function splitFacts(facts: ListingFact[], by: string, max = 3): { kind: string | null; shown: ListingFact[] } {
   const cat = facts.find((f) => f.kind === 'category');
   const kind = cat && cat.text.toLowerCase() !== by.trim().toLowerCase() ? cat.text : null;
   const rest = facts.filter((f) => f !== cat);
   const shown = rest
     .map((f, i) => ({ f, i }))
     .sort((a, b) => FACT_ORDER.indexOf(a.f.kind) - FACT_ORDER.indexOf(b.f.kind) || a.i - b.i)
-    .slice(0, 3)
+    .slice(0, max)
     .map((x) => x.f);
   return { kind, shown };
 }
@@ -45,15 +45,17 @@ function splitFacts(facts: ListingFact[], by: string): { kind: string | null; sh
  * link (the title's link stretched over it), so there is one thing to tap; with `showFeature` the app's icon is its own small link to
  * that app's feature page, laid over the card.
  */
-export function ListingCard({ listing, showFeature = true, className = '' }: { listing: Listing; showFeature?: boolean; /** Its span in an even grid (lib/bento.ts). */ className?: string }) {
+export function ListingCard({ listing, showFeature = true, maxFacts = 3, className = '' }: { listing: Listing; showFeature?: boolean; /** How many facts the foot shows; the events page shows four (price, when, where, seats left). */ maxFacts?: number; /** Its span in an even grid (lib/bento.ts). */ className?: string }) {
   const token = useSession((s) => s.token);
   const meta = LISTING_TYPE_META[listing.type];
   const module = MODULE_BY_KEY[meta.moduleKey];
   const accent = module?.accent ?? (module ? MODULE_GROUP_ACCENT[module.group] : undefined);
-  const to = token ? listing.path : `/signin?next=${encodeURIComponent(listing.path)}`;
-  const verb = token ? meta.verb : `Sign in to ${meta.verb.toLowerCase()}`;
+  // An event opens its own public page (/events/:id), where a visitor joins and signs up in one go, so it never needs sign-in first.
+  const open = token || listing.path.startsWith('/events/');
+  const to = open ? listing.path : `/signin?next=${encodeURIComponent(listing.path)}`;
+  const verb = open ? meta.verb : `Sign in to ${meta.verb.toLowerCase()}`;
   const hasCover = Boolean(listing.media?.some((m) => m.url));
-  const { kind, shown } = splitFacts(listing.facts, listing.by);
+  const { kind, shown } = splitFacts(listing.facts, listing.by, maxFacts);
 
   const tileLook = 'flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink';
   const tileStyle = { background: accent ? `var(--soft-${accent})` : 'var(--color-line)' };

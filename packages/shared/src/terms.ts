@@ -48,6 +48,12 @@ export const TERMS: Record<string, string> = {
   subtask: 'A small step inside a task. It has its own tick box, pays nothing, and never stops you ticking the task.',
   remember: 'A tag for things you want to keep in mind. With a day, it also sends a note to your inbox on that day, at the task’s time or at nine in the morning. With no day, it waits in the To remember list on Daily.',
   'not scheduled': 'Tasks with no do date and no due date. They wait in a list under Tasks until you pick one.',
+  bottlenecks: 'A view of Daily: only the tasks marked Unfinished, Unresolved or Undecided, each kind in its own coloured box. Pick it in Sort by, or tap Close the unfinished on Home.',
+  unfinished: 'Open business you started and did not finish. Ask: do you still want it enough to give it more time?',
+  unresolved: 'Open business with other people: a talk to have, a fight, a guilt. Have the talk, or decide to let it go.',
+  undecided: 'Open business that is a choice you keep thinking about. Get what you need to decide, or decide that you cannot yet.',
+  // One word for the three endings, never "do it" or "let it go" alone: a typed question names those all the time (lib/explain.ts).
+  'three endings': 'The ways to end open business. Do it: put it on today and tick it when done. Give it a time and date: a day and a time, with a reminder. Let it go: stop chasing it; it leaves your lists and waits under Let go, in the Unfinished business view, in case you want it back.',
   'daily three': 'Check in, the small act, one task.',
   'not-to-do': 'Things you stay away from, each with its own streak of kept days.',
   'kept day': 'A day you ticked a not-to-do: you stayed away from it.',
@@ -136,7 +142,7 @@ export const TERMS: Record<string, string> = {
   season: 'One month on the leaderboard. Everyone starts level on the first; the top three when it ends keep the Season top three honor.',
   'change log': 'The list at the end of a coaching page: every ask, yes, note and task change between a coach and a student, with when it happened.',
   username: 'Your own name in the app, like @sam_k. Nobody else has it. It is also your public page address. Change it under Profile.',
-  'friend code': 'Eight letters and numbers, yours alone. Give it to someone you know; they type it in Bond and you get a friend request.',
+  'friend code': 'Eight letters and numbers, yours alone. Someone types it in Bond or scans your QR code, and you get a friend request.',
 };
 
 /** True for the username an account is given at sign-up, before the person picks their own. */
@@ -145,7 +151,7 @@ export const isAutoHandle = (handle: string | null | undefined): boolean => !han
 /** The glossary's categories, in the order they are shown. Every word in TERMS is in exactly one; the words inside each are sorted A to Z by `termGroups`. */
 export const TERM_GROUPS: { name: string; terms: string[] }[] = [
   { name: 'Pillars and pyramids', terms: ['pillar', 'pyramid', 'foundation', 'guiding principle', 'value goal', 'goal outcome', 'project', 'task', 'ripple', 'map', 'life map', 'strategy session', 'live call', 'routine', 'contract', 'core', 'floor'] },
-  { name: 'Daily and progress', terms: ['small act', 'check-in', 'daily three', 'do date', 'due date', 'priority', 'day type', 'time block', 'day template', 'weekly pattern', 'by time block', 'by area', 'habit', 'good habit', 'bad habit', 'emerging', 'subtask', 'remember', 'not scheduled', 'daily brief', 'not-to-do', 'kept day', 'streak', 'xp', 'points', 'level', 'who you are becoming', 'life score', 'five areas of life', 'period', 'review', 'season', 'active minutes', 'eating check-in', 'eating moment', 'serving', 'protein goal', 'supplement', 'nootropic', 'CBT', 'ACT', 'trauma-informed care', 'family systems', 'improv', 'positive psychology', 'self-compassion', 'karma yoga', 'the Stoics'] },
+  { name: 'Daily and progress', terms: ['small act', 'check-in', 'daily three', 'do date', 'due date', 'priority', 'day type', 'time block', 'day template', 'weekly pattern', 'by time block', 'by area', 'habit', 'good habit', 'bad habit', 'emerging', 'subtask', 'remember', 'not scheduled', 'bottlenecks', 'unfinished', 'unresolved', 'undecided', 'three endings', 'daily brief', 'not-to-do', 'kept day', 'streak', 'xp', 'points', 'level', 'who you are becoming', 'life score', 'five areas of life', 'period', 'review', 'season', 'active minutes', 'eating check-in', 'eating moment', 'serving', 'protein goal', 'supplement', 'nootropic', 'CBT', 'ACT', 'trauma-informed care', 'family systems', 'improv', 'positive psychology', 'self-compassion', 'karma yoga', 'the Stoics'] },
   { name: 'You and your page', terms: ['strength', 'personality type', 'love language', 'signs', 'human design', 'gate', 'channel', 'sidereal', 'numerology', 'master number', 'username', 'identity tag', 'setup chat', 'public page', 'badge', 'honor', 'trust', 'unlock'] },
   { name: 'Friends and community', terms: ['friend code', 'chat channel', 'alias', 'circle', 'reaction', 'mention', 'guide', 'life coach', 'student', 'invite link', 'patterns', 'change log', 'run club', 'start code', 'attendee code', 'deck', 'focus mode', 'focus session'] },
   { name: 'Learn and earn', terms: ['cohort', 'campaign', 'bounty', 'Club', 'collab', 'giveaway', 'retainer', 'deliverable', 'client link', 'utilisation', 'paperwork', 'team member', 'first pass', 'plan strength', 'pace'] },

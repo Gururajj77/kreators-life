@@ -245,6 +245,12 @@ const AREA: Prop = {
   description: 'Tasks only: the area of life it serves (Physical, Financial, Mental, Emotional or Spiritual), or none. A tag only: it never changes what a tick pays.',
   aliases: { 'No area': 'none' },
 };
+/** A task's open business (Close the unfinished, 2026-11-07): one of the three kinds, or none. Sent as `openKind`; the route reads it through `parseOpenKind`. */
+const OPEN: Prop = {
+  type: 'string',
+  enum: ['unfinished', 'unresolved', 'undecided', 'none'],
+  description: 'Tasks only: the kind of open business it is. Unfinished: started and not done. Unresolved: a talk or a matter with other people. Undecided: a choice they keep thinking about. Or none. A tag only: it never changes what a tick pays. Daily\'s Unfinished business view lists it.',
+};
 const areaName = (key: string | null | undefined) => (key && key in LIFE_AREAS ? LIFE_AREAS[key as keyof typeof LIFE_AREAS].name : null);
 const DAY: Prop = { type: 'string', enum: ['today', 'yesterday'], description: 'Which day. Today unless they say yesterday.' };
 /** A task's time block, by name; "none" clears it. Sent as `timeBlock` to the node routes, which look it up among the person's own blocks. */
@@ -319,7 +325,7 @@ export const TOOLS: readonly Tool[] = [
     refresh: [],
     title: 'Look at Daily',
     description:
-      "Today on Daily: whether they checked in, the small act, the day template (the kind of day) and its time blocks, the tasks waiting (up to six, with ids, their block and whether each can be ticked now), the tasks already ticked today (with ids, to untick one), and the not to do list (with ids and today's and yesterday's marks). Read this before ticking, unticking, checking in or marking.",
+      "Today on Daily: whether they checked in, the small act, the day template (the kind of day) and its time blocks, the tasks waiting (up to six, with ids, their block, their kind of open business if any, and whether each can be ticked now), the tasks already ticked today (with ids, to untick one), and the not to do list (with ids and today's and yesterday's marks). Read this before ticking, unticking, checking in or marking.",
     params: { type: 'object', properties: {} },
     run: async (_a, io) => {
       const t = await today(io);
@@ -335,7 +341,7 @@ export const TOOLS: readonly Tool[] = [
           tasks: t.tasks.map((n) => {
             const wait = n.readyAt ? Math.ceil((Date.parse(n.readyAt) - now) / 60_000) : 0;
             const later = Boolean(n.doDate && n.doDate > io.date);
-            return { id: n.id, title: n.title, pillar: pillarName(n.relationship), doDate: n.doDate, due: n.dueDate, priority: n.priority === null ? null : `P${n.priority}`, remember: n.remind, repeats: n.repeat ? repeatLabel(n.repeat, openDay(n)) : null, habit: taskIsHabit(n), area: areaName(n.lifeArea), block: blockName(t.day?.blocks, blockOfTask(n, t.day?.slots ?? [])?.blockId), time: n.dueTime, minutes: n.estimateMin, canTickNow: !later && wait <= 0, ...(later ? { waitsForDay: n.doDate } : wait > 0 ? { readyInMinutes: wait } : {}) };
+            return { id: n.id, title: n.title, pillar: pillarName(n.relationship), doDate: n.doDate, due: n.dueDate, priority: n.priority === null ? null : `P${n.priority}`, remember: n.remind, repeats: n.repeat ? repeatLabel(n.repeat, openDay(n)) : null, habit: taskIsHabit(n), area: areaName(n.lifeArea), openBusiness: n.openKind ?? null, block: blockName(t.day?.blocks, blockOfTask(n, t.day?.slots ?? [])?.blockId), time: n.dueTime, minutes: n.estimateMin, canTickNow: !later && wait <= 0, ...(later ? { waitsForDay: n.doDate } : wait > 0 ? { readyInMinutes: wait } : {}) };
           }),
           notScheduled: t.backlogTotal,
           notToDo: t.notToDo.map((i) => ({ id: i.id, title: i.title, today: i.today, yesterday: i.week[5] ?? null, streak: i.streak })),
@@ -699,7 +705,7 @@ export const TOOLS: readonly Tool[] = [
     needs: null,
     refresh: R.layers,
     title: 'Add to a pyramid',
-    description: `Add one layer to a pillar's pyramid. Each layer hangs under the one before: a guiding principle under a foundation, a value goal under a guiding principle, a goal outcome under a value goal, a project under a goal outcome, a task under a project. Give under (the parent's id) when the pillar has more than one; with just one it is found. A task is for today unless a do date is given (doDate is the day it will be done; dueDate is the deadline, never before the do date; doDate "none" leaves it unscheduled, in the list on Daily until a day is picked), and can be ticked ${WAIT.taskMinAgeMinutes} minutes after it is written. A task can have a priority P0 (do now), P1, P2 or P3, can repeat, can carry one area of life (Physical, Financial, Mental, Emotional or Spiritual), can sit in one of their time blocks (by name), and can be tagged to remember (an inbox note on its day).`,
+    description: `Add one layer to a pillar's pyramid. Each layer hangs under the one before: a guiding principle under a foundation, a value goal under a guiding principle, a goal outcome under a value goal, a project under a goal outcome, a task under a project. Give under (the parent's id) when the pillar has more than one; with just one it is found. A task is for today unless a do date is given (doDate is the day it will be done; dueDate is the deadline, never before the do date; doDate "none" leaves it unscheduled, in the list on Daily until a day is picked), and can be ticked ${WAIT.taskMinAgeMinutes} minutes after it is written. A task can have a priority P0 (do now), P1, P2 or P3, can repeat, can carry one area of life (Physical, Financial, Mental, Emotional or Spiritual), can sit in one of their time blocks (by name), can be tagged to remember (an inbox note on its day), and can be marked as open business (unfinished, unresolved or undecided).`,
     params: {
       type: 'object',
       properties: {
@@ -715,6 +721,7 @@ export const TOOLS: readonly Tool[] = [
         remember: { type: 'boolean', description: 'Tasks only: tag it Remember. With a do date or a due date it also sends an inbox note on that day; with none it waits in the To remember list.' },
         habit: { type: 'boolean', description: 'Tasks only, with repeat: count it as a habit (the Habit tag). A repeating task is one unless this is false.' },
         area: AREA,
+        openKind: OPEN,
         block: BLOCK,
         dueTime: { type: 'string', description: 'Tasks only: HH:MM, 24-hour.' },
         minutes: { type: 'integer', minimum: 5, maximum: 600, description: 'Tasks only: how long it should take.' },
@@ -762,6 +769,7 @@ export const TOOLS: readonly Tool[] = [
                   remind: a.remember === true,
                   ...(typeof a.habit === 'boolean' ? { habit: a.habit } : {}),
                   ...(a.area ? { lifeArea: parseLifeArea(a.area) } : {}),
+                  ...(str(a.openKind) && str(a.openKind).toLowerCase() !== 'none' ? { openKind: str(a.openKind) } : {}),
                   ...(str(a.block) ? { timeBlock: str(a.block) } : {}),
                   dueTime: dueTime || null,
                   estimateMin: a.minutes ? Number(a.minutes) : null,
@@ -773,7 +781,7 @@ export const TOOLS: readonly Tool[] = [
       return {
         label: `Added the ${layerName(kind)} ${quote(r.node.title)} to ${pillarName(pillar)}`,
         undo: { method: 'DELETE', path: `/nodes/${seg(r.node.id)}` },
-        data: { id: r.node.id, layer: layerKey(kind), title: r.node.title, pillar: pillarName(pillar), doDate: r.node.doDate, due: r.node.dueDate, priority: r.node.priority === null ? null : `P${r.node.priority}`, area: areaName(r.node.lifeArea) },
+        data: { id: r.node.id, layer: layerKey(kind), title: r.node.title, pillar: pillarName(pillar), doDate: r.node.doDate, due: r.node.dueDate, priority: r.node.priority === null ? null : `P${r.node.priority}`, area: areaName(r.node.lifeArea), openBusiness: r.node.openKind ?? null },
       };
     },
   },
@@ -783,7 +791,7 @@ export const TOOLS: readonly Tool[] = [
     needs: null,
     refresh: R.layers,
     title: 'Change something in a pyramid',
-    description: 'Change a layer or a task: its title, its note, and for a task its do date, due date, priority (P0 to P3, or none), how it repeats (or none), whether it counts as a habit, its area of life (or none), its time block (by name, or none), remember, time and minutes. Renaming a task starts its wait again. Use "none" to clear a date, a time, a priority, a block or a repeat.',
+    description: 'Change a layer or a task: its title, its note, and for a task its do date, due date, priority (P0 to P3, or none), how it repeats (or none), whether it counts as a habit, its area of life (or none), its kind of open business (or none), its time block (by name, or none), remember, time and minutes. Renaming a task starts its wait again. Use "none" to clear a date, a time, a priority, a block or a repeat.',
     params: {
       type: 'object',
       properties: {
@@ -798,6 +806,7 @@ export const TOOLS: readonly Tool[] = [
         remember: { type: 'boolean' },
         habit: { type: 'boolean', description: 'A repeating task: count it as a habit (the Habit tag), or not.' },
         area: AREA,
+        openKind: OPEN,
         block: BLOCK,
         dueTime: { type: 'string', description: 'HH:MM or none.' },
         minutes: { type: 'integer', minimum: 5, maximum: 600 },
@@ -825,6 +834,7 @@ export const TOOLS: readonly Tool[] = [
         if (typeof a.remember === 'boolean') body.remind = a.remember;
         if (typeof a.habit === 'boolean') body.habit = a.habit;
         if (a.area) body.lifeArea = parseLifeArea(a.area);
+        if (str(a.openKind)) body.openKind = str(a.openKind).toLowerCase() === 'none' ? null : str(a.openKind);
         if (str(a.block)) body.timeBlock = str(a.block);
         const time = str(a.dueTime).toLowerCase();
         if (time === 'none') body.dueTime = null;
@@ -838,8 +848,8 @@ export const TOOLS: readonly Tool[] = [
       const r = must(await io.call({ method: 'PATCH', path: `/nodes/${prev.id}`, body })) as { node: Node };
       return {
         label: `Changed ${quote(r.node.title)}`,
-        undo: { method: 'PATCH', path: `/nodes/${prev.id}`, body: { title: prev.title, note: prev.note, ...(prev.kind === 'task' ? { doDate: prev.doDate, dueDate: prev.dueDate, repeat: prev.repeat, priority: prev.priority, remind: prev.remind, habit: prev.habit ?? null, lifeArea: prev.lifeArea ?? null, timeBlockId: prev.timeBlockId ?? null } : { dueDate: prev.dueDate }), dueTime: prev.dueTime, estimateMin: prev.estimateMin } },
-        data: { title: r.node.title, doDate: r.node.doDate, due: r.node.dueDate, priority: r.node.priority === null ? null : `P${r.node.priority}`, area: areaName(r.node.lifeArea), time: r.node.dueTime, minutes: r.node.estimateMin },
+        undo: { method: 'PATCH', path: `/nodes/${prev.id}`, body: { title: prev.title, note: prev.note, ...(prev.kind === 'task' ? { doDate: prev.doDate, dueDate: prev.dueDate, repeat: prev.repeat, priority: prev.priority, remind: prev.remind, habit: prev.habit ?? null, lifeArea: prev.lifeArea ?? null, openKind: prev.openKind ?? null, timeBlockId: prev.timeBlockId ?? null } : { dueDate: prev.dueDate }), dueTime: prev.dueTime, estimateMin: prev.estimateMin } },
+        data: { title: r.node.title, doDate: r.node.doDate, due: r.node.dueDate, priority: r.node.priority === null ? null : `P${r.node.priority}`, area: areaName(r.node.lifeArea), openBusiness: r.node.openKind ?? null, time: r.node.dueTime, minutes: r.node.estimateMin },
       };
     },
   },

@@ -6,7 +6,7 @@ Last updated: 2026-11-07
 **Version:** 0.7, reconciled with the app on 7 November 2026
 **Owner:** Product founder
 **Source of truth:** `CLAUDE.md` for rules, `README.md` for the description, `docs/DECISIONS.md` for why, `docs/whop-study.md` and `docs/superfocus-study.md` for what two studies took and left, `docs/copy-brief.md` for how text reads on a phone, `docs/swiftui-rules.md` for the screen checklist, `docs/security/SECURITY_REPORT.md` for the security checks and `docs/performance.md` for the performance checks.
-**Status (7 November 2026):** built for the scope in section 7. It is checked by 851 shared tests and 2,508 smoke checks. Typecheck, build, the size budget and the scans pass. The layout probes report 0 overflow, lone pill, unequal card and uneven tile row hits at 360, 390, 768 and 1280, and the few rag, orphan and contrast hits that remain are listed in 09 §4. The work up to migration 0100 is committed; the work of 7 November (migrations 0101 to 0115 and more than 350 changed files) is not committed yet. What still stands between it and a launch: commit and deploy that work (see Known gaps), payments are in test mode, the pages still need a lawyer's review, and the business details on the legal pages are Worker variables that are empty in the repo. The owner's own steps (rotating two pasted keys, a second factor on the provider accounts, spending caps, mail DNS, a rehearsed restore) are written down in the security report and not done. See Known gaps.
+**Status (8 November 2026):** built for the scope in section 7. It is checked by 859 shared tests and 2,607 smoke checks. Typecheck, build, the size budget and the scans pass. The layout probes report 0 overflow, lone pill, unequal card and uneven tile row hits at 360, 390, 768 and 1280, and the few rag, orphan and contrast hits that remain are listed in 09 §4. The work up to migration 0100 is committed; the work of 7 November (migrations 0101 to 0115 and more than 350 changed files) is not committed yet. What still stands between it and a launch: commit and deploy that work (see Known gaps), payments are in test mode, the pages still need a lawyer's review, and the business details on the legal pages are Worker variables that are empty in the repo. The owner's own steps (rotating two pasted keys, a second factor on the provider accounts, spending caps, mail DNS, a rehearsed restore) are written down in the security report and not done. See Known gaps.
 
 ## 1. Executive summary
 
@@ -214,9 +214,9 @@ Total registered users and follower counts are never a success metric.
 - Error monitoring and logs. Wrangler observability is on; `pnpm cf:logs` tails; the app's own log (a Logs page for super admins) records changes, refusals, server errors, cron runs that did something and errors a browser reports, and every answer carries a request id. The cron writes to every admin's inbox when failed sign-ins, throttled requests or server errors pass a line, or a role changes (`securityAlerts`), and sends one private email with each new note once mail is set up; nobody is paged. Partial.
 - Export and deletion. One JSON export and one delete cover every table that holds what a person wrote or what is about them. `scripts/data-coverage.mjs` holds a line for each table, `scan.sh` checks it against the code, and a new table fails the scan until someone decides. What is private goes; what other people or the books rely on stays with the name and words taken out. Each export and delete is logged without a name, and old outbox mail, link clicks, payment-message text and settled notices are removed on a schedule. Holds; what the delete leaves on purpose is in 04, Known gaps.
 - Environments: development on 8787, a smoke server on 8788 with its own database, production. No staging. Gap. CI runs the checks on every push and pull request (`.github/workflows/ci.yml`), first on the next push.
-- Migrations in source control. Holds once the work of 7 November is committed: 113 plain SQL files, 0001 to 0119, with 0101 to 0119 not yet tracked by git. Every migration is applied to the live database with `pnpm db:migrate` before `pnpm deploy`; the new code expects the new tables. 0101 and 0105 rebuild the two review tables, so back up first.
+- Migrations in source control. Holds once the last work is committed: 117 plain SQL files, 0001 to 0123; the commit "big changes" (8 November) holds up to 0119, and 0120 to 0123 are not yet tracked by git. Every migration is applied to the live database with `pnpm db:migrate` before `pnpm deploy`; the new code expects the new tables. 0101 and 0105 rebuild the two review tables, so back up first.
 - Size. The main script is 475 kB of a 480 kB budget and the first download 1,469 kB of 1,500 kB (7 November); `pnpm perf:budget` fails the build past them. Holds.
-- Automated tests for permissions, payments, flags and workflows. Unit tests in shared (851, including golden tests that pin Emerging's whole output) and an end-to-end smoke test (2,508 checks), both counted on 7 November 2026; see 09.
+- Automated tests for permissions, payments, flags and workflows. Unit tests in shared (859, including golden tests that pin Emerging's whole output) and an end-to-end smoke test (2,607 checks), both counted on 8 November 2026; see 09.
 
 ## 12. Decisions: resolved and open
 
@@ -299,7 +299,7 @@ Total registered users and follower counts are never a success metric.
 - **Home and apps.** Go to is picture tiles, a hidden app's widgets leave Home, apps are hidden and unhidden, one default order inside each group, and a bell in the sidebar.
 - **Dates and inbox.** Times follow the person's zone and format. Every note has a tab, opens its page and lands on its section. Water notes are gone.
 - **Design.** One red yes, every tile grid in even rows, and tablet columns that start at `lg`.
-- **Under the hood.** Blocks, gratitude, Fitness, the coach's report and How it works became subpath exports. CI, the data coverage guard and the note link guard are new. The admin key has its own door, and alerts also go by email. The figures are now 113 migrations, 47 modules, 851 shared tests and 2,508 smoke checks.
+- **Under the hood.** Blocks, gratitude, Fitness, the coach's report and How it works became subpath exports. CI, the data coverage guard and the note link guard are new. The admin key has its own door, and alerts also go by email. The figures are now 117 migrations, 47 modules, 859 shared tests and 2,607 smoke checks (8 November).
 
 ### From version 0.4 to 0.6 (1 to 5 November 2026)
 
@@ -339,7 +339,7 @@ Total registered users and follower counts are never a success metric.
 
 ## Known gaps
 
-- **The work of 7 November is not committed or deployed.** The commit "alpha_v01.4" (early on 7 November) holds the work up to migration 0100. Before a deploy the rest must be committed, new files included (`git status` lists them as `??`: migrations 0101 to 0115, the `.github` folder, `apps/web/public/app-art/` and about seventy more).
+- **The last work is not committed or deployed.** The commit "big changes" (8 November, 09:37) holds the work up to migration 0119. Before a deploy the rest must be committed, new files included (`git status` lists them as `??`: migrations 0120 to 0123, `routes/eventsPublic.ts`, `site/Events.tsx` and seventeen more).
 - No email or phone verification (§9, §12).
 - No staging; a restore procedure written but not rehearsed; nobody is paged by an alert (§11). CI has not run on GitHub yet.
 - Company-level business metrics are not computed (§10).

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { CAMPAIGN_STATUSES, type Campaign, type CampaignAssignment, type CampaignEvent, type Deliverable, type DeliverableVersion } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { audit, can, httpUrl, LINK_PROBLEM, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, orgIdsOf, orgRole, str, pageOf, paged } from '../db';
+import { audit, can, httpUrl, LINK_PROBLEM, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, orgIdsOf, orgRole, str, pageOf, paged, TEN_A_PAGE } from '../db';
 
 export const army = new Hono<AppEnv>();
 
@@ -42,7 +42,9 @@ army.get('/', async (c) => {
         .prepare(`${SELECT} WHERE c.organization_id IN (${orgIds.length ? orgIds.map(() => '?').join(',') : "''"}) OR c.id IN (SELECT campaign_id FROM campaign_assignments WHERE creator_user_id = ?) ORDER BY c.updated_at DESC LIMIT ? OFFSET ?`)
         .bind(...orgIds, user.id, ask.limit, ask.offset)
         .all<CampaignRow>();
-  const mine = await db.prepare('SELECT a.*, u.display_name AS creator_name FROM campaign_assignments a JOIN users u ON u.id = a.creator_user_id WHERE a.creator_user_id = ? ORDER BY a.created_at DESC').bind(user.id).all<AssignmentRow>();
+  // The list screen shows only the offers waiting for an answer (each campaign page shows its own roles), so a creator with years of
+  // campaigns behind them reads only those, never every role they ever held.
+  const mine = await db.prepare("SELECT a.*, u.display_name AS creator_name FROM campaign_assignments a JOIN users u ON u.id = a.creator_user_id WHERE a.creator_user_id = ? AND a.status = 'offered' ORDER BY a.created_at DESC").bind(user.id).all<AssignmentRow>();
   const pg = paged(rows.results, ask);
   return c.json({ page: pg.page, campaigns: pg.items.map(toCampaign), assignments: mine.results.map(toAssignment), staff: can(user, 'talent') });
 });
@@ -80,12 +82,14 @@ army.get('/campaigns/:id', async (c) => {
   if (!row) return c.json({ error: 'not found' }, 404);
   const who = await whoFor(db, user, row);
   if (!who) return c.json({ error: 'you do not have access to that' }, 403);
+  // What happened is a page at a time (prefix `ev`, ten by default, 2026-11-07); it was the newest hundred.
+  const evAsk = pageOf(c, 'ev', TEN_A_PAGE);
   const [dels, vers, fbs, asg, evs] = await Promise.all([
     db.prepare('SELECT * FROM campaign_deliverables WHERE campaign_id = ? ORDER BY created_at').bind(row.id).all<DeliverableRow>(),
     db.prepare('SELECT v.*, u.display_name AS submitted_by_name FROM deliverable_versions v JOIN users u ON u.id = v.submitted_by WHERE v.deliverable_id IN (SELECT id FROM campaign_deliverables WHERE campaign_id = ?) ORDER BY v.version_number').bind(row.id).all<VersionRow>(),
     db.prepare('SELECT f.*, u.display_name AS author_name FROM feedback_items f JOIN users u ON u.id = f.author_user_id WHERE f.deliverable_version_id IN (SELECT v.id FROM deliverable_versions v JOIN campaign_deliverables d ON d.id = v.deliverable_id WHERE d.campaign_id = ?) ORDER BY f.created_at').bind(row.id).all<FeedbackRow>(),
     db.prepare('SELECT a.*, u.display_name AS creator_name FROM campaign_assignments a JOIN users u ON u.id = a.creator_user_id WHERE a.campaign_id = ?').bind(row.id).all<AssignmentRow>(),
-    db.prepare('SELECT e.*, u.display_name AS actor_name FROM campaign_events e LEFT JOIN users u ON u.id = e.actor_user_id WHERE e.campaign_id = ? ORDER BY e.created_at DESC LIMIT 100').bind(row.id).all<{ id: string; actor_name: string | null; event_type: string; note: string; created_at: string }>(),
+    db.prepare('SELECT e.*, u.display_name AS actor_name FROM campaign_events e LEFT JOIN users u ON u.id = e.actor_user_id WHERE e.campaign_id = ? ORDER BY e.created_at DESC, e.id LIMIT ? OFFSET ?').bind(row.id, evAsk.limit, evAsk.offset).all<{ id: string; actor_name: string | null; event_type: string; note: string; created_at: string }>(),
   ]);
   const deliverables: Deliverable[] = dels.results.map((d) => ({
     id: d.id, campaignId: d.campaign_id, title: d.title, format: d.format, platform: d.platform, dueAt: d.due_at, status: d.status, approvedAt: d.approved_at, finalUrl: d.final_url,
@@ -95,8 +99,9 @@ army.get('/campaigns/:id', async (c) => {
   const campaign = toCampaign(row);
   const assignments = asg.results.map(toAssignment).filter((a) => who !== 'creator' || a.creatorId === user.id);
   if (who === 'creator') campaign.budgetAmount = 0;
-  const events: CampaignEvent[] = evs.results.map((e) => ({ id: e.id, actorName: e.actor_name ? nameOf({ display_name: e.actor_name }) : 'System', eventType: e.event_type, note: e.note, createdAt: e.created_at }));
-  return c.json({ campaign, deliverables, assignments, events, who });
+  const evPage = paged(evs.results, evAsk);
+  const events: CampaignEvent[] = evPage.items.map((e) => ({ id: e.id, actorName: e.actor_name ? nameOf({ display_name: e.actor_name }) : 'System', eventType: e.event_type, note: e.note, createdAt: e.created_at }));
+  return c.json({ campaign, deliverables, assignments, events, eventsPage: evPage.page, who });
 });
 
 army.patch('/campaigns/:id', async (c) => {

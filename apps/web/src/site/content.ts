@@ -315,43 +315,6 @@ export function featuresForLifeArea(key: LifeAreaKey): AppModule[] {
   return LIFE_AREA_FEATURES[key].map((k) => MODULE_BY_KEY[k]).filter((m): m is AppModule => Boolean(m && m.key in FEATURES));
 }
 
-/**
- * The eight chapter titles of each of the founder's books (`BOOKS` in shared), from each book's own contents, for the public
- * Books page. The book's own words; nothing here is written for it.
- */
-export const BOOK_CHAPTERS: Readonly<Record<string, readonly string[]>> = {
-  'the-relationship-method': [
-    'The Invisible Weight',
-    'The Bucket Model',
-    'Energy in Storage',
-    'The 7 Relationships Pyramid',
-    'The Spiritual Infrastructure',
-    'The Internal Core',
-    'The Social Ecosystem',
-    'Living in Perpetual Flow',
-  ],
-  'dictionary-of-mistakes-for-creators': [
-    'The Invisible Mistake Loop',
-    'Identity & Authenticity Mistakes',
-    'Communication & Speaking Mistakes',
-    'Consistency, Procrastination & Compounding',
-    'Imposter Syndrome & Self-Doubt',
-    'Creator Relationships & Social Capital',
-    'Attention, Positioning & Growth Mistakes',
-    'Monetization & Leverage Mistakes',
-  ],
-  'dictionary-of-mistakes-for-20s': [
-    'The Invisible Mistake Loop: Why Awareness Isn’t Enough',
-    'Health: The Slow Decay of the Infinite Resource',
-    'Wealth: Leaks, Leads, and Behavioral Levers',
-    'Connections: Relationships as Pattern Problems',
-    'Career: The Transition from Employee to Leader',
-    'Creation: Mistakes in the Creator Economy',
-    'Identity: The Error of the Static Self',
-    'The Anti-Mistake OS: Living by Design',
-  ],
-};
-
 /** Where "Read the course in the app" goes: the Book page inside the app, through sign-in for a visitor. */
 export const BOOK_PAGE = '/book';
 

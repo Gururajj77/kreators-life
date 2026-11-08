@@ -599,7 +599,19 @@ Under the list, open **Add a task**. Type the task, pick which project it holds 
 ## The lists below
 
 - **Not scheduled yet:** tasks with no do date and no due date. They stay out of Tasks until you pick a day. Then they move up.
-- **Done today:** what you ticked, struck through, with the time. Tap one to untick it. That takes back its xp.
+- **Done today:** what you ticked, struck through, with the time. Tap one to untick it. That takes back its xp. It shows ten at a time. Pick 25 or 50 under it, or go to the next page.
+
+## Close the unfinished
+
+Things you left open tend to stay on your mind: a course you stopped, a talk you put off, a choice you keep turning over. Any task can be marked as one of three kinds. Tap the pencil on it and pick under **Unfinished business**:
+
+- **Unfinished:** you started it and did not finish. Do you still want it enough to give it more time?
+- **Unresolved:** it is with other people, like a talk to have or a fight. Have the talk, or decide to let it go.
+- **Undecided:** a choice you keep thinking about. Get what you need to decide, or decide that you cannot yet.
+
+Once it has a kind, the same panel offers three ways to end it, under **End it**. **Do it** puts it on today; tick it when it is done. **Give it a time and date** picks a day and a time, with a reminder. **Let it go** takes a second tap. It leaves your lists and reminders.
+
+To see only these tasks, pick **Bottlenecks** in the **Sort by** row, or tap **Close the unfinished** on Home. Each kind sits in its own coloured box with its question. Under the boxes, **Let go** lists what you let go, with **Bring back**. A kind is a tag like the area, and **By context** puts these tasks after every priority.
 
 ## The month calendar
 
@@ -690,7 +702,19 @@ Under the list, open **Add a task**. Type the task, pick which project it holds 
 ## The lists below
 
 - **Not scheduled yet:** tasks with no do date and no due date. They stay out of Tasks until you pick a day. Then they move up.
-- **Done today:** what you ticked, struck through, with the time. Tap one to untick it. That takes back its xp.
+- **Done today:** what you ticked, struck through, with the time. Tap one to untick it. That takes back its xp. It shows ten at a time. Pick 25 or 50 under it, or go to the next page.
+
+## Close the unfinished
+
+Things you left open tend to stay on your mind: a course you stopped, a talk you put off, a choice you keep turning over. Any task can be marked as one of three kinds. Tap the pencil on it and pick under **Unfinished business**:
+
+- **Unfinished:** you started it and did not finish. Do you still want it enough to give it more time?
+- **Unresolved:** it is with other people, like a talk to have or a fight. Have the talk, or decide to let it go.
+- **Undecided:** a choice you keep thinking about. Get what you need to decide, or decide that you cannot yet.
+
+Once it has a kind, the same panel offers three ways to end it, under **End it**. **Do it** puts it on today; tick it when it is done. **Give it a time and date** picks a day and a time, with a reminder. **Let it go** takes a second tap. It leaves your lists and reminders.
+
+To see only these tasks, pick **Bottlenecks** in the **Sort by** row, or tap **Close the unfinished** on Home. Each kind sits in its own coloured box with its question. Under the boxes, **Let go** lists what you let go, with **Bring back**. A kind is a tag like the area, and **By context** puts these tasks after every priority.
 
 ## The month calendar
 
@@ -780,7 +804,7 @@ In a task''s plan, **Remember** is a tag for things you want to keep in mind.
 
 ## Your Inbox
 
-Every note the app sends you lands in one place. Tap the bell on Home to open it. On a tablet or a laptop, the bell at the top of the sidebar opens it too and shows your unread count. On a phone, that count sits on the **Apps** tab.
+Every note the app sends you lands in one place. Tap the bell on Home to open it. A bell at the top of the app opens it too and shows your unread count. On a phone it sits at the top right, beside the theme button. On a tablet or a laptop it sits at the top of the sidebar.
 
 - **The tabs:** **Everything** holds it all. Each note also sits in one tab of its own: **Replies and mentions**, **Following**, **Reminders**, **Events**, **Friends**, **Work**, **Shop and money** or **School and coaching**. **Agency** shows while you use it.
 - **Tap a note:** it opens the page and the section it is about.
@@ -874,7 +898,7 @@ In a task''s plan, **Remember** is a tag for things you want to keep in mind.
 
 ## Your Inbox
 
-Every note the app sends you lands in one place. Tap the bell on Home to open it. On a tablet or a laptop, the bell at the top of the sidebar opens it too and shows your unread count. On a phone, that count sits on the **Apps** tab.
+Every note the app sends you lands in one place. Tap the bell on Home to open it. A bell at the top of the app opens it too and shows your unread count. On a phone it sits at the top right, beside the theme button. On a tablet or a laptop it sits at the top of the sidebar.
 
 - **The tabs:** **Everything** holds it all. Each note also sits in one tab of its own: **Replies and mentions**, **Following**, **Reminders**, **Events**, **Friends**, **Work**, **Shop and money** or **School and coaching**. **Agency** shows while you use it.
 - **Tap a note:** it opens the page and the section it is about.
@@ -2380,6 +2404,8 @@ Bond is for the people you actually know.
 2. Share it with a friend. They type it under **Add a friend by code** and tap **Send request**.
 3. You say yes, and you are friends.
 
+Meeting in person? Open **My QR code** on your Profile, in Bond or on an event''s page. It shows your @username and friend code. The other person scans it, their page opens with **Add friend**, and you still say yes. If your code has spread too far, tap **Make a new code**, and the old one stops working.
+
 Chats in Bond always run under two made-up names, even between friends. Bond''s own **Channels** are different: small private rooms where names show, and only friends you ask can join.
 
 Under **Introductions**, turn on **Open to introductions** to meet people from events you went to. Your details move only after the other person says yes.
@@ -2390,7 +2416,7 @@ You can block anyone, any time, from a post''s **More** menu or under a line in 
 
 ## Events, runs and circles
 
-- **Party:** meetups, workshops and bigger days. Tap **RSVP**, or **Join the waitlist** when it is full. Anyone can **Host a meetup**.
+- **Party:** meetups, workshops and bigger days. Tap **RSVP**, or **Join the waitlist** when it is full. Anyone can **Host a meetup**. Each public event also has its own page on the site, under **Events**. A friend who is new can join there and make an account in one go. They land on the event, with its chat, Community and Bond one tap away, and a bar invites them to **Finish setting up** when they like.
 - **Kreators Run:** run clubs near you. Join one, or **Start a club** of your own. At the start line, tap **Enter the start code** to log your run. **Discussions** has one thread per run, for its people, open until thirty days after it. On your own, **Log a run or walk** under **My runs** needs no club and no code. It counts as movement and pays nothing.
 - **Circles:** small groups that meet each week, matched by interests. Everyone at the table has a made-up name.
 - **Club:** a membership you apply to. People get in on the quality of their work and how they show up, never on follower counts.
@@ -2471,6 +2497,8 @@ Bond is for the people you actually know.
 2. Share it with a friend. They type it under **Add a friend by code** and tap **Send request**.
 3. You say yes, and you are friends.
 
+Meeting in person? Open **My QR code** on your Profile, in Bond or on an event''s page. It shows your @username and friend code. The other person scans it, their page opens with **Add friend**, and you still say yes. If your code has spread too far, tap **Make a new code**, and the old one stops working.
+
 Chats in Bond always run under two made-up names, even between friends. Bond''s own **Channels** are different: small private rooms where names show, and only friends you ask can join.
 
 Under **Introductions**, turn on **Open to introductions** to meet people from events you went to. Your details move only after the other person says yes.
@@ -2481,7 +2509,7 @@ You can block anyone, any time, from a post''s **More** menu or under a line in 
 
 ## Events, runs and circles
 
-- **Party:** meetups, workshops and bigger days. Tap **RSVP**, or **Join the waitlist** when it is full. Anyone can **Host a meetup**.
+- **Party:** meetups, workshops and bigger days. Tap **RSVP**, or **Join the waitlist** when it is full. Anyone can **Host a meetup**. Each public event also has its own page on the site, under **Events**. A friend who is new can join there and make an account in one go. They land on the event, with its chat, Community and Bond one tap away, and a bar invites them to **Finish setting up** when they like.
 - **Kreators Run:** run clubs near you. Join one, or **Start a club** of your own. At the start line, tap **Enter the start code** to log your run. **Discussions** has one thread per run, for its people, open until thirty days after it. On your own, **Log a run or walk** under **My runs** needs no club and no code. It counts as movement and pays nothing.
 - **Circles:** small groups that meet each week, matched by interests. Everyone at the table has a made-up name.
 - **Club:** a membership you apply to. People get in on the quality of their work and how they show up, never on follower counts.

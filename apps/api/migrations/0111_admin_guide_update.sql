@@ -445,9 +445,19 @@ Riya plans "Edit the brand reel": do date Thursday, due Friday, P1, Financial, 9
 
 - **To remember:** Remember tasks with no day yet. She picks a day to move one into Tasks.
 - **Not scheduled yet:** tasks with no do date and no due date. They never join the main list until she picks a day.
-- **Done today:** what she ticked, struck through with the time. Tapping one unticks it and takes back its xp.
+- **Done today:** what she ticked, struck through with the time. Tapping one unticks it and takes back its xp. It shows ten at a time, with 25 or 50 and the next page under it, so a long day never makes a long page. A pillar''s done tasks and a coach''s view of her day page the same way.
 
-## Step seven: not to do and Habits
+## Step seven: close the unfinished
+
+Riya keeps thinking about a course she stopped and a talk she put off with her sister. Both are tasks already, so she marks them.
+
+1. She taps the pencil on "Finish the colour course" and picks **Unfinished** under **Bottleneck**, then **Save plan**. "Talk to Meera about Diwali" gets **Unresolved**. A third kind, **Undecided**, is for a choice she keeps turning over.
+2. On Home she taps **Close the unfinished**. Daily opens with **Bottlenecks** picked in **Sort by**: only the marked tasks, one coloured box for each kind, each with its one question.
+3. She ends each one from its panel, under **End it**. The course: **Give it a time and date**, Saturday at 10:00, which turns Remember on, so a note comes that day. The talk: **Do it**, which puts it on today. An old guitar plan: **Let it go**, on a second tap. It leaves her lists and reminders and waits under **Let go**, below the boxes, where **Bring back** returns it.
+
+The kind is a tag like the area: it never changes what a tick pays, and **By context** puts these tasks after every priority. Letting go is the archive a task already had, so nothing new is stored but the kind.
+
+## Step eight: not to do and Habits
 
 **Not to do** is the list of things she stays away from, up to seven. Riya adds "No phone in bed" and taps **Add**. Each day she ticks the ones she kept. A kept day pays 5 xp and grows the streak. The three-dot button opens **I slipped today** and **Remove from the list**. A quiet line under the list, **Yesterday: 2 not marked**, marks yesterday in place, and never an earlier day.
 
@@ -459,7 +469,7 @@ Riya plans "Edit the brand reel": do date Thursday, due Friday, P1, Financial, 9
 
 Daily is core and always on. You cannot switch it off for anyone.
 
-1. **Privacy:** her tasks, not to do list and habits are hers. No admin screen lists them.
+1. **Privacy:** her tasks, not to do list, habits and unfinished business are hers. No admin screen lists them.
 2. **Coaches:** a coach sees Daily and streaks only if Riya shares it on their link.
 3. **XP by hand:** in **Admin**, **People**, tap her row. Under **XP**, add or take away xp with a note. The note and your name go to the audit log.
 4. **Reviews:** Reviews starts hidden. Riya unhides it herself under **Apps** (Reflection). **What does this person see?** only allows or blocks an app; it never unhides one for her.
@@ -528,9 +538,19 @@ Riya plans "Edit the brand reel": do date Thursday, due Friday, P1, Financial, 9
 
 - **To remember:** Remember tasks with no day yet. She picks a day to move one into Tasks.
 - **Not scheduled yet:** tasks with no do date and no due date. They never join the main list until she picks a day.
-- **Done today:** what she ticked, struck through with the time. Tapping one unticks it and takes back its xp.
+- **Done today:** what she ticked, struck through with the time. Tapping one unticks it and takes back its xp. It shows ten at a time, with 25 or 50 and the next page under it, so a long day never makes a long page. A pillar''s done tasks and a coach''s view of her day page the same way.
 
-## Step seven: not to do and Habits
+## Step seven: close the unfinished
+
+Riya keeps thinking about a course she stopped and a talk she put off with her sister. Both are tasks already, so she marks them.
+
+1. She taps the pencil on "Finish the colour course" and picks **Unfinished** under **Bottleneck**, then **Save plan**. "Talk to Meera about Diwali" gets **Unresolved**. A third kind, **Undecided**, is for a choice she keeps turning over.
+2. On Home she taps **Close the unfinished**. Daily opens with **Bottlenecks** picked in **Sort by**: only the marked tasks, one coloured box for each kind, each with its one question.
+3. She ends each one from its panel, under **End it**. The course: **Give it a time and date**, Saturday at 10:00, which turns Remember on, so a note comes that day. The talk: **Do it**, which puts it on today. An old guitar plan: **Let it go**, on a second tap. It leaves her lists and reminders and waits under **Let go**, below the boxes, where **Bring back** returns it.
+
+The kind is a tag like the area: it never changes what a tick pays, and **By context** puts these tasks after every priority. Letting go is the archive a task already had, so nothing new is stored but the kind.
+
+## Step eight: not to do and Habits
 
 **Not to do** is the list of things she stays away from, up to seven. Riya adds "No phone in bed" and taps **Add**. Each day she ticks the ones she kept. A kept day pays 5 xp and grows the streak. The three-dot button opens **I slipped today** and **Remove from the list**. A quiet line under the list, **Yesterday: 2 not marked**, marks yesterday in place, and never an earlier day.
 
@@ -542,7 +562,7 @@ Riya plans "Edit the brand reel": do date Thursday, due Friday, P1, Financial, 9
 
 Daily is core and always on. You cannot switch it off for anyone.
 
-1. **Privacy:** her tasks, not to do list and habits are hers. No admin screen lists them.
+1. **Privacy:** her tasks, not to do list, habits and unfinished business are hers. No admin screen lists them.
 2. **Coaches:** a coach sees Daily and streaks only if Riya shares it on their link.
 3. **XP by hand:** in **Admin**, **People**, tap her row. Under **XP**, add or take away xp with a note. The note and your name go to the audit log.
 4. **Reviews:** Reviews starts hidden. Riya unhides it herself under **Apps** (Reflection). **What does this person see?** only allows or blocks an app; it never unhides one for her.

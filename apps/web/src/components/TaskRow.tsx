@@ -56,7 +56,7 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
   const blocks = useTimeBlocks(mondayOf(todayLocal()), Boolean(task.timeBlockId));
   const hasBlock = Boolean(task.timeBlockId && blocks.data?.blocks.some((b) => b.id === task.timeBlockId));
   // A task a life coach added says so; it ticks and pays like any other.
-  const hasMarks = task.remind || Boolean(task.repeat && taskIsHabit(task)) || Boolean(task.fromPillar) || Boolean(task.fromCoach) || Boolean(task.forReview) || Boolean(task.lifeArea) || hasBlock;
+  const hasMarks = task.remind || Boolean(task.repeat && taskIsHabit(task)) || Boolean(task.fromPillar) || Boolean(task.fromCoach) || Boolean(task.forReview) || Boolean(task.lifeArea) || Boolean(task.openKind) || hasBlock;
   const badge =
     wait > 0 ? (
       <IconTag tone="neutral" icon="Hourglass">{`Ready in ${wait} min`}</IconTag>

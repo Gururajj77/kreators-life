@@ -1,8 +1,8 @@
 import { quoteCode, redeem, release, type Quoted } from '../discounts';
 import { Hono } from 'hono';
-import { DEFAULT_ZONE, EVENT_TYPE_META, EVENT_TYPES, type EventRegistration, type PartyEvent } from '@kreators/shared';
+import { ATTENDEE_APPS, DEFAULT_ZONE, EVENT_TYPE_META, EVENT_TYPES, type EventRegistration, type PartyEvent } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { audit, can, inBatches, liveUser, nameOf, newId, noteStmt, notify, nowIso, num, oneOf, str, isClubMember, pageOf, paged, httpUrl } from '../db';
+import { audit, can, inBatches, liveUser, nameOf, newId, noteStmt, notify, nowIso, num, oneOf, str, isClubMember, pageOf, paged, TEN_A_PAGE, parseModules, httpUrl } from '../db';
 import { openTurn, routeTurn, type Share, type Turn } from '../cronTick';
 import { ROUTE_TRIPS, tripsOf } from '../d1Batch';
 import { claimEventCode, codeOf, guestView, hostView, setEventCode } from '../attendee';
@@ -11,7 +11,7 @@ export const party = new Hono<AppEnv>();
 
 interface EventRow { id: string; title: string; description: string; event_type: PartyEvent['eventType']; host_user_id: string; host_name: string; venue: string; online_url: string | null; timezone: string; starts_at: string; ends_at: string; capacity: number | null; price_points: number; visibility: PartyEvent['visibility']; status: PartyEvent['status']; created_at: string; registered: number; waitlisted: number; attendee_xp: number | null }
 /** Seats taken on an event, counting only live accounts: a deleted member holds no seat and is in no count. `ev` is the SQL for the event id. */
-const seatsTaken = (ev: string) => `(SELECT COUNT(*) FROM event_registrations sr JOIN users su ON su.id = sr.user_id WHERE sr.event_id = ${ev} AND sr.status IN ('registered','attended') AND ${liveUser('su')})`;
+export const seatsTaken = (ev: string) => `(SELECT COUNT(*) FROM event_registrations sr JOIN users su ON su.id = sr.user_id WHERE sr.event_id = ${ev} AND sr.status IN ('registered','attended') AND ${liveUser('su')})`;
 const SELECT = `SELECT e.*, u.display_name AS host_name,
   ${seatsTaken('e.id')} AS registered,
   (SELECT COUNT(*) FROM event_registrations r JOIN users ru ON ru.id = r.user_id WHERE r.event_id = e.id AND r.status = 'waitlisted' AND ${liveUser('ru')}) AS waitlisted,
@@ -31,9 +31,12 @@ party.get('/', async (c) => {
   const rows = await db.prepare(`${SELECT} WHERE e.status = 'published' AND e.ends_at >= ? AND (e.visibility = 'public' OR (e.visibility = 'club' AND ?) OR e.host_user_id = ? OR e.id IN (SELECT event_id FROM event_registrations WHERE user_id = ?)) ORDER BY e.starts_at LIMIT ? OFFSET ?`).bind(nowIso(), club ? 1 : 0, user.id, user.id, ask.limit, ask.offset).all<EventRow>();
   const regs = await db.prepare('SELECT r.*, u.display_name AS name FROM event_registrations r JOIN users u ON u.id = r.user_id WHERE r.user_id = ?').bind(user.id).all<RegRow>();
   const mine = new Map(regs.results.map((r) => [r.event_id, toReg(r)]));
-  const hosting = await db.prepare(`${SELECT} WHERE e.host_user_id = ? ORDER BY e.starts_at DESC LIMIT 50`).bind(user.id).all<EventRow>();
+  // What you host, newest first, a page at a time (prefix `h`, 10, 25 or 50, ten by default).
+  const hAsk = pageOf(c, 'h', TEN_A_PAGE);
+  const hostingRows = await db.prepare(`${SELECT} WHERE e.host_user_id = ? ORDER BY e.starts_at DESC, e.id LIMIT ? OFFSET ?`).bind(user.id, hAsk.limit, hAsk.offset).all<EventRow>();
   const pg = paged(rows.results, ask);
-  return c.json({ page: pg.page, events: pg.items.map((e) => toEvent(e, mine.get(e.id) ?? null)), hosting: hosting.results.map((e) => toEvent(e, null)), canHostAll: can(user, 'events'), club });
+  const hosting = paged(hostingRows.results, hAsk);
+  return c.json({ page: pg.page, events: pg.items.map((e) => toEvent(e, mine.get(e.id) ?? null)), hosting: hosting.items.map((e) => toEvent(e, null)), hostingPage: hosting.page, canHostAll: can(user, 'events'), club });
 });
 
 // Anyone can host a meetup; parties, workshops, camps and days are staff events.
@@ -93,6 +96,29 @@ party.get('/events/:id', async (c) => {
     hostCode: host ? await hostView(db, code, row.starts_at, row.ends_at, row.registered) : null,
     attendee: !host && guest && row.status !== 'cancelled' ? await guestView(db, code, user.id, row.starts_at, row.ends_at) : null,
   });
+});
+
+/**
+ * Someone joining an event from its public page (/events/:id, 2026-11-07). An account that has not finished the setup chat is marked as having
+ * come for this event (`users.attendee_event`, migration 0121), so the app lets it into what an attendee needs first, and Party, Community and
+ * Bond are switched on through the ordinary per-person switch (`users.modules`); setup comes later. An account that finished setup only gets
+ * Party switched on, where the event lives. Only a public, published event still to come; a private or Club-only one answers like a missing one.
+ * It takes no seat and moves no points: the RSVP is the ordinary route after it, and a paid ticket is bought there, on the person's own yes.
+ */
+party.post('/events/:id/arrive', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const row = await db.prepare("SELECT id, ends_at FROM events WHERE id = ? AND visibility = 'public' AND status = 'published'").bind(c.req.param('id')).first<{ id: string; ends_at: string }>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  if (new Date(row.ends_at).getTime() < Date.now()) return c.json({ error: 'this event is over' }, 400);
+  const attendee = !user.onboarded_at;
+  const mine = parseModules(user.modules);
+  for (const k of attendee ? ATTENDEE_APPS : (['party'] as const)) mine[k] = true;
+  await db
+    .prepare('UPDATE users SET modules = ?, attendee_event = CASE WHEN onboarded_at IS NULL THEN ? ELSE attendee_event END WHERE id = ?')
+    .bind(JSON.stringify(mine), row.id, user.id)
+    .run();
+  return c.json({ ok: true, attendee, modules: mine });
 });
 
 // RSVP: the seat is taken in a single statement so two people cannot both get the last one.

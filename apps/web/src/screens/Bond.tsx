@@ -24,6 +24,8 @@ import { useCopy } from '../lib/clipboard';
 import { dateTime, longDate } from '../lib/date';
 import { AnimatedIcon } from '../components/AnimatedIcon';
 import { StatusTag } from '../components/StatusTag';
+import { Fold } from '../components/Fold';
+import { FriendQr } from '../components/FriendQr';
 
 
 
@@ -182,6 +184,10 @@ export function Bond() {
             <ErrorLine e={addByCode.isError ? addByCode.error : null} />
           </form>
         </div>
+        {/* Your code as a QR code to show someone in person: their scan opens your page with Add friend (components/FriendQr.tsx). */}
+        <Fold id="bond-qr" title="My QR code" hint={me.data?.user.handle ? `@${me.data.user.handle}` : undefined} className="mb-sm">
+          <FriendQr />
+        </Fold>
         {pending.length > 0 && (
           <ul className="mb-sm flex list-none flex-col gap-xs p-0 m-0" aria-label="Friend requests">
             {pending.map((f) => (

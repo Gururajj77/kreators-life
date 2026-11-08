@@ -10,7 +10,7 @@ import { Sheet } from '../components/Sheet';
 import { ConfirmSpend } from '../components/ConfirmSpend';
 import { api } from '../lib/api';
 import { useAuthed, useRefreshAll } from '../lib/queries';
-import { Pager, usePage } from '../components/Pager';
+import { Pager, TEN_A_PAGE, usePage } from '../components/Pager';
 import { Icon } from '../components/Icon';
 import { Medal } from 'lucide-react';
 import { FIELD } from '../lib/ui';
@@ -206,7 +206,9 @@ function SubmissionRow({ s, rule, reviewer, finance, onDone, showPerson }: { s: 
 export function Win() {
   const pg = usePage();
   const qpg = usePage('q');
-  const q = useAuthed(['win', pg.query, qpg.query], () => api.win(pg.query, qpg.query));
+  // My submissions are a page at a time (prefix `me`, ten by default); the server reads `mepage` beside the queue's.
+  const mpg = usePage('me', TEN_A_PAGE);
+  const q = useAuthed(['win', pg.query, qpg.query, mpg.query], () => api.win(pg.query, `${qpg.query}&${mpg.query}`));
   const [launching, setLaunching] = useState(false);
   const d = q.data;
   const ruleFor = (bountyId: string): Rule | null => d?.bounties.find((b) => b.id === bountyId) ?? null;
@@ -254,7 +256,7 @@ export function Win() {
             <Pager page={d.page} label="rewards" />
           </section>
 
-          {d.mine.length > 0 && (
+          {(d.mine.length > 0 || d.minePage.page > 1) && (
             <section className="mt-lg" aria-labelledby="mine-heading">
               <h2 id="mine-heading" className="text-title2">
                 My submissions
@@ -275,6 +277,7 @@ export function Win() {
                   </Reveal>
                 ))}
               </ul>
+              <Pager page={d.minePage} prefix="me" label="your submissions" only={TEN_A_PAGE} />
             </section>
           )}
 

@@ -113,7 +113,8 @@ export async function listingsFor(db: D1Database, o: Opts): Promise<Listing[]> {
             by: nameOf({ display_name: r.host_name }),
             blurb: r.description,
             facts: [...fact('category', EVENT_TYPE_META[r.event_type]?.name ?? r.event_type), ...fact('when', whenAt(r.starts_at)), ...(r.online_url ? fact('online', 'Online') : fact('place', r.venue)), ...(r.price_points > 0 ? fact('price', `${r.price_points} pts`) : fact('free', 'Free'))],
-            path: `/party/${r.id}`,
+            // A visitor opens the event's landing page, where they can join and sign up in one go; the team's list keeps the app's page.
+            path: o.includeHidden ? `/party/${r.id}` : `/events/${r.id}`,
             featured: r.featured === 1,
             live: r.status === 'published' && r.ends_at >= now,
             endsAt: r.ends_at,

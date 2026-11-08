@@ -47,9 +47,14 @@ for (const [w, h] of [[1280, 900], [1600, 1000], [1100, 800]]) {
       const main = open.previousElementSibling.getBoundingClientRect();
       const arrow = open.getBoundingClientRect();
       if (Math.abs(main.height - arrow.height) > 1 || Math.abs(main.bottom - arrow.bottom) > 1) out.push(`Daily buttons are ${Math.round(main.height)} and ${Math.round(arrow.height)} tall, ending ${Math.round(main.bottom)} and ${Math.round(arrow.bottom)}`);
-      const card = open.closest('.rounded-card').getBoundingClientRect();
-      const gap = card.bottom - arrow.bottom;
+      // Since Close the unfinished (2026-11-07) the card's foot is that button, right under the two; the group sits at the foot.
+      const cardEl = open.closest('.rounded-card');
+      const card = cardEl.getBoundingClientRect();
+      const close = cardEl.querySelector('a[href*="taskSort=open"]');
+      const last = close ? close.getBoundingClientRect() : arrow;
+      const gap = card.bottom - last.bottom;
       if (gap < 8 || gap > 20) out.push(`Daily buttons sit ${Math.round(gap)}px above the foot of their card`);
+      if (close && (last.top - arrow.bottom < 4 || last.top - arrow.bottom > 12)) out.push(`Close the unfinished sits ${Math.round(last.top - arrow.bottom)}px under the Daily buttons`);
     }
     return out;
   });

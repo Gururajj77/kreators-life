@@ -1,5 +1,5 @@
 import { LOCALE, RELATIONSHIP_BY_KEY } from './core.ts';
-import type { RelationshipKey } from './core.ts';
+import type { PageSize, RelationshipKey } from './core.ts';
 import type { LifeAreaKey } from './life.ts';
 import { LIFE_AREA_ORDER, LIFE_AREAS } from './life.ts';
 import { blockDayMinutes, blockOfTask, blocksInDay, slotOrder, suggestBlock, TASK_GROUP_NONE } from './timeBlocks.ts';
@@ -161,6 +161,8 @@ export interface MonthTask {
   priority: Priority | null;
   /** The area of life it carries, or null for none. */
   lifeArea: LifeAreaKey | null;
+  /** The kind of open business it carries, or null (a tag like any other). */
+  openKind?: OpenKind | null;
   /** HH:MM, when the task has a time. */
   time: string | null;
   estimateMin: number | null;
@@ -216,12 +218,40 @@ export function parsePriority(raw: unknown): Priority | null {
 }
 export const priorityTag = (p: Priority | null): string => (p === null ? '' : `P${p}`);
 
+/**
+ * Close the unfinished (2026-11-07): a task can carry one kind of open business (`nodes.open_kind`, migration 0120), in this one order.
+ * Their words live in the leaf `@kreators/shared/openBusiness`; here only the keys, so a sort and the server can read them.
+ */
+export const OPEN_KINDS = ['unfinished', 'unresolved', 'undecided'] as const;
+export type OpenKind = (typeof OPEN_KINDS)[number];
+const OPEN_KIND_BY_KEY: Record<string, OpenKind> = Object.assign(Object.create(null) as Record<string, OpenKind>, { unfinished: 'unfinished', unresolved: 'unresolved', undecided: 'undecided' });
+/** The one reader: a key in any case, else null (null, '' and "none" clear it). A caller that must refuse an unknown value checks `openKindProblem` first. */
+export function parseOpenKind(v: unknown): OpenKind | null {
+  return typeof v === 'string' ? (OPEN_KIND_BY_KEY[v.trim().toLowerCase()] ?? null) : null;
+}
+export const OPEN_KIND_PROBLEM = 'Pick unfinished, unresolved or undecided, or none.';
+export function openKindProblem(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'string' && (!v.trim() || v.trim().toLowerCase() === 'none')) return null;
+  return parseOpenKind(v) ? null : OPEN_KIND_PROBLEM;
+}
+/** Where a kind comes in the one order; an ordinary task is 0, so open business sorts after it. */
+export const openRank = (k: OpenKind | null | undefined): number => (k ? OPEN_KINDS.indexOf(k) + 1 : 0);
+/** The tag's word: the key with a capital. */
+export const openTag = (k: OpenKind): string => `${k[0]!.toUpperCase()}${k.slice(1)}`;
+/** The open-business cut Daily sends (`?open=`): any of the three kinds, or one. */
+export const isOpenFilter = (v: unknown): v is OpenKind | 'any' => v === 'any' || (typeof v === 'string' && (OPEN_KINDS as readonly string[]).includes(v));
+
+/** Done tasks are paged (2026-11-07, the founder: "this can pile up with time"): 10, 25 or 50 a page, ten by default. */
+export const DONE_PAGE_SIZES = [10, 25, 50] as const;
+export const DONE_PAGE_SIZE: PageSize = 10;
+
 /** How a list of tasks can be ordered. */
 export const TASK_SORTS = [
   { key: 'day', name: 'Day', blurb: 'The day to do it first, then priority.' },
   { key: 'priority', name: 'Priority', blurb: 'P0 first, then the day.' },
   { key: 'due', name: 'Due date', blurb: 'The soonest deadline first; no deadline last.' },
-  { key: 'context', name: 'By context', blurb: 'P0 first; inside each priority, the pillar your kind of day leads with.' },
+  { key: 'context', name: 'By context', blurb: 'P0 first; inside each priority, the pillar your kind of day leads with. Open business comes last, by kind.' },
   { key: 'block', name: 'By time block', blurb: 'Grouped by the blocks of your day; inside each, P0 first, then area, then day.' },
   { key: 'area', name: 'By area', blurb: 'Grouped by area of life; inside each, P0 first, then the block, then day.' },
 ] as const;
@@ -258,9 +288,9 @@ const areaRank = (t: { lifeArea?: LifeAreaKey | null }): number => (t.lifeArea ?
  * The one ordering for a list of tasks. Stable: ties keep the order given. A task with no priority sorts after P3.
  * `context` ('By context'): priority first (P0, P1, P2, P3, then none), so a P0 always stays above everything else; inside one
  * priority the day's lead pillar comes first, then its second, then the rest, each in the Day order. Without a context it is the
- * priority order.
+ * priority order. Tasks that carry open business (`openKind`) come after all of that, grouped by kind in `OPEN_KINDS` order.
  */
-export function sortTasks<T extends { doDate: string | null; dueDate: string | null; dueTime: string | null; priority: Priority | null; relationship?: RelationshipKey; timeBlockId?: string | null; lifeArea?: LifeAreaKey | null }>(
+export function sortTasks<T extends { doDate: string | null; dueDate: string | null; dueTime: string | null; priority: Priority | null; relationship?: RelationshipKey; timeBlockId?: string | null; lifeArea?: LifeAreaKey | null; openKind?: OpenKind | null }>(
   list: T[],
   by: TaskSort,
   context?: TaskContext | null,
@@ -274,7 +304,9 @@ export function sortTasks<T extends { doDate: string | null; dueDate: string | n
   const cmp = (a: T, b: T): number => {
     if (by === 'priority') return pri(a) - pri(b) || day(a).localeCompare(day(b)) || time(a).localeCompare(time(b));
     if (by === 'due') return due(a).localeCompare(due(b)) || pri(a) - pri(b) || day(a).localeCompare(day(b));
-    if (by === 'context') return pri(a) - pri(b) || rank(a) - rank(b) || day(a).localeCompare(day(b)) || time(a).localeCompare(time(b));
+    // Open business is its own group after every priority, its kinds in their one order (Unfinished, Unresolved, Undecided),
+    // each in the same context order inside.
+    if (by === 'context') return openRank(a.openKind) - openRank(b.openKind) || pri(a) - pri(b) || rank(a) - rank(b) || day(a).localeCompare(day(b)) || time(a).localeCompare(time(b));
     // Grouped views: the group first, then the priority is balanced first inside it, and the day after.
     if (by === 'block') return block(a) - block(b) || pri(a) - pri(b) || areaRank(a) - areaRank(b) || day(a).localeCompare(day(b)) || time(a).localeCompare(time(b));
     if (by === 'area') return areaRank(a) - areaRank(b) || pri(a) - pri(b) || block(a) - block(b) || day(a).localeCompare(day(b)) || time(a).localeCompare(time(b));

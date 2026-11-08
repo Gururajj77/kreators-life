@@ -24,21 +24,7 @@ import { FractalGlass } from '../components/fx/FractalGlass';
 import { PeekGuides } from './PeekGuides';
 import { evenGrid, evenTile } from '../lib/bento';
 import { lazyNamed } from '../lib/lazy';
-
-/** A gentle lift into place the first time a section scrolls into view. The content is always visible (opacity
- * never hides it); only the small upward delta animates, so a full-page shot taken before the observer fires never
- * shows a blank band, and `prefers-reduced-motion` drops the lift and renders straight in its resting place. */
-export function useRise() {
-  const reduce = useReducedMotion();
-  return reduce
-    ? { initial: { opacity: 1, y: 0 } }
-    : {
-        initial: { opacity: 1, y: 20 },
-        whileInView: { y: 0 },
-        viewport: { once: true, margin: '-60px' },
-        transition: { duration: 0.5 },
-      };
-}
+import { useRise } from './useRise';
 
 /** The seven pillars stacked, each with its character on top: red at the bottom, violet at the top. */
 export function Tower() {

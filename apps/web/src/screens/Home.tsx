@@ -2,11 +2,10 @@ import { QuoteOfTheDay } from '../components/QuoteOfTheDay';
 import { RemindersSection } from '../components/Reminders';
 import { badgeRoleOf, greetingFor, knowledgeKindIcon, LIFE_AREAS, MODULE_BY_KEY, MODULE_GROUP_ACCENT, MODULE_GROUPS, money, MOODS, RELATIONSHIP_BY_KEY, STRESS_LEVELS, type HomeResponse, type ModuleGroup, type RelationshipKey, formatCount } from '@kreators/shared';
 import type { CSSProperties, ReactNode } from 'react';
-import { Suspense, useCallback, useEffect, useId, useRef, useState } from 'react';
-import gsap from 'gsap';
+import { Suspense, useCallback, useEffect, useId, useState } from 'react';
 import { Link } from 'react-router';
 import type { LucideIcon } from 'lucide-react';
-import { ArrowDownLeft, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, CalendarClock, CalendarDays, Check, Clock, Coins, Compass, EyeOff, FaceSlightlySmiling, Flame, Footprints, HandCoins, HeartPulse, MessageCircle, MessageCirclePlus, NotebookPen, PartyPopper, Pencil, Receipt, Sparkles, Star, UserRound, Users, UsersRound } from 'lucide-react';
+import { ArrowDownLeft, ArrowDownRight, ArrowRight, ArrowUpRight, CalendarClock, CalendarDays, Check, Clock, Coins, Compass, EyeOff, FaceSlightlySmiling, Flame, Footprints, HandCoins, HeartPulse, MessageCircle, MessageCirclePlus, NotebookPen, PartyPopper, Pencil, Receipt, Sparkles, Star, UserRound, Users, UsersRound } from 'lucide-react';
 import { AppIcon } from '../components/AppIcon';
 import { AppTile } from '../components/AppTile';
 import { Icon } from '../components/Icon';
@@ -171,26 +170,6 @@ export function Home() {
   const keepTile = keepForApps(modules);
   const user = me.data?.user;
   const firstName = user?.displayName?.split(' ')[0] ?? '';
-  // The bell swings once when the unread count goes up while Home is open (never on the first load); still under reduced motion.
-  const bell = useRef<HTMLSpanElement>(null);
-  const lastUnread = useRef<number | null>(null);
-  const unread = d?.unread;
-  useEffect(() => {
-    if (unread === undefined) return;
-    const before = lastUnread.current;
-    lastUnread.current = unread;
-    const el = bell.current;
-    if (before === null || unread <= before || !el) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      gsap.set(el, { rotation: 0 });
-      return;
-    }
-    const tl = gsap.timeline();
-    tl.set(el, { transformOrigin: '50% 0%' }).to(el, { keyframes: { rotation: [0, 18, -14, 9, -5, 0] }, duration: 0.7, ease: 'power1.out' });
-    return () => {
-      tl.kill();
-    };
-  }, [unread]);
   const identity = me.data?.identity ?? null;
   const myPage = user ? (user.handle ? `/u/${user.handle}` : `/people/${user.id}`) : '/profile';
   const moodToday = d ? (MOODS.find((m) => m.value === d.trackers.mood.today) ?? null) : null;
@@ -205,17 +184,13 @@ export function Home() {
             <Icon icon={CalendarDays} size={16} className="mr-xs inline-block align-[-3px]" />
             {prettyDate(date)}, {greetingFor(hour).toLowerCase()}
           </p>
-          <div className="order-1 flex items-center justify-between gap-xs md:order-2 md:shrink-0 md:justify-end">
+          {/* My page alone (2026-11-07, the founder): the Inbox bell lives in the phone's top bar and the sidebar, so Home no longer
+              carries a second one with the same count. */}
+          <div className="order-1 flex items-center gap-xs md:order-2 md:shrink-0 md:justify-end">
             <Link to={myPage} className="toy inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-white/15 px-sm text-subhead font-medium text-on-fill">
               <Icon icon={UserRound} size={18} />
               My page
             </Link>
-          <Link to="/inbox" aria-label={d && d.unread > 0 ? `Inbox, ${d.unread} unread` : 'Inbox'} className="toy relative flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-white/15 text-on-fill">
-            <span ref={bell} className="inline-flex">
-              <Icon icon={Bell} size={20} />
-            </span>
-            {d && d.unread > 0 && <span className="absolute -top-[2px] -right-[2px] flex min-w-[18px] items-center justify-center rounded-pill bg-r2 px-xs text-caption2 font-semibold leading-[18px] text-on-fill">{d.unread > 9 ? '9+' : d.unread}</span>}
-          </Link>
           </div>
         </div>
         <div className="relative mt-sm flex items-center gap-sm">
@@ -416,6 +391,21 @@ export function Home() {
                     <Icon icon={ArrowUpRight} size={20} />
                   </Link>
                 </div>
+                {/* Close the unfinished (2026-11-07, the founder's ask): Daily with its Bottlenecks view on, the tasks with a kind in
+                    their three boxes. The arrow's own look beside it, so the card keeps one solid action; the count says how much is open.
+                    Shown only while a bottleneck is open (the founder, 2026-11-07): the count is the view's own, so it comes back with the
+                    first task given a kind, the next time Home reads (a task write marks Home stale). */}
+                {d.today.openBusiness ? (
+                  <Link
+                    to="/today?taskSort=open#tasks-heading"
+                    aria-label={`Close the unfinished: ${d.today.openBusiness} open`}
+                    className="toy mt-xs inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill bg-ink-fixed/20 px-md text-headline text-on-fill"
+                  >
+                    {/* The card's own darker wash (the three boxes, the nudge), so its white words keep AA on the green (four-check: 3.4:1 on white/25). */}
+                    Close the unfinished
+                    <span className="text-subhead">{d.today.openBusiness} open</span>
+                  </Link>
+                ) : null}
               </div>
             </div>
           </Section>

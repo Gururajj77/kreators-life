@@ -394,7 +394,8 @@ run.get('/collabs', async (c) => {
   const user = c.get('user');
   const now = nowIso();
   const staff = can(user, 'events');
-  const ask = pageOf(c);
+  // Run's collabs page on `c`, the applications on `a` (2026-11-07: the collabs read `page`, so Next never moved).
+  const ask = pageOf(c, 'c');
   const appAsk = pageOf(c, 'a');
   const [collabs, myClubs, posterApps] = await Promise.all([
     db.prepare(`${COLLAB} WHERE (c.status = 'open' AND c.ends_at >= ?) OR c.created_by = ? ORDER BY c.status = 'open' DESC, c.ends_at LIMIT ? OFFSET ?`).bind(now, user.id, ask.limit, ask.offset).all<CollabRow>(),
@@ -586,7 +587,7 @@ const LINE_SQL = 'SELECT m.seq, m.id, m.user_id, m.body, m.anonymous, m.reply_to
 run.get('/talk', async (c) => {
   const user = c.get('user');
   const now = nowIso();
-  const ask = pageOf(c);
+  const ask = pageOf(c, 'rt');
   const since = new Date(Date.now() - RUN_TALK_DAYS_AFTER * 86_400_000).toISOString();
   const rows = await c.env.DB.prepare(`${TALK_LIST} WHERE r.status != 'cancelled' AND r.ends_at >= ?2 AND ${TALK_PERSON} ORDER BY (last_line_at IS NULL), last_line_at DESC, r.starts_at, r.id LIMIT ?3 OFFSET ?4`)
     .bind(user.id, since, ask.limit, ask.offset)

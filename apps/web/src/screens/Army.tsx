@@ -13,7 +13,7 @@ import { ConfirmDelete } from '../components/ConfirmDelete';
 import { Toggle } from '../components/Toggle';
 import { api, errorText } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
-import { Pager, usePage } from '../components/Pager';
+import { Pager, TEN_A_PAGE, usePage } from '../components/Pager';
 import { MediaSection } from '../components/MediaSection';
 import { FIELD } from '../lib/ui';
 import { StatusTag } from '../components/StatusTag';
@@ -414,7 +414,9 @@ function NewCampaignSheet({ open, orgs, staff, onClose, onCreated }: { open: boo
 export function Campaign() {
   const { id = '' } = useParams();
   const me = useMe();
-  const q = useAuthed(['campaign', id], () => api.campaign(id));
+  // What happened is a page at a time (prefix `ev`, ten by default).
+  const evp = usePage('ev', TEN_A_PAGE);
+  const q = useAuthed(['campaign', id, evp.query], () => api.campaign(id, evp.query));
   const d = q.data;
   const c = d?.campaign;
   const who = d?.who;
@@ -620,7 +622,7 @@ export function Campaign() {
         <h2 id="log-heading" className="text-title2">
           What happened
         </h2>
-        {d.events.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">Quiet so far.</p>}
+        {d.events.length === 0 && d.eventsPage.page === 1 && <p className="mt-sm m-0 text-subhead text-ink-soft">Quiet so far.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {d.events.map((e) => (
             <li key={e.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
@@ -634,6 +636,7 @@ export function Campaign() {
             </li>
           ))}
         </ul>
+        <Pager page={d.eventsPage} prefix="ev" label="what happened" only={TEN_A_PAGE} />
       </section>
 
       <ConfirmDelete

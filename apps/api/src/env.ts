@@ -122,6 +122,8 @@ export interface UserRow {
   stats_at?: string | null;
   last_checkin: string | null;
   onboarded_at: string | null;
+  /** The Party event joined from its public page before setup was done (migration 0121). */
+  attendee_event?: string | null;
   created_at: string;
 }
 

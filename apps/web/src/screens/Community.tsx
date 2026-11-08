@@ -1,7 +1,7 @@
 import { canModerate, canMute, communityRankOf, isStaffFor, FEED_FILTER_META, FEED_FILTERS, FEED_SORT_META, FEED_SORTS, MAX_PINNED, POST_CATEGORIES, REACTION_META, REACTIONS, SOCIAL_REWARDS, type CommunityPost, type CommunityReply, type FeedFilter, type FeedSort, type ReactionCounts, type ReactionKind, DEFAULT_PAGE_SIZE, pageQuery, type PageSize } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Inert } from '../components/Inert';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Button } from '../components/Button';
 import { useCelebrate } from '../components/Celebration';
@@ -403,7 +403,22 @@ function PostSheet({ open, product, onClose, onSaved }: { open: boolean; product
 /** `onAsk` hands a block up to the feed's own ask sheet, which sits beside this one rather than inside it. */
 function RepliesSheet({ post, onClose, onSaved, onAsk }: { post: CommunityPost | null; onClose: () => void; onSaved: (xp: number) => void; onAsk: (a: Ask) => void }) {
   const [rp, setRp] = useState<{ page: number; size: PageSize }>({ page: 1, size: DEFAULT_PAGE_SIZE });
-  const q = useAuthed(['replies', post?.id ?? '', rp.page, rp.size], () => api.replies(post!.id, pageQuery(rp.page, rp.size)), Boolean(post));
+  // A note about one reply (`#reply-<id>`) asks for the page that holds it, once; after that the pager is the person's.
+  const [at, setAt] = useState(() => (typeof window !== 'undefined' && window.location.hash.startsWith('#reply-') ? window.location.hash.slice(7) : ''));
+  const q = useAuthed(['replies', post?.id ?? '', rp.page, rp.size, at], () => api.replies(post!.id, `${pageQuery(rp.page, rp.size)}${at ? `&at=${encodeURIComponent(at)}` : ''}`), Boolean(post));
+  const landed = at ? q.data?.page.page : undefined;
+  useEffect(() => {
+    if (landed === undefined) return;
+    setRp((p) => (p.page === landed ? p : { ...p, page: landed }));
+    setAt('');
+  }, [landed]);
+  // Another post opens on its first page; a page that came back empty (a reply blocked or gone) steps back one.
+  const postId = post?.id ?? '';
+  useEffect(() => setRp((p) => (p.page === 1 ? p : { ...p, page: 1 })), [postId]);
+  const emptyPage = q.data?.page.empty === true;
+  useEffect(() => {
+    if (emptyPage) setRp((p) => (p.page > 1 ? { ...p, page: p.page - 1 } : p));
+  }, [emptyPage]);
   const [text, setText] = useState('');
   const [anonymous, setAnonymous] = useState(false);
   // The reply being answered, or null for a reply straight to the post.

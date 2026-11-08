@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { DAILY_GROUPED_MAX, dayTypeOf, slotIndexOfTask, slotOrder, PLAN_DEFAULT_MINUTES, startingTemplateFor, weekDates, type DayPlan, type DayTypeResponse, type TemplateSlot, MONTH_RE, MONTH_TASKS_MAX, monthShift, repeatLabel, type MonthProject, type MonthTask, type TodayMonthResponse, PLAN_DAY_MINUTES, planWeek, type PlanTask, MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, notToDoStreak, notToDoWeek, POINTS, RELATIONSHIPS, sparkFor, XP, zonedToUtc, type CheckinResponse, type NotToDo, type NotToDoStatus, type RelationshipKey, TODAY_AGENCY_MAX, type TodayAgency, type TodayEvent, type TodayResponse, type TodayWaitingResponse, parseLifeArea, isTaskSort } from '@kreators/shared';
+import { DAILY_GROUPED_MAX, dayTypeOf, slotIndexOfTask, slotOrder, PLAN_DEFAULT_MINUTES, startingTemplateFor, weekDates, type DayPlan, type DayTypeResponse, type TemplateSlot, MONTH_RE, MONTH_TASKS_MAX, monthShift, repeatLabel, type MonthProject, type MonthTask, type TodayMonthResponse, PLAN_DAY_MINUTES, planWeek, type PlanTask, MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, notToDoStreak, notToDoWeek, POINTS, RELATIONSHIPS, sparkFor, XP, zonedToUtc, type CheckinResponse, type NotToDo, type NotToDoStatus, type RelationshipKey, TODAY_AGENCY_MAX, type TodayAgency, type TodayEvent, type TodayResponse, type TodayWaitingResponse, parseLifeArea, isTaskSort, isOpenFilter, DONE_PAGE_SIZE, DONE_PAGE_SIZES, OPEN_KINDS, type DoneTasksResponse } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { resolveAccess } from '../access';
 import { DATE_RE, dateNearToday, getUser, newId, noteStmt, nowIso, pageOf, paged, shiftDate, streakNow, toNode, type NodeRow, taskGate, withSubtasks } from '../db';
@@ -180,13 +180,20 @@ function blockFilterSql(block: string | null, slots: readonly TemplateSlot[], pr
  */
 const openTasksWhere = (cut: string) =>
   `n.user_id = ?1 AND n.kind = 'task' AND n.status = 'active' AND COALESCE(n.do_date, n.due_date) IS NOT NULL AND COALESCE(n.do_date, n.due_date) <= ?2${cut}`;
+/** A task's open business as a rank, the order `openRank` gives in shared: none 0, then Unfinished, Unresolved, Undecided. */
+const OPEN_RANK_SQL = `CASE n.open_kind WHEN 'unfinished' THEN 1 WHEN 'unresolved' THEN 2 WHEN 'undecided' THEN 3 ELSE 0 END`;
+/** The open-business cut (`?open=`, Daily's Unfinished business view) as SQL: any of the three kinds, or one. The value is read only
+ *  through `isOpenFilter`, so it is one of four fixed words, written into the query as text. */
+const openFilterSql = (open: string | null, col: string): string => (open === 'any' ? ` AND ${col} IN (${OPEN_KINDS.map((k) => `'${k}'`).join(', ')})` : open ? ` AND ${col} = '${open}'` : '');
+
 /**
  * Which come first, the same order as the sort the person picked (`sortTasks`), so the six shown are the top six of it: ?3 = 0 by day;
  * ?3 = 1 by priority, then the lead pillar ?4 and its second ?5 (empty for Priority, so only the priority counts); ?3 = 2 by due date (none
  * last), then priority. With no sort picked, a plain day is by day and a day whose template was picked by context, so a P0 is never left out
  * behind a P2. The six shown and the rest under "N more waiting" (GET /today/waiting) read the same order, so the rest start where the six end.
  */
-const OPEN_TASKS_ORDER = `ORDER BY CASE WHEN ?3 = 2 THEN COALESCE(n.due_date, '9999-99-99') ELSE '' END ASC,
+const OPEN_TASKS_ORDER = `ORDER BY CASE WHEN ?3 = 1 AND ?4 != '' THEN ${OPEN_RANK_SQL} ELSE 0 END ASC,
+         CASE WHEN ?3 = 2 THEN COALESCE(n.due_date, '9999-99-99') ELSE '' END ASC,
          CASE WHEN ?3 = 0 THEN 0 ELSE COALESCE(n.priority, 4) END ASC,
          CASE WHEN ?3 = 0 THEN 0 WHEN n.relationship = ?4 THEN 0 WHEN n.relationship = ?5 THEN 1 ELSE 2 END ASC,
          COALESCE(n.do_date, n.due_date) ASC, CASE WHEN n.due_time IS NULL THEN 1 ELSE 0 END, n.due_time ASC, n.created_at ASC`;
@@ -215,6 +222,10 @@ today.get('/', async (c) => {
   const areaAsk = c.req.query('area');
   const area = areaAsk === 'none' ? 'none' : parseLifeArea(areaAsk);
   const areaSql = (col: string) => (area === 'none' ? ` AND ${col} IS NULL` : area ? ` AND ${col} = '${area}'` : '');
+  // The open-business cut (2026-11-07, Daily's Unfinished business view): any of the three kinds, or one, cut like the area.
+  const openAsk = c.req.query('open');
+  const open = isOpenFilter(openAsk) ? openAsk : null;
+  const openSql = (col: string) => openFilterSql(open, col);
 
   // The day's plan (its day template, the kind of day): read first, since the six shown and the `?block=` cut depend on it.
   const grouped = c.req.query('group') === '1';
@@ -227,7 +238,7 @@ today.get('/', async (c) => {
   const useContext = contextApplies(day, blocking.defaultId) ? 1 : 0;
   const shownMax = grouped ? DAILY_GROUPED_MAX : 6;
   const order = openOrderArgs(c.req.query('sort'), grouped, useContext, day);
-  const openWhere = openTasksWhere(`${areaSql('n.life_area')}${blockSql('n.')}`);
+  const openWhere = openTasksWhere(`${areaSql('n.life_area')}${openSql('n.open_kind')}${blockSql('n.')}`);
 
   // None of these reads waits on another, so they run together: one round trip of waiting instead of a dozen.
   const [dayStart, dayEnd] = dayBounds(date, user.timezone);
@@ -268,20 +279,21 @@ today.get('/', async (c) => {
     // The main list is only what has a day that has come. A task with no date at all (no do date and no due date) waits in the not scheduled list below it until either is picked.
     db
       .prepare(
-        `SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND do_date IS NULL AND due_date IS NULL${areaSql('life_area')}${blockSql('')}
+        `SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND do_date IS NULL AND due_date IS NULL${areaSql('life_area')}${openSql('open_kind')}${blockSql('')}
        ORDER BY remind DESC, created_at DESC LIMIT 60`,
       )
       .bind(user.id)
       .all<NodeRow>(),
     db
-      .prepare(`SELECT COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND do_date IS NULL AND due_date IS NULL${areaSql('life_area')}${blockSql('')}`)
+      .prepare(`SELECT COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND do_date IS NULL AND due_date IS NULL${areaSql('life_area')}${openSql('open_kind')}${blockSql('')}`)
       .bind(user.id)
       .first<{ n: number }>(),
-    // What was ticked today stays in sight under the tasks still waiting, so a tick can be seen and undone.
+    // What was ticked today stays in sight under the tasks still waiting, so a tick can be seen and undone: the first page, ten, with the
+    // true count beside it (2026-11-07); the next pages come from GET /today/done.
     db
-      .prepare("SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? AND completed_at < ? ORDER BY completed_at DESC LIMIT 20")
-      .bind(user.id, dayStart, dayEnd)
-      .all<NodeRow>(),
+      .prepare("SELECT *, COUNT(*) OVER () AS done_total FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? AND completed_at < ? ORDER BY completed_at DESC, id ASC LIMIT ?")
+      .bind(user.id, dayStart, dayEnd, DONE_PAGE_SIZE)
+      .all<NodeRow & { done_total: number }>(),
     db
       .prepare("SELECT COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ?")
       .bind(user.id, new Date(Date.now() - 86_400_000).toISOString())
@@ -295,8 +307,15 @@ today.get('/', async (c) => {
     notToDoList(db, user.id, date),
     eventsOnDay(db, user.id, dayStart, dayEnd),
     resolveAccess(db, user).then((r) => r.access),
-    // Whether any of the person's open tasks carries an area, so Daily shows the Area filter only once it means something.
-    db.prepare("SELECT 1 AS one FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND life_area IS NOT NULL LIMIT 1").bind(user.id).first<{ one: number }>(),
+    // Whether any of the person's open tasks carries an area, so Daily shows the Area filter only once it means something; and how many
+    // tasks were let go (archived, 2026-11-07), so the Unfinished business view offers its Let go list only when there is one.
+    db
+      .prepare(
+        `SELECT EXISTS (SELECT 1 FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND life_area IS NOT NULL) AS one,
+        (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'archived') AS let_go`,
+      )
+      .bind(user.id)
+      .first<{ one: number; let_go: number }>(),
     // Every open task that opens on the day and has a block or a time, summed by block and time, so "Your day" counts a slot's room from
     // all of them, never from the six shown or the Area filter's cut.
     db
@@ -337,8 +356,11 @@ today.get('/', async (c) => {
     tasksTotal: Math.max(tasks.length, Number(openCount?.n ?? 0)),
     tasksLate: Number(openCount?.late ?? 0),
     area: area ?? null,
-    areasUsed: Boolean(areasUsedRow),
+    areasUsed: Boolean(areasUsedRow?.one),
     done: shown.slice(tasks.length + back.results.length),
+    doneTotal: Number(doneToday.results[0]?.done_total ?? 0),
+    open,
+    letGoTotal: Number(areasUsedRow?.let_go ?? 0),
     doneRecently: recent?.n ?? 0,
     timePlan: { plannedMin: plan?.planned ?? 0, doneMin: plan?.done ?? 0, timed: plan?.timed ?? 0 },
     spark: {
@@ -367,7 +389,8 @@ today.get('/waiting', async (c) => {
   const date = dateParam(c.req.query('date'));
   const areaAsk = c.req.query('area');
   const area = areaAsk === 'none' ? 'none' : parseLifeArea(areaAsk);
-  const cut = area === 'none' ? ' AND n.life_area IS NULL' : area ? ` AND n.life_area = '${area}'` : '';
+  const openAsk = c.req.query('open');
+  const cut = (area === 'none' ? ' AND n.life_area IS NULL' : area ? ` AND n.life_area = '${area}'` : '') + openFilterSql(isOpenFilter(openAsk) ? openAsk : null, 'n.open_kind');
   const grouped = c.req.query('group') === '1';
   const blocking = await loadBlocking(db, user.id, [date]);
   const day = dayPlan(blocking, date);
@@ -382,6 +405,49 @@ today.get('/waiting', async (c) => {
   const { items, page } = paged(rows.results, ask);
   const gate = await taskGate(db, user.id);
   const res: TodayWaitingResponse = { tasks: await withSubtasks(db, user.id, items.map((t) => toNode(t, gate))), page };
+  return c.json(res);
+});
+
+// Done today, a page at a time (2026-11-07, the founder: "this can pile up with time"): the tasks ticked on the person's day in their zone,
+// newest first, 10, 25 or 50 a page, ten by default (prefix `d`), and how many in all. GET /today carries the first page; this reads the rest.
+today.get('/done', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const date = dateParam(c.req.query('date'));
+  const [dayStart, dayEnd] = dayBounds(date, user.timezone);
+  const ask = pageOf(c, 'd', { sizes: DONE_PAGE_SIZES, fallback: DONE_PAGE_SIZE });
+  // Daily's Area filter and its Unfinished business view cut this list too, so the count beside it is the count of what the pages hold (2026-11-07, four-check).
+  // Both keys come from fixed lists (parseLifeArea, isOpenFilter), so they are written into the query as text, never a typed value.
+  const areaAsk = c.req.query('area');
+  const area = areaAsk === 'none' ? 'none' : parseLifeArea(areaAsk);
+  const openAsk = c.req.query('open');
+  const cut = (area === 'none' ? ' AND life_area IS NULL' : area ? ` AND life_area = '${area}'` : '') + openFilterSql(isOpenFilter(openAsk) ? openAsk : null, 'open_kind');
+  const [gate, rows, total] = await Promise.all([
+    taskGate(db, user.id),
+    db
+      .prepare(`SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? AND completed_at < ?${cut} ORDER BY completed_at DESC, id ASC LIMIT ? OFFSET ?`)
+      .bind(user.id, dayStart, dayEnd, ask.limit, ask.offset)
+      .all<NodeRow>(),
+    db.prepare(`SELECT COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? AND completed_at < ?${cut}`).bind(user.id, dayStart, dayEnd).first<{ n: number }>(),
+  ]);
+  const { items, page } = paged(rows.results, ask);
+  const res: DoneTasksResponse = { tasks: await withSubtasks(db, user.id, items.map((t) => toNode(t, gate))), page, total: total?.n ?? 0 };
+  return c.json(res);
+});
+
+// What was let go (2026-11-07, Close the unfinished): the person's archived tasks, newest first, a page at a time (prefix `lg`, 10, 25 or 50),
+// with how many in all, so the Unfinished business view can bring one back through the ordinary PATCH /nodes/:id. Owner only; writes nothing.
+today.get('/let-go', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const ask = pageOf(c, 'lg', { sizes: DONE_PAGE_SIZES, fallback: DONE_PAGE_SIZE });
+  const [gate, rows, total] = await Promise.all([
+    taskGate(db, user.id),
+    db.prepare("SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'archived' ORDER BY updated_at DESC, id ASC LIMIT ? OFFSET ?").bind(user.id, ask.limit, ask.offset).all<NodeRow>(),
+    db.prepare("SELECT COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'archived'").bind(user.id).first<{ n: number }>(),
+  ]);
+  const { items, page } = paged(rows.results, ask);
+  const res: DoneTasksResponse = { tasks: await withSubtasks(db, user.id, items.map((t) => toNode(t, gate))), page, total: total?.n ?? 0 };
   return c.json(res);
 });
 
@@ -460,6 +526,7 @@ today.get('/month', async (c) => {
       status: n.status === 'done' ? 'done' : 'active',
       priority: n.priority,
       lifeArea: n.lifeArea,
+      openKind: n.openKind ?? null,
       time: n.dueTime,
       estimateMin: n.estimateMin,
       repeat: n.repeat ? repeatLabel(n.repeat, day) : null,

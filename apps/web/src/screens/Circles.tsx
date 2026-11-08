@@ -14,7 +14,7 @@ import { Fold } from '../components/Fold';
 import { Icon } from '../components/Icon';
 import { Check } from 'lucide-react';
 import { attendeeBody, AttendeeFields, attendeeProblem, ClaimCard, HostCodeCard, type CodeChange } from '../components/AttendeeCode';
-import { Pager, usePage } from '../components/Pager';
+import { Pager, TEN_A_PAGE, usePage } from '../components/Pager';
 import { api } from '../lib/api';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
 import { useSeedOnce } from '../lib/useSeed';
@@ -38,7 +38,11 @@ const countdown = (iso: string, now: number) => {
 /** Anonymous small groups near you. */
 export function Circles() {
   const hostPage = usePage('host');
-  const q = useAuthed(['circles', hostPage.query], () => api.circles(hostPage.query));
+  // Upcoming circles and your tables, each a page at a time (prefixes `up` and `gt`, ten by default).
+  const upPage = usePage('up', TEN_A_PAGE);
+  const gtPage = usePage('gt', TEN_A_PAGE);
+  const cq = `${hostPage.query}&${upPage.query}&${gtPage.query}`;
+  const q = useAuthed(['circles', cq], () => api.circles(cq));
   const me = useMe();
   const refresh = useRefreshAll();
   const d = q.data;
@@ -123,7 +127,7 @@ export function Circles() {
         </section>
       )}
 
-      {d && d.groups.length > 0 && (
+      {d && (d.groups.length > 0 || d.groupsPage.page > 1) && (
         <section className="mt-lg" aria-labelledby="tables-heading">
           <h2 id="tables-heading" className="text-title2">
             Your tables
@@ -149,6 +153,7 @@ export function Circles() {
               </li>
             ))}
           </ul>
+          <Pager page={d.groupsPage} prefix="gt" label="your tables" only={TEN_A_PAGE} />
         </section>
       )}
 
@@ -162,6 +167,7 @@ export function Circles() {
             <EventCard key={e.id} e={e} ready={ready} busy={join.isPending || leave.isPending} onJoin={() => setJoining(e)} onLeave={() => leave.mutate(e.id)} />
           ))}
         </ul>
+        <Pager page={d?.eventsPage} prefix="up" label="upcoming circles" only={TEN_A_PAGE} />
         {join.isError && (
           <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {join.error instanceof Error ? join.error.message : 'Could not join.'}

@@ -127,7 +127,10 @@ export function Manage() {
         <h2 id="members-heading" className="text-title2">
           Members
         </h2>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name, page or email" aria-label="Search members" className="mt-sm w-full rounded-pill border-2 border-line bg-card px-md py-sm text-body" />
+        <input value={q} onChange={(e) => {
+            setQ(e.target.value);
+            pg.reset();
+          }} placeholder="Search by name, page or email" aria-label="Search members" className="mt-sm w-full rounded-pill border-2 border-line bg-card px-md py-sm text-body" />
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {members.data?.members.map((m) => (
             <li key={m.id} className="flex">

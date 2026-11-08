@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { ALIAS_WORDS, attendeeXpLocked, CIRCLE_MINUTES, codeWindow, isCircleStatus, matchCircles, nextWeek, RELATIONSHIPS, RUN_CODE_WINDOW, type CircleEvent, type CircleGroup, type CircleMember, type CircleMessage, type CircleStatus, type MatchCandidate, type RelationshipKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { audit, can, newId, noteStmt, notifyMany, nowIso, num, pageOf, paged, parseList, randomCode, str } from '../db';
+import { audit, can, newId, noteStmt, notifyMany, nowIso, num, pageOf, paged, parseList, randomCode, str, TEN_A_PAGE } from '../db';
 import { openTurn, type Turn } from '../cronTick';
 import { claimEventCode, codeOf, guestView, hostView, setEventCode } from '../attendee';
 
@@ -57,10 +57,12 @@ const toEvent = (r: EventRow, showCode: boolean): CircleEvent => ({
 
 interface GroupRow { id: string; event_id: string; event_title: string; city: string; area: string; starts_at: string; repeat: 'none' | 'weekly'; event_status: string; name: string; venue: string; plan: string; chat_opens_at: string }
 const GROUP_SELECT = 'SELECT g.*, e.title AS event_title, e.city, e.area, e.starts_at, e.repeat, e.status AS event_status FROM circle_groups g JOIN circle_events e ON e.id = g.event_id';
-interface MemberRow { user_id: string; alias: string; character: RelationshipKey; revealed: number; status: string; interests: string; display_name: string; handle: string | null }
+interface MemberRow { group_id: string; user_id: string; alias: string; character: RelationshipKey; revealed: number; status: string; interests: string; display_name: string; handle: string | null }
 
-async function groupFor(db: D1Database, row: GroupRow, userId: string, withMessages: boolean): Promise<CircleGroup> {
-  const members = await db.prepare('SELECT m.*, u.interests, u.display_name, u.handle FROM circle_members m JOIN users u ON u.id = m.user_id WHERE m.group_id = ? ORDER BY m.alias').bind(row.id).all<MemberRow>();
+const MEMBER_SELECT = 'SELECT m.*, u.interests, u.display_name, u.handle FROM circle_members m JOIN users u ON u.id = m.user_id';
+/** A table and its people. A list hands in the members it read for the whole page in one statement (`have`), so a page of tables costs one read, not one each. */
+async function groupFor(db: D1Database, row: GroupRow, userId: string, withMessages: boolean, have?: MemberRow[]): Promise<CircleGroup> {
+  const members = have ? { results: have } : await db.prepare(`${MEMBER_SELECT} WHERE m.group_id = ? ORDER BY m.alias`).bind(row.id).all<MemberRow>();
   const opens = new Date(row.chat_opens_at).getTime();
   const closes = new Date(row.starts_at).getTime() + 48 * HOUR;
   const now = Date.now();
@@ -113,11 +115,21 @@ circles.get('/', async (c) => {
   // Show circles you can still join, plus any you are already in. Closed ones you never joined are noise.
   const joinable = `(e.status = 'open' AND e.starts_at > '${new Date(Date.now() + 36 * HOUR).toISOString()}')`;
   const signedUp = `e.id IN (SELECT event_id FROM circle_signups WHERE user_id = '${user.id.replace(/'/g, '')}')`;
-  const events = city
-    ? await db.prepare(`${EVENT_SELECT(user.id)} WHERE e.status IN ('open','matched') AND e.starts_at >= ? AND ((${joinable} AND LOWER(e.city) = LOWER(?)) OR ${signedUp}) ORDER BY e.starts_at LIMIT 50`).bind(new Date(Date.now() - 48 * HOUR).toISOString(), city).all<EventRow>()
-    : await db.prepare(`${EVENT_SELECT(user.id)} WHERE e.status IN ('open','matched') AND e.starts_at >= ? AND (${joinable} OR ${signedUp}) ORDER BY e.starts_at LIMIT 50`).bind(new Date(Date.now() - 48 * HOUR).toISOString()).all<EventRow>();
-  const groups = await db.prepare(`${GROUP_SELECT} WHERE g.id IN (SELECT group_id FROM circle_members WHERE user_id = ?) ORDER BY e.starts_at DESC LIMIT 20`).bind(user.id).all<GroupRow>();
-  const mine = await Promise.all(groups.results.map((g) => groupFor(db, g, user.id, false)));
+  // Upcoming circles (prefix `up`) and your tables (prefix `gt`), each a page at a time, ten by default; a weekly circle adds a table every week.
+  const upAsk = pageOf(c, 'up', TEN_A_PAGE);
+  const gtAsk = pageOf(c, 'gt', TEN_A_PAGE);
+  const since = new Date(Date.now() - 48 * HOUR).toISOString();
+  const [eventRows, groups] = await Promise.all([
+    city
+      ? db.prepare(`${EVENT_SELECT(user.id)} WHERE e.status IN ('open','matched') AND e.starts_at >= ? AND ((${joinable} AND LOWER(e.city) = LOWER(?)) OR ${signedUp}) ORDER BY e.starts_at, e.id LIMIT ? OFFSET ?`).bind(since, city, upAsk.limit, upAsk.offset).all<EventRow>()
+      : db.prepare(`${EVENT_SELECT(user.id)} WHERE e.status IN ('open','matched') AND e.starts_at >= ? AND (${joinable} OR ${signedUp}) ORDER BY e.starts_at, e.id LIMIT ? OFFSET ?`).bind(since, upAsk.limit, upAsk.offset).all<EventRow>(),
+    db.prepare(`${GROUP_SELECT} WHERE g.id IN (SELECT group_id FROM circle_members WHERE user_id = ?) ORDER BY e.starts_at DESC, g.id LIMIT ? OFFSET ?`).bind(user.id, gtAsk.limit, gtAsk.offset).all<GroupRow>(),
+  ]);
+  const events = paged(eventRows.results, upAsk);
+  const tables = paged(groups.results, gtAsk);
+  const ids = tables.items.map((g) => g.id);
+  const memberRows = ids.length ? (await db.prepare(`${MEMBER_SELECT} WHERE m.group_id IN (${ids.map(() => '?').join(',')}) ORDER BY m.alias`).bind(...ids).all<MemberRow>()).results : [];
+  const mine = await Promise.all(tables.items.map((g) => groupFor(db, g, user.id, false, memberRows.filter((m) => m.group_id === g.id))));
   // Events staff run every circle, in every city, until its code closes: the code, the tables and the counts.
   const host = hostsCircle(user);
   const ask = pageOf(c, 'host');
@@ -125,7 +137,7 @@ circles.get('/', async (c) => {
     ? await db.prepare(`${EVENT_SELECT(user.id)} WHERE e.status IN ('open','matched') AND e.starts_at >= ? ORDER BY e.starts_at LIMIT ? OFFSET ?`).bind(new Date(Date.now() - (CIRCLE_MINUTES + RUN_CODE_WINDOW.after) * 60_000).toISOString(), ask.limit, ask.offset).all<EventRow>()
     : { results: [] as EventRow[] };
   const hosting = paged(running.results, ask);
-  return c.json({ events: events.results.map((e) => toEvent(e, false)), hosting: hosting.items.map((e) => toEvent(e, true)), hostingPage: hosting.page, groups: mine, city: user.city, area: user.area, interests: parseList(user.interests), hasLocation: user.lat !== null && user.lng !== null, canCreate: host });
+  return c.json({ events: events.items.map((e) => toEvent(e, false)), eventsPage: events.page, hosting: hosting.items.map((e) => toEvent(e, true)), hostingPage: hosting.page, groups: mine, groupsPage: tables.page, city: user.city, area: user.area, interests: parseList(user.interests), hasLocation: user.lat !== null && user.lng !== null, canCreate: host });
 });
 
 circles.post('/events', async (c) => {

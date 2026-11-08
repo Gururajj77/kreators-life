@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { bountyPayout, detectPlatform, type Bounty, type BountySubmission, type SocialMetric } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { audit, can, liveUser, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, str, pageOf, paged } from '../db';
+import { audit, can, liveUser, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, str, pageOf, paged, TEN_A_PAGE } from '../db';
 import { fetchMetrics } from '../social';
 
 /** Win: content rewards. A brand funds a pool; creators post videos; verified views turn into points. */
@@ -44,19 +44,28 @@ win.get('/', async (c) => {
   const finance = can(user, 'finance');
   const ask = pageOf(c);
   const queueAsk = pageOf(c, 'q');
-  const [bs, mine, queue] = await Promise.all([
+  // My submissions are a page at a time (prefix `me`, ten by default, 2026-11-07). The cards on this page of rewards still carry mine,
+  // read for just those rewards, and what I earned is summed whole.
+  const meAsk = pageOf(c, 'me', TEN_A_PAGE);
+  const [bs, mineRows, onPage, earnedRow, queue] = await Promise.all([
     db.prepare(`${SELECT} WHERE b.status = 'open' OR b.id IN (SELECT bounty_id FROM bounty_submissions WHERE user_id = ?) ORDER BY b.featured DESC, b.ends_at LIMIT ? OFFSET ?`).bind(user.id, ask.limit, ask.offset).all<BRow>(),
-    db.prepare(`${S_SELECT} WHERE s.user_id = ? ORDER BY s.created_at DESC`).bind(user.id).all<SRow>(),
+    db.prepare(`${S_SELECT} WHERE s.user_id = ? ORDER BY s.created_at DESC, s.id LIMIT ? OFFSET ?`).bind(user.id, meAsk.limit, meAsk.offset).all<SRow>(),
+    db
+      .prepare(`${S_SELECT} WHERE s.user_id = ?1 AND s.bounty_id IN (SELECT b.id FROM bounties b WHERE b.status = 'open' OR b.id IN (SELECT bounty_id FROM bounty_submissions WHERE user_id = ?1) ORDER BY b.featured DESC, b.ends_at LIMIT ?2 OFFSET ?3)`)
+      .bind(user.id, ask.limit, ask.offset)
+      .all<SRow>(),
+    db.prepare("SELECT COALESCE(SUM(payout_points), 0) AS n FROM bounty_submissions WHERE user_id = ? AND status = 'paid'").bind(user.id).first<{ n: number }>(),
     reviewer || finance
       ? db.prepare(`${S_SELECT} WHERE s.status IN ('submitted','verified','disputed') ORDER BY s.created_at LIMIT ? OFFSET ?`).bind(queueAsk.limit, queueAsk.offset).all<SRow>()
       : Promise.resolve({ results: [] as SRow[] }),
   ]);
-  const metrics = await metricsFor(db, [...mine.results, ...queue.results].map((s) => s.id));
-  const byB = new Map(mine.results.map((s) => [s.bounty_id, toS(s, metrics)]));
-  const earned = mine.results.filter((s) => s.status === 'paid').reduce((a, s) => a + s.payout_points, 0);
+  const mine = paged(mineRows.results, meAsk);
+  const metrics = await metricsFor(db, [...new Set([...mine.items, ...onPage.results, ...queue.results].map((s) => s.id))]);
+  const byB = new Map(onPage.results.map((s) => [s.bounty_id, toS(s, metrics)]));
+  const earned = earnedRow?.n ?? 0;
   const pg = paged(bs.results, ask);
   const qpg = paged(queue.results, queueAsk);
-  return c.json({ page: pg.page, bounties: pg.items.map((b) => toB(b, byB.get(b.id) ?? null)), mine: mine.results.map((s) => toS(s, metrics)), queuePage: qpg.page, queue: qpg.items.map((s) => toS(s, metrics)), earned, reviewer, finance, canCreate: reviewer || can(user, 'talent') });
+  return c.json({ page: pg.page, bounties: pg.items.map((b) => toB(b, byB.get(b.id) ?? null)), mine: mine.items.map((s) => toS(s, metrics)), minePage: mine.page, queuePage: qpg.page, queue: qpg.items.map((s) => toS(s, metrics)), earned, reviewer, finance, canCreate: reviewer || can(user, 'talent') });
 });
 
 win.get('/:id', async (c) => {

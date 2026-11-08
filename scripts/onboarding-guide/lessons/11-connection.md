@@ -45,6 +45,8 @@ Bond is for the people you actually know.
 2. Share it with a friend. They type it under **Add a friend by code** and tap **Send request**.
 3. You say yes, and you are friends.
 
+Meeting in person? Open **My QR code** on your Profile, in Bond or on an event's page. It shows your @username and friend code. The other person scans it, their page opens with **Add friend**, and you still say yes. If your code has spread too far, tap **Make a new code**, and the old one stops working.
+
 Chats in Bond always run under two made-up names, even between friends. Bond's own **Channels** are different: small private rooms where names show, and only friends you ask can join.
 
 Under **Introductions**, turn on **Open to introductions** to meet people from events you went to. Your details move only after the other person says yes.
@@ -55,7 +57,7 @@ You can block anyone, any time, from a post's **More** menu or under a line in a
 
 ## Events, runs and circles
 
-- **Party:** meetups, workshops and bigger days. Tap **RSVP**, or **Join the waitlist** when it is full. Anyone can **Host a meetup**.
+- **Party:** meetups, workshops and bigger days. Tap **RSVP**, or **Join the waitlist** when it is full. Anyone can **Host a meetup**. Each public event also has its own page on the site, under **Events**. A friend who is new can join there and make an account in one go. They land on the event, with its chat, Community and Bond one tap away, and a bar invites them to **Finish setting up** when they like.
 - **Kreators Run:** run clubs near you. Join one, or **Start a club** of your own. At the start line, tap **Enter the start code** to log your run. **Discussions** has one thread per run, for its people, open until thirty days after it. On your own, **Log a run or walk** under **My runs** needs no club and no code. It counts as movement and pays nothing.
 - **Circles:** small groups that meet each week, matched by interests. Everyone at the table has a made-up name.
 - **Club:** a membership you apply to. People get in on the quality of their work and how they show up, never on follower counts.

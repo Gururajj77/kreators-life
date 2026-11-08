@@ -2,7 +2,7 @@ import { openTurn, type Turn } from '../cronTick';
 import { Hono } from 'hono';
 import { CONTENT_KINDS, LINK_SOURCES, detectPlatform, type ContentItem, type Customer, type DmAutomation, type DmRequest, type DmSend, type Funnel, type FunnelStep, type Page, type PayoutSummary, type Sequence, type TrackedLink } from '@kreators/shared';
 import type { AppEnv, Env } from '../env';
-import { inBatches, nameOf, newId, noteStmt, notify, nowIso, num, oneOf, parseList, randomCode, str, pageOf, paged } from '../db';
+import { inBatches, nameOf, newId, noteStmt, notify, nowIso, num, oneOf, parseList, randomCode, str, pageOf, paged, TEN_A_PAGE } from '../db';
 import { fetchMetrics } from '../social';
 import { fetchT, isTimeout, TIMEOUT } from '../http';
 import { providerFor } from '../payments';
@@ -23,7 +23,8 @@ const LINK_SELECT = `SELECT l.*, p.title AS product_title,
 const toLink = (r: LinkRow): TrackedLink => ({ id: r.id, code: r.code, productId: r.product_id, productTitle: r.product_title, sourceType: r.source_type, contentItemId: r.content_item_id, automationId: r.automation_id, label: r.label, clicks: r.clicks, checkouts: r.checkouts, sales: r.sales, revenuePoints: r.revenue, createdAt: r.created_at });
 
 growth.get('/links', async (c) => {
-  const ask = pageOf(c);
+  // Results pages its links on `k` (2026-11-07: this read `page`, so Next never moved).
+  const ask = pageOf(c, 'k');
   const rows = await c.env.DB.prepare(`${LINK_SELECT} WHERE l.owner_id = ? ORDER BY l.created_at DESC LIMIT ? OFFSET ?`).bind(c.get('user').id, ask.limit, ask.offset).all<LinkRow>();
   const pg = paged(rows.results, ask);
   return c.json({ page: pg.page, links: pg.items.map(toLink) });
@@ -510,8 +511,16 @@ export const DM_SELECT = 'SELECT d.*, p.title AS product_title, ow.display_name 
 export const toDmRequest = (r: DmReqRow): DmRequest => ({ id: r.id, productId: r.product_id, productTitle: r.product_title, ownerName: nameOf({ display_name: r.owner_name }), buyerName: nameOf({ display_name: r.buyer_name }), question: r.question, answer: r.answer, status: r.status, dueAt: r.due_at, answeredAt: r.answered_at, createdAt: r.created_at });
 
 growth.get('/dm', async (c) => {
-  const rows = await c.env.DB.prepare(`${DM_SELECT} WHERE d.owner_id = ? ORDER BY CASE d.status WHEN 'open' THEN 0 ELSE 1 END, d.due_at`).bind(c.get('user').id).all<DmReqRow>();
-  return c.json({ requests: rows.results.map(toDmRequest) });
+  // The questions still to answer come whole (each is paid and waits on you); the answered ones are a page at a time,
+  // newest first (prefix `an`, ten by default, 2026-11-07).
+  const db = c.env.DB;
+  const ask = pageOf(c, 'an', TEN_A_PAGE);
+  const [open, done] = await Promise.all([
+    db.prepare(`${DM_SELECT} WHERE d.owner_id = ? AND d.status = 'open' ORDER BY d.due_at, d.id`).bind(c.get('user').id).all<DmReqRow>(),
+    db.prepare(`${DM_SELECT} WHERE d.owner_id = ? AND d.status != 'open' ORDER BY COALESCE(d.answered_at, d.due_at) DESC, d.id LIMIT ? OFFSET ?`).bind(c.get('user').id, ask.limit, ask.offset).all<DmReqRow>(),
+  ]);
+  const pg = paged(done.results, ask);
+  return c.json({ requests: [...open.results, ...pg.items].map(toDmRequest), answeredPage: pg.page });
 });
 
 growth.post('/dm/:id/answer', async (c) => {

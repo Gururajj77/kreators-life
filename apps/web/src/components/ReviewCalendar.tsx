@@ -118,15 +118,15 @@ export function ReviewCalendar({ today, onOpenPeriod }: { today: string; onOpenP
         </p>
       )}
 
-      {/* "Coming up" and its line at the left, Schedule a review at the bottom right of the same block (the founder, 2026-11-06); on a
-          narrow phone the button wraps under the words, still at the right. The button keeps its look. */}
+      {/* "Coming up" and its line at the left, Schedule a review at the right, level with the words' last line (the founder, 2026-11-06);
+          on a phone the button takes the full width under the words (the founder, 2026-11-08). The button keeps its look. */}
       <div className="mt-md flex flex-wrap items-end justify-between gap-sm">
-        <div className="min-w-0 flex-[1_1_220px]">
+        <div className="min-w-0 basis-full sm:flex-[1_1_220px] sm:basis-auto">
           <h3 className="m-0 text-headline">Coming up</h3>
           {coming.length === 0 && <p className="mt-xs m-0 text-subhead text-ink-soft">{COPY.empty}</p>}
         </div>
-        <div className="ml-auto">
-          <Button variant="outline" onClick={() => setForm({ existing: null, day: today >= `${month}-01` && today.slice(0, 7) === month ? today : `${month}-01` })}>
+        <div className="w-full sm:ml-auto sm:w-auto">
+          <Button variant="outline" className="w-full sm:w-auto" onClick={() => setForm({ existing: null, day: today >= `${month}-01` && today.slice(0, 7) === month ? today : `${month}-01` })}>
             Schedule a review
           </Button>
         </div>

@@ -67,6 +67,8 @@ export default defineConfig({
           // Fitness's model (a subpath export: the movement kinds, the readers and the eating score) is a leaf (it imports only types), read by
           // the Fitness screen and Kreators Run's tool, both lazy, so it loads with them and never with the first download.
           if (id.includes('/packages/shared/src/fitness.ts')) return 'shared-fitness';
+          // Close the unfinished's words (a subpath export and a leaf: it imports only types), read only by the lazy Unfinished business tab and task form.
+          if (id.includes('/packages/shared/src/openBusiness.ts')) return 'shared-open';
           // A coach's report (a subpath export and a leaf: the section switches and the rules behind suggestions), read by the Coaching screens, both lazy.
           if (id.includes('/packages/shared/src/coachReport.ts')) return 'shared-coach';
           // The line of the day (a long list of text) is a chunk of its own, which keeps the shared chunk under the 400 kB a chunk may
@@ -86,7 +88,8 @@ export default defineConfig({
           // joined the same day, when the year in Reviews, gratitude and Fitness took it to 400.1 kB.
           // Each must stay a leaf, for the reason above.
           if (id.includes('/packages/shared/src/focusRun.ts')) return 'shared-focus-run';
-          if (/\/packages\/shared\/src\/(core|dates|books|store|activity|circles|dayKinds|dayTypes|money)\.ts$/.test(id)) return 'shared-base';
+          // eventJoin (an event attendee's paths and the public event's type, importing only a type) joined on 2026-11-07, since Shell reads it.
+          if (/\/packages\/shared\/src\/(core|dates|books|store|activity|circles|dayKinds|dayTypes|money|eventJoin)\.ts$/.test(id)) return 'shared-base';
           if (id.includes('/packages/shared/src/')) return 'shared';
           // The icons the shared registries name (every app, setup tag, role...) are one map the shell needs, so it is a
           // chunk of its own: preloaded with the first download, but kept out of the entry's 480 kB budget.

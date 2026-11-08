@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { AFFILIATE_SHARE, INVITE_NOT_FOUND, PRODUCT_KINDS, statusesFor, type Availability, type AvailabilityOverride, type Booking, type Coupon, type Lead, type Lesson, type Order, type Product, type ProductInvite, type ProductKind, type ProductStatus, type QuizQuestion, type StudioAnalytics, type Testimonial, parseFaq } from '@kreators/shared';
 import { isUnlockBadgeKey } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { audit, badLink, blockedByName, DELETED_NAME, LINK_PROBLEM, nameOf, newId, noteStmt, notify, nowIso, parseList, pageOf, paged, personBy, httpUrl, str } from '../db';
+import { audit, badLink, blockedByName, DELETED_NAME, LINK_PROBLEM, nameOf, newId, noteStmt, notify, nowIso, parseList, pageOf, paged, TEN_A_PAGE, personBy, httpUrl, str } from '../db';
 import { logEvent, sendEmail, track } from '../ops';
 import { parseQuiz } from './buyer';
 
@@ -485,8 +485,15 @@ interface CouponRow { id: string; code: string; percent_off: number; product_id:
 const toCoupon = (r: CouponRow): Coupon => ({ id: r.id, code: r.code, percentOff: r.percent_off, productId: r.product_id, maxUses: r.max_uses, uses: r.uses, expiresAt: r.expires_at });
 
 studio.get('/coupons', async (c) => {
-  const rows = await c.env.DB.prepare('SELECT * FROM coupons WHERE owner_id = ? ORDER BY created_at DESC').bind(c.get('user').id).all<CouponRow>();
-  return c.json({ coupons: rows.results.map(toCoupon) });
+  // A product's editor asks for its own coupons and the ones for every product (`?product=`), a page at a time (prefix `cp`, ten by default, 2026-11-07).
+  // With no product it is every coupon, paged the same way.
+  const ask = pageOf(c, 'cp', TEN_A_PAGE);
+  const product = c.req.query('product');
+  const rows = product
+    ? await c.env.DB.prepare('SELECT * FROM coupons WHERE owner_id = ? AND (product_id = ? OR product_id IS NULL) ORDER BY created_at DESC, id LIMIT ? OFFSET ?').bind(c.get('user').id, product, ask.limit, ask.offset).all<CouponRow>()
+    : await c.env.DB.prepare('SELECT * FROM coupons WHERE owner_id = ? ORDER BY created_at DESC, id LIMIT ? OFFSET ?').bind(c.get('user').id, ask.limit, ask.offset).all<CouponRow>();
+  const pg = paged(rows.results, ask);
+  return c.json({ coupons: pg.items.map(toCoupon), page: pg.page });
 });
 
 studio.post('/coupons', async (c) => {
@@ -591,7 +598,8 @@ studio.get('/orders', async (c) => {
     binds.push(`${to}T23:59:59`);
   }
   const csv = c.req.query('format') === 'csv';
-  const ask = pageOf(c);
+  // The sales list pages on `s` (2026-11-07: this read `page`, so Next never moved).
+  const ask = pageOf(c, 's');
   // The CSV takes the whole run (up to a thousand rows); the screen takes a page.
   const rows = csv
     ? await db.prepare(`${ORDER_SELECT} WHERE ${where.join(' AND ')} ORDER BY o.created_at DESC LIMIT 1000`).bind(...binds).all<OrderRow>()
@@ -603,7 +611,8 @@ studio.get('/orders', async (c) => {
     const csv = ['order_id,date,product,kind,buyer,status,points,cents,currency,provider,coupon,affiliate,source,fee_points', ...orders.map((o) => [o.id, o.createdAt, o.productTitle, o.productKind, o.buyerName, o.status, o.points, o.cents, o.currency, o.provider, o.couponCode, o.affiliateCode, o.sourceLabel, o.platformFeePoints].map(esc).join(','))].join('\n');
     return c.body(csv, 200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="sales.csv"' });
   }
-  return c.json({ orders });
+  // The page goes with the list (2026-11-07: it was left out, so the sales Pager never showed past the first 25).
+  return c.json({ page: pg.page, orders });
 });
 
 studio.delete('/availability/:id', async (c) => {
@@ -613,7 +622,7 @@ studio.delete('/availability/:id', async (c) => {
 
 // ---- bookings (owner side)
 studio.get('/bookings', async (c) => {
-  const ask = pageOf(c);
+  const ask = pageOf(c, 'b');
   const rows = await c.env.DB.prepare(`${BOOKING_SELECT} WHERE k.owner_id = ? ORDER BY k.starts_at DESC LIMIT ? OFFSET ?`).bind(c.get('user').id, ask.limit, ask.offset).all<BookingRow>();
   const pg = paged(rows.results, ask);
   return c.json({ page: pg.page, bookings: pg.items.map(toBooking) });
@@ -645,7 +654,7 @@ studio.post('/bookings/:id', async (c) => {
 // ---- leads, testimonials, broadcasts, audience
 interface LeadRow { id: string; name: string; email: string; message: string; source: string; created_at: string }
 studio.get('/leads', async (c) => {
-  const ask = pageOf(c);
+  const ask = pageOf(c, 'l');
   const all = await c.env.DB.prepare('SELECT * FROM leads WHERE owner_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?').bind(c.get('user').id, ask.limit, ask.offset).all<LeadRow>();
   const pg = paged(all.results, ask);
   const rows = { results: pg.items };
@@ -654,7 +663,7 @@ studio.get('/leads', async (c) => {
 });
 
 studio.get('/testimonials', async (c) => {
-  const ask = pageOf(c);
+  const ask = pageOf(c, 'r');
   const rows = await c.env.DB.prepare(`${TESTIMONIAL_SELECT} WHERE t.owner_id = ? ORDER BY t.created_at DESC LIMIT ? OFFSET ?`).bind(c.get('user').id, ask.limit, ask.offset).all<TestimonialRow>();
   const pg = paged(rows.results, ask);
   return c.json({ page: pg.page, testimonials: pg.items.map(toTestimonial) });
@@ -692,17 +701,21 @@ studio.post('/broadcasts', async (c) => {
 studio.get('/audience', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const ask = pageOf(c);
+  // Followers page on `f` (the screen always sent `fpage`; before 2026-11-07 the route read `page`, so Next never moved), what you sent on `bc`, ten by default.
+  const ask = pageOf(c, 'f');
+  const bcAsk = pageOf(c, 'bc', TEN_A_PAGE);
   const [followersAll, broadcasts, affiliates] = await Promise.all([
     db.prepare('SELECT u.display_name AS name, u.handle, f.created_at FROM follows f JOIN users u ON u.id = f.follower_id WHERE f.owner_id = ? ORDER BY f.created_at DESC LIMIT ? OFFSET ?').bind(user.id, ask.limit, ask.offset).all<{ name: string; handle: string | null; created_at: string }>(),
-    db.prepare('SELECT id, title, body, audience, sent, created_at FROM broadcasts WHERE owner_id = ? ORDER BY created_at DESC LIMIT 50').bind(user.id).all<{ id: string; title: string; body: string; audience: string; sent: number; created_at: string }>(),
+    db.prepare('SELECT id, title, body, audience, sent, created_at FROM broadcasts WHERE owner_id = ? ORDER BY created_at DESC, id LIMIT ? OFFSET ?').bind(user.id, bcAsk.limit, bcAsk.offset).all<{ id: string; title: string; body: string; audience: string; sent: number; created_at: string }>(),
     db.prepare("SELECT COUNT(*) AS referred FROM users WHERE referred_by = ?").bind(user.referral_code ?? '').first<{ referred: number }>(),
   ]);
   const followers = paged(followersAll.results, ask);
+  const sent = paged(broadcasts.results, bcAsk);
   return c.json({
     page: followers.page,
     followers: followers.items.map((f) => ({ name: nameOf({ display_name: f.name }), handle: f.handle, since: f.created_at })),
-    broadcasts: broadcasts.results.map((b) => ({ id: b.id, title: b.title, body: b.body, audience: b.audience, sent: b.sent, createdAt: b.created_at })),
+    broadcasts: sent.items.map((b) => ({ id: b.id, title: b.title, body: b.body, audience: b.audience, sent: b.sent, createdAt: b.created_at })),
+    broadcastsPage: sent.page,
     referralCode: user.referral_code,
     referred: affiliates?.referred ?? 0,
     affiliateShare: AFFILIATE_SHARE,

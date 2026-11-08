@@ -10,6 +10,7 @@ export * from './community.ts';
 export * from './dates.ts';
 export * from './api.ts';
 export * from './events.ts';
+export * from './eventJoin.ts';
 export * from './runTalk.ts';
 export * from './cohortTalk.ts';
 export * from './store.ts';

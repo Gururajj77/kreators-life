@@ -1,7 +1,8 @@
-import { LIFE_AREA_ORDER, LIFE_AREAS, PRIORITIES, RELATIONSHIPS, addDays, blockOfTask, blocksInDay, mondayOf, openDay, templateForDate, type TodayResponse, type LifeAreaKey, type MonthProject, type Node, type Priority, type RelationshipKey, type Repeat, type TemplateSlot, type TimeBlock, type TimeBlocksResponse } from '@kreators/shared';
+import { LIFE_AREA_ORDER, LIFE_AREAS, OPEN_KINDS, PRIORITIES, RELATIONSHIPS, addDays, type OpenKind, blockOfTask, blocksInDay, mondayOf, openDay, templateForDate, type TodayResponse, type LifeAreaKey, type MonthProject, type Node, type Priority, type RelationshipKey, type Repeat, type TemplateSlot, type TimeBlock, type TimeBlocksResponse } from '@kreators/shared';
 import { blockMismatch, blockMismatchLine, blockUsedMin } from '@kreators/shared/blockHints';
+import { OPEN_ENDINGS, OPEN_KIND_META } from '@kreators/shared/openBusiness';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { X } from 'lucide-react';
 import { api, type TaskPlanBody } from '../lib/api';
@@ -12,12 +13,12 @@ import { RulerPicker } from './RulerPicker';
 import { Toggle } from './Toggle';
 import { FIELD, FIELD_LINE } from '../lib/ui';
 import { useTimeBlocks } from '../lib/useTimeBlocks';
-import { todayLocal, clockOf, slotRange } from '../lib/date';
+import { todayLocal, clockOf, dayLabel, slotRange } from '../lib/date';
 import { ConfirmDelete, DELETE_BTN } from './ConfirmDelete';
 import { FieldLabel } from './Field';
 
 // The row's marks live in TaskMarks.tsx (in the first download); this file is the plan form, loaded when a plan opens.
-export { AreaTag, BlockMark, PriorityChip, TaskTags } from './TaskMarks';
+export { AreaTag, BlockMark, OpenTag, PriorityChip, TaskTags } from './TaskMarks';
 
 const ESTIMATES = [15, 25, 45, 60, 90];
 
@@ -133,6 +134,24 @@ export function AreaSelect({ value, onChange }: { value: LifeAreaKey | null; onC
   );
 }
 
+/** Its kind of open business (Close the unfinished, 2026-11-07): none, or one of the three. A tag and Daily's Unfinished business view only. */
+export function OpenKindSelect({ value, onChange }: { value: OpenKind | null; onChange: (k: OpenKind | null) => void }) {
+  return (
+    <label className="block">
+      <span className="block text-subhead font-semibold">Bottleneck</span>
+      <select value={value ?? ''} onChange={(e) => onChange((e.target.value || null) as OpenKind | null)} className={FIELD}>
+        <option value="">None</option>
+        {OPEN_KINDS.map((k) => (
+          <option key={k} value={k}>
+            {OPEN_KIND_META[k].name}
+          </option>
+        ))}
+      </select>
+      <span className="mt-xs block text-caption text-ink-soft">{value ? OPEN_KIND_META[value].question : 'Optional. Mark something left open, to end it.'}</span>
+    </label>
+  );
+}
+
 /** Four coloured buttons, P0 to P3, and a way to clear it. */
 export function PriorityPicker({ value, onChange }: { value: Priority | null; onChange: (p: Priority | null) => void }) {
   return (
@@ -167,6 +186,8 @@ export interface Plan {
   lifeArea: LifeAreaKey | null;
   /** The time block it was put in, or null: by its time. */
   timeBlockId: string | null;
+  /** Its kind of open business, or null for none. */
+  openKind: OpenKind | null;
 }
 export const planOf = (n?: Node | null, doDate = ''): Plan => ({
   doDate: n?.doDate ?? doDate,
@@ -180,6 +201,7 @@ export const planOf = (n?: Node | null, doDate = ''): Plan => ({
   minutes: n?.estimateMin ? String(n.estimateMin) : '',
   lifeArea: n?.lifeArea ?? null,
   timeBlockId: n?.timeBlockId ?? null,
+  openKind: n?.openKind ?? null,
 });
 export const planBody = (p: Plan): TaskPlanBody => {
   const dated = Boolean(p.doDate || p.dueDate);
@@ -195,6 +217,7 @@ export const planBody = (p: Plan): TaskPlanBody => {
     estimateMin: Number(p.minutes) > 0 ? Number(p.minutes) : null,
     lifeArea: p.lifeArea,
     timeBlockId: p.timeBlockId,
+    openKind: p.openKind,
   };
 };
 /** The same check the server makes, so the person hears it before they save. */
@@ -244,6 +267,7 @@ export function TaskPlanFields({ plan, onChange, today, pillar, taskId }: { plan
         <AreaSelect value={plan.lifeArea} onChange={(lifeArea) => set({ lifeArea })} />
         <TimeBlockSelect value={plan.timeBlockId} onChange={(timeBlockId) => set({ timeBlockId })} day={plan.doDate || plan.dueDate || today} time={plan.time} />
       </div>
+      <OpenKindSelect value={plan.openKind} onChange={(openKind) => set({ openKind })} />
 
       <RepeatPicker
         value={plan.repeat}
@@ -318,6 +342,117 @@ export function StartFocus({ task, className = '' }: { task: Node; className?: s
     <Link to={`/mindful?task=${task.id}&min=${min}#focus-heading`} className={`toy toy-soft inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-line bg-card px-md text-subhead font-medium ${className}`}>
       Start focus, {min} min
     </Link>
+  );
+}
+
+/** The look of the panel's own actions (Start focus), so the three endings sit beside it as its equals. */
+const ACTION = 'toy toy-soft inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-line bg-card px-md text-subhead font-medium';
+
+/**
+ * The three ways to end a task marked Unfinished, Unresolved or Undecided (Close the unfinished, 2026-11-07), shown only while it carries a
+ * kind: Do it puts it on today, Give it a time and date sets a day and a time with Remember on (a form in place), and Let it go is the archive,
+ * on a second tap since it comes back from Let go in Daily's Unfinished business view. Each is the ordinary PATCH /nodes/:id; `onPlan` keeps
+ * the form above in step, so a later Save never puts the old day back, and `onGone` runs once a task is let go.
+ */
+export function TaskEndings({ task, today, onPlan, onGone }: { task: Node; today: string; onPlan?: (patch: Partial<Plan>) => void; onGone?: () => void }) {
+  const refresh = useRefreshAll();
+  const [timing, setTiming] = useState(false);
+  const [day, setDay] = useState(() => (task.doDate && task.doDate > today ? task.doDate : addDays(today, 1)));
+  const [time, setTime] = useState(task.dueTime ?? '09:00');
+  const [armed, setArmed] = useState(false);
+  const [said, setSaid] = useState<string | null>(null);
+  // The day it was moved to here, so a sheet holding the task as it was opened still knows it is on today now.
+  const [movedTo, setMovedTo] = useState<string | null>(null);
+  useEffect(() => {
+    if (!armed) return;
+    const t = window.setTimeout(() => setArmed(false), 4000);
+    return () => window.clearTimeout(t);
+  }, [armed]);
+  const run = useMutation({
+    mutationFn: (v: { body: TaskPlanBody & { status?: 'archived' }; said: string; plan?: Partial<Plan>; gone?: boolean }) => api.updateNode(task.id, v.body),
+    onSuccess: (_r, v) => {
+      if (v.plan) onPlan?.(v.plan);
+      if (v.plan?.doDate) setMovedTo(v.plan.doDate);
+      setTiming(false);
+      setSaid(v.said);
+      void refresh();
+      if (v.gone) onGone?.();
+    },
+  });
+  if (!task.openKind || task.status !== 'active') return null;
+  const opens = movedTo ?? openDay(task);
+  const onToday = Boolean(opens && opens <= today);
+  const formId = `end-time-${task.id}`;
+  const movesDue = Boolean(task.dueDate && day && day > task.dueDate);
+  return (
+    <div>
+      <span className="block text-subhead font-semibold">End it</span>
+      <p className="mt-xs m-0 text-caption text-ink-soft">{OPEN_KIND_META[task.openKind].question}</p>
+      <div className="mt-xs grid gap-xs sm:flex sm:flex-wrap" role="group" aria-label={`End “${task.title}”`}>
+        {onToday ? (
+          <span className="inline-flex min-h-[48px] items-center px-xs text-subhead text-ink-soft">On today. Tick it when it is done.</span>
+        ) : (
+          <button type="button" disabled={run.isPending} onClick={() => run.mutate({ body: { doDate: today }, said: `“${task.title}” is on today's tasks.`, plan: { doDate: today } })} className={ACTION}>
+            {OPEN_ENDINGS.doIt.name}
+          </button>
+        )}
+        <button type="button" aria-expanded={timing} aria-controls={timing ? formId : undefined} disabled={run.isPending} onClick={() => setTiming((v) => !v)} className={ACTION}>
+          {OPEN_ENDINGS.time.name}
+        </button>
+        <button
+          type="button"
+          disabled={run.isPending}
+          aria-label={armed ? `Tap again to let it go: ${task.title}` : `${OPEN_ENDINGS.letGo.name}: ${task.title}`}
+          onClick={() => {
+            if (!armed) return setArmed(true);
+            setArmed(false);
+            run.mutate({ body: { status: 'archived' }, said: `Let go of “${task.title}”.`, gone: true });
+          }}
+          className={`${ACTION} ${armed ? 'red-armed' : ''}`}
+        >
+          <span aria-live="polite">{armed ? 'Tap again to let it go' : OPEN_ENDINGS.letGo.name}</span>
+        </button>
+      </div>
+      {timing && (
+        <form
+          id={formId}
+          className="mt-xs flex flex-wrap items-end gap-xs"
+          aria-label={`Give “${task.title}” a time and date`}
+          onSubmit={(e) => {
+            e.preventDefault();
+            // A due day before the day picked (a late one, most often) moves with it, as the line under the form says, since a do date
+            // after its due date is refused (four-check, 2026-11-07: a late task could never be given a time).
+            const due = movesDue ? { dueDate: day } : {};
+            if (day) run.mutate({ body: { doDate: day, ...due, dueTime: time || null, remind: true }, said: `“${task.title}” is set for ${day === today ? 'today' : dayLabel(day)}${time ? ` at ${clockOf(time)}` : ''}, with a reminder.`, plan: { doDate: day, ...due, time, remind: true } });
+          }}
+        >
+          <label className="min-w-[160px] flex-1">
+            <span className="block text-subhead font-semibold">Day</span>
+            <input type="date" required min={today} value={day} onChange={(e) => setDay(e.target.value)} className={FIELD} />
+          </label>
+          <label className="min-w-[120px] flex-1">
+            <span className="block text-subhead font-semibold">Time</span>
+            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={FIELD} />
+          </label>
+          <button type="submit" disabled={run.isPending || !day} className={ACTION}>
+            Save the time
+          </button>
+          {movesDue && <p className="m-0 w-full text-caption text-ink-soft">Its due day moves to this day too.</p>}
+        </form>
+      )}
+      <p className="mt-xs m-0 text-caption text-ink-soft">{OPEN_ENDINGS.letGo.line}</p>
+      {run.isError ? (
+        <p role="alert" className="mt-xs m-0 text-subhead">
+          {run.error instanceof Error ? run.error.message : 'That did not work. Try again.'}
+        </p>
+      ) : (
+        said && (
+          <p role="status" className="mt-xs m-0 text-subhead text-ink-soft">
+            {said}
+          </p>
+        )
+      )}
+    </div>
   );
 }
 
@@ -495,6 +630,7 @@ export function TaskPanel({ task, today }: { task: Node; today: string }) {
       </button>
       <Subtasks task={task} />
       <StartFocus task={{ ...task, estimateMin: Number(plan.minutes) > 0 ? Number(plan.minutes) : task.estimateMin }} />
+      <TaskEndings task={task} today={today} onPlan={(patch) => setPlan((p) => ({ ...p, ...patch }))} />
       {task.status === 'active' && (
         <div className="flex justify-end">
           <button

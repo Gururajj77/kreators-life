@@ -189,6 +189,8 @@ export interface Page {
   page: number;
   size: PageSize;
   more: boolean;
+  /** Set when a page past the first came back with no rows (its last row was acted on, or a filter changed under it), so the pager steps back. */
+  empty?: boolean;
 }
 
 /** A page size from a query string or a select, or the default. */

@@ -50,7 +50,19 @@ Under the list, open **Add a task**. Type the task, pick which project it holds 
 ## The lists below
 
 - **Not scheduled yet:** tasks with no do date and no due date. They stay out of Tasks until you pick a day. Then they move up.
-- **Done today:** what you ticked, struck through, with the time. Tap one to untick it. That takes back its xp.
+- **Done today:** what you ticked, struck through, with the time. Tap one to untick it. That takes back its xp. It shows ten at a time. Pick 25 or 50 under it, or go to the next page.
+
+## Close the unfinished
+
+Things you left open tend to stay on your mind: a course you stopped, a talk you put off, a choice you keep turning over. Any task can be marked as one of three kinds. Tap the pencil on it and pick under **Bottleneck**:
+
+- **Unfinished:** you started it and did not finish. Do you still want it enough to give it more time?
+- **Unresolved:** it is with other people, like a talk to have or a fight. Have the talk, or decide to let it go.
+- **Undecided:** a choice you keep thinking about. Get what you need to decide, or decide that you cannot yet.
+
+Once it has a kind, the same panel offers three ways to end it, under **End it**. **Do it** puts it on today; tick it when it is done. **Give it a time and date** picks a day and a time, with a reminder. **Let it go** takes a second tap. It leaves your lists and reminders.
+
+To see only these tasks, pick **Bottlenecks** in the **Sort by** row, or tap **Close the unfinished** on Home, which shows while one of these is open. Each kind sits in its own coloured box with its question. Under the boxes, **Let go** lists what you let go, with **Bring back**. A kind is a tag like the area, and **By context** puts these tasks after every priority.
 
 ## The month calendar
 

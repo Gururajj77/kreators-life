@@ -64,8 +64,8 @@ function UnreadTag({ n }: { n: number }) {
 }
 
 /**
- * The Inbox at the top of the sidebar (tablet and laptop only; a phone has no sidebar, so its count stays on the Apps tab): a round button in
- * the theme button's own look, with the unread count on it.
+ * The Inbox bell: at the top of the sidebar on a tablet and a laptop, and left of the theme button in a phone's top-right corner (2026-11-07,
+ * the founder). A round button in the theme button's own look, with the unread count on it, so no tab carries the count any more.
  */
 function BellLink({ unread }: { unread: number }) {
   const label = unread > 0 ? `Inbox, ${unread} unread` : 'Inbox';
@@ -136,12 +136,6 @@ export function TabBar() {
   useEffect(() => {
     if (here) setOpenGroups((s) => (s[here] ? s : { ...s, [here]: true }));
   }, [loc.pathname, here]);
-  const badge = (to: string) =>
-    to === '/apps' && unread > 0 ? (
-      <span className="absolute -top-[2px] -right-[2px] flex min-w-[18px] items-center justify-center rounded-pill bg-r1 px-[4px] text-caption2 font-semibold leading-[18px] text-on-fill" aria-label={`${unread} unread`}>
-        {unread > 9 ? '9+' : unread}
-      </span>
-    ) : null;
   return (
     <>
       {/* Phone: tabs along the bottom. */}
@@ -159,7 +153,6 @@ export function TabBar() {
                   <>
                     <span className={`tab-icon relative flex size-[36px] items-center justify-center rounded-pill transition-colors ${isActive ? (bottom.ready ? 'text-on-ink' : 'bg-ink text-on-ink') : ''}`}>
                       {t.icon(isActive, 24)}
-                      {badge(t.to)}
                     </span>
                     {t.label}
                   </>
@@ -169,7 +162,7 @@ export function TabBar() {
           ))}
         </ul>
       </nav>
-      {/* Phone: the brand in the top-left corner; theme, then the apps menu, in the top-right. The name drops on narrow phones. They sit at the top of the page and scroll away with it, so they never cover the content. A running or paused focus clock takes this spot instead, on every page, until it stops. */}
+      {/* Phone: the brand in the top-left corner; the Inbox bell with its count, theme, then the apps menu, in the top-right. The name drops on narrow phones. They sit at the top of the page and scroll away with it, so they never cover the content. A running or paused focus clock takes this spot instead, on every page, until it stops. */}
       <div className="safe-top absolute top-sm left-md z-30 md:hidden">
         {focusActive ? (
           <FocusPill compact />
@@ -180,6 +173,7 @@ export function TabBar() {
         )}
       </div>
       <div className="safe-top absolute top-sm right-md z-30 flex items-center gap-xs md:hidden">
+        <BellLink unread={unread} />
         <ThemeToggle />
         <button
           type="button"

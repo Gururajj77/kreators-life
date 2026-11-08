@@ -20,7 +20,7 @@ import { Fold } from './Fold';
 import { Icon } from './Icon';
 import { Sheet } from './Sheet';
 import { Skeleton } from './Skeleton';
-import { planBody, planOf, planProblem, PriorityChip, TaskPlanFields, type Plan } from './TaskPlan';
+import { OpenTag, planBody, planOf, planProblem, PriorityChip, TaskPlanFields, type Plan } from './TaskPlan';
 import { FactTag } from './FactTag';
 import { StatusTag } from './StatusTag';
 
@@ -201,6 +201,7 @@ function DayTask({ t, today, queue }: { t: MonthTask; today: string; queue: Retu
                 Habit
               </StatusTag>
             )}
+            {t.openKind && <OpenTag kind={t.openKind} />}
             {when && !done && <FactTag kind="when">{when}</FactTag>}
             {due?.overdue && <StatusTag tone="bad">{due.text}</StatusTag>}
           </span>

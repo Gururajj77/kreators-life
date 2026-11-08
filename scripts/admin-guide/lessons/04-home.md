@@ -13,9 +13,10 @@ In this lesson you'll learn:
 Home opens with a dark card. It shows the date, "Hi, Riya!" and three quick links: her level, her streak and today's mood. Beside them:
 
 - **My page:** opens her public page.
-- **The bell:** opens her Inbox, with a count of what is unread.
 - **Her picture:** opens the Profile tab.
 - **Search anything:** a search box. Results show right under it as she types: apps, help, her tasks, her journal, people and more.
+
+Her Inbox has no bell on this card. The bell at the top of the app opens it, with a count of what is unread.
 
 ## Step two: water and reminders
 

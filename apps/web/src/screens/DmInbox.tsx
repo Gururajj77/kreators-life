@@ -8,9 +8,12 @@ import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
 import { Fold } from '../components/Fold';
+import { Pager, TEN_A_PAGE, usePage } from '../components/Pager';
 
 export function DmInbox() {
-  const q = useAuthed(['dm-requests'], api.dmRequests);
+  // Waiting questions come whole; the answered ones a page at a time (prefix `an`, ten by default).
+  const ap = usePage('an', TEN_A_PAGE);
+  const q = useAuthed(['dm-requests', ap.query], () => api.dmRequests(ap.query));
   const open = q.data?.requests.filter((r) => r.status === 'open') ?? [];
   const closed = q.data?.requests.filter((r) => r.status !== 'open') ?? [];
   return (
@@ -29,7 +32,7 @@ export function DmInbox() {
         </ul>
       </section>
 
-      {closed.length > 0 && (
+      {(closed.length > 0 || (q.data?.answeredPage.page ?? 1) > 1) && (
         <section className="mt-lg" aria-labelledby="done-heading">
           <h2 id="done-heading" className="text-title2">
             Answered
@@ -44,6 +47,7 @@ export function DmInbox() {
               </li>
             ))}
           </ul>
+          <Pager page={q.data?.answeredPage} prefix="an" label="answered questions" only={TEN_A_PAGE} />
         </section>
       )}
     </Screen>

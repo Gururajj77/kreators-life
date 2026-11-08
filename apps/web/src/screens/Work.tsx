@@ -11,7 +11,7 @@ import { ConfirmDelete } from '../components/ConfirmDelete';
 import { api, errorText } from '../lib/api';
 import { todayLocal, shortDate } from '../lib/date';
 import { useAuthed, useMe } from '../lib/queries';
-import { Pager, usePage } from '../components/Pager';
+import { Pager, TEN_A_PAGE, usePage } from '../components/Pager';
 import { FIELD } from '../lib/ui';
 import { Fold } from '../components/Fold';
 import { StatusTag } from '../components/StatusTag';
@@ -86,7 +86,9 @@ function Chips({ items, end = false }: { items: string[]; end?: boolean }) {
 export function Work() {
   const pg = usePage();
   const dpg = usePage('d');
-  const q = useAuthed(['work', pg.query, dpg.query], () => api.work(pg.query, dpg.query));
+  // Your applications are a page at a time (prefix `ap`, ten by default).
+  const apg = usePage('ap', TEN_A_PAGE);
+  const q = useAuthed(['work', pg.query, dpg.query, apg.query], () => api.work(pg.query, `${dpg.query}&${apg.query}`));
   const [posting, setPosting] = useState(false);
   const setStatus = useMutation({ mutationFn: ({ id, status }: { id: string; status: OpportunityT['status'] }) => api.setOpportunity(id, status), onSuccess: () => q.refetch() });
   // Closing a listing asks first, with the listing it is about.
@@ -127,7 +129,7 @@ export function Work() {
         <Pager page={d?.page} label="opportunities" />
       </section>
 
-      {d && d.applications.length > 0 && (
+      {d && (d.applications.length > 0 || d.applicationsPage.page > 1) && (
         <section className="mt-lg" aria-labelledby="mine-heading">
           <h2 id="mine-heading" className="text-title2">
             Your applications
@@ -139,6 +141,7 @@ export function Work() {
               </Reveal>
             ))}
           </ul>
+          <Pager page={d.applicationsPage} prefix="ap" label="your applications" only={TEN_A_PAGE} />
         </section>
       )}
 

@@ -1,7 +1,7 @@
-import { BADGE_FAMILIES, PRODUCT_KIND_META, productHasOwnCover, BADGES, HONORS, RELATIONSHIPS, formatCount } from '@kreators/shared';
+import { BADGE_FAMILIES, PRODUCT_KIND_META, productHasOwnCover, BADGES, HONORS, RELATIONSHIPS, formatCount, type PublicPage } from '@kreators/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Inert } from '../components/Inert';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { AppIcon } from '../components/AppIcon';
 import { Avatar } from '../components/Avatar';
@@ -18,8 +18,9 @@ import { Icon } from '../components/Icon';
 import { Reveal } from '../components/fx/Reveal';
 import { PenLine } from 'lucide-react';
 import { Screen } from '../components/Screen';
-import { api } from '../lib/api';
+import { api, ApiError } from '../lib/api';
 import { captureRef, useSession } from '../lib/store';
+import { friendAddPath, keepFriendAdd } from '../lib/friendAdd';
 import { Stars } from '../components/Stars';
 import { TileGroups } from '../components/TileGroups';
 import { IconTag } from '../components/FactTag';
@@ -75,9 +76,16 @@ export function Public() {
   const nav = useNavigate();
   captureRef(location.search);
   const token = useSession((s) => s.token);
-  const q = useQuery({ queryKey: ['public', handle, id, token], queryFn: () => (id ? api.personPage(id) : api.publicPage(handle)) });
+  // A QR code's link (`/u/<handle>?add=<friend code>`): only on a page reached by its username.
+  const addAsked = id ? null : new URLSearchParams(location.search).get('add');
+  const q = useQuery({ queryKey: ['public', handle, id, token, addAsked], queryFn: () => (id ? api.personPage(id) : api.publicPage(handle, addAsked)) });
   const follow = useMutation({ mutationFn: () => api.follow(q.data?.handle || handle), onSuccess: () => q.refetch() });
   const befriend = useMutation({ mutationFn: () => api.addFriend(q.data?.id ?? ''), onSuccess: () => q.refetch() });
+  // Signed out, the link waits in this tab for after sign-in or the setup chat (Shell brings them back); signed in, it is spent here.
+  useEffect(() => {
+    if (addAsked === null || !handle) return;
+    keepFriendAdd(token ? null : friendAddPath(handle, addAsked));
+  }, [addAsked, handle, token]);
   const accept = useMutation({ mutationFn: () => api.answerFriend(q.data?.friendRequestId ?? '', 'accepted'), onSuccess: () => q.refetch() });
   const chat = useMutation({ mutationFn: () => api.openChat({ userId: q.data?.id ?? '' }), onSuccess: (r) => nav(`/bond/chats/${r.chat.id}`) });
   // A signed-in visitor's own name and email are filled in from their profile (they can change them); a visitor with no account types them.
@@ -93,9 +101,11 @@ export function Public() {
   const d = q.data;
 
   const signedIn = Boolean(token);
+  // A QR code's card owns the friend request, so the cover does not offer it twice.
+  const byQr = addAsked !== null && signedIn;
   // What the viewer can do with this person, the way the owner's switches allow (the server already blanked what is off).
   const friendLine =
-    !d || d.mine || d.isPrivate || !signedIn
+    !d || d.mine || d.isPrivate || !signedIn || byQr
       ? ''
       : d.friend === 'sent'
         ? 'Friend request sent.'
@@ -105,7 +115,7 @@ export function Public() {
             ? 'Not taking friend requests.'
             : '';
   const friendAction =
-    !d || d.mine || d.isPrivate || !signedIn ? null : d.friend === 'none' && d.allowFriendRequests ? (
+    !d || d.mine || d.isPrivate || !signedIn || byQr ? null : d.friend === 'none' && d.allowFriendRequests ? (
       <Button variant="outline" disabled={befriend.isPending} onClick={() => befriend.mutate()}>
         Add friend
       </Button>
@@ -241,6 +251,8 @@ export function Public() {
               </>
             )}
           </AppCover>
+
+          {addAsked !== null && <QrAddCard d={d} code={addAsked} path={friendAddPath(handle, addAsked)} signedIn={signedIn} onChange={() => void q.refetch()} />}
 
           <LinkBlocks blocks={d.links} onOpen={(id) => d.handle && void api.click(d.handle, `block:${id}`)} />
 
@@ -434,5 +446,83 @@ export function Public() {
         <p className="m-0 text-caption text-ink-soft">One page for everything you make. Start yours free.</p>
       </footer>
     </Screen>
+  );
+}
+
+/** What a failed Add friend says. A refusal of any kind reads as a code that does not work, so a block or a switch is never told. */
+function addFailed(e: unknown): string {
+  if (e instanceof ApiError && e.status === 429) return 'Too many tries. Wait a minute, then try again.';
+  if (e instanceof ApiError && e.status === 403 && typeof e.data.module === 'string') return 'Bond is off for you. Turn it on under Apps to add friends.';
+  if (e instanceof ApiError && e.status >= 400 && e.status < 500) return NOBODY;
+  return 'That did not work. Try again.';
+}
+/** A link drawn as Button's outline look, at rest and on hover. */
+const LINK_OUTLINE = 'toy toy-ink btn-outline inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-md text-headline text-ink';
+const NOBODY = 'This code does not work. Ask them to show theirs again.';
+
+/**
+ * The card a QR code opens under the person's cover (`?add=<friend code>`): signed out, a way to sign in or join that comes back here; signed in,
+ * one Add friend through the ordinary request (POST /bond/friends with the code), which they still say yes to. Your own code says so, and a code
+ * that does not match, a block or requests switched off all read the same (`PublicPage.add`).
+ */
+function QrAddCard({ d, code, path, signedIn, onChange }: { d: PublicPage; code: string; path: string; signedIn: boolean; onChange: () => void }) {
+  const add = useMutation({ mutationFn: () => api.addFriendByCode(code), onSuccess: onChange });
+  const accept = useMutation({ mutationFn: () => api.answerFriend(d.friendRequestId ?? '', 'accepted'), onSuccess: onChange });
+  const first = d.name.split(' ')[0] || d.name;
+  const state = !signedIn ? 'out' : d.add === 'self' ? 'self' : d.add !== 'ok' ? 'nobody' : d.friend;
+  const line =
+    state === 'out'
+      ? `Sign in or join to send ${first} a friend request. They still say yes.`
+      : state === 'self'
+        ? 'This is your own code. Show it to someone so they can add you.'
+        : state === 'nobody'
+          ? NOBODY
+          : state === 'none'
+            ? `Send ${first} a friend request. They still say yes.`
+            : state === 'sent'
+              ? 'Friend request sent. They still say yes.'
+              : state === 'pending'
+                ? `${first} asked you first. Say yes to be friends.`
+                : 'You are friends.';
+  const failed = add.isError ? addFailed(add.error) : accept.isError ? 'That did not work. Try again.' : null;
+  const action =
+    state === 'out' ? (
+      <>
+        <Link to={`/signin?next=${encodeURIComponent(path)}`} className={LINK_OUTLINE}>
+          Sign in
+        </Link>
+        <Link to="/start" className={LINK_OUTLINE}>
+          Join
+        </Link>
+      </>
+    ) : state === 'self' ? (
+      <Link to="/you#qr" className={LINK_OUTLINE}>
+        My QR code
+      </Link>
+    ) : state === 'none' && !failed ? (
+      <Button variant="outline" disabled={add.isPending} onClick={() => add.mutate()}>
+        Add friend
+      </Button>
+    ) : state === 'pending' ? (
+      <Button variant="outline" disabled={accept.isPending} onClick={() => accept.mutate()}>
+        Accept request
+      </Button>
+    ) : state === 'friends' ? (
+      <Link to="/bond#bond-friends" className={LINK_OUTLINE}>
+        Open Bond
+      </Link>
+    ) : null;
+  return (
+    <section id="qr-add" aria-labelledby="qr-add-heading" className="mt-lg rounded-card bg-card p-md shadow-toy-soft">
+      <h2 id="qr-add-heading" className="text-card-title">
+        From a QR code
+      </h2>
+      <div className="mt-xs flex flex-wrap-reverse items-center justify-between gap-sm">
+        <p className="m-0 min-w-[60%] flex-1 text-card-note text-ink-soft" role="status">
+          {failed ?? line}
+        </p>
+        {action && <div className="ml-auto flex flex-wrap justify-end gap-xs">{action}</div>}
+      </div>
+    </section>
   );
 }

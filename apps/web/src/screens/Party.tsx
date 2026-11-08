@@ -1,7 +1,7 @@
 import { EVENT_TYPE_META, EVENT_TYPES, type DiscountCheck, type EventRegistration, type EventType, type PartyEvent } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 import { MediaSection } from '../components/MediaSection';
 import { EventPanel } from '../components/EventPanel';
 import { Button } from '../components/Button';
@@ -12,7 +12,7 @@ import { Sheet } from '../components/Sheet';
 import { Fold } from '../components/Fold';
 import { api } from '../lib/api';
 import { useAuthed, useRefreshAll } from '../lib/queries';
-import { Pager, usePage } from '../components/Pager';
+import { DOOR_SIZES, Pager, TEN_A_PAGE, usePage } from '../components/Pager';
 import { attendeeBody, AttendeeFields, attendeeProblem, ClaimCard, HostCodeCard } from '../components/AttendeeCode';
 import { AppIcon } from '../components/AppIcon';
 import { FIELD, FIELD_CARD, RED_YES } from '../lib/ui';
@@ -25,6 +25,8 @@ import { CardHead } from '../components/CardHead';
 import { Reveal } from '../components/fx/Reveal';
 
 const when = eventTime;
+/** A link drawn as the small outline button (Button's own outline look at its small size). */
+const LINK_OUTLINE = 'toy toy-ink btn-outline inline-flex min-h-[44px] items-center justify-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-sm text-subhead font-semibold leading-none text-ink select-none';
 
 
 
@@ -100,7 +102,10 @@ function EventCard({ e, index = 0 }: { e: PartyEvent; index?: number }) {
 
 export function Party() {
   const pg = usePage();
-  const q = useAuthed(['party', pg.query], () => api.party(pg.query));
+  // What you host is its own list, a page at a time (prefix `h`, ten by default).
+  const hp = usePage('h', TEN_A_PAGE);
+  const pq = `${pg.query}&${hp.query}`;
+  const q = useAuthed(['party', pq], () => api.party(pq));
   const [hosting, setHosting] = useState(false);
   const d = q.data;
   return (
@@ -143,7 +148,7 @@ export function Party() {
             <Pager page={d.page} label="events" />
           </section>
 
-          {d.hosting.length > 0 && (
+          {(d.hosting.length > 0 || d.hostingPage.page > 1) && (
             <section className="mt-lg" aria-labelledby="hosting-heading">
               <h2 id="hosting-heading" className="text-title2">
                 Hosting
@@ -164,6 +169,7 @@ export function Party() {
                   </Reveal>
                 ))}
               </ul>
+              <Pager page={d.hostingPage} prefix="h" label="events you host" only={TEN_A_PAGE} />
             </section>
           )}
         </>
@@ -328,16 +334,18 @@ function HostSheet({ open, onClose, canHostAll }: { open: boolean; onClose: () =
 export function EventPage() {
   const { id = '' } = useParams();
   // The host's guest list is a page at a time (prefix `g`). With no size in the address the server sends 100 a page, so the whole room shows at the door.
-  const gp = usePage('g');
+  const gp = usePage('g', DOOR_SIZES);
   const [params] = useSearchParams();
   const gq = `gpage=${gp.page}${params.get('gsize') ? `&gsize=${gp.size}` : ''}`;
   const q = useAuthed(['event', id, gq], () => api.event(id, gq));
   const refresh = useRefreshAll();
-  const codeError = ((useLocation().state as { codeError?: string } | null)?.codeError ?? null);
+  const navState = useLocation().state as { codeError?: string; joined?: EventRegistration['status'] } | null;
+  const codeError = navState?.codeError ?? null;
   const [networking, setNetworking] = useState(false);
   // A team discount code on a ticket that costs points. The server prices it again when the RSVP is sent.
   const [discount, setDiscount] = useState<DiscountCheck | null>(null);
-  const [rsvpResult, setRsvpResult] = useState<string | null>(null);
+  // Someone who joined from the event's public page lands here with how it went (the event attendee's way in).
+  const [rsvpResult, setRsvpResult] = useState<string | null>(navState?.joined === 'registered' ? 'You are in. See you there.' : navState?.joined === 'waitlisted' ? 'The room is full, so you are on the waitlist. We will tell you if a seat opens.' : null);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [thanks, setThanks] = useState(false);
@@ -491,6 +499,21 @@ export function EventPage() {
         </section>
       )}
 
+      {/* One tap each to the people: this event's conversation, Community and Bond (the event attendee's way in, 2026-11-07). */}
+      {mine && (mine.status === 'registered' || mine.status === 'attended') && e.status !== 'cancelled' && (
+        <nav aria-label="Meet the people" className="mt-sm flex flex-wrap gap-xs fill-row">
+          <Link to={`#talk-${e.id}`} className={LINK_OUTLINE}>
+            Event chat
+          </Link>
+          <Link to="/community" className={LINK_OUTLINE}>
+            Community
+          </Link>
+          <Link to="/bond" className={LINK_OUTLINE}>
+            Bond
+          </Link>
+        </nav>
+      )}
+
       {canFeedback && (
         <section className="mt-lg" aria-labelledby="fb-heading">
           <h2 id="fb-heading" className="text-title2">
@@ -595,7 +618,7 @@ export function EventPage() {
             ))}
           </ul>
           {/* The bar shows only when there is more than one page, or a size was picked: a short guest list needs none. */}
-          <Pager page={d.registrationsPage && (d.registrationsPage.more || d.registrationsPage.page > 1 || params.get('gsize')) ? d.registrationsPage : undefined} prefix="g" label="guests" />
+          <Pager page={d.registrationsPage && (d.registrationsPage.more || d.registrationsPage.page > 1 || params.get('gsize')) ? d.registrationsPage : undefined} prefix="g" label="guests" only={DOOR_SIZES} />
         </section>
       )}
       {(d.host || (mine && (mine.status === 'registered' || mine.status === 'attended'))) && <EventPanel app="party" id={e.id} />}

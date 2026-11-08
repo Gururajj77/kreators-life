@@ -7,6 +7,7 @@ import { BadgeArt } from '../components/BadgeArt';
 import { Busy, Skeleton } from '../components/Skeleton';
 import { Button } from '../components/Button';
 import { MyCoachSection } from '../components/MyCoach';
+import { FriendQr } from '../components/FriendQr';
 import { Nudge } from '../components/Nudge';
 import { Person } from '../components/Person';
 import { RoleBadge } from '../components/RoleBadge';
@@ -194,6 +195,17 @@ function YouView({ data }: { data: MeResponse }) {
       </section>
 
       <MyCoachSection />
+
+      {/* My QR code: your page and friend code as a picture to show someone in person (components/FriendQr.tsx; `/you#qr`). */}
+      <section className="mt-lg" aria-labelledby="qr-heading" id="qr">
+        <h2 id="qr-heading" className="text-title2">
+          My QR code
+        </h2>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">Show it to someone you meet. They scan it and can ask to be your friend.</p>
+        <div className="mt-sm sm:max-w-[400px]">
+          <FriendQr />
+        </div>
+      </section>
 
       <section className="mt-lg" aria-labelledby="look-heading">
         <h2 id="look-heading" className="text-title2">

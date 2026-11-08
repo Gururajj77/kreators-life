@@ -1,4 +1,4 @@
-import { RELATIONSHIPS } from '@kreators/shared';
+import { attendeeMayOpen, RELATIONSHIPS } from '@kreators/shared';
 import { Suspense, useEffect, type ReactNode } from 'react';
 import { createBrowserRouter, Link, Navigate, Outlet, RouterProvider, ScrollRestoration, useLocation } from 'react-router';
 import { Avatar } from './components/Avatar';
@@ -13,6 +13,7 @@ import { ReminderBubble } from './components/Reminders';
 import { RouteFallback } from './components/RouteFallback';
 import { lazyNamed } from './lib/lazy';
 import { coachJoinKept } from './lib/coachJoin';
+import { friendAddKept } from './lib/friendAdd';
 import { useMe } from './lib/queries';
 import { useApplyTheme } from './lib/theme';
 import { useFocus, useSession } from './lib/store';
@@ -26,7 +27,6 @@ import { Today } from './screens/Today';
 import { SetupChat } from './screens/SetupChat';
 import { Welcome } from './screens/Welcome';
 import { Home } from './site/Home';
-import { SevenRP } from './site/SevenRP';
 
 // Mounted once by Root for anyone signed in, not a screen, but still downloaded only after the first paint so the entry stays under budget:
 // a running clock is written down in the tab (sessionStorage, lib/focusSession.ts) and picked back up when it mounts, so a delay loses nothing.
@@ -35,6 +35,8 @@ const FocusRoundsHost = lazyNamed(() => import('./components/FocusRoundsHost'), 
 const ConsentPopup = lazyNamed(() => import('./components/ConsentPopup'), 'ConsentPopup');
 // "On this page", the dashes at the top right of a long page: its own chunk after the first paint, and a phone never downloads it.
 const PageContents = lazyNamed(() => import('./components/PageContents'), 'PageContents');
+// The bar that invites someone who joined an event to finish setting up: its own chunk, fetched only for them.
+const AttendeeBar = lazyNamed(() => import('./components/AttendeeBar'), 'AttendeeBar');
 const Forgot = lazyNamed(() => import('./screens/PasswordReset'), 'Forgot');
 const ResetPassword = lazyNamed(() => import('./screens/PasswordReset'), 'ResetPassword');
 const Admin = lazyNamed(() => import('./screens/Admin'), 'Admin');
@@ -129,8 +131,12 @@ const Copyright = lazyNamed(() => import('./site/Copyright'), 'Copyright');
 const Licences = lazyNamed(() => import('./site/Licences'), 'Licences');
 const Subprocessors = lazyNamed(() => import('./site/Subprocessors'), 'Subprocessors');
 const Explore = lazyNamed(() => import('./site/Explore'), 'Explore');
+const EventsList = lazyNamed(() => import('./site/Events'), 'EventsList');
+const EventLanding = lazyNamed(() => import('./site/Events'), 'EventLanding');
 const Feature = lazyNamed(() => import('./site/Feature'), 'Feature');
 const Features = lazyNamed(() => import('./site/Features'), 'Features');
+// /7rp downloads when it is opened (2026-11-07); before, it sat in the entry beside the landing page.
+const SevenRP = lazyNamed(() => import('./site/SevenRP'), 'SevenRP');
 
 function Loading() {
   return (
@@ -196,10 +202,17 @@ function Shell() {
       </div>
     );
   }
-  if (!me.data.user.onboardedAt) return <Navigate to="/onboarding" replace />;
+  // Setup not done: the setup chat first. Someone who joined an event from its public page gets the event first: the event, Party, Community,
+  // Bond's chats, Inbox, the Profile tab and Help (ATTENDEE_PATHS in shared eventJoin.ts), with a bar inviting them to finish; anything else
+  // still sends them to the setup chat.
+  const attendee = !me.data.user.onboardedAt && Boolean(me.data.user.attendeeEvent);
+  if (!me.data.user.onboardedAt && !(attendee && attendeeMayOpen(loc.pathname))) return <Navigate to="/onboarding" replace />;
   // Someone who opened a coach's invite link signed out comes back to its card once they are in (the token is kept for the tab only).
   const joining = coachJoinKept();
   if (joining) return <Navigate to={`/coach/join/${joining}`} replace />;
+  // The same for a QR code's Add friend link: its page clears the kept link once a signed-in visitor lands there.
+  const adding = friendAddKept();
+  if (adding) return <Navigate to={adding} replace />;
   return (
     <>
       <Page tabs />
@@ -208,6 +221,11 @@ function Shell() {
           <TabBar />
           <Assistant />
           <ReminderBubble />
+          {attendee && (
+            <Suspense fallback={null}>
+              <AttendeeBar userId={me.data.user.id} />
+            </Suspense>
+          )}
         </div>
       )}
     </>
@@ -314,6 +332,9 @@ const router = createBrowserRouter([
   // The public site: no account needed.
   { path: '/', element: <Home /> },
   { path: '/explore', element: <Explore /> },
+  // Upcoming public events, and one event's page where a visitor joins and signs up in one go (the event attendee's way in).
+  { path: '/events', element: <EventsList /> },
+  { path: '/events/:id', element: <EventLanding /> },
   { path: '/features', element: <Features /> },
   { path: '/7rp', element: <SevenRP /> },
   { path: '/features/:key', element: <Feature /> },

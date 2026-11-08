@@ -1,4 +1,4 @@
-import { LIFE_AREAS, PRIORITIES, mondayOf, priorityTag, repeatLabel, openDay, taskIsHabit, type LifeAreaKey, type Node, type Priority, type TimeBlock } from '@kreators/shared';
+import { LIFE_AREAS, PRIORITIES, mondayOf, openTag, priorityTag, repeatLabel, openDay, taskIsHabit, type LifeAreaKey, type Node, type OpenKind, type Priority, type TimeBlock } from '@kreators/shared';
 import { tbClass, tbStyle } from '../lib/blockColor';
 import { Bell, ClipboardCheck, Landmark, Repeat as RepeatIcon } from 'lucide-react';
 import { Icon } from './Icon';
@@ -24,8 +24,8 @@ export function PriorityChip({ priority }: { priority: Priority | null }) {
 
 /**
  * The marks on a task, so a person can tell kinds of task apart at a glance: its priority, Remember (it will remind them on the day),
- * Habit (it comes back on its own), From pillar (the strategy session or the vibe check made it), From your coach and the area of
- * life it is for (its icon and its name, never the icon alone).
+ * Habit (it comes back on its own), From pillar (the strategy session or the vibe check made it), From your coach, its kind of open
+ * business (Unfinished, Unresolved or Undecided) and the area of life it is for (its icon and its name, never the icon alone).
  */
 export function TaskTags({ task, priority = true }: { task: Node; /** False where the row shows the priority in its own corner. */ priority?: boolean }) {
   return (
@@ -52,6 +52,7 @@ export function TaskTags({ task, priority = true }: { task: Node; /** False wher
         </StatusTag>
       )}
       {task.fromCoach && <StatusTag tone="deep">From your coach</StatusTag>}
+      {task.openKind && <OpenTag kind={task.openKind} />}
       {task.lifeArea && <AreaTag area={task.lifeArea} />}
       {task.timeBlockId && <TaskBlockMark id={task.timeBlockId} />}
     </>
@@ -72,6 +73,15 @@ function TaskBlockMark({ id }: { id: string }) {
   const q = useTimeBlocks(mondayOf(todayLocal()));
   const block = q.data?.blocks.find((b) => b.id === id);
   return block ? <BlockMark block={block} /> : null;
+}
+
+/** A task's kind of open business (Close the unfinished), as a warm tag with a puzzle piece (from the shared icon registry): the word is always shown. */
+export function OpenTag({ kind }: { kind: OpenKind }) {
+  return (
+    <IconTag tone="warm" icon="Puzzle" title="Bottleneck" className="open-tag">
+      {openTag(kind)}
+    </IconTag>
+  );
 }
 
 /** The area of life a task is for, as a quiet tag: the area's icon and its name. */

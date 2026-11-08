@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { APPLICATION_STATUSES, OPPORTUNITY_TYPES, type Application, type Opportunity } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { audit, can, isClubMember, nameOf, newId, notify, nowIso, num, oneOf, orgIdsOf, orgRole, parseList, str, pageOf, paged } from '../db';
+import { audit, can, isClubMember, nameOf, newId, notify, nowIso, num, oneOf, orgIdsOf, orgRole, parseList, str, pageOf, paged, TEN_A_PAGE } from '../db';
 
 export const work = new Hono<AppEnv>();
 
@@ -28,19 +28,27 @@ work.get('/', async (c) => {
   const user = c.get('user');
   const ask = pageOf(c);
   const draftAsk = pageOf(c, 'd');
+  // Your applications are a page at a time (prefix `ap`, ten by default, 2026-11-07); the cards on this page still carry yours.
+  const apAsk = pageOf(c, 'ap', TEN_A_PAGE);
   const [orgIds, member] = await Promise.all([orgIdsOf(db, user.id), isClubMember(db, user.id)]);
-  const [published, mine, drafts] = await Promise.all([
+  const day = new Date().toISOString().slice(0, 10);
+  const [published, mineRows, onPage, drafts] = await Promise.all([
     // Club-only listings are the Club's first look: only members see them.
-    db.prepare(`${SELECT} WHERE o.status = 'published' AND (o.deadline IS NULL OR o.deadline >= ?) AND (o.club_only = 0 OR ? = 1) ORDER BY o.published_at DESC LIMIT ? OFFSET ?`).bind(new Date().toISOString().slice(0, 10), member ? 1 : 0, ask.limit, ask.offset).all<OppRow>(),
-    db.prepare(`${APP_SELECT} WHERE a.creator_user_id = ? ORDER BY a.updated_at DESC`).bind(user.id).all<AppRow>(),
+    db.prepare(`${SELECT} WHERE o.status = 'published' AND (o.deadline IS NULL OR o.deadline >= ?) AND (o.club_only = 0 OR ? = 1) ORDER BY o.published_at DESC LIMIT ? OFFSET ?`).bind(day, member ? 1 : 0, ask.limit, ask.offset).all<OppRow>(),
+    db.prepare(`${APP_SELECT} WHERE a.creator_user_id = ? ORDER BY a.updated_at DESC, a.id LIMIT ? OFFSET ?`).bind(user.id, apAsk.limit, apAsk.offset).all<AppRow>(),
+    db
+      .prepare(`${APP_SELECT} WHERE a.creator_user_id = ?1 AND a.opportunity_id IN (SELECT o.id FROM opportunities o WHERE o.status = 'published' AND (o.deadline IS NULL OR o.deadline >= ?2) AND (o.club_only = 0 OR ?3 = 1) ORDER BY o.published_at DESC LIMIT ?4 OFFSET ?5)`)
+      .bind(user.id, day, member ? 1 : 0, ask.limit, ask.offset)
+      .all<AppRow>(),
     can(user, 'talent')
       ? db.prepare(`${SELECT} WHERE o.status != 'published' ORDER BY o.created_at DESC LIMIT ? OFFSET ?`).bind(draftAsk.limit, draftAsk.offset).all<OppRow>()
       : db.prepare(`${SELECT} WHERE o.status != 'published' AND (o.created_by = ? OR o.organization_id IN (${orgIds.length ? orgIds.map(() => '?').join(',') : "''"})) ORDER BY o.created_at DESC LIMIT ? OFFSET ?`).bind(user.id, ...orgIds, draftAsk.limit, draftAsk.offset).all<OppRow>(),
   ]);
-  const byOpp = new Map(mine.results.map((a) => [a.opportunity_id, toApp(a)]));
+  const mine = paged(mineRows.results, apAsk);
+  const byOpp = new Map(onPage.results.map((a) => [a.opportunity_id, toApp(a)]));
   const pg = paged(published.results, ask);
   const dpg = paged(drafts.results, draftAsk);
-  return c.json({ page: pg.page, opportunities: pg.items.map((o) => toOpp(o, byOpp.get(o.id) ?? null)), applications: mine.results.map(toApp), draftPage: dpg.page, drafts: dpg.items.map((o) => toOpp(o, null)), canPost: can(user, 'talent') || orgIds.length > 0 });
+  return c.json({ page: pg.page, opportunities: pg.items.map((o) => toOpp(o, byOpp.get(o.id) ?? null)), applications: mine.items.map(toApp), applicationsPage: mine.page, draftPage: dpg.page, drafts: dpg.items.map((o) => toOpp(o, null)), canPost: can(user, 'talent') || orgIds.length > 0 });
 });
 
 work.post('/opportunities', async (c) => {

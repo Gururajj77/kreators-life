@@ -226,6 +226,9 @@ export interface CoachStudentView {
     tasksByDay: number[];
     tasks: Node[];
     done: Node[];
+    /** Their done today is paged (prefix `cd`, 10, 25 or 50); the count is the day's true count. */
+    donePage?: Page;
+    doneTotal?: number;
     /** Today's small act: done or not, and the pillar it was for once it is done. */
     smallAct: { relationship: RelationshipKey | null; done: boolean };
     notToDo: NotToDo[];

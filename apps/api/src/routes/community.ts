@@ -304,12 +304,16 @@ async function presentReplies(c: Context<AppEnv>, rows: ReplyRow[]): Promise<Com
 
 // The replies to a post, in reading order: each one under what it answers. Hidden ones and anyone blocked either way are left out.
 community.get('/:id/replies', async (c) => {
-  const ask = pageOf(c);
+  const asked = pageOf(c);
   if (!(await canSeePost(c.env.DB, c.get('user').id, c.req.param('id'), isGuide(c.get('user'))))) return c.json({ error: 'not found' }, 404);
   const rows = await c.env.DB.prepare(`${REPLY_SELECT} WHERE r.post_id = ?2 AND r.hidden_at IS NULL AND NOT ${hiddenByBlock('?1', 'r.user_id', 'r.anonymous')} ORDER BY r.created_at ASC LIMIT 500`)
     .bind(c.get('user').id, c.req.param('id'))
     .all<ReplyRow>();
-  const ordered = threadOrder(await presentReplies(c, rows.results)).slice(ask.offset, ask.offset + ask.limit);
+  const thread = threadOrder(await presentReplies(c, rows.results));
+  // A note about one reply (`?at=<reply id>`, from `#reply-<id>`) opens on the page that holds it, so the link lands however long the thread.
+  const at = thread.findIndex((r) => r.id === c.req.query('at'));
+  const ask = at >= 0 ? { ...asked, page: Math.floor(at / asked.size) + 1, offset: Math.floor(at / asked.size) * asked.size } : asked;
+  const ordered = thread.slice(ask.offset, ask.offset + ask.limit);
   const pg = paged(ordered, ask);
   return c.json({ page: pg.page, replies: pg.items });
 });
@@ -451,7 +455,7 @@ community.post('/follow/:userId', async (c) => {
 community.get('/mutes', async (c) => {
   const me = c.get('user');
   if (!canMute(rankOf(me), 'member')) return c.json({ error: 'you do not have access to that' }, 403);
-  const ask = pageOf(c);
+  const ask = pageOf(c, 'muted');
   const rows = await c.env.DB.prepare('SELECT m.user_id, m.reason, m.created_at, m.muter_rank, u.display_name, u.handle FROM community_mutes m JOIN users u ON u.id = m.user_id ORDER BY m.created_at DESC LIMIT ? OFFSET ?').bind(ask.limit, ask.offset).all<{ user_id: string; reason: string; created_at: string; muter_rank: string; display_name: string; handle: string | null }>();
   const pg = paged(rows.results, ask);
   return c.json({ page: pg.page, mutes: pg.items.map((r) => ({ userId: r.user_id, name: nameOf(r), handle: r.handle, reason: r.reason, by: r.muter_rank, createdAt: r.created_at })) });

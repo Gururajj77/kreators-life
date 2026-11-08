@@ -650,7 +650,8 @@ export function SetupChat() {
       title="Setting up"
       step={step}
       progress={progress}
-      closeTo={onboarded ? '/you' : '/start'}
+      // Someone who joined an event before setup goes back to their event; Welcome is for everyone else not set up yet.
+      closeTo={onboarded ? '/you' : me.data?.user.attendeeEvent ? `/party/${me.data.user.attendeeEvent}` : '/start'}
       onStartOver={startOver}
       log={chat.log}
       typing={typing ? 'bumling' : null}

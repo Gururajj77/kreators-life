@@ -13,7 +13,7 @@ import { MediaSection, useMediaMenuItem } from '../components/MediaSection';
 import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
-import { Pager, usePage } from '../components/Pager';
+import { Pager, TEN_A_PAGE, usePage } from '../components/Pager';
 import { api } from '../lib/api';
 import { useAuthed, useRefreshAll, useStudio } from '../lib/queries';
 import { FIELD, FIELD_LINE, LABEL } from '../lib/ui';
@@ -49,7 +49,9 @@ export function StudioProduct() {
   const opg = usePage('o');
   const bpg = usePage('b');
   const q = useAuthed(['studio-product', id, opg.query, bpg.query], () => api.studioProduct(id, `${opg.query}&${bpg.query}`));
-  const coupons = useAuthed(['coupons'], api.coupons);
+  // This product's coupons and the ones for every product, a page at a time (prefix `cp`, ten by default).
+  const cpg = usePage('cp', TEN_A_PAGE);
+  const coupons = useAuthed(['coupons', id, cpg.query], () => api.coupons(id, cpg.query));
   const studio = useStudio();
   const refresh = useRefreshAll();
   const d = q.data;
@@ -182,7 +184,7 @@ export function StudioProduct() {
   }
   if (!p || !d) return null;
   const meta = PRODUCT_KIND_META[p.kind];
-  const mine = coupons.data?.coupons.filter((c) => c.productId === id || c.productId === null) ?? [];
+  const mine = coupons.data?.coupons ?? [];
   // A private course never goes in a bundle: a bundle is sold to anyone.
   const others = (studio.data?.products ?? []).filter((x) => x.id !== id && x.kind !== 'bundle' && x.status !== 'private');
   const priced = p.kind !== 'link';
@@ -573,6 +575,7 @@ export function StudioProduct() {
               </li>
             ))}
           </ul>
+          <Pager page={coupons.data?.page} prefix="cp" label="coupons" only={TEN_A_PAGE} />
           <form
             className="mt-sm flex items-end gap-xs"
             onSubmit={(e) => {

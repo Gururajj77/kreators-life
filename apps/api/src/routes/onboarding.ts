@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import {
+  ATTENDEE_APPS,
   deriveAllLadders,
   deriveLadder,
   isRelationshipKey,
@@ -215,7 +216,9 @@ onboarding.post('/setup', async (c) => {
   const mine = parseModules(user.modules);
   // A card game someone paid points for keeps its app on, whatever the setup picks.
   const ownsGame = Boolean(await db.prepare('SELECT 1 AS x FROM card_unlocks WHERE user_id = ? LIMIT 1').bind(user.id).first());
-  for (const k of available) mine[k] = keep.has(k) || (k === 'cards' && ownsGame);
+  // Someone who came in through an event (POST /party/events/:id/arrive) keeps Party, Community and Bond on, where their event and its people are.
+  const cameForEvent = Boolean(user.attendee_event);
+  for (const k of available) mine[k] = keep.has(k) || (k === 'cards' && ownsGame) || (cameForEvent && (ATTENDEE_APPS as readonly string[]).includes(k));
   const merged = (prev: string, add: string[], max: number) => JSON.stringify([...new Set([...parseList(prev), ...add])].slice(0, max));
   const p = match.profile;
   const now = nowIso();

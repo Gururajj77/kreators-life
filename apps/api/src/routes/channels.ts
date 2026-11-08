@@ -184,7 +184,8 @@ function channelRouter(scope: ChannelScope) {
   // The channels this person can see, a page at a time. Community: every open channel (guides can add ?all=1 for closed ones). Bond: the ones they are in or were asked into.
   r.get('/', async (c) => {
     const user = c.get('user');
-    const ask = pageOf(c);
+    // The list pages on `cl` like the screen (2026-11-07: it read `page`, so Next never moved, and Bond's chats hold `ch`); a bare `size` still works.
+    const ask = pageOf(c, 'cl');
     const closed = c.req.query('all') === '1' && scope === 'community' && isGuide(user);
     const where = scope === 'bond' ? "cm.status IN ('member', 'invited') AND c.archived_at IS NULL" : closed ? '1 = 1' : 'c.archived_at IS NULL';
     const rows = await c.env.DB.prepare(`${LIST_SQL} WHERE c.scope = ?2 AND ${where} ORDER BY (cm.status IS NOT NULL) DESC, COALESCE((SELECT MAX(x.created_at) FROM channel_messages x WHERE x.channel_id = c.id AND x.deleted_at IS NULL), c.created_at) DESC LIMIT ?3 OFFSET ?4`)

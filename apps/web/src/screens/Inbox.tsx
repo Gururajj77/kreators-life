@@ -202,7 +202,8 @@ export function Inbox() {
                 <button key={k} type="button" aria-pressed={show === k} onClick={() => {
                   setUndo(null);
                   setShow(k);
-                }} className={`toy min-h-[44px] min-w-0 rounded-pill border-2 px-sm py-xs text-subhead font-medium ${show === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                  pg.reset();
+                }} className={`toy min-h-[44px] min-w-0 rounded-pill border-2 px-sm py-xs text-subhead @max-[19rem]:px-xs font-medium ${show === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                   {label}
                 </button>
               ))}
@@ -240,6 +241,7 @@ export function Inbox() {
             onChange={(k) => {
               setUndo(null);
               setTab(k);
+              pg.reset();
             }}
           />
         </div>
@@ -264,11 +266,12 @@ export function Inbox() {
                 <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink-soft">
                   <Icon icon={iconFor(n.kind)} size={18} />
                 </span>
-                <span className="min-w-0 flex-1">
+                <span className="min-w-0 flex-1 self-stretch">
                   <span className={`block ${n.readAt ? 'text-row-title' : 'text-card-title pr-xs'}`}>{n.title}</span>
-                  {/* The card's foot (the founder, 2026-11-07): the date and time at the bottom right, level with the helper's line while
-                      they fit side by side, else on a line of their own under it, so the helper keeps the card's whole width. */}
-                  <span className="flex flex-wrap items-baseline-last justify-end gap-x-sm">
+                  {/* The card's foot (the founder, 2026-11-07): on a phone the date and time on a line of their own under the helper, at the
+                      left; from md at the bottom right, level with the helper's line while they fit side by side, else on a line of their own
+                      under it, so the helper keeps the card's whole width. */}
+                  <span className="flex flex-col items-start md:flex-row md:flex-wrap md:items-baseline-last md:justify-end md:gap-x-sm">
                     {n.body && <span className="block min-w-0 flex-[1_1_auto] text-card-note text-ink-soft"><Inert text={n.body} /></span>}
                     <time dateTime={n.createdAt} className="block whitespace-nowrap text-caption text-ink-mute">{stamp(n.createdAt)}</time>
                   </span>
@@ -281,7 +284,8 @@ export function Inbox() {
                 )}
               </>
             );
-            const cls = 'toy toy-soft relative flex w-full items-start gap-sm rounded-tile bg-card p-sm text-left';
+            // On a phone the note's icon sits above its words, so the words keep the card's whole width; from md it sits at their left.
+            const cls = 'toy toy-soft relative flex w-full flex-col items-start gap-xs rounded-tile bg-card p-sm text-left md:flex-row md:gap-sm';
             const to = noteLink(n);
             return (
               <li key={n.id} className="flex items-stretch gap-xs">

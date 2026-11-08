@@ -2,6 +2,8 @@ import {
   badgeRoleOf,
   COACH_SHARE_META,
   COACH_SHARE_PARTS,
+  DONE_PAGE_SIZE,
+  DONE_PAGE_SIZES,
   parseCoachShare,
   periodFor,
   reviewNameFor,
@@ -325,15 +327,18 @@ export async function studentView(db: D1Database, link: LinkRow, student: UserRo
   if (share.daily) {
     const [dayStart, dayEnd] = dayBounds(date, student.timezone);
     const gate = await taskGate(db, id);
+    // Their done today, a page at a time like their own Daily (2026-11-07): 10, 25 or 50, ten by default, prefix `cd`, with the true count.
+    const doneAsk = pageOf(c, 'cd', { sizes: DONE_PAGE_SIZES, fallback: DONE_PAGE_SIZE });
     const [checkins, ticks, due, done, act, ntd] = await Promise.all([
       db.prepare("SELECT source_id AS d FROM xp_events WHERE user_id = ? AND source = 'checkin' AND source_id >= ? AND source_id <= ?").bind(id, from, date).all<{ d: string }>(),
       db.prepare("SELECT substr(completed_at, 1, 10) AS d, COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? GROUP BY d").bind(id, `${from}T00:00:00`).all<{ d: string; n: number }>(),
       db.prepare("SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) IS NOT NULL AND COALESCE(do_date, due_date) <= ? ORDER BY COALESCE(do_date, due_date) ASC, CASE WHEN due_time IS NULL THEN 1 ELSE 0 END, due_time ASC LIMIT 20").bind(id, date).all<NodeRow>(),
-      db.prepare("SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? AND completed_at < ? ORDER BY completed_at DESC LIMIT 20").bind(id, dayStart, dayEnd).all<NodeRow>(),
+      db.prepare("SELECT *, COUNT(*) OVER () AS done_total FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? AND completed_at < ? ORDER BY completed_at DESC, id ASC LIMIT ? OFFSET ?").bind(id, dayStart, dayEnd, doneAsk.limit, doneAsk.offset).all<NodeRow & { done_total: number }>(),
       db.prepare('SELECT relationship FROM spark_completions WHERE user_id = ? AND date = ?').bind(id, date).first<{ relationship: RelationshipKey }>(),
       notToDoList(db, id, date),
     ]);
     const perDay = new Map(ticks.results.map((t) => [t.d, t.n]));
+    const donePage = paged(done.results, doneAsk);
     daily = {
       streak: streakNow(student.streak, student.last_checkin, date),
       bestStreak: student.best_streak,
@@ -343,7 +348,9 @@ export async function studentView(db: D1Database, link: LinkRow, student: UserRo
       checkins: [...new Set(checkins.results.map((r) => r.d))].sort(),
       tasksByDay: days30.map((d) => perDay.get(d) ?? 0),
       tasks: due.results.map((t) => coachNode(t, gate)),
-      done: done.results.map((t) => coachNode(t, gate)),
+      done: donePage.items.map((t) => coachNode(t, gate)),
+      donePage: donePage.page,
+      doneTotal: Number(done.results[0]?.done_total ?? 0),
       smallAct: { relationship: act?.relationship ?? null, done: Boolean(act) },
       notToDo: ntd,
     };

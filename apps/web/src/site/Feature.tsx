@@ -12,7 +12,7 @@ import { keepTail } from '../lib/textNodes';
 import { featureFor, SITE_FEATURES } from './content';
 import { LISTING_COLS, ListingCard } from './ListingCard';
 import { GuideLine } from './GuideLine';
-import { useRise } from './SevenRP';
+import { useRise } from './useRise';
 import { SiteLayout } from './SiteLayout';
 import { AppIcon } from '../components/AppIcon';
 import { Fold } from '../components/Fold';

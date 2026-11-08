@@ -156,7 +156,8 @@ export function NewChannelButton({ scope, className = '' }: { scope: ChannelScop
 }
 
 function ChannelList({ scope, onOpen, create }: { scope: ChannelScope; onOpen: (id: string) => void; create: boolean }) {
-  const pg = usePage('ch');
+  // Prefix `cl`: Bond's chats already page on `ch` on the same screen.
+  const pg = usePage('cl');
   const me = useMe();
   const [closed, setClosed] = useState(false);
   const qc = useQueryClient();
@@ -230,7 +231,7 @@ function ChannelList({ scope, onOpen, create }: { scope: ChannelScope; onOpen: (
         ))}
       </ul>
       <ErrorLine e={join.isError ? join.error : decline.isError ? decline.error : null} className="mt-xs" />
-      <Pager page={q.data?.page} prefix="ch" label="channels" />
+      <Pager page={q.data?.page} prefix="cl" label="channels" />
       <NewChannelSheet scope={scope} open={making} onClose={() => setMaking(false)} onMade={(id) => { refresh(); onOpen(id); }} />
     </div>
   );

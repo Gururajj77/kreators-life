@@ -385,6 +385,12 @@ export interface PublicPage {
   shows: { socials: boolean; blocks: boolean; portfolio: boolean; products: boolean; posts: boolean; activity: boolean; badges: boolean };
   allowFriendRequests: boolean;
   allowChats: boolean;
+  /**
+   * Only for a signed-in visitor who came by a QR code (`/u/<handle>?add=<friend code>`): `self` on their own page, `ok` when the code is this
+   * person's and a request can be sent (or they are already linked), and `nobody` for a code that does not match, a block either way or requests
+   * switched off, all in the same words so nothing leaks.
+   */
+  add?: 'ok' | 'self' | 'nobody';
   posts: PublicPost[];
   activity: PublicActivity | null;
   /** Earned badge keys and awarded honor keys, only when the badges switch is on. */

@@ -62,10 +62,10 @@ export const HOW_TO: Record<string, HowTo> = {
       'Daily is three boxes a day: check in, do the small act, tick one task. Checking in pays 10 xp and 10 points and keeps your streak; every seventh day in a row pays 50 points more. The small act is a two-minute thing for your weakest pillar and pays 15 xp. Your routine from the strategy session sits under the first box.',
       'Tasks come from the pillars you set up. Each pays 20 xp and sends a ripple up its pyramid. A task has a do date, the day you will do it, and can have a due date, the deadline. It shows here from its do date and cannot be ticked before it. After its due date it says Overdue, but you can still tick it. A new task waits ten minutes before it can be ticked.',
       'Tap the pencil on a task to plan it, rename it or delete it. Give it an area of life. Tag it P0 (do now), P1, P2 or P3 (whenever), in red, orange, purple and grey, and sort the list by day, priority or due date. Pick the kind of day, a day template like Deep work day, and the list sorts By context: P0 stays on top, and inside each priority the pillar the template leads with comes first. Sort By time block or By area to see tasks in coloured boxes; P0 stays first in each. Make it repeat every day, week, month or year, and the next one appears when you tick it; that makes it a habit. Add subtasks, say how many minutes it takes, tag it Remember, and start a focus session on it. Remember tasks with no day wait in a To remember list on Daily, and with a day they also send a note to your inbox.',
-      'A task with no date waits under Not scheduled yet. It stays out of Tasks until you pick a do date or a due date, and then it moves up. Plan my week suggests a day for each one, spread so no day is overloaded, and shows how strong the plan is; nothing changes until you keep it. Your day shows its time blocks with the tasks in each and the free time left; open Time blocks to shape each day and your usual week. Open Month calendar to see the whole month: tap a day to tick its tasks or add one, and tap Print this month for a paper copy.',
+      'A task with no date waits under Not scheduled yet until you pick a do date or a due date. Things left open tend to stay on your mind, so a task can be marked Unfinished, Unresolved or Undecided in its plan, and ended there: do it, give it a time and date, or let it go. Sort by Bottlenecks to see only those, each kind in its own coloured box; what you let go waits under Let go there, so you can bring it back. Plan my week suggests a day for each task with no day, and nothing changes until you keep it. Open Month calendar to see or print the whole month. Done today shows ten at a time; pick 25 or 50, or go to the next page.',
       'Under the tasks, the not-to-do list holds up to seven things you are staying away from. Tick one to say you kept it today: a kept day pays 5 xp and grows that item’s streak. Missed yesterday? A line under the list opens it, with Kept and Slipped. At the bottom, who you are becoming shows the figure your xp is filling in.',
     ],
-    terms: ['daily three', 'check-in', 'small act', 'task', 'do date', 'due date', 'priority', 'day type', 'time block', 'day template', 'weekly pattern', 'by time block', 'by area', 'plan strength', 'habit', 'subtask', 'remember', 'not scheduled', 'not-to-do', 'kept day', 'who you are becoming', 'routine', 'assistant'],
+    terms: ['daily three', 'check-in', 'small act', 'task', 'do date', 'due date', 'priority', 'day type', 'time block', 'day template', 'weekly pattern', 'by time block', 'by area', 'plan strength', 'habit', 'subtask', 'remember', 'not scheduled', 'bottlenecks', 'unfinished', 'unresolved', 'undecided', 'three endings', 'not-to-do', 'kept day', 'who you are becoming', 'routine', 'assistant'],
   },
   tower: {
     steps: [
@@ -161,7 +161,7 @@ export const HOW_TO: Record<string, HowTo> = {
       'RSVP to take a seat. A full room puts you on the waitlist, first in line: if a seat opens, the first person waiting gets it and a note in their inbox.',
       'Some events cost points for a ticket. Cancelling a seat refunds them.',
       `A host can set xp for the guests, up to ${ATTENDEE_XP_MAX}, and shows an attendee code at the event. It works from thirty minutes before the start to three hours after the end, once each, for up to ${ATTENDEE_CLAIMS_PER_DAY} events in 24 hours. Then the xp is fixed. Afterwards, rate it and say if you are happy to be introduced.`,
-      'Club members see Club-only events. Private events only show to people with the link.',
+      'Public events are listed on the site under Events, each with its own page to share. Someone new joins and makes an account there, lands on the event, and finishes setting up later. Club members see Club-only events. Private events only show to people with the link.',
     ],
     terms: ['attendee code', 'xp'],
   },
@@ -198,7 +198,7 @@ export const HOW_TO: Record<string, HowTo> = {
     steps: [
       'Bond is introductions with consent. Switch introductions on, and the app suggests people you crossed paths with at events.',
       'Ask to meet someone. Nothing moves until they say yes; then you are both introduced.',
-      'Add friends from their public page and chat under aliases. Nobody is ever revealed.',
+      'Add friends from their page, by their friend code, or by scanning their QR code (My QR code, on Profile, in Bond and at an event). They still say yes. Chats run under aliases, and nobody is ever revealed.',
       'Block anyone, any time. A blocked person cannot ask again. A block by name leaves anonymous posts alone, or it would say who wrote them, so block those from the post itself.',
       `Make a channel for friends: a private room for up to ${MAX_CHANNEL_MEMBERS} people. Invite friends, they say yes, and you talk in it under your own names. You can remove people, and anyone can leave.`,
     ],

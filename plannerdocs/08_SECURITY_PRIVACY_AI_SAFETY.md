@@ -61,7 +61,7 @@ The rest of the baseline:
 - **Adding a student.** The lookup box (`GET /coach/lookup`) shows only a picture, a name and a handle on an exact @username or friend code, never an email or a phone, and the same words for nobody and for someone blocked either way. An email is never looked up until it is sent, and someone who blocked the coach reads the same as an address with no account. **The invite link** (`coach_invites`) is kept plain while live, since the coach has to copy it, is never in the export, and is kept only as a hash once retired (a year, answering 410). Opening it says nothing about anyone but the coach, and nothing starts until the student taps Yes after seeing every switch.
 - **Agency team members** work on the owner's Agency through one gate (`agencyTeamAccess.ts`) that reads their row on every request. Only routes on an allowlist open, at the tab's level the owner set (Off, View or Edit). The answer is scrubbed: no business profile or bank, private notes, fees, retainer amount, client link or Army links. A member's write is logged with who did it. A client member gets one read-only view.
 - **Phone and date of birth** are never shown to anyone else; the date of birth cannot be changed.
-- The smoke test (2,508 checks on 2026-11-07) proves much of this: journal, finance, not to do, the public page, Dev Tools, the staff checks, an owner's Agency records and templates, the business-metrics switch, and the client link's switches. Campaigns, applications and cohorts are checked by reading the code. Emerging's privacy was checked by hand on 2026-11-04: another account sees nothing of it. A coach's patterns are held by `coachReport.test.ts` and the Life coaches section of the smoke test.
+- The smoke test (2,607 checks on 2026-11-08) proves much of this: journal, finance, not to do, the public page, Dev Tools, the staff checks, an owner's Agency records and templates, the business-metrics switch, and the client link's switches. Campaigns, applications and cohorts are checked by reading the code. Emerging's privacy was checked by hand on 2026-11-04: another account sees nothing of it. A coach's patterns are held by `coachReport.test.ts` and the Life coaches section of the smoke test.
 
 ## 3. Privacy as practised
 
@@ -297,7 +297,7 @@ What changed for security, privacy and safety since 0.5, each checked in the cod
 - **The live call** becomes paid only in the signed webhook, and a coach never reads it.
 - **The terms.** `LEGAL_VERSION` is 2026-11-07. `/privacy` says a mark of which gratitude prompts someone wrote under or skipped stays until the account goes.
 - **The staff second factor stays not built** (the founder, 2026-11-07).
-- **Checks on 2026-11-07:** typecheck, build, the budget, the scans and 851 shared tests pass; the smoke test passed 2,508 of 2,508, on an empty database and on one kept between runs. Not tested: CI on GitHub, real email, Safari and Firefox. Migrations run from 0001 to 0119.
+- **Checks on 2026-11-08:** typecheck, build, the budget, the scans and 859 shared tests pass; the smoke test passed 2,607 of 2,607, on an empty database and on one kept between runs. Not tested: CI on GitHub, real email, Safari and Firefox. Migrations run from 0001 to 0123.
 
 ## Known gaps
 

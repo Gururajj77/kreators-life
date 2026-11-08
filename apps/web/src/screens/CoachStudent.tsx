@@ -1,5 +1,5 @@
 import { COACH_REPORT_KINDS } from '@kreators/shared/coachReport';
-import { COACH_NOTE_MAX, COACH_SHARE_META, COACH_SHARE_PARTS, formatCount, KIND_META, PENALTIES, periodFor, periodLabel, RELATIONSHIP_BY_KEY, RELATIONSHIPS, SCORE_LABEL, SCORECARD, weightWord, type CoachReview, type CoachShare, type CoachSharePart, type CoachStudentView, type Period, type PeriodKind } from '@kreators/shared';
+import { COACH_NOTE_MAX, DONE_PAGE_SIZE, DONE_PAGE_SIZES, COACH_SHARE_META, COACH_SHARE_PARTS, formatCount, KIND_META, PENALTIES, periodFor, periodLabel, RELATIONSHIP_BY_KEY, RELATIONSHIPS, SCORE_LABEL, SCORECARD, weightWord, type CoachReview, type CoachShare, type CoachSharePart, type CoachStudentView, type Period, type PeriodKind } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import gsap from 'gsap';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -221,6 +221,9 @@ const isReportKind = (v: string): v is PeriodKind => (COACH_REPORT_KINDS as read
  * report in sections that each fold, and that the coach can hide. Each part only while the student shares it, read fresh on every request; what
  * they do not share never left the server. The change log is the same lines they see.
  */
+/** Their done today is paged like Daily's (2026-11-07): 10, 25 or 50, ten by default, prefix `cd`. */
+const DONE_PAGES = { sizes: DONE_PAGE_SIZES, fallback: DONE_PAGE_SIZE };
+
 export function CoachStudent() {
   const { id = '' } = useParams();
   const rev = usePage('rev');
@@ -228,7 +231,8 @@ export function CoachStudent() {
   const ct = usePage('ct');
   const notePg = usePage('note');
   const logPg = usePage('log');
-  const query = `${rev.query}&${revd.query}&${ct.query}&${notePg.query}&${logPg.query}`;
+  const donePg = usePage('cd', DONE_PAGES);
+  const query = `${rev.query}&${revd.query}&${ct.query}&${notePg.query}&${logPg.query}&${donePg.query}`;
   const q = useAuthed(['coach-student', id, query], () => api.coachStudent(id, query));
   const sections = useCoachSections(true);
   const [kindRaw, setKind] = useParamState('period', 'week');
@@ -429,14 +433,18 @@ export function CoachStudent() {
               <TaskLine key={t.id} t={t} today={d.date} onEdit={share.pillars ? () => setEditing({ mode: 'edit', task: t }) : undefined} />
             ))}
           </ul>
-          {d.daily.done.length > 0 && (
+          {(d.daily.doneTotal ?? d.daily.done.length) > 0 && (
             <>
-              <h3 className="mt-md text-headline">Done today</h3>
+              <div className="mt-md flex items-baseline justify-between gap-sm">
+                <h3 className="text-headline">Done today</h3>
+                <span className="text-subhead text-ink-soft">{d.daily.doneTotal ?? d.daily.done.length}</span>
+              </div>
               <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
                 {d.daily.done.map((t) => (
                   <TaskLine key={t.id} t={t} />
                 ))}
               </ul>
+              <Pager page={d.daily.donePage} prefix="cd" label="done tasks" only={DONE_PAGES} />
             </>
           )}
           {d.daily.notToDo.length > 0 && (

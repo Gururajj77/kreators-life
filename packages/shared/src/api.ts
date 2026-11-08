@@ -5,7 +5,7 @@ import type { Redemption } from './rewards.ts';
 import type { Organization } from './work.ts';
 import { addDays } from './dates.ts';
 import type { DatePrefs } from './dates.ts';
-import type { Priority, Repeat } from './tasks.ts';
+import type { OpenKind, Priority, Repeat } from './tasks.ts';
 import type { LifeAreaKey } from './life.ts';
 import type { DayPlan } from './timeBlocks.ts';
 import type { IconName, Permission, Role } from './roles.ts';
@@ -79,6 +79,8 @@ export interface User {
   bestStreak: number;
   lastCheckin: string | null;
   onboardedAt: string | null;
+  /** The Party event this account joined from the public event page before setup was done (migration 0121), else null. */
+  attendeeEvent: string | null;
   createdAt: string;
 }
 
@@ -219,6 +221,8 @@ export interface Node {
   lifeArea: LifeAreaKey | null;
   /** Tasks only, optional: the time block the person picked for it (one of their own), or null: it then falls in the block its time sits in (`blockOfTask`). */
   timeBlockId?: string | null;
+  /** Tasks only, optional: the kind of open business it carries (Unfinished, Unresolved, Undecided), or null. A tag and Daily's Unfinished business view; it never changes what a tick pays. */
+  openKind?: OpenKind | null;
   /** Tasks only, optional: a time of day (HH:MM) and how long it should take, to plan the day. */
   dueTime: string | null;
   estimateMin: number | null;
@@ -264,8 +268,14 @@ export interface TodayResponse {
   tasksTotal?: number;
   /** How many of those are late: their do date (else due date) is before the person's day. */
   tasksLate?: number;
-  /** Tasks ticked on the person's day (in their zone), newest first, so a tick stays in sight and can be undone. */
+  /** Tasks ticked on the person's day (in their zone), newest first, so a tick stays in sight and can be undone: the first page of `DONE_PAGE_SIZE` (the rest through GET /today/done). */
   done: Node[];
+  /** How many were ticked on the day in all, so the count stays true while the list is paged. */
+  doneTotal?: number;
+  /** The open-business cut (`?open=`, Daily's Unfinished business view): any of the three kinds or one; absent or null for every task. */
+  open?: OpenKind | 'any' | null;
+  /** How many tasks were let go (archived), so the Unfinished business view offers its Let go list only when there is one. */
+  letGoTotal?: number;
   /** Tasks ticked in the last day, so Today can say the routine is done. */
   doneRecently: number;
   spark: { relationship: RelationshipKey; text: string; done: boolean };
@@ -291,6 +301,13 @@ export interface TodayResponse {
   looseTasks?: Node[];
   /** How many such tasks there are in all. */
   looseTotal?: number;
+}
+
+/** A page of tasks and how many in all: done tasks (GET /today/done for the day, prefix `d`; GET /nodes/done for a pillar, prefix `dn`) or the tasks let go (GET /today/let-go, prefix `lg`). */
+export interface DoneTasksResponse {
+  tasks: Node[];
+  page: Page;
+  total: number;
 }
 
 /** GET /today/waiting: the open tasks past the ones GET /today shows, in the same order, a page at a time (prefix `w`). */

@@ -9,6 +9,7 @@ import { ATTENDEE_CLAIMS_PER_DAY, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, PLANS } 
 import { cohortTalkPrivateLabel } from '../../packages/shared/src/index.ts';
 import { MAX_DAY_TEMPLATES, MAX_TIME_BLOCKS } from '../../packages/shared/src/index.ts';
 import { gratitudePromptsForDay } from '../../packages/shared/src/gratitude.ts';
+import { ATTENDEE_APPS, attendeeMayOpen } from '../../packages/shared/src/eventJoin.ts';
 import http from 'node:http';
 
 const ORIGIN = process.env.SMOKE_ORIGIN ?? 'http://127.0.0.1:8788';
@@ -2795,7 +2796,7 @@ section('Attendee codes');
   const blockIt = await api('POST', '/bond/block', { userId: O.user.id }, H.token);
   check('anyone can block a member', blockIt.status === 201, blockIt.json);
   const afterBlock = await api('POST', '/bond/friends', { code: hostMe.friendCode }, O.token);
-  check('a blocked person cannot ask the one who blocked them', afterBlock.status === 400, afterBlock.json);
+  check('a blocked person cannot ask the one who blocked them, and by code it reads as a code nobody has', afterBlock.status === 404 && afterBlock.json.error === 'no one has that friend code', afterBlock.json);
   const list = await api('GET', '/bond/blocks', undefined, H.token);
   check('blocks are listed and can be lifted', list.json.blocked?.length === 1 && (await api('DELETE', `/bond/block/${O.user.id}`, undefined, H.token)).status === 200, list.json);
   const peerMute = await api('POST', `/community/members/${O.user.id}/mute`, {}, H.token);
@@ -4117,6 +4118,8 @@ section('Agency');
   await api('POST', `/army/campaigns/${campId}/assignments`, { creator: O.user.email ?? `agency-${stamp}@smoke.test` }, A.token);
   const myAsg = (await api('GET', '/army', undefined, O.token)).json.assignments?.find((a) => a.campaignId === campId);
   await api('POST', `/army/assignments/${myAsg?.id}`, { status: 'accepted' }, O.token);
+  // Army's list carries only the offers still waiting, so an accepted role leaves it (its campaign page still shows it).
+  check("Army's list reads only offers waiting: an accepted role leaves it", myAsg?.status === 'offered' && !(await api('GET', '/army', undefined, O.token)).json.assignments?.some((a) => a.id === myAsg?.id), myAsg);
   const link = await api('PATCH', `/agency/clients/${cid}`, { campaignId: campId }, O.token);
   check('after accepting the role, the client can be linked to the campaign', link.status === 200, link.json);
   const imp = await api('POST', `/agency/clients/${cid}/army-import`, undefined, O.token);
@@ -6855,6 +6858,114 @@ section('Area of life on a task');
   check('area: the export carries it', JSON.stringify(exported.json).includes('"life_area":"physical"'), '');
 }
 
+section('Close the unfinished and done pages');
+{
+  // Close the unfinished (2026-11-07): a task can carry one kind of open business, ended by the ordinary actions; done tasks come a page at a time.
+  const U = await signup(`unfinished-${stamp}@smoke.test`, 'Unfinished-smoke-ok-1', 'Open Smoke');
+  const built = await api('POST', '/onboarding/build', { relationships: ['self'], date: today, picks: { self: { project: 'Open project' } } }, U.token);
+  const proj = (built.json.nodes ?? []).find((n) => n.kind === 'project');
+  check('open: a pyramid to hang lines on', built.status === 201 && proj?.id, built.status);
+  const add = (b) => api('POST', '/nodes', { kind: 'task', parentId: proj?.id, relationship: 'self', ...b }, U.token);
+  const tomorrow = new Date(new Date(`${today}T12:00:00Z`).getTime() + 86_400_000).toISOString().slice(0, 10);
+
+  const line = await add({ title: 'Reply to Sam', openKind: 'Unresolved' });
+  check('open: a task takes a kind, in any case, with no date', line.status === 201 && line.json.node?.openKind === 'unresolved' && line.json.node?.doDate === null, line.json.node);
+  const bad = await add({ title: 'Bad kind', openKind: 'pending' });
+  check('open: an unknown kind is refused in plain words', bad.status === 400 && bad.json.error === 'Pick unfinished, unresolved or undecided, or none.', bad.json);
+  check('open: "constructor" is not a kind', (await add({ title: 'Proto', openKind: 'constructor' })).status === 400);
+  check('open: the old "unsorted" mark is not a kind any more', (await add({ title: 'Old mark', openKind: 'unsorted' })).status === 400);
+  const plain = await add({ title: 'Clean the desk' });
+  check('open: an ordinary task carries none', plain.status === 201 && plain.json.node?.openKind === null, plain.json.node);
+
+  // Daily's Unfinished business view is the open cut (`open=any`) with the longer list; Not scheduled yet is unchanged without it.
+  const day0 = await api('GET', `/today?date=${today}`, undefined, U.token);
+  check('open: Not scheduled yet still lists every task with no date', day0.json.backlog?.some((n) => n.id === line.json.node?.id) && day0.json.backlog?.some((n) => n.id === plain.json.node?.id), day0.json.backlog?.map((n) => n.title));
+  const view0 = await api('GET', `/today?date=${today}&open=any&group=1`, undefined, U.token);
+  check('open: the view reads only tasks with a kind, an undated one too', view0.json.open === 'any' && view0.json.backlog?.some((n) => n.id === line.json.node?.id) && !view0.json.backlog?.some((n) => n.id === plain.json.node?.id) && view0.json.letGoTotal === 0, [view0.json.open, view0.json.backlog?.map((n) => n.title), view0.json.letGoTotal]);
+  check('open: the old tab route is gone', (await api('GET', '/today/unfinished', undefined, U.token)).status === 404);
+
+  const sorted = await api('PATCH', `/nodes/${line.json.node?.id}`, { openKind: 'Undecided' }, U.token);
+  check('open: a change of kind, in any case', sorted.status === 200 && sorted.json.node?.openKind === 'undecided', sorted.json.node);
+  const resorted = await api('PATCH', `/nodes/${line.json.node?.id}`, { openKind: 'unresolved' }, U.token);
+  check('open: and back again', resorted.status === 200 && resorted.json.node?.openKind === 'unresolved', resorted.json.node);
+  const badPatch = await api('PATCH', `/nodes/${line.json.node?.id}`, { openKind: 7 }, U.token);
+  check('open: a bad kind on a change is refused and changes nothing', badPatch.status === 400 && (await api('GET', `/nodes/${line.json.node?.id}`, undefined, U.token)).json.node?.openKind === 'unresolved', badPatch.json);
+  check('open: someone else cannot set it', (await api('PATCH', `/nodes/${line.json.node?.id}`, { openKind: 'undecided' }, A.token)).status === 404);
+  const cleared = await api('PATCH', `/nodes/${plain.json.node?.id}`, { openKind: 'none' }, U.token);
+  check('open: "none" clears a kind', cleared.status === 200 && cleared.json.node?.openKind === null, cleared.json.node);
+
+  // Do it: the ordinary do date; the kind stays as a tag on Daily's main list.
+  const doIt = await api('PATCH', `/nodes/${line.json.node?.id}`, { doDate: today }, U.token);
+  const day1 = await api('GET', `/today?date=${today}`, undefined, U.token);
+  check('open: Do it puts it on today, still tagged', doIt.status === 200 && day1.json.tasks?.find((n) => n.id === line.json.node?.id)?.openKind === 'unresolved', day1.json.tasks?.map((n) => [n.title, n.openKind]));
+  const ordinary = await add({ title: 'Plain P3', doDate: today, priority: 3 });
+  const urgentOpen = await add({ title: 'Decide on the move', doDate: today, priority: 0, openKind: 'undecided' });
+  const ctx = await api('GET', `/today?date=${today}&sort=context`, undefined, U.token);
+  const order = (ctx.json.tasks ?? []).map((n) => n.id);
+  check('open: By context puts open business after every priority, its kinds in order', order.indexOf(ordinary.json.node?.id) < order.indexOf(line.json.node?.id) && order.indexOf(line.json.node?.id) < order.indexOf(urgentOpen.json.node?.id), (ctx.json.tasks ?? []).map((n) => [n.title, n.priority, n.openKind]));
+  const onlyOne = await api('GET', `/today?date=${today}&open=undecided`, undefined, U.token);
+  check('open: the cut takes one kind', onlyOne.json.open === 'undecided' && onlyOne.json.tasks?.length === 1 && onlyOne.json.tasks[0].id === urgentOpen.json.node?.id, onlyOne.json.tasks?.map((n) => n.title));
+  const any = await api('GET', `/today?date=${today}&open=any`, undefined, U.token);
+  check('open: the cut takes any kind', any.json.tasks?.length === 2 && any.json.tasks.every((n) => n.openKind), any.json.tasks?.map((n) => n.title));
+  const junk = await api('GET', `/today?date=${today}&open=constructor`, undefined, U.token);
+  const every = await api('GET', `/today?date=${today}`, undefined, U.token);
+  check('open: an unknown cut is read as every task', junk.status === 200 && junk.json.open === null && junk.json.tasksTotal === every.json.tasksTotal && junk.json.tasksTotal > 2, [junk.json.tasksTotal, every.json.tasksTotal]);
+  const month = (await api('GET', `/today/month?month=${today.slice(0, 7)}&day=${today}`, undefined, U.token)).json.tasks ?? [];
+  check('open: the month calendar carries the kind', month.find((t) => t.id === urgentOpen.json.node?.id)?.openKind === 'undecided', month.map((t) => [t.title, t.openKind]));
+
+  // Give it a time and date: a do date, a time and Remember, through the same PATCH.
+  const timed = await api('PATCH', `/nodes/${urgentOpen.json.node?.id}`, { doDate: tomorrow, dueTime: '10:00', remind: true }, U.token);
+  const homeOpen = await api('GET', `/home?date=${today}`, undefined, U.token);
+  const viewOpen = await api('GET', `/today?date=${today}&open=any&group=1`, undefined, U.token);
+  check("open: Home's count is what the view lists, so one given a later day leaves both", homeOpen.json.today?.openBusiness === (viewOpen.json.tasksTotal ?? 0) + (viewOpen.json.backlogTotal ?? 0), [homeOpen.json.today?.openBusiness, viewOpen.json.tasksTotal, viewOpen.json.backlogTotal]);
+  check('open: Give it a time sets the day, the time and Remember', timed.status === 200 && timed.json.node?.doDate === tomorrow && timed.json.node?.dueTime === '10:00' && timed.json.node?.remind === true, timed.json.node);
+
+  // Let it go: the archive, out of every list and back on request.
+  const gone = await api('PATCH', `/nodes/${urgentOpen.json.node?.id}`, { status: 'archived' }, U.token);
+  const lgA = await api('GET', '/today/let-go', undefined, U.token);
+  const view2 = await api('GET', `/today?date=${today}&open=any&group=1`, undefined, U.token);
+  const month2 = (await api('GET', `/today/month?month=${tomorrow.slice(0, 7)}&day=${today}`, undefined, U.token)).json.tasks ?? [];
+  check('open: Let it go closes it without a tick', gone.status === 200 && gone.json.node?.status === 'archived' && gone.json.node?.completedAt === null, gone.json.node);
+  check('open: a let-go task leaves the view and the calendar, and can be found under Let go', ![...(view2.json.tasks ?? []), ...(view2.json.backlog ?? [])].some((n) => n.id === urgentOpen.json.node?.id) && view2.json.letGoTotal === 1 && lgA.status === 200 && lgA.json.tasks?.some((n) => n.id === urgentOpen.json.node?.id) && lgA.json.total === 1 && !month2.some((t) => t.id === urgentOpen.json.node?.id), [view2.json.letGoTotal, lgA.json.total]);
+  check('open: another account sees none of what was let go', (await api('GET', '/today/let-go', undefined, A.token)).json.tasks?.every((n) => n.id !== urgentOpen.json.node?.id));
+  const back = await api('PATCH', `/nodes/${urgentOpen.json.node?.id}`, { status: 'active' }, U.token);
+  check('open: a let-go task can be brought back as it was', back.status === 200 && back.json.node?.status === 'active' && back.json.node?.openKind === 'undecided' && back.json.node?.doDate === tomorrow, back.json.node);
+
+  // Do it, when it is already done: the ordinary tick ends it and it leaves the view.
+  const ticked = await api('POST', `/nodes/${line.json.node?.id}/complete`, { date: today }, U.token);
+  const view3 = await api('GET', `/today?date=${today}&open=any&group=1`, undefined, U.token);
+  check('open: a tick ends it and it leaves the view', ticked.status === 200 && ![...(view3.json.tasks ?? []), ...(view3.json.backlog ?? [])].some((n) => n.id === line.json.node?.id), ticked.status);
+  const rep = await add({ title: 'Call mum back', doDate: today, openKind: 'unresolved', repeat: { kind: 'daily', every: 1, days: [], until: null } });
+  const repTick = await api('POST', `/nodes/${rep.json.node?.id}/complete`, { date: today }, U.token);
+  check('open: a repeating one carries its kind to the next', repTick.status === 200 && repTick.json.next?.openKind === 'unresolved', repTick.json.next);
+
+  // Done today is paged: the first page rides on GET /today with the true count; GET /today/done reads any page, 10, 25 or 50.
+  const d1 = await api('GET', `/today?date=${today}`, undefined, U.token);
+  check('done pages: Daily carries the true count of done today', d1.json.doneTotal >= 2 && d1.json.done?.length === Math.min(10, d1.json.doneTotal), [d1.json.doneTotal, d1.json.done?.length]);
+  const dp = await api('GET', `/today/done?date=${today}&dpage=1&dsize=25`, undefined, U.token);
+  check('done pages: a page of done today with its size and count', dp.status === 200 && dp.json.page?.size === 25 && dp.json.page?.more === false && dp.json.total === d1.json.doneTotal, dp.json.page);
+  const dpBig = await api('GET', `/today/done?date=${today}&dsize=100`, undefined, U.token);
+  check('done pages: a size that is not 10, 25 or 50 falls back to ten', dpBig.json.page?.size === 10, dpBig.json.page);
+  const dp2 = await api('GET', `/today/done?date=${today}&dpage=2`, undefined, U.token);
+  check('done pages: a page past the end is empty, the count still true', dp2.json.tasks?.length === 0 && dp2.json.total === d1.json.doneTotal, dp2.json);
+  const pn = await api('GET', '/nodes/done?relationship=self&dnsize=10', undefined, U.token);
+  check('done pages: a pillar pages its done tasks with the true count', pn.status === 200 && pn.json.total === d1.json.doneTotal && pn.json.tasks?.every((n) => n.status === 'done'), [pn.json.total, pn.json.page]);
+  check('done pages: a pillar that is not one is refused', (await api('GET', '/nodes/done?relationship=moon', undefined, U.token)).status === 400);
+  check('done pages: another account sees none of these', (await api('GET', '/nodes/done?relationship=self', undefined, A.token)).json.tasks?.every((n) => n.relationship === 'self' && !pn.json.tasks?.some((m) => m.id === n.id)));
+
+  // Let go is paged too: eleven let go is ten and one.
+  for (let i = 0; i < 11; i += 1) {
+    const t = await add({ title: `Old thread ${i}`, openKind: 'unfinished' });
+    await api('PATCH', `/nodes/${t.json.node?.id}`, { status: 'archived' }, U.token);
+  }
+  const lg1 = await api('GET', '/today/let-go?lgpage=1&lgsize=10', undefined, U.token);
+  const lg2 = await api('GET', '/today/let-go?lgpage=2&lgsize=10', undefined, U.token);
+  check('open: Let go is paged ten at a time with its true count', lg1.json.tasks?.length === 10 && lg1.json.page?.more === true && lg2.json.tasks?.length === 1 && lg2.json.page?.more === false && lg1.json.total === 11, [lg1.json.tasks?.length, lg2.json.tasks?.length, lg1.json.total]);
+
+  const exported = await api('GET', '/me/export', undefined, U.token);
+  check('open: the export carries the kind', JSON.stringify(exported.json).includes('"open_kind":"unresolved"'), '');
+}
+
 section('Time blocks');
 {
   // Time blocks, day templates and the weekly pattern (docs/time-blocks.md): settings the person owns, core like /today.
@@ -7811,8 +7922,6 @@ section('What a block does, and the review of 2026-11-07');
   check('cancelling an event twice answers twice and tells the guest once', once.status === 200 && twice.status === 200 && told.length === 1, told.length);
 }
 
-await admin('POST', `/admin/users/${A.user.id}/role`, { role: 'user' });
-
 section('Workers Free');
 {
   const Fp = await signup(`free-${stamp}@smoke.test`, `Harbour-${stamp}-pass`, 'Smoke free plan');
@@ -7903,6 +8012,230 @@ section('Workers Free');
   if (health.headers.has('x-d1-last-tick')) check('the tick stayed inside its budget', JSON.parse(health.headers.get('x-d1-last-tick')).trips <= TRIP_CEILING, health.headers.get('x-d1-last-tick'));
   check('a read that needs no database says so', health.headers.get('x-d1-round-trips') === null || health.headers.get('x-d1-round-trips') === '0', health.headers.get('x-d1-round-trips'));
 }
+
+// ---------------------------------------------------------------- QR code to connect (2026-11-07)
+// A QR code holds /u/<handle>?add=<friend code>. The page answers `add` only to someone signed in: `self`, `ok`, or `nobody` for a code that
+// does not match, a block either way or requests switched off, all alike. The request itself is the ordinary POST /bond/friends with the code.
+section('QR code to connect');
+{
+  const QA = await signup(`qra-${stamp}@smoke.test`, `qr-owner-${stamp}-ok`, 'Qr Owner');
+  const QB = await signup(`qrb-${stamp}@smoke.test`, `qr-scan-${stamp}-ok`, 'Qr Scanner');
+  const QC = await signup(`qrc-${stamp}@smoke.test`, `qr-block-${stamp}-ok`, 'Qr Blocked');
+  for (const t of [QA, QB, QC]) await api('PATCH', '/me/modules', { key: 'bond', on: true }, t.token);
+  const owner = await me(QA.token);
+  const page = (code, token) => api('GET', `/public/${owner.handle}?add=${encodeURIComponent(code)}`, undefined, token);
+  const out = await page(owner.friendCode, null);
+  check('signed out, the page says nothing about the code', out.status === 200 && out.json.add === undefined && out.json.name === 'Qr Owner', out.json.add);
+  const ok = await page(owner.friendCode.toLowerCase(), QB.token);
+  check('signed in, the code that matches the username offers Add friend, any case', ok.json.add === 'ok' && ok.json.friend === 'none', [ok.json.add, ok.json.friend]);
+  const wrong = await page('ZZZZZZZZ', QB.token);
+  check('a code that is not this person\'s reads as nobody', wrong.status === 200 && wrong.json.add === 'nobody', wrong.json.add);
+  const self = await page(owner.friendCode, QA.token);
+  check('scanning your own code says so', self.json.add === 'self' && self.json.mine === true, self.json.add);
+  await api('PATCH', '/me', { publicSettings: { allowFriendRequests: false } }, QA.token);
+  const off = await page(owner.friendCode, QB.token);
+  const offAsk = await api('POST', '/bond/friends', { code: owner.friendCode }, QB.token);
+  check('with friend requests switched off it reads as nobody, and the request is refused', off.json.add === 'nobody' && offAsk.status === 403, [off.json.add, offAsk.status]);
+  await api('PATCH', '/me', { publicSettings: { allowFriendRequests: true, pagePublic: false } }, QA.token);
+  const priv = await page(owner.friendCode, QB.token);
+  check('a page switched off still takes the code, as Bond does, and shows only the name', priv.json.add === 'ok' && priv.json.isPrivate === true && priv.json.bio === '', [priv.json.add, priv.json.isPrivate]);
+  const asked = await api('POST', '/bond/friends', { code: owner.friendCode }, QB.token);
+  const sent = await page(owner.friendCode, QB.token);
+  check('Add friend sends a request they still say yes to', asked.status === 201 && asked.json.status === 'sent' && sent.json.add === 'ok' && sent.json.friend === 'sent', [asked.status, sent.json.friend]);
+  await api('PATCH', '/me', { publicSettings: { pagePublic: true } }, QA.token);
+  await api('POST', '/bond/block', { userId: QC.user.id }, QA.token);
+  const blocked = await page(owner.friendCode, QC.token);
+  const blockedAsk = await api('POST', '/bond/friends', { code: owner.friendCode }, QC.token);
+  const wrongAsk = await api('POST', '/bond/friends', { code: 'ZZZZZZZZ' }, QC.token);
+  check('a blocked pair reads exactly as a code that does not match, on the page and on Add friend', blocked.json.add === 'nobody' && blocked.json.add === wrong.json.add && blockedAsk.status === wrongAsk.status && JSON.stringify(blockedAsk.json) === JSON.stringify(wrongAsk.json), [blocked.json.add, blockedAsk.status, wrongAsk.status]);
+  await api('DELETE', `/bond/block/${QC.user.id}`, undefined, QA.token);
+  const renewed = await api('POST', '/me/friend-code', {}, QA.token);
+  const fresh = renewed.json.friendCode;
+  const stale = await page(owner.friendCode, QC.token);
+  const staleAsk = await api('POST', '/bond/friends', { code: owner.friendCode }, QC.token);
+  const newOk = await page(fresh, QC.token);
+  check('a new friend code ends the old one and every QR code made from it', renewed.status === 200 && /^[A-Z0-9]{8}$/.test(fresh ?? '') && fresh !== owner.friendCode && (await me(QA.token)).friendCode === fresh && stale.json.add === 'nobody' && staleAsk.status === 404 && newOk.json.add === 'ok', [renewed.status, stale.json.add, staleAsk.status, newOk.json.add]);
+  check('a new friend code is limited like other settings', ROUTE_LIMITS.some((r) => r.method === 'POST' && r.path === '/me/friend-code' && r.limit === 'prefs'), '');
+}
+
+section("An event attendee's way in");
+{
+  // Its own host and its own address for the visitor's sign-up, so no other section's limits are touched.
+  const EH = await signup(`evhost-${stamp}@smoke.test`, `ev-host-${stamp}-ok`, 'Event Host');
+  const VISITOR = { 'CF-Connecting-IP': `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 77) & 255}` };
+  const soon = new Date(Date.now() + 3 * 86_400_000).toISOString();
+  const mk = async (b) => (await api('POST', '/party/events', { startsAt: soon, minutes: 90, ...b }, EH.token)).json.event;
+  const free = await mk({ title: `Open walk ${stamp}`, description: 'A slow walk, then chai.', venue: 'Lake gate', capacity: 5, visibility: 'public' });
+  const paid = await mk({ title: `Paid night ${stamp}`, venue: 'Studio', capacity: 5, pricePoints: 40, visibility: 'public' });
+  const room = await mk({ title: `Online hour ${stamp}`, onlineUrl: 'https://meet.example.test/secret-room', visibility: 'public' });
+  const priv = await mk({ title: `Private ${stamp}`, visibility: 'private' });
+  const club = await mk({ title: `Club ${stamp}`, visibility: 'club' });
+  // The public list, read without a session, a page at a time.
+  const listed = [];
+  for (let p = 1; p <= 30; p++) {
+    const r = await api('GET', `/public/events?page=${p}&size=100`, undefined, null, VISITOR);
+    if (p === 1) check('the public list of events answers without an account, paged', r.status === 200 && r.json.page?.size === 100 && Array.isArray(r.json.events), r.status);
+    listed.push(...(r.json.events ?? []));
+    if (!r.json.page?.more) break;
+  }
+  const lf = listed.find((e) => e.id === free?.id);
+  check('a public event is listed with its place, time, price and seats left', lf && lf.venue === 'Lake gate' && lf.startsAt === free.startsAt && lf.pricePoints === 0 && lf.seatsLeft === 5 && lf.hostName === 'Event Host', lf);
+  check('a private or Club-only event is never listed', !listed.some((e) => e.id === priv?.id || e.id === club?.id), '');
+  const lr = listed.find((e) => e.id === room?.id);
+  check('an online event says Online and never shows its room link', lr && lr.online === true && lr.venue === '' && !JSON.stringify(listed).includes('secret-room'), lr);
+  check('the list names no guest and no host id', listed.every((e) => !('hostId' in e) && !('registrations' in e) && !('mine' in e)), '');
+  const one = await api('GET', `/public/events/${free.id}`, undefined, null, VISITOR);
+  check('an event has its own public page', one.status === 200 && one.json.event?.title === `Open walk ${stamp}` && one.json.event?.description === 'A slow walk, then chai.', one.status);
+  const pr = await api('GET', `/public/events/${priv.id}`, undefined, null, VISITOR);
+  const cl = await api('GET', `/public/events/${club.id}`, undefined, null, VISITOR);
+  const none = await api('GET', '/public/events/no-such-event', undefined, null, VISITOR);
+  check('a private or Club-only event page reads exactly like one that does not exist', pr.status === 404 && cl.status === 404 && JSON.stringify(pr.json) === JSON.stringify(none.json) && JSON.stringify(cl.json) === JSON.stringify(none.json), [pr.status, cl.status]);
+  const ex = await api('GET', `/public/explore?type=event&q=${encodeURIComponent(`Open walk ${stamp}`)}`, undefined, null, VISITOR);
+  check("Explore's event card opens the event's public page", ex.json.listings?.[0]?.path === `/events/${free.id}`, ex.json.listings?.[0]?.path);
+  check('the new routes have their limits', ['/public/events', '/public/events/:id'].every((path) => ROUTE_LIMITS.some((r) => r.method === 'GET' && r.path === path && r.limit === 'eventsPublic' && r.by === 'address')) && ROUTE_LIMITS.some((r) => r.method === 'POST' && r.path === '/party/events/:id/arrive' && r.limit === 'eventJoin'), '');
+  // Sign up on the event's page: the device session first, as Welcome makes it, then the account on it (the same rules as the sign-up form).
+  const dev = await api('POST', '/auth/anon', {}, null, VISITOR);
+  const noTerms = await api('POST', '/auth/signup', { email: `evguest-${stamp}@smoke.test`, password: `ev-guest-${stamp}-ok`, displayName: 'Event Guest', phone: PHONE, birthDate: GROWN, acceptTerms: false }, dev.json.token, VISITOR);
+  const young = await api('POST', '/auth/signup', { email: `evguest-${stamp}@smoke.test`, password: `ev-guest-${stamp}-ok`, displayName: 'Event Guest', phone: PHONE, birthDate: new Date(Date.now() - 10 * 365 * 86_400_000).toISOString().slice(0, 10) }, dev.json.token, VISITOR);
+  check('the page sign-up keeps the terms box and the age rule', noTerms.status === 400 && young.status === 400, [noTerms.status, young.status]);
+  const made = await api('POST', '/auth/signup', { email: `evguest-${stamp}@smoke.test`, password: `ev-guest-${stamp}-ok`, displayName: 'Event Guest', phone: PHONE, birthDate: GROWN }, dev.json.token, VISITOR);
+  const G = made.json.token;
+  check('the account is made on the device session, nothing lost', made.status === 201 && made.json.user?.id === dev.json.user?.id && made.json.user?.email === `evguest-${stamp}@smoke.test`, made.status);
+  const arrive = await api('POST', `/party/events/${free.id}/arrive`, undefined, G);
+  const gm = await me(G);
+  check('joining marks an account still setting up as an attendee and switches Party, Community and Bond on', arrive.status === 200 && arrive.json.attendee === true && gm.onboardedAt === null && gm.attendeeEvent === free.id && ATTENDEE_APPS.every((k) => gm.modules[k] === true), [arrive.status, gm.attendeeEvent, gm.modules]);
+  check('and switches nothing else on', Object.keys(gm.modules).every((k) => ATTENDEE_APPS.includes(k)), gm.modules);
+  const seat = await api('POST', `/party/events/${free.id}/rsvp`, { networking: true }, G);
+  const after = await api('GET', `/public/events/${free.id}`, undefined, null, VISITOR);
+  check('then the ordinary RSVP takes the seat, and the page shows one seat fewer', seat.status === 201 && seat.json.status === 'registered' && after.json.event?.seatsLeft === 4, [seat.status, after.json.event?.seatsLeft]);
+  const reach = await Promise.all(['/party', '/community', '/bond', `/party/events/${free.id}`].map((p) => api('GET', p, undefined, G)));
+  check("the attendee's apps answer on the server", reach.every((r) => r.status === 200), reach.map((r) => r.status));
+  check("the app's gate lets an attendee into the event, Party, Community, Bond, Inbox, Profile and Help", ['/party', `/party/${free.id}`, '/community', '/bond', '/bond/chats/x', '/inbox', '/you', '/help'].every(attendeeMayOpen), '');
+  check('and sends every other path to the setup chat', !['/home', '/today', '/tower', '/apps', '/journal', '/profile', '/circles', '/partyx'].some(attendeeMayOpen), '');
+  // A paid ticket: joining takes nothing; the RSVP still needs the points and the person's own tap.
+  const before = (await me(G)).points;
+  const pa = await api('POST', `/party/events/${paid.id}/arrive`, undefined, G);
+  const pr2 = await api('POST', `/party/events/${paid.id}/rsvp`, {}, G);
+  const pe = await api('GET', `/party/events/${paid.id}`, undefined, G);
+  check('a paid event: joining takes no seat and no points, and the ticket still needs the points', pa.status === 200 && pr2.status === 400 && /more points/.test(pr2.json.error ?? '') && pe.json.event?.mine === null && (await me(G)).points === before, [pa.status, pr2.status, pe.json.event?.mine]);
+  const pv = await api('POST', `/party/events/${priv.id}/arrive`, undefined, G);
+  const cv = await api('POST', `/party/events/${club.id}/arrive`, undefined, G);
+  check('a private or Club-only event cannot be joined from a public page', pv.status === 404 && cv.status === 404, [pv.status, cv.status]);
+  await api('POST', '/onboarding/setup', { identities: ['parent'], goals: ['health'], blockers: [] }, EH.token);
+  const hostArrive = await api('POST', `/party/events/${free.id}/arrive`, undefined, EH.token);
+  const hm = await me(EH.token);
+  check('someone who already finished setup is not marked an attendee, and only Party is switched on', hostArrive.status === 200 && hostArrive.json.attendee === false && hm.attendeeEvent === null && hm.modules.party === true, [hostArrive.status, hostArrive.json.attendee, hm.attendeeEvent]);
+  // Setup later: the attendee's apps stay on, and once it is done nothing reads the mark.
+  const setup = await api('POST', '/onboarding/setup', { identities: ['parent'], goals: ['health'], blockers: [] }, G);
+  const done = await me(G);
+  check('finishing setup later keeps Party, Community and Bond on', setup.status < 300 && done.onboardedAt !== null && ATTENDEE_APPS.every((k) => done.modules[k] === true), [setup.status, done.modules]);
+}
+
+// ---------------------------------------------------------------- pages for every list (2026-11-07)
+section('Pages for every list');
+{
+  // Every list that can pass fifty is a page at a time: 10, 25 or 50, ten by default, one extra row read for `more`, the page in the address under its own prefix.
+  const PAGES_ADDRESS = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 83) & 255}`;
+  const join = async (who) => {
+    const r = await api('POST', '/auth/signup', { email: `pages-${who}-${stamp}@smoke.test`, password: `Lantern-${stamp}-pages`, displayName: `Pages ${who}`, phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': PAGES_ADDRESS });
+    return { token: r.json.token, user: r.json.user };
+  };
+  const P = await join('one');
+  const Q = await join('two');
+  const R = await join('three');
+  for (const key of ['mindful', 'party', 'store', 'circles', 'win']) await api('PATCH', '/me/modules', { key, on: true }, P.token);
+  for (const key of ['store']) await api('PATCH', '/me/modules', { key, on: true }, R.token);
+  // Ten and one: page one holds ten and says there is more; page two holds the one; 25 holds all; 100 is not a size here, so it falls back to ten.
+  const tenAndOne = (name, p1, p2, p25, p100, pick) => {
+    const [a, b, c, d] = [p1, p2, p25, p100].map(pick);
+    check(`pages: ${name} is ten and one, 25 holds all eleven, and 100 falls back to ten`, a?.items?.length === 10 && a.page?.size === 10 && a.page?.more === true && b?.items?.length === 1 && b.page?.page === 2 && b.page?.more === false && c?.items?.length === 11 && c.page?.size === 25 && d?.page?.size === 10, [a?.items?.length, a?.page, b?.items?.length, b?.page, c?.items?.length, d?.page]);
+  };
+
+  // Mindful's Sessions: every session, newest first; without list=1 the window the charts and the assistant read is as it was.
+  for (let i = 0; i < 11; i += 1) await api('POST', '/wellbeing/mindful', { value: i + 1, date: today }, P.token);
+  const ms = (q) => api('GET', `/wellbeing/mindful?list=1${q}`, undefined, P.token);
+  const [m1, m2, m25, m100] = await Promise.all([ms(''), ms('&spage=2'), ms('&ssize=25'), ms('&ssize=100')]);
+  tenAndOne("Mindful's sessions", m1, m2, m25, m100, (r) => ({ items: r.json.logs, page: r.json.page }));
+  const chartWindow = await api('GET', '/wellbeing/mindful?days=30', undefined, P.token);
+  check('pages: the thirty-day window the charts read is unchanged, with no page', chartWindow.status === 200 && chartWindow.json.logs?.length === 11 && chartWindow.json.page === undefined, [chartWindow.json.logs?.length]);
+  check('pages: another account sees none of these sessions', (await api('GET', '/wellbeing/mindful?list=1', undefined, Q.token)).json.logs?.length === 0);
+  // A page past the first with nothing on it says so (the screen then steps back); a page with rows, or the first page, never does.
+  const m3 = await ms('&spage=3');
+  check('pages: an empty page past the first says empty, so the pager steps back', m3.json.logs?.length === 0 && m3.json.page?.empty === true && m2.json.page?.empty === undefined && m1.json.page?.empty === undefined, [m3.json.page, m2.json.page]);
+  check('pages: an empty first page is not marked empty', (await api('GET', '/wellbeing/mindful?list=1', undefined, Q.token)).json.page?.empty === undefined);
+
+  // Coupons on a product's editor: its own and the ones for every product.
+  for (let i = 0; i < 11; i += 1) await api('POST', '/studio/coupons', { code: `PG${i}${stamp}`.slice(0, 20), percentOff: 10 }, P.token);
+  const cp = (q) => api('GET', `/studio/coupons?product=none${q}`, undefined, P.token);
+  const [c1, c2, c25, c100] = await Promise.all([cp(''), cp('&cppage=2'), cp('&cpsize=25'), cp('&cpsize=100')]);
+  tenAndOne('coupons', c1, c2, c25, c100, (r) => ({ items: r.json.coupons, page: r.json.page }));
+
+  // What you host in Party.
+  for (let i = 0; i < 11; i += 1) await api('POST', '/party/events', { title: `Pages meet ${i} ${stamp}`, startsAt: new Date(Date.now() + (i + 2) * 86_400_000).toISOString(), minutes: 60 }, P.token);
+  const pt = (q) => api('GET', `/party${q}`, undefined, P.token);
+  const [h1, h2, h25, h100] = await Promise.all([pt(''), pt('?hpage=2'), pt('?hsize=25'), pt('?hsize=100')]);
+  tenAndOne('what you host', h1, h2, h25, h100, (r) => ({ items: r.json.hosting, page: r.json.hostingPage }));
+  check("pages: the hosting page never moves Party's own list", h2.json.page?.page === 1, h2.json.page);
+
+  // Your own pre-owned listings in the Store.
+  for (let i = 0; i < 11; i += 1) await api('POST', '/market/listings', { title: `Pages lens ${i} ${stamp}`, priceCents: 100000 + i, condition: 'lightly_used', category: 'Camera' }, R.token);
+  const mk = (q) => api('GET', `/market${q}`, undefined, R.token);
+  const [l1, l2, l25, l100] = await Promise.all([mk(''), mk('?mlpage=2'), mk('?mlsize=25'), mk('?mlsize=100')]);
+  tenAndOne('your listings', l1, l2, l25, l100, (r) => ({ items: r.json.mine?.listings, page: r.json.mine?.listingsPage }));
+  check('pages: your offers have a page of their own', l1.json.mine?.offersPage?.size === 10 && l1.json.mine?.offersPage?.more === false, l1.json.mine?.offersPage);
+
+  // A note about one reply opens the replies on the page that holds it (`?at=<reply id>`), however long the thread.
+  await api('PATCH', '/me/modules', { key: 'community', on: true }, R.token);
+  const thread = await api('POST', '/community', { body: `Pages thread ${stamp}`, category: 'Stories' }, R.token);
+  const threadId = thread.json.post?.id ?? thread.json.id;
+  const replyIds = [];
+  for (let i = 0; i < 11; i += 1) replyIds.push((await api('POST', `/community/${threadId}/replies`, { body: `Pages reply ${i}` }, R.token)).json.reply?.id);
+  const atLast = await api('GET', `/community/${threadId}/replies?size=10&at=${replyIds[10]}`, undefined, R.token);
+  const atFirst = await api('GET', `/community/${threadId}/replies?size=10&at=${replyIds[0]}`, undefined, R.token);
+  const atNone = await api('GET', `/community/${threadId}/replies?size=10&page=2&at=nobody`, undefined, R.token);
+  check('pages: a linked reply opens on the page that holds it; an unknown one keeps the page asked', atLast.json.page?.page === 2 && atLast.json.replies?.some((r) => r.id === replyIds[10]) && atFirst.json.page?.page === 1 && atNone.json.page?.page === 2 && atNone.json.replies?.length === 1, [atLast.json.page, atFirst.json.page, atNone.json.page, replyIds.filter(Boolean).length]);
+
+  // The rest answer their own page, sized from their own prefix.
+  const sized = async (name, path, token, pick, size = 25) => {
+    const r = await api('GET', path, undefined, token);
+    check(`pages: ${name} reads its own prefix`, r.status === 200 && pick(r.json)?.size === size, [r.status, pick(r.json)]);
+  };
+  await sized('Circles: your tables', '/circles?gtsize=25', P.token, (j) => j.groupsPage);
+  await sized('Circles: upcoming', '/circles?upsize=50', P.token, (j) => j.eventsPage, 50);
+  await sized('Win: my submissions', '/win?mesize=25', P.token, (j) => j.minePage);
+  await sized('Work: your applications', '/work?apsize=50', P.token, (j) => j.applicationsPage, 50);
+  await sized('Priority DMs: answered', '/studio/dm?ansize=25', P.token, (j) => j.answeredPage);
+  await sized('Audience: what you sent', '/studio/audience?bcsize=25', P.token, (j) => j.broadcastsPage);
+  // These read `page` before 2026-11-07 while their screens sent a prefix, so Next never moved.
+  await sized('Audience: followers', '/studio/audience?fsize=50', P.token, (j) => j.page, 50);
+  await sized('Plans: usage', '/credits/ledger?usesize=50', P.token, (j) => j.page, 50);
+  await sized('Sessions: sessions to book', '/store/browse?kind=session&ssize=50', P.token, (j) => j.page, 50);
+  await sized('Sessions: events to book', '/store/browse?kind=event&esize=50', P.token, (j) => j.page, 50);
+  await sized('Shop: sales', '/studio/orders?ssize=50', P.token, (j) => j.page, 50);
+  await sized('Shop: bookings', '/studio/bookings?bsize=50', P.token, (j) => j.page, 50);
+  await sized('Shop: reviews', '/studio/testimonials?rsize=50', P.token, (j) => j.page, 50);
+  await sized('Community: channels', '/community/channels?clsize=50', P.token, (j) => j.page, 50);
+  check('pages: a bare size still works for a picker that reads every channel', (await api('GET', '/community/channels?size=100', undefined, P.token)).json.page?.size === 100);
+  const pg2 = await api('GET', '/credits/ledger?usepage=2', undefined, P.token);
+  check('pages: page two is page two', pg2.json.page?.page === 2 && pg2.json.entries?.length === 0, pg2.json.page);
+
+  // A cohort's learners, for whoever runs it: a page at a time with the whole count beside it.
+  const prog = await api('POST', '/school/programs', { name: 'Smoke test program', description: 'Made by the smoke test.', published: true }, A.token);
+  const k = await api('POST', `/school/programs/${prog.json.id}/cohorts`, { name: `Pages cohort ${stamp}`, startAt: new Date().toISOString(), endAt: new Date(Date.now() + 30 * 86_400_000).toISOString() }, A.token);
+  const kid = k.json.id;
+  await api('POST', `/school/cohorts/${kid}/enroll`, {}, Q.token);
+  await api('POST', `/school/cohorts/${kid}/enroll`, {}, R.token);
+  await api('PATCH', `/school/programs/${prog.json.id}`, { published: false }, A.token);
+  const k1 = await api('GET', `/school/cohorts/${kid}`, undefined, A.token);
+  const k2 = await api('GET', `/school/cohorts/${kid}?lpage=2`, undefined, A.token);
+  check("pages: a cohort's learners are a page with the whole count", k1.status === 200 && k1.json.learnerCount === 2 && k1.json.enrollments?.length === 2 && k1.json.learnersPage?.size === 10 && k1.json.learnersPage?.more === false && k1.json.enrollments.every((e) => e.progress && e.progress.assignmentsApproved === 0 && e.progress.sessionsAttended === 0), [k1.json.learnerCount, k1.json.learnersPage]);
+  check('pages: page two of the learners is empty, the count still whole', k2.json.enrollments?.length === 0 && k2.json.learnerCount === 2, [k2.json.enrollments?.length, k2.json.learnerCount]);
+  const asLearner = await api('GET', `/school/cohorts/${kid}`, undefined, Q.token);
+  check('pages: a learner gets no list of learners', asLearner.status === 200 && asLearner.json.enrollments?.length === 0 && asLearner.json.learnersPage === null, [asLearner.json.enrollments?.length, asLearner.json.learnersPage]);
+}
+
+// The run's own admin goes back to a user once every section that needs it is done (the Pages section makes a program as it).
+await admin('POST', `/admin/users/${A.user.id}/role`, { role: 'user' });
 
 // The guard: every route and tick this suite reached stays under the ceiling. On Workers Free the 51st D1 query of an invocation fails.
 section('D1 round trips');

@@ -20,7 +20,7 @@ Home opens with a dark card. It shows the date and a greeting with your first na
 - **Your streak:** how many days in a row you checked in. It opens Daily.
 - **Your mood:** today's face, or "Log your mood" if you have not picked one. It shows while Mood is on.
 
-Beside them sit **My page**, your public page, and a bell for your Inbox. Your picture opens the Profile tab. **Search anything** sits at the foot of the card, with results right under it as you type.
+Beside them sits **My page**, your public page. Your Inbox has its bell at the top of the app, not on this card. Your picture opens the Profile tab. **Search anything** sits at the foot of the card, with results right under it as you type.
 
 ## Water, then a line for the day
 

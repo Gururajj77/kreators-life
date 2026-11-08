@@ -22,6 +22,7 @@ import { ArrowDown, ArrowUp, ArrowUpRight, BookOpen, Download, ImagePlus, Link2,
 import { MediaTile } from '../components/Media';
 import { api, errorText } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
+import { Pager, TEN_A_PAGE, usePage } from '../components/Pager';
 import { FIELD } from '../lib/ui';
 import { Fold } from '../components/Fold';
 import { clockTime, dateTime, shortDate } from '../lib/date';
@@ -72,7 +73,9 @@ export function Cohort({ cohortId, back = { to: '/school', label: 'School' } }: 
   const params = useParams();
   const id = cohortId ?? params.id ?? '';
   const me = useMe();
-  const q = useAuthed(['cohort', id], () => api.cohort(id));
+  // Learners are a page at a time (prefix `l`, ten by default); the rest of the cohort is whole.
+  const lp = usePage('l', TEN_A_PAGE);
+  const q = useAuthed(['cohort', id, lp.query], () => api.cohort(id, lp.query));
   const [scheduling, setScheduling] = useState(false);
   const [openLesson, setOpenLesson] = useState<string | null>(null);
   const [editingMedia, setEditingMedia] = useState(false);
@@ -221,7 +224,7 @@ export function Cohort({ cohortId, back = { to: '/school', label: 'School' } }: 
               </div>
               {!s.attended && d.myStatus === 'enrolled' && !isLive(s) && new Date(s.startsAt).getTime() > Date.now() && <p className="mt-xs m-0 text-caption text-ink-soft">Check-in opens fifteen minutes before it starts.</p>}
               {d.manager && s.attendance && (
-                <Fold className="mt-sm" title={`Attendance, ${s.attendance.length} of ${d.enrollments.length}`}>
+                <Fold className="mt-sm" title={`Attendance, ${s.attendance.length} of ${d.learnerCount}`}>
                   <ul className="flex list-none flex-col gap-xs p-0 m-0">
                     {d.enrollments.map((e) => {
                       const here = s.attendance?.some((a) => a.userId === e.learnerId);
@@ -239,6 +242,8 @@ export function Cohort({ cohortId, back = { to: '/school', label: 'School' } }: 
                       );
                     })}
                   </ul>
+                  {/* The same page of learners as the list below; turning one turns both. */}
+                  <Pager page={d.learnersPage ?? undefined} prefix="l" label="learners" only={TEN_A_PAGE} />
                 </Fold>
               )}
             </li>
@@ -253,8 +258,8 @@ export function Cohort({ cohortId, back = { to: '/school', label: 'School' } }: 
       {(canRun || d.myStatus === 'enrolled' || d.myStatus === 'completed') && <CohortDiscussion cohortId={id} />}
 
       {canRun && (
-        <Section id="learners-heading" title={`Learners, ${d.enrollments.length}`}>
-          {d.enrollments.length === 0 && <p className="m-0 text-subhead text-ink-soft">No one has enrolled yet.</p>}
+        <Section id="learners-heading" title={`Learners, ${d.learnerCount}`}>
+          {d.learnerCount === 0 && <p className="m-0 text-subhead text-ink-soft">No one has enrolled yet.</p>}
           <ul className="flex list-none flex-col gap-xs p-0 m-0">
             {d.enrollments.map((e) => {
               const [word, tone] = LEARNER_STATUS[e.status] ?? [e.status, 'neutral' as TagTone];
@@ -287,6 +292,7 @@ export function Cohort({ cohortId, back = { to: '/school', label: 'School' } }: 
               );
             })}
           </ul>
+          <Pager page={d.learnersPage ?? undefined} prefix="l" label="learners" only={TEN_A_PAGE} />
           <div className="mt-xs">
             <ErrorLine e={complete.error} />
           </div>

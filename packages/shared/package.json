@@ -15,6 +15,7 @@
     "./gratitude": "./src/gratitude.ts",
     "./lessonResources": "./src/lessonResources.ts",
     "./fitness": "./src/fitness.ts",
+    "./openBusiness": "./src/openBusiness.ts",
     "./help": "./src/help.ts",
     "./coachReport": "./src/coachReport.ts",
     "./insights": "./src/insights.ts",

@@ -209,6 +209,9 @@ bond.post('/friends', async (c) => {
   if (!target) return c.json({ error: code ? 'no one has that friend code' : 'no such person' }, 404);
   const id = target.id;
   if (id === user.id) return c.json({ error: code ? 'that is your own code' : 'who?' }, 400);
+  // By code (typed, or a QR code's Add friend), a block either way reads exactly as a code nobody has, so it never tells anyone they are blocked
+  // (2026-11-07, four-check; the page's own `add` answer says nobody alike).
+  if (code && (await blockedEither(db, user.id, id))) return c.json({ error: 'no one has that friend code' }, 404);
   const tp = publicOf(target);
   if (!tp.allowFriendRequests || (!code && !tp.pagePublic)) return c.json({ error: 'this person is not taking friend requests' }, 403);
   const r = await requestFriend(db, user, id);

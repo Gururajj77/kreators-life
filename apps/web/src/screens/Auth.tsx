@@ -1,4 +1,4 @@
-import { birthDateProblem, MAX_DEVICES, MIN_AGE, passwordProblem, PHONE_HINT, phoneProblem } from '@kreators/shared';
+import { attendeeMayOpen, birthDateProblem, MAX_DEVICES, MIN_AGE, passwordProblem, PHONE_HINT, phoneProblem } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
@@ -100,8 +100,10 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
       }
       setToken(r.token);
       await refresh();
-      // A new or unfinished account starts with the setup chat at /onboarding; the strategy session waits in Pillars.
-      nav(r.user?.onboardedAt ? (next ?? '/home') : '/onboarding', { replace: true });
+      // A new or unfinished account starts with the setup chat at /onboarding; the strategy session waits in Pillars. Someone signing in from an
+      // event's public page goes back to it, and one who joined an event goes back to where an attendee may go (eventJoin.ts in shared).
+      const back = next && (next.startsWith('/events/') || (r.user?.attendeeEvent && attendeeMayOpen(next.split(/[?#]/)[0] ?? '')));
+      nav(r.user?.onboardedAt || back ? (next ?? '/home') : r.user?.attendeeEvent ? `/party/${r.user.attendeeEvent}` : '/onboarding', { replace: true });
     },
   });
   // What the server will say, said here first. Only on sign-up: a sign-in password is whatever it is.

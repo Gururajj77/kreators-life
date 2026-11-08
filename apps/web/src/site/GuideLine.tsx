@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { BUMLING, characterTitle, type Host } from '@kreators/shared';
 import { m as motion } from 'motion/react';
 import { Avatar, type Mood } from '../components/Avatar';
-import { useRise } from './SevenRP';
+import { useRise } from './useRise';
 
 /**
  * A guide steps in and says one plain line, so the public pages read like a conversation, not a brochure. The guide sits on the

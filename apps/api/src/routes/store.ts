@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { rewardSocial, trustFor } from '../rewards';
-import { money, percentOff, productPayWays, unlockFor } from '@kreators/shared';
+import { money, normalizeCode, percentOff, productPayWays, unlockFor } from '@kreators/shared';
 import { haveFor } from '../unlocks';
 import { pageOf, paged, streakNow } from '../db';
 import { AFFILIATE_SHARE, levelFromXp, type Lesson, type PublicPage } from '@kreators/shared';
@@ -62,8 +62,12 @@ async function pageFor(c: Context<AppEnv>, owner: UserRow): Promise<PublicPage> 
     viewer ? db.prepare('SELECT 1 FROM follows WHERE owner_id = ? AND follower_id = ?').bind(owner.id, viewer.id).first() : Promise.resolve(null),
     db.prepare("SELECT * FROM portfolio_items WHERE user_id = ? AND visibility = 'public' ORDER BY created_at DESC LIMIT 30").bind(owner.id).all<{ id: string; title: string; description: string; url: string; visibility: 'public' | 'private'; created_at: string }>(),
   ]);
+  // A QR code's link (`?add=<friend code>`), read only for a signed-in visitor: the code must be this person's, with no block either way.
+  const addAsked = c.req.query('add');
+  const addCode = addAsked !== undefined && viewer && !mine ? normalizeCode(addAsked) : '';
+  const addMatches = addCode.length >= 8 && owner.friend_code === addCode;
   // None of these depends on another (the page view is only a count), so they go out together.
-  const [posts, stats, honors, friend, trust] = await Promise.all([
+  const [posts, stats, honors, friend, trust, , addBlocked] = await Promise.all([
     shows.posts
       ? db
           .prepare('SELECT p.id, p.category, p.body, p.created_at, (SELECT COUNT(*) FROM community_likes l WHERE l.post_id = p.id) AS likes, (SELECT COUNT(*) FROM community_replies r WHERE r.post_id = p.id AND r.hidden_at IS NULL) AS replies FROM community_posts p WHERE p.user_id = ? AND p.anonymous = 0 AND p.hidden_at IS NULL AND p.product_id IS NULL ORDER BY p.created_at DESC LIMIT 10')
@@ -75,7 +79,11 @@ async function pageFor(c: Context<AppEnv>, owner: UserRow): Promise<PublicPage> 
     viewer && viewer.id !== owner.id ? db.prepare('SELECT id, requester_id, status FROM friendships WHERE (requester_id = ?1 AND recipient_id = ?2) OR (requester_id = ?2 AND recipient_id = ?1)').bind(viewer.id, owner.id).first<{ id: string; requester_id: string; status: string }>() : Promise.resolve(null),
     trustFor(db, owner.id),
     !mine && open ? db.prepare("INSERT INTO page_events (owner_id, kind, ref, created_at) VALUES (?, 'view', NULL, ?)").bind(owner.id, nowIso()).run() : Promise.resolve(null),
+    viewer && addMatches ? blockedEither(db, viewer.id, owner.id) : Promise.resolve(true),
   ]);
+  // A friend code works even when the page is switched off, as in Bond (POST /bond/friends); a request already between the two still shows.
+  const add: PublicPage['add'] =
+    addAsked === undefined || !viewer ? undefined : mine ? 'self' : addMatches && !addBlocked && (ps.allowFriendRequests || Boolean(friend)) ? 'ok' : 'nobody';
   // Only the badges that are public: the journal, money and focus families never leave their owner. Reading another person's page writes nothing.
   const shownBadges = stats && shows.badges ? publicBadgeKeys((await badgeState(db, owner, { stats, persist: false })).keys) : [];
   const page: PublicPage = {
@@ -105,6 +113,7 @@ async function pageFor(c: Context<AppEnv>, owner: UserRow): Promise<PublicPage> 
     shows,
     allowFriendRequests: open && ps.allowFriendRequests,
     allowChats: open && ps.allowChats,
+    ...(add ? { add } : {}),
     posts: posts.results.map((p) => ({ id: p.id, category: p.category, body: p.body, likes: p.likes, replies: p.replies, createdAt: p.created_at })),
     activity: stats && shows.activity ? { level: levelFromXp(owner.xp), streak: streakNow(owner.streak, owner.last_checkin, dayInZone(owner.timezone)), areasSetUp: stats.relationshipsWithPillars, memberSince: owner.created_at } : null,
     badges: shownBadges,
@@ -391,7 +400,8 @@ store.get('/orders/:id', async (c) => {
 
 store.get('/browse', async (c) => {
   const kind = c.req.query('kind');
-  const ask = pageOf(c);
+  // Sessions pages its two lists on `s` and `e` (2026-11-07: this read `page`, so Next never moved).
+  const ask = pageOf(c, kind === 'session' ? 's' : kind === 'event' ? 'e' : '');
   const rows =
     kind === 'session' || kind === 'event'
       ? await c.env.DB.prepare(`${PRODUCT_SELECT} WHERE p.status = 'live' AND p.kind = ? ORDER BY p.starts_at ASC, p.created_at DESC LIMIT ? OFFSET ?`).bind(kind, ask.limit, ask.offset).all<ProductRow>()

@@ -1,4 +1,4 @@
-import { anonAliasFrom, normalizeCode, DEFAULT_ZONE, isCurrency, parseAppPrefs, parseDatePrefs, isRealDay, pageSizeOf, parseIdentities, parseRepeat, parsePriority, parseIntake, parseLifeArea, parseLinkBlocks, type InboxKind, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
+import { anonAliasFrom, normalizeCode, DEFAULT_ZONE, isCurrency, parseAppPrefs, parseDatePrefs, isRealDay, pageSizeOf, parseIdentities, parseRepeat, parsePriority, parseIntake, parseLifeArea, parseLinkBlocks, parseOpenKind, type InboxKind, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
 import { BADGE_STATS, BADGES, badgesFrom, communityRankOf, type CommunityRank, EMPTY_SOCIALS, isPrivateBadge, parsePublicSettings, HONORS, isStaffFor, levelFromXp, PERMISSIONS, roleRank, taskReadyAt, timeHonors, type BadgeFacts, type BadgesResponse, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
 import type { Context, Next } from 'hono';
 import type { AppEnv } from './env';
@@ -26,6 +26,8 @@ export interface NodeRow {
   life_area?: string | null;
   /** The time block the person picked for it (migration 0089), or null: it falls in the block its time sits in, or none. */
   time_block_id?: string | null;
+  /** The kind of open business it carries (migration 0120), read through `parseOpenKind`, or null. */
+  open_kind?: string | null;
   do_date?: string | null;
   repeat_json?: string | null;
   spawned_from?: string | null;
@@ -55,15 +57,20 @@ export interface PageAsk {
   limit: number;
   offset: number;
 }
-export function pageOf(c: Context<AppEnv>, prefix = ''): PageAsk {
-  const size = pageSizeOf(c.req.query(`${prefix}size`) ?? c.req.query('size'));
+export function pageOf(c: Context<AppEnv>, prefix = '', only?: { sizes: readonly PageSize[]; fallback: PageSize }): PageAsk {
+  // A list with its own sizes (done tasks: 10, 25 or 50, ten by default) reads only its own prefix, never another list's `size`.
+  const asked = only ? Number(c.req.query(`${prefix}size`)) : null;
+  const size = only ? (only.sizes.includes(asked as PageSize) ? (asked as PageSize) : only.fallback) : pageSizeOf(c.req.query(`${prefix}size`) ?? c.req.query('size'));
   const page = Math.max(1, Math.min(100_000, Math.floor(Number(c.req.query(`${prefix}page`)) || 1)));
   return { page, size, limit: size + 1, offset: (page - 1) * size };
 }
 /** Trim the extra row off and say where the list is. */
 export function paged<T>(rows: readonly T[], ask: PageAsk): { items: T[]; page: Page } {
-  return { items: rows.slice(0, ask.size), page: { page: ask.page, size: ask.size, more: rows.length > ask.size } };
+  // A page past the first with nothing on it says so, so the screen steps back instead of showing an empty list with only Previous.
+  return { items: rows.slice(0, ask.size), page: { page: ask.page, size: ask.size, more: rows.length > ask.size, ...(rows.length === 0 && ask.page > 1 ? { empty: true } : {}) } };
 }
+/** A list paged from 2026-11-07 on (the founder: "pagination for all lists"): 10, 25 or 50, ten by default, like the done tasks. Pass it to `pageOf`. */
+export const TEN_A_PAGE: { sizes: readonly PageSize[]; fallback: PageSize } = { sizes: [10, 25, 50], fallback: 10 };
 
 /** A day as YYYY-MM-DD that is on the calendar: 2026-11-31 and 2026-00-00 have the shape but are refused, so nothing downstream does arithmetic on an Invalid Date. */
 export const DATE_RE = {
@@ -188,6 +195,7 @@ export function toUser(r: UserRow): User {
     bestStreak: r.best_streak,
     lastCheckin: r.last_checkin,
     onboardedAt: r.onboarded_at,
+    attendeeEvent: r.attendee_event ?? null,
     createdAt: r.created_at,
   };
 }
@@ -419,6 +427,7 @@ export function toNode(r: NodeRow, gate?: TaskGate): Node {
     habit: r.habit === null || r.habit === undefined ? null : r.habit === 1,
     lifeArea: parseLifeArea(r.life_area),
     timeBlockId: r.time_block_id ?? null,
+    openKind: parseOpenKind(r.open_kind),
     dueTime: r.due_time ?? null,
     estimateMin: r.estimate_min ?? null,
     completedAt: r.completed_at,

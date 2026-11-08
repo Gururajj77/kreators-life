@@ -36,7 +36,12 @@ home.get('/', async (c) => {
     db.prepare('SELECT relationship, xp FROM relationship_scores WHERE user_id = ?').bind(user.id).all<{ relationship: RelationshipKey; xp: number }>(),
     db.prepare("SELECT relationship, COUNT(*) AS n FROM nodes INDEXED BY idx_nodes_user_done WHERE user_id = ? AND kind = 'pillar' AND status = 'active' GROUP BY relationship").bind(user.id).all<{ relationship: RelationshipKey; n: number }>(),
     db.prepare('SELECT relationship FROM spark_completions WHERE user_id = ? AND date = ?').bind(user.id, date).first<{ relationship: RelationshipKey }>(),
-    db.prepare("SELECT COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND (do_date IS NULL OR do_date <= ?)").bind(user.id, date).first<{ n: number }>(),
+    // The tasks waiting, and the open business (2026-11-07) for the count on Close the unfinished, in one read. The open count is what
+    // Daily's Unfinished view lists: a kind, and a day that has come or no day at all (four-check: one given a later day had kept counting).
+    db
+      .prepare("SELECT COALESCE(SUM(CASE WHEN do_date IS NULL OR do_date <= ?1 THEN 1 ELSE 0 END), 0) AS n, COALESCE(SUM(CASE WHEN open_kind IN ('unfinished', 'unresolved', 'undecided') AND (COALESCE(do_date, due_date) IS NULL OR COALESCE(do_date, due_date) <= ?1) THEN 1 ELSE 0 END), 0) AS open FROM nodes WHERE user_id = ?2 AND kind = 'task' AND status = 'active'")
+      .bind(date, user.id)
+      .first<{ n: number; open: number }>(),
     db.prepare("SELECT COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ?").bind(user.id, new Date(Date.now() - 86_400_000).toISOString()).first<{ n: number }>(),
     db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL').bind(user.id).first<{ n: number }>(),
     db.prepare('SELECT kind, currency, SUM(amount_cents) AS cents, COUNT(*) AS n FROM finance_transactions WHERE user_id = ? AND date LIKE ? GROUP BY kind, currency').bind(user.id, `${month}%`).all<{ kind: 'income' | 'expense'; currency: string; cents: number; n: number }>(),
@@ -103,6 +108,7 @@ home.get('/', async (c) => {
     sparkRelationship,
     taskDone,
     tasksWaiting,
+    openBusiness: Number(waiting?.open ?? 0),
     streak: streakNow(user.streak, user.last_checkin, date),
     doneCount: Number(checkedIn) + Number(Boolean(sparkDone)) + Number(taskDone),
   };

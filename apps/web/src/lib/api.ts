@@ -13,7 +13,7 @@ import { portalSessionHeader, teamLinkSessionHeader } from './portalSession';
 import { agencyTeamHeader, markAgencyTeamGone } from './agencyWorkspace';
 import type { MyTeam, TeamAccess, TeamMember, TeamRole } from '@kreators/shared';
 import type { AgencyStageKey, LifecycleDates, RetainerOption } from '@kreators/shared';
-import type { AdminAttendeeCode, AttendeeCodeHost, AttendeeCodeView } from '@kreators/shared';
+import type { AdminAttendeeCode, AttendeeCodeHost, AttendeeCodeView, PublicEvent } from '@kreators/shared';
 import type { AssistantContext, AssistantReceipt, AssistantReply, AssistantStatus, AssistantTurn, CompanionReply, CompanionStatus, CreditEntry, CreditsResponse, FeelingsReadResult, PlanKey } from '@kreators/shared';
 import type { Brand, BrandDetail, BrandPiece, BrandSource, PieceKind, ResearchKind, ResearchRun } from '@kreators/shared';
 import type { Contract, DayType, Fear, Insecurity, Placement, Practices, RealDay, RoutineBlock, Scores, SessionResponse } from '@kreators/shared';
@@ -162,6 +162,8 @@ import type {
   TodayMonthResponse,
   TodayResponse,
   TodayWaitingResponse,
+  DoneTasksResponse,
+  OpenKind,
   DayTypeKey,
   DayTypeResponse,
   User,
@@ -277,6 +279,8 @@ export interface TaskPlanBody {
   lifeArea?: LifeAreaKey | null;
   /** The time block it was put in (one of the person's own), or null for "by its time". */
   timeBlockId?: string | null;
+  /** Open business: one of the three kinds (Unfinished, Unresolved, Undecided), or null for none. */
+  openKind?: OpenKind | null;
 }
 /** A scheduled review: which one, its first day, the time of the reminder, how it repeats, and an optional name. */
 export interface ReviewScheduleBody {
@@ -395,6 +399,8 @@ export const api = {
   build: (relationships: RelationshipKey[], date: string, picks?: LadderPicks) => post<{ nodes: Node[]; skipped: RelationshipKey[] }>('/onboarding/build', { relationships, date, picks }),
   acceptQuest: (relationship: RelationshipKey, date: string, picks?: LadderPicks) => post<{ nodes: Node[] }>('/onboarding/accept-quest', { relationship, date, picks }),
   nodes: (relationship?: RelationshipKey) => request<{ nodes: Node[] }>(`/nodes${relationship ? `?relationship=${relationship}` : ''}`),
+  /** A pillar's done tasks, a page at a time (`pq` is `pageQuery(page, size, 'dn')`). */
+  nodesDone: (relationship: RelationshipKey, pq: string) => request<DoneTasksResponse>(`/nodes/done?relationship=${relationship}&${pq}`),
   createNode: (body: { kind: NodeKind; parentId: string | null; relationship: RelationshipKey; title: string; note?: string } & TaskPlanBody) => post<{ node: Node }>('/nodes', body),
   updateNode: (id: string, body: { title?: string; note?: string; status?: 'active' | 'archived'; parentId?: string } & TaskPlanBody) => patch<{ node: Node }>(`/nodes/${id}`, body),
   subtasks: (id: string) => request<{ subtasks: Subtask[] }>(`/nodes/${id}/subtasks`),
@@ -408,11 +414,17 @@ export const api = {
   // daily
   /** Daily. `area` (a `LIFE_AREAS` key or 'none') has the server cut the six, the backlog and its count to that area. */
   // `group` reads up to DAILY_GROUPED_MAX tasks for Daily's coloured boxes. (The server's `block` cut is left to other callers; Daily has no Block filter.)
-  today: (date: string, area = '', opts: { group?: boolean; sort?: string } = {}) =>
-    request<TodayResponse>(`/today?date=${date}${area ? `&area=${encodeURIComponent(area)}` : ''}${opts.group ? '&group=1' : ''}${opts.sort ? `&sort=${encodeURIComponent(opts.sort)}` : ''}`),
+  // `open` ('any' or one of the three kinds, Daily's Unfinished business view) cuts them to open business.
+  today: (date: string, area = '', opts: { group?: boolean; sort?: string; open?: string } = {}) =>
+    request<TodayResponse>(`/today?date=${date}${area ? `&area=${encodeURIComponent(area)}` : ''}${opts.group ? '&group=1' : ''}${opts.sort ? `&sort=${encodeURIComponent(opts.sort)}` : ''}${opts.open ? `&open=${encodeURIComponent(opts.open)}` : ''}`),
   /** The open tasks past the ones `today` shows, in the same order (`pq` is `pageQuery(page, size, 'w')`). */
-  todayWaiting: (date: string, area = '', group = false, pq = '', sort = '') =>
-    request<TodayWaitingResponse>(`/today/waiting?date=${date}${area ? `&area=${encodeURIComponent(area)}` : ''}${group ? '&group=1' : ''}${sort ? `&sort=${encodeURIComponent(sort)}` : ''}${pq ? `&${pq}` : ''}`),
+  todayWaiting: (date: string, area = '', group = false, pq = '', sort = '', open = '') =>
+    request<TodayWaitingResponse>(`/today/waiting?date=${date}${area ? `&area=${encodeURIComponent(area)}` : ''}${group ? '&group=1' : ''}${sort ? `&sort=${encodeURIComponent(sort)}` : ''}${open ? `&open=${encodeURIComponent(open)}` : ''}${pq ? `&${pq}` : ''}`),
+  /** Done today past the first page `today` carries (`pq` is `pageQuery(page, size, 'd')`). */
+  todayDone: (date: string, pq: string, area = '', open = '') =>
+    request<DoneTasksResponse>(`/today/done?date=${date}${area ? `&area=${encodeURIComponent(area)}` : ''}${open ? `&open=${encodeURIComponent(open)}` : ''}&${pq}`),
+  /** The tasks let go (archived), a page at a time (`pq` is `pageQuery(page, size, 'lg')`), for the Unfinished business view's Let go list. */
+  letGo: (pq = '') => request<DoneTasksResponse>(`/today/let-go${pq ? `?${pq}` : ''}`),
   /** Emerging: patterns from the person's own rows. `app` asks for the cards one place shows; `rel` for a pillar page. */
   /** Emerging: the person's whole list for their day; each place picks its share on the device (`insightsForPlace`). */
   insights: (day: string, period?: { kind: string; start: string } | null) => request<InsightsResponse>(`/insights?day=${day}${period ? `&kind=${period.kind}&start=${period.start}` : ''}`),
@@ -589,6 +601,8 @@ export const api = {
   // wellbeing
   wellbeing: () => request<WellbeingSummary>('/wellbeing/summary'),
   logs: (kind: LogKind, days = 30) => request<{ logs: WellbeingLog[] }>(`/wellbeing/${kind}?days=${days}`),
+  /** A kind's logs as a list a person scrolls, newest first, a page at a time (prefix `s`). */
+  logsPage: (kind: LogKind, pq = '') => request<{ logs: WellbeingLog[]; page: Page }>(withQ(`/wellbeing/${kind}?list=1`, pq)),
   log: (kind: LogKind, body: { date?: string; value: number; extra?: Record<string, unknown>; note?: string }) => post<{ log: WellbeingLog; summary: WellbeingSummary }>(`/wellbeing/${kind}`, body),
   deleteLog: (kind: LogKind, id: string) => del<{ ok: true }>(`/wellbeing/${kind}/${id}`),
   // fitness: movement and the daily eating check-in (2026-11-07). Kreators Run's tool writes the same movement log at /run/move.
@@ -671,7 +685,8 @@ export const api = {
   search: (q: string) => request<SearchResults>(`/search?q=${encodeURIComponent(q)}`),
 
   // storefront, buyer side
-  publicPage: (handle: string) => request<PublicPage>(`/public/${encodeURIComponent(handle)}`),
+  /** `add` is a QR code's friend code: the answer then says whether it is this person's (`PublicPage.add`). */
+  publicPage: (handle: string, add?: string | null) => request<PublicPage>(`/public/${encodeURIComponent(handle)}${add != null ? `?add=${encodeURIComponent(add)}` : ''}`),
   personPage: (id: string) => request<PublicPage>(`/public/people/${encodeURIComponent(id)}`),
   publicProduct: (id: string) => request<{ product: Product; lessonCount: number; testimonials: Testimonial[]; owned: boolean; seller: { trust: TrustScore }; unlock: Unlock; canEdit: boolean }>(`/public/products/${id}`),
   click: (handle: string, ref: string) => post<{ ok: true }>(`/public/${encodeURIComponent(handle)}/click`, { ref }),
@@ -706,7 +721,7 @@ export const api = {
   createLesson: (productId: string, body: Partial<Lesson>) => post<{ lesson: Lesson }>(`/studio/products/${productId}/lessons`, body),
   updateLesson: (id: string, body: Partial<Lesson>) => patch<{ lesson: Lesson }>(`/studio/lessons/${id}`, body),
   deleteLesson: (id: string) => del<{ ok: true }>(`/studio/lessons/${id}`),
-  coupons: () => request<{ coupons: Coupon[] }>('/studio/coupons'),
+  coupons: (productId = '', pq = '') => request<{ coupons: Coupon[]; page: Page }>(withQ(`/studio/coupons${productId ? `?product=${encodeURIComponent(productId)}` : ''}`, pq)),
   createCoupon: (body: Partial<Coupon>) => post<{ coupon: Coupon }>('/studio/coupons', body),
   deleteCoupon: (id: string) => del<{ ok: true }>(`/studio/coupons/${id}`),
   availability: () => request<{ availability: Availability[] }>('/studio/availability'),
@@ -728,7 +743,7 @@ export const api = {
   approveTestimonial: (id: string, approved: boolean) => post<{ ok: true }>(`/studio/testimonials/${id}`, { approved }),
   broadcast: (body: { title: string; body: string; audience: 'followers' | 'buyers' }) => post<{ sent: number }>('/studio/broadcasts', body),
   audience: (pq = '') =>
-    request<{ page: Page; followers: { name: string; handle: string | null; since: string }[]; broadcasts: { id: string; title: string; body: string; audience: string; sent: number; createdAt: string }[]; referralCode: string | null; referred: number; affiliateShare: number }>(withQ('/studio/audience', pq)),
+    request<{ page: Page; followers: { name: string; handle: string | null; since: string }[]; broadcasts: { id: string; title: string; body: string; audience: string; sent: number; createdAt: string }[]; broadcastsPage: Page; referralCode: string | null; referred: number; affiliateShare: number }>(withQ('/studio/audience', pq)),
 
 
   // organizations (brands)
@@ -741,7 +756,7 @@ export const api = {
   // army: brand campaigns
   army: (pq = '') => request<{ page: Page; campaigns: Campaign[]; assignments: CampaignAssignment[]; staff: boolean }>(withQ('/army', pq)),
   createCampaign: (body: Partial<Campaign> & { organizationId: string; name: string }) => post<{ campaign: Campaign }>('/army/campaigns', body),
-  campaign: (id: string) => request<{ campaign: Campaign; deliverables: Deliverable[]; assignments: CampaignAssignment[]; events: CampaignEvent[]; who: 'staff' | 'brand' | 'creator' }>(`/army/campaigns/${id}`),
+  campaign: (id: string, pq = '') => request<{ campaign: Campaign; deliverables: Deliverable[]; assignments: CampaignAssignment[]; events: CampaignEvent[]; eventsPage: Page; who: 'staff' | 'brand' | 'creator' }>(withQ(`/army/campaigns/${id}`, pq)),
   updateCampaign: (id: string, body: Partial<Campaign> & { ownerId?: string }) => patch<{ campaign: Campaign }>(`/army/campaigns/${id}`, body),
   addDeliverable: (campaignId: string, body: { title: string; format?: string; platform?: string; dueAt?: string }) => post<{ ok: true; id: string }>(`/army/campaigns/${campaignId}/deliverables`, body),
   assignCreator: (campaignId: string, body: { creator: string; role?: string; feeAmount?: number; currency?: string }) => post<{ ok: true; id: string }>(`/army/campaigns/${campaignId}/assignments`, body),
@@ -775,8 +790,9 @@ export const api = {
   addAssignment: (programId: string, body: { title: string; instructions?: string; rubric?: string; dueDays?: number }) => post<{ ok: true }>(`/school/programs/${programId}/assignments`, body),
   openCohort: (programId: string, body: { name: string; startAt: string; endAt: string; capacity?: number }) => post<{ ok: true; id: string }>(`/school/programs/${programId}/cohorts`, body),
   enroll: (cohortId: string, pay?: 'test', discountCode?: string) => post<{ ok: true; id: string }>(`/school/cohorts/${cohortId}/enroll`, { ...(pay ? { pay } : {}), ...(discountCode ? { discountCode } : {}) }),
-  cohort: (id: string) =>
-    request<{ cohort: Cohort; items: LearningItem[]; assignments: CourseAssignment[]; submissions: Submission[]; sessions: CohortSession[]; enrollments: Enrollment[]; manager: boolean; mentor: boolean; myProgress: Enrollment['progress'] | null; myStatus: Enrollment['status'] | null }>(`/school/cohorts/${id}`),
+  /** A cohort; for whoever runs it, `enrollments` is one page of learners (prefix `l`), `learnerCount` all of them. */
+  cohort: (id: string, pq = '') =>
+    request<{ cohort: Cohort; items: LearningItem[]; assignments: CourseAssignment[]; submissions: Submission[]; sessions: CohortSession[]; enrollments: Enrollment[]; learnersPage: Page | null; learnerCount: number; manager: boolean; mentor: boolean; myProgress: Enrollment['progress'] | null; myStatus: Enrollment['status'] | null }>(withQ(`/school/cohorts/${id}`, pq)),
   submitAssignment: (assignmentId: string, body: { cohortId: string; url?: string; text?: string }) => post<{ ok: true }>(`/school/assignments/${assignmentId}/submit`, body),
   giveFeedback: (submissionId: string, body: { comment: string; status: 'approved' | 'changes'; grade?: string }) => post<{ ok: true }>(`/school/submissions/${submissionId}/feedback`, body),
   scheduleSession: (cohortId: string, body: { title: string; startsAt: string; minutes?: number; onlineUrl?: string }) => post<{ ok: true }>(`/school/cohorts/${cohortId}/sessions`, body),
@@ -791,7 +807,7 @@ export const api = {
   cohortTalkVisibility: (cohortId: string, visibility: CohortTalkVisibility) => put<{ me: CohortTalkMe }>(`/school/cohorts/${cohortId}/talk/me`, { visibility }),
 
   // work
-  work: (pq = '', draftPq = '') => request<{ page: Page; opportunities: Opportunity[]; applications: Application[]; draftPage: Page; drafts: Opportunity[]; canPost: boolean }>(withQ(withQ('/work', pq), draftPq)),
+  work: (pq = '', draftPq = '') => request<{ page: Page; opportunities: Opportunity[]; applications: Application[]; applicationsPage: Page; draftPage: Page; drafts: Opportunity[]; canPost: boolean }>(withQ(withQ('/work', pq), draftPq)),
   createOpportunity: (body: Partial<Opportunity> & { title: string }) => post<{ ok: true; id: string }>('/work/opportunities', body),
   opportunity: (id: string, pq = '') => request<{ opportunity: Opportunity; page: Page; applications: Application[]; owner: boolean }>(withQ(`/work/opportunities/${id}`, pq)),
   setOpportunity: (id: string, status: Opportunity['status'], clubOnly?: boolean) => patch<{ ok: true }>(`/work/opportunities/${id}`, clubOnly === undefined ? { status } : { status, clubOnly }),
@@ -799,13 +815,15 @@ export const api = {
   setApplication: (id: string, body: { status: Application['status']; note?: string }) => post<{ ok: true }>(`/work/applications/${id}`, body),
 
   // party
-  party: (pq = '') => request<{ page: Page; events: PartyEvent[]; hosting: PartyEvent[]; canHostAll: boolean; club: boolean }>(withQ('/party', pq)),
+  party: (pq = '') => request<{ page: Page; events: PartyEvent[]; hosting: PartyEvent[]; hostingPage: Page; canHostAll: boolean; club: boolean }>(withQ('/party', pq)),
   createEvent: (body: Partial<PartyEvent> & { title: string; startsAt: string; minutes?: number; attendeeXp?: number; attendeeCode?: string }) => post<{ event: PartyEvent; codeError: string | null }>('/party/events', body),
   event: (id: string, pq = '') => request<{ event: PartyEvent; registrations: EventRegistration[]; registrationsPage?: Page | null; host: boolean; feedback: { average: number | null; count: number }; hostCode: AttendeeCodeHost | null; attendee: AttendeeCodeView | null }>(withQ(`/party/events/${id}`, pq)),
   setEventCode: (id: string, change: CodeChange) => put<{ hostCode: AttendeeCodeHost }>(`/party/events/${id}/attendee-code`, change),
   claimEventCode: (id: string, code: string) => post<{ xp: number; newBadges: string[] }>(`/party/events/${id}/claim`, { code }),
   rsvp: (id: string, networking: boolean, discountCode?: string) => post<{ status: EventRegistration['status'] }>(`/party/events/${id}/rsvp`, { networking, ...(discountCode ? { discountCode } : {}) }),
   cancelRsvp: (id: string) => post<{ ok: true }>(`/party/events/${id}/cancel-rsvp`),
+  /** Joining from the event's public page: marks an account still setting up as an attendee and switches its event apps on. Takes no seat. */
+  arriveEvent: (id: string) => post<{ ok: true; attendee: boolean; modules: Record<string, boolean> }>(`/party/events/${id}/arrive`),
   checkinGuest: (id: string, userId: string) => post<{ ok: true }>(`/party/events/${id}/checkin`, { userId }),
   eventFeedback: (id: string, body: { rating: number; comment?: string; networking?: boolean }) => post<{ ok: true }>(`/party/events/${id}/feedback`, body),
   setEvent: (id: string, status: 'published' | 'cancelled' | 'done') => patch<{ ok: true }>(`/party/events/${id}`, { status }),
@@ -851,7 +869,7 @@ export const api = {
   decideMembership: (id: string, body: { status: Membership['status']; note?: string; months?: number }) => post<{ ok: true }>(`/club/memberships/${id}`, body),
 
   // win: content rewards
-  win: (pq = '', queuePq = '') => request<{ page: Page; bounties: Bounty[]; mine: BountySubmission[]; queuePage: Page; queue: BountySubmission[]; earned: number; reviewer: boolean; finance: boolean; canCreate: boolean }>(withQ(withQ('/win', pq), queuePq)),
+  win: (pq = '', queuePq = '') => request<{ page: Page; bounties: Bounty[]; mine: BountySubmission[]; minePage: Page; queuePage: Page; queue: BountySubmission[]; earned: number; reviewer: boolean; finance: boolean; canCreate: boolean }>(withQ(withQ('/win', pq), queuePq)),
   bounty: (id: string, pq = '') => request<{ bounty: Bounty; page: Page; submissions: BountySubmission[]; board: { name: string; views: number; status: string }[] }>(withQ(`/win/${id}`, pq)),
   createBounty: (body: Partial<Bounty> & { title: string; organizationId?: string }) => post<{ ok: true; id: string }>('/win', body),
   editBounty: (id: string, body: Partial<Bounty>) => patch<{ ok: true; version: number; changed: string[] }>(`/win/${id}`, body),
@@ -900,6 +918,8 @@ export const api = {
   eventListed: (app: EventApp, id: string, on: boolean) => put<{ ok: true }>(`/connect/${app}/${id}/networking`, { on }),
   eventConnect: (app: EventApp, id: string, userId: string) => post<{ ok: true; status: string }>(`/connect/${app}/${id}/people/${userId}/connect`),
   addFriendByCode: (code: string) => post<{ ok: true; status: 'sent' | 'friends' }>('/bond/friends', { code }),
+  /** A new friend code: the old one, and every QR code made from it, stops working. */
+  newFriendCode: () => post<{ friendCode: string }>('/me/friend-code'),
   answerFriend: (id: string, status: 'accepted' | 'declined') => post<{ ok: true }>(`/bond/friends/${id}`, { status }),
   unfriend: (userId: string) => del<{ ok: true }>(`/bond/friends/${userId}`),
   chats: (pq = '') => request<{ page: Page; chats: BondChat[] }>(withQ('/bond/chats', pq)),
@@ -1017,11 +1037,11 @@ export const api = {
   customersCsvUrl: '/api/studio/customers?format=csv',
   refund: (orderId: string, reason: string) => post<{ order: Order | null }>(`/studio/orders/${orderId}/refund`, { reason }),
   payouts: (poq = '') => request<PayoutSummary & { page: Page }>(withQ('/studio/payouts', poq)),
-  dmRequests: () => request<{ requests: DmRequest[] }>('/studio/dm'),
+  dmRequests: (pq = '') => request<{ requests: DmRequest[]; answeredPage: Page }>(withQ('/studio/dm', pq)),
   answerDm: (id: string, answer: string) => post<{ ok: true }>(`/studio/dm/${id}/answer`, { answer }),
 
   // circles and life
-  circles: (query = '') => request<{ events: CircleEvent[]; hosting: CircleEvent[]; hostingPage: Page; groups: CircleGroup[]; city: string; area: string; interests: string[]; hasLocation: boolean; canCreate: boolean }>(`/circles${query ? `?${query}` : ''}`),
+  circles: (query = '') => request<{ events: CircleEvent[]; eventsPage: Page; hosting: CircleEvent[]; hostingPage: Page; groups: CircleGroup[]; groupsPage: Page; city: string; area: string; interests: string[]; hasLocation: boolean; canCreate: boolean }>(`/circles${query ? `?${query}` : ''}`),
   createCircle: (body: { title: string; city: string; area?: string; startsAt: string; venueHint?: string; groupSize?: number; repeat?: 'none' | 'weekly'; attendeeXp?: number; attendeeCode?: string }) => post<{ event: CircleEvent; codeError: string | null }>('/circles/events', body),
   setCircleCode: (id: string, change: CodeChange) => put<{ hostCode: AttendeeCodeHost }>(`/circles/events/${id}/attendee-code`, change),
   claimCircleCode: (id: string, code: string) => post<{ xp: number; newBadges: string[] }>(`/circles/events/${id}/claim`, { code }),
@@ -1287,6 +1307,10 @@ export const publicApi = {
     publicRequest<{ page: Page; listings: Listing[] }>(`/explore?${new URLSearchParams({ ...(opts.q ? { q: opts.q } : {}), ...(opts.type ? { type: opts.type } : {}), ...(opts.featured ? { featured: '1' } : {}), ...(opts.pq ? Object.fromEntries(new URLSearchParams(opts.pq)) : {}) })}`),
   listing: (type: ListingType, id: string) => publicRequest<{ listing: Listing }>(`/explore/${type}/${id}`),
   stats: () => publicRequest<PublicStats>('/explore/stats'),
+  /** The upcoming public events (the /events page), a page at a time. */
+  events: (pq = '') => publicRequest<{ page: Page; events: PublicEvent[] }>(`/events${pq ? `?${pq}` : ''}`),
+  /** One public event's story, for its landing page. */
+  publicEvent: (id: string) => publicRequest<{ event: PublicEvent }>(`/events/${encodeURIComponent(id)}`),
   certificate: (code: string) => publicRequest<{ certificate: Certificate }>(`/certificates/${encodeURIComponent(code)}`),
   invoice: (token: string) => publicRequest<PublicInvoice>(`/invoices/${encodeURIComponent(token)}`),
   config: () => publicRequest<PaymentsConfig>('/config'),

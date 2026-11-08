@@ -14,7 +14,7 @@ import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useParamState } from '../lib/useParamState';
 import { useAuthed, useMe } from '../lib/queries';
-import { Pager, usePage } from '../components/Pager';
+import { Pager, TEN_A_PAGE, usePage } from '../components/Pager';
 import { chip, FIELD } from '../lib/ui';
 import { ErrorLine } from '../components/ErrorLine';
 import { FactTag, IconTag } from '../components/FactTag';
@@ -58,18 +58,37 @@ export function Store() {
   const qc = useQueryClient();
   const ip = usePage('i');
   const lp = usePage('l');
-  const q = useAuthed(['market', ip.query, lp.query], () => api.market(`${ip.query}&${lp.query}`));
+  // Your own listings and offers, each a page at a time (prefixes `ml` and `mo`, ten by default).
+  const mp = usePage('ml', TEN_A_PAGE);
+  const op = usePage('mo', TEN_A_PAGE);
+  const mq = `${ip.query}&${lp.query}&${mp.query}&${op.query}`;
+  const q = useAuthed(['market', mq], () => api.market(mq));
   const d = q.data;
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ['market'] });
   };
-  const [cat, setCat] = useParamState('cat', 'all');
+  // A filter changed on a later page goes back to the first page of both shelves.
+  const firstPages = () => {
+    ip.reset();
+    lp.reset();
+  };
+  const [cat, setCatRaw] = useParamState('cat', 'all');
+  const setCat = (c: string) => {
+    setCatRaw(c);
+    firstPages();
+  };
   const [stageRaw, setStageRaw] = useParamState('stage', 'all');
   const stage: StoreStage | 'all' = (STORE_STAGES as readonly string[]).includes(stageRaw) ? (stageRaw as StoreStage) : 'all';
-  const setStage = (s: StoreStage | 'all') => setStageRaw(s);
+  const setStage = (s: StoreStage | 'all') => {
+    setStageRaw(s);
+    firstPages();
+  };
   const [budgetRaw, setBudgetRaw] = useParamState('budget', '');
   const budget: number | null = budgetRaw ? Number(budgetRaw) : null;
-  const setBudget = (c: number | null) => setBudgetRaw(c === null ? '' : String(c));
+  const setBudget = (c: number | null) => {
+    setBudgetRaw(c === null ? '' : String(c));
+    firstPages();
+  };
   // The open listing lives in the address (`?listing=<id>`), so an inbox note about an offer or a message opens that listing's sheet.
   const [listingParam, setListingParam] = useParamState('listing', '');
   const open = listingParam || null;
@@ -200,13 +219,13 @@ export function Store() {
         <Pager page={d?.listingsPage} prefix="l" label="pre-owned gear" />
       </section>
 
-      {d && (d.mine.listings.length > 0 || d.mine.offers.length > 0) && (
+      {d && (d.mine.listings.length > 0 || d.mine.offers.length > 0 || d.mine.listingsPage.page > 1 || d.mine.offersPage.page > 1) && (
         <section className="mt-lg" aria-labelledby="mine-heading">
           <h2 id="mine-heading" className="text-title2">
             Yours
           </h2>
           {d.mine.listings.length > 0 && (
-            <ul data-tile-list="their own, up to twenty" className={`mt-sm grid list-none gap-xs p-0 m-0 ${evenGrid(d.mine.listings.length, PAIR_COLS)}`}>
+            <ul data-tile-list="their own, a page at a time" className={`mt-sm grid list-none gap-xs p-0 m-0 ${evenGrid(d.mine.listings.length, PAIR_COLS)}`}>
               {d.mine.listings.map((l, n) => (
                 <li key={l.id} className={`flex ${evenTile(n, d.mine.listings.length, PAIR_COLS)}`}>
                   <ListingButton l={l} onOpen={setOpen} />
@@ -214,6 +233,7 @@ export function Store() {
               ))}
             </ul>
           )}
+          <Pager page={d.mine.listingsPage} prefix="ml" label="your listings" only={TEN_A_PAGE} />
           {d.mine.offers.length > 0 && (
             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0" aria-label="Your offers">
               {d.mine.offers.map((o) => (
@@ -229,6 +249,7 @@ export function Store() {
               ))}
             </ul>
           )}
+          <Pager page={d.mine.offersPage} prefix="mo" label="your offers" only={TEN_A_PAGE} />
         </section>
       )}
 

@@ -3,7 +3,7 @@ import gsap from 'gsap';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { prefersReducedMotion } from './fx/env';
 import { tick as buzz } from './fx/haptics';
-import { tickSound, unlockAudio } from '../lib/sound';
+import { tickSound, unlockAudio } from '../lib/audioCore';
 
 /** Where a tick sits: the distance between two ticks in pixels. The CSS reads it from `--rp-gap`, set from this same number. */
 const GAP = 14;

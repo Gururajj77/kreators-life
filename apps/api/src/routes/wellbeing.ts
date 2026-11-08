@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { FOCUS_MAX_MINUTES, LOCALE, FOCUS_VIEWS, isFocusMode, isFocusView, type FocusRoundRow, weekStart, wellbeingLabel, type FocusBucket, type FocusResponse, type FocusTask, type FocusView, type LogKind, type RelationshipKey, type WellbeingLog, type WellbeingSummary, parseFocusSettings } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { DATE_RE, dateNearOwnDay, dateNearToday, likeFit, newId, nowIso, shiftDate, streakNow } from '../db';
+import { DATE_RE, dateNearOwnDay, dateNearToday, likeFit, newId, nowIso, pageOf, paged, shiftDate, streakNow, TEN_A_PAGE } from '../db';
 import { parseMove } from '@kreators/shared/fitness';
 import { moveExtra } from '../fitness';
 
@@ -323,6 +323,14 @@ wellbeing.get('/summary', async (c) => {
 wellbeing.get('/:kind', async (c) => {
   const kind = c.req.param('kind');
   if (!isKind(kind)) return c.json({ error: 'unknown log' }, 404);
+  // A list a person scrolls (Mindful's Sessions, 2026-11-07): every log of the kind, newest first, a page at a time (prefix `s`, ten by default).
+  // Without `list=1` the answer is the window the charts and the assistant read, as before.
+  if (c.req.query('list') === '1') {
+    const ask = pageOf(c, 's', TEN_A_PAGE);
+    const rows = await c.env.DB.prepare('SELECT * FROM wellbeing_logs WHERE user_id = ? AND kind = ? ORDER BY date DESC, created_at DESC, id LIMIT ? OFFSET ?').bind(c.get('user').id, kind, ask.limit, ask.offset).all<Row>();
+    const pg = paged(rows.results, ask);
+    return c.json({ logs: pg.items.map(toLog), page: pg.page });
+  }
   const days = Math.min(365, Math.max(1, Math.round(Number(c.req.query('days') ?? 30)) || 30));
   const from = shiftDate(new Date().toISOString().slice(0, 10), -days);
   const rows = await c.env.DB.prepare('SELECT * FROM wellbeing_logs WHERE user_id = ? AND kind = ? AND date >= ? ORDER BY date DESC, created_at DESC LIMIT 400')

@@ -11,6 +11,8 @@ import { Section } from './Section';
 import { FIELD } from '../lib/ui';
 import { dateTime } from '../lib/date';
 import { IconTag } from './FactTag';
+import { Fold } from './Fold';
+import { FriendQr } from './FriendQr';
 
 const when = dateTime;
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'That did not work. Try again.');
@@ -114,6 +116,10 @@ export function EventPanel({ app, id, talk = true }: { app: EventApp; id: string
           </ul>
         )}
         {err(connect)}
+        {/* Meeting in person: show your code and the other guest scans it (components/FriendQr.tsx). A new code is made on Profile or in Bond. */}
+        <Fold id={`qr-${id}`} title="My QR code" className="mt-sm">
+          <FriendQr renew={false} />
+        </Fold>
       </Section>
 
       {talk && (

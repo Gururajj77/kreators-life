@@ -7,7 +7,7 @@ import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
-import { Pager, usePage } from '../components/Pager';
+import { Pager, TEN_A_PAGE, usePage } from '../components/Pager';
 import { FIELD } from '../lib/ui';
 import { useCopy } from '../lib/clipboard';
 
@@ -16,7 +16,10 @@ export function StudioAudience() {
   const me = useMe();
   const fp = usePage('f');
   const lp = usePage('l');
-  const q = useAuthed(['audience', fp.query], () => api.audience(fp.query));
+  // What you sent is a page at a time too (prefix `bc`, ten by default).
+  const bp = usePage('bc', TEN_A_PAGE);
+  const aq = `${fp.query}&${bp.query}`;
+  const q = useAuthed(['audience', aq], () => api.audience(aq));
   const leads = useAuthed(['leads', lp.query], () => api.leads(lp.query));
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -148,7 +151,7 @@ export function StudioAudience() {
         <Pager page={d?.page} prefix="f" label="followers" />
       </section>
 
-      {d && d.broadcasts.length > 0 && (
+      {d && (d.broadcasts.length > 0 || d.broadcastsPage.page > 1) && (
         <section className="mt-lg" aria-labelledby="sent-heading">
           <h2 id="sent-heading" className="text-title2">
             Sent
@@ -163,6 +166,7 @@ export function StudioAudience() {
               </li>
             ))}
           </ul>
+          <Pager page={d.broadcastsPage} prefix="bc" label="what you sent" only={TEN_A_PAGE} />
         </section>
       )}
     </Screen>

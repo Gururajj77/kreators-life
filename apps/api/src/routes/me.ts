@@ -16,7 +16,7 @@ import {
   type RelationshipState,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { badgeState, badgesFor, DELETED_NAME_PROBLEM, keptStats, getUser, honorKeys, httpUrl, isDeletedName, LINK_PROBLEM, newId, nowIso, objectBody, parseModules, randomCode, str, toUser, publicOf } from '../db';
+import { badgeState, badgesFor, DELETED_NAME_PROBLEM, keptStats, getUser, honorKeys, httpUrl, isDeletedName, LINK_PROBLEM, newFriendCode, newId, nowIso, objectBody, parseModules, randomCode, str, toUser, publicOf } from '../db';
 import { resolveAccess } from '../access';
 import { hashPassword, randomHex, safeEqual } from './auth';
 import { sendEmail, track } from '../ops';
@@ -135,6 +135,19 @@ me.post('/password', async (c) => {
   return c.json({ ok: true });
 });
 
+// A new friend code, when the old one (or a QR code with it) has spread too far. The old code stops working at once, as a code nobody has.
+// Requests already sent stay; nothing else holds the code. Core, so it works with Bond off (limit `prefs`).
+me.post('/friend-code', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const code = newFriendCode();
+  await db.prepare('UPDATE users SET friend_code = ? WHERE id = ?').bind(code, user.id).run();
+  return c.json({ friendCode: code });
+});
+
+/** The first path parts the public API answers itself under /api/public (index.ts and routes/store.ts), never a person's page name. */
+const PAGE_NAMES_IN_USE = new Set(['agency', 'books', 'business', 'calendar', 'certificates', 'config', 'contracts', 'events', 'explore', 'invoices', 'media', 'people', 'products', 'unsubscribe', 'vitals']);
+
 me.patch('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
@@ -160,6 +173,8 @@ me.patch('/', async (c) => {
     const h = body.handle.trim().toLowerCase();
     if (!/^[a-z0-9_]{3,20}$/.test(h)) return c.json({ error: 'a page name is 3 to 20 letters, numbers or underscores' }, 400);
     if (h !== user.handle) {
+      // A name the public API already answers at /api/public/<name> would hide that person's page (2026-11-07: /public/events came in), so it reads as taken.
+      if (PAGE_NAMES_IN_USE.has(h)) return c.json({ error: 'that page name is taken' }, 409);
       const taken = await db.prepare('SELECT id FROM users WHERE handle = ? AND id != ?').bind(h, user.id).first();
       if (taken) return c.json({ error: 'that page name is taken' }, 409);
     }
@@ -600,7 +615,7 @@ me.post('/reset', async (c) => {
     db.prepare("DELETE FROM redemptions WHERE user_id = ? AND status = 'reserved'").bind(user.id),
     db.prepare('UPDATE relationship_scores SET score = 0, xp = 0 WHERE user_id = ?').bind(user.id),
     db
-      .prepare("UPDATE users SET xp = 0, points = 0, streak = 0, best_streak = 0, last_checkin = NULL, onboarded_at = NULL, reminder_time = NULL, identities = '[]', intake_json = '{}', stats_json = NULL, stats_at = NULL WHERE id = ?")
+      .prepare("UPDATE users SET xp = 0, points = 0, streak = 0, best_streak = 0, last_checkin = NULL, onboarded_at = NULL, attendee_event = NULL, reminder_time = NULL, identities = '[]', intake_json = '{}', stats_json = NULL, stats_at = NULL WHERE id = ?")
       .bind(user.id),
   ]);
   return c.json({ ok: true, at: nowIso() });

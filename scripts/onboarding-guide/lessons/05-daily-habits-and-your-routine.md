@@ -49,7 +49,7 @@ In a task's plan, **Remember** is a tag for things you want to keep in mind.
 
 ## Your Inbox
 
-Every note the app sends you lands in one place. Tap the bell on Home to open it. On a tablet or a laptop, the bell at the top of the sidebar opens it too and shows your unread count. On a phone, that count sits on the **Apps** tab.
+Every note the app sends you lands in one place. Tap the bell at the top of the app to open it. It shows your unread count. On a phone it sits at the top right, beside the theme button. On a tablet or a laptop it sits at the top of the sidebar.
 
 - **The tabs:** **Everything** holds it all. Each note also sits in one tab of its own: **Replies and mentions**, **Following**, **Reminders**, **Events**, **Friends**, **Work**, **Shop and money** or **School and coaching**. **Agency** shows while you use it.
 - **Tap a note:** it opens the page and the section it is about.

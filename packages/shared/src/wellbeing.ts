@@ -218,7 +218,8 @@ export interface MarketResponse {
   kits: StoreKit[];
   items: StoreItem[];
   listings: PreownedListing[];
-  mine: { listings: PreownedListing[]; offers: PreownedOffer[] };
+  /** Your own listings and offers, each a page at a time (prefixes `ml` and `mo`, 10, 25 or 50, ten by default). */
+  mine: { listings: PreownedListing[]; offers: PreownedOffer[]; listingsPage: Page; offersPage: Page };
   admin: boolean;
   feature: { feePoints: number; days: number; points: number };
 }
@@ -292,6 +293,7 @@ export const HELP_FAQ = [
   { q: 'What is Emerging?', a: 'Patterns the app notices in what you already log: a task you keep ticking, or how sleep and mood went on the same days. It says what happened together, never what caused what. Only you see it, unless you switch Patterns on for a life coach. Nothing is stored, and your journal is counted by day, never read. Find it on Home under Emerging, or open the Emerging page.' },
   { q: 'How do I make a task repeat?', a: 'Tap the pencil on a task and pick Repeat: every day, on weekdays, every week on days you choose, every month or every year, every one or more of them, with an end day if you like. It needs a do date or a due date. When you tick it, the next one is made. A repeating task shows a Habit tag.' },
   { q: 'Where did my task with no date go?', a: 'Under Not scheduled yet, below Tasks on Daily. It stays there until you pick a do date or a due date. Then it moves up into Tasks on that day.' },
+  { q: 'What is Close the unfinished?', a: 'A button on Home, shown while one of these tasks is open. It opens Daily showing only your unfinished business: the tasks marked Unfinished, Unresolved or Undecided, each kind in its own box. Mark a task in its plan, and end it there: do it, give it a time and date, or let it go. What you let go waits under Let go, so you can bring it back.' },
   { q: 'What are subtasks, and what does Remember do?', a: 'Subtasks are a small checklist inside a task. They pay no xp. Remember is a tag for things to keep in mind. With a day, it also sends a note to your inbox on that day, at its time (9:00 when it has none). With no day, it waits in To remember on Daily. Tasks the strategy session made for you carry a From pillar tag, and tasks that repeat carry a Habit tag.' },
   { q: 'How do I focus on one task?', a: 'Tap the pencil on a task, add how many minutes it takes, then tap Start focus. Mindfulness opens with that task picked and that many minutes on the timer. The Focus dashboard there can show your time in minutes or hours.' },
   { q: 'Points versus xp?', a: 'Xp levels you and your pillars up. Points come from showing up. You can trade points for rewards, for things people sell, and for events.' },

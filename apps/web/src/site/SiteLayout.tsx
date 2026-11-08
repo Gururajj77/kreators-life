@@ -130,6 +130,7 @@ export function SiteLayout({ children, wide = true, minimal = false }: { childre
             <nav aria-label="Footer" className="grid grid-cols-2 gap-x-md gap-y-lg sm:grid-cols-3">
               <FooterGroup title="Explore">
                 <FooterLink to="/explore">Explore</FooterLink>
+                <FooterLink to="/events">Events</FooterLink>
                 <FooterLink to="/7rp">7RP</FooterLink>
                 <FooterLink to="/features">Features</FooterLink>
                 <FooterLink to="/features/books">Books</FooterLink>

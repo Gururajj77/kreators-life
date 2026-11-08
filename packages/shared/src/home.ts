@@ -69,6 +69,8 @@ export interface HomeResponse {
     sparkRelationship: RelationshipKey;
     taskDone: boolean;
     tasksWaiting: number;
+    /** Open tasks marked Unfinished, Unresolved or Undecided, for the count on Close the unfinished (2026-11-07). */
+    openBusiness?: number;
     streak: number;
     doneCount: number;
   };

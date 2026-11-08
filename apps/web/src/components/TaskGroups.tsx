@@ -1,17 +1,22 @@
-import { LIFE_AREAS, groupTasks, openDay, spanLabel, type Node, type RelationshipKey, type TemplateSlot, type TimeBlock } from '@kreators/shared';
+import { DONE_PAGE_SIZE, DONE_PAGE_SIZES, LIFE_AREAS, OPEN_KINDS, RELATIONSHIP_BY_KEY, groupTasks, openDay, spanLabel, type BlockColor, type Node, type OpenKind, type RelationshipKey, type TemplateSlot, type TimeBlock } from '@kreators/shared';
 import { blockMismatch, blockMismatchLine, blockUsedMin, groupWithSuggestions, suggestLine, suggestWhy, type BlockMismatch, type SuggestedGroup } from '@kreators/shared/blockHints';
+import { OPEN_KIND_META } from '@kreators/shared/openBusiness';
 import { useMutation } from '@tanstack/react-query';
 import { tbClass, tbStyle } from '../lib/blockColor';
 import gsap from 'gsap';
-import { useId, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { api } from '../lib/api';
 import { todayLocal, slotRange } from '../lib/date';
 import { useNow } from '../lib/useNow';
 import { useKept } from '../lib/kept';
-import { useMe, useRefreshAll } from '../lib/queries';
+import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
+import { useSearchParams } from 'react-router';
+import { Fold } from './Fold';
 import { AppIcon } from './AppIcon';
 import { Button } from './Button';
 import { tick } from './fx/haptics';
+import { Pager, usePage } from './Pager';
+import { SkeletonList } from './Skeleton';
 import { StatusTag } from './StatusTag';
 import { ToggleChevron } from './ToggleMark';
 
@@ -33,6 +38,26 @@ function minuteNowOn(day: string, now: number): number | null {
   return d.getHours() * 60 + d.getMinutes();
 }
 
+/** How Daily's boxes are drawn: by time block, by area of life, or by kind of open business. */
+export type GroupBy = 'block' | 'area' | 'open';
+/** A box: a block, an area or a kind of open business (which says its one question in `note`). */
+type Group = SuggestedGroup<Node> & { note?: string };
+
+/**
+ * Each kind of open business wears one colour of the time-block wheel (2026-11-07), told apart from each other and from the priority
+ * colours on the same rows (P0 red, P1 orange, P2 purple, P3 grey). The box's words stay ink on a 12% wash, so AA never rests on them.
+ */
+const OPEN_SWATCH: Record<OpenKind, BlockColor> = { unfinished: 'yellow', unresolved: 'blue', undecided: 'green' };
+
+/** The kinds' boxes, in their one order, each only while it holds a task; inside each the order the tasks came in. */
+function openGroups(tasks: Node[]): Group[] {
+  return OPEN_KINDS.flatMap((k) => {
+    const here = tasks.filter((t) => t.openKind === k);
+    if (here.length === 0) return [];
+    return [{ key: `open-${k}`, kind: 'block' as const, name: OPEN_KIND_META[k].name, color: OPEN_SWATCH[k], area: null, ranges: [], inDay: false, minutes: 0, plannedMin: 0, tasks: here, suggested: [], note: OPEN_KIND_META[k].question }];
+  });
+}
+
 /**
  * Daily's grouped view (docs/time-blocks.md): the tasks in coloured boxes, one per time block of the day (in clock order) or one per area
  * of life (in LIFE_AREA_ORDER), drawn like the app groups on Profile: a box in its own soft colour whose header is one button that opens
@@ -40,20 +65,23 @@ function minuteNowOn(day: string, now: number): number | null {
  * for the tab and the person (lib/kept.ts); every box starts open. Lazy (its own chunk with @kreators/shared/blockHints), so the first
  * download stays inside its budget.
  *
+ * Unfinished business (2026-11-07, the founder's ask) is a third grouping: only the tasks marked with a kind, one box per kind in
+ * `OPEN_KINDS` order, each with its one question and its own colour from the time-block wheel (`OPEN_SWATCH`), a kind with none left out.
+ *
  * By time block, a task with no block and no time sits in the block `suggestBlock` picks for it, after the placed ones, marked Suggested
  * with one Keep here; a task whose time put it in a block meant for another area or pillar gets one quiet line with Move it and Keep here
  * (`blockMismatch`). Nothing is written until one of those is tapped, through the ordinary PATCH /nodes/:id.
  */
-export function TaskGroups({ tasks, context, renderTask, more = false, by }: { tasks: Node[]; context: GroupContext; renderTask: (t: Node, below?: ReactNode) => ReactNode; /** More tasks wait past the ones sent (`tasksMore`). */ more?: boolean; by: 'block' | 'area' }) {
+export function TaskGroups({ tasks, context, renderTask, more = false, by }: { tasks: Node[]; context: GroupContext; renderTask: (t: Node, below?: ReactNode) => ReactNode; /** More tasks wait past the ones sent (`tasksMore`). */ more?: boolean; by: GroupBy }) {
   const me = useMe();
   const after = minuteNowOn(context.day, useNow(60_000));
   const used = by === 'block' ? blockUsedMin(context.slots, context.slotPlannedMin) : undefined;
-  const groups: SuggestedGroup<Node>[] = by === 'block' ? groupWithSuggestions(tasks, { ...context, used, after }) : groupTasks(tasks, 'area', context).map((g) => ({ ...g, suggested: [] }));
+  const groups: Group[] = by === 'block' ? groupWithSuggestions(tasks, { ...context, used, after }) : by === 'open' ? openGroups(tasks) : groupTasks(tasks, 'area', context).map((g) => ({ ...g, suggested: [] }));
   // The day's other timed tasks, which a Move it never lands on (late ones from other days are not on this day's clock).
   const timed = tasks.filter((x) => x.dueTime && openDay(x) === context.day);
   // The line under a task: a suggestion's Keep here, or the quiet mismatch prompt for one its time put in a block meant for others.
-  const below = (g: SuggestedGroup<Node>, t: Node): ReactNode => {
-    if (g.kind !== 'block' || !g.inDay) return null;
+  const below = (g: Group, t: Node): ReactNode => {
+    if (by === 'open' || g.kind !== 'block' || !g.inDay) return null;
     const block = context.blocks.find((b) => b.id === g.key);
     if (!block) return null;
     if (g.suggested.includes(t)) return <SuggestLine task={t} block={block} />;
@@ -98,7 +126,7 @@ function countLine(g: SuggestedGroup<unknown>): string {
   return `${n} · ${spanLabel(g.plannedMin)} of ${spanLabel(g.minutes)}`;
 }
 
-function Box({ g, open, onToggle, renderTask, by }: { g: SuggestedGroup<Node>; open: boolean; onToggle: () => void; renderTask: (t: Node) => ReactNode; by: 'block' | 'area' }) {
+function Box({ g, open, onToggle, renderTask, by }: { g: Group; open: boolean; onToggle: () => void; renderTask: (t: Node) => ReactNode; by: GroupBy }) {
   const body = useRef<HTMLDivElement>(null);
   const id = useId();
   const area = g.area ? LIFE_AREAS[g.area] : null;
@@ -136,7 +164,7 @@ function Box({ g, open, onToggle, renderTask, by }: { g: SuggestedGroup<Node>; o
     };
   }, [open]);
 
-  const note = g.kind === 'block' ? [g.ranges.map((r) => slotRange(r)).join(', '), g.inDay ? '' : 'Not in today’s plan'].filter(Boolean).join('. ') : area ? area.blurb : by === 'block' ? 'Tasks with no block yet.' : 'Tasks with no area of life yet.';
+  const note = g.note ? g.note : g.kind === 'block' ? [g.ranges.map((r) => slotRange(r)).join(', '), g.inDay ? '' : 'Not in today’s plan'].filter(Boolean).join('. ') : area ? area.blurb : by === 'block' ? 'Tasks with no block yet.' : 'Tasks with no area of life yet.';
   return (
     <section
       aria-labelledby={`${id}-h`}
@@ -257,5 +285,84 @@ function MismatchLine({ task, m }: { task: Node; m: BlockMismatch }) {
         Keep here
       </Button>
     </HintLine>
+  );
+}
+
+/**
+ * Daily's Unfinished business view (2026-11-07): the tasks marked with a kind in their three boxes, one plain line when there are none, and
+ * what was let go in a closed fold under them (read only once it opens, each with Bring back). Lazy with the other boxes.
+ */
+export function OpenBusinessView({ tasks, context, renderTask, more, areaName, letGoTotal }: { tasks: Node[]; context: GroupContext; renderTask: (t: Node, below?: ReactNode) => ReactNode; more: boolean; /** "for Physical" while the Area filter is on, else ''. */ areaName: string; letGoTotal: number }) {
+  const [search] = useSearchParams();
+  return (
+    <>
+      {tasks.length > 0 ? (
+        <TaskGroups tasks={tasks} context={context} by="open" more={more} renderTask={renderTask} />
+      ) : (
+        <p className="mt-sm m-0 text-subhead text-ink-soft">{areaName ? `No unfinished business ${areaName}.` : 'No unfinished business. Mark a task Unfinished, Unresolved or Undecided in its plan.'}</p>
+      )}
+      {letGoTotal > 0 && (
+        <Fold className="mt-xs" title="Let go" hint={String(letGoTotal)} defaultOpen={search.has('lgpage') || search.has('lgsize')}>
+          <LetGoList />
+        </Fold>
+      )}
+    </>
+  );
+}
+
+/** The Let go list pages like Done today: 10, 25 or 50, ten by default (prefix `lg`). */
+const LET_GO_PAGES = { sizes: DONE_PAGE_SIZES, fallback: DONE_PAGE_SIZE };
+
+/**
+ * What was let go (Close the unfinished, 2026-11-07), under the Unfinished business view's boxes: the archived tasks, newest first, read
+ * only once its fold opens, each with Bring back (the ordinary PATCH /nodes/:id, status active), which puts it back where it was.
+ */
+export function LetGoList() {
+  const pg = usePage('lg', LET_GO_PAGES);
+  const q = useAuthed(['today', 'let-go', pg.query], () => api.letGo(pg.query));
+  const refresh = useRefreshAll();
+  const [said, setSaid] = useState<string | null>(null);
+  const back = useMutation({
+    mutationFn: (t: Node) => api.updateNode(t.id, { status: 'active' }),
+    onSuccess: (_r, t) => {
+      setSaid(`“${t.title}” is back.`);
+      void q.refetch();
+      void refresh();
+    },
+    onError: (x) => setSaid(x instanceof Error ? x.message : 'That did not work. Try again.'),
+  });
+  if (q.isPending) return <SkeletonList className="mt-xs" count={2} lines={1} label="Loading what you let go" />;
+  if (q.isError || !q.data)
+    return (
+      <p role="alert" className="mt-xs m-0 text-subhead">
+        Could not load this. Try again.
+      </p>
+    );
+  return (
+    <div className="mt-xs">
+      {said && (
+        <p role="status" className="m-0 mb-xs text-subhead text-ink-soft">
+          {said}
+        </p>
+      )}
+      {q.data.tasks.length === 0 ? (
+        <p className="m-0 text-subhead text-ink-soft">Nothing let go.</p>
+      ) : (
+        <ul className="m-0 flex list-none flex-col gap-xs p-0">
+          {q.data.tasks.map((t) => (
+            <li key={t.id} className="flex flex-wrap-reverse items-center justify-between gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+              <span className="min-w-0 flex-1 basis-[60%]">
+                <span className="block text-card-title">{t.title}</span>
+                <span className="block text-card-note text-ink-soft">{RELATIONSHIP_BY_KEY[t.relationship].name}</span>
+              </span>
+              <Button variant="outline" size="sm" disabled={back.isPending} onClick={() => back.mutate(t)} aria-label={`Bring back: ${t.title}`}>
+                Bring back
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <Pager page={q.data.page} prefix="lg" label="what you let go" only={LET_GO_PAGES} />
+    </div>
   );
 }

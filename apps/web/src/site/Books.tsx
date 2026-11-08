@@ -5,16 +5,47 @@ import { Link } from 'react-router';
 import { Fold } from '../components/Fold';
 import { useSession } from '../lib/store';
 import { tie } from '../lib/text';
-import { BOOK_CHAPTERS, BOOK_PAGE } from './content';
+import { useBookEntry } from './bookEntry';
 import { GuideLine } from './GuideLine';
 import { SiteLayout } from './SiteLayout';
 import { SiteArrow, SITE_CHIP_BASE, SITE_LINK_INLINE, SITE_PRIMARY } from './buttons';
 
-/** Where "Read the course in the app" goes: the Book page for someone signed in, through sign-in for a visitor. */
-export function useBookEntry(): string {
-  const token = useSession((s) => s.token);
-  return token ? BOOK_PAGE : `/signin?next=${encodeURIComponent(BOOK_PAGE)}`;
-}
+/**
+ * The eight chapter titles of each of the founder's books (`BOOKS` in shared), from each book's own contents, for the public
+ * Books page (here since 2026-11-07, so the landing page does not carry them). The book's own words; nothing here is written for it.
+ */
+export const BOOK_CHAPTERS: Readonly<Record<string, readonly string[]>> = {
+  'the-relationship-method': [
+    'The Invisible Weight',
+    'The Bucket Model',
+    'Energy in Storage',
+    'The 7 Relationships Pyramid',
+    'The Spiritual Infrastructure',
+    'The Internal Core',
+    'The Social Ecosystem',
+    'Living in Perpetual Flow',
+  ],
+  'dictionary-of-mistakes-for-creators': [
+    'The Invisible Mistake Loop',
+    'Identity & Authenticity Mistakes',
+    'Communication & Speaking Mistakes',
+    'Consistency, Procrastination & Compounding',
+    'Imposter Syndrome & Self-Doubt',
+    'Creator Relationships & Social Capital',
+    'Attention, Positioning & Growth Mistakes',
+    'Monetization & Leverage Mistakes',
+  ],
+  'dictionary-of-mistakes-for-20s': [
+    'The Invisible Mistake Loop: Why Awareness Isn’t Enough',
+    'Health: The Slow Decay of the Infinite Resource',
+    'Wealth: Leaks, Leads, and Behavioral Levers',
+    'Connections: Relationships as Pattern Problems',
+    'Career: The Transition from Employee to Leader',
+    'Creation: Mistakes in the Creator Economy',
+    'Identity: The Error of the Static Self',
+    'The Anti-Mistake OS: Living by Design',
+  ],
+};
 
 /** A book's front cover, same-origin, at the covers' own shape (893 by 1263). */
 export function BookCover({ book, className = '', eager = false }: { book: Book; className?: string; eager?: boolean }) {

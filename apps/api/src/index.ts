@@ -82,6 +82,7 @@ import { agencyOther, docsPublic } from './routes/agencyOther';
 import { connect } from './routes/connect';
 import { activity } from './routes/activity';
 import { booksPublic } from './routes/books';
+import { eventsPublic } from './routes/eventsPublic';
 import { logger, writeClientError, writeLog } from './logs';
 import { blockedPath, originAllowed, PAGE_HEADERS } from './headers';
 import { countingD1, guardedFetch, newTally, noteTick } from './d1Guard';
@@ -150,6 +151,7 @@ app.route('/admin', admin);
 app.route('/public', legalPublic);
 app.route('/public', vitalsPublic);
 app.route('/public/explore', explore);
+app.route('/public/events', eventsPublic);
 app.route('/public/media', mediaPublic);
 // A team link session (the client's own team, teamLinkAccess.ts) never reaches the client link or any paper: a request carrying one is a 404.
 for (const prefix of ['/public/agency', '/public/contracts', '/public/invoices']) {

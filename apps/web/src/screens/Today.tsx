@@ -26,12 +26,12 @@ import { RemindersSection, useUndatedRemember } from '../components/Reminders';
 import { TaskRow } from '../components/TaskRow';
 import { WeekPlanButton } from '../components/WeekPlan';
 import { api } from '../lib/api';
-import { dayLabel, prettyDate, clockTime } from '../lib/date';
+import { dayLabel, prettyDate } from '../lib/date';
 import { lazyNamed } from '../lib/lazy';
 import { keys, useAuthed, useMe, useRefreshAll, useToday } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { useActionQueue } from '../lib/useActionQueue';
-import { useParamState } from '../lib/useParamState';
+import { useParamState, writeParams } from '../lib/useParamState';
 import { DayTemplateSelect, DayTypeNote, useDayTemplate } from '../components/DayTypePicker';
 import { TabRow } from '../components/TabRow';
 import { FilterSelect } from '../components/FilterSelect';
@@ -41,6 +41,12 @@ type AreaPick = '' | LifeAreaKey | 'none';
 const AREA_PICKS: readonly { key: AreaPick; label: string }[] = [{ key: '', label: 'Every area' }, ...LIFE_AREA_ORDER.map((k) => ({ key: k as AreaPick, label: LIFE_AREAS[k].name })), { key: 'none', label: 'No area' }];
 const readArea = (raw: string): AreaPick => (raw.trim().toLowerCase() === 'none' ? 'none' : (parseLifeArea(raw) ?? ''));
 const inArea = (pick: AreaPick) => (t: Node) => (pick === '' ? true : pick === 'none' ? !t.lifeArea : t.lifeArea === pick);
+/**
+ * Daily's views in the Sort by row: every sort, then Unfinished business (2026-11-07, the founder: "could just be a filter like the others
+ * with three group colors like time blocks"), which lists only the tasks marked with a kind, in three coloured boxes. Kept in the URL as
+ * `taskSort=open`, like the rest.
+ */
+const VIEWS: readonly { key: string; label: string }[] = [...TASK_SORTS.map((s) => ({ key: s.key, label: s.name })), { key: 'open', label: 'Bottlenecks' }];
 /** The sorts that draw Daily's coloured boxes. */
 const isGrouped = (s: string): s is 'block' | 'area' => s === 'block' || s === 'area';
 const outline = 'toy toy-ink btn-outline inline-flex min-h-[44px] items-center justify-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-sm text-subhead font-semibold leading-none text-ink select-none';
@@ -61,6 +67,10 @@ const TaskPanel = lazyNamed(() => import('../components/TaskPlan'), 'TaskPanel')
 const TaskGroups = lazyNamed(() => import('../components/TaskGroups'), 'TaskGroups');
 // Supplements (2026-11-07): its own small chunk, downloaded only for someone with Fitness on.
 const SupplementsToday = lazyNamed(() => import('../components/SupplementsToday'), 'SupplementsToday');
+// Close the unfinished (2026-11-07): the Unfinished business view (its boxes, its empty line and what was let go), with the other boxes.
+const OpenBusinessView = lazyNamed(() => import('../components/TaskGroups'), 'OpenBusinessView');
+// Done today, paged (2026-11-07): its own small chunk, after the first paint.
+const DoneToday = lazyNamed(() => import('../components/DoneToday'), 'DoneToday');
 
 /** A task on Daily with its plan panel one tap away. */
 function DailyTask({ t, date, queue, onToggle, subtitle, focus = false, below }: { t: Node; date: string; queue: ReturnType<typeof useActionQueue>; onToggle: () => void; subtitle?: string; focus?: boolean; /** A quiet line under the row (a block suggestion or a mismatch, from the grouped view). */ below?: ReactNode }) {
@@ -105,9 +115,9 @@ function DailyTask({ t, date, queue, onToggle, subtitle, focus = false, below }:
  * "8 more waiting": the open tasks past the ones Daily shows, read only once the fold opens (`GET /today/waiting`, in the server's order,
  * a page at a time, prefix `w`), each the same row as the main list.
  */
-function MoreWaiting({ date, area, group, ask, sort, context, queue, onToggle, focusTask }: { date: string; area: string; group: boolean; /** The sort the person picked, sent so the server's halves follow it ('' for its default). */ ask: string; sort: Parameters<typeof sortTasks>[1]; context: Parameters<typeof sortTasks>[2]; queue: ReturnType<typeof useActionQueue>; onToggle: (id: string) => void; focusTask: string | null }) {
+function MoreWaiting({ date, area, open = '', group, ask, sort, context, queue, onToggle, focusTask }: { date: string; area: string; /** The Unfinished business view's cut ('any'), sent like the area. */ open?: string; group: boolean; /** The sort the person picked, sent so the server's halves follow it ('' for its default). */ ask: string; sort: Parameters<typeof sortTasks>[1]; context: Parameters<typeof sortTasks>[2]; queue: ReturnType<typeof useActionQueue>; onToggle: (id: string) => void; focusTask: string | null }) {
   const pg = usePage('w');
-  const q = useAuthed([...keys.today(date), 'waiting', area, group, ask, pg.query], () => api.todayWaiting(date, area, group, pg.query, ask));
+  const q = useAuthed([...keys.today(date), 'waiting', area, group, ask, open, pg.query], () => api.todayWaiting(date, area, group, pg.query, ask, open));
   if (q.isPending) return <SkeletonList count={2} lines={2} label="Loading the rest" />;
   if (q.isError || !q.data)
     return (
@@ -173,14 +183,29 @@ export function Today() {
   // The Area filter (from the Life app's "Tasks for this area" too, `?area=physical`). The server cuts the six, the backlog and its
   // count to the area, so a task past the first six still shows; the lists are filtered on the device as well, for the moment an
   // older answer is still on screen.
-  const [areaRaw, setAreaRaw] = useParamState('area', '');
+  const [areaRaw, setAreaOnly] = useParamState('area', '');
+  // A new area or sort starts the paged lists under it (more waiting, done today, let go) on their first page.
+  const [, setParams] = useSearchParams();
+  const firstPages = () => writeParams(setParams, { wpage: null, dpage: null, lgpage: null });
+  const setAreaRaw = (k: string) => {
+    setAreaOnly(k);
+    firstPages();
+  };
   const area = readArea(areaRaw);
   // The sort picks the grouped view (By time block, By area), which reads the longer list the boxes need.
-  const [sortRaw, setSort] = useParamState('taskSort', '');
+  const [sortRaw, setSortOnly] = useParamState('taskSort', '');
+  const setSort = (k: string) => {
+    setSortOnly(k);
+    firstPages();
+  };
   const ownSort = isTaskSort(sortRaw) ? sortRaw : null;
+  // Unfinished business (2026-11-07) is one more view in the same row: only the tasks with a kind, in their three boxes. The server cuts
+  // the lists to them (`open=any`) and reads the longer list the boxes need, like By time block.
+  const openView = sortRaw === 'open';
+  const openPick = openView ? 'any' : '';
   // Blocks are not a filter (the founder, 2026-11-06): By time block draws them as boxes that fold, and an old `?block=` is ignored.
   // The picked sort goes to the server too, so the six shown are the top six of it and "N more waiting" starts where they end.
-  const { date, data, isPending, isError, refetch } = useToday(area, { group: ownSort !== null && isGrouped(ownSort), sort: ownSort ?? '' });
+  const { date, data, isPending, isError, refetch } = useToday(area, { group: openView || (ownSort !== null && isGrouped(ownSort)), sort: ownSort ?? '', open: openPick });
   const undatedRemember = useUndatedRemember();
   const me = useMe();
   const refresh = useRefreshAll();
@@ -237,18 +262,19 @@ export function Today() {
   const context = { lead, second: tpl.template?.second ?? null, slots, blocks };
   const grouped = isGrouped(sort) ? sort : null;
   const sorts = TASK_SORTS;
-  const keep = inArea(area);
+  const byArea = inArea(area);
+  const keep = (t: Node) => byArea(t) && (!openView || Boolean(t.openKind));
   // The answer on screen was cut to this area by the server (or none is picked), so its counts and an empty list can be trusted.
-  const cutHere = (data?.area ?? '') === area;
+  const cutHere = (data?.area ?? '') === area && (data?.open ?? '') === openPick;
   const allTasks = data?.tasks ?? [];
-  const tasks = sortTasks(allTasks.filter(keep), sort, context);
+  const tasks = sortTasks(allTasks.filter(keep), openView ? 'priority' : sort, context);
   const backlogAll = sortTasks((data?.backlog ?? []).filter(keep), sort === 'day' ? 'priority' : sort, context);
   // Things tagged Remember with no day: kept in plain sight, not folded away.
   const remembered = backlogAll.filter((t) => t.remind);
   const backlog = backlogAll.filter((t) => !t.remind);
   // The server's total is for the picked area once it cut the lists to it; an older answer can only count what is here.
   const waiting = cutHere ? Math.max(0, (data?.backlogTotal ?? 0) - remembered.length) : backlog.length;
-  const done = (data?.done ?? []).filter(keep);
+  const doneFirst = data?.done ?? [];
   // The filter shows once a task here carries an area, or one is picked (a link from Life), so nobody meets an empty control.
   // The server says so for every task (`areasUsed`); the lists here are only a fallback, since they are cut short.
   const showArea = area !== '' || (data?.areasUsed ?? [...allTasks, ...(data?.backlog ?? []), ...(data?.done ?? [])].some((t) => t.lifeArea));
@@ -263,7 +289,10 @@ export function Today() {
   const lateWaiting = cutHere ? (data?.tasksLate ?? 0) : 0;
   const restWaiting = totalWaiting - tasks.length;
   const clearFilters = () => setAreaRaw('');
-  const doneAt = (iso: string | null) => (iso ? clockTime(iso) : '');
+  // The Unfinished business view: its boxes hold every task with a kind whose day has come, and those with no day yet (which the server
+  // sent as the backlog under the same cut), so Not scheduled yet and To remember stand aside while it is on, never listing one twice.
+  const openTasks = openView ? sortTasks([...tasks, ...backlogAll.filter((t) => !openDay(t))], 'priority', context) : [];
+  const openCount = cutHere ? Math.max(openTasks.length, (data?.tasksTotal ?? 0) + (data?.backlogTotal ?? 0)) : openTasks.length;
   const taskDone = Boolean(data && data.doneRecently > 0);
   const doneCount = data ? Number(data.checkedIn) + Number(data.spark.done) + Number(taskDone) : 0;
   const identity = me.data?.identity ?? null;
@@ -421,9 +450,9 @@ export function Today() {
                 <h2 id="tasks-heading" className="text-title2">
                   Tasks
                 </h2>
-                {totalWaiting > 0 && (
+                {(openView ? openCount : totalWaiting) > 0 && (
                   <span className="text-subhead text-ink-soft @min-[41rem]:mr-lg">
-                    {restWaiting > 0 ? `${tasks.length} of ${totalWaiting} waiting` : `${totalWaiting} waiting`}
+                    {openView ? (openTasks.length < openCount ? `${openTasks.length} of ${openCount} open` : `${openCount} open`) : restWaiting > 0 ? `${tasks.length} of ${totalWaiting} waiting` : `${totalWaiting} waiting`}
                     {lateWaiting > 0 && (
                       <>
                         ,{' '}
@@ -453,20 +482,22 @@ export function Today() {
               </div>
             </div>
             {/* The Area filter and the sort share one line from the laptop width up; the sort keeps 420px or wraps onto a line of its own.
-                There is no Block filter: By time block draws the blocks as boxes that fold (the founder, 2026-11-06). */}
+                There is no Block filter: By time block draws the blocks as boxes that fold (the founder, 2026-11-06). Unfinished business is
+                one more choice in the same row (2026-11-07): only the tasks with a kind, in three coloured boxes. */}
             <div className="mt-sm flex w-full flex-col gap-xs lg:flex-row lg:flex-wrap lg:items-center lg:gap-x-md">
               {showArea && (
                 <div className="min-w-0 lg:w-[200px] lg:flex-none">
                   <FilterSelect label="Area" value={area} items={AREA_PICKS} onChange={(k) => setAreaRaw(k)} />
                 </div>
               )}
-              {(allTasks.length > 1 || (data?.backlog.length ?? 0) > 1 || grouped) && (
+              {(allTasks.length > 1 || (data?.backlog.length ?? 0) > 1 || grouped || openView) && (
                 <div className="min-w-0 flex-1 lg:min-w-[420px]">
-                  <TabRow lead="Sort by" align="end" label="Sort tasks by" items={sorts.map((s) => ({ key: s.key, label: s.name }))} value={sort} onChange={setSort} />
+                  <TabRow lead="Sort by" align="end" label="Sort tasks by" items={VIEWS} value={openView ? 'open' : sort} onChange={setSort} />
                 </div>
               )}
             </div>
-            <DayTypeNote template={tpl.template} contextual={tpl.contextual} failed={tpl.failed} ownSort={ownSort && ownSort !== 'context' ? (TASK_SORTS.find((s) => s.key === ownSort)?.name.replace(/^By /, '').toLowerCase() ?? null) : null} />
+            {/* The Unfinished view is a filter, not a sort (its boxes go by priority), so the note says only the kind of day while it is on. */}
+            <DayTypeNote template={tpl.template} contextual={!openView && tpl.contextual} failed={tpl.failed} ownSort={!openView && ownSort && ownSort !== 'context' ? (TASK_SORTS.find((s) => s.key === ownSort)?.name.replace(/^By /, '').toLowerCase() ?? null) : null} />
             {/* The controls above (kind of day, sort, the note) end here: a wider gap before the day's own content. */}
             <Fold className="mt-md" title="Month calendar">
               <Suspense fallback={<Skeleton className="h-[320px]" />}>
@@ -487,7 +518,11 @@ export function Today() {
               </div>
             )}
             <DayBlocks tasks={tasks.filter((t) => openDay(t) === date)} day={dayPlan} loose={data?.looseTasks} looseTotal={data?.looseTotal} />
-            {grouped && dayPlan && tasks.length > 0 ? (
+            {openView ? (
+              <Suspense fallback={<SkeletonList count={3} lines={2} label="Loading the groups" />}>
+                <OpenBusinessView tasks={openTasks} context={{ ...context, day: date }} more={Boolean(data.tasksMore) && !(cutHere && restWaiting > 0)} areaName={areaName} letGoTotal={data.letGoTotal ?? 0} renderTask={(t, below) => <DailyTask key={t.id} t={t} date={date} queue={queue} focus={t.id === focusTask} onToggle={() => tick(t.id)} below={below} />} />
+              </Suspense>
+            ) : grouped && dayPlan && tasks.length > 0 ? (
               <Suspense fallback={<SkeletonList count={3} lines={2} label="Loading the groups" />}>
                 <TaskGroups tasks={tasks} context={{ ...context, slotPlannedMin: dayPlan.slotPlannedMin, day: date }} by={grouped} more={Boolean(data.tasksMore) && !(cutHere && restWaiting > 0)} renderTask={(t, below) => <DailyTask key={t.id} t={t} date={date} queue={queue} focus={t.id === focusTask} onToggle={() => tick(t.id)} below={below} />} />
               </Suspense>
@@ -526,7 +561,7 @@ export function Today() {
             {cutHere && restWaiting > 0 && tasks.length > 0 && (
               // A Remember note opens Daily on its task (`?task=<id>`): when that task is not among the ones shown, this opens on it.
               <Fold className="mt-xs" title={`${restWaiting} more waiting`} defaultOpen={Boolean(focusTask) && !tasks.some((t) => t.id === focusTask)}>
-                <MoreWaiting date={date} area={area} group={grouped !== null} ask={grouped !== null ? '' : (ownSort ?? '')} sort={sort} context={context} queue={queue} onToggle={tick} focusTask={focusTask} />
+                <MoreWaiting date={date} area={area} open={openPick} group={grouped !== null || openView} ask={grouped !== null || openView ? '' : (ownSort ?? '')} sort={openView ? 'priority' : sort} context={context} queue={queue} onToggle={tick} focusTask={focusTask} />
               </Fold>
             )}
             {/* Under the list: a quiet fold whose plus turns into a cross, opening the add form right here (downloaded on first open). */}
@@ -557,7 +592,7 @@ export function Today() {
                 {added}
               </p>
             )}
-            {rememberHidden && (
+            {!openView && rememberHidden && (
               <div role="group" className="mt-md" aria-labelledby="remember-heading">
                 <h3 id="remember-heading" className="text-headline">
                   To remember
@@ -570,7 +605,7 @@ export function Today() {
                 </div>
               </div>
             )}
-            {remembered.length > 0 && (
+            {!openView && remembered.length > 0 && (
               <div role="group" className="mt-md" aria-labelledby="remember-heading">
                 <div className="flex items-baseline justify-between gap-sm">
                   <h3 id="remember-heading" className="text-headline">
@@ -586,7 +621,7 @@ export function Today() {
                 </ul>
               </div>
             )}
-            {waiting > 0 && (
+            {!openView && waiting > 0 && (
               <Fold className="mt-md" title="Not scheduled yet" hint={String(waiting)}>
                 <p className="mt-xs m-0 text-subhead text-ink-soft">Pick a do date or a due date to move one into Tasks.</p>
                 <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -597,38 +632,9 @@ export function Today() {
                 {waiting > backlog.length && <p className="mt-xs m-0 text-caption text-ink-soft">Showing {backlog.length} of {waiting}. Pillars lists the rest.</p>}
               </Fold>
             )}
-            {done.length > 0 && (
-              <div role="group" className="mt-md" aria-labelledby="done-heading">
-                <div className="flex items-baseline justify-between gap-sm">
-                  <h3 id="done-heading" className="text-headline">
-                    Done today
-                  </h3>
-                  <span className="text-subhead text-ink-soft">{done.length}</span>
-                </div>
-                <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
-                  <AnimatePresence initial={false}>
-                    {done.map((t) => (
-                      <TaskRow
-                        key={t.id}
-                        task={t}
-                        today={date}
-                        subtitle={t.completedAt ? `Done at ${doneAt(t.completedAt)}` : undefined}
-                        busy={queue.isPending(t.id)}
-                        hint={queue.hint(t.id)}
-                        onToggle={() => untick(t.id)}
-                      />
-                    ))}
-                  </AnimatePresence>
-                </ul>
-                <p className="mt-xs m-0 text-caption text-ink-soft">
-                  Tap one to untick it; that takes back its xp. Earlier days are on each pillar in{' '}
-                  <Link to="/tower" className="underline underline-offset-4 hover:text-ink">
-                    Pillars
-                  </Link>
-                  .
-                </p>
-              </div>
-            )}
+            <Suspense fallback={null}>
+              <DoneToday date={date} first={doneFirst} total={data.doneTotal ?? doneFirst.length} queue={queue} onUntick={untick} keep={keep} area={area} open={openPick} />
+            </Suspense>
           </section>
 
           {data.agency && <AgencyToday agency={data.agency} />}

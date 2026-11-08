@@ -20,7 +20,8 @@ credits.get('/', async (c) => {
 });
 
 credits.get('/ledger', async (c) => {
-  const ask = pageOf(c);
+  // Plans' Usage list pages on `use` (2026-11-07: it read `page`, so Next never moved); a bare `size` still works.
+  const ask = pageOf(c, 'use');
   const rows = await c.env.DB.prepare('SELECT * FROM credit_ledger WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?').bind(c.get('user').id, ask.limit, ask.offset).all<LedgerRow>();
   const pg = paged(rows.results, ask);
   return c.json({ page: pg.page, entries: pg.items.map(toEntry) });

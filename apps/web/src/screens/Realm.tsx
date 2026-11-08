@@ -30,7 +30,7 @@ import { Sheet } from '../components/Sheet';
 import { Skeleton } from '../components/Skeleton';
 import { ConfirmDelete } from '../components/ConfirmDelete';
 import { TaskRow } from '../components/TaskRow';
-import { ProjectSelect, StartFocus, Subtasks, TaskPlanFields, planBody, planOf, planProblem, type Plan } from '../components/TaskPlan';
+import { ProjectSelect, StartFocus, Subtasks, TaskEndings, TaskPlanFields, planBody, planOf, planProblem, type Plan } from '../components/TaskPlan';
 import { api } from '../lib/api';
 import { FIELD } from '../lib/ui';
 import { dayLabel, localDateTimeValue, todayLocal } from '../lib/date';
@@ -44,6 +44,9 @@ import { Icon } from '../components/Icon';
 import { Check } from 'lucide-react';
 import { Fold } from '../components/Fold';
 import { EmergenceSlot } from '../components/EmergenceSlot';
+import { Pager, usePage } from '../components/Pager';
+import { SkeletonList } from '../components/Skeleton';
+import { DONE_PAGE_SIZE, DONE_PAGE_SIZES, type Node as TaskNode } from '@kreators/shared';
 
 // The same form as "Add a task" on Daily, downloaded the first time the fold opens.
 const AddTaskForm = lazyNamed(() => import('../components/TaskMonth'), 'AddTaskForm');
@@ -55,6 +58,34 @@ export function Realm() {
   const { key } = useParams();
   if (!isRelationshipKey(key)) return <Navigate to="/tower" replace />;
   return <RealmView key={key} relationship={key} />;
+}
+
+/** Done tasks are paged (2026-11-07): 10, 25 or 50, ten by default, prefix `dn`. */
+const DONE_PAGES = { sizes: DONE_PAGE_SIZES, fallback: DONE_PAGE_SIZE };
+
+/** A pillar's done tasks, a page at a time from GET /nodes/done; the count beside the fold stays the pillar's true count. */
+function DoneTasks({ relationship, today, queue, onToggle, onEdit }: { relationship: RelationshipKey; today: string; queue: ReturnType<typeof useActionQueue>; onToggle: (n: TaskNode) => void; onEdit: (n: TaskNode) => void }) {
+  const pg = usePage('dn', DONE_PAGES);
+  const q = useAuthed(['nodes', relationship, 'done', pg.query], () => api.nodesDone(relationship, pg.query));
+  if (q.isPending) return <SkeletonList className="border-t border-line p-sm" count={2} lines={1} label="Loading done tasks" />;
+  if (q.isError || !q.data)
+    return (
+      <p role="alert" className="m-0 border-t border-line p-sm text-subhead">
+        Could not load the done tasks. Try again.
+      </p>
+    );
+  return (
+    <div className="border-t border-line p-sm">
+      <ul className="flex list-none flex-col gap-xs p-0 m-0">
+        <AnimatePresence initial={false}>
+          {q.data.tasks.map((n) => (
+            <TaskRow key={n.id} task={n} today={today} pillarTag={false} busy={queue.isPending(n.id)} hint={queue.hint(n.id)} onToggle={() => onToggle(n)} onEdit={() => onEdit(n)} />
+          ))}
+        </AnimatePresence>
+      </ul>
+      <Pager page={q.data.page} prefix="dn" label="done tasks" only={DONE_PAGES} />
+    </div>
+  );
 }
 
 function RealmView({ relationship }: { relationship: RelationshipKey }) {
@@ -354,6 +385,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                   <li>
                     <Fold
                       className="rounded-tile bg-card p-xs shadow-toy-soft"
+                      defaultOpen={params.has('dnpage') || params.has('dnsize')}
                       title={
                         <span className="flex items-center gap-sm py-xs">
                           <span className="flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-r4 text-on-fill" aria-hidden="true">
@@ -363,22 +395,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                         </span>
                       }
                     >
-                      <ul className="flex list-none flex-col gap-xs border-t border-line p-sm m-0">
-                        <AnimatePresence initial={false}>
-                          {doneTasks.map((n) => (
-                            <TaskRow
-                              key={n.id}
-                              task={n}
-                              today={today}
-                              pillarTag={false}
-                              busy={queue.isPending(n.id)}
-                              hint={queue.hint(n.id)}
-                              onToggle={() => toggle(n)}
-                              onEdit={() => setEditing(n)}
-                            />
-                          ))}
-                        </AnimatePresence>
-                      </ul>
+                      <DoneTasks relationship={relationship} today={today} queue={queue} onToggle={toggle} onEdit={setEditing} />
                     </Fold>
                   </li>
                 )}
@@ -562,6 +579,7 @@ function EditSheet({ node, focusDue = false, onClose }: { node: Node | null; foc
               <TaskPlanFields plan={plan} onChange={setPlan} today={todayLocal()} pillar={node.relationship} taskId={node.id} />
               <Subtasks task={node} />
               <StartFocus task={{ ...node, estimateMin: Number(plan.minutes) > 0 ? Number(plan.minutes) : node.estimateMin }} />
+              <TaskEndings task={node} today={todayLocal()} onPlan={(patch) => setPlan((p) => ({ ...p, ...patch }))} onGone={onClose} />
             </>
           )}
           <p className="m-0 text-subhead text-ink-soft">

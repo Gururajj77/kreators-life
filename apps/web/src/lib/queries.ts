@@ -34,14 +34,16 @@ export function useNodes(relationship: RelationshipKey) {
  * Daily's day. With an area (Daily's Area filter) the server cuts the lists to it, and `group` reads the longer list Daily's coloured boxes
  * need; each is kept under its own key beneath `keys.today(date)`, so invalidating the day refreshes them all.
  */
-export function useToday(area = '', opts: { group?: boolean; sort?: string } = {}) {
+export function useToday(area = '', opts: { group?: boolean; sort?: string; open?: string } = {}) {
   const date = todayLocal();
   const token = useSession((s) => s.token);
   const group = opts.group === true;
   // The sort the person picked (none: the server's own default), so the six shown are the top six of it.
   const sort = group ? '' : (opts.sort ?? '');
+  // The Unfinished business view's cut ('any'), on the server like the area.
+  const open = opts.open ?? '';
   // Changing a filter keeps the last answer on screen (filtered on the device) until the new one lands, never the loading cards.
-  const q = useQuery({ queryKey: [...keys.today(date), area, group ? 'group' : '', sort], queryFn: () => api.today(date, area, { group, sort }), enabled: Boolean(token), placeholderData: (prev) => (prev?.date === date ? prev : undefined) });
+  const q = useQuery({ queryKey: [...keys.today(date), area, group ? 'group' : '', sort, open], queryFn: () => api.today(date, area, { group, sort, open }), enabled: Boolean(token), placeholderData: (prev) => (prev?.date === date ? prev : undefined) });
   return { date, ...q };
 }
 

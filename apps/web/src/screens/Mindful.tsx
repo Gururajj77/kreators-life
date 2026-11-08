@@ -5,7 +5,8 @@ import { Hero, HeroNumber } from '../components/Hero';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { lastDays, shortDay, eventTime } from '../lib/date';
-import { useLogs, useWellbeing } from '../lib/queries';
+import { useAuthed, useLogs, useWellbeing } from '../lib/queries';
+import { Pager, TEN_A_PAGE, usePage } from '../components/Pager';
 import { useFocusPortal } from '../lib/focusPortal';
 import { Icon } from '../components/Icon';
 import { Wind } from 'lucide-react';
@@ -22,6 +23,9 @@ import { RED_YES } from '../lib/ui';
 export function Mindful() {
   const wb = useWellbeing();
   const logs = useLogs('mindful', 30);
+  // The Sessions list is every session, newest first, a page at a time (prefix `s`, ten by default); the charts keep the thirty days above.
+  const sp = usePage('s', TEN_A_PAGE);
+  const list = useAuthed(['logs', 'mindful', 'list', sp.query], () => api.logsPage('mindful', sp.query));
   const setTarget = useFocusPortal((s) => s.setTarget);
   const focusHeight = useFocusPortal((s) => s.height);
   // A steady ref callback: a new one each render would clear and set the slot every time, moving the clock out and back.
@@ -102,9 +106,9 @@ export function Mindful() {
         <h2 id="hist-heading" className="text-title2">
           Sessions
         </h2>
-        {logs.data && logs.data.logs.length === 0 && <p className="mt-xs m-0 text-subhead text-ink-soft">No sessions yet. Pick a length above and start. Even one minute counts.</p>}
+        {list.data && list.data.logs.length === 0 && list.data.page.page === 1 && <p className="mt-xs m-0 text-subhead text-ink-soft">No sessions yet. Pick a length above and start. Even one minute counts.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-          {logs.data?.logs.map((l) => (
+          {list.data?.logs.map((l) => (
             <li key={l.id} className={`flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft`}>
               <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-r4 text-on-fill" aria-hidden="true">
                 <Icon icon={Wind} size={18} />
@@ -127,6 +131,7 @@ export function Mindful() {
             </li>
           ))}
         </ul>
+        <Pager page={list.data?.page} prefix="s" label="sessions" only={TEN_A_PAGE} />
         <Sheet open={toDelete !== null} onClose={() => setToDelete(null)} title="Delete this session?">
           <div className="grid gap-md pb-xl">
             <p className="m-0 text-callout text-ink-soft">{toDelete?.label}. Its minutes come off your totals and charts. This cannot be undone.</p>

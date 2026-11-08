@@ -127,6 +127,10 @@ export const LIMITS = {
   passwordChange: { max: 5, windowSec: 900 },
   /** Lines written in Community and Bond channels. A room is chattier than a one-to-one chat, so this is above `message`. */
   channelMessage: { max: 180, windowSec: 3600 },
+  /** The public list of events and one event's landing page (/events, /events/:id), read without an account, per address. */
+  eventsPublic: { max: 300, windowSec: 600 },
+  /** Joining an event from its public page (POST /party/events/:id/arrive), per person. */
+  eventJoin: { max: 30, windowSec: 3600 },
 } as const;
 
 export type LimitName = keyof typeof LIMITS;
@@ -201,6 +205,10 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/party/events/:id/claim', limit: 'claim' },
   { method: 'POST', path: '/circles/events/:id/claim', limit: 'claim' },
   { method: 'POST', path: '/party/events/:id/duplicate', limit: 'create' },
+  // The event attendee's way in (2026-11-07): the public list and landing page per address, the join per person.
+  { method: 'GET', path: '/public/events', limit: 'eventsPublic', by: 'address' },
+  { method: 'GET', path: '/public/events/:id', limit: 'eventsPublic', by: 'address' },
+  { method: 'POST', path: '/party/events/:id/arrive', limit: 'eventJoin' },
   { method: 'POST', path: '/community/:id/follow-post', limit: 'follow' },
   { method: 'POST', path: '/community/replies/:id/react', limit: 'like' },
   { method: 'POST', path: '/coach/requests', limit: 'coachAsk' },
@@ -244,6 +252,8 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/run/move', limit: 'prefs' },
   { method: 'DELETE', path: '/run/move/:id', limit: 'prefs' },
   { method: 'POST', path: '/me/calendar', limit: 'prefs' },
+  /** A new friend code: the old one, and every QR code made from it, stops working. */
+  { method: 'POST', path: '/me/friend-code', limit: 'prefs' },
   { method: 'PUT', path: '/session/away', limit: 'prefs' },
   // A yes to the live call: a paid service, so it shares the checkout budget (a provider order is made only while payments are live).
   { method: 'POST', path: '/session/call', limit: 'checkout' },
