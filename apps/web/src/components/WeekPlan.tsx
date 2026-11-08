@@ -146,8 +146,11 @@ export function WeekPlanButton({ openOn = 0 }: { /** Opens the sheet each time t
                 {draftHours} h
               </span>
             </div>
-            {/* The plan is asked for again only once the ruler settles, not at every tick it passes. */}
+            {/* The plan is asked for again only once the ruler settles, not at every tick it passes. One small gap under the words, so the
+                ruler's numbers never touch them (the founder, 2026-11-08). */}
+            <div className="mt-sm">
             <RulerPicker label={COPY.hours} tone="paper" accent="r2" min={1} max={12} step={1} labelEvery={2} majorStep={2} value={draftHours} onChange={setDraftHours} onCommit={setH} valueText={(v) => `${v} ${v === 1 ? 'hour' : 'hours'} a day`} />
+            </div>
           </div>
           <div className="mt-md">
             {q.isPending && (
