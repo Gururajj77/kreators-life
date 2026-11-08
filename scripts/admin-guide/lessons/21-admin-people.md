@@ -82,7 +82,7 @@ Payments are not live yet, so plans start here.
 
 A struck-through app is one she is not allowed. A line under it says why: blocked for her, needs a higher role, not rolled out to her yet, or switched off for everyone. Locked apps cannot be blocked, and the server refuses it too.
 
-This only decides what she may use. She still turns her own apps on and off herself.
+This only decides what she may use. She still hides and unhides her own apps.
 
 ## Change many people at once
 
@@ -96,7 +96,7 @@ Say Riya made a second account to test her page, and asks you to remove it.
 2. Tap the bin icon at the end of its row.
 3. A sheet asks "Delete" and the name. Tap **Yes, delete it**, or **Keep this account**.
 
-Their details and what they made go. Money records stay, without their name. It cannot be undone. An admin account, and your own, can never be deleted here.
+What is private goes. Their events, runs and sessions still to come are cancelled, and whoever was coming is told. Money records and what others rely on stay under "Deleted member", without their name. A buyer with a session or a paid question still open is told to write to the team under Help, and nothing refunds by itself, so you refund it from **Orders**. It cannot be undone. If a delete stops partway, ask again: nothing happens twice. An admin account, and your own, can never be deleted here.
 
 ## What an admin checks
 

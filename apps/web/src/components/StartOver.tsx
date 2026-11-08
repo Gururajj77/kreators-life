@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 /**
  * The button that starts a kept chat over. The first tap asks, the second does it (the founder, 2026-11-06: a start over is a
- * second tap, not a pop-up), so a stray tap never throws a conversation away. The ask clears itself after four seconds.
+ * second tap, not a pop-up), so a stray tap never throws a conversation away. While it asks it is solid red (`.red-armed`); the ask clears itself after four seconds.
  * Anything the chat already saved stays saved.
  */
 export function StartOver({ onConfirm, className = '' }: { onConfirm: () => void; className?: string }) {
@@ -21,7 +21,7 @@ export function StartOver({ onConfirm, className = '' }: { onConfirm: () => void
         onConfirm();
       }}
       aria-live="polite"
-      className={`toy inline-flex min-h-[44px] shrink-0 items-center rounded-pill px-sm text-subhead font-medium ${asking ? 'bg-ink text-on-ink' : 'bg-card'} ${className}`}
+      className={`toy inline-flex min-h-[44px] shrink-0 items-center rounded-pill px-sm text-subhead font-medium ${asking ? 'red-armed' : 'bg-card'} ${className}`}
     >
       {asking ? 'Tap again to start over' : 'Start over'}
     </button>

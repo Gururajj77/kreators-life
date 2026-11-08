@@ -67,7 +67,7 @@ export function Book() {
 
       <ul className="mt-md grid list-none gap-md p-0 m-0">
         {BOOKS.map((b) => (
-          <li key={b.slug} id={b.slug} className="scroll-mt-[64px]">
+          <li key={b.slug} id={b.slug} data-contents-section="" className="scroll-mt-[64px]">
             <BookCard book={b} state={state.get(b.slug) ?? null} loading={q.isPending} schoolOn={Boolean(school?.on)} schoolAvailable={Boolean(school?.available)} primary={firstBuy === b.slug ? 'buy' : firstCourse === b.slug ? 'course' : null} />
           </li>
         ))}
@@ -145,7 +145,7 @@ function BookCard({ book: b, state, loading, schoolOn, schoolAvailable, primary 
         {course && !schoolOn && schoolAvailable && (
           <Link to="/apps" className={OUTLINE}>
             <Icon icon={GraduationCap} size={18} />
-            Switch on School for the course
+            Show School for the course
           </Link>
         )}
         {!course && !loading && (

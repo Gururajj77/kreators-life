@@ -1,0 +1,42 @@
+# The automatic checks on every push and pull request: what "Done means" in CLAUDE.md asks for, short of the smoke suite (it needs a running
+# Worker and its own database, so it stays a local run: bash scripts/smoke/blueprint.sh). This job holds no secrets and only reads the repository.
+# Actions are pinned to a full commit, the version beside each; pnpm's version comes from packageManager in package.json.
+name: Checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Typecheck, tests, scans, build and size budget
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.16.0
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Shared tests
+        run: pnpm --filter @kreators/shared test
+      - name: Spacing, colour, wording and link scans
+        run: bash scripts/scan.sh
+      - name: Build
+        run: pnpm build
+      - name: Size budget
+        run: pnpm perf:budget

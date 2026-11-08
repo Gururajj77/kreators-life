@@ -20,7 +20,7 @@ needs a run. See "Still to run".
 | CLS (layout shift) | 0.1 at the 75th percentile | same |
 | TTFB (first byte) | 0.8 s at the 75th percentile | same; most of it is the Worker plus D1 round trips |
 | API read | most under 300 ms; any plain read over 1.5 s is logged as a warning (`SLOW_READ_MS` in logs.ts) | a screen makes several |
-| D1 round trips per request | as few as the dependency allows: independent reads together (`Promise.all`), many writes in one `db.batch` | each trip is a network hop to the one database |
+| D1 round trips per invocation | under 50, the Free plan's limit; the suite fails past 45 (see The Free plan). As few as the dependency allows: independent reads together (`Promise.all`), many writes in one `db.batch` | each trip is a network hop to the one database |
 | Initial JavaScript (web) | entry 480 kB raw, first download 1,500 kB raw, any other chunk 400 kB (`pnpm perf:budget`); the hope is 200 kB gzip for the first download, now 421 kB | `scripts/perf-budget.mjs`, see the Web items section |
 | Worker bundle | 2.6 MB raw, 545 KiB gzip today (the Anthropic SDK is 1.07 MB of it, now loaded on first use); keep under 3 MB raw | cold start parses the whole file |
 
@@ -32,7 +32,7 @@ needs a run. See "Still to run".
 | 2 | Image formats and sizes | DONE (web) | Web items, row 2; the server takes JPEG, PNG, WebP, AVIF, GIF up to 1 MB (`routes/media.ts`) |
 | 3 | Duplicate requests | DONE (web) | Web items, row 3 |
 | 4 | Debounced inputs | DONE (web) | Web items, row 4 |
-| 5 | Pagination | DONE, FIXED (caps), OPEN (three lists) | Every list a person scrolls goes through `pageOf` and `paged` (PAGE_SIZES 10 to 100, one extra row fetched). Found five staff lists with no limit and gave them a safety cap with the same response shape: reward review queue and a reward's entrants (500, `routes/win.ts`), open help requests (500, `support.ts`), applications to an opportunity (500, `work.ts`), a host's guest list (1,000, `party.ts`). Also fixed `metricsFor` in win.ts, which put every id in one `IN (...)` and would fail past 100 bound values; it now chunks by 80 in one batch. OPEN, need a `Pager` on the screen as well: the review queue and entrants, `GET /nodes` (one person's whole pyramid, bounded by their own data), and Observability's user list (`routes/internal.ts` reads every user to count access; staff only). |
+| 5 | Pagination | DONE, FIXED (caps), OPEN (three lists) | Every list a person scrolls goes through `pageOf` and `paged` (PAGE_SIZES 10 to 100, one extra row fetched). Found five staff lists with no limit and gave them a safety cap with the same response shape: reward review queue and a reward's entrants (500, `routes/win.ts`), open help requests (500, `support.ts`), applications to an opportunity (500, `work.ts`), a host's guest list (1,000, `party.ts`). Also fixed `metricsFor` in win.ts, which put every id in one `IN (...)` and would fail past 100 bound values; it now chunks by 80 in one batch. OPEN, need a `Pager` on the screen as well: the review queue and entrants, `GET /nodes` (one person's whole pyramid, bounded by their own data), and Dev Tools' user list (`routes/internal.ts` reads every user to count access; staff only). |
 | 6 | CDN for static files | DONE | `wrangler.jsonc`: `assets` serves `apps/web/dist` and `run_worker_first` lists only `/`, `/api/*`, `/go/*`, `/out/*`, `/__scheduled`, `/sitemap.xml`, so every script, style, font and picture is answered from Cloudflare's edge without starting the Worker. |
 | 7 | Background work | DONE, OPEN (two helpers) | `waitUntil` carries the request log (`logs.ts`), the /go and /out click writes and the webhook processing (`routes/go.ts`), and the Workers cache write (`cachecontrol.ts`); the cron runs every 15 minutes and every 2 hours (`wrangler.jsonc`). OPEN: `track()` (14 call sites) and `sendEmail()` (8) are awaited inline; both live in `ops.ts`. Wrapping them in `ctx.waitUntil` at the call site takes a person's tap off the analytics insert and the mail provider call. |
 | 8 | N+1 queries | FIXED | See "Query count changes" below. Loops that did one query per row are now one batch: subtask counts (`withSubtasks`), pictures for cards (`mediaForListings`), the pieces of a kit (`kitItems`), reward metrics (`metricsFor`), the data export (`/me/export`), and every fan-out notice (`notifyMany` in db.ts: community mentions and thread followers, circle tables, run and event cancellations, reward edits, campaign status, photo folder, coach asks to admins). |
@@ -84,11 +84,184 @@ needs a run. See "Still to run".
 | `GET /me/export` | about 55 hops | 2 hops | the tables in batches of 30 |
 | A notice to N people (`notifyMany`) | N hops | ceil(N / 50) hops | a batch of inserts, the same rows; 12 call sites |
 
+## Rows a quiet tick reads (2026-11-07)
+
+Measured on seeded data with SQLite's scan statistics, not D1's meter. At 1,000 people a quiet cron tick visits 9,183 rows, down from 18,189 (migration 0114: `rate_limits` by window, deleted users by a partial index, plus the Agency scans). 100 agencies with 1,000 clients and 30,000 pieces: 12,683 rows a tick, down from about 290,000. The life dashboard's stillness read: 896 rows for someone with four focus rounds a day for 300 days, down from 438,000. `localNow` in cron.ts keeps one formatter per zone: about 3 ms of JS a tick at 1,000 people on a Mac. One account delete visits 65,031 rows, down from 95,031; `app_logs` (40,001) stays unindexed on purpose, since every logged change would pay a row written for it, and `rate_limits` matches the end of a key, which no index serves.
+
+## The Free plan (the founder, 2026-11-07)
+
+The app stays on Workers Free. These are Cloudflare's limits as its own pages said on 2026-11-07, and what the app does about each.
+
+| Limit on Free | What it means here | What the app does |
+|---|---|---|
+| 50 D1 queries per invocation (a `db.batch()` is one) | the 51st fails with "Too many API requests by single Worker invocation" | stays under 50; the suite fails past 45 |
+| 50 subrequests per invocation; another page says 1,000 to Cloudflare's own services | only the live platform can settle it, so it is built to the stricter one | a cron tick counts its calls out against the same budget; see "Settle it" below |
+| 10 ms of CPU per invocation, with some flexibility | requests and cron alike | see the CPU table; PBKDF2 at 100,000 is the known exception and stays |
+| 100,000 requests a day | each API call and each cron run; static files do not count | see the daily table |
+| 5 million rows read, 100,000 rows written a day (enforced since 1 September 2026) | past either, every D1 query fails until midnight UTC, 05:30 IST | see the daily table |
+
+### The rule and the guard
+
+An invocation stays under 50 D1 round trips. `D1_GUARD` (`apps/api/src/d1Guard.ts`) is one Worker variable, set by `scripts/smoke/blueprint.sh` and the test server's script and never in production, where `fetch` only looks at that one property. With it set, every answer carries `X-D1-Round-Trips`, `X-D1-Rows-Read` and `X-D1-Rows-Written` (D1's own `meta`), and `X-D1-Last-Tick` holds the last cron run's numbers. `scripts/smoke/smoke.mjs` keeps the highest per route, prints the top twenty, and fails a check when anything passes 45.
+
+### Round trips, before and after
+
+The highest each route or tick reached over the whole smoke suite (2,459 checks, 651 routes), on the test server's real local D1. "Before" is the code as the review left it.
+
+| Route | Before | After |
+|---|---|---|
+| cron tick | 79 | 25 |
+| `GET /coach/students/:id/patterns` | 59 | 13 |
+| `PUT /reviews` | 51 | 14 |
+| `POST /assistant` | 50 | 27 |
+| `GET /coach/students/:id/report` | 50 | 10 |
+| `GET /reviews` | 49 | 10 |
+| `GET /reviews/summary` | 42 | 6 |
+| `GET /insights/dashboard` | 41 | 9 |
+| `POST /agency/retainers/:id/confirm` | 39 | 36 |
+| `GET /home` | 36 | 2 |
+| `POST /companion` | 34 | 16 |
+| `POST /nodes/:id/complete` | 29 | 24 |
+| `POST /assistant/actions/:id/confirm` | 28 | 13 |
+| `GET /coach/students/:id` | 26 | 13 |
+| `POST /store/:id/checkout` | 25 | 22 |
+| `GET /today` | 24 | 5 |
+| `POST /run/runs/:id/entry` | 23 | 18 |
+| `DELETE /me` | 22 | 21 |
+| `POST /party/events/:id/claim` | 21 | 16 |
+| `GET /public/agency/:id` | 21 | 9 |
+
+The highest now is 36, a retainer confirmed with two months due. The suite does not reach these, so they were run on the stand-in binding (`scripts/smoke/d1-shim.mjs`, held to 50): a coach with 100 students, `GET /coach?size=100` 10 trips and taking the coach's permission away 17 (it was about 400, one link at a time); a cancel for 600 guests 41 trips, 408 told at once and the rest over the next ticks; a host with 30 events of 30 guests deleted in one tap, the seats finished by the cron; `GET /me/export` 9 trips on a heavy account.
+
+How it got there: `batchedReads` (`apps/api/src/d1Batch.ts`) wraps the binding once per invocation in index.ts and sends every read made in one turn of the event loop as one `db.batch`. A route still writes `await db.prepare(...).first()`, and `Promise.all` of reads is one trip. Only a SELECT waits. A write goes at once, after sending what was gathered, so nothing changes order. A batch is a transaction, so when one fails each read is sent again alone, and only the read at fault fails its caller. The answers are the same: the Reviews, Coaching report, Emerging and period sections of the suite and the golden tests ran before and after. A rate limit is now one statement (`RETURNING count`).
+
+What can still grow with a list checks `tripsOf(db)` against `ROUTE_TRIPS` (40) and stops while it can answer. The assistant's message and the Companion's run tools only while a read's 8 or a write's 16 trips are left, and then say "go on". A note to many people (`notifyMany`) is N / 50 trips, so about 2,000 people on one note would pass the ceiling; nothing sends that many today (a run club's members, a reward's entrants).
+
+### The cron
+
+A tick cannot do unbounded work on this plan. `apps/api/src/cronTick.ts` holds it to `TICK_TRIPS` (38) round trips and calls out, and `TICK_STATEMENTS` (400) statements. How jobs share them:
+
+- Every job first reads what it has to do, all together, usually one trip. A job with nothing to do takes no part.
+- The rest go one at a time: the security alerts first, the others in an order that moves on by one each tick, worked out from the clock, so nothing is stored.
+- Each gets an equal part of what is left, and what it does not use passes to the jobs after it. A job that cannot do one piece of work with less (an Agency month is about 16 trips) gets that much while it is left.
+- A job's read leaves out what was already sent, and someone who needs no note (a day already focused, Fitness off) never takes a place, so the budget goes on people still waiting.
+- What needs only an hour's accuracy runs on the first tick of the hour: the tidy-up, past supplement notes, the season, sequences, monthly entries, a retainer's months, stages, the next weekly circle, discount uses. So a quiet tick is 3 trips, and the first of an hour 4.
+- A tick that had to leave work writes `cron_state`. While that row is there, a reminder's hour reaches back to when the ticks fell behind, so what was left is still caught, and note ids and `last_sent_day` keep each one once.
+- A claim and its work are one batch, so a stop can never lose them: a season's close (claim, top three, honors and notes), a month's entry (`UPDATE ... WHERE next_date = ?`, then `INSERT ... WHERE changes() = 1`), an event's reminder, a sequence's message, one circle's tables and seats.
+
+`node --experimental-strip-types scripts/smoke/cron-stress.mjs` runs all this with no server, every migration on a scratch file and a thousand people:
+
+| Case | Result |
+|---|---|
+| 100 reminders of each of nine kinds due at once | 4 ticks, the most 18 trips and 493 statements; every person once; the month's 100 entries on the next hour's tick |
+| 900 of each | 31 ticks, the most 21 trips; every person once; the window grew and went back to an hour |
+| A tick stopped dead after N trips, N from 1 to 40, then ordinary ticks | all 30 of each kind told once, all 30 monthly entries, the season closed with its top three, honors and notes, in all 40 |
+| A quiet tick | 3 trips, 16 statements; a first tick of the hour 4 trips, 48 statements |
+
+A reminder that cannot be reached by the person's own midnight is lost with that day: at 400 statements a tick that takes about 1,600 statements due at once, every hour, for several hours. It would need thousands of reminders in one hour.
+
+### Rows a quiet tick reads
+
+The window on the reminders (`indiaTimes`: in India only the times that can be due now; anyone abroad every tick) and the partial indexes of migration 0116 take a quiet tick at 1,000 seeded people from 7,169 rows to about 400, plus 2.5 rows for each Remember task on a day near now (2,895 in that seed, where all 1,000 have one today). The tidy-up moved to once an hour. So the cron reads about 40,000 to 280,000 rows a day at 1,000 accounts, 1% to 6% of the limit, and it was 688,000, 14%. Without a YouTube key the two metric reads are not made at all.
+
+### CPU
+
+JavaScript time on this Mac, cpu time less time inside SQLite, with a heavy person (25 ticks a day for 84 days, every tracker daily, 2,907 nodes). **A Mac is not a Worker**, and Cloudflare's meter is not this one, so read these as a comparison. The first request in a process costs 20 to 25 ms here whatever it is (V8 compiling), and a Worker's cold start is similar work.
+
+| Route | Warm JS, ms |
+|---|---|
+| `GET /home` | 0.5 |
+| `GET /today` | 0.9 |
+| `GET /reviews` | 0.4 |
+| `GET /insights/dashboard`, a week / a year | 0.6 / 3.6 |
+| `GET /coach/students/:id/report` | 1.7 |
+| **`GET /insights`** | **6.3** (10.8 before the offset cache) |
+| **`GET /coach/students/:id/patterns`** | **6.7** (10.7 before) |
+| **`GET /me/export`** (2.2 MB of JSON) | **8.3** |
+| `GET /me/activity` | 4.3 |
+| Quiet tick at 1,000 people, warm / cold | 0.4 / 7.6 |
+| A tick with 500 statements, warm / cold | 4 / 18 |
+
+The three in bold stay over about 5 ms on this heaviest account; an ordinary account is about a fifth of it. The export is rare and said to take a moment; a very large one may need asking twice. `POST /auth/signin` and sign-up (PBKDF2 at 100,000 rounds) are the known exception, by design. What changed: `zoneOffsetMinutes` keeps each zone's offset per UTC day, unless the clocks change that day (checked against the exact answer at 408,785 instants across all 418 zones, 0 different, and the shared tests); before 1973 it stays exact. `dayInZone`, `localDay`, `clockIn` and `slotsFor` keep one formatter per zone. `zonedToUtc` and `localStamp` go through `zoneOffsetMinutes`.
+
+### The daily limits
+
+Real D1 meters, from `scripts/smoke/drive-day.mjs`: a real browser opens Home twice, Daily three times, Pillars, Journal and Mood, each from cold; then a check-in, four ticks, a new task, a journal line, mood, sleep and three glasses of water. A tick also refetches what Daily shows, which that drive does not count, so add about 1,300 rows a tick on a screen that is open.
+
+| One person's ordinary day | Requests | Rows read | Rows written |
+|---|---|---|---|
+| A new account, before | 94 | 11,022 | 159 |
+| A new account, after | 95 | 8,045 | 164 |
+| A new account, starting blocks from code (2026-11-07) | 95 | 3,885 | 164 |
+| Three months of use (5 ticks a day, trackers daily, 467 nodes), before | 72 | 71,397 | 67* |
+| Three months of use, after | 95 | 37,866 | 100* |
+| Three months of use, same account again, blocks as rows (2026-11-07) | 91 | 36,203 | 69 |
+| Three months of use, same account, never changed a block (2026-11-07) | 91 | 32,057 | 69 |
+
+\* Corrected 2026-11-07: the first run read 28,314 rows, on a test account whose tasks named pillars that do not exist, so Daily crashed after its first four requests and most of its reads were never made. These are from a Daily that draws. The drive does not count what a screen reads again after a tick, about 1,400 rows on this account (Daily's own reads without Emerging, worked out from its requests, not measured through a tick), so four ticks make about 43,500 rows a day.
+
+| People a day before each limit | New accounts | Three months of use, a block changed | Three months of use, no block changed |
+|---|---|---|---|
+| 100,000 requests | about 1,050 | about 1,050 | about 1,050 |
+| 5 million rows read | about 1,280 (610 when the starting blocks were rows) | **about 115**, 119 with the 2026-11-07 run and 138 before what a tick reads again (70 before this work, on the same crashing account, so not like for like) | **about 135**: 155 before what a tick reads again |
+| 100,000 rows written | about 600 | about 600 (1,000 by the drive, which ticked fewer tasks) | the same |
+
+**Rows read come first, at about 115 active people a day once accounts have three months in them and have changed a block, and about 135 if they never did**, before the cron's share. A new account costs 307 rows written, so about 325 sign-ups in a day would use every write, and writes are what a launch day hits first. A person's day writes: each tick about 33 rows (the node, xp, scores, points, notes, a log line of 4 rows), each limited request 1 to 3.
+
+What moved it, each without changing an answer or a promise:
+
+- `/me` read every count behind the badges, 2,900 rows at three months, after every write. The counts now stay on the person's row for an hour (`keptStats`): 24 rows. A tick moves them by what it changed, so it no longer reads them twice (about 5,000 rows less a tick). The gallery and unlocks read fresh. A badge from anything but a tick can show up to an hour late on Profile.
+- `/me` walked every task for Pillars' counts: Pillars now asks (`GET /me/pillar-tasks`).
+- `GET /reviews/summary`, on Home and six other screens: the overdue count walks only what can be overdue, the kinds of day read their templates once and no slots, and tasks brought to a review have a partial index: 3,795 to about 1,100 rows.
+- `idx_wb_user_date`: a range of days walked every log the person had. `taskGate` read every done task to answer "under the free few?" and "when was the last?"; both now stop early. `completed_at LIKE` and `date LIKE` became ranges.
+- Emerging waits fifteen minutes after a read before reading again, however many writes marked it stale.
+- The Leaderboard's overview and filter counts visited about 47,000 rows an open at 1,000 opted-in people. They come from `board_cache` now, three hours old at most, from one pass of about eight rows a person; who shows is read fresh. The two sorts that walk everyone's tasks are kept six hours. The xp and streak boards read badge counts only for who is on the page. Log filters list the last day, not the last week.
+
+Left on purpose: `app_logs` keeps its three indexes (each line is 4 rows written). Dropping them would make one filter on Logs read the whole table, which costs more than it saves.
+
+### The starting blocks live in code (2026-11-07, the founder's yes)
+
+A new account used to write 769 of its 1,076 rows on its first open of Daily: 14 blocks, 14 templates and 124 slots, about five rows each once the indexes count. Now it writes none of them until it changes a block or a template. A task, a date and a weekday hold only an id, and the ids are the same in code and in rows (`b-<seed>-<user>`, `t-<seed>-<user>`), so none of those needs the rows. Who has rows is `users.time_blocks_seeded_at`, read beside whatever it decides.
+
+| | Before | After |
+|---|---|---|
+| Rows written, one sign-up | 1,076 | 307 |
+| Sign-ups a day before the writes run out | 92 | 325 |
+| First open of Daily | 712 rows read, 769 written | 235 read, 0 written |
+| Each read of a person's blocks | 317 rows | none with no rows; one more row with rows |
+| A new account's ordinary day | 8,159 rows read | 3,885 |
+| The first change, once | | about 780 rows written, 7 or 8 trips (777 to 835 measured, the top when the change itself adds slots) |
+
+The 325 assumes nobody changes a block on their first day. Every person who does adds that one 780 back, so a launch where everyone did would be back near 90. Picking a kind of day, a weekly pattern or a block for a task writes only its own row.
+
+Two tabs: the batch that writes the rows first claims the account with a stamp no other batch holds, and each insert runs only under that claim. A tab that read the account before another tab's first change adds nothing, so a template deleted in between stays deleted (the suite's section "Starting blocks from code" runs first changes at once). Every answer was compared byte for byte: 120 answers over 20 read routes before and after the change, at six stages of one account, and 21 routes on one account with no rows and then with rows.
+
+### When a limit is hit
+
+Past a D1 daily limit, every query fails until 05:30 IST. Checked with a binding that refuses everything: every API route answers 500 with the plain line and a request id (`{"error":"something broke on our side","requestId":...}`), `/go/:code` and the sitemap answer a plain 500, and nothing signs anyone out, since only a 401 does. The screens show their ordinary error line. The public pages, the app shell and `GET /api/health` still load, since they need no database. A cron tick fails as a whole and tries again in fifteen minutes. Past 100,000 requests, Cloudflare itself answers `/api/*` (error 1027); the static site still loads, and the client shows its fallback line, "That did not work. Check your connection and try again." No new screen was built for any of this.
+
+### Settle it, once, on the live site
+
+Cloudflare's pages disagree on 50 and 1,000. Signed in as a super admin on the live site, in the browser console:
+
+```js
+fetch('/api/internal/platform-limit', { headers: { Authorization: 'Bearer ' + JSON.parse(localStorage['kreators.session']).state.token } }).then((r) => r.json()).then(console.log)
+```
+
+It asks `SELECT 1` until it is refused, so it changes nothing and reads no rows, and it answers how many queries that invocation made. Run it once and write the number here. Whatever it says, the app stays built to 50.
+
+### How to measure
+
+- `bash scripts/smoke/blueprint.sh`: the top twenty and the ceiling, at the end. `SMOKE_D1_REPORT=<file>` keeps every route.
+- `node --experimental-strip-types scripts/smoke/cron-stress.mjs`: the cron at a thousand people. No server.
+- `node --experimental-strip-types scripts/smoke/drive-day.mjs`: one person's day and how many people fit. `DRIVE_DAY_TOKEN=<token>` for an account with months of data, `DRIVE_DAY_ROWS=1` for each request.
+- The Cloudflare dashboard, D1, the database, Metrics: the real rows a day. Look before the app has 150 active people a day.
+
 ## Maintenance rhythm
 
 - **Every release:** `pnpm typecheck`, shared tests, `pnpm build && pnpm perf:budget`, `bash scripts/smoke/blueprint.sh`. After touching a query, run
   `EXPLAIN QUERY PLAN` on it (recipe below) and check there is no `SCAN` of a table that grows.
-- **Weekly:** open Observability, Real-user vitals (once mounted) and read the 75th percentile per route against the budgets. Read Logs for
+- **Weekly:** open Dev Tools, Real-user vitals (once mounted) and read the 75th percentile per route against the budgets. Read Logs for
   "slow read" warnings and note the routes that repeat. Check `wrangler tail` or the Workers dashboard for CPU time and errors.
 - **Monthly:** `SELECT COUNT(*)` on the fast-growing tables (`link_clicks`, `xp_events`, `points_ledger`, `app_logs`, `web_vitals`, `notifications`)
   against the retention in the cron; look at the Worker bundle size (`wrangler deploy --dry-run`) and the web budget.
@@ -102,7 +275,7 @@ needs a run. See "Still to run".
   `SCAN t` on a table that grows is the thing to remove; `SEARCH t USING INDEX` is right; `COVERING INDEX` is best.
 - **The Worker's size and what is in it:** `pnpm --filter @kreators/api exec wrangler deploy --dry-run --outdir <dir>` prints the upload size; the
   bundle is `<dir>/index.js`.
-- **A slow route:** Logs (Observability) for "slow read" and the `ms` of any change; `pnpm cf:logs` for the live tail; `X-Request-Id` ties a browser
+- **A slow route:** Logs (from Dev Tools) for "slow read" and the `ms` of any change; `pnpm cf:logs` for the live tail; `X-Request-Id` ties a browser
   report to a log line.
 - **Real users:** the Real-user vitals table (item 30), 75th percentile per route and device, against the budgets at the top.
 - **The web bundle and a slow phone:** `pnpm perf:budget`, `SHOOT_TOKEN=<token> node scripts/smoke/perf-probe.mjs` (the Web items section).
@@ -110,7 +283,7 @@ needs a run. See "Still to run".
 
 ## Wired in
 
-The vitals route, its 90-day prune and the staff summary (`GET /api/internal/vitals`), the water sweep range, the timeouts on Resend and the research reads, and Smart Placement are all in place (see `apps/api/src/index.ts`, `routes/internal.ts`, `ops.ts`, `reach.ts`, `wrangler.jsonc`).
+The vitals route, its 90-day prune and the staff summary (`GET /api/internal/vitals`), the note sweep range (now only supplement lines, since water notes went on 2026-11-07), the timeouts on Resend and the research reads, and Smart Placement are all in place (see `apps/api/src/index.ts`, `routes/internal.ts`, `ops.ts`, `reach.ts`, `wrangler.jsonc`).
 
 ## Web items
 
@@ -138,7 +311,7 @@ gsap (29 kB) are all needed to paint the first screen. See item 22 for what woul
 | 1 | Skeletons instead of bare "Loading" | DONE | `components/Skeleton.tsx` (`Skeleton`, `SkeletonCard`, `SkeletonList`, `Busy`): `aria-hidden` blocks, `role="status"` and `aria-busy` on the wrapper, pulse off under reduced motion, theme tokens only. Used on Home, Daily, Journal (list and day sheet), Community, Store and Inbox where the screen showed a "Loading" line or nothing. Pillars and Profile draw from the account the app shell already waits for, so they have nothing to wait on. `RouteFallback` keeps the page frame while a screen downloads. |
 | 2 | Image formats and sizes | DONE | `lib/shrink.ts` saves WebP at quality 0.82 and steps down, as before, but now checks the browser really made WebP (a browser that cannot hands back a PNG) and otherwise saves JPEG, or PNG for a PNG so nothing transparent turns black. Same 1600 px longest side and 1 MB cap. GIF handling is untouched. The server accepts JPEG, PNG, WebP, AVIF and GIF (`apps/api/src/routes/media.ts`), so all three outputs pass. `public/` holds no large pictures: the biggest file is `licences.json` (51 kB), then `og.png` (33 kB); nothing deleted. |
 | 3 | Duplicate requests | DONE | TanStack Query already merges identical requests by key. Read data is now fresh for 30 seconds (`main.tsx`, was 10), one retry, and none for a 4xx answer. Window focus still refreshes stale data, so at most one refresh per 30 seconds. Submit buttons on sign-in, reset, profile, product checkout, Community post and reply, Bond chat, listing offers and chat, event chat, Help and Customers already disable while `isPending`. The sign-up card inside the setup chat and strategy session is a chat card whose answer is consumed once; not changed, see "Still to run". |
-| 4 | Debounced inputs | DONE | New `lib/useDebounced.ts` (300 ms). Used by `SearchBox` (two letters minimum, as before) and the team's member search in Manage, which asked the server on every key. Already debounced and left alone: Week plan's task search, Logs, Observability, the public Explore search. Every search carries the debounced word in its query key, so an answer for an older word is a different query and cannot replace a newer one. The admin server searches run on a button, and `DataTable` filters rows already in memory. |
+| 4 | Debounced inputs | DONE | New `lib/useDebounced.ts` (300 ms). Used by `SearchBox` (two letters minimum, as before) and the team's member search in Manage, which asked the server on every key. Already debounced and left alone: Week plan's task search, Logs, Dev Tools, the public Explore search. Every search carries the debounced word in its query key, so an answer for an older word is a different query and cannot replace a newer one. The admin server searches run on a button, and `DataTable` filters rows already in memory. |
 | 11 | Unused dependencies | DONE | Every web dependency is imported: react, react-dom, react-router, @tanstack/react-query, zustand, gsap, motion, qrcode (one screen). No change. |
 | 14 | Optimistic updates | N/A (noted) | They exist only where a drag needs them: Agency's board moves (`screens/Agency.tsx`, `components/AgencyPipeline.tsx`) and the focus settings (`lib/focusPrefs.ts`). Task ticks use the one-at-a-time action queue (`lib/useActionQueue.ts`) with a busy state, on purpose: a tick pays xp and the server decides. Nothing added. |
 | 15 | Lazy-load below the fold | DONE | Pictures in Store, Media, Listing sheet, link blocks and the Media section thumbnails now carry `loading="lazy"` and `decoding="async"` (Media section thumbnails also got width and height). Video embeds were already `loading="lazy"` and sit behind the consent gate. The public page's profile picture is the likely largest paint and has `fetchPriority="high"`. Images changed: `screens/Store.tsx` (2), `screens/Public.tsx`, `screens/Profile.tsx`, `components/Media.tsx` (2), `components/ListingSheet.tsx`, `components/LinkBlocks.tsx` (3), `components/MediaSection.tsx`. Link-block pictures have no known size, so they can still shift the page a little when they arrive. |

@@ -1,4 +1,4 @@
-import { EVENT_TYPE_META, EVENT_TYPES, type DiscountCheck, type EventRegistration, type EventType, type PartyEvent, LOCALE } from '@kreators/shared';
+import { EVENT_TYPE_META, EVENT_TYPES, type DiscountCheck, type EventRegistration, type EventType, type PartyEvent } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
@@ -15,9 +15,9 @@ import { useAuthed, useRefreshAll } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { attendeeBody, AttendeeFields, attendeeProblem, ClaimCard, HostCodeCard } from '../components/AttendeeCode';
 import { AppIcon } from '../components/AppIcon';
-import { FIELD, FIELD_CARD } from '../lib/ui';
+import { FIELD, FIELD_CARD, RED_YES } from '../lib/ui';
 import { ErrorLine } from '../components/ErrorLine';
-import { eventTime, localDateTimeValue } from '../lib/date';
+import { eventTime, localDateTimeValue, clockTime, displayZone, zoneName } from '../lib/date';
 import { FactTag, IconTag } from '../components/FactTag';
 import { StatusTag } from '../components/StatusTag';
 import { RowCard } from '../components/RowCard';
@@ -41,7 +41,7 @@ function AskSheet({ ask, onClose }: { ask: { title: string; body: string; action
               ask?.run();
               onClose();
             }}
-            className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill"
+            className={RED_YES}
           >
             {ask?.action}
           </button>
@@ -342,6 +342,7 @@ export function EventPage() {
   const [comment, setComment] = useState('');
   const [thanks, setThanks] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const rsvp = useMutation({
     mutationFn: () => api.rsvp(id, networking, discount && discount.offPoints > 0 ? discount.code : undefined),
     onSuccess: (r) => {
@@ -422,7 +423,7 @@ export function EventPage() {
         <CardHead tag={e.pricePoints > 0 ? <FactTag kind="price">{`${e.pricePoints} points a ticket`}</FactTag> : <FactTag kind="free">Free</FactTag>}>
           <p className="m-0 text-card-title">{when(e.startsAt)}</p>
           <p className="m-0 text-card-note text-ink-soft">
-            Until {when(e.endsAt)} ({e.timezone})
+            Until {when(e.endsAt)} ({zoneName(displayZone())})
           </p>
         </CardHead>
         <div className="mt-sm flex">
@@ -482,7 +483,7 @@ export function EventPage() {
               <p className="m-0 text-card-title">{mine.status === 'waitlisted' ? 'You are on the waitlist.' : 'You are registered.'}</p>
               <p className="mt-xs m-0 text-card-note text-ink-soft">{mine.networkingOptIn ? 'Open to introductions at this event.' : 'Not open to introductions at this event.'}</p>
               <ErrorLine e={cancel.isError ? cancel.error : null} />
-              <Button variant="outline" className="mt-sm" onClick={() => cancel.mutate()} disabled={cancel.isPending}>
+              <Button variant="outline" className="mt-sm" onClick={() => setLeaving(true)} disabled={cancel.isPending}>
                 Cancel my RSVP
               </Button>
             </div>
@@ -582,7 +583,7 @@ export function EventPage() {
                   <span className="block text-card-note text-ink-soft">
                     {r.status}
                     {r.networkingOptIn ? ', open to intros' : ''}
-                    {r.checkedInAt ? `, checked in ${new Date(r.checkedInAt).toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' })}` : ''}
+                    {r.checkedInAt ? `, checked in ${clockTime(r.checkedInAt)}` : ''}
                   </span>
                 </span>
                 {r.status === 'registered' && (
@@ -598,6 +599,10 @@ export function EventPage() {
         </section>
       )}
       {(d.host || (mine && (mine.status === 'registered' || mine.status === 'attended'))) && <EventPanel app="party" id={e.id} />}
+      <AskSheet
+        ask={leaving ? { title: 'Cancel your RSVP?', body: mine?.status === 'waitlisted' ? 'You leave the waitlist. You can join again while the event has room for it.' : 'Your seat goes to the next person. Any points you paid come back.', action: 'Yes, cancel it', run: () => cancel.mutate() } : null}
+        onClose={() => setLeaving(false)}
+      />
       <AskSheet ask={cancelling ? { title: 'Cancel this event?', body: 'Everyone registered is told it is off. This cannot be undone.', action: 'Yes, cancel it', run: () => setStatus.mutate('cancelled') } : null} onClose={() => setCancelling(false)} />
     </Screen>
   );

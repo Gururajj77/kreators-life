@@ -1,4 +1,4 @@
-import { ATTENDEE_CLAIMS_PER_DAY, ATTENDEE_CODE_MAX, ATTENDEE_CODE_MIN, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, attendeeXpLocked, attendeeXpProblem, codeProblem, normalizeCode, RELATIONSHIP_BY_KEY, type AttendeeCodeHost, type AttendeeCodeView, LOCALE } from '@kreators/shared';
+import { ATTENDEE_CLAIMS_PER_DAY, ATTENDEE_CODE_MAX, ATTENDEE_CODE_MIN, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, attendeeXpLocked, attendeeXpProblem, codeProblem, normalizeCode, RELATIONSHIP_BY_KEY, type AttendeeCodeHost, type AttendeeCodeView } from '@kreators/shared';
 import { useState, type ReactNode } from 'react';
 import { useNow } from '../lib/useNow';
 import { Button } from './Button';
@@ -7,6 +7,7 @@ import { Nudge } from './Nudge';
 import { Icon } from './Icon';
 import { Check } from 'lucide-react';
 import { FIELD_SOLID } from '../lib/ui';
+import { clockTime, weekday } from '../lib/date';
 
 /**
  * Attendee codes, drawn the same way in Party, Run and Circles. The host sets the guests’ xp before the event starts
@@ -23,7 +24,7 @@ export interface CodeChange {
 
 const say = (e: unknown) => (e instanceof Error ? e.message : 'That did not work. Try again.');
 /** A time in the window, as the clock on the wall says it: "Sat 18:30". */
-const clock = (iso: string) => new Date(iso).toLocaleString(LOCALE, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+const clock = (iso: string) => `${weekday(iso)}, ${clockTime(iso)}`;
 
 function Problem({ text }: { text: string | null }) {
   if (!text) return null;

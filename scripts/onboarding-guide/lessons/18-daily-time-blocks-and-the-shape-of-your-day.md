@@ -44,7 +44,7 @@ A day template is your kind of day. You start with 14, like Everyday, Deep work 
 
 Tap a template under **Day templates** to open it.
 
-1. Change its name, **Pillar that leads** and **Second pillar**.
+1. Change its name, **Pillar that leads**, **Second pillar** and **Colour**, the same picker as a block's.
 2. Each slot is a block with a start and an end. An end before the start runs past midnight, like Sleep from 11 pm to 7 am.
 3. Slots can never overlap. A gap is fine and shows as free time.
 4. Tap **Save**, or **Save as new** to keep a copy.
@@ -70,17 +70,19 @@ Pick **Follow your week** again to undo a one-day change.
 
 ## How tasks fall into blocks
 
-A task finds its block in one of three ways.
+A task finds its block in one of four ways.
 
 1. **You pick it.** In a task's plan, the **Time block** select lists the blocks of that day first, then your other blocks.
 2. **By its time.** Leave it on **By its time**, and a task at 11 am sits in the block that covers 11 am.
 3. **Plan my week suggests one**, from the task's area of life and pillar.
+4. **Daily suggests one.** A task with no block and no time shows inside the block that fits, until you say.
 
 ## Seeing your day in blocks
 
 On Daily, **Sort by** now has six choices: Day, Priority, Due date, By context, By time block and By area.
 
-- **By time block** shows your tasks in coloured boxes, one per block, in clock order. Each box shows its times and a count, like "3 tasks · 1 h 30 of 3 h". Tasks with no block sit in **No block yet**.
+- **By time block** shows your tasks in coloured boxes, one per block, in clock order. Each box shows its times and a count, like "3 tasks · 1 h 30 of 3 h". A task with no block and no time shows as **Suggested** inside the block that fits, with **Keep here**. Nothing is saved until you tap. It never suggests your night's sleep, a full block or a block already over. Tasks with no block sit in **No block yet**.
+- **A task in the wrong block:** a timed task in a block meant for something else gets one quiet line, with **Move it** or **Keep here**. The task's form says the same under its time.
 - **By area** shows a box for each area of life that has tasks, in the order physical, financial, mental, emotional and spiritual. Tasks with no area sit in **No area**.
 - Inside every box, P0 comes first.
 - Tap a box to fold it. **Open all** and **Fold all** sit above them.
@@ -88,7 +90,7 @@ On Daily, **Sort by** now has six choices: Day, Priority, Due date, By context, 
 
 **By context** reads the pillar your day template leads with. On a Family day, family tasks come first inside each priority. On a day that follows your default, the list sorts by day, unless you pick another sort.
 
-Just above the list, **Your day** is a fold that shows each block as a band, with its tasks inside. It says how much room is left, like "45 min free", or "Over by 30 min" when you planned too much.
+Just above the list, **Your day** is a fold that shows each block as a band, with its tasks inside. It says how much room is left, like "45 min free", or "Over by 30 min" when you planned too much. A line like **3 tasks have no time or block yet** opens those tasks, each with a block picker.
 
 ## Plan my week suggests a block
 
@@ -108,7 +110,7 @@ A day has only so many hours. When you see the day as blocks, you see the room b
 
 After a few weeks, Emerging on Daily starts to read your blocks back to you. It may say "You ticked 14 of 20 Deep work tasks inside the block." It also sets the tasks you tick on one kind of day beside your other days.
 
-**Your kinds of day** shows your last four weeks by kind, each in the colour of its longest block, and how each kind went beside your other days: tasks ticked, and focus minutes and mood while those apps are on. A day counts as the kind you set for it, else the one your week gives it. Days on Everyday count as no kind. You see it on Daily, on the Time blocks page, under Emerging and on Reviews. Each line says what went together, never what caused what.
+**Your kinds of day** shows your last four weeks by kind, each in its own colour, and how each kind went beside your other days: tasks ticked, and focus minutes and mood while those apps are on. A day counts as the kind you set for it, else the one your week gives it. Days on Everyday count as no kind. You see it on Daily, on the Time blocks page, under Emerging and on Reviews. Each line says what went together, never what caused what.
 
 What develops is a sense of your own rhythm. You learn which hours are for deep work and which are for rest, and you plan around them.
 

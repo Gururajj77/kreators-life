@@ -20,7 +20,7 @@ import { ErrorLine } from '../components/ErrorLine';
 import { FactTag, IconTag } from '../components/FactTag';
 import { StatusTag } from '../components/StatusTag';
 import { MoreMenu, type MoreMenuItem } from '../components/MoreMenu';
-import { bento } from '../lib/bento';
+import { evenGrid, evenTile } from '../lib/bento';
 import { FilterBar, FilterSelect } from '../components/FilterSelect';
 import { CardHead } from '../components/CardHead';
 import { Reveal } from '../components/fx/Reveal';
@@ -29,6 +29,8 @@ import { ArrowRight } from 'lucide-react';
 import '../components/fx/spotlight';
 
 const pill = chip;
+/** Shelves of cards: one to a row on a phone and a tablet, two from the laptop width, in even rows (lib/bento.ts). */
+const PAIR_COLS = { base: 1, lg: 2 } as const;
 const BUDGETS: { label: string; cents: number | null }[] = [
   { label: 'Any budget', cents: null },
   { label: 'Under 10k', cents: 1_000_000 },
@@ -68,7 +70,10 @@ export function Store() {
   const [budgetRaw, setBudgetRaw] = useParamState('budget', '');
   const budget: number | null = budgetRaw ? Number(budgetRaw) : null;
   const setBudget = (c: number | null) => setBudgetRaw(c === null ? '' : String(c));
-  const [open, setOpen] = useState<string | null>(null);
+  // The open listing lives in the address (`?listing=<id>`), so an inbox note about an offer or a message opens that listing's sheet.
+  const [listingParam, setListingParam] = useParamState('listing', '');
+  const open = listingParam || null;
+  const setOpen = (id: string | null) => setListingParam(id ?? '');
   const [selling, setSelling] = useState(false);
   const [adding, setAdding] = useState<'item' | 'kit' | null>(null);
   const feature = useMutation({ mutationFn: (v: { type: 'item' | 'kit' | 'listing'; id: string }) => api.marketFeature(v.type, v.id), onSuccess: refresh });
@@ -169,9 +174,9 @@ export function Store() {
         </h2>
         <p className="mt-xs m-0 text-subhead text-ink-soft">Picked by the team. Each link opens the seller's site.</p>
         {items.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">{d?.items.length ? 'Nothing here for these filters.' : 'Nothing on the shelf yet.'}</p>}
-        <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
+        <ul data-tile-list="paged" className={`mt-sm grid list-none gap-xs p-0 m-0 ${evenGrid(items.length, PAIR_COLS)}`}>
           {items.map((i, n) => (
-            <Reveal as="li" key={i.id} index={n} className={`${cardClass(isFeatured(i.featuredUntil))} ${bento(n, items.length, 1, 2)}`}>
+            <Reveal as="li" key={i.id} index={n} className={`${cardClass(isFeatured(i.featuredUntil))} ${evenTile(n, items.length, PAIR_COLS)}`}>
               <ItemBody item={i} team={teamItems('item', i.id, i.featuredUntil)} />
             </Reveal>
           ))}
@@ -185,9 +190,9 @@ export function Store() {
         </h2>
         <p className="mt-xs m-0 text-subhead text-ink-soft">Tap one to make an offer or ask a question. Sold ones stay two weeks, so you see prices.</p>
         {listings.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">{d?.listings.length ? 'Nothing here for these filters.' : 'Nothing listed yet. Yours could be first.'}</p>}
-        <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
+        <ul data-tile-list="paged" className={`mt-sm grid list-none gap-xs p-0 m-0 ${evenGrid(listings.length, PAIR_COLS)}`}>
           {listings.map((l, n) => (
-            <Reveal as="li" key={l.id} index={n} className={`flex ${bento(n, listings.length, 1, 2)}`}>
+            <Reveal as="li" key={l.id} index={n} className={`flex ${evenTile(n, listings.length, PAIR_COLS)}`}>
               <ListingButton l={l} onOpen={setOpen} />
             </Reveal>
           ))}
@@ -201,9 +206,9 @@ export function Store() {
             Yours
           </h2>
           {d.mine.listings.length > 0 && (
-            <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
+            <ul data-tile-list="their own, up to twenty" className={`mt-sm grid list-none gap-xs p-0 m-0 ${evenGrid(d.mine.listings.length, PAIR_COLS)}`}>
               {d.mine.listings.map((l, n) => (
-                <li key={l.id} className={`flex ${bento(n, d.mine.listings.length, 1, 2)}`}>
+                <li key={l.id} className={`flex ${evenTile(n, d.mine.listings.length, PAIR_COLS)}`}>
                   <ListingButton l={l} onOpen={setOpen} />
                 </li>
               ))}

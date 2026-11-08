@@ -1,4 +1,4 @@
-import { canModerate, canMute, communityRankOf, isStaffFor, FEED_FILTER_META, FEED_FILTERS, FEED_SORT_META, FEED_SORTS, MAX_PINNED, POST_CATEGORIES, REACTION_META, REACTIONS, SOCIAL_REWARDS, type CommunityPost, type CommunityReply, type FeedFilter, type FeedSort, type ReactionCounts, type ReactionKind, DEFAULT_PAGE_SIZE, pageQuery, type PageSize, LOCALE } from '@kreators/shared';
+import { canModerate, canMute, communityRankOf, isStaffFor, FEED_FILTER_META, FEED_FILTERS, FEED_SORT_META, FEED_SORTS, MAX_PINNED, POST_CATEGORIES, REACTION_META, REACTIONS, SOCIAL_REWARDS, type CommunityPost, type CommunityReply, type FeedFilter, type FeedSort, type ReactionCounts, type ReactionKind, DEFAULT_PAGE_SIZE, pageQuery, type PageSize } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Inert } from '../components/Inert';
 import { useState } from 'react';
@@ -27,6 +27,7 @@ import { Fold } from '../components/Fold';
 import { AskSheet, type Ask } from '../components/Channels';
 import { ConfirmDelete } from '../components/ConfirmDelete';
 import { ToggleChevron } from '../components/ToggleMark';
+import { shortDate } from '../lib/date';
 
 const FILTER_ITEMS = FEED_FILTERS.map((f) => ({ key: f, label: FEED_FILTER_META[f] }));
 const SORT_ITEMS = FEED_SORTS.map((k) => ({ key: k, label: FEED_SORT_META[k] }));
@@ -202,6 +203,15 @@ function CommunityFeed() {
   const refresh = useRefreshAll();
   const [writing, setWriting] = useState(false);
   const [open, setOpen] = useState<CommunityPost | null>(null);
+  // An inbox note or a search result names a post (`?post=<id>`, a reply as `#reply-<id>`): its replies open as if it was tapped, and
+  // the hash lands on the reply once the sheet lists it (lib/useLandOnHash.ts). Closing the sheet takes the post out of the address.
+  const [postParam, setPostParam] = useParamState('post', '');
+  const linked = useAuthed(['community-post', postParam], () => api.communityPost(postParam), Boolean(postParam) && !product);
+  const sheetPost = open ?? (postParam ? (linked.data?.post ?? null) : null);
+  const closeSheet = () => {
+    setOpen(null);
+    if (postParam) setPostParam('');
+  };
   const [ask, setAsk] = useState<Ask | null>(null);
   const like = useMutation({ mutationFn: (v: { id: string; kind: ReactionKind }) => api.likePost(v.id, v.kind), onSuccess: () => refresh() });
   const followPost = useMutation({ mutationFn: (id: string) => api.followPost(id), onSuccess: () => refresh() });
@@ -249,6 +259,11 @@ function CommunityFeed() {
           {notice}
         </p>
       )}
+      {postParam && linked.isError && (
+        <p role="status" className="mt-sm m-0 rounded-tile bg-paper p-sm text-subhead">
+          That post is gone, or you cannot see it any more.
+        </p>
+      )}
       {q.data?.muted && (
         <p role="status" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           You are muted in Community for now. You can read, but not post or reply. A guide or admin can lift it.
@@ -281,7 +296,7 @@ function CommunityFeed() {
                   {p.anonymous ? (
                     <span className="min-w-0 text-balance text-subhead font-semibold [overflow-wrap:anywhere]">{p.authorName}</span>
                   ) : (
-                    <Link to={p.authorHandle ? `/u/${p.authorHandle}` : `/people/${p.authorId}`} className="inline-flex min-h-[44px] min-w-0 items-center text-subhead font-semibold [overflow-wrap:anywhere]">
+                    <Link to={p.authorHandle ? `/u/${p.authorHandle}` : `/people/${p.authorId}`} className="inline-flex min-h-[44px] min-w-[44px] items-center text-subhead font-semibold [overflow-wrap:anywhere]">
                       {p.authorName}
                     </Link>
                   )}
@@ -289,7 +304,7 @@ function CommunityFeed() {
                   {p.authorPro && <IconTag tone="deep" icon="Crown">Pro</IconTag>}
                 </span>
                 <span className="block text-caption text-ink-soft">
-                  {p.category}, {new Date(p.createdAt).toLocaleDateString(LOCALE, { month: 'short', day: 'numeric' })}
+                  {p.category}, {shortDate(p.createdAt)}
                   {p.authorFollowers > 0 ? ` · ${p.authorFollowers} ${p.authorFollowers === 1 ? 'follower' : 'followers'}` : ''}
                   {p.hidden ? ', hidden' : ''}
                 </span>
@@ -329,7 +344,7 @@ function CommunityFeed() {
       <Pager page={q.data?.page} label="posts" />
       {canMute(myRank, 'member') && <MutedList />}
       <PostSheet open={writing} product={product} onClose={() => setWriting(false)} onSaved={(xp, held) => { refresh(); setNotice(held ? 'Thanks! A guide looks at a first post before it goes up. It pays once they say okay.' : null); if (xp > 0) celebrate({ title: 'Posted', totalXp: xp, color: 'var(--color-r2)' }); }} />
-      <RepliesSheet post={open} onAsk={setAsk} onClose={() => setOpen(null)} onSaved={(xp) => { refresh(); if (xp > 0) celebrate({ title: 'Replied', totalXp: xp, color: 'var(--color-r2)' }); }} />
+      <RepliesSheet post={sheetPost} onAsk={setAsk} onClose={closeSheet} onSaved={(xp) => { refresh(); if (xp > 0) celebrate({ title: 'Replied', totalXp: xp, color: 'var(--color-r2)' }); }} />
       <AskSheet ask={ask} onClose={() => setAsk(null)} />
     </Screen>
   );
@@ -432,11 +447,11 @@ function RepliesSheet({ post, onClose, onSaved, onAsk }: { post: CommunityPost |
             {visible.map((r) => {
               const kids = kidsOf(r.id, r.depth);
               return (
-                <li key={r.id} style={{ marginLeft: `calc(var(--spacing-md) * ${r.depth})` }} className={`rounded-tile bg-card p-sm shadow-toy-soft ${r.depth > 0 ? 'border-l-4 border-line' : ''}`}>
+                <li key={r.id} id={`reply-${r.id}`} style={{ marginLeft: `calc(var(--spacing-md) * ${r.depth})` }} className={`rounded-tile bg-card p-sm shadow-toy-soft ${r.depth > 0 ? 'border-l-4 border-line' : ''}`}>
                   <p className="m-0 text-subhead font-semibold">
                     {r.authorName}
                     {r.anonymous && <IconTag className="ml-xs" tone="neutral" icon="UserRound">{r.mine ? 'Anonymous, you' : 'Anonymous'}</IconTag>}{' '}
-                    <span className="text-ink-soft">{new Date(r.createdAt).toLocaleDateString(LOCALE, { month: 'short', day: 'numeric' })}</span>
+                    <span className="text-ink-soft">{shortDate(r.createdAt)}</span>
                   </p>
                   <p className="mt-xs m-0 text-callout"><Inert text={r.body} /></p>
                   <div className="mt-xs flex flex-wrap items-center gap-xs">

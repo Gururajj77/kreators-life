@@ -9,11 +9,12 @@ import {
   type InvoiceItem,
   type RetainerCycle,
 } from '@kreators/shared';
-import { newId, notify, nowIso, shiftDate } from './db';
+import { newId, noteStmt, notify, nowIso, shiftDate } from './db';
 import { localDay } from './coaching';
 import { createInvoice, nextNumberAfter, setInvoiceStatus } from './routes/finance';
 import { billingOf, settingsFor } from './routes/agency';
 import { logStmt, type RetainerRow } from './lifecycle';
+import { openTurn, type Share, type Turn } from './cronTick';
 
 /**
  * Recurring work for a running retainer. Every month of it makes its invoice (a draft, or sent when the owner left auto-send on) and its
@@ -32,10 +33,11 @@ interface DueRetainer extends RetainerRow {
 const DUE_SELECT = `SELECT r.*, u.timezone, c.name AS client_name, c.contact_email, c.billing_json
   FROM agency_retainers r JOIN users u ON u.id = r.user_id JOIN agency_clients c ON c.id = r.client_id`;
 
+/** What one month costs in round trips, at the most measured: its pieces in a batch, an invoice and its number, a note. */
+const CYCLE_TRIPS = 16;
+
 /** A month is made, or it already was. Throws only on a real failure. */
 async function makeCycle(db: D1Database, r: DueRetainer, cycle: RetainerCycle, total: number): Promise<boolean> {
-  const done = await db.prepare('SELECT 1 AS x FROM agency_cycles WHERE retainer_id = ? AND month = ?').bind(r.id, cycle.month).first();
-  if (done) return false;
   const count = await db.prepare('SELECT COUNT(*) AS n FROM agency_items WHERE user_id = ?').bind(r.user_id).first<{ n: number }>();
   // The pieces fit under the cap on a person's deliverables; if they do not all fit, the month says how many it made.
   const pieces = Math.max(0, Math.min(r.pieces_per_month, AGENCY_MAX_ITEMS - (count?.n ?? 0)));
@@ -58,16 +60,22 @@ async function makeCycle(db: D1Database, r: DueRetainer, cycle: RetainerCycle, t
     if (taken) return false;
     throw e;
   }
-  await invoiceForCycle(db, r, cycleId, cycle, total);
-  await notify(db, r.user_id, 'agency', `Month ${cycle.n} of ${r.client_name} is ready`, `${pieces} ${pieces === 1 ? 'piece' : 'pieces'} and an invoice ${r.auto_send === 1 ? 'sent' : 'in drafts'}.`, `/agency/${r.client_id}`);
+  await invoiceForCycle(db, r, cycleId, cycle, total, pieces);
   return true;
 }
 
+/** The month marked done and the owner told, in one batch, so a stop can never finish a month nobody hears of. The note has a fixed id, so it is once whichever run finished it. */
+const finishMonth = (db: D1Database, r: DueRetainer, cycleId: string, invoiceId: string, n: number, pieces: number) =>
+  db.batch([
+    db.prepare('UPDATE agency_cycles SET invoice_id = ? WHERE id = ?').bind(invoiceId, cycleId),
+    noteStmt(db, { id: `month-ready-${cycleId}`, userId: r.user_id, kind: 'agency', title: `Month ${n} of ${r.client_name} is ready`, body: `${pieces} ${pieces === 1 ? 'piece' : 'pieces'}${invoiceId ? ` and an invoice ${r.auto_send === 1 ? 'sent' : 'in drafts'}` : ''}.`, link: `/agency/${r.client_id}` }, 'once'),
+  ]);
+
 /** The month's invoice: the retainer's fee for the length chosen, as a draft, sent when auto-send is on. Once: only the run that holds the cycle row gets here. */
-async function invoiceForCycle(db: D1Database, r: DueRetainer, cycleId: string, cycle: RetainerCycle, total: number): Promise<void> {
+async function invoiceForCycle(db: D1Database, r: DueRetainer, cycleId: string, cycle: RetainerCycle, total: number, pieces: number): Promise<void> {
   const monthly = retainerMonthlyCents(r.fee_cents, r.discount_bps);
   if (monthly <= 0) {
-    await db.prepare("UPDATE agency_cycles SET invoice_id = '' WHERE id = ? AND invoice_id IS NULL").bind(cycleId).run();
+    await finishMonth(db, r, cycleId, '', cycle.n, pieces);
     return;
   }
   // A claim before the work, so a retry never makes a second invoice for the same month.
@@ -90,33 +98,58 @@ async function invoiceForCycle(db: D1Database, r: DueRetainer, cycleId: string, 
       agencyClientId: r.client_id,
       doc: { ...docFromProfile(settings.profile), to: billingOf({ billing_json: r.billing_json, name: r.client_name, contact_email: r.contact_email }) },
       prefix: settings.profile.invoicePrefix,
+      agencyCycleId: cycleId,
       ...(last ? { number: await nextNumberAfter(db, r.user_id, last.number) } : {}),
     });
     invoiceId = invoice?.id ?? '';
-    if (invoiceId) await db.prepare('UPDATE invoices SET agency_cycle_id = ? WHERE id = ?').bind(cycleId, invoiceId).run();
   }
-  await db.prepare('UPDATE agency_cycles SET invoice_id = ? WHERE id = ?').bind(invoiceId, cycleId).run();
+  // Sent before the month is marked done, so a stop in between leaves it for the half-hour sweep, which finds this invoice and sends it (twice does nothing), never a second one.
   if (invoiceId && r.auto_send === 1) await setInvoiceStatus(db, r.user_id, invoiceId, 'sent');
+  await finishMonth(db, r, cycleId, invoiceId, cycle.n, pieces);
 }
 
 /**
  * Makes what is due for every running retainer (or one): the months whose start day has come in the owner's zone, oldest first. Also ends
  * a retainer whose last month is over, and finishes an invoice that a crash left half made. Returns the number of months made.
  */
-export async function runAgencyCycles(db: D1Database, only?: { retainerId: string }): Promise<number> {
-  const rows = await db
-    .prepare(`${DUE_SELECT} WHERE r.status = 'active' AND r.start_day IS NOT NULL AND r.months IS NOT NULL ${only ? 'AND r.id = ?' : ''} ORDER BY r.created_at LIMIT 300`)
-    .bind(...(only ? [only.retainerId] : []))
-    .all<DueRetainer>();
-  let made = 0;
-  for (const r of rows.results) {
+export async function runAgencyCycles(db: D1Database, only?: { retainerId: string }, turn: Turn = openTurn(db)): Promise<number> {
+  const live = `r.status = 'active' AND r.start_day IS NOT NULL AND r.months IS NOT NULL ${only ? 'AND r.id = ?' : ''}`;
+  const whose = only ? [only.retainerId] : [];
+  // Every running retainer and the months it has made, in one trip, so a tick asks nothing per retainer unless a month is really due. A half-made month has its own read.
+  const cutoff = new Date(Date.now() - 30 * 60_000).toISOString();
+  const [rows, madeRows, stuck] = await Promise.all([
+    db.prepare(`${DUE_SELECT} WHERE ${live} ORDER BY r.created_at LIMIT 300`).bind(...whose).all<DueRetainer>(),
+    db.prepare(`SELECT cy.retainer_id, cy.month FROM agency_cycles cy JOIN agency_retainers r ON r.id = cy.retainer_id WHERE ${live}`).bind(...whose).all<{ retainer_id: string; month: string }>(),
+    only ? Promise.resolve(null) : db.prepare(`SELECT cy.id AS cycle_id, cy.n, cy.month, cy.day, cy.pieces FROM agency_cycles cy WHERE cy.created_at < ? AND (cy.invoice_id IS NULL OR cy.invoice_id = 'making') LIMIT 50`).bind(cutoff).all<StuckCycle>(),
+  ]);
+  const madeMonths = new Set(madeRows.results.map((m) => `${m.retainer_id}|${m.month}`));
+  // What is really due: a month not yet made, or a retainer whose last month is over. Worked out once, without a trip.
+  const due = rows.results.flatMap((r) => {
     const total = r.months ?? 0;
     const today = localDay(r.timezone || 'Asia/Kolkata');
+    const months = cyclesDue(r.start_day!, total, today).filter((cycle) => !madeMonths.has(`${r.id}|${cycle.month}`));
+    const all = retainerCycles(r.start_day!, total);
+    const last = all[all.length - 1];
+    const over = Boolean(last && today > last.end);
+    return months.length || over ? [{ r, total, months, over }] : [];
+  });
+  if (!due.length && !stuck?.results.length) return 0;
+  const share = await turn(CYCLE_TRIPS);
+  let made = 0;
+  for (const { r, total, months, over } of due) {
     try {
-      for (const cycle of cyclesDue(r.start_day!, total, today)) if (await makeCycle(db, r, cycle, total)) made += 1;
-      const all = retainerCycles(r.start_day!, total);
-      const last = all[all.length - 1];
-      if (last && today > last.end) {
+      let stopped = false;
+      for (const cycle of months) {
+        // The next tick takes the rest, from the months it reads then: each month is whole or not started.
+        if (share.left() < CYCLE_TRIPS) {
+          share.more();
+          stopped = true;
+          break;
+        }
+        if (await makeCycle(db, r, cycle, total)) made += 1;
+      }
+      if (stopped) break;
+      if (over) {
         const ended = await db.prepare("UPDATE agency_retainers SET status = 'ended', ended_at = ?, updated_at = ? WHERE id = ? AND status = 'active'").bind(nowIso(), nowIso(), r.id).run();
         if (ended.meta.changes) {
           await logStmt(db, r.user_id, r.client_id, 'auto', 'retainer', `The retainer ended after ${total} ${total === 1 ? 'month' : 'months'}. Offer a renewal to go on.`).run();
@@ -127,23 +160,33 @@ export async function runAgencyCycles(db: D1Database, only?: { retainerId: strin
       // One retainer failing must not stop the others; it is tried again on the next run.
     }
   }
-  if (!only) made += await finishHalfMade(db);
+  if (stuck) made += await finishHalfMade(db, stuck.results, cutoff, share);
   return made;
 }
 
+interface StuckCycle {
+  cycle_id: string;
+  n: number;
+  month: string;
+  day: string;
+  pieces: number;
+}
+
 /** A month whose invoice was never finished (the run stopped between the pieces and the invoice): finished once, a half hour later. */
-async function finishHalfMade(db: D1Database): Promise<number> {
-  const cutoff = new Date(Date.now() - 30 * 60_000).toISOString();
-  const stuck = await db.prepare(`SELECT cy.id AS cycle_id, cy.n, cy.month, cy.day FROM agency_cycles cy WHERE cy.created_at < ? AND (cy.invoice_id IS NULL OR cy.invoice_id = 'making') LIMIT 50`).bind(cutoff).all<{ cycle_id: string; n: number; month: string; day: string }>();
+async function finishHalfMade(db: D1Database, stuck: readonly StuckCycle[], cutoff: string, share: Share): Promise<number> {
   let fixed = 0;
-  for (const s of stuck.results) {
+  for (const s of stuck) {
+    if (share.left() < CYCLE_TRIPS) {
+      share.more();
+      break;
+    }
     const r = await db.prepare(`${DUE_SELECT} WHERE r.id = (SELECT retainer_id FROM agency_cycles WHERE id = ?)`).bind(s.cycle_id).first<DueRetainer>();
     if (!r) continue;
     // Take the half-made claim back so exactly one run finishes it.
     const took = await db.prepare("UPDATE agency_cycles SET invoice_id = NULL WHERE id = ? AND (invoice_id IS NULL OR invoice_id = 'making') AND created_at < ?").bind(s.cycle_id, cutoff).run();
     if (!took.meta.changes) continue;
     try {
-      await invoiceForCycle(db, r, s.cycle_id, { n: s.n, month: s.month, day: s.day, end: s.day }, r.months ?? 0);
+      await invoiceForCycle(db, r, s.cycle_id, { n: s.n, month: s.month, day: s.day, end: s.day }, r.months ?? 0, s.pieces);
       fixed += 1;
     } catch {
       // tried again next time

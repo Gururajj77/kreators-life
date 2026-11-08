@@ -1,4 +1,4 @@
-import { bountyPayout, detectPlatform, SOCIAL_PLATFORM_META, type Bounty, type BountySubmission, LOCALE, formatCount } from '@kreators/shared';
+import { bountyPayout, detectPlatform, SOCIAL_PLATFORM_META, type Bounty, type BountySubmission, formatCount } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
@@ -17,7 +17,7 @@ import { FIELD } from '../lib/ui';
 import { ErrorLine } from '../components/ErrorLine';
 import { StatusTag } from '../components/StatusTag';
 import type { TagTone } from '@kreators/shared';
-import { shortDate, localDateTimeValue } from '../lib/date';
+import { shortDate, localDateTimeValue, dateTime } from '../lib/date';
 import { FactTag, IconTag } from '../components/FactTag';
 import { RowCard } from '../components/RowCard';
 import { Reveal } from '../components/fx/Reveal';
@@ -107,7 +107,7 @@ function ReviewBox({ s, rule, reviewer, finance, onDone }: { s: BountySubmission
             .slice(0, 6)
             .map((m) => (
               <li key={m.id} className="text-caption text-ink-soft">
-                {new Date(m.fetchedAt).toLocaleString(LOCALE, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: {n(m.views)} views, {n(m.likes + m.comments + m.shares)} engagement, {m.source === 'auto' ? 'read from the platform' : m.source === 'staff' ? 'confirmed by staff' : 'reported by the creator'}
+                {dateTime(m.fetchedAt)}: {n(m.views)} views, {n(m.likes + m.comments + m.shares)} engagement, {m.source === 'auto' ? 'read from the platform' : m.source === 'staff' ? 'confirmed by staff' : 'reported by the creator'}
                 {m.note ? `. ${m.note}` : ''}
               </li>
             ))}

@@ -1,5 +1,6 @@
 import { discountCodeKey, discountLabel, discountProblem, DISCOUNT_AREAS, isPaidPlan, PLAN_CURRENCY, PLANS, priceWithDiscount, TOPUP_PACKS, type DiscountArea, type DiscountCheck, type DiscountQuote, type DiscountRule, type AdminDiscountCode } from '@kreators/shared';
-import { newId, nowIso } from './db';
+import { inBatches, newId, nowIso } from './db';
+import { openTurn, type Turn } from './cronTick';
 
 /**
  * Discount codes the team makes. This file is the one rule for every checkout: it finds a typed code, works out the price on the
@@ -181,18 +182,22 @@ export async function redeem(db: D1Database, r: { row: CodeRow; userId: string; 
   return null;
 }
 
-/** Gives back the use a payment that failed, expired or could not start had taken. Safe to call twice: only the call that flips the row gives the use back. */
+/** The two go in one batch: the flip, then the count, which moves only when that flip changed a row. So two calls give back one use, and a stop between them cannot lose it. */
+const releaseStmts = (db: D1Database, r: { id: string; code_id: string }): D1PreparedStatement[] => [
+  db.prepare('UPDATE discount_redemptions SET released_at = ? WHERE id = ? AND released_at IS NULL').bind(nowIso(), r.id),
+  db.prepare('UPDATE discount_codes SET used_count = MAX(0, used_count - 1) WHERE id = ? AND changes() = 1').bind(r.code_id),
+];
+
+/** Gives back the use a payment that failed, expired or could not start had taken. Safe to call twice. */
 export async function release(db: D1Database, ref: string): Promise<void> {
   const open = await db.prepare('SELECT id, code_id FROM discount_redemptions WHERE ref = ? AND released_at IS NULL').bind(ref).all<{ id: string; code_id: string }>();
-  for (const r of open.results) {
-    const flipped = await db.prepare('UPDATE discount_redemptions SET released_at = ? WHERE id = ? AND released_at IS NULL').bind(nowIso(), r.id).run();
-    if (flipped.meta.changes === 1) await db.prepare('UPDATE discount_codes SET used_count = MAX(0, used_count - 1) WHERE id = ?').bind(r.code_id).run();
-  }
+  await inBatches(db, open.results.flatMap((r) => releaseStmts(db, r)));
 }
 
 /** The cron's sweep: every use held by an order that failed or expired is given back. */
-export async function releaseDeadOrders(db: D1Database): Promise<number> {
-  const dead = await db.prepare("SELECT r.ref FROM discount_redemptions r JOIN orders o ON o.id = r.ref WHERE r.released_at IS NULL AND o.status IN ('failed', 'expired') LIMIT 200").all<{ ref: string }>();
-  for (const d of dead.results) await release(db, d.ref);
-  return dead.results.length;
+export async function releaseDeadOrders(db: D1Database, turn: Turn = openTurn(db)): Promise<number> {
+  const dead = await db.prepare("SELECT r.id, r.code_id FROM discount_redemptions r JOIN orders o ON o.id = r.ref WHERE r.released_at IS NULL AND o.status IN ('failed', 'expired') LIMIT 200").all<{ id: string; code_id: string }>();
+  if (!dead.results.length) return 0;
+  const share = await turn();
+  return (await share.send(share.fit(dead.results, 2).flatMap((r) => releaseStmts(db, r)))).filter((res, i) => i % 2 === 0 && res.meta.changes === 1).length;
 }

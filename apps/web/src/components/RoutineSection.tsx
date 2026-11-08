@@ -8,6 +8,7 @@ import { CheckRow } from './CheckRow';
 import { Icon } from './Icon';
 import { Skeleton } from './Skeleton';
 import { Compass } from 'lucide-react';
+import { clockOf } from '../lib/date';
 
 
 /**
@@ -89,7 +90,7 @@ export function RoutineSection({ date }: { date: string }) {
       {morning && (
         <div className="mt-sm flex flex-col gap-xs">
           <p className="m-0 text-subhead font-semibold">
-            Morning routine, {morning.start} to {morning.end}
+            Morning routine, {clockOf(morning.start)} to {clockOf(morning.end)}
             {stepsMinutes(morning) > 0 ? `, ${minutesLabel(stepsMinutes(morning))} of steps` : ''}
             {d.today?.done ? '. Done.' : ''}
           </p>
@@ -104,7 +105,7 @@ export function RoutineSection({ date }: { date: string }) {
           .map((b) => (
             <li key={b.key} className="flex items-start gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
               <span className="w-[100px] shrink-0 text-caption text-ink-soft">
-                {b.start} to {b.end}
+                {clockOf(b.start)} to {clockOf(b.end)}
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-subhead font-semibold">{b.name}</span>

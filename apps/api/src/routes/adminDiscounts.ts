@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { DISCOUNT_AREAS, DISCOUNT_CODE_MAX, DISCOUNT_CODE_MIN, DISCOUNT_PER_PERSON_MAX, discountCodeKey, isDiscountArea, typedCents, typedPercentBps, type AdminDiscountCode, type DiscountArea } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { actorOf, audit, can, newId, nowIso, pageOf, paged, randomCode, str } from '../db';
+import { actorOf, audit, can, likeFit, newId, nowIso, pageOf, paged, randomCode, str, auditStmt } from '../db';
 import { areasOf, toAdminCode, type AdminCodeRow, type CodeRow } from '../discounts';
 
 /**
@@ -31,7 +31,7 @@ adminDiscounts.get('/', async (c) => {
   const binds: unknown[] = [];
   if (q) {
     where.push('(d.code LIKE ? OR d.note LIKE ?)');
-    binds.push(`%${q.replace(/[%_]/g, '')}%`, `%${q.replace(/[%_]/g, '')}%`);
+    binds.push(`%${likeFit(q.replace(/[%_]/g, ''))}%`, `%${likeFit(q.replace(/[%_]/g, ''))}%`);
   }
   if (active === '1' || active === '0') {
     where.push('d.active = ?');
@@ -208,15 +208,11 @@ adminDiscounts.post('/bulk', async (c) => {
   const ids = Array.isArray(b.ids) ? b.ids.filter((x): x is string => typeof x === 'string').slice(0, 100) : [];
   if (ids.length === 0) return c.json({ error: 'Tick some codes first.' }, 400);
   const active = b.active === true ? 1 : 0;
-  let n = 0;
-  for (const id of ids) {
-    const res = await db.prepare('UPDATE discount_codes SET active = ?, updated_at = ? WHERE id = ? AND active != ?').bind(active, nowIso(), id, active).run();
-    if (res.meta.changes === 1) {
-      n += 1;
-      await audit(db, actorOf(c), active ? 'discount.update' : 'discount.off', 'discount_code', id, { active: !active }, { active: Boolean(active), bulk: true });
-    }
-  }
-  return c.json({ changed: n });
+  // Each moves only if it was the other way, in one batch, and an audit line for each that moved in the next: a hundred codes in two trips.
+  const moved = await db.batch(ids.map((id) => db.prepare('UPDATE discount_codes SET active = ?, updated_at = ? WHERE id = ? AND active != ?').bind(active, nowIso(), id, active)));
+  const changed = ids.filter((_, i) => moved[i]?.meta.changes === 1);
+  if (changed.length) await db.batch(changed.map((id) => auditStmt(db, actorOf(c), active ? 'discount.update' : 'discount.off', 'discount_code', id, { active: !active }, { active: Boolean(active), bulk: true })));
+  return c.json({ changed: changed.length });
 });
 
 export type { AdminDiscountCode };

@@ -1,8 +1,13 @@
 import { Hono } from 'hono';
-import { COACH_ABOUT_MAX, COACH_ASK_AGAIN_DAYS, COACH_NOTE_MAX, COACH_SHARE_PARTS, MAX_COACH_ASKS, MAX_COACHES, parentKind, parseCoachShare, type CoachDirectoryEntry, type CoachHub, type CoachLinkStatus, type CoachProfile, type MyCoachResponse } from '@kreators/shared';
+import { COACH_REPORT_KINDS, parseCoachSections } from '@kreators/shared/coachReport';
+import { COACH_ABOUT_MAX, COACH_ASK_AGAIN_DAYS, COACH_NOTE_MAX, COACH_SHARE_PARTS, DEFAULT_COACH_SHARE, MAX_COACH_ASKS, MAX_COACHES, NEW_LINK_SHARE, normalizeCode, parentKind, parseCoachShare, type CoachAskResult, type CoachDirectoryEntry, type CoachHub, type CoachJoinCard, type CoachJoinState, type CoachLinkStatus, type CoachLookup, type CoachPrefs, type CoachProfile, type CoachShare, type MyCoachResponse, type PeriodKind } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { DATE_RE, getNode, nameOf, newId, notify, nowIso, pageOf, paged, personBy, str, toNode } from '../db';
+import { LIMITS } from '../limits';
+import { blockedByName, blockedEither, DATE_RE, getNode, liveUser, nameOf, newId, notify, nowIso, pageOf, paged, personBy, randomCode, str, toNode } from '../db';
 import { activeLink, askToCoach, endLink, isCoach, LINK, linkById, logCoach, logPage, notePage, rosterRow, shareChange, studentView, toLink, toPerson, type LinkRow } from '../coaching';
+import { coachPatterns, coachReport } from '../coachReport';
+import { emailProblem, maskEmail, publicUrl } from '../agencyPaper';
+import { limited, sendEmail, sha } from '../ops';
 import { createNode, DATES_PROBLEM, editNode, type NodeBody } from './nodes';
 
 /**
@@ -18,6 +23,10 @@ export const coach = new Hono<AppEnv>();
 export const myCoach = new Hono<AppEnv>();
 
 const DAY = 86_400_000;
+/** Invite emails a coach can send in 24 hours (counted from the change log; each is a mail to someone with no account). */
+const MAX_COACH_INVITE_EMAILS = 20;
+/** A coach asks a student to turn Patterns on at most once a week, per link. */
+const PATTERNS_ASK_DAYS = 7;
 
 interface ProfileRow { about: string; open: number; asked_at: string | null }
 async function profileOf(db: D1Database, userId: string): Promise<CoachProfile> {
@@ -28,6 +37,7 @@ async function profileOf(db: D1Database, userId: string): Promise<CoachProfile> 
 /** Why a new link between these two cannot start, or null. The same checks for every way a link starts. */
 export async function linkProblem(db: D1Database, coachId: string, studentId: string): Promise<{ error: string; status: 400 | 409 } | null> {
   if (coachId === studentId) return { error: 'A coach cannot coach themselves.', status: 400 };
+  if (await blockedEither(db, coachId, studentId)) return { error: 'These two cannot work together.', status: 409 };
   const open = await db.prepare("SELECT status FROM coach_links WHERE coach_id = ? AND student_id = ? AND status IN ('pending','active')").bind(coachId, studentId).first<{ status: CoachLinkStatus }>();
   if (open) return { error: open.status === 'active' ? 'They already work together.' : 'There is already an ask waiting between them.', status: 409 };
   const no = await db.prepare("SELECT answered_at FROM coach_links WHERE coach_id = ? AND student_id = ? AND status = 'declined' AND answered_at >= ? ORDER BY answered_at DESC LIMIT 1").bind(coachId, studentId, new Date(Date.now() - COACH_ASK_AGAIN_DAYS * DAY).toISOString()).first<{ answered_at: string }>();
@@ -37,16 +47,58 @@ export async function linkProblem(db: D1Database, coachId: string, studentId: st
   return null;
 }
 
-/** Start a link: asked (it waits for the other side) or, from the team only, active at once. */
-export async function startLink(db: D1Database, a: { coachId: string; studentId: string; askedBy: 'coach' | 'student' | 'admin'; createdBy: string | null; active: boolean }): Promise<LinkRow | null> {
+/**
+ * Start a link: asked (it waits for the other side) or active at once. A link someone says yes to starts with every part on, Patterns too, and
+ * they see each switch when they say yes. A link the team makes at once has no such yes, so Patterns starts off there, as on a link made
+ * before it (2026-11-07). `share` is what someone picked on the join card.
+ */
+export async function startLink(db: D1Database, a: { coachId: string; studentId: string; askedBy: 'coach' | 'student' | 'admin'; createdBy: string | null; active: boolean; share?: CoachShare }): Promise<LinkRow | null> {
   const id = newId();
   const now = nowIso();
+  const share = a.share ?? (a.active ? DEFAULT_COACH_SHARE : NEW_LINK_SHARE);
   await db
-    .prepare("INSERT INTO coach_links (id, coach_id, student_id, status, asked_by, created_by, share_json, created_at, answered_at) VALUES (?, ?, ?, ?, ?, ?, '{}', ?, ?)")
-    .bind(id, a.coachId, a.studentId, a.active ? 'active' : 'pending', a.askedBy, a.createdBy, now, a.active ? now : null)
+    .prepare('INSERT INTO coach_links (id, coach_id, student_id, status, asked_by, created_by, share_json, created_at, answered_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, a.coachId, a.studentId, a.active ? 'active' : 'pending', a.askedBy, a.createdBy, JSON.stringify(share), now, a.active ? now : null)
     .run();
   return linkById(db, id);
 }
+
+/** The live invite link's token, made the first time it is asked for. */
+async function inviteToken(db: D1Database, coachId: string): Promise<string> {
+  const token = randomCode(16);
+  await db.prepare('INSERT OR IGNORE INTO coach_invites (coach_id, token, created_at) VALUES (?, ?, ?)').bind(coachId, token, nowIso()).run();
+  const row = await db.prepare('SELECT token FROM coach_invites WHERE coach_id = ?').bind(coachId).first<{ token: string }>();
+  return row?.token ?? token;
+}
+
+/** A renewed or closed invite link is kept only as a hash, so opening it later says it was closed. */
+async function retireInvite(db: D1Database, coachId: string, token: string): Promise<D1PreparedStatement> {
+  return db.prepare('INSERT OR IGNORE INTO retired_coach_invites (token_hash, coach_id, retired_at) VALUES (?, ?, ?)').bind(await sha(token), coachId, nowIso());
+}
+
+/** Close a coach's invite link, if it is open: it is kept only as a hash, and answers 410 from then on. */
+export async function closeInvite(db: D1Database, coachId: string): Promise<boolean> {
+  const before = await db.prepare('SELECT token FROM coach_invites WHERE coach_id = ?').bind(coachId).first<{ token: string }>();
+  if (!before) return false;
+  await db.batch([await retireInvite(db, coachId, before.token), db.prepare('DELETE FROM coach_invites WHERE coach_id = ?').bind(coachId)]);
+  return true;
+}
+
+const TOKEN_RE = /^[A-Z0-9]{16}$/;
+
+/** The coach behind a live invite link, or why there is none: closed (410: renewed, closed, or they are no longer a coach), or unknown (404). */
+async function inviteCoach(db: D1Database, token: string): Promise<{ coach: UserRow } | { closed: true } | null> {
+  if (!TOKEN_RE.test(token)) return null;
+  const row = await db.prepare(`SELECT u.* FROM coach_invites i JOIN users u ON u.id = i.coach_id WHERE i.token = ? AND ${liveUser('u')}`).bind(token).first<UserRow>();
+  if (row) return isCoach(row) ? { coach: row } : { closed: true };
+  const was = await db.prepare('SELECT 1 AS x FROM retired_coach_invites WHERE token_hash = ?').bind(await sha(token)).first();
+  return was ? { closed: true } : null;
+}
+
+const joinCard = async (db: D1Database, coachRow: UserRow): Promise<CoachJoinCard> => ({ coach: toPerson(coachRow), about: (await profileOf(db, coachRow.id)).about });
+
+/** Per coach, so many addresses cannot wear a link out between them; the per-address limit is in ROUTE_LIMITS. */
+const joinLimited = (db: D1Database, coachId: string) => limited(db, `coach-join:${coachId}`, LIMITS.coachJoinLink.max, LIMITS.coachJoinLink.windowSec);
 
 // ---- the coach's side
 
@@ -56,13 +108,13 @@ coach.get('/', async (c) => {
   const profile = await profileOf(db, user.id);
   const none = { page: 1, size: pageOf(c).size, more: false };
   if (!isCoach(user)) {
-    const res: CoachHub = { coach: false, profile, counts: { students: 0, asks: 0, sent: 0 }, students: [], studentsPage: none, asks: [], asksPage: none, sent: [], sentPage: none };
+    const res: CoachHub = { coach: false, profile, counts: { students: 0, asks: 0, sent: 0 }, students: [], studentsPage: none, asks: [], asksPage: none, sent: [], sentPage: none, invite: null, steps: null };
     return c.json(res);
   }
   const s = pageOf(c, 's');
   const a = pageOf(c, 'a');
   const o = pageOf(c, 'o');
-  const [rows, asks, sent, counts] = await Promise.all([
+  const [rows, asks, sent, counts, invite, prefs, ever] = await Promise.all([
     db.prepare(`${LINK} WHERE l.coach_id = ? AND l.status = 'active' ORDER BY s.display_name COLLATE NOCASE, l.id LIMIT ? OFFSET ?`).bind(user.id, s.limit, s.offset).all<LinkRow>(),
     db.prepare(`${LINK} WHERE l.coach_id = ? AND l.status = 'pending' AND l.asked_by = 'student' ORDER BY l.created_at DESC LIMIT ? OFFSET ?`).bind(user.id, a.limit, a.offset).all<LinkRow>(),
     db.prepare(`${LINK} WHERE l.coach_id = ? AND l.status = 'pending' AND l.asked_by != 'student' ORDER BY l.created_at DESC LIMIT ? OFFSET ?`).bind(user.id, o.limit, o.offset).all<LinkRow>(),
@@ -75,6 +127,10 @@ coach.get('/', async (c) => {
       )
       .bind(user.id)
       .first<{ students: number | null; asks: number | null; sent: number | null }>(),
+    db.prepare('SELECT token FROM coach_invites WHERE coach_id = ?').bind(user.id).first<{ token: string }>(),
+    db.prepare('SELECT read_sharing_at FROM coach_prefs WHERE user_id = ?').bind(user.id).first<{ read_sharing_at: string | null }>(),
+    // A first student: anyone ever linked or asked, or an invite link made or emailed.
+    db.prepare("SELECT (SELECT COUNT(*) FROM coach_links WHERE coach_id = ?1 AND asked_by != 'student') + (SELECT COUNT(*) FROM coach_log WHERE coach_id = ?1 AND action = 'invite.email') AS n").bind(user.id).first<{ n: number }>(),
   ]);
   const students = paged(rows.results, s);
   const asked = paged(asks.results, a);
@@ -89,8 +145,52 @@ coach.get('/', async (c) => {
     asksPage: asked.page,
     sent: out.items.map(toLink),
     sentPage: out.page,
+    invite: invite?.token ?? null,
+    steps: { line: profile.about.trim().length > 0, invited: Boolean(invite) || (ever?.n ?? 0) > 0, sharing: Boolean(prefs?.read_sharing_at) },
   };
   return c.json(res);
+});
+
+// What the box read as the coach typed, in the same words for nobody and for someone blocked either way. An exact @username or friend code shows
+// a small preview: a picture, a name and a handle, never an email or a phone. An email is never looked up until it is sent.
+coach.get('/lookup', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  if (!isCoach(user)) return c.json({ error: 'Only a life coach can look someone up.' }, 403);
+  const raw = (c.req.query('who') ?? '').trim().slice(0, 200);
+  const none = (read: CoachLookup['read']): CoachLookup => ({ read, person: null });
+  if (!raw) return c.json(none('none'));
+  if (raw.includes('@') && !raw.startsWith('@')) return c.json(none('email'));
+  const q = raw.toLowerCase().replace(/^@/, '');
+  const byHandle = q ? await db.prepare(`SELECT u.* FROM users u WHERE u.handle = ? AND ${liveUser('u')}`).bind(q).first<UserRow>() : null;
+  const code = normalizeCode(q);
+  const byCode = !byHandle && !raw.startsWith('@') && code.length >= 8 ? await db.prepare(`SELECT u.* FROM users u WHERE u.friend_code = ? AND ${liveUser('u')}`).bind(code).first<UserRow>() : null;
+  const found = byHandle ?? byCode;
+  // Words that could be either read as a username, until a code matches. Nobody and someone blocked either way answer in the very same words, so a real code is never told from a made-up one.
+  if (!found || found.id === user.id || (await blockedEither(db, user.id, found.id))) return c.json(none('username'));
+  const read: CoachLookup['read'] = byCode ? 'code' : 'username';
+  const res: CoachLookup = { read, person: { name: nameOf(found), handle: found.handle, avatarUrl: found.avatar_url ?? '', badge: toPerson(found).badge } };
+  return c.json(res);
+});
+
+// The coach's invite link: open it (`on`), renew it (`fresh`, the old one is kept only as a hash and answers 410) or close it (`off`).
+coach.post('/invite', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  if (!isCoach(user)) return c.json({ error: 'Only a life coach has an invite link.' }, 403);
+  const body = await c.req.json<{ action?: unknown }>().catch(() => ({}) as { action?: unknown });
+  const before = await db.prepare('SELECT token FROM coach_invites WHERE coach_id = ?').bind(user.id).first<{ token: string }>();
+  if (body.action === 'off') {
+    if (await closeInvite(db, user.id)) await logCoach(db, { linkId: null, coachId: user.id, studentId: user.id, actorId: user.id, action: 'invite.close', label: `${nameOf(user)} closed their invite link` });
+    return c.json({ invite: null });
+  }
+  if (body.action === 'fresh' && before) {
+    const token = randomCode(16);
+    await db.batch([await retireInvite(db, user.id, before.token), db.prepare('UPDATE coach_invites SET token = ?, created_at = ? WHERE coach_id = ?').bind(token, nowIso(), user.id)]);
+    await logCoach(db, { linkId: null, coachId: user.id, studentId: user.id, actorId: user.id, action: 'invite.renew', label: `${nameOf(user)} renewed their invite link` });
+    return c.json({ invite: token });
+  }
+  return c.json({ invite: await inviteToken(db, user.id) });
 });
 
 // A coach's line for the directory and whether they take new students. Anyone can keep one: it goes with an ask.
@@ -129,7 +229,7 @@ coach.get('/directory', async (c) => {
         (SELECT COUNT(*) FROM coach_links x WHERE x.coach_id = u.id AND x.status = 'active') AS students,
         (SELECT y.status FROM coach_links y WHERE y.coach_id = u.id AND y.student_id = ?1 AND y.status IN ('pending','active')) AS mine
        FROM users u LEFT JOIN coach_profiles p ON p.user_id = u.id
-       WHERE u.permissions LIKE '%"coach"%' AND COALESCE(p.open, 1) = 1 AND u.id != ?1
+       WHERE u.permissions LIKE '%"coach"%' AND COALESCE(p.open, 1) = 1 AND u.id != ?1 AND NOT ${blockedByName('?1', 'u.id')}
        ORDER BY u.display_name COLLATE NOCASE, u.id LIMIT ?2 OFFSET ?3`,
     )
     .bind(user.id, ask.limit, ask.offset)
@@ -139,14 +239,42 @@ coach.get('/directory', async (c) => {
   return c.json({ coaches, page: pg.page });
 });
 
-// A coach asks someone, by email or @handle, to be their student. Nothing is shared until they say yes.
+// A coach asks someone, by email, @username or friend code, to be their student. Nothing is shared until they say yes. An email with no account
+// gets the coach's invite link instead (private mail, never marketing, the link built from PUBLIC_URL), and the coach hears the same words for
+// that as for someone who blocked them, who gets nothing at all.
 coach.post('/requests', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   if (!isCoach(user)) return c.json({ error: 'Only a life coach can ask someone to be their student.' }, 403);
   const body = await c.req.json<{ who?: unknown }>().catch(() => ({}) as { who?: unknown });
-  const student = await personBy(db, typeof body.who === 'string' ? body.who : '');
-  if (!student) return c.json({ error: 'No account has that email, username or friend code.' }, 404);
+  const who = typeof body.who === 'string' ? body.who.trim() : '';
+  const isEmail = who.includes('@') && !who.startsWith('@');
+  const found = await personBy(db, who);
+  const student = found && found.display_name !== 'Deleted member' ? found : null;
+  const blocked = student ? await blockedEither(db, user.id, student.id) : false;
+  if (isEmail && (!student || blocked)) {
+    const problem = emailProblem(who);
+    if (problem) return c.json({ error: problem }, 400);
+    const sentToday = await db.prepare("SELECT COUNT(*) AS n FROM coach_log WHERE coach_id = ? AND action = 'invite.email' AND created_at >= ?").bind(user.id, new Date(Date.now() - DAY).toISOString()).first<{ n: number }>();
+    if ((sentToday?.n ?? 0) >= MAX_COACH_INVITE_EMAILS) return c.json({ error: `You sent ${MAX_COACH_INVITE_EMAILS} invites today. Try again tomorrow, or share your invite link.` }, 429);
+    const url = publicUrl(c.env, `/coach/join/${await inviteToken(db, user.id)}`);
+    // Whether mail is set up at all, the same answer whoever the address is.
+    const canSend = Boolean(url) && Boolean(c.env.RESEND_API_KEY);
+    if (!blocked && url) {
+      await sendEmail(db, c.env, {
+        // Under the coach's id, so the export lists it and the delete takes it (their name is in the subject).
+        userId: user.id,
+        to: who,
+        subject: `${nameOf(user)} would like to be your life coach on kreators.app`,
+        body: `${nameOf(user)} is a life coach on kreators.app and would like to work with you.\n\nOpen this link to see who they are and choose what they can see. Nothing is shared until you say yes:\n${url}\n\nIf you do not know them, you can ignore this email.`,
+        private: true,
+      });
+    }
+    await logCoach(db, { linkId: null, coachId: user.id, studentId: user.id, actorId: user.id, action: 'invite.email', label: `${nameOf(user)} emailed an invite to ${maskEmail(who)}` });
+    const res: CoachAskResult = { invited: { to: maskEmail(who), sent: canSend } };
+    return c.json(res, 201);
+  }
+  if (!student || blocked) return c.json({ error: 'No account has that username or friend code.' }, 404);
   const waiting = await db.prepare("SELECT COUNT(*) AS n FROM coach_links WHERE coach_id = ? AND status = 'pending' AND asked_by = 'coach'").bind(user.id).first<{ n: number }>();
   if ((waiting?.n ?? 0) >= MAX_COACH_ASKS) return c.json({ error: `You have ${MAX_COACH_ASKS} asks waiting. Wait for answers, or take some back.` }, 429);
   const bad = await linkProblem(db, user.id, student.id);
@@ -155,7 +283,8 @@ coach.post('/requests', async (c) => {
   if (!link) return c.json({ error: 'not found' }, 404);
   await logCoach(db, { linkId: link.id, coachId: user.id, studentId: student.id, actorId: user.id, action: 'link.ask', label: `${nameOf(user)} asked to coach ${nameOf(student)}` });
   await notify(db, student.id, 'coach', `${nameOf(user)} would like to be your life coach`, 'Say yes or no on your Profile tab. Nothing is shared until you say yes, and you pick what they see.', '/you#coach');
-  return c.json({ link: toLink(link) }, 201);
+  const res: CoachAskResult = { link: toLink(link) };
+  return c.json(res, 201);
 });
 
 // A student asks a coach from the directory. The coach says yes or no.
@@ -163,14 +292,15 @@ coach.post('/ask/:coachId', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const target = await db.prepare('SELECT * FROM users WHERE id = ?').bind(c.req.param('coachId')).first<UserRow>();
-  if (!target || !isCoach(target)) return c.json({ error: 'There is no life coach by that name.' }, 404);
+  // A block reads like nobody: an ask never reaches the inbox of a coach who blocked this person, or who was blocked by them.
+  if (!target || !isCoach(target) || (await blockedEither(db, user.id, target.id))) return c.json({ error: 'There is no life coach by that name.' }, 404);
   if (!(await profileOf(db, target.id)).open) return c.json({ error: 'This coach is not taking new students right now.' }, 409);
   const bad = await linkProblem(db, target.id, user.id);
   if (bad) return c.json({ error: bad.error }, bad.status);
   const link = await startLink(db, { coachId: target.id, studentId: user.id, askedBy: 'student', createdBy: user.id, active: false });
   if (!link) return c.json({ error: 'not found' }, 404);
   await logCoach(db, { linkId: link.id, coachId: target.id, studentId: user.id, actorId: user.id, action: 'link.ask', label: `${nameOf(user)} asked ${nameOf(target)} to be their life coach` });
-  await notify(db, target.id, 'coach', `${nameOf(user)} asked you to be their life coach`, 'Say yes or no under Coaching.', '/coaching');
+  await notify(db, target.id, 'coach', `${nameOf(user)} asked you to be their life coach`, 'Say yes or no under Coaching.', '/coaching#asks-heading');
   return c.json({ link: toLink(link) }, 201);
 });
 
@@ -191,6 +321,54 @@ coach.get('/students/:id', async (c) => {
   return c.json(await studentView(db, found.link, student, user, c));
 });
 
+const isReportKind = (v: unknown): v is PeriodKind => (COACH_REPORT_KINDS as readonly unknown[]).includes(v);
+
+// One period's report: only fields from parts the student shares (coachReport.ts), read fresh on every request.
+coach.get('/students/:id/report', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const found = await myStudent(db, user, c.req.param('id'));
+  if ('error' in found) return c.json({ error: found.error }, found.status);
+  const student = await db.prepare('SELECT * FROM users WHERE id = ?').bind(found.link.student_id).first<UserRow>();
+  if (!student) return c.json({ error: 'not found' }, 404);
+  const kind = c.req.query('kind') ?? 'week';
+  if (!isReportKind(kind)) return c.json({ error: 'pick a day, a week, a month or a quarter' }, 400);
+  const date = c.req.query('date');
+  if (date && !DATE_RE.test(date)) return c.json({ error: 'date must be a real day, YYYY-MM-DD' }, 400);
+  return c.json(await coachReport(db, found.link, student, kind, date));
+});
+
+// Patterns (with the student's Patterns switch on) and suggestions, worked out on read from what they share. Stored nowhere.
+coach.get('/students/:id/patterns', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const found = await myStudent(db, user, c.req.param('id'));
+  if ('error' in found) return c.json({ error: found.error }, found.status);
+  const student = await db.prepare('SELECT * FROM users WHERE id = ?').bind(found.link.student_id).first<UserRow>();
+  if (!student) return c.json({ error: 'not found' }, 404);
+  return c.json(await coachPatterns(db, found.link, student));
+});
+
+// One tap to ask the student to turn Patterns on: an inbox note with a way to do it, once per link per week, logged.
+coach.post('/students/:id/patterns/ask', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const found = await myStudent(db, user, c.req.param('id'));
+  if ('error' in found) return c.json({ error: found.error }, found.status);
+  const { link } = found;
+  if (parseCoachShare(link.share_json).patterns) return c.json({ error: 'They already share patterns with you.' }, 409);
+  const since = new Date(Date.now() - PATTERNS_ASK_DAYS * DAY).toISOString();
+  const now = nowIso();
+  const done = await db.prepare("UPDATE coach_links SET patterns_asked_at = ? WHERE id = ? AND status = 'active' AND (patterns_asked_at IS NULL OR patterns_asked_at < ?)").bind(now, link.id, since).run();
+  if ((done.meta.changes ?? 0) === 0) {
+    const from = link.patterns_asked_at ? new Date(Date.parse(link.patterns_asked_at) + PATTERNS_ASK_DAYS * DAY).toISOString().slice(0, 10) : null;
+    return c.json({ error: from ? `You asked already. You can ask again from ${from}.` : 'You asked already.', askAgainFrom: from }, 409);
+  }
+  await logCoach(db, { linkId: link.id, coachId: user.id, studentId: link.student_id, actorId: user.id, action: 'patterns.ask', label: `${nameOf(user)} asked to see patterns` });
+  await notify(db, link.student_id, 'coach', `${nameOf(user)} asked to see your patterns`, 'Turn it on under Your life coach, on your Profile tab, or leave it off. It is your choice.', '/you#coach');
+  return c.json({ ok: true, askedAt: now, askAgainFrom: new Date(Date.parse(now) + PATTERNS_ASK_DAYS * DAY).toISOString().slice(0, 10) });
+});
+
 // A note for the student. They read every one, in Coaching and their inbox.
 coach.post('/students/:id/notes', async (c) => {
   const db = c.env.DB;
@@ -204,7 +382,7 @@ coach.post('/students/:id/notes', async (c) => {
   const id = newId();
   await db.prepare('INSERT INTO coach_notes (id, link_id, coach_id, student_id, body, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(id, link.id, user.id, link.student_id, text, nowIso()).run();
   await logCoach(db, { linkId: link.id, coachId: user.id, studentId: link.student_id, actorId: user.id, action: 'note.add', label: `${nameOf(user)} left a note`, targetId: id });
-  await notify(db, link.student_id, 'coach', `A note from ${nameOf(user)}, your life coach`, text.length > 140 ? `${text.slice(0, 137)}...` : text, '/coaching');
+  await notify(db, link.student_id, 'coach', `A note from ${nameOf(user)}, your life coach`, text.length > 140 ? `${text.slice(0, 137)}...` : text, '/coaching#notes-heading');
   return c.json({ ok: true, id }, 201);
 });
 
@@ -219,6 +397,20 @@ coach.delete('/students/:id/notes/:noteId', async (c) => {
   await logCoach(db, { linkId: found.link.id, coachId: user.id, studentId: found.link.student_id, actorId: user.id, action: 'note.remove', label: `${nameOf(user)} took back a note from ${note.created_at.slice(0, 10)}`, targetId: note.id });
   return c.json({ ok: true });
 });
+
+/**
+ * What a coach may set on a task, the same fields the student's own form sets where they make sense: the words, the do and due dates, the priority,
+ * how it repeats, the habit flag, the length, the time and a note. Never a time block (the student's own), a status, Remember, or For review.
+ * Only keys the request carries are passed on, since editNode reads a key's presence as a change.
+ */
+function coachTaskFields(body: NodeBody): NodeBody {
+  const out: NodeBody = {};
+  for (const k of ['title', 'note', 'doDate', 'dueDate', 'dueTime', 'estimateMin', 'priority', 'repeat', 'habit'] as const) if (k in body) out[k] = body[k];
+  return out;
+}
+
+/** A task's plan for the change log's before and after, in plain fields. */
+const taskFacts = (t: { title: string; do_date?: string | null; due_date: string | null; due_time?: string | null; estimate_min?: number | null; priority?: unknown; repeat_json?: string | null; habit?: number | null }) => ({ title: t.title, doDate: t.do_date ?? null, dueDate: t.due_date, dueTime: t.due_time ?? null, estimateMin: t.estimate_min ?? null, priority: t.priority ?? null, repeats: Boolean(t.repeat_json), habit: t.habit ?? null });
 
 /** The coach may write in a student's pyramid only while the student shares their pillars. */
 async function writable(db: D1Database, user: UserRow, studentId: string) {
@@ -238,10 +430,11 @@ coach.post('/students/:id/tasks', async (c) => {
   const body = await c.req.json<NodeBody>().catch(() => ({}) as NodeBody);
   const parent = typeof body.parentId === 'string' ? await getNode(db, link.student_id, body.parentId) : null;
   if (!parent || parent.kind !== parentKind('task')) return c.json({ error: 'Pick one of their projects for the task.' }, 400);
-  const made = await createNode(db, link.student_id, { kind: 'task', relationship: parent.relationship, parentId: parent.id, title: body.title, note: body.note, dueDate: body.dueDate, dueTime: body.dueTime, estimateMin: body.estimateMin }, user.id);
+  const made = await createNode(db, link.student_id, { kind: 'task', relationship: parent.relationship, parentId: parent.id, ...coachTaskFields(body) }, user.id);
   if ('error' in made) return c.json({ error: made.error }, made.status);
   const t = made.row;
-  await logCoach(db, { linkId: link.id, coachId: user.id, studentId: link.student_id, actorId: user.id, action: 'task.add', label: `${nameOf(user)} added the task “${t.title}” under “${parent.title}”${t.due_date ? `, for ${t.due_date}` : ''}`, targetId: t.id, after: { title: t.title, dueDate: t.due_date, dueTime: t.due_time, estimateMin: t.estimate_min } });
+  const day = t.do_date ?? t.due_date;
+  await logCoach(db, { linkId: link.id, coachId: user.id, studentId: link.student_id, actorId: user.id, action: 'task.add', label: `${nameOf(user)} added the task “${t.title}” under “${parent.title}”${day ? `, for ${day}` : ''}`, targetId: t.id, after: taskFacts(t) });
   await notify(db, link.student_id, 'coach', `${nameOf(user)} added a task: ${t.title}`, 'It is in your pyramid, marked From your coach. Only you tick it.', `/realm/${t.relationship}`);
   return c.json({ node: toNode(t) }, 201);
 });
@@ -256,15 +449,21 @@ coach.patch('/students/:id/tasks/:taskId', async (c) => {
   const row = await getNode(db, link.student_id, c.req.param('taskId'));
   if (!row || row.kind !== 'task') return c.json({ error: 'not found' }, 404);
   if (row.status !== 'active') return c.json({ error: 'Only open tasks can be changed.' }, 400);
-  const body = await c.req.json<NodeBody>().catch(() => ({}) as NodeBody);
-  // The student's do date cannot end up after the deadline a coach sets.
-  if (typeof body.dueDate === 'string' && row.do_date && DATE_RE.test(body.dueDate) && body.dueDate < row.do_date) return c.json({ error: DATES_PROBLEM }, 400);
-  const fresh = await editNode(db, row, { title: body.title, note: body.note, dueDate: body.dueDate, dueTime: body.dueTime, estimateMin: body.estimateMin });
+  const body = coachTaskFields(await c.req.json<NodeBody>().catch(() => ({}) as NodeBody));
+  // The do date cannot end up after the deadline, whichever of the two the coach changed.
+  const doAfter = 'doDate' in body ? (typeof body.doDate === 'string' && DATE_RE.test(body.doDate) ? body.doDate : null) : row.do_date;
+  const dueAfter = 'dueDate' in body ? (typeof body.dueDate === 'string' && DATE_RE.test(body.dueDate) ? body.dueDate : null) : row.due_date;
+  if (doAfter && dueAfter && doAfter > dueAfter) return c.json({ error: DATES_PROBLEM }, 400);
+  const fresh = await editNode(db, row, body);
   const changes = [
     fresh.title !== row.title ? `the title to “${fresh.title}”` : '',
-    fresh.due_date !== row.due_date ? (fresh.due_date ? `the date to ${fresh.due_date}` : 'cleared the date') : '',
+    fresh.do_date !== row.do_date ? (fresh.do_date ? `the do date to ${fresh.do_date}` : 'cleared the do date') : '',
+    fresh.due_date !== row.due_date ? (fresh.due_date ? `the due date to ${fresh.due_date}` : 'cleared the due date') : '',
     fresh.due_time !== row.due_time ? (fresh.due_time ? `the time to ${fresh.due_time}` : 'cleared the time') : '',
     fresh.estimate_min !== row.estimate_min ? (fresh.estimate_min ? `the length to ${fresh.estimate_min} min` : 'cleared the length') : '',
+    fresh.priority !== row.priority ? (fresh.priority === null || fresh.priority === undefined ? 'cleared the priority' : `the priority to P${fresh.priority}`) : '',
+    fresh.repeat_json !== row.repeat_json ? (fresh.repeat_json ? 'how it repeats' : 'stopped it repeating') : '',
+    fresh.habit !== row.habit ? 'whether it counts as a habit' : '',
     fresh.note !== row.note ? 'the note' : '',
   ].filter(Boolean);
   if (changes.length) {
@@ -276,8 +475,8 @@ coach.patch('/students/:id/tasks/:taskId', async (c) => {
       action: 'task.edit',
       label: `${nameOf(user)} changed the task “${row.title}”: ${changes.join(', ')}`,
       targetId: row.id,
-      before: { title: row.title, dueDate: row.due_date, dueTime: row.due_time, estimateMin: row.estimate_min },
-      after: { title: fresh.title, dueDate: fresh.due_date, dueTime: fresh.due_time, estimateMin: fresh.estimate_min },
+      before: taskFacts(row),
+      after: taskFacts(fresh),
     });
     await notify(db, link.student_id, 'coach', `${nameOf(user)} changed a task: ${fresh.title}`, `Changed ${changes.join(', ')}.`, `/realm/${fresh.relationship}`);
   }
@@ -285,6 +484,76 @@ coach.patch('/students/:id/tasks/:taskId', async (c) => {
 });
 
 // ---- the student's side, and answers from either side
+
+// What a person keeps on their own Coaching pages: each section open, closed or hidden, the same for every student. Under /me/coach, so it works
+// with Coaching off too; owner only, in the export, gone with the account.
+const prefsOf = async (db: D1Database, userId: string): Promise<CoachPrefs> => {
+  const row = await db.prepare('SELECT sections_json, read_sharing_at FROM coach_prefs WHERE user_id = ?').bind(userId).first<{ sections_json: string; read_sharing_at: string | null }>();
+  return { sections: parseCoachSections(row?.sections_json ?? '{}'), readSharing: Boolean(row?.read_sharing_at) };
+};
+myCoach.get('/prefs', async (c) => c.json(await prefsOf(c.env.DB, c.get('user').id)));
+myCoach.put('/prefs', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const body = await c.req.json<{ sections?: unknown; readSharing?: unknown }>().catch(() => ({}) as { sections?: unknown; readSharing?: unknown });
+  const before = await prefsOf(db, user.id);
+  const sections = body.sections === undefined ? before.sections : parseCoachSections(body.sections);
+  const now = nowIso();
+  await db
+    .prepare('INSERT INTO coach_prefs (user_id, sections_json, read_sharing_at, updated_at) VALUES (?1, ?2, CASE WHEN ?3 = 1 THEN ?4 ELSE NULL END, ?4) ON CONFLICT(user_id) DO UPDATE SET sections_json = excluded.sections_json, read_sharing_at = COALESCE(coach_prefs.read_sharing_at, excluded.read_sharing_at), updated_at = excluded.updated_at')
+    .bind(user.id, JSON.stringify(sections), body.readSharing === true ? 1 : 0, now)
+    .run();
+  return c.json(await prefsOf(db, user.id));
+});
+
+// The join card for someone signed in: who the coach is and where they stand with them. Limited per address and per coach, like the public read.
+myCoach.get('/join/:token', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const found = await inviteCoach(db, c.req.param('token'));
+  if (!found) return c.json({ error: 'not found' }, 404);
+  if ('closed' in found) return c.json({ error: 'closed' }, 410);
+  const { coach: coachRow } = found;
+  if (await blockedEither(db, coachRow.id, user.id)) return c.json({ error: 'closed' }, 410);
+  const open = await db.prepare("SELECT status FROM coach_links WHERE coach_id = ? AND student_id = ? AND status IN ('pending','active')").bind(coachRow.id, user.id).first<{ status: CoachLinkStatus }>();
+  const res: CoachJoinState = { ...(await joinCard(db, coachRow)), state: coachRow.id === user.id ? 'self' : open?.status === 'active' ? 'linked' : open ? 'waiting' : 'new' };
+  return c.json(res);
+});
+
+// Yes on the join card. The person picked each switch; the link starts through linkProblem, or an ask already waiting between them becomes the yes.
+myCoach.post('/join/:token', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const found = await inviteCoach(db, c.req.param('token'));
+  if (!found) return c.json({ error: 'not found' }, 404);
+  if ('closed' in found) return c.json({ error: 'closed' }, 410);
+  const { coach: coachRow } = found;
+  if (await blockedEither(db, coachRow.id, user.id)) return c.json({ error: 'closed' }, 410);
+  if (await joinLimited(db, coachRow.id)) return c.json({ error: 'too many tries, wait a minute' }, 429);
+  const body = await c.req.json<{ share?: unknown }>().catch(() => ({}) as { share?: unknown });
+  const asked = body.share && typeof body.share === 'object' ? (body.share as Record<string, unknown>) : {};
+  const share: CoachShare = { ...NEW_LINK_SHARE };
+  for (const k of COACH_SHARE_PARTS) if (typeof asked[k] === 'boolean') share[k] = asked[k] as boolean;
+  const waiting = await db.prepare(`${LINK} WHERE l.coach_id = ? AND l.student_id = ? AND l.status = 'pending'`).bind(coachRow.id, user.id).first<LinkRow>();
+  let linkId: string;
+  if (waiting) {
+    const full = await db.prepare("SELECT COUNT(*) AS n FROM coach_links WHERE student_id = ? AND status = 'active'").bind(user.id).first<{ n: number }>();
+    if ((full?.n ?? 0) >= MAX_COACHES) return c.json({ error: `A student has at most ${MAX_COACHES} coaches at once.` }, 409);
+    const done = await db.prepare("UPDATE coach_links SET status = 'active', answered_at = ?, share_json = ? WHERE id = ? AND status = 'pending'").bind(nowIso(), JSON.stringify(share), waiting.id).run();
+    if ((done.meta.changes ?? 0) === 0) return c.json({ error: 'That ask is not waiting any more.' }, 409);
+    linkId = waiting.id;
+  } else {
+    const bad = await linkProblem(db, coachRow.id, user.id);
+    if (bad) return c.json({ error: bad.error }, bad.status);
+    const made = await startLink(db, { coachId: coachRow.id, studentId: user.id, askedBy: 'coach', createdBy: user.id, active: true, share });
+    if (!made) return c.json({ error: 'not found' }, 404);
+    linkId = made.id;
+  }
+  await logCoach(db, { linkId, coachId: coachRow.id, studentId: user.id, actorId: user.id, action: 'link.join', label: `${nameOf(user)} said yes through ${nameOf(coachRow)}’s invite link`, after: share });
+  await notify(db, coachRow.id, 'coach', `${nameOf(user)} joined through your invite link`, 'Open Coaching to see what they share.', '/coaching#students-heading');
+  const fresh = await linkById(db, linkId);
+  return c.json({ link: fresh ? toLink(fresh) : null }, 201);
+});
 
 myCoach.get('/', async (c) => {
   const db = c.env.DB;
@@ -321,8 +590,8 @@ myCoach.post('/links/:id/answer', async (c) => {
   const studentName = nameOf({ display_name: link.s_name });
   await logCoach(db, { linkId: link.id, coachId: link.coach_id, studentId: link.student_id, actorId: user.id, action: yes ? 'link.yes' : 'link.no', label: `${nameOf(user)} said ${yes ? 'yes' : 'no'}` });
   const other = user.id === link.coach_id ? link.student_id : link.coach_id;
-  if (other === link.coach_id) await notify(db, other, 'coach', yes ? `${studentName} said yes to coaching` : `${studentName} said no to coaching`, yes ? 'Open Coaching to see what they share.' : '', '/coaching');
-  else await notify(db, other, 'coach', yes ? `${coachName} is your life coach now` : `${coachName} said no to coaching`, yes ? 'Pick what they see on your Profile tab, any time.' : '', yes ? '/you#coach' : '/coaching');
+  if (other === link.coach_id) await notify(db, other, 'coach', yes ? `${studentName} said yes to coaching` : `${studentName} said no to coaching`, yes ? 'Open Coaching to see what they share.' : '', yes ? '/coaching#students-heading' : '/coaching');
+  else await notify(db, other, 'coach', yes ? `${coachName} is your life coach now` : `${coachName} said no to coaching`, yes ? 'Pick what they see on your Profile tab, any time.' : '', '/you#coach');
   const fresh = await linkById(db, link.id);
   return c.json({ link: fresh ? toLink(fresh) : null });
 });
@@ -356,4 +625,16 @@ myCoach.patch('/links/:id/share', async (c) => {
   }
   const fresh = await linkById(db, link.id);
   return c.json({ link: fresh ? toLink(fresh) : null });
+});
+
+/** The join card with no session: who the coach is, and nothing else. A renewed or closed link answers 410. */
+export const coachJoinPublic = new Hono<AppEnv>();
+coachJoinPublic.get('/:token', async (c) => {
+  const db = c.env.DB;
+  const found = await inviteCoach(db, c.req.param('token'));
+  if (!found) return c.json({ error: 'not found' }, 404);
+  if ('closed' in found) return c.json({ error: 'closed' }, 410);
+  if (await joinLimited(db, found.coach.id)) return c.json({ error: 'too many tries, wait a minute' }, 429);
+  c.header('Cache-Control', 'no-store');
+  return c.json(await joinCard(db, found.coach));
 });

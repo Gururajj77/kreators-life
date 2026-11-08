@@ -1,9 +1,14 @@
-import type { AppPrefs, ConsentChoices, LiveCallAnswer, LiveCallRequest } from '@kreators/shared';
+import type { AppPrefs, ConsentChoices, DatePrefs, LiveCallAnswer, LiveCallRequest } from '@kreators/shared';
 import type { AdminDiscountCode, DiscountArea, DiscountCheck } from '@kreators/shared';
 import type { ActivityYear, BadgesResponse, Page, Unlock } from '@kreators/shared';
 import type { Channel, ChannelLine, ChannelMember, ChannelScope } from '@kreators/shared';
 import type { CohortTalkLine, CohortTalkMe, CohortTalkResponse, CohortTalkVisibility } from '@kreators/shared';
+import type { GratitudeDay, GratitudeGroup, GratitudeLine } from '@kreators/shared/gratitude';
+import type { LifeDashboard } from '@kreators/shared/lifeDashboard';
+import type { EatInput, EatLog, FitnessMonth, FitnessResponse, MoveKind, MoveLog, MovesPage, RunMovesResponse, Supplement, SupplementInput, SupplementSettings, SupplementsTodayView, SupplementsView, SupplementTime } from '@kreators/shared/fitness';
 import { todayLocal } from './date';
+/** A movement log as Fitness and Kreators Run send it. */
+export interface MoveBody { date: string; kind: MoveKind; minutes: number; metres: number | null; effort: number | null; note: string }
 import { portalSessionHeader, teamLinkSessionHeader } from './portalSession';
 import { agencyTeamHeader, markAgencyTeamGone } from './agencyWorkspace';
 import type { MyTeam, TeamAccess, TeamMember, TeamRole } from '@kreators/shared';
@@ -14,17 +19,18 @@ import type { Brand, BrandDetail, BrandPiece, BrandSource, PieceKind, ResearchKi
 import type { Contract, DayType, Fear, Insecurity, Placement, Practices, RealDay, RoutineBlock, Scores, SessionResponse } from '@kreators/shared';
 import type { FeedFilter, FeedSort, SocialAward, TrustScore } from '@kreators/shared';
 import type { ListingDetail, MarketResponse, PreownedListing, PreownedMessage, PreownedOffer, StoreItem, StoreKit } from '@kreators/shared';
-import type { PeriodKind, Review, ReviewCalendarResponse, ReviewSummary, ReviewTemplate, ReviewsResponse } from '@kreators/shared';
+import type { PeriodKind, Review, ReviewCalendarResponse, ReviewSummary, ReviewTemplate, ReviewTemplatesResponse, ReviewsResponse } from '@kreators/shared';
 import type { NotToDo, NotToDoStatus } from '@kreators/shared';
 import type { InsightsResponse, LifeAreaKey } from '@kreators/shared';
 import type { BlockColor, DayTemplate, KindsMonthResponse, TimeBlock, TimeBlocksResponse } from '@kreators/shared';
 import type { SetupMatch } from '@kreators/shared';
 import type { CardGamePlay, CardGamesResponse, DiscoverAnswers, DiscoverResult, FocusMode, FocusResponse, FocusRoundRow, FocusTask, FocusView, LogsResponse } from '@kreators/shared';
 import type { DailyBrief, GettingStarted, InboxShow, InboxTab, ReactionKind } from '@kreators/shared';
-import type { AdminCoachAsk, AdminCoachLink, CoachDirectoryEntry, CoachHub, CoachLink, CoachLogEntry, CoachProfile, CoachShare, CoachStudentView, CoachTaskInput, MyCoachResponse } from '@kreators/shared';
+import type { AdminCoachAsk, AdminCoachLink, CoachAskResult, CoachDirectoryEntry, CoachHub, CoachJoinCard, CoachJoinState, CoachLink, CoachLogEntry, CoachLookup, CoachPatternsAnswer, CoachPrefs, CoachProfile, CoachReport, CoachShare, CoachStudentView, CoachTaskInput, MyCoachResponse } from '@kreators/shared';
 import type { CustomReminder, RemindersResponse, WaterState, BlockedPerson, EventApp, EventExtras, LinkBlock, MediaItem, MediaOwner } from '@kreators/shared';
 import type { ObservabilityResponse } from '@kreators/shared';
 import type { AgencyDocFull, AgencyDocKind, AgencyDocListItem, DocLogLine, HouseTemplate, PublicAgencyDoc, RetainerInput } from '@kreators/shared';
+import type { ClientPapers } from '@kreators/shared/agencyEmail';
 import type { WeekPlan, AgencyTemplate, TemplateKind, AgencyClient, AgencyClientPage, AgencyContract, AgencyDeliverable, AgencyNote, AgencyOverview, AgencySettings, BoardColumn, BusinessProfile, ContractAnswer, ContractDoc, ContractListItem, DeliverableStage, DocComment, DocType, InvoiceDoc, InvoiceParty, Kpi, KpisResponse, Page as AgencyPage, PortalShow, PortalView, TeamLinkShow, TeamLinkView, PublicContract, ClientOnboarding, ContractQuestion } from '@kreators/shared';
 import type {
   HomeResponse,
@@ -344,6 +350,8 @@ export const api = {
     currency?: string;
     /** How the app groups start and the order of apps inside each (Profile, Features); the whole set, checked by appPrefsProblem. */
     appPrefs?: AppPrefs;
+    /** How dates and times read on their screens (Profile); checked by datePrefsProblem. */
+    datePrefs?: Partial<DatePrefs>;
     avatarUrl?: string;
     socials?: Socials;
       publicSettings?: Partial<PublicSettings>;
@@ -356,6 +364,8 @@ export const api = {
   addPortfolio: (body: { title: string; url: string; description?: string; visibility?: 'public' | 'private' }) => post<{ item: PortfolioItem }>('/me/portfolio', body),
   removePortfolio: (id: string) => del<{ ok: true }>(`/me/portfolio/${id}`),
   setModule: (key: string, on: boolean) => patch<{ modules: Record<string, boolean> }>('/me/modules', { key, on }),
+  /** Several apps in one write (Select on Apps): the server takes the whole list or none of it. */
+  setModules: (changes: { key: string; on: boolean }[]) => patch<{ modules: Record<string, boolean> }>('/me/modules', { changes }),
   reset: () => post<{ ok: true }>('/me/reset'),
   linkClicks: () => request<{ clicks: Record<string, number> }>('/me/link-clicks'),
   // the assistant: typing (with a plan), and Confirm, Cancel and Undo on what it did
@@ -405,7 +415,9 @@ export const api = {
     request<TodayWaitingResponse>(`/today/waiting?date=${date}${area ? `&area=${encodeURIComponent(area)}` : ''}${group ? '&group=1' : ''}${sort ? `&sort=${encodeURIComponent(sort)}` : ''}${pq ? `&${pq}` : ''}`),
   /** Emerging: patterns from the person's own rows. `app` asks for the cards one place shows; `rel` for a pillar page. */
   /** Emerging: the person's whole list for their day; each place picks its share on the device (`insightsForPlace`). */
-  insights: (day: string) => request<InsightsResponse>(`/insights?day=${day}`),
+  insights: (day: string, period?: { kind: string; start: string } | null) => request<InsightsResponse>(`/insights?day=${day}${period ? `&kind=${period.kind}&start=${period.start}` : ''}`),
+  /** One period's numbers for "Your life, this week"; with none, the last eight weeks beside the eight before. */
+  insightsDashboard: (day: string, period?: { kind: string; start: string } | null) => request<LifeDashboard>(`/insights/dashboard?day=${day}${period ? `&kind=${period.kind}&start=${period.start}` : ''}`),
   todayMonth: (month: string, day: string) => request<TodayMonthResponse>(`/today/month?month=${month}&day=${day}`),
   home: (date: string, hour: number) => request<HomeResponse>(`/home?date=${date}&hour=${hour}`),
   checkin: (date: string) => post<CheckinResponse>('/today/checkin', { date }),
@@ -430,7 +442,9 @@ export const api = {
   restoreTimeBlocks: () => post<{ added: { blocks: number; templates: number } }>('/time-blocks/restore'),
   reviews: (kind: PeriodKind, date: string) => request<ReviewsResponse>(`/reviews?kind=${kind}&date=${date}`),
   reviewSummary: (kind: PeriodKind, date: string) => request<ReviewSummary>(`/reviews/summary?kind=${kind}&date=${date}`),
-  saveReview: (body: { kind: PeriodKind; date: string; templateId: string | null; answers: string[]; rating: number | null; highlight: string }) => request<{ review: Review }>('/reviews', { method: 'PUT', body: JSON.stringify(body) }),
+  // The device's day rides along, so a daily review for the person's own today is never refused as "not started" (2026-11-07).
+  saveReview: (body: { kind: PeriodKind; date: string; templateId: string | null; answers: string[]; rating: number | null; highlight: string }) => request<{ review: Review }>(`/reviews?day=${todayLocal()}`, { method: 'PUT', body: JSON.stringify(body) }),
+  reviewTemplatesAll: () => request<ReviewTemplatesResponse>('/reviews/templates'),
   deleteReview: (id: string) => del<{ ok: true }>(`/reviews/${id}`),
   reviewTemplateAdd: (body: { kind: PeriodKind; name: string; prompts: string[] }) => post<{ template: ReviewTemplate }>('/reviews/templates', body),
   reviewTemplateUpdate: (id: string, body: { name: string; prompts: string[] }) => patch<{ template: ReviewTemplate }>(`/reviews/templates/${id}`, body),
@@ -507,6 +521,7 @@ export const api = {
   agencyCommentAdd: (type: DocType, id: string, body: string) => post<{ ok: true }>(`/agency/comments/${type}/${id}`, { body }),
   agencyCommentRemove: (id: string) => del<{ ok: true }>(`/agency/comments/${id}`),
   agencyEmailCopy: (type: 'invoices' | 'contracts' | 'docs', id: string, body: { to?: string; message?: string; subject?: string } = {}) => post<EmailCopyResult>(`/agency/${type}/${id}/email`, body),
+  agencyClientPapers: (clientId: string) => request<ClientPapers>(`/agency/clients/${clientId}/papers`),
   agencyDocLog: (type: DocType, id: string) => request<{ log: DocLogLine[] }>(`/agency/doc-log/${type}/${id}`),
   agencyDocs: (q = '') => request<{ page: AgencyPage; docs: AgencyDocListItem[]; counts: { status: string; n: number }[] }>(withQ('/agency/docs', q)),
   agencyDoc: (id: string) => request<{ doc: AgencyDocFull }>(`/agency/docs/${id}`),
@@ -537,6 +552,7 @@ export const api = {
 
   // rank and rewards
   leaderboard: (by: LeaderboardSort, scope: LeaderboardScope = 'all', value = '', paging = '') => request<LeaderboardResponse>(`/leaderboard?by=${by}&scope=${scope}&value=${encodeURIComponent(value)}${paging ? `&${paging}` : ''}`),
+  pillarTasks: () => request<{ pillars: { relationship: RelationshipKey; activeTasks: number; doneTasks: number }[] }>('/me/pillar-tasks'),
   leaderboardOptions: () => request<LeaderboardOptions>('/leaderboard/options'),
   leaderboardBlocks: () => request<{ blocks: LeaderboardBlock[] }>('/leaderboard/blocks'),
   rewards: (pq = '') => request<RewardsResponse & { redemptionsPage?: Page }>(withQ('/rewards', pq)),
@@ -575,8 +591,42 @@ export const api = {
   logs: (kind: LogKind, days = 30) => request<{ logs: WellbeingLog[] }>(`/wellbeing/${kind}?days=${days}`),
   log: (kind: LogKind, body: { date?: string; value: number; extra?: Record<string, unknown>; note?: string }) => post<{ log: WellbeingLog; summary: WellbeingSummary }>(`/wellbeing/${kind}`, body),
   deleteLog: (kind: LogKind, id: string) => del<{ ok: true }>(`/wellbeing/${kind}/${id}`),
+  // fitness: movement and the daily eating check-in (2026-11-07). Kreators Run's tool writes the same movement log at /run/move.
+  fitness: (day: string) => request<FitnessResponse>(`/fitness?day=${day}`),
+  fitnessMonth: (month: string) => request<FitnessMonth>(`/fitness/month?month=${month}`),
+  fitnessMoves: (pq = '') => request<MovesPage>(withQ('/fitness/moves', pq)),
+  logMove: (body: MoveBody, from: 'fitness' | 'run' = 'fitness') => post<{ move: MoveLog }>(`/${from}/move`, body),
+  editMove: (id: string, body: Partial<MoveBody>) => patch<{ move: MoveLog }>(`/fitness/move/${id}`, body),
+  deleteMove: (id: string, from: 'fitness' | 'run' = 'fitness') => del<{ ok: true }>(`/${from}/move/${id}`),
+  saveEat: (body: EatInput & { date: string; ifId?: string | null }) => put<{ eat: EatLog }>('/fitness/eat', body),
+  // Only the goal is ever sent: the weight it may come from stays in the form.
+  setProteinGoal: (goal: number | null) => put<{ goal: number | null }>('/fitness/protein-goal', { goal }),
+  // Supplements (2026-11-07): the person's own list, under the same /fitness gate.
+  supplements: (day: string) => request<SupplementsView>(`/fitness/supplements?day=${day}`),
+  supplementsToday: (date: string) => request<SupplementsTodayView>(`/fitness/supplements/today?date=${date}`),
+  supplementSettings: (body: Partial<SupplementSettings>) => put<{ settings: SupplementSettings }>('/fitness/supplements/settings', body),
+  addSupplement: (body: SupplementInput) => post<{ supplement: Supplement }>('/fitness/supplements', body),
+  editSupplement: (id: string, body: Partial<SupplementInput> & { paused?: boolean }) => patch<{ supplement: Supplement }>(`/fitness/supplements/${id}`, body),
+  moveSupplement: (id: string, dir: 'up' | 'down') => post<{ ok: true }>(`/fitness/supplements/${id}/move`, { dir }),
+  deleteSupplement: (id: string) => del<{ ok: true }>(`/fitness/supplements/${id}`),
+  deleteAllSupplements: () => del<{ ok: true }>('/fitness/supplements'),
+  tickSupplement: (id: string, date: string, taken: boolean) => put<{ ok: true }>(`/fitness/supplements/${id}/day`, { date, taken }),
+  tickSupplementGroup: (date: string, time: SupplementTime) => post<{ ok: true; marked: number }>('/fitness/supplements/day', { date, time }),
+  deleteEat: (id: string) => del<{ ok: true }>(`/fitness/eat/${id}`),
+  runMoves: (day: string) => request<RunMovesResponse>(`/run/move?day=${day}`),
   journalDay: (date: string) => request<{ entries: JournalEntry[] }>(`/journal?date=${date}&size=100`),
-  journalDays: (month: string) => request<{ days: { date: string; count: number; emotion: number | null }[] }>(`/journal/days?month=${month}`),
+  journalDays: (month: string) => request<{ days: { date: string; count: number; emotion: number | null }[]; gratitude: string[] }>(`/journal/days?month=${month}`),
+  /** Gratitude for one day (any day up to today). */
+  /** For today or yesterday it also carries the day's three prompts for this person (`prompts`, kept per day) and their usual three. */
+  gratitude: (day: string) => request<{ gratitude: GratitudeDay | null; prompts?: string[]; usual?: GratitudeGroup[] | null }>(`/journal/gratitude?day=${day}&today=${todayLocal()}`),
+  /** Save today's or yesterday's three lines; `ifUpdatedAt` is the version read ('' for none), so another tab's save answers 409. */
+  saveGratitude: (day: string, lines: GratitudeLine[], ifUpdatedAt: string) => put<{ gratitude: GratitudeDay | null; prompts?: string[] }>(`/journal/gratitude/${day}`, { lines, today: todayLocal(), ifUpdatedAt }),
+  /** Another prompt on an empty line: the one shown counts as seen; answers the day's new prompts (409 with them when the screen was behind). */
+  gratitudeAnother: (day: string, index: number, prompt: string) => post<{ prompts: string[] }>(`/journal/gratitude/${day}/another`, { index, prompt, today: todayLocal() }),
+  /** The pillar picker on an empty line. */
+  gratitudePick: (day: string, index: number, group: GratitudeGroup, prompt: string) => post<{ prompts: string[] }>(`/journal/gratitude/${day}/pick`, { index, group, prompt, today: todayLocal() }),
+  /** The usual three each new day starts with, or null for the rotation. */
+  saveGratitudeUsual: (usual: GratitudeGroup[] | null) => put<{ usual: GratitudeGroup[] | null }>('/journal/gratitude-settings', { usual }),
   journal: (pq = '') => request<{ page: Page; entries: JournalEntry[]; stats: { total: number; thisMonth: number; positive: number; negative: number } }>(withQ('/journal', pq)),
   createEntry: (body: Partial<JournalEntry> & { date?: string }) => post<{ entry: JournalEntry }>('/journal', body),
   updateEntry: (id: string, body: Partial<JournalEntry>) => patch<{ entry: JournalEntry }>(`/journal/${id}`, body),
@@ -611,6 +661,8 @@ export const api = {
   heldPosts: (pq = '') => request<{ posts: CommunityPost[]; page: Page; holdFirstPosts: boolean }>(withQ('/manage/community/held', pq)),
   setHoldFirstPosts: (holdFirstPosts: boolean) => put<{ holdFirstPosts: boolean }>('/manage/community/settings', { holdFirstPosts }),
   replies: (id: string, pq = '') => request<{ page: Page; replies: CommunityReply[] }>(withQ(`/community/${id}/replies`, pq)),
+  /** One post, for a link that names it (`/community?post=<id>` from an inbox note or a search result). */
+  communityPost: (id: string) => request<{ post: CommunityPost | null }>(`/community/posts/${encodeURIComponent(id)}`),
   reply: (id: string, body: string, opts: { anonymous?: boolean; parentId?: string | null } = {}) => post<{ reply: CommunityReply; awarded: SocialAward }>(`/community/${id}/replies`, { body, ...opts }),
   blockPostAuthor: (id: string) => post<{ ok: true }>(`/community/posts/${id}/block-author`),
   blockReplyAuthor: (id: string) => post<{ ok: true }>(`/community/replies/${id}/block-author`),
@@ -634,7 +686,7 @@ export const api = {
   certificates: () => request<{ certificates: Certificate[] }>('/store/certificates'),
   myDmRequests: () => request<{ requests: DmRequest[] }>('/store/dm'),
   browse: (kind?: 'session' | 'event', pq = '') => request<{ page: Page; products: Product[] }>(withQ(`/store/browse${kind ? `?kind=${kind}` : ''}`, pq)),
-  library: (pq = '') => request<{ page: Page; orders: Order[]; products: Product[]; bookings: Booking[] }>(withQ('/store/library', pq)),
+  library: (pq = '') => request<{ page: Page; orders: Order[]; products: Product[]; bookings: Booking[]; bookingsPage: Page }>(withQ('/store/library', pq)),
   owned: (id: string) => request<{ product: Product; lessons: Lesson[]; certificateCode: string | null }>(`/store/products/${id}`),
   completeLesson: (id: string) => post<{ ok: true }>(`/store/lessons/${id}/complete`),
   slots: (productId: string, date: string) => request<{ slots: string[]; durationMin: number; zone: string }>(`/store/${productId}/slots?date=${date}`),
@@ -709,7 +761,10 @@ export const api = {
   uninviteFromProgram: (id: string, userId: string) => del<{ ok: true }>(`/school/programs/${id}/invites/${userId}`),
   deleteProgram: (id: string) => del<{ ok: true }>(`/school/programs/${id}`),
   addLearningItem: (programId: string, body: { moduleTitle: string; contentType?: LearningItem['contentType']; contentRef?: string; body?: string }) => post<{ ok: true; id: string }>(`/school/programs/${programId}/items`, body),
-  updateLessonResource: (itemId: string, contentRef: string) => patch<{ ok: true; contentRef: string }>(`/school/items/${itemId}`, { contentRef }),
+  addLessonResource: (itemId: string, body: { kind: string; ref: string; label: string }) => post<{ ok: true; id: string }>(`/school/items/${itemId}/resources`, body),
+  changeLessonResource: (itemId: string, resourceId: string, body: { kind: string; ref: string; label: string }) => patch<{ ok: true }>(`/school/items/${itemId}/resources/${resourceId}`, body),
+  moveLessonResource: (itemId: string, resourceId: string, to: 'up' | 'down') => post<{ ok: true }>(`/school/items/${itemId}/resources/${resourceId}/move`, { to }),
+  removeLessonResource: (itemId: string, resourceId: string) => del<{ ok: true }>(`/school/items/${itemId}/resources/${resourceId}`),
   // Editing in place (migration 0095): a lesson's title, kind and words, its place in the program, removing it, and School's order of
   // programs (an admin).
   updateSchoolLesson: (itemId: string, body: { moduleTitle?: string; contentType?: LearningItem['contentType']; body?: string }) => patch<{ ok: true }>(`/school/items/${itemId}`, body),
@@ -809,7 +864,7 @@ export const api = {
   bond: (inq = '') => request<{ optedIn: boolean; intros: Introduction[]; introPage: Page; suggestions: { userId: string; name: string; handle: string | null; skills: string[]; context: string }[] }>(withQ('/bond', inq)),
   proposeIntro: (recipientId: string, context: string) => post<{ ok: true }>('/bond/intros', { recipientId, context }),
   answerIntro: (id: string, status: 'accepted' | 'declined') => post<{ ok: true }>(`/bond/intros/${id}`, { status }),
-  friends: (pq = '') => request<{ page: Page; open: Friend[]; friends: Friend[] }>(withQ('/bond/friends', pq)),
+  friends: (pq = '') => request<{ page: Page; open: Friend[]; openPage: Page; friends: Friend[] }>(withQ('/bond/friends', pq)),
   addFriend: (userId: string) => post<{ ok: true; status: 'sent' | 'friends' }>('/bond/friends', { userId }),
   reminders: (day: string) => request<RemindersResponse>(`/reminders?day=${day}`),
   legal: () => request<LegalState>('/me/legal'),
@@ -818,7 +873,7 @@ export const api = {
   unsubscribe: (token: string) => post<{ ok: boolean }>(`/public/unsubscribe/${encodeURIComponent(token)}`),
   drinkWater: (day: string, ml?: number) => post<{ water: WaterState }>('/reminders/water', { day, ...(ml ? { ml } : {}) }),
   undoWater: (day: string) => del<{ water: WaterState }>(`/reminders/water?day=${day}`),
-  waterSettings: (day: string, s: Partial<{ on: boolean; goalMl: number; glassMl: number; everyMin: number; from: string; to: string }>) => put<{ water: WaterState }>('/reminders/water/settings', { day, ...s }),
+  waterSettings: (day: string, s: Partial<{ goalMl: number; glassMl: number }>) => put<{ water: WaterState }>('/reminders/water/settings', { day, ...s }),
   addReminder: (r: { title: string; time: string; days: number[] }) => post<{ reminder: CustomReminder }>('/reminders/custom', r),
   changeReminder: (id: string, r: Partial<{ title: string; time: string; days: number[]; enabled: boolean }>) => patch<{ reminder: CustomReminder }>(`/reminders/custom/${id}`, r),
   removeReminder: (id: string) => del<{ ok: true }>(`/reminders/custom/${id}`),
@@ -976,7 +1031,7 @@ export const api = {
   circleGroup: (id: string) => request<{ group: CircleGroup; opensInMinutes: number; attendee: AttendeeCodeView | null }>(`/circles/groups/${id}`),
   circleSay: (id: string, body: string) => post<{ ok: true; id: string }>(`/circles/groups/${id}/messages`, { body }),
   circlePlan: (id: string, body: { venue?: string; plan?: string }) => post<{ ok: true }>(`/circles/groups/${id}/plan`, body),
-  life: () => request<LifeSummary>('/life'),
+  life: () => request<LifeSummary>(`/life?day=${todayLocal()}`),
 
   // finance
   /** One month in Finance; the month's entries page with prefix tx and the dues with prefix du. */
@@ -1005,7 +1060,16 @@ export const api = {
   coachDirectory: (pq = '') => request<{ page: Page; coaches: CoachDirectoryEntry[] }>(withQ('/coach/directory', pq)),
   saveCoachProfile: (body: { about?: string; open?: boolean }) => put<{ profile: CoachProfile }>('/coach/profile', body),
   askToCoach: (about: string) => post<{ profile: CoachProfile }>('/coach/apply', { about }),
-  askStudent: (who: string) => post<{ link: CoachLink }>('/coach/requests', { who }),
+  askStudent: (who: string) => post<CoachAskResult>('/coach/requests', { who }),
+  coachLookup: (who: string) => request<CoachLookup>(`/coach/lookup?who=${encodeURIComponent(who)}`),
+  coachInvite: (action: 'on' | 'fresh' | 'off') => post<{ invite: string | null }>('/coach/invite', { action }),
+  coachReport: (id: string, kind: string, date: string) => request<CoachReport>(`/coach/students/${id}/report?kind=${kind}&date=${date}`),
+  coachPatterns: (id: string) => request<CoachPatternsAnswer>(`/coach/students/${id}/patterns`),
+  coachAskPatterns: (id: string) => post<{ ok: true; askedAt: string; askAgainFrom: string }>(`/coach/students/${id}/patterns/ask`),
+  coachPrefs: () => request<CoachPrefs>('/me/coach/prefs'),
+  saveCoachPrefs: (body: Partial<CoachPrefs>) => put<CoachPrefs>('/me/coach/prefs', body),
+  coachJoinState: (token: string) => request<CoachJoinState>(`/me/coach/join/${encodeURIComponent(token)}`),
+  coachJoin: (token: string, share: CoachShare) => post<{ link: CoachLink | null }>(`/me/coach/join/${encodeURIComponent(token)}`, { share }),
   askCoach: (coachId: string) => post<{ link: CoachLink }>(`/coach/ask/${coachId}`),
   coachStudent: (id: string, query = '') => request<CoachStudentView>(`/coach/students/${id}${query ? `?${query}` : ''}`),
   coachNote: (studentId: string, body: string) => post<{ ok: true; id: string }>(`/coach/students/${studentId}/notes`, { body }),
@@ -1198,6 +1262,7 @@ export interface PublicInvoice {
 }
 
 export const publicApi = {
+  coachJoinCard: (token: string) => publicRequest<CoachJoinCard>(`/coach-join/${encodeURIComponent(token)}`),
   portal: (token: string) => publicRequest<PortalView>(`/agency/${encodeURIComponent(token)}`),
   portalDecide: (token: string, id: string, body: { decision: 'approve' | 'changes' | 'paid_change' | 'comment'; note?: string; where?: string }) => publicSend<{ ok: true }>('POST', `/agency/${encodeURIComponent(token)}/items/${id}`, body),
   portalUnlock: (token: string, password: string) => publicSend<{ open: boolean; session: string | null; expiresAt: string | null }>('POST', `/agency/${encodeURIComponent(token)}/unlock`, { password }),

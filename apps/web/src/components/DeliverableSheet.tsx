@@ -399,7 +399,7 @@ function Thread({ itemId, onDone }: { itemId: string; onDone: () => void }) {
               <StatusTag tone={AUTHOR_TONE[n.author]}>{n.author === 'team' && n.authorName ? (n.mine ? 'You, team note' : n.authorName) : n.author === 'client' && n.clientTeam ? "Client's team" : AGENCY_AUTHOR_NAME[n.author]}</StatusTag>
               {n.kind !== 'note' && <StatusTag tone={n.kind === 'change' ? 'warn' : n.kind === 'paid_change' ? 'bad' : 'neutral'}>{NOTE_KIND_NAME[n.kind]}</StatusTag>}
               {n.author === 'me' && <span className="text-caption text-ink-soft">{n.shared ? 'Shared with the client' : 'Private'}</span>}
-              <span className="text-caption text-ink-mute">{prettyDate(n.createdAt.slice(0, 10))}</span>
+              <span className="text-caption text-ink-mute">{prettyDate(n.createdAt)}</span>
               {(member ? n.author === 'team' && n.mine && can('pipeline', 'edit') : n.author === 'me' || n.author === 'team') && (
                 <button
                   type="button"

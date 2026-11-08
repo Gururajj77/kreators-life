@@ -10,7 +10,7 @@ import { publicApi } from '../lib/api';
 import { useSession } from '../lib/store';
 import { keepTail } from '../lib/textNodes';
 import { featureFor, SITE_FEATURES } from './content';
-import { ListingCard } from './ListingCard';
+import { LISTING_COLS, ListingCard } from './ListingCard';
 import { GuideLine } from './GuideLine';
 import { useRise } from './SevenRP';
 import { SiteLayout } from './SiteLayout';
@@ -18,6 +18,7 @@ import { AppIcon } from '../components/AppIcon';
 import { Fold } from '../components/Fold';
 import { Books } from './Books';
 import { SiteArrow, SITE_CHIP, SITE_CHIP_BASE, SITE_LINK, SITE_PRIMARY, SITE_SECONDARY } from './buttons';
+import { evenGrid, evenTile } from '../lib/bento';
 
 /** The rest of a feature's story: one short fact a line, as a list (CopyOS: lists for features, paragraphs only for a story). */
 function MoreList({ items }: { items: string[] }) {
@@ -177,9 +178,9 @@ function FeaturePage() {
             </p>
           )}
           {listings.data && listings.data.listings.length > 0 && (
-            <ul className="mt-sm grid list-none gap-sm p-0 m-0 md:grid-cols-2 lg:grid-cols-3">
-              {listings.data.listings.slice(0, 12).map((l) => (
-                <ListingCard key={`${l.type}-${l.id}`} listing={l} showFeature={false} />
+            <ul className={`mt-sm grid list-none gap-sm p-0 m-0 ${evenGrid(Math.min(12, listings.data.listings.length), LISTING_COLS)}`}>
+              {listings.data.listings.slice(0, 12).map((l, i, all) => (
+                <ListingCard key={`${l.type}-${l.id}`} listing={l} showFeature={false} className={evenTile(i, all.length, LISTING_COLS)} />
               ))}
             </ul>
           )}

@@ -1,5 +1,6 @@
-import { LIFE_AREAS, RELATIONSHIP_BY_KEY, slotLength, slotOrder, slotRangeLabel, spanLabel, type LifeAreaKey, type RelationshipKey, type TemplateSlot, type TimeBlock, type BlockColor } from '@kreators/shared';
+import { LIFE_AREAS, RELATIONSHIP_BY_KEY, slotLength, slotOrder, spanLabel, type LifeAreaKey, type RelationshipKey, type TemplateSlot, type TimeBlock, type BlockColor } from '@kreators/shared';
 import { tbClass, tbStyle } from '../../lib/blockColor';
+import { slotRange } from '../../lib/date';
 
 // The refresh after a time-blocks write lives in lib/timeBlocksRefresh.ts (Daily's picker uses it too); passed on here.
 export { useTimeBlocksRefresh } from '../../lib/timeBlocksRefresh';
@@ -65,16 +66,6 @@ export function SourceText({ text }: { text: string }) {
   );
 }
 
-/** A block's dot and name, the mark a task wears in a block. */
-export function BlockName({ block }: { block: Pick<TimeBlock, 'name' | 'color'> }) {
-  return (
-    <span className={`${tbClass(block.color)} inline-flex min-w-0 items-center gap-xs`} style={tbStyle(block.color)}>
-      <span className="tb-dot" aria-hidden="true" />
-      <span className="min-w-0">{block.name}</span>
-    </span>
-  );
-}
-
 /**
  * A template's day as one strip, midnight to midnight, each slot a part in its block's colour (a slot over midnight is two parts).
  * Decoration only: the slots are read out as text for screen readers.
@@ -89,7 +80,7 @@ export function DayStrip({ slots, blocks, className = '' }: { slots: readonly Te
     if (len > first) parts.push({ key: `${i}b`, color, left: 0, width: len - first });
   });
   const said = slotOrder(slots)
-    .map((s) => `${blocks.get(s.blockId)?.name ?? 'A block'} ${slotRangeLabel(s)}`)
+    .map((s) => `${blocks.get(s.blockId)?.name ?? 'A block'} ${slotRange(s)}`)
     .join(', ');
   return (
     <>
@@ -118,7 +109,7 @@ export function DayTimeline({ slots, blocks }: { slots: readonly TemplateSlot[];
             <li key={it.key} className="flex items-center gap-sm rounded-tile border border-dashed border-line px-sm py-xs">
               <span className="text-subhead text-ink-soft">Free</span>
               <span className="ml-auto text-footnote text-ink-soft">
-                <span className="whitespace-nowrap">{slotRangeLabel(it.free)}</span> · {spanLabel(slotLength(it.free))}
+                <span className="whitespace-nowrap">{slotRange(it.free)}</span> · {spanLabel(slotLength(it.free))}
               </span>
             </li>
           );
@@ -131,7 +122,7 @@ export function DayTimeline({ slots, blocks }: { slots: readonly TemplateSlot[];
             <span className="min-w-0 flex-1">
               <span className="block text-headline">{b?.name ?? 'A block'}</span>
               <span className="mt-[2px] block text-footnote text-ink-soft">
-                <span className="whitespace-nowrap">{slotRangeLabel(s)}</span> · {spanLabel(slotLength(s))}
+                <span className="whitespace-nowrap">{slotRange(s)}</span> · {spanLabel(slotLength(s))}
                 {b?.tag ? ` · ${b.tag}` : ''}
               </span>
             </span>

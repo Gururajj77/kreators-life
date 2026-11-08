@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { BOOK_AUTHOR, BUMLING, formatCount, MODULE_BY_KEY, PAYMENTS_LIVE, planPriceLabel, RELATIONSHIPS, type RelationshipKey } from '@kreators/shared';
+import { BOOK_AUTHOR, BUMLING, formatCount, LIVE_CALL_CENTS, MODULE_BY_KEY, money, PAYMENTS_LIVE, PLAN_CURRENCY, planPriceLabel, RELATIONSHIPS, type RelationshipKey } from '@kreators/shared';
 import { useQuery } from '@tanstack/react-query';
 import { m as motion } from 'motion/react';
 import { Link } from 'react-router';
@@ -32,6 +32,7 @@ import { SiteArrow, SITE_CHIP, SITE_LINK, SITE_LINK_INLINE, SITE_PRIMARY, SITE_P
 import { SevenKnot } from '../components/fx/SevenKnot';
 import { StatusTag } from '../components/StatusTag';
 import { fillVar } from '../lib/relFill';
+import { evenGrid, evenTile } from '../lib/bento';
 
 /**
  * The landing page tells one story, in the PASTOR order: the problem, what it costs (the villains), the story and the
@@ -101,7 +102,7 @@ const ANSWERS: {
     villain: 'scatter',
     pillar: 'guru',
     poster: ['One place.', 'One login.'],
-    how: 'Learning, paid work, brand campaigns, your clients, your shop and your money in one app. Only a few apps are on to start. The setup chat picks up to five more that fit, and you can switch any off.',
+    how: 'Learning, paid work, brand campaigns, your clients, your shop and your money in one app. Only a few apps are on to start. The setup chat picks up to five more that fit, and you can hide any of them.',
     apps: ['agency', 'school', 'work', 'shop', 'finance'],
   },
   {
@@ -152,6 +153,10 @@ const FIVE_WS = [
 
 const BEFORE = ['Up at three, editing again', 'Big goals, no next step', 'Ten apps and no plan', 'Nobody to check in with', 'Money you cannot see coming'];
 const AFTER = ['A routine that fits your real day', 'Today’s task moves a big goal', 'One app, only what you use', 'Circles, clubs and a coach who check in', 'All your money in one place'];
+
+// Even rows (lib/bento.ts): the live numbers in one row from the tablet, the free parts two to a row; a phone stacks both, like every bento.
+const LIVE_COLS = { base: 1, sm: 4 } as const;
+const FREE_COLS = { base: 1, sm: 2 } as const;
 
 const FREE = [
   'The daily game: check in, a small act, a task',
@@ -319,7 +324,7 @@ export function Home() {
           {/* Green deepened toward the fill shade, as Hero draws a fill: the plain fill's light sheen left white text at 4.4:1 at the top left. */}
           <li className="flex flex-col rounded-tile p-md text-on-fill" style={{ background: 'linear-gradient(150deg, var(--color-r4), color-mix(in oklab, var(--color-r4) 70%, var(--fill-shade)))' }}>
             <p className="m-0 text-headline">No card needed</p>
-            <p className="mt-xs m-0 text-subhead">We ask your phone and birthday so everyone here is 18 or over. Nobody else ever sees them.</p>
+            <p className="mt-xs m-0 text-subhead"><Phrases text="To keep everyone here 18 or over, we ask your phone and birthday. Nobody else ever sees them." at={/(?<=\.) /} /></p>
             <Icon icon={ShieldCheck} size={32} className="mt-auto self-end pt-xs opacity-80" />
           </li>
         </ul>
@@ -331,7 +336,7 @@ export function Home() {
         <GuideLine host={BUMLING.key} side="right" className="mb-lg md:mb-xl">
           {/* Kept whole up to each full stop and comma, so a narrow blob breaks there on purpose (the rectangle rule). */}
           <span className="inline-block">Hi, I’m Bumling.</span> <span className="inline-block">Tell me what gets in your way,</span>{' '}
-          <span className="inline-block">and I’ll switch on the apps that fit.</span>
+          <span className="inline-block">and I’ll show the apps that fit.</span>
         </GuideLine>
         {/* The problem is the heading of the villains under it (the founder, 2026-11-05: not a band of its own in half the screen): the
             eyebrow, the hook and its two lines over the five cards, at the page's width, the lines kept to a reading measure. */}
@@ -388,7 +393,7 @@ export function Home() {
           {/* Three equal cells: the old wide first cell held two lines in a box made for four, so it read as an empty box. */}
           <ol className="mt-lg grid list-none gap-sm p-0 m-0 sm:grid-cols-3">
             {[
-              ['A short chat', 'Answer a few questions. It switches on the apps that fit, and nothing else.'],
+              ['A short chat', 'Answer a few questions. It shows the apps that fit, and nothing else.'],
               ['Your pillars', 'A short session maps your seven and builds a pyramid for the ones that need you most.'],
               ['Three boxes a day', 'Check in, do one small act, tick one task. Every tick climbs your pyramid to the reason you started.'],
             ].map(([t, d], i) => (
@@ -544,11 +549,15 @@ export function Home() {
               ))}
             </ul>
           </motion.div>
-          {live.map(([label, value]) => (
+        </div>
+        {/* The live numbers in one row of their own (even rows, lib/bento.ts): however many are over zero, each takes an equal share. */}
+        {live.length > 0 && (
+        <div className={`bento mt-sm ${evenGrid(live.length, LIVE_COLS)}`}>
+          {live.map(([label, value], i) => (
             <SpotlightCard
               index={1}
               key={label}
-              className={`rounded-tile bg-card p-sm shadow-toy-soft ${live.length < 4 && live[live.length - 1]?.[0] === label ? (['', 'bento-w4', 'bento-w3', 'bento-w2'][live.length] ?? '') : ''}`}
+              className={`rounded-tile bg-card p-sm shadow-toy-soft ${evenTile(i, live.length, LIVE_COLS)}`}
             >
               <p className="m-0 text-title1 type-figure leading-none">
                 <CountUp value={value} format={(n) => formatCount(n)} />
@@ -559,6 +568,7 @@ export function Home() {
             </SpotlightCard>
           ))}
         </div>
+        )}
         <Link to="/explore" className={`${SITE_SECONDARY} mt-md`}>
           See what is open right now
           <SiteArrow />
@@ -576,26 +586,30 @@ export function Home() {
           <h2 id="offer-heading" className={h2}>
             Free to start. <em>Free to stay.</em>
           </h2>
-          {/* Two by two: four short lines in equal cells, so none sits alone in a box made for three lines. */}
-          <ul className="bento mt-md list-none p-0 m-0">
+          {/* Two by two: four short lines in equal cells, so none sits alone in a box made for three lines (even rows, lib/bento.ts). */}
+          <ul className={`bento mt-md list-none p-0 m-0 ${evenGrid(FREE.length, FREE_COLS)}`}>
             {FREE.map((f, i) => (
-              <li key={f} className="bento-w2 flex items-start gap-xs rounded-tile bg-paper p-sm text-headline">
+              <li key={f} className={`flex items-start gap-xs rounded-tile bg-paper p-sm text-headline ${evenTile(i, FREE.length, FREE_COLS)}`}>
                 <Icon icon={Check} size={20} className="mt-[2px]" />
                 {f}
               </li>
             ))}
           </ul>
-          {/* What costs money, as two short facts, then the way to see more. */}
-          <p className="type-measure mt-md m-0 text-subhead">Two things cost money:</p>
+          {/* What costs money, as three short facts, then the way to see more. */}
+          <p className="type-measure mt-md m-0 text-subhead">Three things cost money:</p>
           <ul className="type-measure mt-xs m-0 grid list-disc gap-xs pl-md text-subhead text-ink-soft">
             <li>
               Typing to the assistant needs a plan from {planPriceLabel('pro')}
               {PAYMENTS_LIVE ? '' : '. Plans are not on sale yet, so nothing is charged'}.
             </li>
             <li>The Shop takes 5% of each sale you make.</li>
+            <li>
+              An optional live call with a coach costs {money(LIVE_CALL_CENTS, PLAN_CURRENCY)}
+              {PAYMENTS_LIVE ? '' : '. It is not on sale yet, so nothing is charged'}.
+            </li>
           </ul>
           <p className="type-measure mt-xs m-0 text-balance text-subhead text-ink-soft">
-            Switch any app off, export or delete everything, from the Profile tab.{' '}
+            Hide any app, export your data or delete your account, from the Profile tab.{' '}
             <Link to="/pricing" className={SITE_LINK_INLINE}>
               See pricing
             </Link>

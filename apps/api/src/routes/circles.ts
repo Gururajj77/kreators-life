@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { ALIAS_WORDS, attendeeXpLocked, CIRCLE_MINUTES, codeWindow, isCircleStatus, matchCircles, nextWeek, RELATIONSHIPS, RUN_CODE_WINDOW, type CircleEvent, type CircleGroup, type CircleMember, type CircleMessage, type CircleStatus, type MatchCandidate, type RelationshipKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { audit, can, newId, notifyMany, nowIso, num, pageOf, paged, parseList, randomCode, str } from '../db';
+import { audit, can, newId, noteStmt, notifyMany, nowIso, num, pageOf, paged, parseList, randomCode, str } from '../db';
+import { openTurn, type Turn } from '../cronTick';
 import { claimEventCode, codeOf, guestView, hostView, setEventCode } from '../attendee';
 
 /**
@@ -192,10 +193,14 @@ export async function matchEvent(db: D1Database, eventId: string): Promise<{ gro
   const chatOpensAt = new Date(new Date(ev.starts_at).getTime() - 24 * HOUR).toISOString();
   const now = nowIso();
   let n = 0;
+  // One event's tables, members, notes and the move to matched are one batch: one trip, all or nothing, and each statement holds only while the event is still open, so a
+  // tick and a team member's tap at the same moment seat nobody twice. The first statement in the batch to run decides; a stop leaves the event open for the next tick.
+  const stillOpen = 'EXISTS (SELECT 1 FROM circle_events WHERE id = ? AND status = ?)';
+  const stmts: D1PreparedStatement[] = [];
   for (const ids of result.groups) {
     n += 1;
     const gid = newId();
-    const stmts = [db.prepare('INSERT INTO circle_groups (id, event_id, name, venue, plan, chat_opens_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(gid, ev.id, `Table ${n}`, ev.venue_hint, '', chatOpensAt, now)];
+    stmts.push(db.prepare(`INSERT INTO circle_groups (id, event_id, name, venue, plan, chat_opens_at, created_at) SELECT ?, ?, ?, ?, ?, ?, ? WHERE ${stillOpen}`).bind(gid, ev.id, `Table ${n}`, ev.venue_hint, '', chatOpensAt, now, ev.id, 'open'));
     // Aliases: a word and a character, no two alike at one table.
     const used = new Set<string>();
     ids.forEach((uid, i) => {
@@ -204,13 +209,13 @@ export async function matchEvent(db: D1Database, eventId: string): Promise<{ gro
       let k = 0;
       while (used.has(alias)) alias = `${ALIAS_WORDS[(i * 5 + n + k) % ALIAS_WORDS.length]} ${character.character}`, (k += 1);
       used.add(alias);
-      stmts.push(db.prepare('INSERT INTO circle_members (group_id, user_id, alias, character, revealed, status) VALUES (?, ?, ?, ?, 0, ?)').bind(gid, uid, alias, character.key, statusOf.get(uid) ?? ''));
+      stmts.push(db.prepare(`INSERT INTO circle_members (group_id, user_id, alias, character, revealed, status) SELECT ?, ?, ?, ?, 0, ? WHERE ${stillOpen}`).bind(gid, uid, alias, character.key, statusOf.get(uid) ?? '', ev.id, 'open'));
+      stmts.push(noteStmt(db, { id: `circle-set-${ev.id}-${uid}`, userId: uid, kind: 'circle', title: `Your table for ${ev.title} is set`, body: `You are at a table of ${ids.length}. The chat opens a day before.`, link: `/circles/${gid}`, at: now }, 'once'));
     });
-    await db.batch(stmts);
-    await notifyMany(db, ids, 'circle', `Your table for ${ev.title} is set`, `You are at a table of ${ids.length}. The chat opens a day before.`, `/circles/${gid}`);
   }
-  await notifyMany(db, result.unmatched, 'circle', `No table this time for ${ev.title}`, 'Too few people nearby signed up. You are first in line next time.', '/circles');
-  await db.prepare("UPDATE circle_events SET status = 'matched' WHERE id = ?").bind(ev.id).run();
+  for (const uid of result.unmatched) stmts.push(noteStmt(db, { id: `circle-none-${ev.id}-${uid}`, userId: uid, kind: 'circle', title: `No table this time for ${ev.title}`, body: 'Too few people nearby signed up. You are first in line next time.', link: '/circles', at: now }, 'once'));
+  stmts.push(db.prepare("UPDATE circle_events SET status = 'matched' WHERE id = ?").bind(ev.id));
+  await db.batch(stmts);
   return { groups: result.groups.length, unmatched: result.unmatched.length };
 }
 
@@ -219,16 +224,21 @@ export async function matchEvent(db: D1Database, eventId: string): Promise<{ gro
  * the next one opens a week later at the same time, so there is always one to join. Cancelling the latest
  * occurrence ends the series. Past circles are marked done two days after they met.
  */
-export async function rollWeeklyCircles(db: D1Database): Promise<number> {
+export async function rollWeeklyCircles(db: D1Database, turn: Turn = openTurn(db)): Promise<number> {
   const now = Date.now();
-  await db.prepare("UPDATE circle_events SET status = 'done' WHERE status IN ('open','matched') AND starts_at < ?").bind(new Date(now - 48 * HOUR).toISOString()).run();
   const latest = await db
     .prepare("SELECT e.* FROM circle_events e WHERE e.repeat = 'weekly' AND e.starts_at = (SELECT MAX(x.starts_at) FROM circle_events x WHERE x.series_id = e.series_id)")
     .all<{ id: string; title: string; city: string; area: string; starts_at: string; venue_hint: string; group_size: number; status: string; series_id: string | null; created_by: string | null }>();
+  const due = latest.results.filter((e) => e.status !== 'cancelled' && !(e.status === 'open' && new Date(e.starts_at).getTime() > now));
+  if (!due.length) return 0;
+  const share = await turn();
   let n = 0;
-  for (const e of latest.results) {
-    if (e.status === 'cancelled') continue;
-    if (e.status === 'open' && new Date(e.starts_at).getTime() > now) continue;
+  for (const e of due) {
+    // Each roll is a read and a batch; the next tick takes what this one did not reach.
+    if (share.left() < 2) {
+      share.more();
+      break;
+    }
     let next = nextWeek(e.starts_at);
     while (new Date(next).getTime() < now + 36 * HOUR) next = nextWeek(next);
     const id = newId();
@@ -248,10 +258,19 @@ export async function rollWeeklyCircles(db: D1Database): Promise<number> {
 }
 
 /** Events starting within two days get their tables set. Called by the cron. */
-export async function matchDueCircles(db: D1Database): Promise<number> {
+export async function matchDueCircles(db: D1Database, turn: Turn = openTurn(db)): Promise<number> {
   const due = await db.prepare("SELECT id FROM circle_events WHERE status = 'open' AND starts_at <= ? AND (SELECT COUNT(*) FROM circle_signups s WHERE s.event_id = circle_events.id) >= 3").bind(new Date(Date.now() + 48 * HOUR).toISOString()).all<{ id: string }>();
+  if (!due.results.length) return 0;
+  const share = await turn();
   let n = 0;
-  for (const e of due.results) n += (await matchEvent(db, e.id)).groups;
+  for (const e of due.results) {
+    // Two reads and one batch each.
+    if (share.left() < 3) {
+      share.more();
+      break;
+    }
+    n += (await matchEvent(db, e.id)).groups;
+  }
   return n;
 }
 

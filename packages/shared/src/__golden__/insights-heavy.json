@@ -792,6 +792,49 @@
    }
   },
   {
+   "key": "budget-over",
+   "id": "budget-over",
+   "state": "ready",
+   "apps": [
+    "finance",
+    "home",
+    "life",
+    "insights"
+   ],
+   "reads": [
+    "money"
+   ],
+   "private": true,
+   "relationship": null,
+   "headline": "3 of 3 months",
+   "text": "Food ran over its budget in 3 of 3 months, by ₹1,073 on average.",
+   "basis": "From 3 months of your spending, in INR, against your budgets as they are now.",
+   "chart": {
+    "kind": "pair",
+    "rows": [
+     {
+      "label": "Spent in a month, on average",
+      "value": 1107332,
+      "n": 3,
+      "unit": "INR"
+     },
+     {
+      "label": "Its budget",
+      "value": 1000000,
+      "n": 3,
+      "unit": "INR"
+     }
+    ]
+   },
+   "action": {
+    "label": "See your budgets",
+    "to": "/finance#budgets-heading",
+    "kind": "link"
+   },
+   "need": null,
+   "strength": 70
+  },
+  {
    "key": "habit-tie",
    "id": "habit-tie:ntd:ntd3",
    "state": "ready",
@@ -1236,6 +1279,97 @@
    "strength": 53
   },
   {
+   "key": "water-days",
+   "id": "water-days",
+   "state": "ready",
+   "apps": [
+    "home",
+    "today",
+    "life",
+    "insights",
+    "mindful"
+   ],
+   "reads": [
+    "water",
+    "focus"
+   ],
+   "private": true,
+   "relationship": "self",
+   "headline": "49 vs 37",
+   "text": "On days you met your water goal, you focused 12 minutes more, on average.",
+   "basis": "From 17 days you met it and 39 days you did not, in 8 weeks. Things that happen together, not causes.",
+   "chart": {
+    "kind": "pair",
+    "rows": [
+     {
+      "label": "Focus, goal met",
+      "value": 48.6,
+      "n": 17,
+      "unit": "min"
+     },
+     {
+      "label": "Focus, other days",
+      "value": 36.9,
+      "n": 39,
+      "unit": "min"
+     }
+    ]
+   },
+   "action": {
+    "label": "Add a glass",
+    "to": "/home#water",
+    "kind": "link"
+   },
+   "need": null,
+   "strength": 50
+  },
+  {
+   "key": "water-weekday",
+   "id": "water-weekday",
+   "state": "ready",
+   "apps": [
+    "today",
+    "life",
+    "insights"
+   ],
+   "reads": [
+    "water"
+   ],
+   "private": true,
+   "relationship": "self",
+   "headline": "Sats",
+   "text": "You drink least on Saturdays: 1,052 ml on average, against 1,544 ml on other days.",
+   "basis": "From 56 days with water logged in 8 weeks.",
+   "chart": {
+    "kind": "week",
+    "labels": [
+     "Mon",
+     "Tue",
+     "Wed",
+     "Thu",
+     "Fri",
+     "Sat",
+     "Sun"
+    ],
+    "values": [
+     1730,
+     1351,
+     1660,
+     1411,
+     1240,
+     1052,
+     1875
+    ]
+   },
+   "action": {
+    "label": "Add a glass",
+    "to": "/home#water",
+    "kind": "link"
+   },
+   "need": null,
+   "strength": 49
+  },
+  {
    "key": "best-hours",
    "id": "best-hours",
    "state": "ready",
@@ -1674,6 +1808,52 @@
    "action": null,
    "need": "Have 4 more days with and without a focus session of 25 minutes.",
    "strength": 0
+  },
+  {
+   "key": "gratitude-mood",
+   "id": "gratitude-mood",
+   "state": "watching",
+   "apps": [
+    "journal",
+    "mood",
+    "insights"
+   ],
+   "reads": [
+    "gratitude",
+    "wellbeing"
+   ],
+   "private": true,
+   "relationship": null,
+   "headline": "",
+   "text": "Gratitude and mood",
+   "basis": "",
+   "chart": null,
+   "action": null,
+   "need": "Log your mood on 5 more days, some with gratitude written and some without.",
+   "strength": 0
+  },
+  {
+   "key": "budget-pace",
+   "id": "budget-pace",
+   "state": "watching",
+   "apps": [
+    "finance",
+    "home",
+    "life",
+    "insights"
+   ],
+   "reads": [
+    "money"
+   ],
+   "private": true,
+   "relationship": null,
+   "headline": "",
+   "text": "Your budgets",
+   "basis": "",
+   "chart": null,
+   "action": null,
+   "need": "Give the month 2 more days.",
+   "strength": 0
   }
  ],
  "places": {
@@ -1717,12 +1897,14 @@
    "sleep-mood"
   ],
   "life": [
-   "pillar-balance"
+   "budget-over",
+   "water-days"
   ],
   "journal": [
    "journal-mood"
   ],
   "finance": [
+   "budget-over",
    "money-stress"
   ],
   "reviews": [
@@ -1733,6 +1915,7 @@
    "discover-strength"
   ],
   "agency": [],
+  "fitness": [],
   "insights": [
    "habit:divine:reel|shoot",
    "habit:guru:edit|intro|vlog",
@@ -1740,6 +1923,7 @@
    "habit-tie:ntd:ntd1",
    "sleep-mood",
    "habit-tie:task:servant_leader:call|mom",
+   "budget-over",
    "habit-tie:ntd:ntd3",
    "journal-mood",
    "habit-tie:task:friendship:draft|review",
@@ -1748,6 +1932,8 @@
    "habit-tie:task:self:reel|shoot",
    "slips-sleep",
    "stress-calm",
+   "water-days",
+   "water-weekday",
    "best-hours",
    "daytype-done",
    "pillar-balance",
@@ -1756,7 +1942,9 @@
    "agency-load",
    "routine-tasks",
    "habit-tie:ntd:ntd2",
-   "focus-tasks"
+   "focus-tasks",
+   "gratitude-mood",
+   "budget-pace"
   ],
   "pillar:servant_leader": [
    {
@@ -1948,6 +2136,7 @@
    "habit-tie:ntd:ntd1",
    "sleep-mood",
    "habit-tie:task:servant_leader:call|mom",
+   "budget-over",
    "habit-tie:ntd:ntd3",
    "journal-mood",
    "habit-tie:task:friendship:draft|review",
@@ -1956,6 +2145,8 @@
    "habit-tie:task:self:reel|shoot",
    "slips-sleep",
    "stress-calm",
+   "water-days",
+   "water-weekday",
    "best-hours",
    "daytype-done",
    "pillar-balance",
@@ -1965,7 +2156,9 @@
    "agency-load",
    "routine-tasks",
    "habit-tie:ntd:ntd2",
-   "focus-tasks"
+   "focus-tasks",
+   "gratitude-mood",
+   "budget-pace"
   ],
   "pillar:friendship": [
    {
@@ -2102,6 +2295,7 @@
    "habit-tie:ntd:ntd1",
    "sleep-mood",
    "habit-tie:task:servant_leader:call|mom",
+   "budget-over",
    "habit-tie:ntd:ntd3",
    "journal-mood",
    "habit-tie:task:friendship:draft|review",
@@ -2110,6 +2304,8 @@
    "habit-tie:task:self:reel|shoot",
    "slips-sleep",
    "stress-calm",
+   "water-days",
+   "water-weekday",
    "best-hours",
    "daytype-done",
    "pillar-balance",
@@ -2119,7 +2315,9 @@
    "agency-load",
    "routine-tasks",
    "habit-tie:ntd:ntd2",
-   "focus-tasks"
+   "focus-tasks",
+   "gratitude-mood",
+   "budget-pace"
   ],
   "pillar:parent_child": [
    {
@@ -2254,6 +2452,7 @@
    "habit-tie:ntd:ntd1",
    "sleep-mood",
    "habit-tie:task:servant_leader:call|mom",
+   "budget-over",
    "habit-tie:ntd:ntd3",
    "journal-mood",
    "habit-tie:task:friendship:draft|review",
@@ -2262,6 +2461,8 @@
    "habit-tie:task:self:reel|shoot",
    "slips-sleep",
    "stress-calm",
+   "water-days",
+   "water-weekday",
    "best-hours",
    "daytype-done",
    "pillar-balance",
@@ -2271,7 +2472,9 @@
    "agency-load",
    "routine-tasks",
    "habit-tie:ntd:ntd2",
-   "focus-tasks"
+   "focus-tasks",
+   "gratitude-mood",
+   "budget-pace"
   ],
   "pillar:lover_partner": [
    {
@@ -2520,6 +2723,7 @@
    "habit-tie:ntd:ntd1",
    "sleep-mood",
    "habit-tie:task:servant_leader:call|mom",
+   "budget-over",
    "habit-tie:ntd:ntd3",
    "journal-mood",
    "habit-tie:task:friendship:draft|review",
@@ -2528,6 +2732,8 @@
    "habit-tie:task:self:reel|shoot",
    "slips-sleep",
    "stress-calm",
+   "water-days",
+   "water-weekday",
    "best-hours",
    "daytype-done",
    "pillar-balance",
@@ -2537,7 +2743,9 @@
    "agency-load",
    "routine-tasks",
    "habit-tie:ntd:ntd2",
-   "focus-tasks"
+   "focus-tasks",
+   "gratitude-mood",
+   "budget-pace"
   ],
   "pillar:self": [
    {
@@ -2689,6 +2897,7 @@
    "habit-tie:ntd:ntd1",
    "sleep-mood",
    "habit-tie:task:servant_leader:call|mom",
+   "budget-over",
    "habit-tie:ntd:ntd3",
    "journal-mood",
    "habit-tie:task:friendship:draft|review",
@@ -2697,6 +2906,8 @@
    "habit-tie:task:self:reel|shoot",
    "slips-sleep",
    "stress-calm",
+   "water-days",
+   "water-weekday",
    "best-hours",
    "daytype-done",
    "pillar-balance",
@@ -2706,7 +2917,9 @@
    "agency-load",
    "routine-tasks",
    "habit-tie:ntd:ntd2",
-   "focus-tasks"
+   "focus-tasks",
+   "gratitude-mood",
+   "budget-pace"
   ],
   "pillar:guru": [
    {
@@ -2955,6 +3168,7 @@
    "habit-tie:ntd:ntd1",
    "sleep-mood",
    "habit-tie:task:servant_leader:call|mom",
+   "budget-over",
    "habit-tie:ntd:ntd3",
    "journal-mood",
    "habit-tie:task:friendship:draft|review",
@@ -2963,6 +3177,8 @@
    "habit-tie:task:self:reel|shoot",
    "slips-sleep",
    "stress-calm",
+   "water-days",
+   "water-weekday",
    "best-hours",
    "daytype-done",
    "pillar-balance",
@@ -2972,7 +3188,9 @@
    "agency-load",
    "routine-tasks",
    "habit-tie:ntd:ntd2",
-   "focus-tasks"
+   "focus-tasks",
+   "gratitude-mood",
+   "budget-pace"
   ],
   "pillar:divine": [
    {
@@ -3220,6 +3438,7 @@
    "habit-tie:ntd:ntd1",
    "sleep-mood",
    "habit-tie:task:servant_leader:call|mom",
+   "budget-over",
    "habit-tie:ntd:ntd3",
    "journal-mood",
    "habit-tie:task:friendship:draft|review",
@@ -3229,6 +3448,8 @@
    "slips-sleep",
    "stress-calm",
    "pillar-balance:divine",
+   "water-days",
+   "water-weekday",
    "best-hours",
    "daytype-done",
    "pillar-balance",
@@ -3237,7 +3458,9 @@
    "agency-load",
    "routine-tasks",
    "habit-tie:ntd:ntd2",
-   "focus-tasks"
+   "focus-tasks",
+   "gratitude-mood",
+   "budget-pace"
   ]
  }
 }

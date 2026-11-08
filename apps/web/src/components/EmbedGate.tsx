@@ -15,7 +15,7 @@ export function embedHost(url: string): string {
  * A video from another site waits for a tap until the person says yes to videos in their privacy choices. Until then the other site
  * sees nothing: no request goes to it. "Play" loads this one video; "Always show videos" saves the choice for good.
  */
-export function EmbedGate({ url, title, children, className = '' }: { url: string; title: string; children: ReactNode; className?: string }) {
+export function EmbedGate({ url, title, children, className = '', quiet = false }: { url: string; title: string; children: ReactNode; className?: string; /** Play is outline, for a gate that is not the first on its screen. */ quiet?: boolean }) {
   const allowed = useConsent((s) => s.choices.embeds);
   const [once, setOnce] = useState(false);
   const token = useSession((s) => s.token);
@@ -34,7 +34,7 @@ export function EmbedGate({ url, title, children, className = '' }: { url: strin
       <p className="m-0 text-headline">{title || `Video from ${host}`}</p>
       <p className="m-0 max-w-[420px] text-caption text-ink-soft">This video is hosted by {host}, which sees your visit once it loads. {line}</p>
       <div className="mt-xs flex flex-wrap justify-center gap-xs">
-        <Button size="sm" onClick={() => setOnce(true)}>
+        <Button size="sm" variant={quiet ? 'outline' : 'primary'} onClick={() => setOnce(true)}>
           Play this video
         </Button>
         <Button size="sm" variant="outline" onClick={() => always.mutate()} disabled={always.isPending}>

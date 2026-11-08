@@ -8,6 +8,7 @@ import { Button } from './Button';
 import { Sheet } from './Sheet';
 import { LogOut } from 'lucide-react';
 import { Icon } from './Icon';
+import { RED_YES_LG } from '../lib/ui';
 
 /** A door with an arrow leaving it. */
 function DoorIcon({ size = 18 }: { size?: number }) {
@@ -62,8 +63,7 @@ export function SignOut({ compact = false, iconOnly = false, className = '' }: {
             type="button"
             onClick={() => signout.mutate()}
             disabled={signout.isPending}
-            className="toy inline-flex min-h-[56px] items-center justify-center gap-xs rounded-pill bg-r1 px-md text-headline text-on-fill disabled:opacity-50"
-            style={{ '--toy-color': 'var(--deep-servant_leader)' } as CSSProperties}
+            className={RED_YES_LG}
           >
             <DoorIcon />
             {signout.isPending ? 'Signing out' : deviceOnly ? 'Sign out anyway' : 'Yes, sign out'}

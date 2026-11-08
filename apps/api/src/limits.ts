@@ -15,6 +15,11 @@ export const LIMITS = {
   reset: { max: 20, windowSec: 3600 },
   anon: { max: 60, windowSec: 3600 },
   lead: { max: 5, windowSec: 60 },
+  /**
+   * Guesses at the shared admin key (X-Admin-Key on /api/admin): ten in ten minutes, then even the right key waits. A right key takes its place
+   * back and an admin's own session never takes one (`adminKeyDoor` in ops.ts). Ten, since the Admin screen opens with five calls at once.
+   */
+  adminKey: { max: 10, windowSec: 600 },
   // Signed in, counted per person.
   checkout: { max: 10, windowSec: 60 },
   post: { max: 10, windowSec: 3600 },
@@ -55,6 +60,14 @@ export const LIMITS = {
   coachAsk: { max: 20, windowSec: 3600 },
   /** What a life coach writes for a student: notes, and tasks added or changed. */
   coachWrite: { max: 60, windowSec: 3600 },
+  /** A coach's page for one student: a period's report and the patterns, each many reads on the server. */
+  coachRead: { max: 300, windowSec: 3600 },
+  /** The box on Coaching looking up a @username or friend code as the coach types (one read 300 ms after the last key). */
+  coachLookup: { max: 120, windowSec: 3600 },
+  /** Opening or answering a coach's invite link, per address. */
+  coachJoin: { max: 60, windowSec: 3600 },
+  /** The same, per coach whatever the address, so a shared link cannot be worn out or used to fill a coach's list. */
+  coachJoinLink: { max: 300, windowSec: 3600 },
   /** A broken screen reporting itself, per address. */
   clientError: { max: 20, windowSec: 600 },
   /** A page's speed numbers, sent once as the visitor leaves it, per address. */
@@ -66,11 +79,14 @@ export const LIMITS = {
   discover: { max: 30, windowSec: 3600 },
   /** Saving the timer settings, which happens as a person taps a stepper or a switch. */
   prefs: { max: 240, windowSec: 3600 },
+  /** Gratitude for the day on Journal, saved as the person types (one save 800 ms after the last change), so a few dozen saves a day. */
+  gratitude: { max: 240, windowSec: 3600 },
   /**
-   * Reading Emerging (GET /insights), per person. Every screen shares one cached answer per device day (2026-11-05), so a person asks a
-   * few times an hour; each ask rebuilds weeks of rows, so a script looping on it is held to this.
+   * Reading Emerging (GET /insights and /insights/dashboard), per person. Every screen shares one cached answer per device day (2026-11-05),
+   * so a person asks a few times an hour; stepping through periods on the page (2026-11-07) asks twice a step, so someone looking back over a
+   * year stays well inside this. Each ask rebuilds weeks of rows, so a script looping on it is held to it.
    */
-  insights: { max: 120, windowSec: 3600 },
+  insights: { max: 240, windowSec: 3600 },
   /** Everyday Agency work: moving a deliverable, a note, a time entry. */
   agency: { max: 600, windowSec: 3600 },
   /** Asking someone to join your Agency team: an inbox note and maybe a friend request go out, so twenty a day. */
@@ -133,16 +149,17 @@ const CHANNEL_DOORS: Door[] = (['community', 'bond'] as const).flatMap((app): Do
 
 /** Which doors each limit guards: the method and the path under /api. Patterns follow Hono's. */
 export const ROUTE_LIMITS: readonly {
-  /** GET only for a read heavy enough to need one (Emerging). */
+  /** GET only for a read heavy enough to need one (Emerging), or a door every method goes through (the admin key). */
   method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   path: string;
   limit: LimitName;
   /** Count the address instead of the person. */
   by?: 'address';
-  /** Count only a request whose body carries a discount code, so an ordinary checkout, enrolment or RSVP never spends the code budget. */
-  when?: 'discountCode' | 'appPrefs';
+  /** Count only a request whose body carries a discount code, so an ordinary checkout, enrolment or RSVP never spends the code budget. `adminKey` counts only a wrong key. */
+  when?: 'discountCode' | 'appPrefs' | 'datePrefs' | 'adminKey';
 }[] = [
   ...CHANNEL_DOORS,
+  ...(['GET', 'POST', 'PATCH', 'PUT', 'DELETE'] as const).map((method) => ({ method, path: '/admin/*', limit: 'adminKey' as const, by: 'address' as const, when: 'adminKey' as const })),
   { method: 'POST', path: '/auth/signin', limit: 'signin' },
   { method: 'POST', path: '/auth/signup', limit: 'signup' },
   { method: 'POST', path: '/auth/forgot', limit: 'forgot' },
@@ -189,11 +206,43 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/coach/requests', limit: 'coachAsk' },
   { method: 'POST', path: '/coach/ask/:coachId', limit: 'coachAsk' },
   { method: 'POST', path: '/coach/apply', limit: 'coachAsk' },
+  { method: 'GET', path: '/coach/lookup', limit: 'coachLookup' },
+  { method: 'GET', path: '/coach/students/:id/report', limit: 'coachRead' },
+  { method: 'GET', path: '/coach/students/:id/patterns', limit: 'coachRead' },
+  { method: 'POST', path: '/coach/students/:id/patterns/ask', limit: 'coachWrite' },
+  { method: 'POST', path: '/coach/invite', limit: 'coachWrite' },
+  { method: 'PUT', path: '/me/coach/prefs', limit: 'prefs' },
+  { method: 'GET', path: '/public/coach-join/:token', limit: 'coachJoin', by: 'address' },
+  { method: 'GET', path: '/me/coach/join/:token', limit: 'coachJoin', by: 'address' },
+  { method: 'POST', path: '/me/coach/join/:token', limit: 'coachJoin', by: 'address' },
   { method: 'POST', path: '/discover/submit', limit: 'discover' },
   { method: 'PUT', path: '/wellbeing/focus-settings', limit: 'prefs' },
+  { method: 'PUT', path: '/journal/gratitude/:day', limit: 'gratitude' },
+  // Gratitude prompts per person (migration 0106): Another prompt, the pillar picker and the usual three share the card's budget.
+  { method: 'POST', path: '/journal/gratitude/:day/another', limit: 'gratitude' },
+  { method: 'POST', path: '/journal/gratitude/:day/pick', limit: 'gratitude' },
+  { method: 'PUT', path: '/journal/gratitude-settings', limit: 'gratitude' },
   { method: 'PATCH', path: '/wellbeing/focus/:id', limit: 'prefs' },
   { method: 'POST', path: '/wellbeing/focus', limit: 'prefs' },
   { method: 'DELETE', path: '/wellbeing/focus/:id', limit: 'prefs' },
+  // Fitness (2026-11-07) and Kreators Run's own run-or-walk tool: the same movement log, under the everyday limit.
+  { method: 'POST', path: '/fitness/move', limit: 'prefs' },
+  { method: 'PATCH', path: '/fitness/move/:id', limit: 'prefs' },
+  { method: 'DELETE', path: '/fitness/move/:id', limit: 'prefs' },
+  { method: 'PUT', path: '/fitness/eat', limit: 'prefs' },
+  { method: 'DELETE', path: '/fitness/eat/:id', limit: 'prefs' },
+  { method: 'PUT', path: '/fitness/protein-goal', limit: 'prefs' },
+  // Supplements (2026-11-07): every write under prefs, like the rest of Fitness.
+  { method: 'PUT', path: '/fitness/supplements/settings', limit: 'prefs' },
+  { method: 'POST', path: '/fitness/supplements', limit: 'prefs' },
+  { method: 'DELETE', path: '/fitness/supplements', limit: 'prefs' },
+  { method: 'POST', path: '/fitness/supplements/day', limit: 'prefs' },
+  { method: 'PATCH', path: '/fitness/supplements/:id', limit: 'prefs' },
+  { method: 'DELETE', path: '/fitness/supplements/:id', limit: 'prefs' },
+  { method: 'POST', path: '/fitness/supplements/:id/move', limit: 'prefs' },
+  { method: 'PUT', path: '/fitness/supplements/:id/day', limit: 'prefs' },
+  { method: 'POST', path: '/run/move', limit: 'prefs' },
+  { method: 'DELETE', path: '/run/move/:id', limit: 'prefs' },
   { method: 'POST', path: '/me/calendar', limit: 'prefs' },
   { method: 'PUT', path: '/session/away', limit: 'prefs' },
   // A yes to the live call: a paid service, so it shares the checkout budget (a provider order is made only while payments are live).
@@ -211,6 +260,7 @@ export const ROUTE_LIMITS: readonly {
   { method: 'PUT', path: '/time-blocks/days', limit: 'prefs' },
   { method: 'POST', path: '/time-blocks/restore', limit: 'prefs' },
   { method: 'GET', path: '/insights', limit: 'insights' },
+  { method: 'GET', path: '/insights/dashboard', limit: 'insights' },
   { method: 'POST', path: '/discover/more/:kind/submit', limit: 'discover' },
   { method: 'POST', path: '/public/client-error', limit: 'clientError' },
   { method: 'POST', path: '/public/vitals', limit: 'vitals' },
@@ -248,6 +298,10 @@ export const ROUTE_LIMITS: readonly {
   { method: 'PATCH', path: '/school/items/:id', limit: 'prefs' },
   { method: 'POST', path: '/school/items/:id/move', limit: 'prefs' },
   { method: 'DELETE', path: '/school/items/:id', limit: 'prefs' },
+  { method: 'POST', path: '/school/items/:id/resources', limit: 'prefs' },
+  { method: 'PATCH', path: '/school/items/:id/resources/:resourceId', limit: 'prefs' },
+  { method: 'DELETE', path: '/school/items/:id/resources/:resourceId', limit: 'prefs' },
+  { method: 'POST', path: '/school/items/:id/resources/:resourceId/move', limit: 'prefs' },
   { method: 'PUT', path: '/school/cohorts/:id/talk/me', limit: 'prefs' },
   { method: 'DELETE', path: '/school/cohorts/:id/talk/:lineId', limit: 'prefs' },
   { method: 'POST', path: '/school/cohorts/:id/talk/:lineId/report', limit: 'ticket' },
@@ -324,6 +378,10 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/me/password', limit: 'passwordChange' },
   // How the app groups start and the order of apps in them (Profile, Features): counted only when a save carries it.
   { method: 'PATCH', path: '/me', limit: 'prefs', when: 'appPrefs' },
+  // The date and time format (Profile): likewise.
+  { method: 'PATCH', path: '/me', limit: 'prefs', when: 'datePrefs' },
+  // Hiding and showing your own apps, one at a time or several in one write.
+  { method: 'PATCH', path: '/me/modules', limit: 'prefs' },
   // The rest of Agency's writes: everyday work under `agency`, the heavy ones (a fresh client link ends every session, an
   // import reaches Army) under `lifecycle`, and the business metrics under `prefs`.
   { method: 'PATCH', path: '/agency/clients/:id', limit: 'agency' },
@@ -357,5 +415,5 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/me/teams/:id/leave', limit: 'prefs' },
 ];
 
-/** The doors that take no session are limited before the session check; everything else after it, per person. */
-export const isOpenDoor = (path: string): boolean => path.startsWith('/auth/') || path.startsWith('/public/');
+/** The doors that take no session are limited before the session check; everything else after it, per person. /admin is mounted before that check too. */
+export const isOpenDoor = (path: string): boolean => path.startsWith('/auth/') || path.startsWith('/public/') || path.startsWith('/admin/');

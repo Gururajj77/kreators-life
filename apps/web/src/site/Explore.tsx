@@ -7,9 +7,10 @@ import { Pager, usePage } from '../components/Pager';
 import { publicApi } from '../lib/api';
 import { chip } from '../lib/ui';
 import { SITE_LINK } from './buttons';
-import { ListingCard } from './ListingCard';
+import { LISTING_COLS, ListingCard } from './ListingCard';
 import { SiteLayout } from './SiteLayout';
 import { TabRow } from '../components/TabRow';
+import { evenGrid, evenTile } from '../lib/bento';
 
 const TYPE_ITEMS: { key: ListingType | 'all'; label: ReactNode; name: string }[] = [
   { key: 'all', label: 'Everything', name: 'Everything' },
@@ -119,9 +120,10 @@ export function Explore() {
                 </Link>
               )}
             </div>
-            <ul className="mt-sm grid list-none gap-sm p-0 m-0 md:grid-cols-2 lg:grid-cols-3">
-              {list.map((l) => (
-                <ListingCard key={`${l.type}-${l.id}`} listing={l} />
+            {/* A page of cards in even rows (lib/bento.ts), so its last row is never a lone card or a half-empty one. */}
+            <ul data-tile-list="paged" className={`mt-sm grid list-none gap-sm p-0 m-0 ${evenGrid(list.length, LISTING_COLS)}`}>
+              {list.map((l, i) => (
+                <ListingCard key={`${l.type}-${l.id}`} listing={l} className={evenTile(i, list.length, LISTING_COLS)} />
               ))}
             </ul>
             <Pager page={results.data?.page} label="listings" />

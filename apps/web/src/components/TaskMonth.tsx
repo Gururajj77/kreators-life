@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { Link } from 'react-router';
 import { Check, Repeat as RepeatIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '../lib/api';
-import { dueLabel, prettyDate, weekday } from '../lib/date';
+import { dueLabel, prettyDate, weekday, clockOf } from '../lib/date';
 import { printAs } from '../lib/printDoc';
 import { useAuthed, useRefreshAll } from '../lib/queries';
 import { useActionQueue } from '../lib/useActionQueue';
@@ -109,7 +109,7 @@ export function TaskMonth({ today }: { today: string }) {
                   onClick={() => setPicked(day)}
                   aria-label={`${prettyDate(day)}${kind ? `, ${kind.name}` : ''}, ${list.length === 0 ? 'no tasks' : `${list.length} ${list.length === 1 ? 'task' : 'tasks'}${done > 0 ? `, ${done} done` : ''}`}`}
                   style={ring(day)}
-                  className={`toy toy-flat flex min-w-0 flex-col items-stretch gap-xs rounded-tile bg-paper p-xs text-left ${cellHeight}`}
+                  className={`toy toy-flat relative before:absolute before:-inset-x-[4px] before:inset-y-0 before:content-[''] flex min-w-0 flex-col items-stretch gap-xs rounded-tile bg-paper p-xs text-left ${cellHeight}`}
                 >
                   {/* Wraps in a phone's narrow cell, so the count drops under the date and its kind's dot instead of covering them. */}
                   <span className="flex flex-wrap items-center justify-between gap-xs">
@@ -169,7 +169,7 @@ function DayTask({ t, today, queue }: { t: MonthTask; today: string; queue: Retu
   const wait = done ? 0 : minutesUntil(t.readyAt, now);
   const early = !done && Boolean(t.doDate && t.doDate > today);
   const due = done ? null : dueLabel(t.dueDate, today);
-  const when = [t.time ? timeLabel(t.time) : null, t.estimateMin ? `${t.estimateMin} min` : null].filter(Boolean).join(' · ');
+  const when = [t.time ? clockOf(t.time) : null, t.estimateMin ? `${t.estimateMin} min` : null].filter(Boolean).join(' · ');
   const tick = () =>
     queue.run(t.id, async () => {
       if (done) {
@@ -290,14 +290,15 @@ function DayKind({ day, kinds }: { day: string; kinds: NonNullable<TodayMonthRes
  * "Add a task" under Daily's list: the same form the month's day sheet uses, with the do date set to the person's today. The projects
  * come from this month's answer (the same read as the calendar), fetched when the fold first opens.
  */
-export function AddTaskForm({ today, onAdded, autoFocus = false }: { today: string; /** Told the title and do date once a task is saved (Daily closes its fold and says so). */ onAdded?: (title: string, doDate: string | null) => void; autoFocus?: boolean }) {
+export function AddTaskForm({ today, onAdded, autoFocus = false, projects, note }: { /** A pillar's page sends its own projects, so nothing is read and the task stays on that pillar. */ projects?: MonthProject[]; /** One quiet line above the button. */ note?: string;  today: string; /** Told the title and do date once a task is saved (Daily closes its fold and says so). */ onAdded?: (title: string, doDate: string | null) => void; autoFocus?: boolean }) {
   const month = today.slice(0, 7);
-  const q = useAuthed(['today', 'month', month, today], () => api.todayMonth(month, today));
-  return q.data ? <AddOnDay day={today} today={today} projects={q.data.projects} onAdded={onAdded} autoFocus={autoFocus} /> : <Skeleton className="h-[240px]" />;
+  const q = useAuthed(['today', 'month', month, today], () => api.todayMonth(month, today), projects === undefined);
+  const list = projects ?? q.data?.projects;
+  return list ? <AddOnDay day={today} today={today} projects={list} onAdded={onAdded} autoFocus={autoFocus} note={note} /> : <Skeleton className="h-[240px]" />;
 }
 
 /** The add form: a title, the project it holds up, and the ordinary task plan with the do date set to the day. It goes through the same route the pillar page uses. */
-function AddOnDay({ day, today, projects, onAdded, autoFocus = false }: { day: string; today: string; projects: MonthProject[]; onAdded?: (title: string, doDate: string | null) => void; autoFocus?: boolean }) {
+function AddOnDay({ day, today, projects, onAdded, autoFocus = false, note }: { day: string; today: string; projects: MonthProject[]; onAdded?: (title: string, doDate: string | null) => void; autoFocus?: boolean; note?: string }) {
   // A new task (perhaps repeating) changes what an Emerging card offers, so it is read again at once.
   const refresh = useRefreshAll({ insights: true });
   const [title, setTitle] = useState('');
@@ -359,8 +360,10 @@ function AddOnDay({ day, today, projects, onAdded, autoFocus = false }: { day: s
           setPlan(next);
         }}
         today={today}
+        pillar={project?.relationship}
       />
       {day < today && <p className="m-0 text-balance text-caption text-ink-soft">{COPY.past}</p>}
+      {note && <p className="m-0 text-balance text-caption text-ink-soft">{note}</p>}
       {create.isError && (
         <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
           {create.error instanceof Error ? create.error.message : 'Could not add it. Try again.'}

@@ -1,22 +1,65 @@
-import { LIFE_AREAS, slotRangeLabel, spanLabel, type TaskGroup } from '@kreators/shared';
+import { LIFE_AREAS, groupTasks, openDay, spanLabel, type Node, type RelationshipKey, type TemplateSlot, type TimeBlock } from '@kreators/shared';
+import { blockMismatch, blockMismatchLine, blockUsedMin, groupWithSuggestions, suggestLine, suggestWhy, type BlockMismatch, type SuggestedGroup } from '@kreators/shared/blockHints';
+import { useMutation } from '@tanstack/react-query';
 import { tbClass, tbStyle } from '../lib/blockColor';
 import gsap from 'gsap';
 import { useId, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { api } from '../lib/api';
+import { todayLocal, slotRange } from '../lib/date';
+import { useNow } from '../lib/useNow';
 import { useKept } from '../lib/kept';
-import { useMe } from '../lib/queries';
+import { useMe, useRefreshAll } from '../lib/queries';
 import { AppIcon } from './AppIcon';
 import { Button } from './Button';
 import { tick } from './fx/haptics';
+import { StatusTag } from './StatusTag';
 import { ToggleChevron } from './ToggleMark';
+
+/** What the grouping reads: the day's slots and blocks, its lead and second pillar, and the server's minutes planned in each slot. */
+export interface GroupContext {
+  slots: readonly TemplateSlot[];
+  blocks: readonly TimeBlock[];
+  lead?: RelationshipKey;
+  second?: RelationshipKey | null;
+  slotPlannedMin?: readonly number[];
+  /** The day shown (YYYY-MM-DD): on today, a block that is over is never suggested or pointed at. */
+  day: string;
+}
+
+/** The minute of the device's day it is now, when `day` is today; null for any other day. */
+function minuteNowOn(day: string, now: number): number | null {
+  if (day !== todayLocal()) return null;
+  const d = new Date(now);
+  return d.getHours() * 60 + d.getMinutes();
+}
 
 /**
  * Daily's grouped view (docs/time-blocks.md): the tasks in coloured boxes, one per time block of the day (in clock order) or one per area
  * of life (in LIFE_AREA_ORDER), drawn like the app groups on Profile: a box in its own soft colour whose header is one button that opens
  * and folds it. Inside each box the tasks keep the order `groupTasks` gave them, so the priority comes first. Which boxes are open is kept
- * for the tab and the person (lib/kept.ts); every box starts open.
+ * for the tab and the person (lib/kept.ts); every box starts open. Lazy (its own chunk with @kreators/shared/blockHints), so the first
+ * download stays inside its budget.
+ *
+ * By time block, a task with no block and no time sits in the block `suggestBlock` picks for it, after the placed ones, marked Suggested
+ * with one Keep here; a task whose time put it in a block meant for another area or pillar gets one quiet line with Move it and Keep here
+ * (`blockMismatch`). Nothing is written until one of those is tapped, through the ordinary PATCH /nodes/:id.
  */
-export function TaskGroups<T extends { id: string }>({ groups, renderTask, more = false, by }: { groups: TaskGroup<T>[]; renderTask: (t: T) => ReactNode; /** More tasks wait past the ones sent (`tasksMore`). */ more?: boolean; by: 'block' | 'area' }) {
+export function TaskGroups({ tasks, context, renderTask, more = false, by }: { tasks: Node[]; context: GroupContext; renderTask: (t: Node, below?: ReactNode) => ReactNode; /** More tasks wait past the ones sent (`tasksMore`). */ more?: boolean; by: 'block' | 'area' }) {
   const me = useMe();
+  const after = minuteNowOn(context.day, useNow(60_000));
+  const used = by === 'block' ? blockUsedMin(context.slots, context.slotPlannedMin) : undefined;
+  const groups: SuggestedGroup<Node>[] = by === 'block' ? groupWithSuggestions(tasks, { ...context, used, after }) : groupTasks(tasks, 'area', context).map((g) => ({ ...g, suggested: [] }));
+  // The day's other timed tasks, which a Move it never lands on (late ones from other days are not on this day's clock).
+  const timed = tasks.filter((x) => x.dueTime && openDay(x) === context.day);
+  // The line under a task: a suggestion's Keep here, or the quiet mismatch prompt for one its time put in a block meant for others.
+  const below = (g: SuggestedGroup<Node>, t: Node): ReactNode => {
+    if (g.kind !== 'block' || !g.inDay) return null;
+    const block = context.blocks.find((b) => b.id === g.key);
+    if (!block) return null;
+    if (g.suggested.includes(t)) return <SuggestLine task={t} block={block} />;
+    const m = blockMismatch(t, context.slots, context.blocks, { used, after, taken: timed.filter((x) => x.id !== t.id) });
+    return m ? <MismatchLine task={t} m={m} /> : null;
+  };
   const [shut, setShut] = useKept<Record<string, boolean>>(`taskgroups:${me.data?.user.id ?? 'anon'}`, by, {});
   const openAll = () => setShut({});
   const foldAll = () => setShut(Object.fromEntries(groups.map((g) => [g.key, true])));
@@ -38,7 +81,7 @@ export function TaskGroups<T extends { id: string }>({ groups, renderTask, more 
       </div>
       <div className="mt-xs flex flex-col gap-xs">
         {groups.map((g) => (
-          <Box key={g.key} g={g} open={!shut[g.key]} onToggle={() => setShut((s) => ({ ...s, [g.key]: !s[g.key] }))} renderTask={renderTask} by={by} />
+          <Box key={g.key} g={g} open={!shut[g.key]} onToggle={() => setShut((s) => ({ ...s, [g.key]: !s[g.key] }))} renderTask={(t) => renderTask(t, below(g, t))} by={by} />
         ))}
       </div>
       {more && <p className="mt-xs m-0 text-caption text-ink-soft">Showing the first 60.</p>}
@@ -46,14 +89,16 @@ export function TaskGroups<T extends { id: string }>({ groups, renderTask, more 
   );
 }
 
-/** "3 tasks · 1 h 30 of 3 h": the count, and for a block of the day the minutes planned in it against its length. */
-function countLine(g: TaskGroup<unknown>): string {
-  const n = g.tasks.length === 1 ? '1 task' : `${g.tasks.length} tasks`;
-  if (g.kind !== 'block' || !g.inDay || g.minutes === 0 || g.tasks.length === 0) return n;
+/** "3 tasks · 1 h 30 of 3 h": the placed tasks, and for a block of the day the minutes placed in it against its length; a box that holds
+ *  only suggestions says "2 suggested" (each suggested row carries its own mark, so the pill stays short on a phone). */
+function countLine(g: SuggestedGroup<unknown>): string {
+  const placed = g.tasks.length - g.suggested.length;
+  const n = placed === 0 && g.suggested.length > 0 ? `${g.suggested.length} suggested` : placed === 1 ? '1 task' : `${placed} tasks`;
+  if (g.kind !== 'block' || !g.inDay || g.minutes === 0 || placed === 0) return n;
   return `${n} · ${spanLabel(g.plannedMin)} of ${spanLabel(g.minutes)}`;
 }
 
-function Box<T extends { id: string }>({ g, open, onToggle, renderTask, by }: { g: TaskGroup<T>; open: boolean; onToggle: () => void; renderTask: (t: T) => ReactNode; by: 'block' | 'area' }) {
+function Box({ g, open, onToggle, renderTask, by }: { g: SuggestedGroup<Node>; open: boolean; onToggle: () => void; renderTask: (t: Node) => ReactNode; by: 'block' | 'area' }) {
   const body = useRef<HTMLDivElement>(null);
   const id = useId();
   const area = g.area ? LIFE_AREAS[g.area] : null;
@@ -91,10 +136,11 @@ function Box<T extends { id: string }>({ g, open, onToggle, renderTask, by }: { 
     };
   }, [open]);
 
-  const note = g.kind === 'block' ? [g.ranges.map((r) => slotRangeLabel(r)).join(', '), g.inDay ? '' : 'Not in today’s plan'].filter(Boolean).join('. ') : area ? area.blurb : by === 'block' ? 'Tasks with no block yet.' : 'Tasks with no area of life yet.';
+  const note = g.kind === 'block' ? [g.ranges.map((r) => slotRange(r)).join(', '), g.inDay ? '' : 'Not in today’s plan'].filter(Boolean).join('. ') : area ? area.blurb : by === 'block' ? 'Tasks with no block yet.' : 'Tasks with no area of life yet.';
   return (
     <section
       aria-labelledby={`${id}-h`}
+      data-group-key={g.key}
       data-pillar={areaBox ? area.relationship : undefined}
       className={`rounded-card ${g.kind === 'block' && g.color ? `tb-box ${tbClass(g.color)}` : g.kind === 'none' ? 'bg-card' : ''}`}
       style={areaBox ? { background: `var(--soft-${area.relationship})` } : g.kind === 'block' ? tbStyle(g.color) : undefined}
@@ -127,13 +173,89 @@ function Box<T extends { id: string }>({ g, open, onToggle, renderTask, by }: { 
         <span className={`shrink-0 rounded-pill bg-card-strong px-sm text-caption font-medium leading-[26px] ${over ? 'text-ink' : 'text-ink-soft'}`}>{over ? `${countLine(g)}, over` : countLine(g)}</span>
         <ToggleChevron open={open} size={20} className="text-ink-soft" />
       </button>
+      {/* The gap under the header sits on an inner wrapper, never on the element GSAP takes to height 0, so the header's hover tint
+          never meets the first row (the same fix as AppGroups). */}
       <div ref={body} id={`${id}-b`} className="overflow-hidden">
-        {g.tasks.length === 0 ? (
-          <p className="m-0 px-md pb-md text-subhead text-ink-soft">Nothing here yet.</p>
-        ) : (
-          <ul className="m-0 flex list-none flex-col gap-xs px-sm pb-sm">{g.tasks.map((t) => renderTask(t))}</ul>
-        )}
+        <div className="pt-xs">
+          {g.tasks.length === 0 ? (
+            <p className="m-0 px-md pb-md text-subhead text-ink-soft">Nothing here yet.</p>
+          ) : (
+            <ul className="m-0 flex list-none flex-col gap-xs px-sm pb-sm">{g.tasks.map((t) => renderTask(t))}</ul>
+          )}
+        </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * One PATCH /nodes/:id from a hint, then the day is read again. The hint line goes away with the save (and Move it takes the row to
+ * another box), so focus moves to the task's own Plan button where it now sits, else to its box's header, never back to the page top.
+ */
+function useHintSave(task: Node) {
+  const refresh = useRefreshAll();
+  return useMutation({
+    mutationFn: (body: { timeBlockId?: string; dueTime?: string; to: string }) => api.updateNode(task.id, { timeBlockId: body.timeBlockId, dueTime: body.dueTime }),
+    onSuccess: (_d, body) =>
+      refresh().then(() =>
+        requestAnimationFrame(() => {
+          const row = document.querySelector<HTMLElement>(`li[data-task-id="${CSS.escape(task.id)}"]`);
+          const plan = row?.querySelector<HTMLElement>('button[aria-label^="Plan "], button[aria-label^="Close the plan"]');
+          const header = document.querySelector<HTMLElement>(`section[data-group-key="${CSS.escape(body.to)}"] > button`);
+          const target = plan && plan.offsetParent !== null ? plan : header;
+          target?.focus();
+        }),
+      ),
+  });
+}
+
+/** The quiet line under a row: a line and the actions it belongs to, words at the left and the actions at the right (wrapping under the
+ *  words, still at the right, when they do not fit beside them), so a list of suggestions stays a list of tasks. `more` is the why, shown
+ *  from the tablet width up: on a phone a suggestion is one line, its mark and its Keep here. */
+function HintLine({ words, more, mark, children, failed, data }: { words?: string; more?: string; mark?: ReactNode; children: ReactNode; failed: boolean; data: Record<string, string> }) {
+  return (
+    <div className="mt-xs px-sm" {...data}>
+      <div className="flex flex-wrap items-center justify-between gap-xs">
+        <p className="m-0 min-w-0 flex-[1_1_60%] text-caption text-ink-soft">
+          {mark}
+          {mark && (words || more) ? ' ' : null}
+          {words}
+          {more ? <span className="hidden sm:inline">{more}</span> : null}
+        </p>
+        <div className="ml-auto flex shrink-0 gap-xs">{children}</div>
+      </div>
+      {failed && (
+        <p role="alert" className="mt-xs m-0 text-caption">
+          That did not save. Try again.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** A task with no block and no time, shown in the block suggested for it: Suggested, why, and Keep here (its block from now on). */
+function SuggestLine({ task, block }: { task: Node; block: TimeBlock }) {
+  const save = useHintSave(task);
+  return (
+    <HintLine more={suggestLine(suggestWhy(task, block), block)} mark={<StatusTag tone="calm">Suggested</StatusTag>} failed={save.isError} data={{ 'data-block-suggested': block.id }}>
+      <Button variant="outline" size="sm" disabled={save.isPending} onClick={() => save.mutate({ timeBlockId: block.id, to: block.id })} aria-label={`Keep here, in ${block.name}: ${task.title}`}>
+        Keep here
+      </Button>
+    </HintLine>
+  );
+}
+
+/** A task its time put in a block meant for another area or pillar: one quiet line, Move it (to the better block's time) or Keep here. */
+function MismatchLine({ task, m }: { task: Node; m: BlockMismatch }) {
+  const save = useHintSave(task);
+  return (
+    <HintLine words={blockMismatchLine(m, slotRange)} failed={save.isError} data={{ 'data-block-mismatch': m.better.id }}>
+      <Button variant="outline" size="sm" disabled={save.isPending} onClick={() => save.mutate({ dueTime: m.start, to: m.better.id })} aria-label={`Move it to ${m.better.name}: ${task.title}`}>
+        Move it
+      </Button>
+      <Button variant="outline" size="sm" disabled={save.isPending} onClick={() => save.mutate({ timeBlockId: m.block.id, to: m.block.id })} aria-label={`Keep here, in ${m.block.name}: ${task.title}`}>
+        Keep here
+      </Button>
+    </HintLine>
   );
 }

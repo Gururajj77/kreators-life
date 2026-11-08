@@ -142,7 +142,7 @@ function PartyEdit({ p, onChange, who, taxHint, tight = false }: { p: InvoicePar
 }
 
 /**
- * A phone typed on the paper: read the Indian way ("+91 77421 14087", `phoneDisplay`) until it is picked, then exactly as kept, so the
+ * A phone typed on the paper: read the Indian way ("+91 98765 43210", `phoneDisplay`) until it is picked, then exactly as kept, so the
  * stored number only changes when the person types.
  */
 function PhoneText({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {

@@ -30,7 +30,7 @@ import {
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { audit, objectBody, dayFromDevice, nameOf, newId, notify, nowIso, oneOf, pageOf, paged, randomCode, str } from '../db';
-import { coverFrom, emailCopy, logDoc, maskEmail, ownLogo, publicUrl } from '../agencyPaper';
+import { coverFrom, emailCopy, logDoc, logOtherPapers, maskEmail, ownLogo, publicUrl } from '../agencyPaper';
 import { settingsFor } from './agency';
 import { activeHouse, clientBits, clientFacts, docOf, houseContract, jsonOr, ownTemplate, recipientFor, templateDoc } from './agencyDocs';
 
@@ -292,6 +292,7 @@ agencyOther.post('/:id/email', async (c) => {
     replyTo: invoiceFromProfile(settings.profile).email,
   });
   await logDoc(db, user.id, 'doc', row.id, result.sent ? 'emailed' : 'email-not-sent', maskEmail(who.to));
+  await logOtherPapers(db, user.id, row.client_id, cover?.message, row.id, result.sent ? 'emailed' : 'email-not-sent', maskEmail(who.to));
   await audit(db, user.id, 'agency_doc.email', 'doc', row.id, '', maskEmail(who.to));
   return c.json({ ok: true, ...result, to: maskEmail(who.to) });
 });

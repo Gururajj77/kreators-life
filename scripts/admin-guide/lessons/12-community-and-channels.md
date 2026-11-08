@@ -9,9 +9,9 @@ In this lesson you'll learn:
 - How channels work beside the feed.
 - How a guide holds, pins, hides and mutes, and how you make one.
 
-## Switch it on
+## Find it
 
-Community is off on a new account. Riya opens **Apps**, taps the **Connection** group and turns on the switch beside **Community**.
+Community starts hidden on a new account, unless the setup chat showed it for her. Riya opens **Apps**, opens the **Connection** group, opens **Hidden apps** at its end and taps the eye beside **Community**.
 
 ## Step by step: Riya's first post
 

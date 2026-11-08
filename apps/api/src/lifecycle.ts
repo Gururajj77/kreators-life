@@ -1,3 +1,4 @@
+import { openTurn, type Turn } from './cronTick';
 import {
   autoStage,
   parseLifecycleDates,
@@ -54,11 +55,19 @@ export function logStmt(db: D1Database, userId: string, clientId: string, by: Lo
  * cron move it once. Writes the log line when it moved. True when it did.
  */
 export async function moveStage(db: D1Database, userId: string, clientId: string, from: AgencyStageKey, to: AgencyStageKey, actor: LogActor, text: string): Promise<boolean> {
+  const [moved] = await db.batch(moveStmts(db, userId, clientId, from, to, actor, text));
+  return Boolean(moved?.meta.changes);
+}
+
+/** The move and its log line, for one batch: the line goes only when that move changed a row, so a stop can never leave a move with no line, and two runs write one. */
+function moveStmts(db: D1Database, userId: string, clientId: string, from: AgencyStageKey, to: AgencyStageKey, by: LogActor, text: string): D1PreparedStatement[] {
   const now = nowIso();
-  const res = await db.prepare('UPDATE agency_clients SET stage = ?, stage_since = ?, updated_at = ? WHERE id = ? AND user_id = ? AND stage = ?').bind(to, now, now, clientId, userId, from).run();
-  if (!res.meta.changes) return false;
-  await logStmt(db, userId, clientId, actor, 'stage', text).run();
-  return true;
+  const actor = typeof by === 'string' ? by : by.actor;
+  const actorId = typeof by === 'string' ? null : by.actorId;
+  return [
+    db.prepare('UPDATE agency_clients SET stage = ?, stage_since = ?, updated_at = ? WHERE id = ? AND user_id = ? AND stage = ?').bind(to, now, now, clientId, userId, from),
+    db.prepare("INSERT INTO agency_log (id, user_id, client_id, actor, actor_id, kind, text, created_at) SELECT ?, ?, ?, ?, ?, 'stage', ?, ? WHERE changes() = 1").bind(newId(), userId, clientId, actor, actorId, text.slice(0, 300), now),
+  ];
 }
 
 /** Applies a stage event the app saw (an agreement sent or signed, an offer, a retainer started): forward only, once. */
@@ -79,7 +88,7 @@ export async function applyStageEvent(db: D1Database, userId: string, clientId: 
  * (to Enquiry with an agreement still out, say) the client stays where they were put until an agreement is sent or signed again; before
  * this, the next page load moved them straight forward again (the founder, 2026-11-07). A client with no `stage_since` keeps the old rule.
  */
-export async function syncStageFromAgreements(db: D1Database, only?: { userId: string; clientId: string }): Promise<number> {
+export async function syncStageFromAgreements(db: D1Database, only?: { userId: string; clientId: string }, turn: Turn = openTurn(db)): Promise<number> {
   const rows = await db
     .prepare(
       `SELECT c.id, c.user_id, c.stage,
@@ -93,14 +102,17 @@ export async function syncStageFromAgreements(db: D1Database, only?: { userId: s
     )
     .bind(...(only ? [only.clientId, only.userId] : []))
     .all<{ id: string; user_id: string; stage: string; signed: number; sent: number }>();
-  let moved = 0;
-  for (const r of rows.results) {
+  if (!rows.results.length) return 0;
+  const share = await turn();
+  const moves = rows.results.flatMap((r) => {
     const from = parseStage(r.stage);
     const event: StageEvent = r.signed ? 'agreement_signed' : 'agreement_sent';
     const to = autoStage(from, event);
-    if (to && (await moveStage(db, r.user_id, r.id, from, to, 'auto', event === 'agreement_signed' ? 'The agreement was signed.' : 'The agreement was sent.'))) moved += 1;
-  }
-  return moved;
+    return to ? [{ r, from, to, text: event === 'agreement_signed' ? 'The agreement was signed.' : 'The agreement was sent.' }] : [];
+  });
+  // Two statements each, twenty-five clients to a trip. What is not reached is still early and is read again next tick.
+  const sent = await share.send(share.fit(moves, 2).flatMap(({ r, from, to, text }) => moveStmts(db, r.user_id, r.id, from, to, 'auto', text)));
+  return sent.filter((res, i) => i % 2 === 0 && res.meta.changes).length;
 }
 
 /** Closes a client's open ask for a new password: the owner set one, or dismissed it. A statement, so it rides in the same batch. */

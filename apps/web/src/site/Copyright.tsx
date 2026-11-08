@@ -166,7 +166,7 @@ export function Copyright() {
 
       <H>Our designated agent (United States)</H>
       <P>For a notice under the US copyright law (the DMCA), you can also write to our agent.</P>
-      <div className="mt-sm grid gap-sm md:grid-cols-2">
+      <div className="mt-sm grid gap-sm md:grid-cols-2 md:[&>:last-child:nth-child(odd)]:col-span-2">
         <Fact label="Agent" value={agent} unset={unset} />
         <Fact label="Address" value={business?.dmcaAddress} unset={unset} />
         <Fact label="Email" value={business?.dmcaEmail || email} unset="" />

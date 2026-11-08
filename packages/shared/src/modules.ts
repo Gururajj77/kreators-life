@@ -27,6 +27,8 @@ export interface AppModule {
   minRole: Role;
 }
 
+/** Every app. The order here is the default order inside a group, everywhere apps are listed (the founder's, 2026-11-07: Connection, Essentials
+ * and Operations as he set them, Reflection by importance and Creation by value), until a person arranges a group under Profile, Features. */
 export const MODULES: readonly AppModule[] = [
   { key: 'home', name: 'Home', blurb: 'Your numbers, your day, and a door into everything.', icon: 'House', group: 'core', path: '/home', defaultOn: true, locked: true, minRole: 'user' },
   { key: 'today', name: 'Daily', blurb: 'Your three boxes a day.', icon: 'Sun', group: 'core', path: '/today', defaultOn: true, locked: true, minRole: 'user' },
@@ -34,10 +36,6 @@ export const MODULES: readonly AppModule[] = [
   { key: 'search', name: 'Search', blurb: 'Find anything you wrote, bought, applied to or read.', icon: 'Search', group: 'core', path: '/search', defaultOn: true, locked: true, minRole: 'user' },
   // On for everyone. People still only appear after they opt in under Profile, and journal and wellbeing never count.
   { key: 'leaderboard', name: 'Leaderboard', blurb: 'See where you stand by goal, pillar and city, with a monthly season.', icon: 'Trophy', group: 'core', path: '/leaderboard', defaultOn: true, minRole: 'user' },
-  // Off on a new account; unlocking a game in Rewards switches it on.
-  { key: 'cards', name: 'Games', blurb: 'Unlock a game with points, then play it with the people around you.', icon: 'Spade', group: 'community', path: '/cards', defaultOn: false, minRole: 'user', accent: 'friendship' },
-  // Off on a new account. Owner only, like the journal: never shown to brands, staff, the leaderboard, a coach or the assistant.
-  { key: 'discover', name: 'Discover', blurb: 'A quiz on how you think, feel and act. It shows your strengths across the seven relationships.', icon: 'Telescope', group: 'wellbeing', path: '/discover', defaultOn: false, minRole: 'user', accent: 'self' },
   { key: 'notifications', name: 'Inbox', blurb: 'What happened while you were away, and daily reminders.', icon: 'Bell', group: 'core', path: '/inbox', defaultOn: true, minRole: 'user' },
   { key: 'help', name: 'Help', blurb: 'Answers to your questions, and a line to the team.', icon: 'LifeBuoy', group: 'core', path: '/help', defaultOn: true, minRole: 'user' },
   // The assistant is part of every screen, not an app of its own: locked on, and its page is its plan and credits.
@@ -50,41 +48,47 @@ export const MODULES: readonly AppModule[] = [
   // Off on a new account. Owner only: a content agency's or a freelance creator's clients, pieces, time and approvals.
   { key: 'agency', name: 'Agency', blurb: 'Clients, content pieces from idea to published, retainers, time, approvals and invoices.', icon: 'FolderKanban', group: 'earn', path: '/agency', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
 
-  { key: 'party', name: 'Party', blurb: 'Meetups, workshops, camps and flagship days. RSVP, waitlist, check in.', icon: 'PartyPopper', group: 'community', path: '/party', defaultOn: false, minRole: 'user', accent: 'friendship' },
-  { key: 'run', name: 'Kreators Run', blurb: 'Run clubs near you. A start code at the line logs your run.', icon: 'Footprints', group: 'community', path: '/run', defaultOn: false, minRole: 'user', accent: 'friendship' },
   { key: 'community', name: 'Community', blurb: 'Posts, replies and likes, by category.', icon: 'MessagesSquare', group: 'community', path: '/community', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  { key: 'run', name: 'Kreators Run', blurb: 'Run clubs near you. A start code at the line logs your run.', icon: 'Footprints', group: 'community', path: '/run', defaultOn: false, minRole: 'user', accent: 'friendship' },
   { key: 'club', name: 'Club', blurb: 'A curated membership with benefits and members-only opportunities.', icon: 'IdCard', group: 'community', path: '/club', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  { key: 'party', name: 'Party', blurb: 'Meetups, workshops, camps and flagship days. RSVP, waitlist, check in.', icon: 'PartyPopper', group: 'community', path: '/party', defaultOn: false, minRole: 'user', accent: 'friendship' },
   { key: 'bond', name: 'Bond', blurb: 'Friends, introductions, and anonymous chats with people you met.', icon: 'Handshake', group: 'community', path: '/bond', defaultOn: false, minRole: 'user', accent: 'friendship' },
   { key: 'circles', name: 'Circles', blurb: 'Small anonymous groups near you each week, matched by interests that fit.', icon: 'UsersRound', group: 'community', path: '/circles', defaultOn: false, minRole: 'user', accent: 'friendship' },
+  // Off on a new account; unlocking a game in Rewards switches it on.
+  { key: 'cards', name: 'Games', blurb: 'Unlock a game with points, then play it with the people around you.', icon: 'Spade', group: 'community', path: '/cards', defaultOn: false, minRole: 'user', accent: 'friendship' },
 
   { key: 'life', name: 'Life', blurb: 'The five areas of life on one dashboard.', icon: 'Compass', group: 'wellbeing', path: '/life', defaultOn: true, minRole: 'user', accent: 'lover_partner' },
+  { key: 'journal', name: 'Journal', blurb: 'Write it down with an emotion and a stress level.', icon: 'NotebookPen', group: 'wellbeing', path: '/journal', defaultOn: true, minRole: 'user', accent: 'self' },
+  { key: 'reviews', name: 'Reviews', blurb: 'Look back on a day to a year, with your numbers and your pillars.', icon: 'ClipboardCheck', group: 'wellbeing', path: '/reviews', defaultOn: false, minRole: 'user', accent: 'self' },
+  { key: 'mindful', name: 'Mindfulness', blurb: 'A breathing timer that logs your minutes.', icon: 'Wind', group: 'wellbeing', path: '/mindful', defaultOn: false, minRole: 'user', accent: 'divine' },
+  // Off on a new account. Movement and a daily eating check-in, private like every tracker; nothing in it pays.
+  { key: 'fitness', name: 'Fitness', blurb: 'Log a run, a walk or a workout, and how you ate today.', icon: 'Dumbbell', group: 'wellbeing', path: '/fitness', defaultOn: false, minRole: 'user', accent: 'self' },
   { key: 'wellbeing', name: 'Wellbeing', blurb: 'One score from your mood, sleep, stress and mindful minutes.', icon: 'HeartPulse', group: 'wellbeing', path: '/wellbeing', defaultOn: false, minRole: 'user', accent: 'lover_partner' },
   { key: 'mood', name: 'Mood', blurb: 'How are you feeling today? Pick a face, see the week.', icon: 'FaceSlightlySmiling', group: 'wellbeing', path: '/mood', defaultOn: false, minRole: 'user', accent: 'parent_child' },
   { key: 'sleep', name: 'Sleep', blurb: 'Hours and quality, night by night.', icon: 'Moon', group: 'wellbeing', path: '/sleep', defaultOn: false, minRole: 'user', accent: 'guru' },
   { key: 'stress', name: 'Stress', blurb: 'Level and what is behind it.', icon: 'WavesHorizontal', group: 'wellbeing', path: '/stress', defaultOn: false, minRole: 'user', accent: 'friendship' },
-  { key: 'mindful', name: 'Mindfulness', blurb: 'A breathing timer that logs your minutes.', icon: 'Wind', group: 'wellbeing', path: '/mindful', defaultOn: false, minRole: 'user', accent: 'divine' },
-  { key: 'journal', name: 'Journal', blurb: 'Write it down with an emotion and a stress level.', icon: 'NotebookPen', group: 'wellbeing', path: '/journal', defaultOn: true, minRole: 'user', accent: 'self' },
-  { key: 'reviews', name: 'Reviews', blurb: 'Look back on a week, month, quarter or half year, with your numbers.', icon: 'ClipboardCheck', group: 'wellbeing', path: '/reviews', defaultOn: false, minRole: 'user', accent: 'self' },
-  { key: 'companion', name: 'Companion', blurb: 'A chat that knows how you are doing. Not a therapist.', icon: 'MessageCircleHeart', group: 'wellbeing', path: '/companion', defaultOn: false, minRole: 'user', accent: 'guru' },
   { key: 'coaching', name: 'Coaching', blurb: 'A life coach sees only what you share, never your journal.', icon: 'Target', group: 'wellbeing', path: '/coaching', defaultOn: false, minRole: 'user', accent: 'guru' },
+  { key: 'companion', name: 'Companion', blurb: 'A chat that knows how you are doing. Not a therapist.', icon: 'MessageCircleHeart', group: 'wellbeing', path: '/companion', defaultOn: false, minRole: 'user', accent: 'guru' },
+  // Off on a new account. Owner only, like the journal: never shown to brands, staff, the leaderboard, a coach or the assistant.
+  { key: 'discover', name: 'Discover', blurb: 'A quiz on how you think, feel and act. It shows your strengths across the seven relationships.', icon: 'Telescope', group: 'wellbeing', path: '/discover', defaultOn: false, minRole: 'user', accent: 'self' },
 
-  { key: 'profile', name: 'Public page', blurb: 'What people see: bio, skills, portfolio, links and what you sell.', icon: 'Link', group: 'creator', path: '/profile', defaultOn: true, minRole: 'user', accent: 'self' },
   { key: 'shop', name: 'Shop', blurb: 'Sell downloads, courses, memberships, sessions and events.', icon: 'ShoppingBag', group: 'creator', path: '/shop', defaultOn: true, minRole: 'user', accent: 'servant_leader' },
-  { key: 'store', name: 'Store', blurb: 'Gear new from partners, or pre-owned from other creators.', icon: 'ShoppingCart', group: 'creator', path: '/store', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
-  { key: 'audience', name: 'Audience', blurb: 'Your followers, leads, broadcasts and affiliate link.', icon: 'Megaphone', group: 'creator', path: '/shop/audience', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
+  { key: 'profile', name: 'Public page', blurb: 'What people see: bio, skills, portfolio, links and what you sell.', icon: 'Link', group: 'creator', path: '/profile', defaultOn: true, minRole: 'user', accent: 'self' },
   { key: 'content', name: 'Content', blurb: 'Which post made money: tracked links, views and revenue per piece of content.', icon: 'TrendingUp', group: 'creator', path: '/shop/content', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
+  { key: 'audience', name: 'Audience', blurb: 'Your followers, leads, broadcasts and affiliate link.', icon: 'Megaphone', group: 'creator', path: '/shop/audience', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
   { key: 'automations', name: 'Auto-DM', blurb: 'Comment a keyword, get a link in DMs. Funnels show where people drop off.', icon: 'Bot', group: 'creator', path: '/shop/automations', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
   { key: 'finance', name: 'Finance', blurb: 'Money in and out, dues, budgets and goals for your work.', icon: 'Wallet', group: 'creator', path: '/finance', defaultOn: false, minRole: 'user', accent: 'parent_child' },
-  { key: 'library', name: 'My purchases', blurb: 'Courses, downloads, memberships, tickets and sessions you own.', icon: 'Backpack', group: 'creator', path: '/library', defaultOn: false, minRole: 'user', accent: 'guru' },
+  { key: 'fund', name: 'Fund', blurb: 'Apply for a grant or backing for a project.', icon: 'Sprout', group: 'creator', path: '/fund', defaultOn: false, minRole: 'user', accent: 'divine' },
+  { key: 'tv', name: 'TV', blurb: 'Pitch a series. Track it from proposal to release.', icon: 'Tv', group: 'creator', path: '/tv', defaultOn: false, minRole: 'user', accent: 'divine' },
   { key: 'knowledge', name: 'Knowledge', blurb: 'Curated articles and exercises with their sources.', icon: 'BookOpen', group: 'creator', path: '/knowledge', defaultOn: false, minRole: 'user', accent: 'guru' },
   { key: 'tools', name: 'Tools', blurb: 'A directory of creator tools, verified by the team.', icon: 'Toolbox', group: 'creator', path: '/tools', defaultOn: false, minRole: 'user', accent: 'guru' },
-  { key: 'tv', name: 'TV', blurb: 'Pitch a series. Track it from proposal to release.', icon: 'Tv', group: 'creator', path: '/tv', defaultOn: false, minRole: 'user', accent: 'divine' },
-  { key: 'fund', name: 'Fund', blurb: 'Apply for a grant or backing for a project.', icon: 'Sprout', group: 'creator', path: '/fund', defaultOn: false, minRole: 'user', accent: 'divine' },
+  { key: 'store', name: 'Store', blurb: 'Gear new from partners, or pre-owned from other creators.', icon: 'ShoppingCart', group: 'creator', path: '/store', defaultOn: false, minRole: 'user', accent: 'servant_leader' },
+  { key: 'library', name: 'My purchases', blurb: 'Courses, downloads, memberships, tickets and sessions you own.', icon: 'Backpack', group: 'creator', path: '/library', defaultOn: false, minRole: 'user', accent: 'guru' },
 
-  { key: 'manage', name: 'Manage', blurb: 'Your staff tools, as far as your permissions go.', icon: 'ShieldCheck', group: 'manage', path: '/manage', defaultOn: true, minRole: 'sub_admin' },
   { key: 'admin', name: 'Admin', blurb: 'Roles, permissions, feature flags, audit log, honors, points.', icon: 'KeyRound', group: 'manage', path: '/admin', defaultOn: true, minRole: 'admin' },
+  { key: 'manage', name: 'Manage', blurb: 'Your staff tools, as far as your permissions go.', icon: 'ShieldCheck', group: 'manage', path: '/manage', defaultOn: true, minRole: 'sub_admin' },
   // Tracking for the team, in Operations: the module's minRole keeps it to staff and admins.
-  { key: 'observability', name: 'Observability', blurb: 'Who is here, which apps are on, roles and the build map.', icon: 'RadioTower', group: 'manage', path: '/internal/observability', defaultOn: true, minRole: 'sub_admin' },
+  { key: 'observability', name: 'Dev Tools', blurb: 'Who is here, which apps are on, roles and the build map.', icon: 'RadioTower', group: 'manage', path: '/internal/observability', defaultOn: true, minRole: 'sub_admin' },
 ];
 
 export const MODULE_BY_KEY: Record<string, AppModule> = byKey(MODULES.map((m) => [m.key, m]));
@@ -100,7 +104,7 @@ export const MODULE_GROUPS: Record<ModuleGroup, string> = {
 
 /** The one order of the app groups, everywhere they are listed (Apps, Profile, Features, the sidebar, the phone menu, Home's Go to,
  * the public Features page): Contribution, Reflection, Connection, Creation, Essentials, then the team's Operations. The founder's
- * order (2026-11-03); apps inside a group still come in the order that fits the person. */
+ * order (2026-11-03); inside a group, apps come in MODULES' order unless the person arranged them. */
 export const MODULE_GROUP_ORDER: readonly ModuleGroup[] = ['earn', 'wellbeing', 'community', 'creator', 'core', 'manage'];
 /** The given groups, in the one order. */
 export const inGroupOrder = (groups: readonly ModuleGroup[]): ModuleGroup[] => MODULE_GROUP_ORDER.filter((g) => groups.includes(g));
@@ -190,7 +194,7 @@ export function groupStartsOpen(prefs: AppPrefs | null | undefined, group: Modul
 }
 
 /** The apps of one group in the person's order: the ones they placed first, in their order, then every other app in the order it came
- * in (the context order: on first, then what fits, then what they open most), so an app added later slots in by that rule. */
+ * in (the default order, `MODULES`), so an app added later slots in by that rule. */
 export function orderInGroup<T extends { key: string }>(list: readonly T[], order: readonly string[] | null | undefined): T[] {
   if (!order || order.length === 0) return [...list];
   const at = new Map(order.map((k, i) => [k, i] as const));

@@ -20,6 +20,10 @@ export const FIELD_44 = 'mt-xs min-h-[44px] w-full rounded-tile border-2 border-
 export const SELECT_SM = 'min-h-[44px] rounded-pill border-2 border-line bg-card px-sm text-subhead font-medium';
 /** The words above a field. */
 export const LABEL = 'block text-subhead font-semibold';
+/** A destructive yes, the one look (`.red-yes` in app.css): the pale red outline at rest, solid red on a mouse hover, keyboard focus or a press. */
+export const RED_YES = 'toy inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill px-md text-headline red-yes disabled:opacity-50';
+/** The same yes in a stacked column, level with a `size="lg"` Keep under it. */
+export const RED_YES_LG = 'toy inline-flex min-h-[56px] items-center justify-center gap-xs rounded-pill px-md text-headline red-yes disabled:opacity-50';
 
 /** A pill that picks one of a few (a filter, a sort): solid only once it is picked. 44px tall. */
 export const chip = (on: boolean) => `toy inline-flex min-h-[44px] shrink-0 items-center rounded-pill border-2 px-sm text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card text-ink'}`;

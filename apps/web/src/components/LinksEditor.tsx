@@ -117,38 +117,43 @@ export function LinksEditor({ initial }: { initial: LinkBlock[] }) {
                   <StatusTag tone="info">{clicks.data?.clicks[b.id] ?? 0} {(clicks.data?.clicks[b.id] ?? 0) === 1 ? 'tap' : 'taps'}</StatusTag>
                 )}
               </div>
-              <div className="mt-xs flex flex-wrap gap-xs">
-                <Button variant="outline" size="sm" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move ${b.title || LINK_BLOCK_META[b.type].name} up`}>
-                  Up
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => move(i, 1)} disabled={i === blocks.length - 1} aria-label={`Move ${b.title || LINK_BLOCK_META[b.type].name} down`}>
-                  Down
-                </Button>
+              {/* The block's other actions at the left and Edit at the bottom right of what it edits (Layout patterns, 2026-11-06); on a narrow
+                  phone Edit wraps under them, still at the right. */}
+              <div className="mt-xs flex flex-wrap items-center gap-xs">
+                <div className="flex flex-wrap gap-xs">
+                  <Button variant="outline" size="sm" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move ${b.title || LINK_BLOCK_META[b.type].name} up`}>
+                    Up
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => move(i, 1)} disabled={i === blocks.length - 1} aria-label={`Move ${b.title || LINK_BLOCK_META[b.type].name} down`}>
+                    Down
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => commit(blocks.map((x) => (x.id === b.id ? { ...x, on: !x.on } : x)))}>
+                    {b.on ? 'Hide' : 'Show'}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={save.isPending}
+                    aria-haspopup="dialog"
+                    aria-label={`Remove ${b.title || LINK_BLOCK_META[b.type].name}`}
+                    onClick={() => {
+                      save.reset();
+                      setRemoving(b);
+                    }}
+                  >
+                    Remove
+                  </Button>
+                </div>
                 <Button
                   variant="outline"
                   size="sm"
+                  className="ml-auto"
                   onClick={() => {
                     setEditing({ ...b, items: b.items.map((it) => ({ ...it })) });
                     setIsNew(false);
                   }}
                 >
                   Edit
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => commit(blocks.map((x) => (x.id === b.id ? { ...x, on: !x.on } : x)))}>
-                  {b.on ? 'Hide' : 'Show'}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={save.isPending}
-                  aria-haspopup="dialog"
-                  aria-label={`Remove ${b.title || LINK_BLOCK_META[b.type].name}`}
-                  onClick={() => {
-                    save.reset();
-                    setRemoving(b);
-                  }}
-                >
-                  Remove
                 </Button>
               </div>
             </li>

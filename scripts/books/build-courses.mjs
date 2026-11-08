@@ -6,7 +6,8 @@
 //   node scripts/books/build-courses.mjs --sync <out.sql>
 //       UPDATE statements that bring a database where the migration already ran up to the
 //       current sources (titles, bodies, program and assignment text). It never deletes a row,
-//       so enrolments and lesson progress stay. Apply it with wrangler d1 execute --file.
+//       so enrolments and lesson progress stay, and it never touches a lesson's resources
+//       (lesson_resources), which an admin adds in School. Apply it with wrangler d1 execute --file.
 //
 // Each source in scripts/books/courses/*.md is one School program, written by hand from the
 // founder's own book (Shubham Aggarwal). The migration it writes is the same shape as

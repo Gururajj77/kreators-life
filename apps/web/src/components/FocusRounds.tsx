@@ -12,7 +12,7 @@ import { useFocusPortal } from '../lib/focusPortal';
 import { claimPart, FOCUS_TAB_ID, focusChannel, focusRunOwner, markPartDone, partDone, readFocusRun, snapshotLeftMs, useFocusSession, writeFocusRun, type FocusKind, type FocusSnapshot, type FocusTabMessage } from '../lib/focusSession';
 import { useRefreshAll } from '../lib/queries';
 import { useDebounced } from '../lib/useDebounced';
-import { chip, FIELD } from '../lib/ui';
+import { chip, FIELD, RED_YES } from '../lib/ui';
 import { playBeats, playBreathCue, playChime, unlockAudio, useAmbient } from '../lib/sound';
 import { BreathFour } from './BreathFour';
 import { useFocus, useSession } from '../lib/store';
@@ -347,9 +347,9 @@ function SessionEditor({ edit, onClose, enabled, owner, logFocus }: { edit: Focu
       {!fresh &&
         (asking ? (
           <div className="mt-sm grid grid-cols-2 gap-xs" role="group" aria-label="Delete this session?">
-            <Button variant="outline" disabled={busy} onClick={remove}>
+            <button type="button" disabled={busy} onClick={remove} className={RED_YES}>
               Delete it
-            </Button>
+            </button>
             <Button variant="outline" disabled={busy} onClick={() => setAsking(false)}>
               Keep it
             </Button>

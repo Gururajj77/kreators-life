@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
 import { Icon } from './Icon';
 import { MoodFace } from './MoodFace';
 import { tie } from '../lib/text';
+import { fullDay } from '../lib/date';
 
 /**
  * The kit's chart vocabulary, drawn in SVG with the theme's tokens so every one works in light and dark.
@@ -447,9 +448,14 @@ export function CalendarGrid({
   onMonth,
   maxDate,
   selected,
+  dots,
+  dotLabel,
 }: {
   month: string;
   marks: Record<string, { color: string; icon?: LucideIcon; mood?: number }>;
+  /** A small dot under a day's mark, for a second thing the day holds (Journal: gratitude written), said in words by `dotLabel`. */
+  dots?: Record<string, boolean>;
+  dotLabel?: string;
   label: string;
   today?: string;
   onFill?: boolean;
@@ -518,11 +524,22 @@ export function CalendarGrid({
               {mark?.icon ? <Icon icon={mark.icon} size={14} strokeWidth={3} /> : day}
             </span>
           );
+          const dotted = Boolean(dots?.[key]);
+          const cell = dotted ? (
+            <span className="relative flex">
+              {face}
+              <span aria-hidden="true" className="absolute -bottom-[6px] left-1/2 size-[6px] -translate-x-1/2 rounded-pill" style={{ background: onFill ? 'var(--color-on-fill)' : 'var(--color-ink)' }} />
+            </span>
+          ) : (
+            face
+          );
           const blocked = Boolean(maxDate && key > maxDate);
+          // What the day holds, in words: an entry, the second thing a dot marks, or both, so a dot-only day never reads "nothing yet".
+          const holds = [mark ? 'has an entry' : '', dotted && dotLabel ? dotLabel : ''].filter(Boolean).join(', ');
           if (!onPick) {
             return (
               <span key={key} className="flex items-center justify-center">
-                {face}
+                {cell}
               </span>
             );
           }
@@ -532,10 +549,10 @@ export function CalendarGrid({
               type="button"
               disabled={blocked}
               onClick={() => onPick(key)}
-              aria-label={`${new Date(`${key}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long' })}, ${mark ? 'has an entry. Open it' : blocked ? 'not yet' : 'nothing yet. Add one'}`}
+              aria-label={`${fullDay(key)}, ${holds ? `${holds}. Open it` : blocked ? 'not yet' : 'nothing yet. Add one'}`}
               className={`toy toy-flat flex min-h-[44px] items-center justify-center rounded-pill ${blocked ? 'opacity-40' : ''}`}
             >
-              {face}
+              {cell}
             </button>
           );
         })}
@@ -563,11 +580,20 @@ export function EmojiRow({ items, onFill = false, size = 36 }: { items: { label:
 }
 
 /** One number with its name, and a hint on what moved it. Tap to go where it comes from. */
+/**
+ * A long figure with nowhere to break steps down a size, so a tile's edge never cuts a digit off (₹1,00,00,00 reads ten lakh, not a crore): nine or ten characters on a phone or a tablet,
+ * eleven or more at every width. A figure longer than that breaks rather than clips.
+ */
+const figureSize = (value: ReactNode): string => {
+  if (typeof value !== 'string' || /\s/.test(value) || value.length < 9) return 'text-title1';
+  return value.length >= 11 ? 'text-title2' : 'text-title2 lg:text-title1';
+};
+
 export function StatTile({ label, value, hint, tone, to, children, className = '', onClick, pressed }: { label: string; value: ReactNode; hint?: ReactNode; tone?: string; to?: string; children?: ReactNode; className?: string; onClick?: () => void; pressed?: boolean }) {
   const inner = (
     <>
       <span className="block text-eyebrow uppercase text-ink-soft">{label}</span>
-      <span className="mt-xs block text-title1 type-figure leading-none">{value}</span>
+      <span className={`mt-xs block ${figureSize(value)} type-figure leading-none [overflow-wrap:anywhere]`}>{value}</span>
       {hint && <span className="mt-xs block text-caption text-ink-soft">{hint}</span>}
       {children}
     </>

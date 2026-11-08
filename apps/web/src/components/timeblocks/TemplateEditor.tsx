@@ -24,6 +24,7 @@ import { IconButton } from '../IconButton';
 import { MoreMenu, type MoreMenuItem } from '../MoreMenu';
 import { FIELD, FIELD_LINE, LABEL } from '../../lib/ui';
 import { SwatchPicker } from './SwatchPicker';
+import { clockOf } from '../../lib/date';
 
 interface SlotDraft {
   /** A made id, so a row keeps its key while the list changes (never the index). */
@@ -73,6 +74,7 @@ export function TemplateEditor({
   const [second, setSecond] = useState<RelationshipKey | null>(template.second);
   const [color, setColor] = useState<BlockColor>(() => templateColor(template, blocks) ?? 'indigo');
   const colourId = useId();
+  const addSlotId = useId();
   const [slots, setSlots] = useState<SlotDraft[]>(() => draftSlots(template));
   const ids = useMemo(() => new Set(blocks.map((b) => b.id)), [blocks]);
   const names = useMemo(() => Object.fromEntries(blocks.map((b) => [b.id, b.name])) as Record<string, string>, [blocks]);
@@ -167,14 +169,23 @@ export function TemplateEditor({
                 {/* On a phone the length and the remove sit beside the block, and the two times take the next line in full. */}
                 <span className="order-2 ml-auto flex shrink-0 items-center gap-xs sm:order-3">
                   {len && <span className="whitespace-nowrap text-footnote text-ink-soft">{len}</span>}
-                  <IconButton icon={Trash2} label={`Remove ${blockName} from ${s.start} to ${s.end}`} tip="br" onClick={() => setSlots((list) => list.filter((x) => x.key !== s.key))} />
+                  {/* The row and this button go, so the keyboard's place moves to Add a slot, under the list. */}
+                  <IconButton
+                    icon={Trash2}
+                    label={`Remove ${blockName} from ${clockOf(s.start)} to ${clockOf(s.end)}`}
+                    tip="br"
+                    onClick={() => {
+                      setSlots((list) => list.filter((x) => x.key !== s.key));
+                      document.getElementById(addSlotId)?.focus({ preventScroll: true });
+                    }}
+                  />
                 </span>
               </li>
             );
           })}
         </ul>
         <div className="mt-xs">
-          <Button type="button" variant="outline" size="sm" full onClick={add} disabled={slots.length >= MAX_TEMPLATE_SLOTS || blocks.length === 0}>
+          <Button id={addSlotId} type="button" variant="outline" size="sm" full onClick={add} disabled={slots.length >= MAX_TEMPLATE_SLOTS || blocks.length === 0}>
             <Icon icon={Plus} size={16} />
             Add a slot
           </Button>

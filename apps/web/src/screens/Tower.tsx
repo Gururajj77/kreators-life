@@ -20,12 +20,12 @@ import { ArrowUpRight } from 'lucide-react';
 import { EmergenceSlot } from '../components/EmergenceSlot';
 
 /** One pillar card. With a strategy session behind it, the card carries the pillar's map line: floor to core, the Courage mark, and a focus tag. */
-function Floor({ r, state, delay, placement, focus }: { r: Relationship; state: RelationshipState | undefined; delay: number; placement: Placement | null; focus: boolean }) {
+function Floor({ r, state, tasks, delay, placement, focus }: { r: Relationship; state: RelationshipState | undefined; tasks: { activeTasks: number; doneTasks: number } | undefined; delay: number; placement: Placement | null; focus: boolean }) {
   const reduce = useReducedMotion();
   const built = (state?.pillars ?? 0) > 0;
   const lp = levelProgress(state?.xp ?? 0);
-  const todo = state?.activeTasks ?? 0;
-  const done = state?.doneTasks ?? 0;
+  const todo = tasks?.activeTasks ?? 0;
+  const done = tasks?.doneTasks ?? 0;
   const asked = state?.answered ?? true;
   const line = !asked ? `Not asked yet. Tap to answer ${r.character}'s three questions.` : built ? `Set up. ${todo === 0 ? 'Nothing to do' : `${todo} to do`}, ${done} done.` : 'Not set up yet. Tap to start.';
   const f = placement ? placementFlags(placement) : null;
@@ -91,6 +91,7 @@ function StartSessionCard() {
 
 export function Tower() {
   const me = useMe();
+  const pillarTasks = useAuthed(['me', 'pillar-tasks'], api.pillarTasks);
   const date = todayLocal();
   const sess = useAuthed(['session', date], () => api.session(date));
   if (!me.data) return null;
@@ -129,7 +130,7 @@ export function Tower() {
       )}
       <ol className="mt-sm flex list-none flex-col gap-xs p-0 m-0" aria-label="Pillars, top to bottom">
         {floors.map((r, i) => (
-          <Floor key={r.key} r={r} state={byKey.get(r.key)} delay={(floors.length - 1 - i) * 0.07} placement={placementOf(r.key)} focus={focus.includes(r.key)} />
+          <Floor key={r.key} r={r} state={byKey.get(r.key)} tasks={pillarTasks.data?.pillars.find((p) => p.relationship === r.key)} delay={(floors.length - 1 - i) * 0.07} placement={placementOf(r.key)} focus={focus.includes(r.key)} />
         ))}
       </ol>
       {/* The same not-to-do block as on Daily: what you stay away from protects these pillars too. */}

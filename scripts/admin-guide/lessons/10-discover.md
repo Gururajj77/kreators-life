@@ -8,12 +8,12 @@ In this lesson you'll learn:
 - How the add-ons work, from 16 personality types to Human design and numerology.
 - What an admin can see, and what stays with Riya.
 
-## Switch it on
+## Find it
 
-Discover starts off on a new account. Riya can switch it on in two ways:
+Discover starts hidden on a new account, unless the setup chat showed it for her. Riya can find it in two ways:
 
-- **From Apps:** open the **Reflection** group and turn on the switch beside **Discover**.
-- **From the setup chat:** its last step offers **Take the Discover quiz**, which switches the app on first.
+- **From Apps:** she opens the **Reflection** group, opens **Hidden apps** at its end and taps the eye beside **Discover**.
+- **From the setup chat:** its last step offers **Take the Discover quiz**, which shows the app first.
 
 ## Step by step: the main quiz
 
@@ -80,7 +80,7 @@ Human design and numerology are shown as systems for reflection, not science. Th
 - **Owner only:** Discover answers and results are like the journal. They are never shown to brands, staff, the leaderboard or a coach.
 - **The assistant:** it sees only a short profile, and only while the person's switch is on.
 - **Birth details:** they stay on the person's own table. Only type, strategy, authority and profile can reach the assistant or next steps.
-- **Observability:** it counts each add-on finished and how many switched how your mind works on. Counts only, no names or answers.
+- **Dev Tools:** it counts each add-on finished and how many switched how your mind works on. Counts only, no names or answers.
 - **Switches:** in Admin, **Flags**, the Discover row sets On, Minimum role, Rollout % and Overrides. In **People**, **What does this person see?** sets it for one person.
 - **Data:** the answers are in the person's export and go with erase and delete.
 

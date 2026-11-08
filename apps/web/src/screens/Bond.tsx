@@ -42,7 +42,9 @@ export function Bond() {
   const inPage = usePage('in');
   const q = useAuthed(['bond', inPage.query], () => api.bond(inPage.query));
   const frPage = usePage('fr');
-  const fr = useAuthed(['bond-friends', frPage.query], () => api.friends(frPage.query));
+  const opPage = usePage('op');
+  const frQuery = `${frPage.query}&${opPage.query}`;
+  const fr = useAuthed(['bond-friends', frQuery], () => api.friends(frQuery));
   const chPage = usePage('ch');
   const ch = useAuthed(['bond-chats', chPage.query], () => api.chats(chPage.query));
   const blPage = usePage('bl');
@@ -204,7 +206,7 @@ export function Bond() {
           <ul className="flex list-none flex-col gap-xs p-0 m-0">
             {[...sent, ...friends].map((f) => (
               <li key={f.requestId} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-                <Link to={f.handle ? `/u/${f.handle}` : `/people/${f.userId}`} className="min-w-0 flex-1">
+                <Link to={f.handle ? `/u/${f.handle}` : `/people/${f.userId}`} className="min-h-[44px] min-w-0 flex-1">
                   <span className="block text-card-title">
                     {f.name}
                     {f.handle ? <span className="text-ink-soft"> @{f.handle}</span> : ''}
@@ -223,6 +225,7 @@ export function Bond() {
             ))}
           </ul>
         )}
+        <Pager page={fr.data?.openPage} prefix="op" label="friend requests" />
         <Pager page={fr.data?.page} prefix="fr" label="friends" />
       </Section>
 

@@ -10,7 +10,15 @@
     "./journalPrompts": "./src/journalPrompts.ts",
     "./agencyEmail": "./src/agencyEmail.ts",
     "./focusRun": "./src/focusRun.ts",
-    "./ladderChoices": "./src/ladderChoices.ts"
+    "./ladderChoices": "./src/ladderChoices.ts",
+    "./blockHints": "./src/blockHints.ts",
+    "./gratitude": "./src/gratitude.ts",
+    "./lessonResources": "./src/lessonResources.ts",
+    "./fitness": "./src/fitness.ts",
+    "./help": "./src/help.ts",
+    "./coachReport": "./src/coachReport.ts",
+    "./insights": "./src/insights.ts",
+    "./lifeDashboard": "./src/lifeDashboard.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

@@ -108,9 +108,10 @@ export function DocHeader({ back, backLabel, title, tone, status, save, primary,
   const hint = useId();
   return (
     <AppCover
-      // A document's title is long ("TRIAL ENGAGEMENT AGREEMENT"): on a phone it keeps the old header's 24px with its last two words
-      // tied, so no word stands alone and none breaks; from md it is the cover's large title. A string, so the condensed bar keeps it.
-      className="no-print [&_h1]:text-title2! md:[&_h1]:text-large-title!"
+      // A document's title is long ("TRIAL ENGAGEMENT AGREEMENT"): on a phone and a tablet (a 391px cover beside the sidebar) it keeps the
+      // old header's 24px with its last two words tied, so no word stands alone and none breaks; from lg it is the cover's large title. A
+      // string, so the condensed bar keeps it.
+      className="no-print [&_h1]:text-title2! lg:[&_h1]:text-large-title!"
       back={{ to: back, label: backLabel }}
       title={tie(title)}
       lede={

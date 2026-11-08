@@ -1,69 +1,10 @@
-import {
-  DISCOVER_STRENGTHS,
-  KARMIC_DEBTS,
-  NUMBER_LABELS,
-  NUMBER_READINGS,
-  YEAR_THEMES,
-  computeNumerology,
-  designProfile,
-  discoverProfile,
-  loveTop,
-  numerologyInsights,
-  personalCycle,
-  type NumberValue,
-  type NumerologyContext,
-  CHANNEL_MEANINGS,
-  DESIGN_BODIES,
-  DESIGN_CENTERS,
-  DESIGN_CHANNELS,
-  GATE_NAMES,
-  channelKey,
-  gateSide,
-  hangingGates,
-  type DesignChart,
-  DESIGN_DEPTHS,
-  DESIGN_TYPES,
-  EQ_SCALE,
-  ZODIACS,
-  analyseDesign,
-  designChart,
-  designCompare,
-  designInputProblem,
-  emptyDesignInput,
-  parseDesignInput,
-  signOf,
-  type DesignCenter,
-  type DesignInput,
-  type DesignResult,
-  type Zodiac,
-  EXTRA_KINDS,
-  LOVE_LANGUAGES,
-  LOVE_PAIRS,
-  MIND_NOTE,
-  RATE_FREQUENCY,
-  RELATIONSHIP_BY_KEY,
-  TYPE_AXES,
-  TYPE_SCREENS,
-  MIND_SCREENS,
-  analyseLove,
-  analyseMind,
-  analyseType,
-  emptyExtra,
-  extraProgress,
-  lovePairLines,
-  parseExtra,
-  type ExtraKind,
-  type LoveAnswers,
-  type LoveResult,
-  type MindResult,
-  type RelationshipKey,
-  type TypeResult, LOCALE } from '@kreators/shared';
+import { DISCOVER_STRENGTHS, KARMIC_DEBTS, NUMBER_LABELS, NUMBER_READINGS, YEAR_THEMES, computeNumerology, designProfile, discoverProfile, loveTop, numerologyInsights, personalCycle, type NumberValue, type NumerologyContext, CHANNEL_MEANINGS, DESIGN_BODIES, DESIGN_CENTERS, DESIGN_CHANNELS, GATE_NAMES, channelKey, gateSide, hangingGates, type DesignChart, DESIGN_DEPTHS, DESIGN_TYPES, EQ_SCALE, ZODIACS, analyseDesign, designChart, designCompare, designInputProblem, emptyDesignInput, parseDesignInput, signOf, type DesignCenter, type DesignInput, type DesignResult, type Zodiac, EXTRA_KINDS, LOVE_LANGUAGES, LOVE_PAIRS, MIND_NOTE, RATE_FREQUENCY, RELATIONSHIP_BY_KEY, TYPE_AXES, TYPE_SCREENS, MIND_SCREENS, analyseLove, analyseMind, analyseType, emptyExtra, extraProgress, lovePairLines, parseExtra, type ExtraKind, type LoveAnswers, type LoveResult, type MindResult, type RelationshipKey, type TypeResult } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { api, type ExtraState } from '../lib/api';
-import { bento } from '../lib/bento';
-import { todayLocal } from '../lib/date';
+import { evenGrid, evenTile } from '../lib/bento';
+import { todayLocal, longDate, stampIn } from '../lib/date';
 import { StatTile } from './Charts';
 import { useAuthed, useDiscover, useDiscoverMore, useRefreshAll } from '../lib/queries';
 import { Button } from './Button';
@@ -73,7 +14,7 @@ import { Section } from './Section';
 import { Fold } from './Fold';
 import { Toggle } from './Toggle';
 import { AppIcon } from './AppIcon';
-import { FIELD } from '../lib/ui';
+import { FIELD, RED_YES } from '../lib/ui';
 import { StatusTag } from './StatusTag';
 import { CardHead } from './CardHead';
 import './fx/spotlight';
@@ -82,7 +23,7 @@ import { Sheet } from './Sheet';
 
 const ACCENT: Record<ExtraKind, RelationshipKey> = { type: 'self', love: 'lover_partner', mind: 'guru', design: 'divine' };
 const fillOf = (color: string): CSSProperties => ({ background: `linear-gradient(135deg, ${color}, color-mix(in oklab, ${color} 72%, var(--fill-shade)))` });
-const when = (iso: string) => new Date(iso).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long', year: 'numeric' });
+const when = longDate;
 
 // On a phone a card says its first and last sentence (what it is, and the care line that ends it); the middle shows
 // from the tablet width up, so the meaning is the same and the phone reads less.
@@ -111,7 +52,7 @@ export function MoreSection({ onOpen }: { onOpen: (k: ExtraKind) => void }) {
   const extras = q.data?.extras;
   return (
     <Section id="more" title="More ways to know yourself" lede="Short self-checks, in any order. Each shapes your next steps and the assistant only if you allow it.">
-      <ul className="m-0 grid list-none gap-xs p-0 md:grid-cols-2">
+      <ul className="m-0 grid list-none gap-xs p-0 lg:grid-cols-2">
         {EXTRA_KINDS.map((k) => {
           const st = extras?.[k.key];
           const done = Boolean(st?.result);
@@ -924,7 +865,7 @@ function DesignView({ result, onEdit }: { result: DesignResult; onEdit: () => vo
   const rel = RELATIONSHIP_BY_KEY[ACCENT.design];
   const other = zodiac === 'tropical' ? 'fagan' : 'tropical';
   // In the birthplace's own clock, so the time reads as it does on the birth record.
-  const when = (iso: string) => new Date(iso).toLocaleString(LOCALE, { dateStyle: 'medium', timeStyle: 'short', timeZone: result.input.zone });
+  const when = (iso: string) => stampIn(iso, result.input.zone);
   return (
     <>
       <Hero kind="design" big={`${t.name}`} title={`${chart.profile.text} profile, ${a.headline.split(', ')[1]}`} line={`Strategy: ${t.strategy}.`} />
@@ -1102,9 +1043,9 @@ function NumerologyPanel({ result, onEdit }: { result: DesignResult; onEdit: () 
   return (
     <>
       <Section id="num-numbers" title="Your numbers" lede="From your birth date and, if you gave it, your full birth name.">
-        <ul className="m-0 grid list-none grid-cols-2 gap-xs p-0 md:grid-cols-4">
+        <ul className={`m-0 grid list-none gap-xs p-0 ${evenGrid(shown.length, { base: 2, md: 4 })}`}>
           {shown.map((t, i) => (
-            <li key={t.key} className={bento(i, shown.length, 2, 4)}>
+            <li key={t.key} className={evenTile(i, shown.length, { base: 2, md: 4 })}>
               <StatTile label={t.label} value={numText(t.v!)} hint={`${chainText(t.v!)}${t.v!.karmic ? `, karmic ${t.v!.karmic}` : ''}`} className="h-full" />
             </li>
           ))}
@@ -1277,7 +1218,7 @@ function DesignScreen({ onBack }: { onBack: () => void }) {
   return (
     <>
       {head}
-      {st.takenAt && <p className="mt-xs m-0 text-subhead text-ink-soft">Worked out {new Date(st.takenAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long', year: 'numeric' })}. Only you can see this.</p>}
+      {st.takenAt && <p className="mt-xs m-0 text-subhead text-ink-soft">Worked out {longDate(st.takenAt)}. Only you can see this.</p>}
       <DesignView result={st.result as DesignResult} onEdit={() => setMode('form')} />
       <UseSwitches kind="design" />
       <div className="mt-md flex flex-wrap gap-xs" data-pillar={ACCENT.design}>
@@ -1317,7 +1258,7 @@ export function AskDelete({ open, title, line, pending, failed, onYes, onClose }
             type="button"
             disabled={pending}
             onClick={onYes}
-            className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill disabled:opacity-50"
+            className={RED_YES}
           >
             Yes, delete it
           </button>

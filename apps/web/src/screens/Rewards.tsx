@@ -10,6 +10,7 @@ import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
 import { tie } from '../lib/text';
+import { Phrases } from '../components/Phrases';
 import { useCardGames, useRefreshAll, useRewards } from '../lib/queries';
 import { LockedButton } from '../components/LockedButton';
 import { ConfirmSpend } from '../components/ConfirmSpend';
@@ -17,7 +18,8 @@ import { ConfirmDelete } from '../components/ConfirmDelete';
 import { AppIcon } from '../components/AppIcon';
 import { RollNumber } from '../components/fx/RollNumber';
 import { SkeletonList } from '../components/Skeleton';
-import { GameTile } from './Cards';
+import { GameTile, GAME_COLS } from './Cards';
+import { evenGrid, evenTile } from '../lib/bento';
 import { Pager, usePage } from '../components/Pager';
 import { fillVar } from '../lib/relFill';
 
@@ -144,18 +146,18 @@ export function Rewards() {
                     </span>
                   </h3>
                   <p className="mt-xs m-0 text-subhead text-ink-soft">{g.blurb}</p>
-                  <ul className={g.key === 'games' ? 'mt-sm grid list-none grid-cols-1 gap-sm p-0 m-0 lg:grid-cols-3' : 'mt-sm flex list-none flex-col gap-xs p-0 m-0'}>
-                    {list.map((r) => {
+                  <ul className={g.key === 'games' ? `mt-sm grid list-none gap-sm p-0 m-0 ${evenGrid(list.length, GAME_COLS)}` : 'mt-sm flex list-none flex-col gap-xs p-0 m-0'}>
+                    {list.map((r, i) => {
                       const can = data.points >= r.cost;
                       const tile = g.key === 'games';
                       const card = r.game ? gameByKey.get(r.game) : undefined;
                       // A game on this shelf is drawn as the Games page draws it: its cover, then Play, Unlock or the lock under it.
                       if (tile && card) {
                         // `card.unlocked` is the server's answer (a super admin plays every game), not only what was redeemed.
-                        return <GameTile key={r.key} game={card} busy={redeem.isPending} onUnlock={(x) => setAsking({ key: r.key, name: x.name, cost: x.cost, game: true })} />;
+                        return <GameTile key={r.key} game={card} busy={redeem.isPending} onUnlock={(x) => setAsking({ key: r.key, name: x.name, cost: x.cost, game: true })} className={evenTile(i, list.length, GAME_COLS)} />;
                       }
                       return (
-                        <li key={r.key} data-pillar={r.game ? CARD_GAME_BY_KEY[r.game]?.accent : r.kind === 'event' ? 'divine' : 'parent_child'} className={tile ? 'flex flex-col items-stretch gap-sm rounded-tile bg-card p-sm shadow-toy-soft' : 'flex flex-wrap items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft sm:flex-nowrap'}>
+                        <li key={r.key} data-pillar={r.game ? CARD_GAME_BY_KEY[r.game]?.accent : r.kind === 'event' ? 'divine' : 'parent_child'} className={tile ? `flex flex-col items-stretch gap-sm rounded-tile bg-card p-sm shadow-toy-soft ${evenTile(i, list.length, GAME_COLS)}` : 'flex flex-wrap items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft sm:flex-nowrap'}>
                           <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill text-[24px]" style={{ background: r.game && CARD_GAME_BY_KEY[r.game] ? `color-mix(in oklab, ${fillVar(RELATIONSHIP_BY_KEY[CARD_GAME_BY_KEY[r.game]!.accent])} 22%, transparent)` : r.kind === 'event' ? 'var(--tint-purple)' : 'var(--tint-yellow)' }} aria-hidden="true">
                             {r.emoji}
                           </span>
@@ -163,8 +165,8 @@ export function Rewards() {
                             <span className="block text-balance text-card-title">{tie(r.name)}</span>
                             {/* On a phone the name, the price and what is still to go are enough; the line about the item shows from the `md` width up (`useWide`). */}
                             <span className="block text-card-note text-ink-soft">
-                              {wide && `${r.blurb} `}
-                              {can ? '' : `${formatCount(r.cost - data.points)} more points to go.`}
+                              {/* Whole sentences, so a narrow card breaks after a full stop and never leaves a short line in the middle. */}
+                              <Phrases text={`${wide ? `${r.blurb} ` : ''}${can ? '' : `${formatCount(r.cost - data.points)} more points to go.`}`.trim()} at={/(?<=\.) /} />
                             </span>
                             {r.link && (
                               <a href={r.link} target="_blank" rel="noreferrer" className="text-subhead font-semibold underline underline-offset-4">

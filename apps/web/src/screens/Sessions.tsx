@@ -1,5 +1,5 @@
-import { PRODUCT_KIND_META, productHasOwnCover, type Page, type Product, LOCALE } from '@kreators/shared';
-import { dateTime } from '../lib/date';
+import { PRODUCT_KIND_META, productHasOwnCover, type Page, type Product } from '@kreators/shared';
+import { dateTime, shortDate } from '../lib/date';
 import { Link } from 'react-router';
 import { AppIcon } from '../components/AppIcon';
 import { AppCover } from '../components/AppCover';
@@ -30,7 +30,7 @@ export function Sessions() {
                 <span className="block truncate text-card-title">{p.title}</span>
                 <span className="block text-card-note text-ink-soft">
                   {p.ownerName}
-                  {p.kind === 'session' ? `, ${p.durationMin} min` : p.startsAt ? `, ${new Date(p.startsAt).toLocaleDateString(LOCALE, { month: 'short', day: 'numeric' })}` : ''}
+                  {p.kind === 'session' ? `, ${p.durationMin} min` : p.startsAt ? `, ${shortDate(p.startsAt)}` : ''}
                 </span>
               </span>
               <span className="shrink-0 text-subhead font-semibold">{p.pricePoints === 0 && p.priceCents === 0 ? 'Free' : `${p.pricePoints} pts`}</span>

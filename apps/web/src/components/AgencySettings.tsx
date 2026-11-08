@@ -40,7 +40,10 @@ import { Busy, Skeleton } from './Skeleton';
 import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
 import { CardHead } from './CardHead';
+import { evenGrid, evenTile } from '../lib/bento';
 
+// The five looks: the first takes the row over two pairs (lib/bento.ts).
+const DESIGN_COLS = { base: 1, md: 2 } as const;
 const KIND_NAME: Record<string, string> = { invoice: 'Invoice', contract: 'Agreement', doc: 'Document' };
 
 /** The house templates every Agency user can start from: read only here; a super admin makes and retires them in Admin. */
@@ -356,9 +359,9 @@ export function AgencySettings() {
         before={
           <div>
             <span className={LABEL}>Invoice design</span>
-            <div role="group" aria-label="Invoice design" className="mt-xs grid gap-xs md:grid-cols-2">
-              {INVOICE_DESIGNS.map((d) => (
-                <button key={d} type="button" aria-pressed={p.design === d} onClick={() => set({ design: d })} className={`toy rounded-tile border-2 p-sm text-left ${p.design === d ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
+            <div role="group" aria-label="Invoice design" className={`mt-xs grid gap-xs ${evenGrid(INVOICE_DESIGNS.length, DESIGN_COLS)}`}>
+              {INVOICE_DESIGNS.map((d, i) => (
+                <button key={d} type="button" aria-pressed={p.design === d} onClick={() => set({ design: d })} className={`toy rounded-tile border-2 p-sm text-left ${evenTile(i, INVOICE_DESIGNS.length, DESIGN_COLS)} ${p.design === d ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
                   <span className="block text-card-title">{INVOICE_DESIGN_META[d].name}</span>
                   <span className="mt-xs block text-card-note text-ink-soft">{INVOICE_DESIGN_META[d].blurb}</span>
                 </button>

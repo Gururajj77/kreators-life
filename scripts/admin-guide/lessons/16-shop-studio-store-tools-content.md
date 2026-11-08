@@ -51,7 +51,7 @@ When she makes a new version, she taps **Archived** on the old one. **Delete for
 
 ## The Store
 
-The Store is off on a new account. It has three shelves: new gear picked by the team, pre-owned gear from creators, and kits by budget.
+The Store starts hidden on a new account. It has three shelves: new gear picked by the team, pre-owned gear from creators, and kits by budget.
 
 1. Riya taps **Sell something** to list her old camera.
 2. She fills in **What is it**, **Category**, **Condition**, **Asking price**, and optional extras like **What comes with it** and picture links.

@@ -83,15 +83,6 @@ export function hexColorOf(v: unknown): HexColor | null {
 export function blockColorOf(v: unknown): BlockColor | null {
   return isSwatch(v) ? v : hexColorOf(v);
 }
-/** Whether a "#rrggbb" is light enough to want dark ink on it (relative luminance over 0.5). */
-export function hexIsLight(hex: HexColor): boolean {
-  const n = parseInt(hex.slice(1), 16);
-  const ch = (c: number) => {
-    const x = c / 255;
-    return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
-  };
-  return 0.2126 * ch((n >> 16) & 255) + 0.7152 * ch((n >> 8) & 255) + 0.0722 * ch(n & 255) > 0.5;
-}
 
 // ---- types ----
 
@@ -593,6 +584,10 @@ export function slotIndexOfTask(task: { timeBlockId?: string | null; dueTime: st
   }
   return slots.findIndex((s) => s.blockId === hit.blockId);
 }
+/** Whether a slot runs past midnight (23:00 to 07:00); an end of 0 is midnight itself, not past it. */
+export function slotCrossesMidnight(s: { start: number; end: number }): boolean {
+  return s.end !== 0 && s.end < s.start;
+}
 /** A block's minutes in a day's slots. */
 export function blockDayMinutes(blockId: string, slots: readonly TemplateSlot[]): number {
   return slots.filter((s) => s.blockId === blockId).reduce((n, s) => n + slotLength(s), 0);
@@ -608,8 +603,11 @@ export function blocksInDay(slots: readonly TemplateSlot[], blocks: readonly Tim
  * A block to suggest for a task on a day, from its area of life and pillar. Rules only; it writes nothing.
  * 1. Matches: the day's blocks with the task's area (when it has one); if none, the ones with its pillar.
  * 2. P0, P1 or no priority take the first Focus-tagged match, P2 and P3 the first match that is not Focus; the first of those
- *    with room left (what is already in it plus this estimate fits its minutes) wins, else the first of those, else the first match.
+ *    with room left (what is already in it plus this estimate fits its minutes) wins, else the first of those, else the first match with
+ *    room, else the first match (2026-11-07: so Daily's suggestions spread over a pillar's blocks instead of piling into the first).
  * 3. No match: P0 and P1 go to the day's first Focus-tagged block; anything else gets null.
+ * A block whose every slot that day runs past midnight (the night's sleep, as `templateColor` reads it) is never suggested: nobody is
+ * sent to do a task at bedtime (2026-11-07).
  */
 export function suggestBlock(
   task: { lifeArea?: LifeAreaKey | null; relationship?: RelationshipKey; priority: Priority | null; estimateMin: number | null },
@@ -617,7 +615,7 @@ export function suggestBlock(
   blocks: readonly TimeBlock[],
   usedMin?: Readonly<Record<string, number>>,
 ): string | null {
-  const day = blocksInDay(slots, blocks);
+  const day = blocksInDay(slots, blocks).filter((b) => slots.some((s) => s.blockId === b.id && !slotCrossesMidnight(s)));
   if (day.length === 0) return null;
   const need = task.estimateMin ?? SLOT_TASK_MINUTES;
   const room = (b: TimeBlock) => (usedMin?.[b.id] ?? 0) + need <= blockDayMinutes(b.id, slots);
@@ -627,7 +625,7 @@ export function suggestBlock(
   if (matches.length > 0) {
     const preferred = matches.filter((b) => (high ? isFocusTag(b.tag) : !isFocusTag(b.tag)));
     if (preferred.length > 0) return (preferred.find(room) ?? preferred[0]!).id;
-    return matches[0]!.id;
+    return (matches.find(room) ?? matches[0]!).id;
   }
   if (task.priority !== null && task.priority <= 1) {
     const focus = day.filter((b) => isFocusTag(b.tag));

@@ -1,12 +1,13 @@
 import gsap from 'gsap';
 import { CloseButton } from './CloseButton';
-import { LOCALE, MAX_CUSTOM_REMINDERS, REMINDER_TIME, REMINDER_TITLE_MAX, WATER_EVERY_CHOICES, WATER_GLASS_MAX, WATER_GLASS_MIN, WATER_GOAL_MAX, WATER_GOAL_MIN, WEEKDAY_NAMES, weekdaysLabel, type CustomReminder } from '@kreators/shared';
+import { MAX_CUSTOM_REMINDERS, REMINDER_TIME, REMINDER_TITLE_MAX, WATER_GLASS_MAX, WATER_GLASS_MIN, WATER_GOAL_MAX, WATER_GOAL_MIN, WEEKDAY_NAMES, weekdaysLabel, type CustomReminder } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Suspense, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { lazyNamed } from '../lib/lazy';
 import { useLocation } from 'react-router';
 import { api } from '../lib/api';
-import { dayLabel, todayLocal } from '../lib/date';
+import { dayLabel, todayLocal, weekday } from '../lib/date';
 import { useSession } from '../lib/store';
 import { useDialogFocus } from '../lib/useDialogFocus';
 import { Button } from './Button';
@@ -53,17 +54,10 @@ function Drop({ size = 20 }: { size?: number }) {
   );
 }
 
-export const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
-export const minutesOf = (t: string) => {
-  const [h, m] = t.split(':').map(Number);
-  return (h ?? 0) * 60 + (m ?? 0);
-};
 /** A picker's choices, with the value now in effect always among them (a goal typed as 2,150 ml stays pickable). */
 export const withNow = (list: number[], now: number, label: (n: number) => string) => [...new Set([...list, now])].sort((a, b) => a - b).map((value) => ({ value, label: label(value) }));
 export const GOALS = Array.from({ length: (WATER_GOAL_MAX - WATER_GOAL_MIN) / 250 + 1 }, (_, i) => WATER_GOAL_MIN + i * 250);
 export const GLASSES = [100, 150, 200, 250, 300, 350, 400, 500, 750, 1000].filter((n) => n >= WATER_GLASS_MIN && n <= WATER_GLASS_MAX);
-export const HOURS = Array.from({ length: 19 }, (_, i) => (5 + i) * 60);
-export const everyLabel = (w: { everyMin: number }) => (w.everyMin >= 60 ? `${w.everyMin / 60} h` : `${w.everyMin} min`);
 
 /** Every write the water block makes, in one place, so the panel and its two sheets share them. */
 export function useWaterActions() {
@@ -84,7 +78,7 @@ export function useWaterActions() {
 const AMOUNTS = [100, 150, 200, 250, 300, 330, 400, 500, 750, 1000];
 const amountsFor = (glassMl: number) => [...new Set([...AMOUNTS, glassMl])].filter((n) => n >= WATER_GLASS_MIN && n <= WATER_GLASS_MAX).sort((x, y) => x - y);
 /** "Mo", "Tu" for a day typed as YYYY-MM-DD, read at noon so no zone moves it to the day before. */
-const weekdayOf = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString(LOCALE, { weekday: 'short' }).slice(0, 2);
+const weekdayOf = (day: string) => weekday(day).slice(0, 2);
 
 /**
  * Today's water in the look of Breathe and focus (2026-11-06, the founder: "make it better like the one used in mindfulness", then "put
@@ -124,7 +118,7 @@ function WaterPanel({ summary = true, undoHere = true }: { summary?: boolean; /*
         </div>
 
         {/* The amount picker: step through the amounts with the arrows, add the one shown with the middle button. */}
-        <div className="water-grid-step flex items-center justify-center gap-xs" role="group" aria-label="Add water">
+        <div className="water-grid-step flex flex-wrap items-center justify-center gap-xs" role="group" aria-label="Add water">
           <button type="button" className="mf-mini toy flex w-[44px] items-center justify-center px-0" onClick={() => setPicked(amounts[Math.max(0, at - 1)]!)} disabled={at <= 0} aria-label="A smaller amount">
             <Icon icon={ChevronLeft} size={18} />
           </button>
@@ -184,16 +178,17 @@ const WATER_PANES = [
 /**
  * The water block (2026-11-06, the founder: "put the buttons inside the card on full width, on mobile and all screens just use the
  * buttons as a way to go left, swipe cards with that data, as it's already a container box, instead of opening a popup"): one dark card
- * whose three round icon buttons (Water, Settings, Reminders, centred) switch the card between its panels in place, and a sideways swipe
+ * whose three round icon buttons (Water, Reminders, Settings, centred) switch the card between its panels in place, and a sideways swipe
  * on a touch screen does the same. Nothing opens over the page. Only the open panel is shown, so the card is its height and nothing is
- * ever clipped; it eases in from the side it came from (GSAP, set under reduced motion). The heading (and Close in the laptop's bubble) sits above the card; `heading={false}` leaves it out (inside the
+ * ever clipped; it eases in from the side it came from (GSAP, set under reduced motion). The heading sits above the card, and in a popup (the laptop's bubble, the card table's sheet) Close and the round buttons sit in its rail outside the panel (`railIn`); `heading={false}` leaves the heading out (inside the
  * section, whose row already says it). The card pins the dark theme's colours on itself (`.water-night`).
  */
-export function WaterBlock({ tasks = true, summary = true, heading = true, onClose, className = '' }: { tasks?: boolean; summary?: boolean; heading?: boolean; onClose?: () => void; className?: string }) {
+export function WaterBlock({ tasks = true, summary = true, heading = true, onClose, railIn, className = '' }: { tasks?: boolean; summary?: boolean; heading?: boolean; onClose?: () => void; /** In a popup: the rail its Close and the card's round buttons go to, outside the panel (null until the rail is in the page). */ railIn?: HTMLElement | null; className?: string }) {
   const { q, undo } = useWaterActions();
   const w = q.data?.water;
   const id = useId();
-  const [pane, setPane] = useState(0);
+  // A note about your own reminders opens Home on `#reminders` (lib/useLandOnHash.ts opens the section), so the card starts on that panel.
+  const [pane, setPane] = useState(() => (typeof window !== 'undefined' && window.location.hash === '#reminders' ? WATER_PANES.findIndex((p) => p.key === 'reminders') : 0));
   // On a phone and in the laptop's bubble (it has Close), Undo is the fourth icon in the row (the founder, 2026-11-06); on a laptop's
   // Home it stays beside the amount picker and the section's row.
   const wideScreen = useWide();
@@ -224,13 +219,59 @@ export function WaterBlock({ tasks = true, summary = true, heading = true, onClo
     const next = Math.max(0, Math.min(WATER_PANES.length - 1, i));
     if (next === pane) return;
     dir.current = next > pane ? 1 : -1;
+    // In a popup the panel never shrinks as its panes change, so the rail beside it (where this tap landed) stays under the pointer (the founder, 2026-11-07: "they stay sticky").
+    const popup = railIn ? panes.current[pane]?.closest<HTMLElement>('.dialog-panel') : null;
+    if (popup) popup.style.minHeight = `min(${popup.offsetHeight}px, 90dvh)`;
     setPane(next);
   };
   const leave = () => go(0);
 
+  const railed = railIn !== undefined;
+  // Close says what it does by sliding its word out on hover or keyboard focus (the ExpandButton look, slowed like the card's icons).
+  const close = onClose && (
+    <button type="button" onClick={onClose} aria-label="Close water and reminders" className="water-close expand-btn toy toy-soft ml-auto inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-pill border-2 border-line bg-card px-xs text-subhead font-medium text-ink">
+      <Icon icon={X} size={20} />
+      <span className="expand-btn-words" aria-hidden="true">
+        Close
+      </span>
+    </button>
+  );
+  // The three buttons at the top right of the card, centred in the bubble (it has Close) and on a phone: each opens its panel in place.
+  const tabs = w && (
+    <div className="water-tabs" data-center={onClose ? '' : undefined}>
+      <div role="tablist" aria-label="Water" className="contents">
+        {WATER_PANES.map((p, i) => (
+          // Icons only; the name slides out on hover or keyboard focus (the ExpandButton look), and is the tab's name for screen readers.
+          <button key={p.key} type="button" role="tab" id={`${id}-t${i}`} aria-selected={pane === i} aria-controls={`${id}-p${i}`} aria-label={p.name} title={p.name} onClick={() => go(i)} className="water-tab expand-btn toy">
+            {p.key === 'today' ? <Drop size={20} /> : <AnimatedIcon name={p.key === 'settings' ? 'settings' : 'calendar'} size={20} />}
+            <span className="expand-btn-words" aria-hidden="true">
+              {p.name}
+            </span>
+          </button>
+        ))}
+      </div>
+      {undoInRow && (
+        // Not a tab: it takes back the last glass, in the same look, its word sliding out on hover or keyboard focus.
+        <button type="button" aria-label="Undo the last glass" title="Undo the last glass" onClick={() => undo.mutate()} disabled={undo.isPending || w.ml === 0} className="water-tab expand-btn toy disabled:opacity-50">
+          <Icon icon={Undo2} size={20} />
+          <span className="expand-btn-words" aria-hidden="true">
+            Undo
+          </span>
+        </button>
+      )}
+    </div>
+  );
   return (
     <section className={className} aria-labelledby={heading ? `${id}-h` : undefined} aria-label={heading ? undefined : 'Water and reminders'} data-pillar="lover_partner">
-      {(heading || onClose) && (
+      {railIn &&
+        createPortal(
+          <>
+            {close}
+            {tabs}
+          </>,
+          railIn,
+        )}
+      {(heading || (onClose && !railed)) && (
         <div className="mb-sm flex items-start justify-between gap-sm">
           {heading && (
             <div className="min-w-0">
@@ -240,16 +281,7 @@ export function WaterBlock({ tasks = true, summary = true, heading = true, onClo
               <p className="mt-xs m-0 text-subhead text-ink-soft">{w ? `${w.glasses} of ${w.goalGlasses} glasses today, ${litres(w.ml)} of ${litres(w.goalMl)}.` : 'Loading'}</p>
             </div>
           )}
-          {onClose && (
-            // Close says what it does by sliding its word out on hover or keyboard focus (the ExpandButton look, slowed like the card's
-            // icons): a tooltip above it would be cut by the bubble's scrolling box (the founder, 2026-11-06).
-            <button type="button" onClick={onClose} aria-label="Close water and reminders" className="water-close expand-btn toy toy-soft ml-auto inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-pill border-2 border-line bg-card px-xs text-subhead font-medium text-ink">
-              <Icon icon={X} size={20} />
-              <span className="expand-btn-words" aria-hidden="true">
-                Close
-              </span>
-            </button>
-          )}
+          {!railed && close}
         </div>
       )}
       <div className="night-card mf-panel water-night rounded-card" data-accent="r4">
@@ -257,31 +289,9 @@ export function WaterBlock({ tasks = true, summary = true, heading = true, onClo
           <p className="mf-line m-0" role="status">{q.isError ? 'Could not load.' : 'Loading'}</p>
         ) : (
           <>
-            {/* The three buttons at the top right of the card, centred in the bubble (it has Close) and on a phone: each opens its panel in place. */}
-            <div className="water-tabs" data-center={onClose ? '' : undefined}>
-            <div role="tablist" aria-label="Water" className="contents">
-              {WATER_PANES.map((p, i) => (
-                // Icons only; the name slides out on hover or keyboard focus (the ExpandButton look), and is the tab's name for screen readers.
-                <button key={p.key} type="button" role="tab" id={`${id}-t${i}`} aria-selected={pane === i} aria-controls={`${id}-p${i}`} aria-label={p.name} title={p.name} onClick={() => go(i)} className="water-tab expand-btn toy">
-                  {p.key === 'today' ? <Drop size={20} /> : <AnimatedIcon name={p.key === 'settings' ? 'settings' : 'calendar'} size={20} />}
-                  <span className="expand-btn-words" aria-hidden="true">
-                    {p.name}
-                  </span>
-                </button>
-              ))}
-            </div>
-              {undoInRow && (
-                // Not a tab: it takes back the last glass, in the same look, its word sliding out on hover or keyboard focus.
-                <button type="button" aria-label="Undo the last glass" title="Undo the last glass" onClick={() => undo.mutate()} disabled={undo.isPending || w.ml === 0} className="water-tab expand-btn toy disabled:opacity-50">
-                  <Icon icon={Undo2} size={20} />
-                  <span className="expand-btn-words" aria-hidden="true">
-                    Undo
-                  </span>
-                </button>
-              )}
-            </div>
+            {!railed && tabs}
             <div
-              className="mt-md"
+              className={railed ? undefined : 'mt-md'}
               // A sideways swipe on a touch screen moves one panel (touch events: a pointer can be cancelled when the browser takes the gesture).
               onTouchStart={(e) => {
                 // A sheet opened from a row is portalled to the body, but React still bubbles its touches here: only a touch that began
@@ -343,10 +353,11 @@ export function RemindersSection({ always = false, tasks = true, quiet = false }
   const drink = useMutation({ mutationFn: () => api.drinkWater(day), onSuccess: refresh });
   const undo = useMutation({ mutationFn: () => api.undoWater(day), onSuccess: refresh });
   return (
-    <section className={`span-all mt-md w-full rounded-card bg-card p-md shadow-toy-soft ${always ? '' : 'md:hidden'}`} aria-label="Water and reminders" data-pillar="lover_partner">
+    // `#water` and `#reminders` land here and open it (Emerging's Add a glass, a reminder note; lib/useLandOnHash.ts), on Home at every width.
+    <section id="water" data-land="reminders" className={`span-all mt-md w-full rounded-card bg-card p-md shadow-toy-soft ${always ? '' : 'lg:hidden'}`} aria-label="Water and reminders" data-pillar="lover_partner">
       {/* One wide cell: what it is and where today stands on the left, the tap on the right. On a phone the tap drops under it, full width. */}
       <div className="flex flex-col gap-sm sm:flex-row sm:items-center sm:justify-between">
-        <button type="button" aria-expanded={open} aria-controls="reminders-body" onClick={() => setOpen((v) => !v)} className="toy toy-flat flex min-h-[44px] min-w-0 flex-1 items-center gap-sm rounded-inner-sm px-xs py-xs text-left">
+        <button type="button" aria-expanded={open} aria-controls="reminders-body" data-land-open="" onClick={() => setOpen((v) => !v)} className="toy toy-flat flex min-h-[44px] min-w-0 flex-1 items-center gap-sm rounded-inner-sm px-xs py-xs text-left">
           <span className="flex size-[44px] shrink-0 items-center justify-center rounded-inner-sm bg-r4/20 text-r4">
             <Drop size={24} />
           </span>
@@ -381,8 +392,8 @@ export function RemindersSection({ always = false, tasks = true, quiet = false }
 }
 
 /**
- * On a laptop: a small bubble at the left of Daily and Journal that opens into the same panel. There is no floating button
- * on a phone; the section above does that job there.
+ * On a laptop (from `lg`): a small bubble at the left of Daily and Journal that opens into the same panel. There is no floating button
+ * on a phone or a tablet; the section above does that job there.
  */
 export function ReminderBubble() {
   const loc = useLocation();
@@ -392,6 +403,7 @@ export function ReminderBubble() {
   // Focus moves into the panel when it opens, Tab wraps at its ends, Escape closes it, and focus goes back to the Water button.
   const panel = useRef<HTMLDivElement>(null);
   useDialogFocus(panel, open && here, { modal: false, onEscape: () => setOpen(false) });
+  const [rail, setRail] = useState<HTMLElement | null>(null);
   useEffect(() => setOpen(false), [loc.pathname]);
   if (!here) return null;
   const w = q.data?.water;
@@ -399,11 +411,15 @@ export function ReminderBubble() {
     // Open, the panel rises over the privacy card (z-45), which waits just above the bubble until it is answered: the person asked for
     // water, so the water comes first; closed, the card is on top again. While a modal sheet asks (a reminder's Remove), the bubble drops
     // to the scrim's level: the sheet's portal comes later in the body, so its scrim dims the bubble and takes its clicks.
-    <div className={`fixed bottom-md left-[calc(var(--nav-w)+var(--spacing-md))] hidden md:block ${open ? 'z-[46]' : 'z-40'} [body:has([role=dialog][aria-modal=true])_&]:z-40`} data-pillar="lover_partner">
+    <div className={`fixed bottom-md left-[calc(var(--nav-w)+var(--spacing-md))] hidden lg:block ${open ? 'z-[46]' : 'z-40'} [body:has([role=dialog][aria-modal=true])_&]:z-40`} data-pillar="lover_partner">
       {open && (
         // The water block on a strong card: its heading and round buttons on the card, the dark panel under them.
-        <div ref={panel} className="mb-sm max-h-[80vh] w-[380px] overflow-y-auto rounded-card border border-line bg-card-strong p-md shadow-toy-soft" role="dialog" aria-label="Water and reminders">
-          <WaterBlock onClose={() => setOpen(false)} />
+        // Its Close and the card's round buttons sit in the rail on its right, where a laptop always has room, and stay put as the panel scrolls.
+        <div ref={panel} className="dialog-frame relative mb-sm w-[380px]" role="dialog" aria-label="Water and reminders">
+          <div ref={setRail} className="dialog-rail" />
+          <div className="dialog-panel max-h-[80vh] overflow-y-auto rounded-card border border-line bg-card-strong p-md shadow-toy-soft">
+            <WaterBlock onClose={() => setOpen(false)} railIn={rail} />
+          </div>
         </div>
       )}
       <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} aria-label={w ? `Water and reminders, ${w.glasses} of ${w.goalGlasses} glasses` : 'Water and reminders'} className="toy toy-soft flex min-h-[48px] items-center gap-xs rounded-pill border-2 border-line bg-card-strong px-md text-headline">
@@ -420,6 +436,7 @@ export function ReminderBubble() {
  */
 export function WaterButton() {
   const [open, setOpen] = useState(false);
+  const [rail, setRail] = useState<HTMLElement | null>(null);
   const { q } = useReminders();
   const w = q.data?.water;
   return (
@@ -437,8 +454,8 @@ export function WaterButton() {
         </span>
         Water {w ? `${w.glasses}/${w.goalGlasses}` : ''}
       </button>
-      <Sheet open={open} onClose={() => setOpen(false)} title="Water and reminders">
-        <WaterBlock heading={false} />
+      <Sheet open={open} onClose={() => setOpen(false)} title="Water and reminders" rail={<div ref={setRail} className="contents" data-pillar="lover_partner" />}>
+        <WaterBlock heading={false} railIn={rail} />
       </Sheet>
     </>
   );

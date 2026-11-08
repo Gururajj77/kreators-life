@@ -3,7 +3,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, Plus, X } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 import { api } from '../lib/api';
-import { bentoSpans } from '../lib/bento';
+import { evenGrid, evenTile } from '../lib/bento';
+import { focusHeadingAfter } from '../lib/focusHeading';
 import { keys, useRefreshAll } from '../lib/queries';
 import { tie } from '../lib/text';
 import { AppIcon } from './AppIcon';
@@ -37,16 +38,8 @@ const GROUPS: readonly TagGroup[] = [
   { label: 'The rest of life', icon: 'Sun', keys: of('life'), fold: true },
 ];
 
-// Tailwind reads class names as written, so every span is spelled out: two columns, three from a 32rem column, four from 48rem.
-const SPAN2 = ['', 'col-span-1', 'col-span-2'];
-const SPAN3 = ['', '@lg:col-span-1', '@lg:col-span-2', '@lg:col-span-3'];
-const SPAN4 = ['', '@3xl:col-span-1', '@3xl:col-span-2', '@3xl:col-span-3', '@3xl:col-span-4'];
-
-/** A tile's spans at each width, so no row ends in a lone tile (`bentoSpans`, the rule `bento()` uses). */
-function spanClass(i: number, n: number): string {
-  const at = (cols: number, list: string[]) => list[Math.min(cols, bentoSpans(n, cols)[i] ?? 1)];
-  return `${at(2, SPAN2)} ${at(3, SPAN3)} ${at(4, SPAN4)}`;
-}
+// Two columns, three from a 32rem column, four from 48rem (the section's own width), in even rows (lib/bento.ts), so no row ends in a lone tile.
+const TAG_COLS = { base: 2, '@lg': 3, '@3xl': 4 } as const;
 
 const isStage = (k: string) => IDENTITY_BY_KEY[k]?.kind === 'stage';
 
@@ -68,7 +61,7 @@ export function TagPicker({ identities }: { identities: readonly string[] }) {
     },
     onSuccess: (r, { note }) => {
       // The Life coach tag asks the team to make you one, as the setup chat does; say so, since the tile alone does not show it.
-      const coach = r.coach === 'asked' ? 'We asked the team to make you a life coach.' : r.coach === 'waiting' ? 'Your ask to be a life coach is with the team.' : '';
+      const coach = r.coach ? 'Asked. The team will look at it.' : '';
       setSaid(['Saved.', note, coach].filter(Boolean).join(' '));
     },
     onError: (e, _v, ctx) => {
@@ -127,7 +120,14 @@ export function TagPicker({ identities }: { identities: readonly string[] }) {
           <ul className="contents" aria-labelledby={ownId}>
             {own.map((k) => (
               <li key={k} className="list-none">
-                <OwnTag tag={k} onRemove={() => toggle(k)} />
+                <OwnTag
+                  tag={k}
+                  onRemove={() => {
+                    toggle(k);
+                    // The tag and its ✕ go, so the keyboard's place moves to the label over them (never the field, which would open a phone's keyboard).
+                    focusHeadingAfter(ownId);
+                  }}
+                />
               </li>
             ))}
           </ul>
@@ -166,13 +166,13 @@ function Tiles({ group, identities, atMax, onToggle }: { group: TagGroup; identi
           {group.label}
         </p>
       )}
-      <ul className="grid list-none grid-cols-2 gap-sm p-0 m-0 @lg:grid-cols-3 @3xl:grid-cols-4">
+      <ul className={`grid list-none gap-sm p-0 m-0 ${evenGrid(options.length, TAG_COLS)}`}>
         {options.map((o, i) => {
           const on = identities.includes(o.key);
           // A stage swaps for the one already picked, so the most never blocks it.
           const blocked = !on && atMax && !(o.kind === 'stage' && identities.some(isStage));
           return (
-            <li key={o.key} className={spanClass(i, options.length)}>
+            <li key={o.key} className={evenTile(i, options.length, TAG_COLS)}>
               <button
                 type="button"
                 aria-pressed={on}
@@ -211,7 +211,7 @@ function OwnTag({ tag, onRemove }: { tag: string; onRemove: () => void }) {
   return (
     <span className="inline-flex items-center gap-xs">
       <span aria-live="polite">
-        <IconTag tone={armed ? 'warn' : 'neutral'} icon={OWN_TAG_ICON}>
+        <IconTag tone={armed ? 'bad' : 'neutral'} icon={OWN_TAG_ICON}>
           {armed ? `Tap ✕ again to remove “${tag}”` : tag}
         </IconTag>
       </span>
@@ -224,7 +224,7 @@ function OwnTag({ tag, onRemove }: { tag: string; onRemove: () => void }) {
           setArmed(false);
           onRemove();
         }}
-        className="toy toy-soft relative flex size-[28px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-ink after:absolute after:left-1/2 after:top-1/2 after:size-[44px] after:-translate-x-1/2 after:-translate-y-1/2 after:content-['']"
+        className={`toy toy-soft relative flex size-[28px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-ink after:absolute after:left-1/2 after:top-1/2 after:size-[44px] after:-translate-x-1/2 after:-translate-y-1/2 after:content-[''] ${armed ? 'red-armed' : ''}`}
       >
         <Icon icon={X} size={16} />
       </button>

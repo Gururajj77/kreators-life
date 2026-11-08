@@ -9,9 +9,9 @@ In this lesson you'll learn:
 - How introductions after an event work.
 - How blocks work, and what an admin can check.
 
-## Switch it on
+## Find it
 
-Bond is off on a new account. Riya opens **Apps**, taps the **Connection** group and turns on the switch beside **Bond**.
+Bond starts hidden on a new account, unless the setup chat showed it for her. Riya opens **Apps**, opens the **Connection** group, opens **Hidden apps** at its end and taps the eye beside **Bond**.
 
 ## Usernames and friend codes
 
@@ -75,7 +75,7 @@ A block works both ways:
 - **The leaderboard:** neither shows on the other's board.
 - **Asks:** neither can send the other a friend request or an introduction.
 
-The blocked person is not told. Blocking from an introduction offers a **Reason, for the team only** box. Riya can lift a block any time under **People you blocked** with **Unblock**, which asks first.
+The blocked person is not told. Blocking from an introduction offers a **Reason, for the team only** box. Riya can lift a block any time under **People you blocked** with **Unblock**, which asks first. A block made from a made-up name is listed under that name, so it never names the writer.
 
 ## Her page's switches
 

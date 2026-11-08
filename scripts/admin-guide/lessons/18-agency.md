@@ -9,15 +9,15 @@ In this lesson you'll learn:
 - How the client link, the team link and the team work.
 - What you, as an admin, can check and change.
 
-## Switch Agency on
+## Find Agency
 
-Agency is off on a new account. It sits in the Contribution group.
+Agency starts hidden on a new account, unless the setup chat showed it for her. It sits in the Contribution group.
 
 1. Riya opens the Apps tab and opens the Contribution group.
-2. She turns on the switch beside Agency.
+2. She opens **Hidden apps** at its end and taps the eye beside Agency.
 3. She taps Agency to open it.
 
-The screen has five tabs: **Overview, Pipeline, Clients, Paperwork and Team**. A round gear at the top opens **Agency settings**.
+The screen has five tabs: **Overview, Pipeline, Clients, Paperwork and Team**. A round gear at the top opens **Agency settings**. Each number on Overview opens the list of exactly what it counts, so **Late** opens the pieces that are late.
 
 ## Set up the business once
 
@@ -50,9 +50,9 @@ A client goes through nine stages: **Enquiry, Agreement sent, Agreement signed, 
 3. When a step is done, she taps **Move to** and the next stage's name.
 4. **Stage details** folds open the checklist.
 
-Sending or signing an agreement moves the stage forward by itself. The app never moves a client back on its own.
+Sending or signing an agreement moves the stage forward by itself. The app never moves a client back on its own. A step back sticks: an agreement already out moves them on only if it is sent or signed again.
 
-The client page has four parts: **Work, Money, Paper and Link**.
+The client page has four parts: **Work, Money, Paper and Link**. Above them, the tile **For them to look at** holds two links. The waiting number opens Work on In review, and the late number opens it on Late.
 
 ## Plan the work in the pipeline
 
@@ -71,6 +71,12 @@ Paperwork has three parts: **Invoices, Agreements and Documents**.
 
 The screen says plainly that a typed name is not a certified e-signature.
 
+- **Under the header:** while a paper can change, a bar holds **Who it is for** and the **Write comments** switch.
+- **Under the paper:** a fold, **Password for** and the client's name, holds the password for their link.
+- **The brief:** the client's answers save as they type, and Riya sees them on her page.
+- **Print this section:** it sits in a section's menu, and it works on a signed agreement too. It never changes the words.
+- **Email a copy:** in More. It opens a note written for her to change, naming each paper with its own link. Nothing is attached. A first send names the agreement and the invoice together, from whichever she opened it on. If one has no link yet, the note says it will follow in a separate email, and the sheet says why, with a way to it. Other notes cover a change to the paper, a reply about clauses and a payment reminder. A note never holds the client's password.
+
 For money, she taps **New invoice**, fills the lines, then **Send to client**. When the brand pays, she taps **Mark paid**. A sent invoice can be voided from More, and **Restore** brings it back with the same number.
 
 ## The client link and the team link
@@ -79,9 +85,9 @@ The **Link** part holds the client link.
 
 - **Copy link** copies it. **Switch it on** opens it again when it is off.
 - **What your client sees** sets which parts show and what they can do.
-- More has **Make a fresh link** and **Switch the link off**.
+- More has **Make a fresh link** and **Switch the link off**, which asks first.
 
-A new client first sees a short form: legal name, brands, address, PIN code, state, tax numbers and contact. When they send it, their details land on the record and the trial agreement is made.
+A new client first sees a short form: legal name, brands, address, PIN code, state, tax numbers and contact. What the client's record already holds fills itself in, so they are not asked twice. When they send it, their details land on the record and the trial agreement is made.
 
 The brand's junior staff get the **team link**. Riya taps **Switch the team link on** and must set a password first. It never shows invoices, agreements, money or private notes.
 
@@ -107,9 +113,9 @@ A team can hold up to 25 people. A member never sees her bank, fees, private not
 
 ## What an admin checks
 
-- **Allowing or blocking it:** in Admin, People, tap a row and use **What does this person see?** to allow or block Agency for that person. For a whole brand, add an override on Agency under Flags, for a brand. An override never switches it on: the person then turns it on from **Apps** (Contribution), as under Switch Agency on.
+- **Allowing or blocking it:** in Admin, People, tap a row and use **What does this person see?** to allow or block Agency for that person. For a whole brand, add an override on Agency under Flags, for a brand. An override never unhides it: the person then unhides it from **Apps** (Contribution), as under Find Agency.
 - **House templates:** only a super admin saves one, from their own paper, with **Save as house template** in More. They are listed under the **Agency templates** tab.
-- **Counts only:** Observability shows how much Agency is used. It never shows client names, amounts or notes.
+- **Counts only:** Dev Tools shows how much Agency is used. It never shows client names, amounts or notes.
 - **Owner only:** no staff member or admin can open Riya's clients, fees or notes.
 
 > **Pro tip:** ask a new Agency user to fill Agency settings first. Every paper after that fills itself, and the "Not filled yet" marks go away.

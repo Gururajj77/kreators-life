@@ -77,7 +77,7 @@ const STAGE_COPY: Record<AgencyStageKey, { now: string; you: string; we: string;
 const PIECE_STAGES: ReadonlySet<AgencyStageKey> = new Set<AgencyStageKey>(['trial', 'pilot', 'retainer', 'delivery']);
 const fill = (line: string, agency: string) => line.replace('{a}', agency || 'Your team');
 
-const dot = (s: string | null) => (s ? prettyDate(s.slice(0, 10)) : '');
+const dot = (s: string | null) => (s ? prettyDate(s) : '');
 /** Only a real https address is ever a link. */
 const safe = (u: string) => u.startsWith('https://');
 

@@ -725,6 +725,9 @@ function useKeyboardArea(): { top: number; height: number } | null {
   return area;
 }
 
+/** The room the Close above the card takes while a phone's keyboard holds the panel to the visible area: the button and a gap each side. */
+const RAIL_ROOM = 60;
+
 export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focusIn: boolean }) {
   const nav = useNavigate();
   const loc = useLocation();
@@ -1231,8 +1234,8 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
             say(meta.host, ['Which one?'], {
               kind: 'chips',
               chips: [
-                { label: `This ${PERIOD_META[kind].short.toLowerCase()}, ${periodLabel(now)}`, value: now.start },
-                { label: `The one before, ${periodLabel(before)}`, value: before.start },
+                { label: kind === 'day' ? `Today, ${periodLabel(now)}` : `This ${PERIOD_META[kind].short.toLowerCase()}, ${periodLabel(now)}`, value: now.start },
+                { label: kind === 'day' ? `The day before, ${periodLabel(before)}` : `The one before, ${periodLabel(before)}`, value: before.start },
               ],
               pick: async (c2) => {
                 you(c2.label);
@@ -1497,8 +1500,9 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
     const el = panel.current;
     if (!el) return;
     if (keyboard) {
-      el.style.top = `${keyboard.top}px`;
-      el.style.height = `${keyboard.height}px`;
+      // The round Close sits above the card, so the card starts a button and two small gaps down.
+      el.style.top = `${keyboard.top + RAIL_ROOM}px`;
+      el.style.height = `${keyboard.height - RAIL_ROOM}px`;
       el.style.bottom = 'auto';
       el.style.zIndex = '50';
       return () => {
@@ -1588,10 +1592,16 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
     <section
       ref={panel}
       aria-label={`Bumling AI assistant, with ${who(host)}`}
-      // On a phone the panel fills the page from just under the logo row to the tab bar, on a fill with nothing showing
-      // through (the card colour laid over the page's own base); on a laptop it is the 400px card in the corner.
-      className="fixed inset-x-0 top-[calc(var(--spacing-xl)+env(safe-area-inset-top))] bottom-[calc(var(--spacing-xl)+1px+env(safe-area-inset-bottom))] z-40 flex h-auto flex-col overflow-hidden rounded-none border-x-0 border-t-2 border-b-0 border-line shadow-none [background:linear-gradient(var(--card-strong),var(--card-strong)),var(--page-base-a)] md:inset-x-auto md:top-auto md:right-md md:bottom-md md:h-[min(640px,calc(100dvh-32px))] md:w-[400px] md:rounded-card md:border-2 md:bg-card-strong md:shadow-toy-soft"
+      data-assistant-panel=""
+      // On a phone the panel fills the page from just under the logo row to the tab bar; on a laptop it is the 400px card in the corner.
+      // This frame is where it sits and what moves; the round Close is outside the card (its rail: above it on a phone, on its left on a laptop).
+      className="assistant-frame dialog-frame fixed inset-x-0 top-[calc(var(--spacing-xl)+env(safe-area-inset-top))] bottom-[calc(var(--spacing-xl)+1px+env(safe-area-inset-bottom))] z-40 h-auto md:inset-x-auto md:top-auto md:right-md md:bottom-md md:h-[min(640px,calc(100dvh-32px))] md:w-[400px]"
     >
+      <div className="dialog-rail">
+        <CloseButton onClose={onClose} />
+      </div>
+      {/* The card, on a fill with nothing showing through (the card colour laid over the page's own base). */}
+      <div className="flex h-full flex-col overflow-hidden rounded-none border-x-0 border-t-2 border-b-0 border-line shadow-none [background:linear-gradient(var(--card-strong),var(--card-strong)),var(--page-base-a)] md:rounded-card md:border-2 md:bg-card-strong md:shadow-toy-soft">
       <header className="flex shrink-0 items-center gap-xs border-b-2 border-line py-xs pr-sm pl-md">
         {/* The name and the line under it wrap on a narrow phone rather than being cut short. */}
         <div className="min-w-0 flex-1 break-words">
@@ -1599,7 +1609,6 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
           <p className="m-0 text-caption text-ink-soft">{flow ? FLOWS[flow].label : credits}</p>
         </div>
         {log.length > 2 && <StartOver onConfirm={startOver} />}
-        <CloseButton onClose={onClose} />
       </header>
       {/* With a phone's keyboard up on a short screen, the model picker steps aside so the conversation keeps its room. */}
       {status.data?.connected && models.length > 1 && model && !(keyboard && keyboard.height < 420) && (
@@ -1610,6 +1619,7 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
       </div>
       <div className="shrink-0 border-t-2 border-line p-xs">
         <ChatComposer placeholder={canType ? 'Add or change something' : status.data?.connected ? 'Needs a plan' : 'Ask what something means'} onStop={thinking ? stop : undefined} stopping={stopping} onSend={(t) => void send(t)} disabled={thinking || ask?.kind === 'wait'} maxLength={2000} />
+      </div>
       </div>
     </section>
   );

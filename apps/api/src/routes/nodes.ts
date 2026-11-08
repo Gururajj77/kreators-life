@@ -2,9 +2,9 @@ import { Hono } from 'hono';
 import { addDays, daysBetween, isNodeKind, isRelationshipKey, lifeAreaProblem, nextOccurrence, parentKind, parseLifeArea, parsePriority, parseRepeat, taskReadyAt, WAIT, XP, type CompleteResponse, type RippleEvent } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { TIME_RE } from '@kreators/shared';
-import { ancestorsOf, badgesNow, DATE_RE, diffBadges, getNode, newId, nowIso, readyFromNow, toNode, type NodeRow, taskGate, readyAtFor, withSubtasks } from '../db';
+import { ancestorsOf, DATE_RE, diffBadges, getNode, newId, nowIso, readyFromNow, toNode, type NodeRow, taskGate, readyAtFor, withSubtasks, badgeState, getUser, keptStats, statsAfterTick, storeStats } from '../db';
 import { dateNearToday, shiftDate } from '../db';
-import { blockFromBody, ensureTimeBlocks } from '../timeBlocks';
+import { blockFromBody } from '../timeBlocks';
 
 /** Whether a request names a block, by id or by name. */
 const namesBlock = (b: NodeBody): boolean => (b.timeBlockId !== undefined) || (b.timeBlock !== undefined);
@@ -116,7 +116,6 @@ export async function createNode(db: D1Database, ownerId: string, body: NodeBody
   // The block it sits in: the person's own, checked before anything is written.
   let timeBlockId: string | null = null;
   if (kind === 'task' && namesBlock(body)) {
-    await ensureTimeBlocks(db, { id: ownerId });
     const picked = await blockFromBody(db, ownerId, body);
     if (picked && 'error' in picked) return { error: picked.error, status: 400 };
     timeBlockId = picked?.id ?? null;
@@ -187,7 +186,6 @@ export async function editNode(db: D1Database, row: NodeRow, body: NodeBody): Pr
   if (row.kind === 'task' && 'lifeArea' in body && !lifeAreaProblem(body.lifeArea)) await db.prepare('UPDATE nodes SET life_area = ? WHERE id = ?').bind(parseLifeArea(body.lifeArea), row.id).run();
   // The time block: the person's own (the task's owner, so a coach can only pick the student's), or cleared. A value that is not theirs is left alone.
   if (row.kind === 'task' && namesBlock(body)) {
-    await ensureTimeBlocks(db, { id: row.user_id });
     const picked = await blockFromBody(db, row.user_id, body);
     if (picked && !('error' in picked)) await db.prepare('UPDATE nodes SET time_block_id = ? WHERE id = ? AND user_id = ?').bind(picked.id, row.id, row.user_id).run();
   }
@@ -257,7 +255,6 @@ nodes.patch('/:id', async (c) => {
       if (areaProblem) return c.json({ error: areaProblem }, 400);
     }
     if (namesBlock(body)) {
-      await ensureTimeBlocks(db, user);
       const picked = await blockFromBody(db, user.id, body);
       if (picked && 'error' in picked) return c.json({ error: picked.error }, 400);
     }
@@ -359,7 +356,7 @@ nodes.post('/:id/complete', async (c) => {
   // gap after the previous tick, so writing and ticking in the same breath, or ticking back to back, earns nothing.
   // The gate, today's paid-task count and the badges before the tick are three independent reads: together they cost one wait.
   const since = new Date(Date.now() - 86_400_000).toISOString();
-  const [gate, rewarded, before] = await Promise.all([
+  const [gate, rewarded, keptBefore] = await Promise.all([
     taskGate(db, user.id),
     db
       .prepare(
@@ -368,8 +365,9 @@ nodes.post('/:id/complete', async (c) => {
       )
       .bind(user.id, since)
       .first<{ n: number }>(),
-    badgesNow(db, user.id),
+    keptStats(db, user),
   ]);
+  const before = (await badgeState(db, user, { stats: keptBefore })).keys;
   const leftMs = new Date(readyAtFor(row, gate)).getTime() - Date.now();
   if (leftMs > 0) {
     const wait = Math.max(1, Math.ceil(leftMs / 60_000));
@@ -457,8 +455,10 @@ nodes.post('/:id/complete', async (c) => {
     }
   }
 
-  const after = await badgesNow(db, user.id);
-  const fresh = await getNode(db, user.id, row.id);
+  // Only the counts a tick moves change here, so the badges after it cost one small read and not every row the person has (`statsAfterTick`).
+  const [ticked, nowUser, fresh] = await Promise.all([statsAfterTick(db, keptBefore, { userId: user.id, taskId: row.id, relationship: row.relationship, projectCleared: Boolean(projectCleared) }), getUser(db, user.id), getNode(db, user.id, row.id)]);
+  const after = (await badgeState(db, nowUser ?? user, { stats: ticked })).keys;
+  await storeStats(db, user.id, ticked);
   const res: CompleteResponse = {
     node: toNode(fresh ?? row),
     ripple,
@@ -491,6 +491,8 @@ nodes.post('/:id/uncomplete', async (c) => {
   }
 
   // Un-ticking a repeating task takes back the next one it made, as long as nobody has touched it.
+  // An untick lowers a count, so the kept ones are read again next time.
+  await db.prepare('UPDATE users SET stats_at = NULL WHERE id = ?').bind(user.id).run();
   await db.prepare("DELETE FROM nodes WHERE spawned_from = ? AND user_id = ? AND status = 'active' AND xp = 0").bind(row.id, user.id).run();
   const ancestors = await ancestorsOf(db, user.id, row);
 

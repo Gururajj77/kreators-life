@@ -84,8 +84,8 @@ export function phoneProblem(raw: string): string | null {
 }
 
 /**
- * A phone number for the eye, never for storing: an Indian mobile reads the Indian way, "+91 77421 14087", whether it was kept as
- * "+917742114087", "+91 77421-14087" or a bare "7742114087". Anything else (a number abroad, a landline such as "080 2345 6789",
+ * A phone number for the eye, never for storing: an Indian mobile reads the Indian way, "+91 98765 43210", whether it was kept as
+ * "+919876543210", "+91 98765-43210" or a bare "9876543210". Anything else (a number abroad, a landline such as "080 2345 6789",
  * words like "ext") comes back as typed.
  */
 export function phoneDisplay(raw: string): string {

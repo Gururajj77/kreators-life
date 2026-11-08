@@ -11,7 +11,7 @@ import { docOf, itemsIn, jsonOr, snapshotOf, templateDoc, type HouseRow } from '
  * cannot, since a house template is made from the admin's own invoice, agreement or document). Everyone else reads them in the template
  * picker (GET /agency/templates) and uses one by copying it. Every write is audited. Nothing is seeded.
  *
- * Rate limit: admin routes are mounted before the session check, so a ROUTE_LIMITS line for them would never run; the limit is applied here.
+ * Rate limit: admin routes are mounted before the session check, so a ROUTE_LIMITS line for them would count the address, not the person; the limit is applied here.
  */
 export const adminAgency = new Hono<AppEnv>();
 

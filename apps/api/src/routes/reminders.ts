@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { MAX_CUSTOM_REMINDERS, parseWeekdays, REMINDER_TIME, REMINDER_TITLE_MAX, WATER_DAY_MAX, WATER_EVERY_CHOICES, WATER_GLASS_MAX, WATER_GLASS_MIN, WATER_GOAL_MAX, WATER_GOAL_MIN, type CustomReminder, type RemindersResponse, type WaterState } from '@kreators/shared';
+import { MAX_CUSTOM_REMINDERS, parseWeekdays, REMINDER_TIME, REMINDER_TITLE_MAX, WATER_DAY_MAX, WATER_GLASS_MAX, WATER_GLASS_MIN, WATER_GOAL_MAX, WATER_GOAL_MIN, type CustomReminder, type RemindersResponse, type WaterState } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { DATE_RE, dateNearToday, newId, nowIso, shiftDate, str } from '../db';
 
@@ -9,7 +9,7 @@ import { DATE_RE, dateNearToday, newId, nowIso, shiftDate, str } from '../db';
  */
 export const reminders = new Hono<AppEnv>();
 
-interface PrefsRow { water_on: number; water_goal_ml: number; water_glass_ml: number; water_every_min: number; water_from: string; water_to: string }
+interface PrefsRow { water_goal_ml: number; water_glass_ml: number }
 interface CustomRow { id: string; title: string; time: string; days_json: string; enabled: number }
 
 const toCustom = (r: CustomRow): CustomReminder => ({ id: r.id, title: r.title, time: r.time, days: parseWeekdays(JSON.parse(r.days_json || '[]')), enabled: r.enabled === 1 });
@@ -17,8 +17,14 @@ const toCustom = (r: CustomRow): CustomReminder => ({ id: r.id, title: r.title, 
 /** The person's preferences, made with their defaults the first time they are read. */
 async function prefsFor(db: D1Database, userId: string): Promise<PrefsRow> {
   await db.prepare('INSERT OR IGNORE INTO reminder_prefs (user_id, updated_at) VALUES (?, ?)').bind(userId, nowIso()).run();
-  return (await db.prepare('SELECT water_on, water_goal_ml, water_glass_ml, water_every_min, water_from, water_to FROM reminder_prefs WHERE user_id = ?').bind(userId).first<PrefsRow>())!;
+  return (await db.prepare('SELECT water_goal_ml, water_glass_ml FROM reminder_prefs WHERE user_id = ?').bind(userId).first<PrefsRow>())!;
 }
+
+/**
+ * Water reminders are gone (2026-11-07), so nothing reads these fixed words. A tab left open across that deploy still draws its reminder
+ * switch and hours from them and would break on a missing one; it reads "off". Safe to take out with the next deploy after that one.
+ */
+const OPEN_OLD_TAB = { on: false, everyMin: 120, from: '09:00', to: '21:00' };
 
 async function waterFor(db: D1Database, userId: string, day: string): Promise<WaterState> {
   const p = await prefsFor(db, userId);
@@ -26,16 +32,13 @@ async function waterFor(db: D1Database, userId: string, day: string): Promise<Wa
   const by = new Map(rows.results.map((r) => [r.day, r.ml]));
   const ml = by.get(day) ?? 0;
   return {
+    ...OPEN_OLD_TAB,
     day,
     ml,
     goalMl: p.water_goal_ml,
     glassMl: p.water_glass_ml,
     glasses: Math.floor(ml / p.water_glass_ml),
     goalGlasses: Math.ceil(p.water_goal_ml / p.water_glass_ml),
-    on: p.water_on === 1,
-    everyMin: p.water_every_min,
-    from: p.water_from,
-    to: p.water_to,
     week: Array.from({ length: 7 }, (_, i) => {
       const d = shiftDate(day, i - 6);
       return { day: d, ml: by.get(d) ?? 0 };
@@ -96,17 +99,10 @@ reminders.put('/water/settings', async (c) => {
   const p = await prefsFor(db, user.id);
   const goal = body.goalMl === undefined ? p.water_goal_ml : Math.round(Number(body.goalMl));
   const glass = body.glassMl === undefined ? p.water_glass_ml : Math.round(Number(body.glassMl));
-  const every = body.everyMin === undefined ? p.water_every_min : Number(body.everyMin);
-  const from = body.from === undefined ? p.water_from : str(body.from, 5);
-  const to = body.to === undefined ? p.water_to : str(body.to, 5);
+  // Only the goal and the glass. An old tab may still send on, everyMin, from and to; they are ignored, never refused.
   if (!(goal >= WATER_GOAL_MIN && goal <= WATER_GOAL_MAX)) return c.json({ error: `A daily goal is ${WATER_GOAL_MIN} to ${WATER_GOAL_MAX} ml.` }, 400);
   if (!(glass >= WATER_GLASS_MIN && glass <= WATER_GLASS_MAX)) return c.json({ error: `A glass is ${WATER_GLASS_MIN} to ${WATER_GLASS_MAX} ml.` }, 400);
-  if (!(WATER_EVERY_CHOICES as readonly number[]).includes(every)) return c.json({ error: 'Pick how often from the list.' }, 400);
-  if (!REMINDER_TIME.test(from) || !REMINDER_TIME.test(to) || from >= to) return c.json({ error: 'Start the day before it ends, like 09:00 to 21:00.' }, 400);
-  await db
-    .prepare('UPDATE reminder_prefs SET water_on = ?, water_goal_ml = ?, water_glass_ml = ?, water_every_min = ?, water_from = ?, water_to = ?, updated_at = ? WHERE user_id = ?')
-    .bind(body.on === undefined ? p.water_on : body.on === false ? 0 : 1, goal, glass, every, from, to, nowIso(), user.id)
-    .run();
+  await db.prepare('UPDATE reminder_prefs SET water_goal_ml = ?, water_glass_ml = ?, updated_at = ? WHERE user_id = ?').bind(goal, glass, nowIso(), user.id).run();
   return c.json({ water: await waterFor(db, user.id, day) });
 });
 

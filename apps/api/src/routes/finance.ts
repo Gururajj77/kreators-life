@@ -1,3 +1,4 @@
+import { openTurn, type Turn } from '../cronTick';
 import { Hono } from 'hono';
 import { DOC_COMMENT_MAX, isCurrency, monthShift, emptyInvoiceDoc, invoiceForClient, EXPENSE_CATEGORIES, INCOME_CATEGORIES, INVOICE_STATUSES, invoiceTotals, parseInvoiceDoc, type InvoiceDoc, type FinanceBudget, type FinanceDue, type FinanceGoal, type FinanceRecurring, type FinanceSplit, type FinanceSummary, type FinanceTransaction, type Invoice, type InvoiceItem, type Page } from '@kreators/shared';
 import type { AppEnv } from '../env';
@@ -54,26 +55,27 @@ const moneyCurrency = (sent: unknown, user: object): string => {
 };
 
 /** Post every recurring entry whose date has come. Called by the cron. */
-export async function runRecurring(db: D1Database, onlyUser?: string): Promise<number> {
+export async function runRecurring(db: D1Database, onlyUser?: string, turn: Turn = openTurn(db)): Promise<number> {
   // A month's entry posts on the person's own day, in their zone (India's by default), never the server's UTC date. The query
   // reads up to the furthest day anywhere (UTC plus one) and each row is then held to its owner's today.
   const latest = shiftDate(new Date().toISOString().slice(0, 10), 1);
   const due = onlyUser
     ? await db.prepare('SELECT r.*, u.timezone AS zone FROM finance_recurring r JOIN users u ON u.id = r.user_id WHERE r.active = 1 AND r.next_date <= ? AND r.user_id = ? LIMIT 200').bind(latest, onlyUser).all<RecRow & { user_id: string; zone: string | null }>()
     : await db.prepare('SELECT r.*, u.timezone AS zone FROM finance_recurring r JOIN users u ON u.id = r.user_id WHERE r.active = 1 AND r.next_date <= ? LIMIT 200').bind(latest).all<RecRow & { user_id: string; zone: string | null }>();
-  let posted = 0;
-  for (const r of due.results) {
-    if (r.next_date > dayInZone(r.zone)) continue;
-    // The date moves first and only from the date that was read, so a second run at the same time posts nothing twice.
-    const moved = await db.prepare('UPDATE finance_recurring SET next_date = ? WHERE id = ? AND next_date = ?').bind(nextMonthly(r.next_date, r.day_of_month), r.id, r.next_date).run();
-    if (moved.meta.changes !== 1) continue;
-    await db
-      .prepare("INSERT INTO finance_transactions (id, user_id, kind, amount_cents, currency, category, counterparty, note, date, source, ref, splits_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'recurring', ?, '[]', ?)")
-      .bind(newId(), r.user_id, r.kind, r.amount_cents, r.currency, r.category, r.counterparty, r.note || 'Monthly', r.next_date, r.id, nowIso())
-      .run();
-    posted += 1;
-  }
-  return posted;
+  const ready = due.results.filter((r) => r.next_date <= dayInZone(r.zone));
+  if (!ready.length) return 0;
+  const share = await turn();
+  // The date moves first, only from the date that was read, and the entry goes in the same batch only when that move changed a row. So a second run at the
+  // same time posts nothing twice, and a stop can never move the date and lose the month's entry.
+  const results = await share.send(
+    share.fit(ready, 2).flatMap((r) => [
+      db.prepare('UPDATE finance_recurring SET next_date = ? WHERE id = ? AND next_date = ?').bind(nextMonthly(r.next_date, r.day_of_month), r.id, r.next_date),
+      db
+        .prepare("INSERT INTO finance_transactions (id, user_id, kind, amount_cents, currency, category, counterparty, note, date, source, ref, splits_json, created_at) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 'recurring', ?, '[]', ? WHERE changes() = 1")
+        .bind(newId(), r.user_id, r.kind, r.amount_cents, r.currency, r.category, r.counterparty, r.note || 'Monthly', r.next_date, r.id, nowIso()),
+    ]),
+  );
+  return results.filter((res, i) => i % 2 === 1 && res.meta.changes === 1).length;
 }
 
 export interface InvRow { id: string; user_id: string; owner_name: string; owner_handle: string | null; number: string; client_name: string; client_email: string; items_json: string; total_cents: number; currency: string; status: Invoice['status']; issue_date: string; due_date: string | null; note: string; token: string; paid_at: string | null; created_at: string; doc_json?: string; agency_client_id?: string | null; revised_at?: string | null }
@@ -372,7 +374,13 @@ finance.put('/budgets', async (c) => {
 });
 
 // ---- invoices
-interface NewInvoice { clientName: string; clientEmail: string; items: InvoiceItem[]; dueDate: string | null; note: string; currency: string; agencyClientId?: string | null; doc?: InvoiceDoc; prefix?: string; number?: string; issueDate?: string }
+interface NewInvoice { /** The retainer month it is for, set in the one insert, so a stop can never leave a month's invoice that the month cannot find. */ agencyCycleId?: string; clientName: string; clientEmail: string; items: InvoiceItem[]; dueDate: string | null; note: string; currency: string; agencyClientId?: string | null; doc?: InvoiceDoc; prefix?: string; number?: string; issueDate?: string }
+
+/** The numbers a person already has in a series, in one read. Asking number by number would pass the free plan's fifty queries for anyone with a hundred invoices in a row. A range and no LIKE, so a `%` or `_` in a prefix is only a letter. */
+async function numbersIn(db: D1Database, userId: string, stem: string): Promise<Set<string>> {
+  const rows = await db.prepare('SELECT number FROM invoices WHERE user_id = ? AND number >= ? AND number < ?').bind(userId, stem, `${stem}\u{10FFFF}`).all<{ number: string }>();
+  return new Set(rows.results.map((r) => r.number));
+}
 
 /** The number that follows another in its own series: SSBB-001 becomes SSBB-002, INV-2026-009 becomes INV-2026-010. Never one already taken. */
 export async function nextNumberAfter(db: D1Database, userId: string, number: string): Promise<string> {
@@ -380,11 +388,11 @@ export async function nextNumberAfter(db: D1Database, userId: string, number: st
   if (!m) return nextNumber(db, userId, '');
   const stem = m[1] ?? '';
   const width = (m[2] ?? '').length;
+  const taken = await numbersIn(db, userId, stem);
   let n = Number(m[2]) + 1;
   for (;;) {
     const candidate = `${stem}${String(n).padStart(width, '0')}`;
-    const taken = await db.prepare('SELECT 1 AS x FROM invoices WHERE user_id = ? AND number = ?').bind(userId, candidate).first();
-    if (!taken) return candidate;
+    if (!taken.has(candidate)) return candidate;
     n += 1;
   }
 }
@@ -392,12 +400,11 @@ export async function nextNumberAfter(db: D1Database, userId: string, number: st
 /** The next number: INV-2026-001 by default, or PREFIX-001 when the person set a prefix. Never one that is already taken. */
 export async function nextNumber(db: D1Database, userId: string, prefix: string): Promise<string> {
   const stem = prefix ? `${prefix}-` : `INV-${new Date().getFullYear()}-`;
-  const count = await db.prepare('SELECT COUNT(*) AS n FROM invoices WHERE user_id = ? AND number LIKE ?').bind(userId, `${stem}%`).first<{ n: number }>();
-  let n = (count?.n ?? 0) + 1;
+  const taken = await numbersIn(db, userId, stem);
+  let n = taken.size + 1;
   for (;;) {
     const number = `${stem}${String(n).padStart(3, '0')}`;
-    const taken = await db.prepare('SELECT 1 AS x FROM invoices WHERE user_id = ? AND number = ?').bind(userId, number).first();
-    if (!taken) return number;
+    if (!taken.has(number)) return number;
     n += 1;
   }
 }
@@ -412,8 +419,8 @@ export async function createInvoice(db: D1Database, userId: string, input: NewIn
   // No issue day given: the owner's today in their zone, never the server's UTC date.
   const issueDate = input.issueDate ?? dayInZone((await db.prepare('SELECT timezone FROM users WHERE id = ?').bind(userId).first<{ timezone: string | null }>())?.timezone);
   await db
-    .prepare("INSERT INTO invoices (id, user_id, number, client_name, client_email, items_json, total_cents, currency, status, issue_date, due_date, note, token, paid_at, created_at, agency_client_id, doc_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, NULL, ?, ?, ?)")
-    .bind(id, userId, number, input.clientName, input.clientEmail, JSON.stringify(input.items), totalOf(input.items, input.doc), input.currency, issueDate, input.dueDate, input.note, randomCode(12), nowIso(), input.agencyClientId ?? null, JSON.stringify(input.doc ?? {}))
+    .prepare("INSERT INTO invoices (id, user_id, number, client_name, client_email, items_json, total_cents, currency, status, issue_date, due_date, note, token, paid_at, created_at, agency_client_id, doc_json, agency_cycle_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, NULL, ?, ?, ?, ?)")
+    .bind(id, userId, number, input.clientName, input.clientEmail, JSON.stringify(input.items), totalOf(input.items, input.doc), input.currency, issueDate, input.dueDate, input.note, randomCode(12), nowIso(), input.agencyClientId ?? null, JSON.stringify(input.doc ?? {}), input.agencyCycleId ?? null)
     .run();
   const row = await db.prepare(`${INV_SELECT} WHERE i.id = ?`).bind(id).first<InvRow>();
   return row ? toInvoice(row) : null;

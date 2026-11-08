@@ -5,7 +5,7 @@ import { newId, nowIso } from '../db';
 import { handleComment } from './growth';
 import { hmacHex, providerFor } from '../payments';
 import { release } from '../discounts';
-import { logEvent, sendEmail, sha as sha256Hex, track } from '../ops';
+import { logEvent, safeEqual, sendEmail, sha as sha256Hex, track } from '../ops';
 import { ORDER_SELECT, type OrderRow } from './studio';
 import { nameOf, notify } from '../db';
 import type { Env } from '../env';
@@ -205,7 +205,7 @@ webhooks.post('/meta', async (c) => {
   const raw = await c.req.text();
   const given = (c.req.header('X-Hub-Signature-256') ?? '').replace('sha256=', '');
   const expected = await hmacHex(c.env.META_APP_SECRET, raw);
-  if (!given || given.length !== expected.length || given !== expected) return c.json({ error: 'bad signature' }, 401);
+  if (!given || !safeEqual(given, expected)) return c.json({ error: 'bad signature' }, 401);
   let payload: { entry?: { id?: string; changes?: { field?: string; value?: { id?: string; text?: string; media?: { id?: string; media_product_type?: string }; from?: { id?: string; username?: string } } }[] }[] } = {};
   try {
     payload = JSON.parse(raw) as typeof payload;

@@ -44,6 +44,8 @@ Typing what you want, like "move my edit task to Friday", needs a plan.
 4. Removing something, or settling money owed, waits for her to tap **Confirm** or **Cancel**.
 5. While it works, the send arrow turns into a **Stop** square. What was done before the stop stays, each with Undo.
 
+It can also log movement, the eating check-in and the day's gratitude. It never reads supplements.
+
 Each reply says **Answered by** and the model's name, so it is never mixed up with a built-in line.
 
 Without a plan, she can still ask what a word means, like "what is a layer?". Anything else shows the plan card.

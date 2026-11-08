@@ -11,7 +11,7 @@ export interface Env {
   META_APP_SECRET?: string;
   META_VERIFY_TOKEN?: string;
   META_ACCESS_TOKEN?: string;
-  /** Salt for hashing click IPs. Falls back to a fixed string locally. */
+  /** Salt for hashing click addresses, anonymous names and the addresses and typed emails in `rate_limits` keys. Falls back to a fixed string locally. */
   CLICK_SALT?: string;
   /** Optional Razorpay keys. With them, money checkout is live; without them it stays in test mode. */
   RAZORPAY_KEY_ID?: string;
@@ -59,6 +59,8 @@ export interface Env {
   ASSISTANT_PRICE_OUT?: string;
   /** For a model not on ASSISTANT_MODELS, on OpenRouter: zero-retention hosts only, unless "off" (then it may not read the journal or trackers). */
   ASSISTANT_ZDR?: string;
+  /** Set only on the test server (blueprint.sh): count D1 round trips and rows and say them in headers (d1Guard.ts). Never set in production. */
+  D1_GUARD?: string;
 }
 
 export interface UserRow {
@@ -106,6 +108,8 @@ export interface UserRow {
   links_json: string;
   /** JSON: which app groups start open and the order of apps inside a group (migration 0074), read through parseAppPrefs. */
   app_prefs_json?: string | null;
+  /** JSON: the date format and time format this person's screens use (migration 0109), read through parseDatePrefs; NULL is the default. */
+  date_prefs_json?: string | null;
   fee_bps: number;
   streak: number;
   best_streak: number;
@@ -113,6 +117,9 @@ export interface UserRow {
   getting_started_hidden_at?: string | null;
   /** When the starting time blocks and day templates were added (migration 0089); null until the first read. */
   time_blocks_seeded_at?: string | null;
+  /** The counts behind the badges, kept for an hour (`keptStats` in db.ts). */
+  stats_json?: string | null;
+  stats_at?: string | null;
   last_checkin: string | null;
   onboarded_at: string | null;
   created_at: string;
@@ -131,5 +138,6 @@ export interface TeamActor {
 export type AppEnv = {
   Bindings: Env;
   /** `team` is set by the Agency team gate (agencyTeamAccess.ts) when a team member works on someone's Agency: `user` is then the owner. */
-  Variables: { user: UserRow; team?: TeamActor; logNote?: string; requestId?: string };
+  /** `adminKeyOk` is set only by the admin key's door (`adminKeyDoor` in ops.ts), the one place that key is compared. */
+  Variables: { user: UserRow; team?: TeamActor; logNote?: string; requestId?: string; adminKeyOk?: boolean };
 };

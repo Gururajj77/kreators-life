@@ -64,8 +64,8 @@ const groupId = (circles.events ?? []).find((e) => e.myGroupId)?.myGroupId ?? ci
 // A friend and an alias chat.
 await api('POST', '/bond/friends', { userId: M.user.id }, S.token);
 const friends = await api('GET', '/bond/friends', undefined, M.token);
-const pending = (friends.requests ?? friends.friends ?? []).find((f) => f.status === 'pending');
-if (pending?.id) await api('POST', `/bond/friends/${pending.id}`, { status: 'accepted' }, M.token);
+const pending = (friends.open ?? []).find((f) => f.status === 'pending');
+if (pending?.requestId) await api('POST', `/bond/friends/${pending.requestId}`, { status: 'accepted' }, M.token);
 const chat = await api('POST', '/bond/chats', { userId: S.user.id }, M.token);
 const resources = await api('GET', '/resources', undefined, M.token);
 const resourceId = resources.resources?.[0]?.id ?? null;
@@ -124,12 +124,38 @@ if (agClient.id) {
   if (contractToken) site.push(`/k/${contractToken}`);
 }
 
+// The newer pages, with real data: movement, eating and gratitude, a daily review, a coach with a student who shares, a lesson with several resources.
+const dayBefore = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+await api('POST', '/fitness/move', { date: today, kind: 'swim', minutes: 30, metres: 1000, effort: 3 }, M.token);
+await api('POST', '/fitness/move', { date: dayBefore, kind: 'walk', minutes: 40, metres: 3000, effort: 2 }, M.token);
+await api('PUT', '/fitness/eat', { date: today, meals: [{ moment: 'breakfast', protein: true, goodFuel: true }, { moment: 'lunch', protein: true, tasty: true }], fruit: 1, veg: 2, packaged: 0, screenFree: 1 }, M.token);
+const gratitudeKeys = (await api('GET', `/journal/gratitude?day=${today}&today=${today}`, undefined, M.token)).prompts ?? [];
+if (gratitudeKeys.length) await api('PUT', `/journal/gratitude/${today}`, { lines: gratitudeKeys.map((prompt, i) => ({ prompt, text: i === 0 ? 'A long walk with an old friend' : '' })), today, ifUpdatedAt: '' }, M.token);
+await api('PUT', '/reviews', { kind: 'day', date: today, answers: ['Kept the morning clear'], rating: 4 }, M.token);
+await admin('POST', `/admin/users/${M.user.id}/permissions`, { permissions: ['coach'] });
+await api('POST', '/onboarding', { answers, displayName: 'Third' }, T.token);
+await api('POST', '/onboarding/build', { relationships: ['self', 'friendship'], date: today }, T.token);
+await api('POST', '/today/checkin', { date: today }, T.token);
+await api('POST', '/wellbeing/mood', { value: 4, date: today }, T.token);
+await api('PATCH', '/me/modules', { key: 'fitness', on: true }, T.token);
+const taught = await admin('POST', '/admin/coaching/links', { coachId: M.user.id, student: T.user.email, mode: 'link' });
+if (taught.link?.id) await api('PATCH', `/me/coach/links/${taught.link.id}/share`, { patterns: true }, T.token);
+const lessonId = 'prog-onboarding-l01';
+const taughtLessons = await api('GET', '/school/cohorts/coh-onboarding', undefined, M.token);
+if ((taughtLessons.items?.find((i) => i.id === lessonId)?.resources?.length ?? 0) < 3) {
+  await api('POST', `/school/items/${lessonId}/resources`, { kind: 'video', ref: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ', label: 'Watch it first' }, M.token);
+  await api('POST', `/school/items/${lessonId}/resources`, { kind: 'book', ref: 'the-relationship-method' }, M.token);
+  await api('POST', `/school/items/${lessonId}/resources`, { kind: 'link', ref: 'https://example.com/notes', label: 'Notes on the web' }, M.token);
+}
+await api('POST', '/school/cohorts/coh-onboarding/enroll', {}, T.token);
+
 const stateDir = path.join(path.dirname(new URL(import.meta.url).pathname), 'state');
 fs.mkdirSync(stateDir, { recursive: true });
 fs.writeFileSync(path.join(stateDir, 'shoot-token'), M.token);
+fs.writeFileSync(path.join(stateDir, 'shoot-token-student'), T.token);
 
-site.unshift('/', '/explore', '/features/school', '/c/nope', '/i/nope', '/terms', '/privacy', '/refunds', '/contact', '/pricing', '/start', '/signin', '/forgot', '/signin/reset?token=nope', '/signup', `/u/sell${stamp}`.slice(0, 24), `/people/${S.user.id}`, sold.product?.id ? `/p/${sold.product.id}` : null);
-const app = [...agencyPaths, '/onboarding', '/session', '/vibe-check', '/home', '/today', '/tower', '/realm/self', '/apps', '/you', '/search', '/profile', '/help', '/inbox', '/leaderboard', '/rewards', '/school', '/school/coh-editing-open', '/work', opp.id ? `/work/${opp.id}` : null, '/army', camp.id ? `/army/${camp.id}` : null, '/win', reward.id ? `/win/${reward.id}` : null, '/party', event.event?.id ?? event.id ? `/party/${event.event?.id ?? event.id}` : null, '/run', club.club?.id ?? club.id ? `/run/clubs/${club.club?.id ?? club.id}` : null, '/run?tab=tracking', '/run?tab=collabs', '/community', '/club', '/bond', chat.chat?.id ?? chat.id ? `/bond/chats/${chat.chat?.id ?? chat.id}` : null, '/circles', groupId ? `/circles/${groupId}` : null, '/life', '/reviews', '/wellbeing', '/mood', '/sleep', '/stress', '/mindful', '/journal', '/companion', '/knowledge', resourceId ? `/knowledge/${resourceId}` : null, '/tools', '/tv', '/fund', '/sessions', '/library', sold.product?.id ? `/library/${sold.product.id}` : null, '/shop', '/store', mine.product?.id ? `/shop/products/${mine.product.id}` : null, '/shop/page', '/shop/bookings', '/shop/testimonials', '/shop/audience', '/shop/content', '/shop/automations', '/shop/customers', '/shop/dm', '/finance', '/internal/observability', '/manage', '/admin', '/nowhere-at-all'];
+site.unshift('/', '/features', '/7rp', '/explore', '/features/school', '/features/books', '/licences', '/subprocessors', '/copyright', '/c/nope', '/i/nope', '/terms', '/privacy', '/refunds', '/contact', '/pricing', '/start', '/signin', '/forgot', '/signin/reset?token=nope', '/signup', `/u/sell${stamp}`.slice(0, 24), `/people/${S.user.id}`, sold.product?.id ? `/p/${sold.product.id}` : null);
+const app = [...agencyPaths, '/onboarding', '/session', '/vibe-check', '/home', '/today', '/tower', '/realm/self', '/apps', '/you', '/search', '/profile', '/help', '/insights', '/insights?kind=month', '/insights?kind=day', '/inbox', '/leaderboard', '/rewards', '/school', '/school/coh-editing-open', '/work', opp.id ? `/work/${opp.id}` : null, '/army', camp.id ? `/army/${camp.id}` : null, '/win', reward.id ? `/win/${reward.id}` : null, '/party', event.event?.id ?? event.id ? `/party/${event.event?.id ?? event.id}` : null, '/run', club.club?.id ?? club.id ? `/run/clubs/${club.club?.id ?? club.id}` : null, '/run?tab=tracking', '/run?tab=collabs', '/community', '/club', '/bond', chat.chat?.id ?? chat.id ? `/bond/chats/${chat.chat?.id ?? chat.id}` : null, '/circles', groupId ? `/circles/${groupId}` : null, '/life', '/reviews', '/wellbeing', '/mood', '/sleep', '/stress', '/mindful', '/journal', '/companion', '/knowledge', resourceId ? `/knowledge/${resourceId}` : null, '/tools', '/tv', '/fund', '/sessions', '/library', sold.product?.id ? `/library/${sold.product.id}` : null, '/shop', '/store', mine.product?.id ? `/shop/products/${mine.product.id}` : null, '/shop/page', '/shop/bookings', '/shop/testimonials', '/shop/audience', '/shop/content', '/shop/automations', '/shop/customers', '/shop/dm', '/finance', '/fitness', '/time-blocks', '/cards', '/discover', '/book', '/plans', '/coaching', `/coaching/students/${T.user.id}`, '/school/coh-onboarding', '/reviews?kind=day', '/insights?kind=week', '/internal/observability', '/internal/logs', '/manage', '/admin', '/admin/guide', '/nowhere-at-all'];
 const shots = [...site.filter(Boolean).map((p) => ({ path: p, name: `all-${p.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'site'}` })), ...app.filter(Boolean).map((p) => ({ path: p, needsSession: true, name: `all-${p.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')}` }))];
 process.stdout.write(JSON.stringify(shots, null, 1));
 console.error(`${shots.length} shots; token in ${path.join(stateDir, 'shoot-token')}`);

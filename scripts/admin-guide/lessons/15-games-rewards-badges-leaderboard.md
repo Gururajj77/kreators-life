@@ -71,7 +71,7 @@ Honors are different. The team gives them, or time in the app unlocks them. They
 The Leaderboard is on for everyone, but nobody shows on it until they say so.
 
 1. On the **Profile** tab, under **Profile**, Riya ticks **Show me on the leaderboard**.
-2. She taps **Save profile**.
+2. She taps **Save profile**, or uses **Show me on the boards** on the Leaderboard itself.
 3. She opens **Leaderboard** (or **Rank** under Points).
 4. Under **Board** she picks Everyone, By goal, By pillar, By city, By who they are or By experience.
 5. Under **Rank by** she picks All time, This month, Streak or Badges.

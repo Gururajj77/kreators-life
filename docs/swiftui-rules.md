@@ -45,7 +45,7 @@ Never use these rules to restyle a control at rest.
 ## Sheets, alerts, navigation
 26. **Use item-driven sheets.** Open a sheet with the item it is about (`const [editing, setEditing] = useState<Item|null>(null)`), not a boolean plus a separate selected id. Check: paired `open` + `selectedId` states.
 27. **Sheets own their actions.** The sheet saves and closes itself through its own mutation. Do not prop-drill `onSave`/`onCancel` chains. All sheets use `Sheet` and `useDialogFocus` (focus in, trapped, Escape, return).
-28. **Confirmations are in-app sheets.** Use `ConfirmSpend` or a confirm `Sheet`, never `window.confirm` (HIG and CLAUDE.md). Check: `grep -rn "window\.confirm" apps/web/src` Each one is a finding (wave 8 left two: Resources.tsx and Realm.tsx).
+28. **Confirmations are in-app sheets.** Use `ConfirmSpend` or a confirm `Sheet`, never `window.confirm` (HIG and CLAUDE.md). Check: `grep -rn "window\.confirm" apps/web/src` Each one is a finding (none is left: wave 8 left two, Resources.tsx and Realm.tsx, and both ask in `ConfirmDelete` since 2026-11-06).
 29. **Navigation is a typed router, not state.** Use links and `navigate()`. Tabs and filters that only change the view use `preventScrollReset` (`drive-scroll.mjs` reports 0). `BackLink` uses history when it has it.
 30. **Pick containers that adapt, without swapping trees on resize.** Do not render two different component trees per breakpoint when CSS can adapt one, because that loses state mid-resize. Use responsive classes. `md`/`lg` need height, per app.css.
 
@@ -66,3 +66,42 @@ Never use these rules to restyle a control at rest.
 - For every app screen under review, walk rules 1 to 37 and note each violation as `file:line`, with the rule number.
 - Fix hard rules (8, 9, 13, 19, 20, 21, 22, 26 to 28) as bugs. Present performance rules (5, 6, 12, 14) as suggestions unless they cause a visible bug.
 - After changes, run the typecheck, build, shared tests, `scripts/scan.sh` and the probes in rules 31 and 32 over shots.json at phone and laptop width.
+
+## The walk of 2026-11-07
+The screens built after wave 8, each read rule by rule and what was in doubt driven in Chrome on 8788. No control's look changed at rest. "Focus" below is the walk's own check under rules 13 and 27: when a panel closes or a row leaves, the keyboard's place goes somewhere on purpose, without moving the page and with no ring for a mouse (`focusHeadingAfter` in `lib/focusHeading.ts`, which waits until no dialog holds focus).
+
+| Screen | Rule | What was wrong | The fix |
+|---|---|---|---|
+| Fitness, eating check-in | 1 | The form's seed effect also cleared its status line, and a save comes back as a new row, so "Saved" went as soon as the read landed | Two effects: the seed follows the row, and only another day clears the line |
+| Fitness, day sheet | 11 | A row from another month opened "Nothing logged on this day" while that month was still on its way | A skeleton until it lands |
+| Fitness, day sheet | Focus | Saving a Change folded the form holding the focused button | Back to that row's Change |
+| Fitness, Kreators Run's tool | Focus | Removing a row dropped focus to the top of the page | The list's heading |
+| Supplements | 27, Focus | `data-autofocus` works only in a dialog, so Change left focus nowhere, and Cancel or a save lost it; no Escape | `autoFocus`, Escape closes it, focus back to the row's menu; a removal goes to the heading |
+| Time blocks | 19 | Edit's scroll to a template was smooth under reduced motion | `auto` under reduced motion |
+| Time blocks | Focus | A save folded its form, a delete took the row, removing a slot took its button, and Edit scrolled away with focus left behind | The row's toggle, the list's heading, Add a slot, and the card's toggle |
+| Reviews, opening a period from the calendar | 19, Focus | Smooth under reduced motion, and the day panel that opened it took focus with it | `auto` under reduced motion, focus on the review's heading |
+| Reviews, ReviewSteps | 24 | The rating was a radio group with no arrow keys, though a second tap clears it | A group of `aria-pressed` toggles, which is what it does |
+| Reviews, templates and calendar | 1, 28 | Seed effects with no comment, and a failed save or remove still showed on the next opening | A comment each, and both reset as the sheet opens |
+| Emerging, cards | Focus | Not now took the card and its menu, Add it folded the not to do form, and Back to the last 8 weeks took its own button | The block's heading, the button that opened the form, and the numbers' heading |
+| Your life, tiles | 8 | A note's parts were keyed by their words, and two can read the same | By place, with a comment, since they never reorder |
+| Coach's student page | 13 | The bar's GSAP tween had no cleanup | Killed on change and on leaving |
+| Coach's student page | 11 | Blank while it loaded | The way back and a skeleton |
+| Coach's student page and report | CLAUDE.md, times | `toLocaleDateString` twice, so "Your student since" ignored the person's format | `longDate` and `weekday` from `lib/date.ts` |
+| Coach's student page | Focus | A share chip opened a section and scrolled to it, focus left in the bar | The section's toggle |
+| Coach's report, charts | 8 | Wrappers keyed by index, while an odd count moves a card to the top | The card's own key |
+| Coaching | 13 | Copy link's timer was never cleared and overlapped on a second tap; a refused copy said nothing | `useCopy`, which cleans up and says so |
+| Coaching | 11 | The page, the directory and the change log were blank while they loaded | Skeletons |
+| Coaching, MyCoach, Move form | 1 | One-time seeds with no comment | A comment each |
+| MyCoach | 28 | A failed End coaching wrote its line under the sheet, out of sight | The line in the sheet too, cleared when it opens |
+| MyCoach | Focus | Ending or taking back a link took the row's buttons | The block's heading |
+| Inbox | 21 | The unread dot named itself with `aria-label` on a plain span | Screen-reader text inside it |
+| Inbox | 1 | Any read of the account wrote over a reminder time being typed | The effect follows the saved time, not the object |
+| Inbox | 28 | A failed delete said nothing | `ErrorLine` in the sheet, cleared on closing |
+| Inbox | Focus | Archive, Restore, Undo and a delete each took the focused button | Undo after an archive, else the list's heading |
+| TagPicker | Focus | The second tap on ✕ took the button | The label over the tags, never the field, which would open a phone's keyboard |
+| Cohort | 28, Focus | Removing a lesson took its card; a failed one showed again | The Lessons heading, and a reset on closing |
+| Leaderboard (outside the list, found by the grep) | 19 | Smooth scroll under reduced motion | `auto` under reduced motion |
+
+**Came out clean, with nothing to fix:** CoachJoin, DatesAndTimes, AppTile and Home's Go to, the sidebar's BellLink, SupplementsToday, CoachPatterns, CoachTaskLine, CoachTaskSheet, CoachSections, Cohort's resource editor, the eating check-in's and movement form's controls, BlockEditor and SwatchPicker. The gratitude card needed only a comment saying why its three lines are keyed by place.
+
+**Left as suggestions, not faults (rules 3 and 5):** `AddStudent` takes the whole hub to read one field; `row` in ReviewCalendar and `inner` in Inbox are JSX helpers, not components; the calendar's "Remind me" switches share one name. **Left for the founder, since it is a look at rest:** Inbox's delete sheet has a ghost Keep where CLAUDE.md asks for an outline one.

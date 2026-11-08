@@ -1,10 +1,10 @@
-import { CHANNEL_POLL_MS, isNearBottom, LOCALE, MAX_CHANNEL_MESSAGE, mergeChannelLines, type RunTalk, type RunTalkLine } from '@kreators/shared';
+import { CHANNEL_POLL_MS, isNearBottom, MAX_CHANNEL_MESSAGE, mergeChannelLines, type RunTalk, type RunTalkLine } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import gsap from 'gsap';
 import { useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ApiError, api, errorText } from '../lib/api';
-import { dateTime, eventTime } from '../lib/date';
+import { dateTime, eventTime, shortDate } from '../lib/date';
 import { useAuthed } from '../lib/queries';
 import { useSession } from '../lib/store';
 import { useParamState } from '../lib/useParamState';
@@ -40,7 +40,7 @@ export function RunDiscussions() {
 
 function talkWhen(t: RunTalk): string {
   if (!t.open) return 'closed for new lines';
-  return `open until ${new Date(t.closesAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' })}`;
+  return `open until ${shortDate(t.closesAt)}`;
 }
 
 function TalkList({ onOpen }: { onOpen: (id: string) => void }) {

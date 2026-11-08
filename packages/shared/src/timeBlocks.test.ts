@@ -131,6 +131,12 @@ describe('the starting set', () => {
     expect(new Set(STARTING_TEMPLATES.map((t) => t.seed)).size).toBe(STARTING_TEMPLATES.length);
     expect(new Set(STARTING_BLOCKS.map((b) => b.seed)).size).toBe(STARTING_BLOCKS.length);
   });
+  it('never takes a seed away: people with no rows name them by id on tasks, dates and weekdays', () => {
+    const blocks = ['hygiene', 'routine', 'deep', 'recovery', 'busy', 'social', 'fun', 'learn', 'selflove', 'sleep', 'travel', 'family', 'date', 'reflect'];
+    const templates = ['everyday', 'deep', 'create', 'learning', 'money', 'admin', 'family', 'recovery', 'social', 'date', 'reflection', 'lowenergy', 'selflove', 'travel'];
+    expect(STARTING_BLOCKS.map((b) => b.seed)).toEqual(expect.arrayContaining(blocks));
+    expect(STARTING_TEMPLATES.map((t) => t.seed)).toEqual(expect.arrayContaining(templates));
+  });
   it('carries every old kind of day with its lead and second', () => {
     for (const k of DAY_TYPE_KEYS) {
       const t = startingTemplateFor(k);
@@ -303,7 +309,8 @@ describe('the week plan with time blocks', () => {
 
 describe('time blocks in help', () => {
   it('has a How it works entry and every word it leans on', async () => {
-    const { HOW_TO, TERMS, TASK_SORTS } = await import('./index');
+    const { TERMS, TASK_SORTS } = await import('./index');
+    const { HOW_TO } = await import('./help');
     const how = HOW_TO.timeBlocks!;
     expect(how.steps.length).toBeGreaterThanOrEqual(3);
     expect(how.steps.length).toBeLessThanOrEqual(5);

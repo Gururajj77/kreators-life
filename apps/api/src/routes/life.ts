@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { LIFE_AREA_ORDER, levelFromXp, money, wellbeingLabel, type LifeArea, type LifeAreaKey, type LifePart, type LifeSummary, type RelationshipKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { currencyOf } from '../db';
+import { currencyOf, personDay, shiftDate } from '../db';
+import { EAT_FASTING_VALUE, eatFromStored, MOVE_WEEK_TARGET } from '@kreators/shared/fitness';
 
 /** One dashboard for the five areas of a life, each part pointing at the screen where you act on it. */
 export const life = new Hono<AppEnv>();
@@ -15,26 +16,31 @@ const mean = (parts: LifePart[]) => {
 
 interface Log { kind: string; date: string; value: number; extra: string }
 
-life.get('/', async (c) => c.json(await lifeSummary(c.env.DB, c.get('user').id)));
+// The person's own today: the device's `?day=`, else today in their zone, never the server's UTC date.
+life.get('/', async (c) => c.json(await lifeSummary(c.env.DB, c.get('user').id, personDay(c.req.query('day'), c.get('user').timezone))));
 
-/** The five-area picture for one person. Home shows the scores; Life shows the parts. */
-export async function lifeSummary(db: D1Database, userId: string): Promise<LifeSummary> {
+/**
+ * The five-area picture for one person. Home shows the scores; Life shows the parts. `day` is the person's own today from their device
+ * (the routes pass `personDay`; UTC only when a caller sends none): "this week" is that day and the six before it, the same seven days as Fitness's hero and the brief, and the
+ * week before is the seven days ahead of those.
+ */
+export async function lifeSummary(db: D1Database, userId: string, day?: string): Promise<LifeSummary> {
   const user = { id: userId };
-  const today = new Date().toISOString().slice(0, 10);
-  const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+  const today = day ?? new Date().toISOString().slice(0, 10);
+  const daysAgo = (n: number) => shiftDate(today, -(n - 1));
   const since14 = daysAgo(14);
   const since7 = daysAgo(7);
   const since30 = daysAgo(30);
   const month = today.slice(0, 7);
 
   const [logs, journal, floors, tasks, sparks, fin, budgets, invoices, goals, cohorts, areaTasks, areaUsed] = await Promise.all([
-    db.prepare('SELECT kind, date, value, extra FROM wellbeing_logs WHERE user_id = ? AND date >= ? ORDER BY date').bind(user.id, since14).all<Log>(),
+    db.prepare('SELECT kind, date, value, extra FROM wellbeing_logs WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date').bind(user.id, since14, today).all<Log>(),
     db.prepare('SELECT emotion, created_at FROM journal_entries WHERE user_id = ? AND created_at >= ? AND emotion IS NOT NULL').bind(user.id, `${since14}T00:00:00`).all<{ emotion: number; created_at: string }>(),
     db.prepare('SELECT relationship, xp FROM relationship_scores WHERE user_id = ?').bind(user.id).all<{ relationship: RelationshipKey; xp: number }>(),
     db.prepare("SELECT substr(completed_at, 1, 10) AS d, COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? GROUP BY d").bind(user.id, `${since14}T00:00:00`).all<{ d: string; n: number }>(),
     db.prepare('SELECT date FROM spark_completions WHERE user_id = ? AND date >= ?').bind(user.id, since14).all<{ date: string }>(),
-    db.prepare("SELECT kind, SUM(amount_cents) AS cents, MAX(currency) AS currency FROM finance_transactions WHERE user_id = ? AND date LIKE ? AND currency = ? GROUP BY kind").bind(user.id, `${month}%`, currencyOf(user)).all<{ kind: 'income' | 'expense'; cents: number; currency: string | null }>(),
-    db.prepare("SELECT b.category, b.monthly_cents, (SELECT COALESCE(SUM(amount_cents), 0) FROM finance_transactions t WHERE t.user_id = b.user_id AND t.kind = 'expense' AND t.category = b.category AND t.date LIKE ? AND t.currency = ?) AS spent FROM finance_budgets b WHERE b.user_id = ?").bind(`${month}%`, currencyOf(user), user.id).all<{ category: string; monthly_cents: number; spent: number }>(),
+    db.prepare("SELECT kind, SUM(amount_cents) AS cents, MAX(currency) AS currency FROM finance_transactions WHERE user_id = ? AND date >= ? AND date <= ? AND currency = ? GROUP BY kind").bind(user.id, `${month}-01`, `${month}-31`, currencyOf(user)).all<{ kind: 'income' | 'expense'; cents: number; currency: string | null }>(),
+    db.prepare("SELECT b.category, b.monthly_cents, (SELECT COALESCE(SUM(amount_cents), 0) FROM finance_transactions t WHERE t.user_id = b.user_id AND t.kind = 'expense' AND t.category = b.category AND t.date >= ? AND t.date <= ? AND t.currency = ?) AS spent FROM finance_budgets b WHERE b.user_id = ?").bind(`${month}-01`, `${month}-31`, currencyOf(user), user.id).all<{ category: string; monthly_cents: number; spent: number }>(),
     db.prepare("SELECT COUNT(*) AS n FROM invoices WHERE user_id = ? AND status = 'sent' AND due_date IS NOT NULL AND due_date < ?").bind(user.id, today).first<{ n: number }>(),
     db.prepare("SELECT g.kind, g.target_cents, g.saved_cents, (SELECT COALESCE(SUM(amount_cents), 0) FROM finance_transactions t WHERE t.user_id = g.user_id AND t.kind = 'income' AND t.currency = ? AND t.date >= g.start_date) AS earned FROM finance_goals g WHERE g.user_id = ?").bind(currencyOf(user), user.id).all<{ kind: string; target_cents: number; saved_cents: number; earned: number }>(),
     db
@@ -52,7 +58,7 @@ export async function lifeSummary(db: D1Database, userId: string): Promise<LifeS
       .all<{ area: string; d: string; n: number }>(),
     // The part counts only for an area the person tagged a task with in the last thirty days, so no area's score drops because the tag is new.
     db
-      .prepare("SELECT DISTINCT life_area AS area FROM nodes WHERE user_id = ?1 AND kind = 'task' AND life_area IS NOT NULL AND (updated_at >= ?2 OR completed_at >= ?2 OR created_at >= ?2)")
+      .prepare("SELECT DISTINCT life_area AS area FROM nodes INDEXED BY idx_nodes_life_area WHERE user_id = ?1 AND kind = 'task' AND life_area IS NOT NULL AND (updated_at >= ?2 OR completed_at >= ?2 OR created_at >= ?2)")
       .bind(user.id, `${since30}T00:00:00`)
       .all<{ area: string }>(),
   ]);
@@ -102,6 +108,19 @@ export async function lifeSummary(db: D1Database, userId: string): Promise<LifeS
   const mindfulTotal = mindfulNow.reduce((s, l) => s + l.value, 0);
   const moodAvg = avg(moodNow.map((l) => l.value));
   const stressAvg = avg(stressNow.map((l) => l.value));
+  // Eating (Fitness's daily check-in, 2026-11-07): each day's 0 to 100 from `eatDayScore`, averaged over the week. It joins the physical
+  // area as one part beside sleep, movement and breath, and only for someone who logged it in the last two weeks, so nobody's score moves
+  // because the part is new. A fasting day has no score and is left out (its stored value is EAT_FASTING_VALUE).
+  const scored = (ls: Log[]) => ls.filter((l) => l.value > EAT_FASTING_VALUE);
+  const eatNow = scored(thisWeek('eat'));
+  const scoreEat = (ls: Log[]) => {
+    const days = scored(ls)
+      .map((l) => eatFromStored(l.value, l.extra, '').dayScore)
+      .filter((v): v is number => v !== null);
+    return days.length ? clamp(avg(days) ?? 0) : null;
+  };
+  const eats = logs.results.some((l) => l.kind === 'eat');
+  const eatAvg = avg(eatNow.map((l) => l.value));
   const tasksThisWeek = tasks.results.filter((t) => t.d >= since7).reduce((s, t) => s + t.n, 0);
   const tasksLastWeek = tasks.results.filter((t) => t.d < since7).reduce((s, t) => s + t.n, 0);
   const sparksThisWeek = sparks.results.filter((s) => s.date >= since7).length;
@@ -119,15 +138,17 @@ export async function lifeSummary(db: D1Database, userId: string): Promise<LifeS
 
   const physical: LifePart[] = [
     { label: 'Sleep', value: sleepAvg === null ? 'not logged' : `${sleepAvg.toFixed(1)} h a night`, score: scoreSleep(sleepNow), path: '/sleep', hint: 'Seven to eight hours scores full marks.' },
-    { label: 'Movement', value: moveNow.length ? `${moveTotal} min this week` : 'not logged', score: scoreMinutes(moveNow, 150), path: '/life#move', hint: 'A hundred and fifty minutes a week is the target.' },
+    { label: 'Movement', value: moveNow.length ? `${moveTotal} min this week` : 'not logged', score: scoreMinutes(moveNow, MOVE_WEEK_TARGET), path: '/life#move', hint: 'A hundred and fifty minutes a week is the target.' },
     { label: 'Breath', value: mindfulNow.length ? `${mindfulTotal} mindful min` : 'not logged', score: scoreMinutes(mindfulNow, 60), path: '/mindful', hint: 'Sixty mindful minutes a week scores full marks.' },
+    ...(eats ? [{ label: 'Eating', value: eatAvg === null ? 'no score yet' : `${eatAvg.toFixed(1)} of 5`, score: scoreEat(eatNow), path: '/fitness', hint: 'From your eating check-in in Fitness: fruit and vegetables, packaged food and meals without a screen.' }] : []),
     ...areaPart('physical'),
   ];
   const physicalBefore = mean([
     ...areaBefore('physical'),
     { label: '', value: '', score: scoreSleep(lastWeek('sleep')), path: '', hint: '' },
-    { label: '', value: '', score: scoreMinutes(lastWeek('move'), 150), path: '', hint: '' },
+    { label: '', value: '', score: scoreMinutes(lastWeek('move'), MOVE_WEEK_TARGET), path: '', hint: '' },
     { label: '', value: '', score: scoreMinutes(lastWeek('mindful'), 60), path: '', hint: '' },
+    ...(eats ? [{ label: '', value: '', score: scoreEat(lastWeek('eat')), path: '', hint: '' }] : []),
   ]);
 
   const financial: LifePart[] = [

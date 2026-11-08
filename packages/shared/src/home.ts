@@ -1,3 +1,4 @@
+import { formatCount } from './core.ts';
 import type { RelationshipKey } from './core.ts';
 import type { LifeAreaKey } from './life.ts';
 import { DISCOVER_STRENGTHS, LOVE_LANGUAGES } from './discover.ts';
@@ -236,9 +237,19 @@ export interface BriefFacts {
   };
   /** Unread lines in the channels the person is in (Community and Bond, only the apps that are on), and `to` when they are all in one channel. */
   channels?: { unread: number; to: string | null };
+  /**
+   * Fitness and Kreators Run (2026-11-07), read only while one of them is on: whether movement is logged on the person's day, and the active
+   * minutes of the last seven days. `eatToday` only while Fitness is on: whether the day's eating check-in is done.
+   */
+  move?: { today: boolean; week: number };
+  eatToday?: boolean;
+  /** Journal (2026-11-07), only while it is on: whether today's gratitude has any line written. Never a word of it. */
+  gratitudeToday?: boolean;
 }
 
 const BRIEF_SIZE = 3;
+/** Active minutes in seven days the brief calls a good week (Fitness's MOVE_WEEK_TARGET, kept here so the brief does not load Fitness's words). */
+export const BRIEF_MOVE_WEEK = 150;
 /** Hours of sleep a night (the week's average) under which the brief suggests a Yourself pillar step. */
 export const BRIEF_SLEEP_LOW = 6.5;
 /** The week's average mood (1 to 5) at or under which the brief suggests a Friends pillar step. */
@@ -295,6 +306,10 @@ export function briefFor(f: BriefFacts): { signals: BriefLine[]; actions: BriefL
   if (ag?.monthMade) sig(62, 'agency-month', 'good', `Month ${ag.monthMade.n} for ${ag.monthMade.clientName} is set up: its pieces and its invoice.`, `/agency/${ag.monthMade.clientId}`);
   const ch = on('community') || on('bond') ? f.channels : undefined;
   if (ch && ch.unread > 0) sig(42, 'channels', 'neutral', `${plural(ch.unread, 'new line')} in your channels.`, ch.to ?? (on('community') ? '/community?tab=channels' : '/bond#bond-channels'));
+  // Fitness and Kreators Run: a good week of movement is said; the person's own numbers, for their own brief.
+  const mv = on('fitness') || on('run') ? f.move : undefined;
+  const moveTo = on('fitness') ? '/fitness#move-heading' : '/run?tab=tracking';
+  if (mv && mv.week >= BRIEF_MOVE_WEEK) sig(44, 'move-week', 'good', `${formatCount(mv.week)} active minutes these seven days.`, moveTo);
   sig(10, 'level', 'neutral', `Level ${f.level}. ${f.xpToNext} xp to the next one.`, '/you');
 
   if (!f.checkedIn) act(100, 'checkin', 'Check in on Daily. It keeps your streak.', '/today');
@@ -358,6 +373,11 @@ export function briefFor(f: BriefFacts): { signals: BriefLine[]; actions: BriefL
       if (x.mind.pat !== 'few') act(53, 'mind-pat', 'Plan tomorrow tonight, so a change of plan feels smaller.', '/today');
     }
   }
+  // Fitness, Kreators Run and Journal (2026-11-07): log a walk on a day with no movement yet, do the eating check-in in the evening, and
+  // write the day's gratitude, each only while its app is on and only when it is not done.
+  if (mv && !mv.today && f.hour >= 12) act(54, 'move', 'No movement logged today. Go for a short walk, then log it.', moveTo);
+  if (on('fitness') && f.eatToday === false && f.hour >= 18) act(47, 'eat', 'Do your eating check-in: how did you eat today?', '/fitness#eat-heading');
+  if (on('journal') && f.gratitudeToday === false && f.hour >= 12) act(46, 'gratitude', 'Write three things you are grateful for today.', '/journal#gratitude-heading');
   act(20, 'pillar', 'Add a task to the pillar you want to grow.', '/tower');
   if (on('journal')) act(15, 'journal', 'Write one line in your journal about today.', '/journal');
 

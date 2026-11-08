@@ -26,6 +26,10 @@
 @custom-variant md (@media (width >= 48rem) and (height >= 30rem));
 @custom-variant lg (@media (width >= 64rem) and (height >= 30rem));
 
+/* Even rows (evenGrid and evenTile in lib/bento.ts) build their class names from the count, so every one is listed here for Tailwind. */
+@source inline("{,sm:,md:,lg:,xl:,@lg:,@3xl:}grid-cols-{1,2,3,4,5,6,7,12,20,30}");
+@source inline("{,sm:,md:,lg:,xl:,@lg:,@3xl:}col-span-{1,2,3,4,5,6}");
+
 @theme {
   /* The only spacing steps this app uses. */
   --spacing-xs: 8px;
@@ -326,6 +330,22 @@
   --deep-guru: #323c9a;
   --deep-earth: #4f3422;
   --deep-divine: #2e1065;
+  /* Home's app tiles (AppTile): each pillar's own hue lifted to a bright tile that carries dark ink, 8:1 or better here and 6:1 or better in dark mode. */
+  --app-tile-servant_leader: #feaeb9;
+  --app-tile-friendship: #ffb182;
+  --app-tile-parent_child: #f8d66d;
+  --app-tile-lover_partner: #9adea4;
+  --app-tile-self: #9bcdfc;
+  --app-tile-guru: #b3c1fc;
+  --app-tile-divine: #c0b8f4;
+  /* The same hue under a mouse: the lightest each can go with white words at 4.5:1 or better, one set for both themes (yellow leans to amber, since a straight dark yellow reads olive). */
+  --app-tile-hover-servant_leader: #ad5a68;
+  --app-tile-hover-friendship: #af5d23;
+  --app-tile-hover-parent_child: #926a0a;
+  --app-tile-hover-lover_partner: #338245;
+  --app-tile-hover-self: #3f77a9;
+  --app-tile-hover-guru: #636fae;
+  --app-tile-hover-divine: #756aaa;
 }
 
 /* Dark: the same hues reversed. The cream page becomes Brown 100, cards
@@ -379,6 +399,13 @@
     --deep-guru: #b4baf5;
     --deep-earth: #d6c2b8;
     --deep-divine: #ddd6fe;
+    --app-tile-servant_leader: #f091a1;
+    --app-tile-friendship: #f49c68;
+    --app-tile-parent_child: #e3c151;
+    --app-tile-lover_partner: #7fc98b;
+    --app-tile-self: #80b7eb;
+    --app-tile-guru: #9aa9f1;
+    --app-tile-divine: #ab9fe8;
   }
 }
 :root[data-theme='dark'] {
@@ -428,6 +455,13 @@
   --deep-guru: #b4baf5;
   --deep-earth: #d6c2b8;
   --deep-divine: #ddd6fe;
+  --app-tile-servant_leader: #f091a1;
+  --app-tile-friendship: #f49c68;
+  --app-tile-parent_child: #e3c151;
+  --app-tile-lover_partner: #7fc98b;
+  --app-tile-self: #80b7eb;
+  --app-tile-guru: #9aa9f1;
+  --app-tile-divine: #ab9fe8;
 }
 
 @layer base {
@@ -564,10 +598,18 @@
   :focus:not(:focus-visible) {
     outline: none;
   }
+  /* A page opened straight on a section (lib/landOnHash.ts): focus is there with no key pressed yet, so no ring until the keyboard moves it. */
+  [data-land-quiet]:focus-visible {
+    outline: none;
+  }
   /* The tab bar (72px), the assistant's button (above it) and the sticky chrome never cover a control the keyboard scrolls to. */
   html {
     scroll-padding-top: 80px;
     scroll-padding-bottom: 120px;
+  }
+  /* Select on Apps: its row sticks under the title bar, at most about 96px tall, so the keyboard's next stop lands clear of it too. */
+  html:has([data-apps-selecting]) {
+    scroll-padding-top: calc(env(safe-area-inset-top) + 52px + 96px + var(--spacing-sm));
   }
   /* A placeholder is text: it takes the quiet ink, which holds 4.5:1 on a field in both modes. */
   ::placeholder {
@@ -587,8 +629,9 @@
   }
 }
 
-/* Laptop layout: the header spans the page, sections flow into two columns. */
-@media (min-width: 768px) and (min-height: 480px) {
+/* Laptop layout: the header spans the page, sections flow into two columns. From the `lg` width: beside the open sidebar a tablet's column
+   is 464px, so two halves of 216px cut a tracker's name under its chart and left words in stubs; there Home stays one column, like a phone. */
+@media (min-width: 64rem) and (min-height: 480px) {
   .screen-columns {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -1227,6 +1270,7 @@ details[open] > summary {
   .bg-card.rounded-card,
   .bg-card.rounded-tile,
   nav.bg-card,
+  .dialog-panel,
   [role='dialog'],
   [aria-modal='true'] {
     -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
@@ -1253,6 +1297,7 @@ nav {
   .bg-card.rounded-card,
   .bg-card.rounded-tile,
   nav.bg-card,
+  .dialog-panel,
   [role='dialog'],
   [aria-modal='true'] {
     -webkit-backdrop-filter: none;
@@ -1353,17 +1398,22 @@ nav {
 }
 
 /* Bento: one gap, one radius, and size that says what matters. Cells span columns and rows by their class;
-   on a phone everything stacks, but a wide cell keeps its extra height so the order of importance still reads. */
-.bento {
-  display: grid;
-  grid-template-columns: repeat(1, minmax(0, 1fr));
-  gap: var(--spacing-sm);
-  grid-auto-flow: dense;
+   on a phone everything stacks, but a wide cell keeps its extra height so the order of importance still reads. The grid itself sits in
+   the components layer, so a list that takes even rows (evenGrid and evenTile in lib/bento.ts) sets its own columns over it. */
+@layer components {
+  .bento {
+    display: grid;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+    gap: var(--spacing-sm);
+    grid-auto-flow: dense;
+  }
+  @media (width >= 40rem) {
+    .bento {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
 }
 @media (width >= 40rem) {
-  .bento {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
   .bento-w2 {
     grid-column: span 2;
   }
@@ -1421,6 +1471,133 @@ nav {
 nav .bg-card {
   background-color: var(--card-strong);
   box-shadow: 0 0 0 1px var(--line), inset 0 1px 0 var(--glass-hi), 0 4px 14px var(--shade-2);
+}
+
+/* Popups (the founder, 2026-11-07: "move the close and settings and such icon menu items in popups on the right outside the card and they
+   stay sticky"). A popup's dialog node is a frame that holds a rail of round buttons and a panel; the frame animates and drags, and only the
+   panel scrolls, fills and blurs, so the rail never moves with the words. The frame draws nothing, and a tap on its empty part reaches the scrim.
+   The rail is one small gap off the panel's right edge, Close first. A phone-width sheet has no room there: under 37.5rem (the panel's 480px and a
+   rail each side) it sits above the panel's top edge at the right, in room the frame keeps for it, so a rise from below starts it off screen too,
+   and the panel's height leaves that room free. A word that slides out grows back over the panel, never off the screen. */
+[role='dialog'].dialog-frame {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.dialog-frame {
+  pointer-events: none;
+}
+.dialog-frame > * {
+  pointer-events: auto;
+}
+.dialog-rail {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: calc(100% + var(--spacing-xs));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--spacing-xs);
+  width: 44px;
+}
+.sheet-panel {
+  max-height: 90dvh;
+}
+/* A sheet opened from a sheet: its scrim covers the one under it and that one's rail. */
+[role='dialog'][aria-modal='true'] ~ .sheet-scrim {
+  z-index: 50;
+}
+/* Sheet's Close keeps the look it had on the panel (the thin fill over the strong card) now that the scrim is behind it. */
+.sheet-close:not(:hover) {
+  background-color: var(--page-base-a);
+  background-image: linear-gradient(var(--paper), var(--paper)), linear-gradient(var(--card-strong), var(--card-strong));
+}
+/* A More menu's round button has no fill of its own: in a rail it takes the strong card, so it reads on the scrim. */
+.dialog-rail .more-trigger:not(:hover) {
+  background-color: var(--card-strong);
+}
+/* A rail button's name shows to its left, over the panel, where there is always room. */
+.dialog-rail .mf-round[data-at]::after,
+.dialog-rail .rail-tip::after {
+  top: 50%;
+  right: calc(100% + var(--spacing-xs));
+  bottom: auto;
+  left: auto;
+  transform: translateY(-50%);
+}
+@media (width < 37.5rem) {
+  .sheet-frame {
+    padding-top: calc(44px + var(--spacing-xs));
+  }
+  .sheet-frame > .dialog-rail {
+    right: var(--spacing-md);
+    left: auto;
+    flex-direction: row-reverse;
+    width: auto;
+  }
+  .sheet-frame > .sheet-panel {
+    max-height: min(90dvh, calc(100dvh - 44px - var(--spacing-md) - env(safe-area-inset-top)));
+  }
+  /* Up there the name drops below the button, over the panel. */
+  .sheet-frame > .dialog-rail .mf-round[data-at]::after,
+  .sheet-frame > .dialog-rail .rail-tip::after {
+    top: calc(100% + var(--spacing-xs));
+    right: 0;
+    transform: none;
+  }
+}
+/* The assistant's panel sits against the laptop's right edge, so its rail is on its left; a phone's fills the width, so its rail is above it, in the
+   row under the page's top edge, where the panel starts. */
+.assistant-frame > .dialog-rail {
+  top: auto;
+  right: var(--spacing-md);
+  bottom: calc(100% + var(--spacing-xs));
+  left: auto;
+  flex-direction: row-reverse;
+  width: auto;
+}
+@media (width >= 48rem) and (height >= 30rem) {
+  .assistant-frame > .dialog-rail {
+    top: 0;
+    right: calc(100% + var(--spacing-xs));
+    bottom: auto;
+    flex-direction: column;
+    width: 44px;
+  }
+}
+/* The water card's round buttons in a popup's rail: one column, each on the card's own slate since the card is no longer behind it, the open one
+   with a white edge, which is what holds 3:1 on the scrim in both themes (its green alone is 1.4:1 there). */
+.dialog-rail .water-tabs {
+  flex-flow: column nowrap;
+  align-items: flex-end;
+  width: 44px;
+}
+.dialog-rail .water-tab {
+  --mf-dim: rgba(255, 255, 255, 0.78);
+}
+.dialog-rail .water-tab:not([aria-selected='true']) {
+  background: #25293a;
+}
+.dialog-rail .water-tab[aria-selected='true'] {
+  border: 2px solid #ffffff;
+}
+/* Dimmed by its icon, not by letting the page's words show through it. */
+.dialog-rail .water-tab:disabled {
+  color: rgba(255, 255, 255, 0.45);
+  opacity: 1;
+}
+.dialog-rail .water-close {
+  margin-left: 0;
+}
+/* Forced colours drop every fill, so a popup and its round buttons need an edge to read as things. */
+@media (forced-colors: active) {
+  .dialog-panel {
+    border: 1px solid CanvasText;
+  }
+  .dialog-rail button,
+  .dialog-rail a {
+    border: 1px solid ButtonText;
+  }
 }
 
 /* Continuous corners ("squircles") where the browser can draw them: the curve eases into the straight edge instead of meeting it at a
@@ -1858,7 +2035,8 @@ input[type='radio'] {
   text-align: left;
   transition: background-color 160ms ease;
 }
-.fx-row:focus-visible {
+.fx-row:focus-visible,
+.fx-row:has(input:focus-visible) {
   outline: 2px solid var(--tint, var(--color-r6));
   outline-offset: -2px;
 }
@@ -2280,9 +2458,13 @@ ol.grid > li > .toy:only-child {
    between sections, no reference row, no letterhead and no running title. */
 .legal-root[data-layout='typed'] .legal-head { text-align: left; }
 /* On a phone the title steps down so "TRIAL ENGAGEMENT AGREEMENT" (about 16em wide) stays on one line from 320 to 430, including the
-   owner's editable title, which cannot carry a nowrap span; a laptop and paper keep 1.85em and 23pt. */
+   owner's editable title, which cannot carry a nowrap span; a laptop and paper keep 1.85em and 23pt. A tablet's owner page has the paper
+   beside the sidebar, so it steps down too (its own rule, after this one). */
 .legal-root[data-layout='typed'] .legal-title { text-align: left; font-variant: normal; letter-spacing: 0; font-size: clamp(0.95em, 4.8vw, 1.85em); text-transform: none; }
-/* On a phone screen a typed clause whose last word would stand alone ("consumption.", "above.") is pulled in from the right by
+@media screen and (min-width: 48rem) and (max-width: 63.99rem) {
+  .screen .legal-root[data-layout='typed'] .legal-title { font-size: clamp(0.95em, 2.9vw, 1.85em); }
+}
+/* Under the laptop width a typed clause whose last word would stand alone ("consumption.", "above.") is pulled in from the right by
    lib/noLoneWord.ts until two words share the last line. The owner's paper is plain editable text, so the client page's nowrap
    spans cannot help there, and balance gives up past six lines. The words never change; paper and laptops never get it. */
 @media screen {
@@ -2635,7 +2817,7 @@ select.inv-edit { appearance: none; cursor: pointer; }
 .water-pane > h3 + .mf-line {
   margin-top: var(--spacing-xs);
 }
-/* The card's three buttons (Water, Settings, Reminders), round icons whose names slide out on hover or keyboard focus (the founder,
+/* The card's three buttons (Water, Reminders, Settings), round icons whose names slide out on hover or keyboard focus (the founder,
    2026-11-06: "keep it icons only but expand the text when hovered"; .expand-btn-words), centred at every size; each opens its panel
    in place. */
 .water-tabs {
@@ -2769,12 +2951,13 @@ select.inv-edit { appearance: none; cursor: pointer; }
 .water-night.mf-panel {
   padding: var(--spacing-md);
 }
-/* Its five pickers: two to a row whatever the screen (the panel is narrow), the hours together on the last row. */
+/* Its two pickers: side by side whatever the screen (the panel is narrow). The card is short, so while a picker's list is open (264px) the
+   card grows to hold it: never cut by the laptop's bubble, never under the card below it on the page. */
 .water-night .mf-sets {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.water-night .mf-sets > :nth-child(3) {
-  grid-column: 1 / -1;
+.water-pane:has(.mf-pop) {
+  padding-bottom: calc(var(--spacing-2xl) * 2);
 }
 .mf-top {
   display: flex;
@@ -3161,7 +3344,9 @@ select.inv-edit { appearance: none; cursor: pointer; }
     0 0 0 1px rgba(255, 255, 255, 0.16),
     0 6px 14px -4px var(--shade-2);
 }
-.mf-round::after {
+.mf-round::after,
+.app-eye::after,
+.rail-tip::after {
   content: attr(data-tip);
   position: absolute;
   bottom: calc(100% + var(--spacing-xs));
@@ -3191,18 +3376,45 @@ select.inv-edit { appearance: none; cursor: pointer; }
   left: auto;
   transform: none;
 }
+/* Select on Apps: the row's card while it is stuck (screens/Apps.tsx). The strong card over the page's own base, so no row's words show through it,
+   with the matte finish of a solid surface. */
+.apps-row-stuck {
+  background-color: var(--page-base-a);
+  background-image: var(--matte-grain), var(--matte-sheen), linear-gradient(var(--card-strong), var(--card-strong));
+  box-shadow: var(--shadow-toy-soft);
+}
+/* The eye on an app's row (AppGroups.tsx) keeps its own toy look and takes only this tooltip. Its list clips whatever leaves it (.fx-inset,
+   and a group's body while it slides), so the word sits beside the eye, inside the row, on the first row and the last alike. */
+.app-eye {
+  position: relative;
+}
+.app-eye::after {
+  top: 50%;
+  right: calc(100% + var(--spacing-xs));
+  bottom: auto;
+  left: auto;
+  transform: translateY(-50%);
+}
 /* A round button lifts a little on hover (the toy transform), which makes it a layer of its own, so its name could not rise over what
    comes after it on the page (the water panel under the water block's buttons hid them, 2026-11-06). While its name shows, the button
    itself sits above its neighbours. */
 .mf-round:hover,
-.mf-round:focus-visible {
+.mf-round:focus-visible,
+.app-eye:hover,
+.app-eye:focus-visible,
+.rail-tip:hover,
+.rail-tip:focus-visible {
   z-index: 30;
 }
-.mf-round:focus-visible::after {
+/* Not Sheet's Close (.rail-tip): a popup opens with focus on it, and its name would then sit over the title every time. */
+.mf-round:focus-visible::after,
+.app-eye:focus-visible::after {
   opacity: 1;
 }
 @media (hover: hover) and (pointer: fine) {
-  .mf-round:hover::after {
+  .mf-round:hover::after,
+  .app-eye:hover::after,
+  .rail-tip:hover::after {
     opacity: 1;
   }
 }
@@ -3211,6 +3423,8 @@ select.inv-edit { appearance: none; cursor: pointer; }
   .rp-line,
   .mf-bar > span,
   .mf-round::after,
+  .app-eye::after,
+  .rail-tip::after,
   .mf-secs > i,
   .mf-tabs > button {
     transition: none !important;
@@ -3566,6 +3780,75 @@ select.inv-edit { appearance: none; cursor: pointer; }
    is no one colour under the icon, so the knockout draws nothing and the slash simply crosses the glyph, like a lucide icon. */
 .ua-knock { --ua-knockout: transparent; }
 
+/* Home's Go to tiles (the founder, 2026-11-07, components/AppTile.tsx): one bright graded fill in the group's colour under dark ink, the
+   name at the top left and a picture of a real object (public/app-art/<key>.webp, scripts/app-art/build.mjs) at the bottom right, running off
+   both edges. The picture sits in the flow under the name, so it can never cover it and a larger browser text size only makes the tile
+   taller. The ink is dark in both themes, so the title keeps its light weight in dark mode too. */
+[data-pillar='servant_leader'] { --app-tile: var(--app-tile-servant_leader); --app-tile-hover: var(--app-tile-hover-servant_leader); }
+[data-pillar='friendship'] { --app-tile: var(--app-tile-friendship); --app-tile-hover: var(--app-tile-hover-friendship); }
+[data-pillar='parent_child'] { --app-tile: var(--app-tile-parent_child); --app-tile-hover: var(--app-tile-hover-parent_child); }
+[data-pillar='lover_partner'] { --app-tile: var(--app-tile-lover_partner); --app-tile-hover: var(--app-tile-hover-lover_partner); }
+[data-pillar='self'] { --app-tile: var(--app-tile-self); --app-tile-hover: var(--app-tile-hover-self); }
+[data-pillar='guru'] { --app-tile: var(--app-tile-guru); --app-tile-hover: var(--app-tile-hover-guru); }
+[data-pillar='divine'] { --app-tile: var(--app-tile-divine); --app-tile-hover: var(--app-tile-hover-divine); }
+.app-tile {
+  --text-headline--font-weight: 550;
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 168px;
+  overflow: hidden;
+  padding: var(--spacing-sm);
+  color: var(--color-ink-fixed);
+  background-image: var(--matte-grain), linear-gradient(150deg, color-mix(in oklab, var(--app-tile) 86%, white), var(--app-tile) 58%, color-mix(in oklab, var(--app-tile) 90%, var(--fill-shade)));
+}
+.app-tile-art {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 124px;
+  height: 124px;
+  /* Past the tile's padding and 8px over its edge, so the object is cut by the tile like the cut-outs in the founder's reference. */
+  margin: auto calc((var(--spacing-sm) + var(--spacing-xs)) * -1) calc((var(--spacing-sm) + var(--spacing-xs)) * -1) auto;
+  pointer-events: none;
+  user-select: none;
+  transition: transform 220ms var(--ease-open);
+}
+/* Under a mouse the tile deepens and its words turn white (the founder, 2026-11-07, his own exception to "never a new filled hover"). The
+   deeper fill is a layer that fades in, since a gradient cannot ease, and the weight stays, so the name never wraps differently. A touch never
+   sticks in it. The toy's 3% brighter hover is off here, or it would eat the white's contrast. */
+.app-tile::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0;
+  pointer-events: none;
+  background-image: var(--matte-grain), linear-gradient(150deg, var(--app-tile-hover), color-mix(in oklab, var(--app-tile-hover) 86%, var(--fill-shade)));
+}
+@media (hover: hover) and (pointer: fine) {
+  .app-tile:hover:not(:disabled) {
+    color: #ffffff;
+    filter: none;
+  }
+  .app-tile:hover::before {
+    opacity: 1;
+  }
+}
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .app-tile::before {
+    transition: opacity 180ms ease;
+  }
+  .app-tile > span:first-child {
+    transition: color 180ms ease;
+  }
+  .app-tile:hover .app-tile-art {
+    transform: translate(-2px, -4px) rotate(-2deg) scale(1.03);
+  }
+}
+
 /* Hover colours follow the pillar. An app's screen (Gate), a pillar page, 7RP and a feature page set data-accent on the root to a pillar;
    a block can carry data-pillar to wear its own. --tint then becomes that pillar's colour, and every button kind hovers in it. */
 /* --tint-ink is the text that reads on that colour: white on the deep ones, the dark slate on orange and yellow. */
@@ -3593,6 +3876,36 @@ select.inv-edit { appearance: none; cursor: pointer; }
   /* A text button takes the pillar's colour, deepened toward ink so it still reads on the page. */
   .btn-ghost:hover:not(:disabled) {
     color: color-mix(in oklab, var(--tint) 55%, var(--color-ink));
+  }
+}
+
+/* The red yes, one look everywhere (the founder, 2026-11-07: "red yes can be solid on hover or second confirmation tap", his own exception
+   to "never a new filled hover"): the pale red outline at rest, solid red with white words on a mouse hover, on keyboard focus and while
+   pressed. A second-tap control keeps its own look at rest and wears `.red-armed` only while its label says "Tap again to …". White on
+   --color-r1 is 5.3:1 in both themes, and the white is fixed since --color-on-fill turns dark on the orange and yellow fills. The flags are
+   there because an armed control can be any kind of button, and its own hover would otherwise paint a pale wash under the white words. */
+.red-yes {
+  border: 2px solid color-mix(in oklab, var(--color-r1) 40%, transparent);
+  background-color: transparent;
+  color: var(--deep-servant_leader);
+}
+.red-armed:not(:disabled),
+.red-yes:focus-visible:not(:disabled),
+.red-yes:active:not(:disabled) {
+  border-color: var(--color-r1) !important;
+  background-color: var(--color-r1) !important;
+  background-image: none !important;
+  color: #ffffff !important;
+}
+@media (hover: hover) and (pointer: fine) {
+  .red-yes:hover:not(:disabled) {
+    border-color: var(--color-r1) !important;
+    background-color: var(--color-r1) !important;
+    background-image: none !important;
+    color: #ffffff !important;
+  }
+  .toy:is(.red-yes, .red-armed):hover:not(:disabled) {
+    --toy-color: var(--color-r1);
   }
 }
 
@@ -5278,6 +5591,8 @@ li.sort-lifted {
   --knot-shade: #1a1838;
   --knot-rim: #c9c2ff;
   --hero-glow: 30%;
+  /* Added to the knot's reach. On a dark surface the hook is 50 lighter, so "life" ends about 7px sooner and the knot follows it there. */
+  --knot-lean: 0px;
   --hero-metal-1: var(--color-ink);
   --hero-metal-2: color-mix(in oklab, var(--color-ink) 82%, var(--color-r6));
   --hero-metal-3: color-mix(in oklab, var(--color-ink) 70%, var(--color-r7));
@@ -5290,6 +5605,7 @@ li.sort-lifted {
 :root[data-theme='dark'] {
   --knot-shade: #0c0a24;
   --hero-glow: 55%;
+  --knot-lean: var(--spacing-xs);
   --hero-metal-1: #ffffff;
   --hero-metal-2: #e9e7f7;
   --hero-metal-3: #b9b6d6;
@@ -5303,6 +5619,7 @@ li.sort-lifted {
   :root:not([data-theme='light']) {
     --knot-shade: #0c0a24;
     --hero-glow: 55%;
+    --knot-lean: var(--spacing-xs);
     --hero-metal-1: #ffffff;
     --hero-metal-2: #e9e7f7;
     --hero-metal-3: #b9b6d6;
@@ -5385,8 +5702,10 @@ li.sort-lifted {
 @media (width >= 48rem) and (height >= 30rem) {
   .hero-body {
     /* How far the knot reaches back over the hook: enough to cross the end of "life" a little (about a tenth of its ink, measured
-       from pixels), never a whole word; on a phone the knot sits under the hook and covers nothing. */
-    --knot-reach: calc(var(--spacing-xl) + var(--spacing-lg) + var(--spacing-md));
+       from pixels at 768, 1024, 1280, 1440 and 1600), never a whole word; on a phone the knot sits under the hook and covers nothing.
+       --knot-grow is how much wider than its column the knot is drawn, kept apart so moving the reach never changes its size. */
+    --knot-reach: calc(var(--spacing-xl) + var(--spacing-lg) + var(--spacing-xs) + var(--knot-lean));
+    --knot-grow: calc(var(--spacing-xl) + var(--spacing-lg) + var(--spacing-md));
     display: grid;
     grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
     grid-template-areas:
@@ -5401,7 +5720,7 @@ li.sort-lifted {
   }
   .hero-knot-place {
     grid-area: knot;
-    inline-size: calc(100% + var(--knot-reach));
+    inline-size: calc(100% + var(--knot-grow));
     margin-inline-start: calc(-1 * var(--knot-reach));
     /* It scales from its left edge, so its reach over the hook stays where it was measured (about a tenth of "life"). */
     transform-origin: 0% 50%;
@@ -5417,7 +5736,8 @@ li.sort-lifted {
 }
 @media (width >= 64rem) and (height >= 30rem) {
   .hero-body {
-    --knot-reach: calc(var(--spacing-xl) + var(--spacing-md) + var(--spacing-xs));
+    --knot-reach: calc(var(--spacing-xl) + var(--spacing-sm) + var(--knot-lean));
+    --knot-grow: calc(var(--spacing-xl) + var(--spacing-md) + var(--spacing-xs));
     grid-template-columns: minmax(0, 400px) minmax(0, 1fr) minmax(0, 232px);
     grid-template-areas:
       'title knot side'
@@ -5429,11 +5749,17 @@ li.sort-lifted {
   }
   .hero-knot-place {
     align-self: center;
-    inline-size: calc(100% + var(--knot-reach));
+    inline-size: calc(100% + var(--knot-grow));
     margin-inline-start: calc(-1 * var(--knot-reach));
   }
   .hero-side {
     align-self: end;
+  }
+}
+/* From 1080px the knot has its full size, so its ink starts a little further into the box and the reach gives a little back. */
+@media (width >= 67.5rem) and (height >= 30rem) {
+  .hero-body {
+    --knot-reach: calc(var(--spacing-xl) + var(--spacing-md) + var(--knot-lean));
   }
 }
 /* The seven guides overlap in a stack on the dark card, each on a ring of the slate. */
@@ -5806,3 +6132,159 @@ li.sort-lifted {
 }
 
 /* End of time blocks. */
+
+/* On this page (components/PageContents.tsx): a stack of small dashes pinned at the top right, under the top bar, and the card of headings that
+   opens to its left. Under the sheets' scrim (40) and the Mindful cover (35), over the condensed bar (20). The foot keeps both clear of the
+   assistant's 60px button in the corner. A dash is 8px of stack until a page has more headings than the screen has room for. */
+.page-contents {
+  --pc-top: calc(env(safe-area-inset-top) + 52px + var(--spacing-sm));
+  --pc-foot: calc(60px + var(--spacing-md) + var(--spacing-sm));
+  --pc-room: calc(100dvh - var(--pc-top) - var(--pc-foot));
+  --pc-dash: color-mix(in oklab, var(--color-ink-mute) 80%, transparent);
+  --pc-now: color-mix(in oklab, var(--tint) 65%, var(--color-ink));
+  position: fixed;
+  top: var(--pc-top);
+  right: 0;
+  z-index: 25;
+}
+/* The site's sticky header is 61px, a little taller than the app's bar. Its foot holds the privacy bar instead of the assistant's button, up to 102px tall where the bar wraps. */
+body:has(.fx-header) .page-contents {
+  --pc-top: calc(env(safe-area-inset-top) + 61px + var(--spacing-sm));
+  --pc-foot: var(--spacing-2xl);
+}
+/* The assistant's panel sits in the same corner, over the page, with a half-covered stack and card under it otherwise. */
+body:has([data-assistant-panel]) .page-contents {
+  display: none;
+}
+/* Orange and yellow are too light to read as words, so those two start from their own deep tokens, which turn pale in dark mode. */
+:root[data-accent='friendship'] .page-contents {
+  --pc-now: color-mix(in oklab, var(--deep-friendship) 85%, var(--color-ink));
+}
+:root[data-accent='parent_child'] .page-contents {
+  --pc-now: color-mix(in oklab, var(--deep-parent_child) 85%, var(--color-ink));
+}
+.pc-dashes {
+  display: block;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: var(--radius-inner);
+}
+/* It sits flush with the screen's edge, so the keyboard's ring goes inside it. */
+.pc-dashes:focus-visible {
+  outline-offset: -2px;
+}
+.pc-stack {
+  display: block;
+  padding-block: var(--spacing-xs);
+  padding-right: var(--spacing-md);
+}
+.pc-slot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: min(var(--spacing-xs), calc((var(--pc-room) - var(--spacing-md)) / var(--pc-n, 1)));
+}
+.pc-dash {
+  width: 20px;
+  height: 2px;
+  border-radius: 999px;
+  background-color: var(--pc-dash);
+  transition: background-color 160ms var(--ease-open);
+}
+.pc-slot[data-depth='1'] .pc-dash {
+  width: 14px;
+}
+.pc-slot[data-depth='2'] .pc-dash {
+  width: 8px;
+}
+.pc-slot[data-now] .pc-dash {
+  width: 24px;
+  background-color: var(--color-ink);
+}
+.pc-slot[data-depth='1'][data-now] .pc-dash {
+  width: 18px;
+}
+.pc-slot[data-depth='2'][data-now] .pc-dash {
+  width: 12px;
+}
+.pc-slot[data-pointed] .pc-dash {
+  background-color: var(--color-ink);
+}
+.pc-card {
+  position: absolute;
+  top: 0;
+  right: 100%;
+  width: max-content;
+  min-width: 168px;
+  max-width: 280px;
+  max-height: var(--pc-room);
+  margin-right: var(--spacing-xs);
+  padding: var(--spacing-xs);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate3d(var(--spacing-xs), 0, 0);
+  transition:
+    opacity 160ms var(--ease-open),
+    transform 220ms var(--ease-open),
+    visibility 0s linear 160ms;
+}
+.pc-card[data-open] {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: 0s;
+}
+/* One line a row, 44px for a finger and 32px for a mouse, which has no finger to fit (the tap target rule's one exception). */
+.pc-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding-inline: var(--spacing-sm);
+  border-radius: var(--radius-inner);
+  text-align: left;
+  color: var(--color-ink-soft);
+  transition: background-color 120ms var(--ease-open);
+}
+.pc-row[data-depth='1'] {
+  padding-left: calc(var(--spacing-sm) * 2);
+}
+.pc-row[data-depth='2'] {
+  padding-left: calc(var(--spacing-sm) * 3);
+}
+.pc-row[aria-current] {
+  color: var(--pc-now);
+}
+.pc-row[data-pointed] {
+  background-color: color-mix(in oklab, var(--tint) 14%, var(--card-strong));
+}
+@media (hover: hover) and (pointer: fine) {
+  .pc-row {
+    min-height: 32px;
+  }
+  .pc-row:hover {
+    background-color: color-mix(in oklab, var(--tint) 14%, var(--card-strong));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pc-card,
+  .pc-dash,
+  .pc-row {
+    transition: none;
+  }
+}
+/* A dash is only a fill, and forced colours would paint it the page's own colour. */
+@media (forced-colors: active) {
+  .pc-dash {
+    forced-color-adjust: none;
+    background-color: CanvasText;
+  }
+  .pc-slot[data-now] .pc-dash,
+  .pc-slot[data-pointed] .pc-dash {
+    background-color: Highlight;
+  }
+}

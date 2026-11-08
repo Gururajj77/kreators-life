@@ -14,8 +14,12 @@ import { RowCard } from '../components/RowCard';
 import { Reveal } from '../components/fx/Reveal';
 import { CountUp } from '../components/fx/CountUp';
 import { FactTag, IconTag } from '../components/FactTag';
+import { evenGrid, evenTile } from '../lib/bento';
 
 /** Each permission's queue tile: where it opens and what is waiting. Its icon is the permission's own, from `PERMISSION_META` in shared. */
+// However many permissions a person holds, the rows stay full (lib/bento.ts): an odd count leads with a tile that takes the row.
+const TILE_COLS = { base: 1, sm: 2 } as const;
+
 const PERMISSION_TILES: Record<Permission, { name: string; blurb: string; to: string; queue?: (q: Queues) => number }> = {
   talent: { name: 'Talent', blurb: 'Campaign briefs, shortlists, assignments', to: '/army', queue: (q) => q.campaigns },
   cohorts: { name: 'Cohorts', blurb: 'Programs, cohorts, completion', to: '/school', queue: (q) => q.assignments },
@@ -39,6 +43,17 @@ export function Manage() {
   const members = useAuthed(['members', asked, pg.query], () => api.members(asked, pg.query));
   const o = overview.data;
   const role = me.data?.user.role ?? 'user';
+  const tiles = o
+    ? [
+        // An admin holds every permission but Life coach, which the server lists only when given.
+        ...(role === 'admin' ? (Object.keys(PERMISSION_TILES) as Permission[]).filter((p) => p !== 'coach' || o.permissions.includes('coach')) : o.permissions).map((p) => {
+          const m = PERMISSION_TILES[p];
+          return { key: p, name: m.name, blurb: m.blurb, to: m.to, icon: PERMISSION_META[p].icon, waiting: m.queue ? m.queue(o.queues) : null };
+        }),
+        { key: 'knowledge', name: 'Knowledge', blurb: 'Write and publish articles', to: '/knowledge', icon: MODULE_BY_KEY.knowledge?.icon, waiting: null },
+        ...(role === 'admin' ? [{ key: 'admin', name: 'Admin', blurb: 'People, flags, listings, audit', to: '/admin', icon: MODULE_BY_KEY.admin?.icon, waiting: null }] : []),
+      ]
+    : [];
   return (
     <Screen>
       <AppCover
@@ -60,17 +75,9 @@ export function Manage() {
           {/* A queue tile is placed like every card (2026-11-05): the name and its line at the top left, the permission's icon on a neutral
               tile at the top right, what is waiting at the foot of every tile (a neutral word when nothing is, or when the area keeps no
               queue) and an arrow at the bottom right. One to a row on a phone, so no line is squeezed; two from the small tablet up. */}
-          <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 sm:grid-cols-2">
-            {[
-              // An admin holds every permission but Life coach, which the server lists only when given.
-              ...(role === 'admin' ? (Object.keys(PERMISSION_TILES) as Permission[]).filter((p) => p !== 'coach' || o.permissions.includes('coach')) : o.permissions).map((p) => {
-                const m = PERMISSION_TILES[p];
-                return { key: p, name: m.name, blurb: m.blurb, to: m.to, icon: PERMISSION_META[p].icon, waiting: m.queue ? m.queue(o.queues) : null };
-              }),
-              { key: 'knowledge', name: 'Knowledge', blurb: 'Write and publish articles', to: '/knowledge', icon: MODULE_BY_KEY.knowledge?.icon, waiting: null },
-              ...(role === 'admin' ? [{ key: 'admin', name: 'Admin', blurb: 'People, flags, listings, audit', to: '/admin', icon: MODULE_BY_KEY.admin?.icon, waiting: null }] : []),
-            ].map((t, i) => (
-              <Reveal as="li" key={t.key} index={i} className="flex">
+          <ul className={`mt-sm grid list-none gap-xs p-0 m-0 ${evenGrid(tiles.length, TILE_COLS)}`}>
+            {tiles.map((t, i) => (
+              <Reveal as="li" key={t.key} index={i} className={`flex ${evenTile(i, tiles.length, TILE_COLS)}`}>
                 <RowCard
                   to={t.to}
                   title={t.name}

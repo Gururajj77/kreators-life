@@ -1,7 +1,7 @@
 import { portalPasswordProblem, TEAM_LINK_ACTIONS, TEAM_LINK_NEVER, TEAM_LINK_PARTS, type AgencyClient, type TeamLinkActionKey, type TeamLinkPartKey } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowUpRight, Eye, Link2Off, RefreshCw } from 'lucide-react';
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../lib/api';
 import { copyPlain } from '../lib/clipboard';
@@ -14,6 +14,7 @@ import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
 import { Toggle } from './Toggle';
 import { ToggleChevron } from './ToggleMark';
+import { RED_YES } from '../lib/ui';
 
 const COPY = {
   lede: 'A second link for their own team. It shows the work, never the paperwork or money.',
@@ -35,8 +36,6 @@ const COPY = {
 const ALL_SWITCHES = [...TEAM_LINK_PARTS, ...TEAM_LINK_ACTIONS];
 
 /** The red yes of a confirm sheet (the look `ConfirmSheet` and Sign out use), beside an outline Keep. */
-const RED_YES = 'toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill disabled:opacity-50';
-const RED_YES_STYLE = { '--toy-color': 'var(--deep-servant_leader)' } as CSSProperties;
 
 /**
  * The team link (2026-11-04): a second link per client, for the client's own team, under the client link on the Link segment. The same
@@ -243,7 +242,6 @@ export function TeamLink({ client }: { client: AgencyClient }) {
                 }}
                 disabled={send.isPending}
                 className={RED_YES}
-                style={RED_YES_STYLE}
               >
                 Yes, make a fresh link
               </button>
@@ -264,7 +262,6 @@ export function TeamLink({ client }: { client: AgencyClient }) {
                 }}
                 disabled={send.isPending}
                 className={RED_YES}
-                style={RED_YES_STYLE}
               >
                 Yes, switch it off
               </button>

@@ -1,3 +1,4 @@
+import { ROUTE_TRIPS, tripsOf } from '../d1Batch';
 import { Hono, type Context } from 'hono';
 import {
   DEFAULT_ZONE,
@@ -62,6 +63,8 @@ const MAX_TURNS = 40;
 const MAX_RESULT = 12_000;
 /** The most tool calls run from one model turn; the rest are answered with a note so the model can call them again. */
 const MAX_CALLS = 8;
+/** A read tool's route and a write tool's, at most, in D1 round trips (a tick is the longest write). On the free plan one message is one invocation with fifty queries, so a tool runs only while this much is left. */
+const TOOL_TRIPS = { read: 8, write: 16 } as const;
 /** What the assistant says back for the model, when it asked leave to do what the person already asked for. */
 const GO_AHEAD = 'Yes, go ahead. Do it now, without asking again.';
 
@@ -253,6 +256,11 @@ export function assistantRoutes(appFetch: AppFetch) {
         stopped = 'user';
         break;
       }
+      // One invocation: its D1 queries and its model calls. Past this the message ends with what it did, and "go on" starts a new one.
+      if (tripsOf(db) + step + TOOL_TRIPS.read >= ROUTE_TRIPS) {
+        stopped = 'steps';
+        break;
+      }
       // Stop before a call that could push the message past what it may spend.
       const next = creditsFor({ input: tokensOfMessages(messages) + tokensOf(JSON.stringify(specs)), output: MAX_OUT }, cfg.price);
       if (creditsFor(tokens, cfg.price) + next > budget) {
@@ -291,7 +299,8 @@ export function assistantRoutes(appFetch: AppFetch) {
       // Every call the model made gets an answer; past MAX_CALLS the answer says to call it again.
       messages.push({ role: 'assistant', content: res.content || null, tool_calls: res.toolCalls });
       for (const [i, tc] of res.toolCalls.entries()) {
-        messages.push({ role: 'tool', tool_call_id: tc.id, content: i < MAX_CALLS ? await runCall(tc) : JSON.stringify({ error: `Not run: at most ${MAX_CALLS} at once. Call it again.` }) });
+        const room = tripsOf(db) + step + (byName.get(tc.function.name)?.risk === 'read' ? TOOL_TRIPS.read : TOOL_TRIPS.write) <= ROUTE_TRIPS;
+        messages.push({ role: 'tool', tool_call_id: tc.id, content: i >= MAX_CALLS ? JSON.stringify({ error: `Not run: at most ${MAX_CALLS} at once. Call it again.` }) : !room ? JSON.stringify({ error: 'Not run: this message has done what one message can. Tell the person, and they can say go on.' }) : await runCall(tc) });
       }
       if (waiting) {
         text = res.content;

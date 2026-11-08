@@ -1,31 +1,46 @@
-import { BADGE_META, COACH_NOTE_MAX, COACH_SHARE_META, COACH_SHARE_PARTS, type CoachShare, type CoachSharePart, KIND_META, levelFromXp, PENALTIES, RELATIONSHIP_BY_KEY, RELATIONSHIPS, SCORE_LABEL, SCORECARD, weightWord, type Node, type NodeKind, LOCALE } from '@kreators/shared';
+import { COACH_REPORT_KINDS } from '@kreators/shared/coachReport';
+import { COACH_NOTE_MAX, COACH_SHARE_META, COACH_SHARE_PARTS, formatCount, KIND_META, PENALTIES, periodFor, periodLabel, RELATIONSHIP_BY_KEY, RELATIONSHIPS, SCORE_LABEL, SCORECARD, weightWord, type CoachReview, type CoachShare, type CoachSharePart, type CoachStudentView, type Period, type PeriodKind } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { Inert } from '../components/Inert';
 import gsap from 'gsap';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { Button } from '../components/Button';
+import { WeekDots } from '../components/Charts';
+import { CoachFold, ShowOnThisPage, useCoachSections } from '../components/CoachSections';
+import { CoachPatterns } from '../components/CoachPatterns';
+import { ReportCharts, ReportNumbers, ReportPillars } from '../components/CoachReportParts';
+import { TaskLine } from '../components/CoachTaskLine';
+import { CoachTaskSheet, type CoachEditing } from '../components/CoachTaskSheet';
 import { ConfirmDelete } from '../components/ConfirmDelete';
-import { FactTag } from '../components/FactTag';
-import { StatusTag } from '../components/StatusTag';
-import { AreaLine, Gauge, HBars, MultiLine, StatTile, WeekDots } from '../components/Charts';
+import { ErrorLine } from '../components/ErrorLine';
+import { Fold } from '../components/Fold';
+import { Hero, HeroNumber } from '../components/Hero';
+import { Inert } from '../components/Inert';
 import { PlacementChart, ScoreRow } from '../components/LifeMap';
-import { CoachFace } from '../components/MyCoach';
-import { AppCover } from '../components/AppCover';
+import { BackLink } from '../components/PageHeader';
 import { Pager, usePage } from '../components/Pager';
+import { PeriodFilter } from '../components/PeriodFilter';
 import { Screen } from '../components/Screen';
-import { Section } from '../components/Section';
-import { Sheet } from '../components/Sheet';
+import { Skeleton, SkeletonList } from '../components/Skeleton';
+import { StatusTag } from '../components/StatusTag';
 import { TabRow } from '../components/TabRow';
 import { api } from '../lib/api';
-import { shortDay, dateTime } from '../lib/date';
+import { clockOf, dateTime, longDate, shortDay } from '../lib/date';
 import { useAuthed } from '../lib/queries';
 import { FIELD } from '../lib/ui';
+import { useParamState } from '../lib/useParamState';
 
 const when = dateTime;
-const say = (e: unknown) => (e instanceof Error ? e.message : 'That did not work.');
-const LAYERS: NodeKind[] = ['pillar', 'principle', 'value_goal', 'outcome'];
-const PART_SECTION_ID: Record<CoachSharePart, string> = { daily: 'daily-heading', pillars: 'pillars-heading', routine: 'routine-heading', lifeMap: 'map-heading', reflection: 'reflection-heading' };
+const LAYERS_WORD: Record<string, string> = { task: 'Their tasks', project: 'Their projects', outcome: 'Their goal outcomes', value_goal: 'Their value goals', principle: 'Their guiding principles', pillar: 'Their foundations' };
+/** Which fold each shared part opens, from the row of parts. */
+const PART_FOLD: Record<CoachSharePart, { key: string; id: string }> = {
+  daily: { key: 'day', id: 'day-heading' },
+  pillars: { key: 'pillars', id: 'pillars-heading' },
+  routine: { key: 'routine', id: 'routine-heading' },
+  lifeMap: { key: 'map', id: 'map-heading' },
+  reflection: { key: 'reviews', id: 'reviews-heading' },
+  patterns: { key: 'patterns', id: 'patterns-heading' },
+};
 
 /** Scrolls a part's section to just under the stuck bar. Reduced motion jumps instead of sliding. */
 function jumpTo(id: string) {
@@ -39,11 +54,11 @@ function jumpTo(id: string) {
 }
 
 /**
- * The parts a student shares, as a row that sticks to the top of the screen. Flat while it sits in the page; once it
- * sticks, a frosted backdrop and a hairline fade in. On a phone the strip reaches up behind the logo and the corner
- * buttons, and the chips sit under them.
+ * The parts a student shares, as a row that sticks to the top of the screen. Flat while it sits in the page; once it sticks, a frosted backdrop and a
+ * hairline fade in. On a phone the strip reaches up behind the logo and the corner buttons, and the chips sit under them. A tap opens that
+ * part's section and goes there; a part they do not share is struck through and cannot be picked.
  */
-function ShareBar({ share }: { share: CoachShare }) {
+function ShareBar({ share, onPick }: { share: CoachShare; onPick: (part: CoachSharePart) => void }) {
   const sentinel = useRef<HTMLDivElement>(null);
   const backdrop = useRef<HTMLDivElement>(null);
   const [stuck, setStuck] = useState(false);
@@ -57,8 +72,14 @@ function ShareBar({ share }: { share: CoachShare }) {
   useEffect(() => {
     if (!backdrop.current) return;
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduce) gsap.set(backdrop.current, { opacity: stuck ? 1 : 0 });
-    else gsap.to(backdrop.current, { opacity: stuck ? 1 : 0, duration: 0.25, ease: 'power2.out' });
+    if (reduce) {
+      gsap.set(backdrop.current, { opacity: stuck ? 1 : 0 });
+      return;
+    }
+    const tween = gsap.to(backdrop.current, { opacity: stuck ? 1 : 0, duration: 0.25, ease: 'power2.out' });
+    return () => {
+      tween.kill();
+    };
   }, [stuck]);
   return (
     <>
@@ -69,7 +90,7 @@ function ShareBar({ share }: { share: CoachShare }) {
           <TabRow
             label="What they share"
             items={COACH_SHARE_PARTS.map((k) => ({ key: k, label: COACH_SHARE_META[k].name, disabled: !share[k], title: share[k] ? undefined : 'They do not share this' }))}
-            onChange={(k) => requestAnimationFrame(() => jumpTo(PART_SECTION_ID[k]))}
+            onChange={(k) => onPick(k)}
             pillClass={(_on, off) => (off ? 'inline-flex min-h-[44px] items-center rounded-pill bg-line px-sm text-caption font-medium text-ink-soft line-through' : 'toy toy-soft inline-flex min-h-[44px] items-center rounded-pill bg-card px-sm text-caption font-medium text-ink')}
           />
         </nav>
@@ -78,126 +99,145 @@ function ShareBar({ share }: { share: CoachShare }) {
   );
 }
 
-function Problem({ e }: { e: unknown }) {
-  if (!e) return null;
-  return (
-    <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
-      {say(e)}
-    </p>
-  );
+/** A number about the person for the hero: their streak, else wellbeing, else how much they share. Sage's mood follows it. */
+function heroOf(d: CoachStudentView): { eyebrow: string; value: number; unit?: string; label: string; mood: 'excited' | 'happy' | 'sleepy' } {
+  if (d.daily) return { eyebrow: 'Streak', value: d.daily.streak, unit: d.daily.streak === 1 ? 'day' : 'days', label: `Best ${formatCount(d.daily.bestStreak)}. ${d.daily.checkedIn ? 'Checked in today.' : 'Not checked in today.'}`, mood: d.daily.streak >= 7 ? 'excited' : d.daily.streak > 0 ? 'happy' : 'sleepy' };
+  if (d.reflection) return { eyebrow: 'Wellbeing', value: d.reflection.wellbeing.score, unit: 'of 100', label: d.reflection.wellbeing.label, mood: d.reflection.wellbeing.score >= 60 ? 'happy' : 'sleepy' };
+  const on = COACH_SHARE_PARTS.filter((k) => d.link.share[k]).length;
+  return { eyebrow: 'They share', value: on, unit: `of ${COACH_SHARE_PARTS.length}`, label: 'parts of their progress with you.', mood: on > 0 ? 'happy' : 'sleepy' };
 }
 
-/** A task as the coach sees it: the title, when it is due, whether the coach added it, and a way to change it while it is open. */
-function TaskLine({ t, onEdit }: { t: Node; onEdit?: () => void }) {
-  const due = t.dueDate ? `${shortDay(t.dueDate)}${t.dueTime ? `, ${t.dueTime}` : ''}` : null;
-  const hasTags = t.fromCoach || due !== null;
+/** One saved review: its own name and period, the answers, and the layer it walks only while Pillars is shared too. Never the snapshot. */
+function ReviewFold({ r }: { r: CoachReview }) {
   return (
-    <li data-pillar={t.relationship} className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <div className="flex items-start gap-xs">
-        <span className="mt-xs size-[12px] shrink-0 rounded-pill" style={{ background: RELATIONSHIP_BY_KEY[t.relationship].color }} aria-hidden="true" />
-        <span className={`min-w-0 flex-1 text-subhead font-semibold ${t.status === 'done' ? 'text-ink-soft line-through' : ''}`}>{t.title}</span>
-      </div>
-      {(hasTags || (onEdit && t.status === 'active')) && (
-        <div className="mt-xs flex flex-wrap items-center justify-end gap-xs">
-          {t.fromCoach && <StatusTag tone="deep">From a coach</StatusTag>}
-          {due && <FactTag kind="when">{due}</FactTag>}
-          {onEdit && t.status === 'active' && (
-            <Button size="sm" variant="ghost" onClick={onEdit}>
-              Change
-            </Button>
+    <li>
+      <Fold title={r.name} hint={`${periodLabel({ kind: r.kind, start: r.start, end: r.end })}${r.rating ? `, ${r.rating} of 5` : ''}`}>
+        <div className="rounded-tile bg-card p-sm shadow-toy-soft">
+          <dl className="m-0 grid gap-xs text-subhead">
+            {r.prompts.map((p, i) =>
+              r.answers[i] ? (
+                <div key={i}>
+                  <dt className="text-ink-soft">{p}</dt>
+                  <dd className="m-0 whitespace-pre-wrap"><Inert text={r.answers[i]} /></dd>
+                </div>
+              ) : null,
+            )}
+          </dl>
+          {!r.answers.some(Boolean) && <p className="m-0 text-subhead text-ink-soft">No answers written.</p>}
+          {r.layer && r.layer.pillars.some((x) => x.items.length > 0) && (
+            <div className="mt-sm">
+              <h4 className="m-0 text-subhead font-semibold">{LAYERS_WORD[r.layer.kind] ?? 'The layer'}</h4>
+              <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0 text-subhead">
+                {r.layer.pillars.flatMap((x) =>
+                  x.items.map((it) => (
+                    <li key={it.id} className="flex flex-wrap items-center justify-between gap-xs">
+                      <span className="min-w-[60%] flex-1">
+                        {it.title} <span className="text-ink-soft">({RELATIONSHIP_BY_KEY[x.relationship].name})</span>
+                      </span>
+                      {it.pace && <StatusTag tone={it.pace.status === 'on' ? 'good' : it.pace.status === 'behind' ? 'bad' : it.pace.status === 'slipping' ? 'warn' : 'neutral'}>{it.pace.label}</StatusTag>}
+                    </li>
+                  )),
+                )}
+              </ul>
+            </div>
           )}
         </div>
-      )}
+      </Fold>
     </li>
   );
 }
 
-type Editing = { mode: 'add'; parentId: string } | { mode: 'edit'; task: Node };
-
-/** Add a task under one of the projects of the student, or change an open one. The student ticks it; nobody else does. */
-function TaskSheet({ studentId, editing, projects, onClose, onDone }: { studentId: string; editing: Editing | null; projects: Node[]; onClose: () => void; onDone: () => void }) {
-  const task = editing?.mode === 'edit' ? editing.task : null;
-  const [parentId, setParentId] = useState(editing?.mode === 'add' ? editing.parentId : '');
-  const [title, setTitle] = useState(task?.title ?? '');
-  const [dueDate, setDueDate] = useState(task?.dueDate ?? '');
-  const [dueTime, setDueTime] = useState(task?.dueTime ?? '');
-  const [minutes, setMinutes] = useState(task?.estimateMin ? String(task.estimateMin) : '');
-  const [note, setNote] = useState(task?.note ?? '');
-  const save = useMutation({
-    mutationFn: () => {
-      const body = { title, note, dueDate: dueDate || null, dueTime: dueTime || null, estimateMin: Number(minutes) > 0 ? Number(minutes) : null };
-      return task ? api.coachEditTask(studentId, task.id, body) : api.coachAddTask(studentId, { parentId, ...body });
-    },
-    onSuccess: () => {
-      onDone();
-      onClose();
-    },
-  });
+function RoutinePart({ routine }: { routine: NonNullable<CoachStudentView['routine']> }) {
+  const contract = routine.contract;
   return (
-    <Sheet open={Boolean(editing)} onClose={onClose} title={task ? 'Change the task' : 'Add a task'}>
-      <form
-        className="flex flex-col gap-md"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (title.trim() && (task || parentId)) save.mutate();
-        }}
-      >
-        {!task && (
-          <label className="block">
-            <span className="block text-subhead font-semibold">Under which project</span>
-            <select value={parentId} onChange={(e) => setParentId(e.target.value)} required className={FIELD}>
-              <option value="">Pick a project</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {RELATIONSHIP_BY_KEY[p.relationship].name}: {p.title}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <label className="block">
-          <span className="block text-subhead font-semibold">The task</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={140} placeholder={KIND_META.task.prompt} className={FIELD} />
-        </label>
-        <div className="grid grid-cols-3 gap-xs">
-          <label className="block">
-            <span className="block text-subhead font-semibold">Day</span>
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={FIELD} />
-          </label>
-          <label className="block">
-            <span className="block text-subhead font-semibold">Time</span>
-            <input type="time" value={dueTime} onChange={(e) => setDueTime(e.target.value)} className={FIELD} />
-          </label>
-          <label className="block">
-            <span className="block text-subhead font-semibold">Minutes</span>
-            <input type="number" min={1} max={600} value={minutes} onChange={(e) => setMinutes(e.target.value)} className={FIELD} />
-          </label>
-        </div>
-        <label className="block">
-          <span className="block text-subhead font-semibold">A note, optional</span>
-          <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={2} className={FIELD} />
-        </label>
-        <p className="m-0 text-subhead text-ink-soft">{task ? 'Renaming a task starts its wait again. The change goes in the change log and to their inbox.' : 'It shows as From your coach. It waits and pays like their own tasks, and only they tick it.'}</p>
-        <Problem e={save.error} />
-        <Button type="submit" size="lg" full disabled={save.isPending || !title.trim() || (!task && !parentId)}>
-          {task ? 'Save the change' : 'Add the task'}
-        </Button>
-      </form>
-    </Sheet>
+    <>
+      <WeekDots days={routine.week.days.map(Boolean)} color="var(--color-r4)" label={`Routine kept ${routine.week.done} of the last 7 days`} />
+      {contract ? (
+        <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0 text-subhead">
+          <li>At least {contract.minDays} days a week. These seven days: {routine.week.done}.</li>
+          <li>Check-in at {clockOf(contract.checkinTime)}.</li>
+          <li>A short week: {PENALTIES.find((p) => p.key === contract.penalty)?.name.toLowerCase() ?? 'the streak breaks'}.</li>
+          <li>Weekly review on {longDate(contract.nextWeekly)}, monthly review on {longDate(contract.nextMonthly)}.</li>
+        </ul>
+      ) : (
+        <p className="mt-sm m-0 text-subhead text-ink-soft">No contract signed yet.</p>
+      )}
+      {routine.general.length > 0 && (
+        <ol className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
+          {routine.general.map((b) => (
+            <li key={b.key} className="rounded-tile bg-card p-sm shadow-toy-soft">
+              <p className="m-0 text-card-title">{b.name}</p>
+              <p className="m-0 text-card-note text-ink-soft">
+                {clockOf(b.start)} to {clockOf(b.end)}
+                {b.steps.length > 0 ? `. ${b.steps.join(', ')}` : ''}
+              </p>
+            </li>
+          ))}
+        </ol>
+      )}
+      {routine.today && <p className="mt-sm m-0 text-subhead font-semibold">Today’s morning: {routine.today.done ? 'done' : `${routine.today.steps.length} steps ticked so far`}.</p>}
+    </>
   );
 }
 
-/** One student, as their life coach sees them: each part only when they share it, numbers first, and the change log at the end. */
+function MapPart({ map }: { map: NonNullable<CoachStudentView['lifeMap']> }) {
+  return (
+    <>
+      <PlacementChart placements={map.placements} focus={map.focus} />
+      <h3 className="mt-md text-headline">Scores</h3>
+      <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
+        {[...SCORECARD.health, ...SCORECARD.wealth].map((k) => (
+          <ScoreRow key={k} label={SCORE_LABEL[k]} value={map.scores[k]} color="var(--deep-self)" />
+        ))}
+        {RELATIONSHIPS.map((r) => (
+          <ScoreRow key={r.key} label={r.name} value={map.scores[r.key]} color={r.color} />
+        ))}
+      </ul>
+      {(map.fears.length > 0 || map.insecurities.length > 0) && (
+        <>
+          <h3 className="mt-md text-headline">What gets in the way</h3>
+          <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
+            {map.fears.map((f) => (
+              <li key={`f-${f.text}`} className="rounded-tile bg-card p-sm text-subhead font-semibold shadow-toy-soft">
+                {f.text} <span className="text-ink-soft">({RELATIONSHIP_BY_KEY[f.relationship].name}; {f.drives === 'yes' ? 'drives decisions' : f.drives === 'sometimes' ? 'sometimes drives them' : 'does not drive them'})</span>
+              </li>
+            ))}
+            {map.insecurities.map((it, i) => (
+              <li key={`i-${i}`} className="rounded-tile bg-card p-sm text-subhead font-semibold shadow-toy-soft">
+                {it.text} <span className="text-ink-soft">({RELATIONSHIP_BY_KEY[it.relationship].name}; weighs {weightWord(it.weight).toLowerCase()})</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </>
+  );
+}
+
+const isReportKind = (v: string): v is PeriodKind => (COACH_REPORT_KINDS as readonly string[]).includes(v);
+
+/**
+ * One student, as their life coach sees them (2026-11-07): a plain header and a hero holding a number about them, the period in the address, then the
+ * report in sections that each fold, and that the coach can hide. Each part only while the student shares it, read fresh on every request; what
+ * they do not share never left the server. The change log is the same lines they see.
+ */
 export function CoachStudent() {
   const { id = '' } = useParams();
   const rev = usePage('rev');
+  const revd = usePage('revd');
+  const ct = usePage('ct');
   const notePg = usePage('note');
   const logPg = usePage('log');
-  const query = `${rev.query}&${notePg.query}&${logPg.query}`;
+  const query = `${rev.query}&${revd.query}&${ct.query}&${notePg.query}&${logPg.query}`;
   const q = useAuthed(['coach-student', id, query], () => api.coachStudent(id, query));
-  const [editing, setEditing] = useState<Editing | null>(null);
+  const sections = useCoachSections(true);
+  const [kindRaw, setKind] = useParamState('period', 'week');
+  const [dateRaw, setDate] = useParamState('date', '');
+  const [editing, setEditing] = useState<CoachEditing | null>(null);
   const [note, setNote] = useState('');
+  const noteBox = useRef<HTMLTextAreaElement>(null);
   const [unnoting, setUnnoting] = useState<string | null>(null);
+  const [ending, setEnding] = useState(false);
   const write = useMutation({
     mutationFn: () => api.coachNote(id, note),
     onSuccess: () => {
@@ -205,53 +245,188 @@ export function CoachStudent() {
       void q.refetch();
     },
   });
-  const takeBack = useMutation({ mutationFn: (noteId: string) => api.removeCoachNote(id, noteId), onSuccess: () => { setUnnoting(null); void q.refetch(); } });
+  const takeBack = useMutation({
+    mutationFn: (noteId: string) => api.removeCoachNote(id, noteId),
+    onSuccess: () => {
+      setUnnoting(null);
+      void q.refetch();
+    },
+  });
+  const end = useMutation({
+    mutationFn: (linkId: string) => api.endCoach(linkId),
+    onSuccess: () => {
+      setEnding(false);
+      void q.refetch();
+    },
+  });
   const d = q.data;
+  const today = d?.date ?? '';
+  const kind: PeriodKind = isReportKind(kindRaw) ? kindRaw : 'week';
+  const period: Period | null = today ? periodFor(kind, /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) && dateRaw <= today ? dateRaw : today) : null;
+  // A heavy read on the server, so only while something on the page draws it.
+  const wantReport = ['numbers', 'charts', 'pillars'].some((k) => sections.state(k) === 'open');
+  const report = useAuthed(['coach-report', id, period?.kind, period?.start], () => api.coachReport(id, kind, period?.start ?? today), Boolean(period) && wantReport);
+  const pickPeriod = (p: Period) => {
+    setKind(p.kind);
+    setDate(p.start === periodFor(p.kind, today).start ? '' : p.start);
+  };
+  // Opening a prefilled note: the words land in the box, the coach edits them, and nothing is sent until they say so.
+  const prefillNote = useCallback(
+    (text: string) => {
+      setNote(text);
+      sections.set('notes', 'open');
+      requestAnimationFrame(() => {
+        noteBox.current?.scrollIntoView({ block: 'center' });
+        noteBox.current?.focus();
+      });
+    },
+    [sections],
+  );
+  const reload = () => {
+    void q.refetch();
+    void report.refetch();
+  };
   if (q.isError)
     return (
       <Screen>
-        <AppCover back={{ to: '/coaching', label: 'Coaching' }} title="Not your student" lede={say(q.error)} />
+        <header className="pt-lg">
+          <BackLink to="/coaching">Coaching</BackLink>
+          <h1 className="text-large-title">Not your student</h1>
+          <p className="mt-xs m-0 text-subhead text-ink-soft">{q.error instanceof Error ? q.error.message : 'That did not work.'}</p>
+        </header>
       </Screen>
     );
-  if (!d) return null;
+  if (!d || !period)
+    return (
+      <Screen howTo={false}>
+        <header className="pt-lg">
+          <BackLink to="/coaching">Coaching</BackLink>
+        </header>
+        <SkeletonList className="mt-md" count={3} lines={2} label="Loading this student" />
+      </Screen>
+    );
   const s = d.link.student;
   const share = d.link.share;
-  const projects = (d.pillars?.nodes ?? []).filter((n) => n.kind === 'project' && n.status === 'active');
+  const nodes = d.pillars?.nodes ?? [];
+  const projects = nodes.filter((n) => n.kind === 'project' && n.status === 'active');
+  const hero = heroOf(d);
+  const hidden = COACH_SHARE_PARTS.filter((k) => !share[k]);
   return (
     <Screen>
-      <AppCover
-        back={{ to: '/coaching', label: 'Coaching' }}
-        title={s.name}
-        lede={
-          <>
-            <p className="m-0">
-              {BADGE_META[s.badge].name}{s.handle ? `, @${s.handle}` : ''}. Your student since {new Date(d.link.answeredAt ?? d.link.createdAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' })}. Their today is {shortDay(d.date)}.
-            </p>
-            <p className="mt-xs m-0 text-caption">They pick what you see and can change it any time. Never their journal.</p>
-          </>
-        }
-        actions={<CoachFace name={s.name} badge={s.badge} size={56} />}
+      <header className="pt-lg">
+        <BackLink to="/coaching">Coaching</BackLink>
+        <h1 className="text-large-title">{s.name}</h1>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">
+          {s.handle ? `@${s.handle}. ` : ''}Your student since {longDate(d.link.answeredAt ?? d.link.createdAt)}. They pick what you see. Never their journal.
+        </p>
+        <Hero color="var(--color-r6)" deep="var(--deep-guru)" className="mt-md" character="guru" mood={hero.mood}>
+          <p className="m-0 text-eyebrow uppercase opacity-90">{hero.eyebrow}</p>
+          <HeroNumber value={hero.value} unit={hero.unit} label={hero.label} />
+        </Hero>
+      </header>
+
+      <ShareBar
+        share={share}
+        onPick={(part) => {
+          const f = PART_FOLD[part];
+          sections.set(f.key, 'open');
+          requestAnimationFrame(() => {
+            jumpTo(f.id);
+            // The keyboard's place goes with the page, to the section's own toggle, so Tab carries on into what it opened.
+            document.getElementById(f.id)?.querySelector('button')?.focus({ preventScroll: true });
+          });
+        }}
       />
 
-      <ShareBar share={share} />
+      <ShowOnThisPage page="student" isCoach sections={sections} className="mt-xs" />
 
-      <div className="mt-lg grid grid-cols-2 gap-xs sm:grid-cols-3">
-        {d.daily && <StatTile label="Streak" value={d.daily.streak} hint={`Best ${d.daily.bestStreak}. ${d.daily.checkedIn ? 'Checked in today.' : 'Not checked in today.'}`} />}
-        {d.daily && <StatTile label="Level" value={levelFromXp(d.daily.xp)} hint={`${d.daily.xp} xp`} />}
-        {d.daily && <StatTile label="Tasks, 30 days" value={d.daily.tasksByDay.reduce((a, b) => a + b, 0)} hint={`${d.daily.checkins.length} check-ins`} />}
-        {d.routine && <StatTile label="Routine, 7 days" value={`${d.routine.week.done} of 7`} hint={d.routine.contract ? `Their plan: ${d.routine.contract.minDays} days a week` : 'No contract yet'} />}
-        {d.reflection && <StatTile label="Wellbeing" value={d.reflection.wellbeing.score} hint={d.reflection.wellbeing.label} />}
+      <div className="mt-md">
+        <PeriodFilter period={period} onChange={pickPeriod} today={today} kinds={COACH_REPORT_KINDS} />
       </div>
 
+      <CoachFold sections={sections} k="numbers" id="numbers-heading" title="Report numbers" hint={periodLabel(period)}>
+        {report.data ? <ReportNumbers report={report.data} /> : report.isError ? <ErrorLine e={report.error} /> : <Skeleton className="h-[200px] rounded-tile" />}
+      </CoachFold>
+
+      <CoachFold sections={sections} k="charts" id="charts-heading" title="Charts" lede="The period you picked, and the trackers over thirty days.">
+        {report.data ? <ReportCharts report={report.data} view={d} /> : report.isError ? <ErrorLine e={report.error} /> : <Skeleton className="h-[240px] rounded-tile" />}
+      </CoachFold>
+
+      <CoachFold sections={sections} k="patterns" id="patterns-heading" title="Patterns and suggestions" lede="Plain rules, from what they share, kept nowhere. Edit anything before you send it.">
+        <CoachPatterns studentId={id} name={s.name} enabled={sections.state('patterns') === 'open'} onNote={prefillNote} onTask={(t) => setEditing({ mode: 'add', parentId: t.projectId ?? '', title: t.title, habit: t.habit })} />
+      </CoachFold>
+
+      <CoachFold sections={sections} k="notes" id="notes-heading" title="Notes" hint={d.notes.length ? formatCount(d.notes.length) : undefined} lede="They read every note, here and in their inbox.">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (note.trim()) write.mutate();
+          }}
+        >
+          <textarea ref={noteBox} value={note} onChange={(e) => setNote(e.target.value)} maxLength={COACH_NOTE_MAX} rows={3} placeholder="What you noticed, and one next step" aria-label="A note for your student" className={FIELD} />
+          <Button type="submit" className="mt-xs" disabled={write.isPending || !note.trim()}>
+            Leave the note
+          </Button>
+        </form>
+        <ErrorLine e={write.error} className="mt-sm" />
+        <ol className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
+          {d.notes.map((n) => (
+            <li key={n.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
+              <p className="m-0 whitespace-pre-wrap text-prose"><Inert text={n.body} /></p>
+              <div className="mt-xs flex flex-wrap items-center justify-between gap-xs">
+                <span className="text-caption text-ink-soft">{when(n.createdAt)}</span>
+                {n.mine && (
+                  <Button size="sm" variant="ghost" disabled={takeBack.isPending} onClick={() => { takeBack.reset(); setUnnoting(n.id); }}>
+                    Take back
+                  </Button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ol>
+        <Pager page={d.notesPage} prefix="note" label="notes" />
+        <ConfirmDelete open={unnoting !== null} title="Take this note back?" body="It is removed from their notes. This cannot be undone." pending={takeBack.isPending} failed={takeBack.isError} onYes={() => unnoting && takeBack.mutate(unnoting)} onClose={() => setUnnoting(null)} yes="Yes, take it back" />
+      </CoachFold>
+
+      {d.pillars && (
+        <CoachFold
+          sections={sections}
+          k="pillars"
+          id="pillars-heading"
+          title="Pillars and pace"
+          lede="Each pyramid top down: foundation first, projects last."
+          action={
+            projects.length > 0 ? (
+              <Button size="sm" variant="outline" plusToX onClick={() => setEditing({ mode: 'add', parentId: '' })}>
+                Add a task
+              </Button>
+            ) : undefined
+          }
+        >
+          {report.data?.pillars ? <ReportPillars rows={report.data.pillars} nodes={nodes} onAdd={(parentId) => setEditing({ mode: 'add', parentId })} onEdit={(task) => setEditing({ mode: 'edit', task })} /> : report.isError ? <ErrorLine e={report.error} /> : <Skeleton className="h-[200px] rounded-tile" />}
+        </CoachFold>
+      )}
+
+      {d.coachTasks && (
+        <CoachFold sections={sections} k="tasks" id="tasks-heading" title="Tasks you added" hint={d.coachTasks.tasks.length ? formatCount(d.coachTasks.tasks.length) : undefined} lede="Newest first, with how each stands. Only they tick a task.">
+          {d.coachTasks.tasks.length === 0 && <p className="m-0 text-subhead text-ink-soft">No tasks from you yet.</p>}
+          <ol className="m-0 flex list-none flex-col gap-xs p-0">
+            {d.coachTasks.tasks.map((t) => (
+              <TaskLine key={t.id} t={t} today={d.date} onEdit={share.pillars ? () => setEditing({ mode: 'edit', task: t }) : undefined} />
+            ))}
+          </ol>
+          <Pager page={d.coachTasks.page} prefix="ct" label="tasks" />
+        </CoachFold>
+      )}
+
       {d.daily && (
-        <Section id="daily-heading" title="Daily and streaks" lede="Tasks ticked each day over the last thirty, and the day as it stands.">
-          <AreaLine values={d.daily.tasksByDay} max={Math.max(3, ...d.daily.tasksByDay)} color="var(--color-r4)" label={`Tasks ticked per day over thirty days, ${d.daily.tasksByDay.reduce((a, b) => a + b, 0)} in all`} labels={d.daily.tasksByDay.map((_, i) => shortDay(new Date(Date.parse(`${d.date}T00:00:00Z`) - (29 - i) * 86_400_000).toISOString().slice(0, 10)))} />
-          <p className="mt-sm m-0 text-subhead font-semibold">Small act today: {d.daily.smallAct.done ? `done${d.daily.smallAct.relationship ? `, for ${RELATIONSHIP_BY_KEY[d.daily.smallAct.relationship].name}` : ''}` : 'not yet'}.</p>
+        <CoachFold sections={sections} k="day" id="day-heading" title="The day" hint={shortDay(d.date)} lede="Their own today, as it stands.">
+          <p className="m-0 text-subhead font-semibold">Small act: {d.daily.smallAct.done ? `done${d.daily.smallAct.relationship ? `, for ${RELATIONSHIP_BY_KEY[d.daily.smallAct.relationship].name}` : ''}` : 'not yet'}.</p>
           <h3 className="mt-md text-headline">Due by today</h3>
           {d.daily.tasks.length === 0 && <p className="m-0 text-subhead text-ink-soft">Nothing due.</p>}
           <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
             {d.daily.tasks.map((t) => (
-              <TaskLine key={t.id} t={t} onEdit={share.pillars ? () => setEditing({ mode: 'edit', task: t }) : undefined} />
+              <TaskLine key={t.id} t={t} today={d.date} onEdit={share.pillars ? () => setEditing({ mode: 'edit', task: t }) : undefined} />
             ))}
           </ul>
           {d.daily.done.length > 0 && (
@@ -278,244 +453,44 @@ export function CoachStudent() {
               </ul>
             </>
           )}
-        </Section>
-      )}
-
-      {d.pillars && (
-        <Section
-          id="pillars-heading"
-         
-          title="Pillars and pyramids"
-          lede="Each pyramid top down: the foundation first, projects last. Add a task under a project, or change an open one."
-          action={
-            projects.length > 0 ? (
-              <Button size="sm" variant="outline" plusToX onClick={() => setEditing({ mode: 'add', parentId: '' })}>
-                Add a task
-              </Button>
-            ) : undefined
-          }
-        >
-          <HBars
-            label="Xp in each pillar"
-            rows={RELATIONSHIPS.map((r) => {
-              const xp = d.pillars?.relationships.find((x) => x.key === r.key)?.xp ?? 0;
-              const top = Math.max(1, ...(d.pillars?.relationships ?? []).map((x) => x.xp));
-              return { key: r.key, label: r.name, value: xp / top, text: `${xp} xp`, color: r.color };
-            })}
-          />
-          {RELATIONSHIPS.map((r) => {
-            const mine = (d.pillars?.nodes ?? []).filter((n) => n.relationship === r.key);
-            if (mine.length === 0) return null;
-            return (
-              <div key={r.key} data-pillar={r.key} className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-                <h3 className="text-headline" style={{ color: `var(--deep-${r.key})` }}>
-                  {r.name}
-                </h3>
-                <dl className="mt-xs m-0 grid gap-xs text-subhead">
-                  {LAYERS.flatMap((k) =>
-                    mine
-                      .filter((n) => n.kind === k)
-                      .map((n) => (
-                        <div key={n.id}>
-                          <dt className="text-eyebrow uppercase text-ink-soft">{KIND_META[k].label}</dt>
-                          <dd className="m-0 font-semibold">{n.title}</dd>
-                        </div>
-                      )),
-                  )}
-                </dl>
-                {mine
-                  .filter((n) => n.kind === 'project')
-                  .map((p) => {
-                    const tasks = mine.filter((t) => t.kind === 'task' && t.parentId === p.id).sort((a, b) => (a.status === b.status ? 0 : a.status === 'active' ? -1 : 1));
-                    return (
-                      <div key={p.id} className="mt-sm">
-                        <div className="flex flex-wrap items-center justify-between gap-xs">
-                          <p className="m-0 text-subhead font-semibold">
-                            {KIND_META.project.label}: {p.title}
-                            {p.status === 'done' ? ' (done)' : ''}
-                          </p>
-                          {p.status === 'active' && (
-                            <Button size="sm" variant="ghost" plusToX onClick={() => setEditing({ mode: 'add', parentId: p.id })}>
-                              Add a task here
-                            </Button>
-                          )}
-                        </div>
-                        <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
-                          {tasks.map((t) => (
-                            <TaskLine key={t.id} t={t} onEdit={() => setEditing({ mode: 'edit', task: t })} />
-                          ))}
-                        </ul>
-                      </div>
-                    );
-                  })}
-              </div>
-            );
-          })}
-        </Section>
+        </CoachFold>
       )}
 
       {d.routine && (
-        <Section id="routine-heading" title="Routine and contract" lede="The routine from their strategy session, the last seven days, and the plan they signed.">
-          <WeekDots days={d.routine.week.days.map(Boolean)} color="var(--color-r4)" label={`Routine kept ${d.routine.week.done} of the last 7 days`} />
-          {d.routine.contract ? (
-            <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0 text-subhead">
-              <li>At least {d.routine.contract.minDays} days a week. These seven days: {d.routine.week.done}.</li>
-              <li>Check-in at {d.routine.contract.checkinTime}.</li>
-              <li>A short week: {PENALTIES.find((p) => p.key === d.routine?.contract?.penalty)?.name.toLowerCase() ?? 'the streak breaks'}.</li>
-              <li>Weekly check on {d.routine.contract.nextWeekly}, monthly review on {d.routine.contract.nextMonthly}.</li>
-            </ul>
-          ) : (
-            <p className="mt-sm m-0 text-subhead text-ink-soft">No contract signed yet.</p>
-          )}
-          {d.routine.general.length > 0 && (
-            <ol className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
-              {d.routine.general.map((b) => (
-                <li key={b.key} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                  <p className="m-0 text-card-title">{b.name}</p>
-                  <p className="m-0 text-card-note text-ink-soft">
-                    {b.start} to {b.end}
-                    {b.steps.length > 0 ? `. ${b.steps.join(', ')}` : ''}
-                  </p>
-                </li>
-              ))}
-            </ol>
-          )}
-          {d.routine.today && <p className="mt-sm m-0 text-subhead font-semibold">Today’s morning: {d.routine.today.done ? 'done' : `${d.routine.today.steps.length} steps ticked so far`}.</p>}
-        </Section>
-      )}
-
-      {d.lifeMap && (
-        <Section id="map-heading" title="Life map answers" lede={`From their strategy session on ${new Date(d.lifeMap.createdAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' })}. The bar runs from where they drop under stress to where they usually live.`}>
-          <PlacementChart placements={d.lifeMap.placements} focus={d.lifeMap.focus} />
-          <h3 className="mt-md text-headline">Scores</h3>
-          <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
-            {[...SCORECARD.health, ...SCORECARD.wealth].map((k) => (
-              <ScoreRow key={k} label={SCORE_LABEL[k]} value={d.lifeMap?.scores[k]} color="var(--deep-self)" />
-            ))}
-            {RELATIONSHIPS.map((r) => (
-              <ScoreRow key={r.key} label={r.name} value={d.lifeMap?.scores[r.key]} color={r.color} />
-            ))}
-          </ul>
-          {(d.lifeMap.fears.length > 0 || d.lifeMap.insecurities.length > 0) && (
-            <>
-              <h3 className="mt-md text-headline">What gets in the way</h3>
-              <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
-                {d.lifeMap.fears.map((f) => (
-                  <li key={`f-${f.text}`} className="rounded-tile bg-card p-sm text-subhead font-semibold shadow-toy-soft">
-                    {f.text} <span className="text-ink-soft">({RELATIONSHIP_BY_KEY[f.relationship].name}; {f.drives === 'yes' ? 'drives decisions' : f.drives === 'sometimes' ? 'sometimes drives them' : 'does not drive them'})</span>
-                  </li>
-                ))}
-                {d.lifeMap.insecurities.map((it, i) => (
-                  <li key={`i-${i}`} className="rounded-tile bg-card p-sm text-subhead font-semibold shadow-toy-soft">
-                    {it.text} <span className="text-ink-soft">({RELATIONSHIP_BY_KEY[it.relationship].name}; weighs {weightWord(it.weight).toLowerCase()})</span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </Section>
-      )}
-
-      {!d.lifeMap && share.lifeMap && (
-        <Section id="map-heading" title="Life map answers" lede="Where each pillar sits on the map, their scores and what gets in the way.">
-          <p className="m-0 text-subhead text-ink-soft">No life map yet. It fills in once they finish their strategy session.</p>
-        </Section>
+        <CoachFold sections={sections} k="routine" id="routine-heading" title="Routine and contract" hint={`${d.routine.week.done} of 7`} lede="The routine from their strategy session, and the plan they signed.">
+          <RoutinePart routine={d.routine} />
+        </CoachFold>
       )}
 
       {d.reflection && (
-        <Section id="reflection-heading" title="Reflection" lede="Wellbeing and the trackers over thirty days, numbers only, and their saved reviews. Never their journal or tracker notes.">
-          <div className="flex flex-wrap items-center gap-md">
-            <Gauge value={d.reflection.wellbeing.score / 100} size={120} stroke={12} color="var(--color-r4)" label={`Wellbeing ${d.reflection.wellbeing.score} of 100, ${d.reflection.wellbeing.label}`}>
-              <span className="text-title1 type-figure">{d.reflection.wellbeing.score}</span>
-            </Gauge>
-            <p className="m-0 min-w-0 flex-1 text-subhead text-ink-soft">{d.reflection.wellbeing.label}. Mood, sleep, stress, mindful minutes and the streak, over the last seven days.</p>
-          </div>
-          <div className="mt-md">
-            <MultiLine
-              label="Mood and stress over thirty days, from one to five"
-              max={5}
-              min={1}
-              labels={d.reflection.days.map((x) => shortDay(x.date))}
-              series={[
-                { values: d.reflection.days.map((x) => x.mood), color: 'var(--color-r3)', label: 'Mood' },
-                { values: d.reflection.days.map((x) => x.stress), color: 'var(--color-r1)', label: 'Stress' },
-              ]}
-            />
-          </div>
-          <div className="mt-md">
-            <AreaLine label="Hours of sleep over thirty days" values={d.reflection.days.map((x) => x.sleep)} max={10} color="var(--color-r6)" labels={d.reflection.days.map((x) => shortDay(x.date))} />
-          </div>
-          <p className="mt-sm m-0 text-subhead">
-            Thirty days: {d.reflection.days.reduce((a, x) => a + x.mindful, 0)} mindful minutes, {d.reflection.days.reduce((a, x) => a + x.move, 0)} minutes moving.
-          </p>
-          <h3 className="mt-md text-headline">Saved reviews</h3>
-          {d.reflection.reviews.length === 0 && <p className="m-0 text-subhead text-ink-soft">No reviews saved yet.</p>}
-          <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
+        <CoachFold sections={sections} k="reviews" id="reviews-heading" title="Saved reviews" lede="Their answers, newest first. Never the numbers saved with them.">
+          {d.reflection.reviews.length === 0 && d.reflection.dayReviews.length === 0 && <p className="m-0 text-subhead text-ink-soft">No reviews saved yet.</p>}
+          <ol className="m-0 flex list-none flex-col gap-xs p-0">
             {d.reflection.reviews.map((r) => (
-              <li key={r.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <p className="m-0 text-subhead font-semibold">
-                  {r.templateName}, {shortDay(r.start)} to {shortDay(r.end)}
-                  {r.rating ? `, ${r.rating} of 5` : ''}
-                </p>
-                <dl className="mt-xs m-0 grid gap-xs text-subhead">
-                  {r.prompts.map((p, i) =>
-                    r.answers[i] ? (
-                      <div key={i}>
-                        <dt className="text-ink-soft">{p}</dt>
-                        <dd className="m-0 whitespace-pre-wrap">{r.answers[i]}</dd>
-                      </div>
-                    ) : null,
-                  )}
-                </dl>
-              </li>
+              <ReviewFold key={r.id} r={r} />
             ))}
-          </ul>
+          </ol>
           <Pager page={d.reflection.reviewsPage} prefix="rev" label="reviews" />
-        </Section>
+          {(d.reflection.dayReviews.length > 0 || revd.page > 1) && (
+            <Fold title="Daily reviews" hint={formatCount(d.reflection.dayReviews.length)} className="mt-sm">
+              <ol className="m-0 flex list-none flex-col gap-xs p-0">
+                {d.reflection.dayReviews.map((r) => (
+                  <ReviewFold key={r.id} r={r} />
+                ))}
+              </ol>
+              <Pager page={d.reflection.dayReviewsPage} prefix="revd" label="daily reviews" />
+            </Fold>
+          )}
+        </CoachFold>
       )}
 
-      <Section id="notes-heading" title="Notes" lede="They read every note, here and in their inbox.">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (note.trim()) write.mutate();
-          }}
-        >
-          <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={COACH_NOTE_MAX} rows={3} placeholder="What you noticed, and one next step" aria-label="A note for your student" className={FIELD} />
-          <Button type="submit" className="mt-xs" disabled={write.isPending || !note.trim()}>
-            Leave the note
-          </Button>
-        </form>
-        <Problem e={write.error} />
-        <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
-          {d.notes.map((n) => (
-            <li key={n.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-              <p className="m-0 whitespace-pre-wrap text-prose"><Inert text={n.body} /></p>
-              <div className="mt-xs flex flex-wrap items-center justify-between gap-xs">
-                <span className="text-caption text-ink-soft">{when(n.createdAt)}</span>
-                {n.mine && (
-                  <Button size="sm" variant="ghost" disabled={takeBack.isPending} onClick={() => { takeBack.reset(); setUnnoting(n.id); }}>
-                    Take back
-                  </Button>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-        <Pager page={d.notesPage} prefix="note" label="notes" />
-        <ConfirmDelete
-          open={unnoting !== null}
-          title="Take this note back?"
-          body="It is removed from their notes. This cannot be undone."
-          pending={takeBack.isPending}
-          failed={takeBack.isError}
-          onYes={() => unnoting && takeBack.mutate(unnoting)}
-          onClose={() => setUnnoting(null)}
-          yes="Yes, take it back"
-        />
-      </Section>
+      {share.lifeMap && (
+        <CoachFold sections={sections} k="map" id="map-heading" title="Life map answers" lede={d.lifeMap ? `From their strategy session on ${longDate(d.lifeMap.createdAt)}.` : undefined}>
+          {d.lifeMap ? <MapPart map={d.lifeMap} /> : <p className="m-0 text-subhead text-ink-soft">No life map yet. It fills in once they finish their strategy session.</p>}
+        </CoachFold>
+      )}
 
-      <Section id="log-heading" title="Change log" lede="Every ask, yes, note and task change between you two, with when it happened. They see the same lines.">
+      <CoachFold sections={sections} k="log" id="log-heading" title="Change log" lede="Every ask, yes, note and task change between you two. They see the same lines.">
         {d.log.length === 0 && <p className="m-0 text-subhead text-ink-soft">Nothing yet.</p>}
         <ol className="m-0 flex list-none flex-col gap-xs p-0">
           {d.log.map((e) => (
@@ -528,9 +503,27 @@ export function CoachStudent() {
           ))}
         </ol>
         <Pager page={d.logPage} prefix="log" label="changes" />
-      </Section>
+      </CoachFold>
 
-      <TaskSheet key={editing ? (editing.mode === 'edit' ? editing.task.id : `add-${editing.parentId}`) : 'none'} studentId={id} editing={editing} projects={projects} onClose={() => setEditing(null)} onDone={() => void q.refetch()} />
+      {hidden.length > 0 && <p className="mt-sm m-0 text-caption text-ink-soft">Not shared with you: {hidden.map((k) => COACH_SHARE_META[k].name).join(', ')}.</p>}
+
+      <div className="mt-md flex justify-end">
+        <Button
+          variant="ghost"
+          disabled={end.isPending}
+          onClick={() => {
+            end.reset();
+            setEnding(true);
+          }}
+        >
+          End coaching
+        </Button>
+      </div>
+      <ConfirmDelete open={ending} title={`End coaching with ${s.name}?`} body="You stop seeing their progress at once, and they are told. The notes and the change log stay." pending={end.isPending} failed={end.isError} onYes={() => end.mutate(d.link.id)} onClose={() => setEnding(false)} yes="Yes, end it" keep="Keep coaching" />
+
+      {/* Keyed by what it opens with: the form's fields are a deliberate one-time seed from that task or suggestion, so each opening starts fresh. */}
+      <CoachTaskSheet key={editing ? (editing.mode === 'edit' ? editing.task.id : `add-${editing.parentId}-${editing.title ?? ''}`) : 'none'} studentId={id} editing={editing} projects={projects} onClose={() => setEditing(null)} onDone={reload} />
     </Screen>
   );
 }
+

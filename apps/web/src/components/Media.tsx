@@ -51,14 +51,14 @@ export function FadeImage({ alt, frame, reserve = false, className = '', onLoad,
 }
 
 /** One picture, GIF or video, sized to its column. Videos play in their own player; a picture that fails to load drops out. */
-export function MediaTile({ item, className = '', reserve = false }: { item: MediaItem; className?: string; reserve?: boolean }) {
+export function MediaTile({ item, className = '', reserve = false, quiet = false }: { item: MediaItem; className?: string; reserve?: boolean; /** A video that is not the first on its screen: its gate's Play is outline, so the screen keeps one solid button. */ quiet?: boolean }) {
   const frame = item.kind === 'video' ? videoEmbed(item.url) : null;
   if (item.kind === 'video') {
     if (!frame) return null;
     return (
       <figure className={`m-0 ${className}`}>
         {frame.type === 'frame' ? (
-          <EmbedGate url={frame.src} title={item.caption || 'Video'}>
+          <EmbedGate url={frame.src} title={item.caption || 'Video'} quiet={quiet}>
             <iframe
               src={frame.src}
               title={item.caption || 'Video'}

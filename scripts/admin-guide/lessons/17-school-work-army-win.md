@@ -10,12 +10,12 @@ In this lesson you'll learn:
 
 ## School: Riya the learner
 
-School, Work and Army are on for a new account. Win is off until switched on.
+School, Work and Army show on a new account. Win starts hidden.
 
 1. Riya opens **School**. Under **Programs** she finds Editing fundamentals.
 2. Beside a cohort date she taps **Enrol**. A program priced in points asks again in a sheet before spending.
 3. Under **Your cohorts** she taps **Open**.
-4. Under **Lessons** she opens each one in order. A lesson shows its words, then **Watch video**, **Open resource** or **Download resource** at its foot.
+4. Under **Lessons** she opens each one in order. A lesson shows its words, then its ways in at its foot, up to six: **Download resource**, **Watch video**, **Open resource** or a book. A video plays right in the lesson.
 5. Under **Assignments** she reads the brief, adds **Link to your work** or writes in **Or write it here**, and taps **Hand in**.
 6. Under **Live sessions**, **I am here** checks her in while a session is live. Check-in opens fifteen minutes before.
 7. In **Discussion** she starts a thread with **Start a thread** and **Post**. She picks Private, so her handle stays hidden, or Public, so others can open her page.
@@ -30,6 +30,9 @@ Making programs needs the **Cohorts** permission (cohort manager). Giving feedba
 2. They fill in **Name**, **Description**, **Price in points**, **How it runs**, **What people leave with** and **What they need before starting**.
 3. Under **Who can see it** they pick Draft, Private or Public, then tap **Create program**.
 4. In the program's menu: **Add lesson**, **Add assignment** and **Open a cohort**. Whoever opens a cohort becomes its manager, scheduling sessions, giving feedback and marking completion.
+5. Whoever may edit a program changes it in place: its name and words, and a lesson's title, kind, words and order. They add and remove lessons too.
+6. **Add a resource**, at a lesson's foot, takes up to six: a YouTube or Vimeo video, a book, a file or another link, each with an optional **Label**. **Change resources** moves or changes one, and removes it on a second tap. A lesson from one of the founder's books shows **The book** until it has a resource, so add the book too to keep it.
+7. An admin moves a program with **Show first**, **Move up** and **Move down**. Every change is audited.
 
 A program has four states:
 
@@ -64,7 +67,7 @@ Army is brand campaigns run properly.
 
 Win is content rewards: a brand funds a pool of points and pays per thousand verified views.
 
-1. Riya switches **Win** on, opens a reward and reads the brief.
+1. Riya unhides **Win**, opens a reward and reads the brief.
 2. **What could I earn?** shows the payout for any view count.
 3. She posts her video, taps **Enter**, pastes the link and taps **Submit my video**.
 4. YouTube views are read by the app. Other platforms are typed in and confirmed by a reviewer, one report every six hours.

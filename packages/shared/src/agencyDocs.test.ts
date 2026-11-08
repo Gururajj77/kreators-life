@@ -62,7 +62,7 @@ const sampleInvoice = (): Invoice => {
     clientName: 'Acme Foods',
     clientEmail: '',
     items: [
-      { description: 'Voxpop videos package', quantity: 5, unitCents: 700000 },
+      { description: 'Sample videos package', quantity: 5, unitCents: 700000 },
       { description: 'Extra edit', quantity: 1, unitCents: 150050 },
     ],
     totalCents: 0,

@@ -59,8 +59,8 @@ const COHORT = {
 const MUST = ["In this lesson you'll learn", '**Pro tip', '**Result:**', '## The bottom line'];
 // A lesson written later keeps its own number, so its id and everyone's progress on the lessons around it never change, and is
 // read right after the lesson named here (number: the lesson it follows). Every other lesson follows its number. A lesson's
-// place in School (its `sequence`) is its position in this reading order, 1 up. Daily, part three (18) comes after part two (05) (2026-11-06, time blocks).
-const AFTER = { 18: 5 };
+// place in School (its `sequence`) is its position in this reading order, 1 up. Daily, part three (18) comes after part two (05) (2026-11-06, time blocks); Fitness (19) after the journal and trackers (07), and working with a life coach (20) after Connection (11) (2026-11-07, docs/content-placement.md).
+const AFTER = { 18: 5, 19: 7, 20: 11 };
 
 const q = (s) => `'${String(s).replace(/'/g, "''")}'`;
 const lessonId = (n) => `${PROGRAM.id}-l${String(n).padStart(2, '0')}`;
@@ -142,6 +142,8 @@ const syncAt = process.argv.indexOf('--sync');
 if (syncAt !== -1) {
   const target = process.argv[syncAt + 1];
   if (!target || target.startsWith('--')) throw new Error('give the sync file path');
+  // A sync never touches a lesson's resources (lesson_resources), which an admin adds in School: it changes titles, words and order, and
+  // its INSERT OR IGNORE does nothing to a lesson that exists.
   // --only 04,18: bring only these lessons' titles and words up to date (adding any that are new); the rest keep theirs, and the
   // program's own line is left out.
   const onlyAt = process.argv.indexOf('--only');

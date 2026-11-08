@@ -17,6 +17,7 @@ import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { useCompanion, useMe } from '../lib/queries';
 import { useAssistantModel } from '../lib/store';
+import { RED_YES } from '../lib/ui';
 
 const STARTERS = ['I feel tired today', 'I am stressed about work', 'What should I do next?', 'Today went well'];
 const VOICE: ChatVoice = { name: 'Companion', icon: 'MessageCircleHeart' };
@@ -181,7 +182,7 @@ export function Companion() {
               type="button"
               disabled={clear.isPending}
               onClick={() => clear.mutate()}
-              className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill disabled:opacity-50"
+              className={RED_YES}
             >
               Yes, clear it
             </button>

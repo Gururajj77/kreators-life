@@ -2,56 +2,54 @@ import { inGroupOrder, matchSetup, MODULES, moduleState, orderInGroup, setupSwit
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { api } from './api';
-import { usageScore } from './context';
 import { keys, useMe } from './queries';
 
 export interface ModuleView extends AppModule {
   available: boolean;
   on: boolean;
   reason: ModuleAccess['reason'];
-  /** How much it matters to this person right now: on first, then what fits who they are, then what they open most. Higher is first. */
-  rank: number;
 }
 
 /**
- * Every module with its state for the signed-in person, in order of context: what is on first, then the apps that fit who they
- * are and what they came for (the same match the setup chat and Features use), then the ones they open most on this device, then
- * the app's own order. Every list in the app takes this order, so the most useful app is first on a phone and on a laptop alike.
+ * Every module with its state for the signed-in person: what is on first, then what they could turn on, and inside that the default order
+ * (`MODULES`, the founder's, 2026-11-07). Every list in the app takes this order, so an app stays where the person last saw it; a group the
+ * person arranged under Profile, Features goes on top of it (`orderInGroup`).
  */
 export function useModules(): { modules: ModuleView[]; ready: boolean } {
   const me = useMe();
   const data = me.data;
-  const key = data ? `${data.user.identities.join('|')}#${data.user.intake.goals.join('|')}#${data.user.intake.blockers.join('|')}` : '';
   const modules = useMemo(() => {
     if (!data) return [];
     const { user, moduleSettings, access } = data;
-    const base = MODULES.map((m, i) => {
+    const standing = (m: { on: boolean; available: boolean }) => (m.on ? 2 : m.available ? 1 : 0);
+    return MODULES.map((m): ModuleView => {
       const a = access?.[m.key];
       const state = a ?? { ...moduleState(m, user.role, moduleSettings, user.modules), reason: 'ok' as const };
-      return { ...m, ...state, idx: i };
-    });
-    const setup = { identities: user.identities, goals: user.intake.goals, blockers: user.intake.blockers };
-    const fits = new Set<string>();
-    if (setup.identities.length > 0 || setup.goals.length > 0) {
-      const m = matchSetup(setup, base.filter((x) => setupSwitchable(x) && x.available).map((x) => x.key));
-      for (const a of [...m.apps, ...m.more]) fits.add(a.key);
-    }
-    return base
-      .map((m): ModuleView & { idx: number } => ({ ...m, rank: (m.on ? 1000 : m.available ? 500 : 0) + (fits.has(m.key) ? 400 : 0) + usageScore(m.key) - m.idx * 0.01 }))
-      .sort((x, y) => y.rank - x.rank)
-      .map(({ idx: _idx, ...m }) => m);
+      return { ...m, ...state };
+    }).sort((x, y) => standing(y) - standing(x));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.access, data?.moduleSettings, data?.user.role, data?.user.modules, key]);
+  }, [data?.access, data?.moduleSettings, data?.user.role, data?.user.modules]);
   return { ready: Boolean(data), modules };
 }
 
 /**
  * The groups in the one order every list uses (MODULE_GROUP_ORDER in shared: Contribution, Reflection, Connection, Creation, Essentials,
- * Operations). Only the apps inside a group follow what fits the person.
+ * Operations).
  */
 export function useGroupOrder(groups: readonly ModuleGroup[]): ModuleGroup[] {
   return inGroupOrder(groups);
 }
+
+/**
+ * Whether a tile or link stays, by the page it opens: one that opens an app shows only while that app is on, and a page that is no app's own shows always. Home's and
+ * Reviews' tiles use it (the founder, 2026-11-06 and 2026-11-07). A hash or query is left out, so /journal#gratitude-heading is Journal's.
+ */
+export const keepForApps =
+  (modules: readonly ModuleView[]) =>
+  (to: string | undefined): boolean => {
+    const path = to?.split(/[#?]/)[0];
+    return !path || modules.every((m) => m.path !== path || m.on);
+  };
 
 export function useModule(key: string): ModuleView | null {
   const { modules } = useModules();

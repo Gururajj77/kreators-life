@@ -1,7 +1,8 @@
+import { openTurn, type Turn } from '../cronTick';
 import { Hono } from 'hono';
 import { CONTENT_KINDS, LINK_SOURCES, detectPlatform, type ContentItem, type Customer, type DmAutomation, type DmRequest, type DmSend, type Funnel, type FunnelStep, type Page, type PayoutSummary, type Sequence, type TrackedLink } from '@kreators/shared';
 import type { AppEnv, Env } from '../env';
-import { inBatches, nameOf, newId, notify, nowIso, num, oneOf, parseList, randomCode, str, pageOf, paged } from '../db';
+import { inBatches, nameOf, newId, noteStmt, notify, nowIso, num, oneOf, parseList, randomCode, str, pageOf, paged } from '../db';
 import { fetchMetrics } from '../social';
 import { fetchT, isTimeout, TIMEOUT } from '../http';
 import { providerFor } from '../payments';
@@ -359,7 +360,7 @@ growth.delete('/sequences/:id', async (c) => {
 });
 
 /** Deliver every due sequence message. Called by the cron. */
-export async function runSequences(db: D1Database): Promise<number> {
+export async function runSequences(db: D1Database, turn: Turn = openTurn(db)): Promise<number> {
   const due = await db
     .prepare(
       `SELECT q.id AS sequence_id, q.title, q.body, q.owner_id, o.id AS order_id, o.buyer_id, u.display_name AS owner_name, u.handle
@@ -370,13 +371,16 @@ export async function runSequences(db: D1Database): Promise<number> {
        LIMIT 200`,
     )
     .all<{ sequence_id: string; title: string; body: string; owner_id: string; order_id: string; buyer_id: string; owner_name: string; handle: string | null }>();
-  for (const d of due.results) {
-    await db.batch([
+  if (!due.results.length) return 0;
+  const share = await turn();
+  // The mark and the note go together, fifty statements to a trip, and the note's id holds what the mark holds, so a stop never loses a message or sends one twice.
+  const sent = await share.send(
+    share.fit(due.results, 2).flatMap((d) => [
       db.prepare('INSERT OR IGNORE INTO sequence_sends (sequence_id, order_id, sent_at) VALUES (?, ?, ?)').bind(d.sequence_id, d.order_id, nowIso()),
-      db.prepare('INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)').bind(newId(), d.buyer_id, 'sequence', `${nameOf({ display_name: d.owner_name })}: ${d.title}`, d.body.slice(0, 300), d.handle ? `/u/${d.handle}` : '/library', nowIso()),
-    ]);
-  }
-  return due.results.length;
+      noteStmt(db, { id: `sequence-${d.sequence_id}-${d.order_id}`, userId: d.buyer_id, kind: 'sequence', title: `${nameOf({ display_name: d.owner_name })}: ${d.title}`, body: d.body.slice(0, 300), link: d.handle ? `/u/${d.handle}` : '/library' }, 'once'),
+    ]),
+  );
+  return sent.length / 2;
 }
 
 // ---- customers, refunds, payouts, priority DMs
@@ -519,6 +523,6 @@ growth.post('/dm/:id/answer', async (c) => {
   const answer = str(body.answer, 4000);
   if (!answer) return c.json({ error: 'write the answer' }, 400);
   await db.prepare("UPDATE dm_requests SET answer = ?, status = 'answered', answered_at = ? WHERE id = ?").bind(answer, nowIso(), r.id).run();
-  await notify(db, r.buyer_id, 'dm', `${nameOf(user)} answered your question`, answer.slice(0, 160), '/library');
+  await notify(db, r.buyer_id, 'dm', `${nameOf(user)} answered your question`, answer.slice(0, 160), '/library#dm-heading');
   return c.json({ ok: true });
 });

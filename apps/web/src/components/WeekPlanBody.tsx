@@ -1,8 +1,8 @@
-import { FOCUS_TAG, RELATIONSHIP_BY_KEY, minutesLabel2, type FocusTask, type TimeBlock, type Node, type PlanAttention, type PlanStrength, type RelationshipKey, type WeekPlan as WeekPlanData, type WeekPlanSuggestion, LOCALE } from '@kreators/shared';
+import { FOCUS_TAG, RELATIONSHIP_BY_KEY, minutesLabel2, type FocusTask, type TimeBlock, type Node, type PlanAttention, type PlanStrength, type RelationshipKey, type WeekPlan as WeekPlanData, type WeekPlanSuggestion } from '@kreators/shared';
 import { tbClass, tbStyle } from '../lib/blockColor';
 import { useEffect, useState } from 'react';
 import { api, type TaskPlanBody } from '../lib/api';
-import { prettyDate, todayLocal, weekday } from '../lib/date';
+import { prettyDate, todayLocal, weekday, dayLabel } from '../lib/date';
 import { useAuthed, useRefreshAll } from '../lib/queries';
 import { tie } from '../lib/text';
 import { FIELD } from '../lib/ui';
@@ -18,7 +18,7 @@ import { ToggleChevron } from './ToggleMark';
 // The body of the Plan my week sheet: the strength, the suggestions, the fixes and Keep. It downloads when the sheet opens
 // (WeekPlan.tsx), so Daily's first download carries only the button.
 
-const dayOption = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', day: 'numeric', month: 'short' });
+const dayOption = dayLabel;
 const tone = (s: PlanStrength) => (s.label === 'Strong' ? 'good' : s.label === 'Fair' ? 'warn' : 'neutral');
 
 /** One reading of how strong a plan is: a ring with the score, the label, and the three parts as small bars. */
@@ -82,7 +82,7 @@ function OwnForm({ node, day, today, onAdd }: { node: Node; day: string; today: 
   const problem = planProblem(p);
   return (
     <div className="mt-sm flex flex-col gap-md rounded-card bg-card p-md shadow-toy-soft">
-      <TaskPlanFields plan={p} onChange={setP} today={today} />
+      <TaskPlanFields plan={p} onChange={setP} today={today} pillar={node.relationship} taskId={node.id} />
       {problem && (
         <p role="alert" className="m-0 text-subhead">
           {problem}

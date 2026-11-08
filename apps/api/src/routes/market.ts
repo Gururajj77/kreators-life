@@ -23,7 +23,7 @@ import {
   type StoreStage,
 } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { isStaff, nameOf, newId, notify, nowIso, num, oneOf, str, pageOf, paged } from '../db';
+import { blockedEither, isStaff, nameOf, newId, notify, nowIso, num, oneOf, str, pageOf, paged } from '../db';
 import { trustForMany } from '../rewards';
 import { haveFor } from '../unlocks';
 import { isUnlockBadgeKey, unlockFor } from '@kreators/shared';
@@ -353,6 +353,8 @@ market.post('/listings/:id/offers', async (c) => {
   const row = await db.prepare('SELECT * FROM preowned_listings WHERE id = ?').bind(c.req.param('id')).first<ListingRow>();
   if (!row) return c.json({ error: 'not found' }, 404);
   if (row.seller_id === user.id) return c.json({ error: 'That one is yours.' }, 400);
+  // A block reads like nobody: an offer never reaches the inbox of a seller who blocked this person, or who was blocked by them.
+  if (await blockedEither(db, user.id, row.seller_id)) return c.json({ error: 'not found' }, 404);
   if (row.status !== 'live') return c.json({ error: 'This one is no longer open to offers.' }, 400);
   const body = await c.req.json<{ cents?: unknown; note?: unknown }>().catch(() => ({}) as { cents?: unknown; note?: unknown });
   const cents = num(body.cents, null, 1);
@@ -363,7 +365,7 @@ market.post('/listings/:id/offers', async (c) => {
     db.prepare("UPDATE preowned_offers SET status = 'withdrawn', decided_at = ? WHERE listing_id = ? AND buyer_id = ? AND status = 'open'").bind(now, row.id, user.id),
     db.prepare('INSERT INTO preowned_offers (id, listing_id, buyer_id, cents, note, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id, row.id, user.id, Math.round(cents), str(body.note, 300), 'open', now),
   ]);
-  await notify(db, row.seller_id, 'store', `An offer on ${row.title}`, `${nameOf(user)} offers ${money(Math.round(cents), row.currency)}.`, '/store');
+  await notify(db, row.seller_id, 'store', `An offer on ${row.title}`, `${nameOf(user)} offers ${money(Math.round(cents), row.currency)}.`, `/store?listing=${row.id}`);
   const fresh = await db.prepare(`${OFFER_SELECT} WHERE o.id = ?`).bind(id).first<OfferRow>();
   return c.json({ offer: fresh ? toOffer(fresh) : null }, 201);
 });
@@ -378,6 +380,8 @@ market.post('/offers/:id', async (c) => {
   const body = await c.req.json<{ action?: string }>().catch(() => ({}) as { action?: string });
   const action = oneOf(body.action, ['accept', 'decline', 'withdraw'] as const, 'decline');
   const now = nowIso();
+  // A seller can still settle an offer made before a block; the note just does not cross it.
+  const heard = action !== 'withdraw' && !(await blockedEither(db, listing.seller_id, offer.buyer_id));
   if (action === 'withdraw') {
     if (offer.buyer_id !== user.id) return c.json({ error: 'not found' }, 404);
     if (offer.status !== 'open') return c.json({ error: 'That offer is already decided.' }, 400);
@@ -391,10 +395,10 @@ market.post('/offers/:id', async (c) => {
         db.prepare("UPDATE preowned_offers SET status = 'declined', decided_at = ? WHERE listing_id = ? AND id != ? AND status = 'open'").bind(now, listing.id, offer.id),
         db.prepare("UPDATE preowned_listings SET status = 'agreed', buyer_id = ?, updated_at = ? WHERE id = ?").bind(offer.buyer_id, now, listing.id),
       ]);
-      await notify(db, offer.buyer_id, 'store', `Your offer on ${listing.title} was accepted`, 'Sort out the handover in the chat.', '/store');
+      if (heard) await notify(db, offer.buyer_id, 'store', `Your offer on ${listing.title} was accepted`, 'Sort out the handover in the chat.', `/store?listing=${listing.id}`);
     } else {
       await db.prepare("UPDATE preowned_offers SET status = 'declined', decided_at = ? WHERE id = ?").bind(now, offer.id).run();
-      await notify(db, offer.buyer_id, 'store', `Your offer on ${listing.title} was declined`, 'You can make another.', '/store');
+      if (heard) await notify(db, offer.buyer_id, 'store', `Your offer on ${listing.title} was declined`, 'You can make another.', `/store?listing=${listing.id}`);
     }
   }
   const [fresh, freshListing] = await Promise.all([db.prepare(`${OFFER_SELECT} WHERE o.id = ?`).bind(offer.id).first<OfferRow>(), listingFor(db, listing.id)]);
@@ -407,6 +411,8 @@ async function threadFor(c: { env: { DB: D1Database } }, user: UserRow, listingI
   if (!listing) return null;
   const buyerId = listing.seller_id === user.id ? (buyerParam ?? '') : user.id;
   if (!buyerId || buyerId === listing.seller_id) return null;
+  // A block closes the chat both ways, in the same words as no chat at all.
+  if (await blockedEither(c.env.DB, listing.seller_id, buyerId)) return null;
   return { listing, buyerId };
 }
 
@@ -430,7 +436,7 @@ market.post('/listings/:id/messages', async (c) => {
   const now = nowIso();
   await db.prepare('INSERT INTO preowned_messages (id, listing_id, buyer_id, sender_id, body, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(id, t.listing.id, t.buyerId, user.id, text, now).run();
   const other = user.id === t.listing.seller_id ? t.buyerId : t.listing.seller_id;
-  await notify(db, other, 'store', `About ${t.listing.title}`, text.slice(0, 120), '/store');
+  await notify(db, other, 'store', `About ${t.listing.title}`, text.slice(0, 120), `/store?listing=${t.listing.id}`);
   const row = await db.prepare('SELECT m.*, u.display_name AS sender_name FROM preowned_messages m JOIN users u ON u.id = m.sender_id WHERE m.id = ?').bind(id).first<MessageRow>();
   return c.json({ message: row ? toMessage(row, user.id) : null }, 201);
 });

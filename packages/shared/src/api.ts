@@ -4,6 +4,7 @@ import type { Evolution, NodeKind } from './pillars.ts';
 import type { Redemption } from './rewards.ts';
 import type { Organization } from './work.ts';
 import { addDays } from './dates.ts';
+import type { DatePrefs } from './dates.ts';
 import type { Priority, Repeat } from './tasks.ts';
 import type { LifeAreaKey } from './life.ts';
 import type { DayPlan } from './timeBlocks.ts';
@@ -61,8 +62,10 @@ export interface User {
   area: string;
   /** True when the person shared their position for nearby matching. The coordinates never leave the server. */
   hasLocation: boolean;
-  /** IANA zone the person's availability is written in. */
+  /** IANA zone the person's times show in, their reminders arrive by and their availability is written in. */
   timezone: string;
+  /** How their dates and times read on screen (migration 0109, `parseDatePrefs`): "7 Nov 26, 4:17am" unless they changed it under Profile. */
+  datePrefs: DatePrefs;
   /** The currency their own money is kept in (Finance, a new product): one of `CURRENCIES`, rupees unless they changed it. */
   currency: string;
   /** How their app groups start (open or closed) and the order of the apps inside each group (migration 0074, `parseAppPrefs`). */
@@ -86,8 +89,6 @@ export interface RelationshipState {
   xp: number;
   level: number;
   pillars: number;
-  activeTasks: number;
-  doneTasks: number;
   /** Character evolution stage, 1 to 4. */
   stage: number;
   /** Days since this floor's first pillar. Null when nothing is built. */

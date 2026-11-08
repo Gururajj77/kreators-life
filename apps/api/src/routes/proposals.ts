@@ -110,6 +110,7 @@ proposals.post('/:id/stage', async (c) => {
     db.prepare('INSERT INTO decision_log (id, proposal_id, actor_user_id, from_stage, to_stage, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(newId(), prev.id, user.id, prev.stage, stage, str(body.note, 2000), now),
   ]);
   await audit(db, user.id, 'proposal.stage', 'proposal', prev.id, prev.stage, stage);
+  // A pitch is TV's or Fund's. note-link: /tv, /fund
   await notify(db, prev.user_id, prev.kind, `${prev.title}: ${stage.replace('_', ' ')}`, str(body.note, 160), `/${prev.kind}`);
   return c.json({ ok: true });
 });

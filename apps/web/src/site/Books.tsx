@@ -96,7 +96,7 @@ export function Books() {
             Three books, <em>three courses</em>
           </h1>
           <p className="mt-sm m-0 max-w-[560px] text-callout text-ink-soft">
-            {BOOK_AUTHOR}, the founder of kreators.app, wrote all three. He left college to live as a monk and came back with the idea behind this app: seven relationships make a life.
+            {BOOK_AUTHOR}, the founder of kreators.app, wrote all three. He left college to live as a monk and came back with this idea: seven relationships make a life.
           </p>
           {/* One main action (site/buttons.ts): Start free for a visitor, the courses for someone signed in. */}
           <div className="mt-md flex flex-wrap items-center gap-sm">
@@ -118,7 +118,7 @@ export function Books() {
 
       <ul className="mt-lg grid list-none gap-lg p-0 m-0">
         {BOOKS.map((b) => (
-          <li key={b.slug} id={b.slug} className="scroll-mt-xl">
+          <li key={b.slug} id={b.slug} data-contents-section="" className="scroll-mt-xl">
             <article className="grid gap-md rounded-card bg-card p-md shadow-toy-soft md:grid-cols-[240px_1fr] md:p-lg" aria-labelledby={`${b.slug}-title`}>
               <div className="mx-auto w-[180px] md:w-full">
                 <BookCover book={b} eager />

@@ -12,9 +12,9 @@ In this lesson you'll learn:
 
 Busy days are not the problem. Scattered days are. A few slow breaths calm your body before you start. A clock with a clear end makes one task feel small enough to begin. Together they turn "I should work on that" into "I am working on that, for 25 minutes".
 
-## Switch it on
+## Find it
 
-Mindfulness starts off on a new account. Open **Apps**, tap the **Reflection** group and turn on the switch beside **Mindfulness**. The same panel, **Breathe and focus**, also shows on Home, so you can start a clock from either place.
+Mindfulness starts hidden on a new account, unless the setup chat showed it for you. Open **Apps**, open the **Reflection** group, open **Hidden apps** at its end and tap the eye beside **Mindfulness**. The same panel, **Breathe and focus**, also shows on Home while Mindfulness is not hidden, so you can start a clock from either place.
 
 The page opens with your mindful minutes this week. Under it sits the panel, a dark card with four tabs: **Breathe**, **Timer**, **Pomodoro** and **Stopwatch**. Pick one, then tap the orange **Start**. While it runs, the button reads **Pause**, then **Resume**.
 
@@ -23,7 +23,7 @@ The page opens with your mindful minutes this week. Under it sits the panel, a d
 You breathe with a row of circles, one for each step of the breath. The current circle fills up as you count. Pick a **Pattern**:
 
 - **Calm exhale** is first: in for 4, hold for 4, out for 6, rest for 2.
-- **Box**, **4-7-8**, **Even**, **Triangle**, **Longer out** and **Sigh** are the others.
+- **Box**, **4-7-8**, **Even**, **Triangle**, **Longer out**, **Pranayam** and **Sigh** are the others.
 
 Pick a cue for each step: **Soft chime**, **Bell**, **Voice** or **No cue**. Choose a length with the quick buttons (1, 3, 5 or 10 minutes) or the ruler, up to 30. If the counts feel fast, tap the small "per count" button and slow each count down, up to five seconds. A finished breath always adds to your mindful minutes.
 

@@ -13,9 +13,13 @@ import { useAuthed } from '../lib/queries';
 import { Icon } from '../components/Icon';
 import { Folder, TrendingUp } from 'lucide-react';
 import { FIELD } from '../lib/ui';
+import { evenGrid, evenTile } from '../lib/bento';
 
 
 /** What the server can do today, said before anyone waits for it. */
+// One folder a brand, in even rows however many there are (lib/bento.ts): an odd page leads with a card that takes the row.
+const FOLDER_COLS = { base: 1, md: 2 } as const;
+
 export function ToolsLine({ tools }: { tools: { reach: boolean; writer: 'claude' | 'workers-ai' | 'none' } }) {
   const research = tools.reach ? 'Research runs through Agent Reach: web, YouTube, X, Instagram and Reddit.' : 'Research reads plain pages and YouTube for now. Connect Agent Reach for X, Reddit, transcripts and profiles.';
   const writer = tools.writer === 'claude' ? 'Claude writes the pieces.' : tools.writer === 'workers-ai' ? 'A small model writes the pieces.' : 'No writing model is connected, so pieces come back as research digests.';
@@ -59,9 +63,9 @@ export function Content() {
         </div>
         {q.isError && <p className="mt-sm m-0 font-semibold">{errorText(q.error, 'Could not load.')}</p>}
         {d && d.brands.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">No folders yet. Make one for your own brand, or for a client.</p>}
-        <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
-          {d?.brands.map((b) => (
-            <li key={b.id}>
+        <ul data-tile-list="paged" className={`mt-sm grid list-none gap-xs p-0 m-0 ${evenGrid(d?.brands.length ?? 0, FOLDER_COLS)}`}>
+          {d?.brands.map((b, i, all) => (
+            <li key={b.id} className={evenTile(i, all.length, FOLDER_COLS)}>
               <BrandCard b={b} />
             </li>
           ))}

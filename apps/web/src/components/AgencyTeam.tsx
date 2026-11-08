@@ -253,7 +253,7 @@ function MemberRow({ m, onRole, onSaid }: { m: TeamMember; onRole: (m: TeamMembe
     },
   });
   const open = m.status !== 'removed';
-  const since = m.status === 'active' && m.joinedAt ? `joined ${shortDay(m.joinedAt.slice(0, 10))}` : m.status === 'invited' ? `invited ${shortDay(m.invitedAt.slice(0, 10))}` : '';
+  const since = m.status === 'active' && m.joinedAt ? `joined ${shortDay(m.joinedAt)}` : m.status === 'invited' ? `invited ${shortDay(m.invitedAt)}` : '';
   return (
     <li className="rounded-card bg-card p-md shadow-toy-soft">
       <div className="flex items-start gap-sm">
@@ -444,7 +444,7 @@ export function ClientMemberView({ teamId, agencyName }: { teamId: string; agenc
                     <p className={`m-0 min-w-0 ${p.publishedAt ? 'text-card-title' : 'text-headline'}`}>{p.title}</p>
                     <StatusTag tone={DELIVERABLE_STAGE_TONE.published}>{DELIVERABLE_STAGE_META.published.name}</StatusTag>
                   </div>
-                  {p.publishedAt && <p className="m-0 text-card-note text-ink-soft">{`Live ${prettyDate(p.publishedAt.slice(0, 10))}`}</p>}
+                  {p.publishedAt && <p className="m-0 text-card-note text-ink-soft">{`Live ${prettyDate(p.publishedAt)}`}</p>}
                 </ViewCard>
               ))}
             </ul>

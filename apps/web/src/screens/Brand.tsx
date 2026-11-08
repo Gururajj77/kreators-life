@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '../components/Button';
 import { ConfirmDelete } from '../components/ConfirmDelete';
+import { TapTwice } from '../components/TapTwice';
 import { IconButton } from '../components/IconButton';
 import { Markdown } from '../components/Markdown';
 import { AppCover } from '../components/AppCover';
@@ -17,13 +18,16 @@ import { ToolsLine } from './Content';
 import { AppIcon } from '../components/AppIcon';
 import { Icon } from '../components/Icon';
 import { Check, Trash2 } from 'lucide-react';
-import { FIELD, chip } from '../lib/ui';
+import { FIELD, chip, RED_YES } from '../lib/ui';
 import { copyPlain } from '../lib/clipboard';
 import { dateTime } from '../lib/date';
 import { ErrorLine } from '../components/ErrorLine';
 import { WorkingLine } from '../components/fx/WorkingLine';
 import { TabRow } from '../components/TabRow';
+import { evenGrid, evenTile } from '../lib/bento';
 
+// The nine kinds of piece: three by three on a laptop; on a tablet, the first takes the row over pairs (lib/bento.ts).
+const PIECE_COLS = { base: 1, md: 2, lg: 3 } as const;
 const when = dateTime;
 const n = (v: number | undefined) => (typeof v === 'number' && v > 0 ? formatCount(v) : '');
 const TABS = [
@@ -237,12 +241,10 @@ function SourcesTab({ id, sources, onChange, onOpenRun }: { id: string; sources:
               </span>
             </div>
             <div className="mt-sm flex flex-wrap gap-xs">
-              <Button size="sm" onClick={() => read.mutate(s.id)} disabled={read.isPending}>
+              <Button variant="outline" size="sm" onClick={() => read.mutate(s.id)} disabled={read.isPending}>
                 {read.isPending && read.variables === s.id ? 'Reading' : s.lastReadAt ? 'Read again' : 'Read it'}
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => remove.mutate(s.id)} disabled={remove.isPending}>
-                Remove
-              </Button>
+              <TapTwice size="sm" variant="ghost" name={s.url} onYes={() => remove.mutate(s.id)} disabled={remove.isPending} />
             </div>
           </li>
         ))}
@@ -327,9 +329,7 @@ function ResearchTab({ id, runs, preset, reach, onChange, onOpen }: { id: string
                 {r.status === 'done' ? `${r.items.length} ${r.items.length === 1 ? 'item' : 'items'} via ${r.backend}` : `Failed: ${r.error}`}, {when(r.createdAt)}
               </span>
             </button>
-            <Button size="sm" variant="ghost" onClick={() => remove.mutate(r.id)} disabled={remove.isPending}>
-              Remove
-            </Button>
+            <TapTwice size="sm" variant="ghost" name={r.kind} onYes={() => remove.mutate(r.id)} disabled={remove.isPending} />
           </li>
         ))}
       </ul>
@@ -366,9 +366,9 @@ function CreateTab({ id, runs, preset, writer, onMade }: { id: string; runs: Res
         Create
       </h2>
       <p className="mt-xs m-0 text-subhead text-ink-soft">{writer === 'none' ? 'No writing model is connected, so you get the research laid out as a digest.' : 'Pick what to write. The piece leans on the research you tick, or the latest runs if you tick none.'}</p>
-      <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
-        {PIECE_KINDS.map((k) => (
-          <li key={k}>
+      <ul className={`mt-sm grid list-none gap-xs p-0 m-0 ${evenGrid(PIECE_KINDS.length, PIECE_COLS)}`}>
+        {PIECE_KINDS.map((k, i) => (
+          <li key={k} className={evenTile(i, PIECE_KINDS.length, PIECE_COLS)}>
             <button type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={`toy toy-flat flex w-full items-start gap-sm rounded-tile border-2 p-sm text-left ${kind === k ? 'border-ink bg-card' : 'border-line bg-card'}`}>
               <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-paper" aria-hidden="true">
                 <AppIcon name={PIECE_META[k].icon} size={20} />
@@ -542,7 +542,7 @@ function PieceSheet({ id, piece, onClose, onChange }: { id: string; piece: Brand
             </p>
           )}
           <div className="flex flex-wrap gap-xs">
-            <button type="button" disabled={remove.isPending} onClick={() => remove.mutate()} className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill disabled:opacity-50">
+            <button type="button" disabled={remove.isPending} onClick={() => remove.mutate()} className={RED_YES}>
               Yes, remove it
             </button>
             <Button variant="outline" onClick={() => setAsking(false)}>

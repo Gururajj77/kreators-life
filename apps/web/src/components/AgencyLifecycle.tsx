@@ -1,30 +1,9 @@
-import {
-  AGENCY_STAGE_BY_KEY,
-  RETAINER_DEFAULT_OPTIONS,
-  RETAINER_MONTHS_MAX,
-  RETAINER_OPTIONS_MAX,
-  RETAINER_STATUS_NAME,
-  RETAINER_STATUS_TONE,
-  REVISIONS_MAX,
-  TRIAL_RULES,
-  money,
-  moveProblem,
-  nextStage,
-  previousStage,
-  retainerMonthlyCents,
-  retainerTotalCents,
-  stageIndex,
-  typedCents,
-  typedPercentBps,
-  type AgencyClient,
-  type AgencyRetainer,
-  type ClientLifecycle,
-  type RetainerOption, LOCALE } from '@kreators/shared';
+import { AGENCY_STAGE_BY_KEY, RETAINER_DEFAULT_OPTIONS, RETAINER_MONTHS_MAX, RETAINER_OPTIONS_MAX, RETAINER_STATUS_NAME, RETAINER_STATUS_TONE, REVISIONS_MAX, TRIAL_RULES, money, moveProblem, nextStage, previousStage, retainerMonthlyCents, retainerTotalCents, stageIndex, typedCents, typedPercentBps, type AgencyClient, type AgencyRetainer, type ClientLifecycle, type RetainerOption } from '@kreators/shared';
 import { useAuthed } from '../lib/queries';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { ApiError, api } from '../lib/api';
-import { prettyDate, todayLocal } from '../lib/date';
+import { prettyDate, todayLocal, shortDay } from '../lib/date';
 import { Button } from './Button';
 import { Fold } from './Fold';
 import { Sheet } from './Sheet';
@@ -33,6 +12,7 @@ import { StatusTag } from './StatusTag';
 import { CardHead } from './CardHead';
 import { Toggle } from './Toggle';
 import { FIELD } from '../lib/ui';
+import { ConfirmDelete } from './ConfirmDelete';
 import { FieldLabel } from './Field';
 import { ClientPassword } from './ClientPassword';
 
@@ -144,7 +124,7 @@ export function LifecycleCard({ client, life, compact = false }: { client: Agenc
       <ul className="m-0 flex list-none flex-col gap-xs p-0">
         {life.log.map((l) => (
           <li key={l.id} className="rounded-tile bg-paper p-sm text-subhead">
-            <span className="block text-caption text-ink-soft">{`${l.actor === 'me' ? 'You' : l.actor === 'client' ? 'The client' : 'Automatic'}, ${prettyDate(l.at.slice(0, 10))}`}</span>
+            <span className="block text-caption text-ink-soft">{`${l.actor === 'me' ? 'You' : l.actor === 'client' ? 'The client' : 'Automatic'}, ${prettyDate(l.at)}`}</span>
             {l.text}
           </li>
         ))}
@@ -397,7 +377,8 @@ export function RetainerCard({ client, life, currency }: { client: AgencyClient;
   const [confirming, setConfirming] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const ready = stageIndex(life.stage) >= stageIndex('pilot');
-  const withdraw = useMutation({ mutationFn: (id: string) => api.agencyRetainerWithdraw(id), onSuccess: () => refresh() });
+  const [askingBack, setAskingBack] = useState(false);
+  const withdraw = useMutation({ mutationFn: (id: string) => api.agencyRetainerWithdraw(id), onSuccess: () => { setAskingBack(false); void refresh(); } });
   const end = useMutation({ mutationFn: (id: string) => api.agencyRetainerEnd(id), onSuccess: () => { setConfirmEnd(false); void refresh(); } });
   const auto = useMutation({ mutationFn: (v: { id: string; on: boolean }) => api.agencyRetainerAutoSend(v.id, v.on), onSuccess: () => refresh() });
   const err = withdraw.error ?? end.error ?? auto.error;
@@ -435,7 +416,7 @@ export function RetainerCard({ client, life, currency }: { client: AgencyClient;
             <>
               <p className="mt-sm m-0 text-subhead font-semibold">
                 {`${r.months} months from ${r.startDay ? prettyDate(r.startDay) : 'the start day'}. ${r.cyclesMade} of ${r.months} made.`}
-                {r.nextCycle ? ` Next cycle: ${new Date(`${r.nextCycle.day}T00:00:00`).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' })}.` : ''}
+                {r.nextCycle ? ` Next cycle: ${shortDay(r.nextCycle.day)}.` : ''}
               </p>
               <p className="mt-xs m-0 text-subhead text-ink-soft">Each month makes its invoice and its pieces by itself, once, on the retainer&apos;s own day. A short month falls on its last day.</p>
             </>
@@ -448,7 +429,7 @@ export function RetainerCard({ client, life, currency }: { client: AgencyClient;
           <div className="mt-sm flex flex-wrap gap-xs">
             {r.status === 'chosen' && <Button onClick={() => setConfirming(true)}>Confirm and start</Button>}
             {(r.status === 'offered' || r.status === 'chosen') && (
-              <Button variant="outline" size="sm" onClick={() => withdraw.mutate(r.id)} disabled={withdraw.isPending}>
+              <Button variant="outline" size="sm" onClick={() => { withdraw.reset(); setAskingBack(true); }} disabled={withdraw.isPending}>
                 Take the offer back
               </Button>
             )}
@@ -462,23 +443,14 @@ export function RetainerCard({ client, life, currency }: { client: AgencyClient;
                 {r.status === 'ended' ? 'Offer a renewal' : 'Offer again'}
               </Button>
             )}
-            {r.status === 'active' &&
-              (confirmEnd ? (
-                <>
-                  <Button variant="outline" size="sm" onClick={() => end.mutate(r.id)} disabled={end.isPending}>
-                    Yes, end it
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setConfirmEnd(false)}>
-                    Keep it
-                  </Button>
-                </>
-              ) : (
-                <Button variant="outline" size="sm" onClick={() => setConfirmEnd(true)}>
-                  End the retainer
-                </Button>
-              ))}
+            {r.status === 'active' && (
+              <Button variant="outline" size="sm" onClick={() => { end.reset(); setConfirmEnd(true); }}>
+                End the retainer
+              </Button>
+            )}
           </div>
-          {r.status === 'active' && confirmEnd && <p className="mt-xs m-0 text-subhead text-ink-soft">Months not yet made will not be made. What is already made stays.</p>}
+          <ConfirmDelete open={askingBack} title="Take this offer back?" body="It leaves the client's link at once. You can offer again." yes="Yes, take it back" keep="Keep the offer" pending={withdraw.isPending} failed={withdraw.isError} error={withdraw.error ? failed(withdraw.error) : undefined} onYes={() => withdraw.mutate(r.id)} onClose={() => setAskingBack(false)} />
+          <ConfirmDelete open={confirmEnd} title="End this retainer?" body="Months not yet made will not be made. What is already made stays." yes="Yes, end it" pending={end.isPending} failed={end.isError} error={end.error ? failed(end.error) : undefined} onYes={() => end.mutate(r.id)} onClose={() => setConfirmEnd(false)} />
         </>
       )}
       {err && (

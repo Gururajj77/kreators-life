@@ -11,8 +11,7 @@ import { useAuthed, useMe } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { Pencil, Undo2 } from 'lucide-react';
 import { MoreMenu } from '../components/MoreMenu';
-import type { CSSProperties } from 'react';
-import { FIELD } from '../lib/ui';
+import { FIELD, RED_YES_LG } from '../lib/ui';
 import { ErrorLine } from '../components/ErrorLine';
 import { ToggleChevron } from '../components/ToggleMark';
 
@@ -342,8 +341,7 @@ function WithdrawSheet({ p, onClose, onDone }: { p: Proposal | null; onClose: ()
             type="button"
             onClick={() => withdraw.mutate(p.id)}
             disabled={withdraw.isPending}
-            className="toy inline-flex min-h-[56px] items-center justify-center gap-xs rounded-pill bg-r1 px-md text-headline text-on-fill disabled:opacity-50"
-            style={{ '--toy-color': 'var(--deep-servant_leader)' } as CSSProperties}
+            className={RED_YES_LG}
           >
             {withdraw.isPending ? 'Withdrawing' : 'Yes, withdraw it'}
           </button>

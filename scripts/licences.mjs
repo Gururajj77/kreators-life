@@ -81,6 +81,9 @@ for (const dep of Object.keys(webPkg.dependencies ?? {})) {
   else console.warn(`not installed, skipped: ${dep}`);
 }
 
+// The pictures on Home's app tiles are no npm package, so the walk above never meets them: their licence is the file beside them.
+found.set('fluentui-emoji', { name: 'fluentui-emoji', version: '3D pictures on Home', license: 'MIT', repository: 'https://github.com/microsoft/fluentui-emoji', text: readFileSync(join(WEB, 'public', 'apps', 'LICENSE.txt'), 'utf8').trim() });
+
 const packages = [...found.values()].sort((a, b) => a.name.localeCompare(b.name) || a.version.localeCompare(b.version, undefined, { numeric: true }));
 writeFileSync(OUT, JSON.stringify({ generatedAt: new Date().toISOString(), packages }, null, 1) + '\n');
 

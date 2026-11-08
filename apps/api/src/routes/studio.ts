@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { AFFILIATE_SHARE, INVITE_NOT_FOUND, PRODUCT_KINDS, statusesFor, type Availability, type AvailabilityOverride, type Booking, type Coupon, type Lead, type Lesson, type Order, type Product, type ProductInvite, type ProductKind, type ProductStatus, type QuizQuestion, type StudioAnalytics, type Testimonial, parseFaq } from '@kreators/shared';
 import { isUnlockBadgeKey } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { audit, DELETED_NAME, nameOf, newId, notify, nowIso, parseList, pageOf, paged, personBy, httpUrl, str } from '../db';
+import { audit, badLink, blockedByName, DELETED_NAME, LINK_PROBLEM, nameOf, newId, noteStmt, notify, nowIso, parseList, pageOf, paged, personBy, httpUrl, str } from '../db';
 import { logEvent, sendEmail, track } from '../ops';
 import { parseQuiz } from './buyer';
 
@@ -293,6 +293,7 @@ studio.post('/products', async (c) => {
   const kind = (PRODUCT_KINDS as readonly string[]).includes(String(body.kind)) ? (body.kind as ProductKind) : 'digital';
   const title = str(body.title, 120);
   if (!title) return c.json({ error: 'title required' }, 400);
+  if (badLink(body.url)) return c.json({ error: LINK_PROBLEM }, 400);
   const id = newId();
   const now = nowIso();
   await db
@@ -302,7 +303,7 @@ studio.post('/products', async (c) => {
     )
     .bind(
       id, user.id, kind, title, str(body.description, 2000), int(body.pricePoints, 0) ?? 0, int(body.priceCents, 0) ?? 0, str(body.currency, 3, 'INR').toUpperCase() || 'INR',
-      str(body.url, 500) || null, str(body.startsAt, 40) || null, int(body.durationMin, kind === 'session' ? 30 : null, 5, 600), int(body.capacity, null, 1),
+      httpUrl(body.url, 500) || null, str(body.startsAt, 40) || null, int(body.durationMin, kind === 'session' ? 30 : null, 5, 600), int(body.capacity, null, 1),
       httpUrl(body.meetingUrl, 500) || null, body.status === 'live' ? 'live' : 'draft', str(body.cover, 8, ''), 0, now, now,
       body.pwyw === true ? 1 : 0, JSON.stringify(list(body.intake, 8, 200)), httpUrl(body.replayUrl, 500) || null, int(body.replayPoints, 0) ?? 0, JSON.stringify(await ownedIds(db, user.id, body.bundleIds)), str(body.lockedBody, 20000), int(body.responseDays, kind === 'dm' ? 3 : null, 1, 30), body.leadMagnet === true ? 1 : 0, body.certificate === true ? 1 : 0,
       int(body.bufferMin, 0, 0, 120) ?? 0, int(body.noticeHours, 2, 0, 720) ?? 2, int(body.maxDaysAhead, 30, 1, 365) ?? 30, kind === 'membership' ? int(body.periodMonths, null, 1, 36) : null,
@@ -340,6 +341,7 @@ studio.patch('/products/:id', async (c) => {
   const prev = await editableProduct(db, user, c.req.param('id'));
   if (!prev) return c.json({ error: 'not found' }, 404);
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  if (badLink(body.url)) return c.json({ error: LINK_PROBLEM }, 400);
   // Private is for courses only; every other kind is Draft, Live or Archived.
   if ('status' in body && body.status !== prev.status && !(statusesFor(prev.kind) as readonly unknown[]).includes(body.status)) {
     return c.json({ error: body.status === 'private' ? 'Only a course can be private.' : 'That is not a state this product can be in.' }, 400);
@@ -357,7 +359,7 @@ studio.patch('/products/:id', async (c) => {
     )
     .bind(
       str(body.title, 120, prev.title) || prev.title, str(body.description, 2000, prev.description), int(body.pricePoints, prev.price_points) ?? prev.price_points, int(body.priceCents, prev.price_cents) ?? prev.price_cents,
-      str(body.currency, 3, prev.currency).toUpperCase() || prev.currency, 'url' in body ? str(body.url, 500) || null : prev.url, 'startsAt' in body ? str(body.startsAt, 40) || null : prev.starts_at,
+      str(body.currency, 3, prev.currency).toUpperCase() || prev.currency, 'url' in body ? httpUrl(body.url, 500) || null : prev.url, 'startsAt' in body ? str(body.startsAt, 40) || null : prev.starts_at,
       'durationMin' in body ? int(body.durationMin, prev.duration_min, 5, 600) : prev.duration_min, 'capacity' in body ? int(body.capacity, prev.capacity, 1) : prev.capacity,
       'meetingUrl' in body ? httpUrl(body.meetingUrl, 500) || null : prev.meeting_url, status, str(body.cover, 8, prev.cover) || prev.cover, int(body.sortOrder, prev.sort_order) ?? prev.sort_order, nowIso(),
       typeof body.pwyw === 'boolean' ? (body.pwyw ? 1 : 0) : prev.pwyw, 'intake' in body ? JSON.stringify(list(body.intake, 8, 200)) : prev.intake_json, 'replayUrl' in body ? httpUrl(body.replayUrl, 500) || null : prev.replay_url, int(body.replayPoints, prev.replay_points) ?? prev.replay_points,
@@ -419,7 +421,7 @@ studio.post('/products/:id/invites', async (c) => {
   const target = await personBy(db, who);
   // A block either way reads like nobody, so an invite never tells someone they were blocked.
   const blocked = target
-    ? await db.prepare('SELECT 1 FROM blocks WHERE (blocker_id = ?1 AND blocked_id = ?2) OR (blocker_id = ?2 AND blocked_id = ?1) OR (blocker_id = ?3 AND blocked_id = ?2) OR (blocker_id = ?2 AND blocked_id = ?3)').bind(user.id, target.id, row.owner_id).first()
+    ? await db.prepare(`SELECT 1 AS x WHERE ${blockedByName('?1', '?2')} OR ${blockedByName('?3', '?2')}`).bind(user.id, target.id, row.owner_id).first()
     : null;
   if (!target || target.display_name === DELETED_NAME || blocked) return c.json({ error: INVITE_NOT_FOUND }, 404);
   if (target.id === row.owner_id) return c.json({ error: 'That is the course owner. They can always open it.' }, 400);
@@ -628,7 +630,7 @@ studio.post('/bookings/:id', async (c) => {
   await db.prepare('UPDATE bookings SET status = ?, meeting_url = ? WHERE id = ?').bind(status, meetingUrl, prev.id).run();
   if (status !== prev.status) {
     const when = new Date(prev.starts_at).toUTCString();
-    await notify(db, prev.buyer_id, 'booking', status === 'confirmed' ? `Your session with ${nameOf(user)} is confirmed` : status === 'cancelled' ? `Your session with ${nameOf(user)} was cancelled` : `Session marked done`, when, '/library');
+    await notify(db, prev.buyer_id, 'booking', status === 'confirmed' ? `Your session with ${nameOf(user)} is confirmed` : status === 'cancelled' ? `Your session with ${nameOf(user)} was cancelled` : `Session marked done`, when, '/library#bk-heading');
     await logEvent(db, 'booking', prev.id, `booking.${status}`);
     if (status === 'confirmed') {
       await track(db, user.id, 'booking_confirmed', { leadTimeHours: Math.round((new Date(prev.starts_at).getTime() - Date.now()) / 3600_000) });
@@ -681,7 +683,7 @@ studio.post('/broadcasts', async (c) => {
   await db.batch([
     db.prepare('INSERT INTO broadcasts (id, owner_id, title, body, audience, sent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id, user.id, title, text, audience, people.results.length, now),
     ...people.results.map((p) =>
-      db.prepare('INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)').bind(newId(), p.id, 'broadcast', `${nameOf(user)}: ${title}`, text.slice(0, 300), link, now),
+      noteStmt(db, { userId: p.id, kind: 'broadcast', title: `${nameOf(user)}: ${title}`, body: text.slice(0, 300), link, at: now }),
     ),
   ]);
   return c.json({ sent: people.results.length }, 201);

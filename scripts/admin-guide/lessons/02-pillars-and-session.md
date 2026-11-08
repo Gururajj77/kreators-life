@@ -19,7 +19,7 @@ Before the session, a dark card sits near the top: **Set up your pillars: the st
 The session is one chat, hosted by Bumling. First comes the map.
 
 1. A row of seven faces sits at the top, one per relationship.
-2. For each one, Riya ticks every feeling she knows from it, on good days and bad ones.
+2. For each one, Riya ticks every feeling she knows from it, on good days and bad ones. Each feeling carries two tags, its number on the scale and its dimension, and she still picks by the words.
 3. The feelings come in three groups: **Stuck**, **Owning it** and **At ease**.
 4. Love, Teachers or Faith can be set aside with **Not part of my life right now**.
 5. If ticking is hard, **Say it in your own words** opens a box. **Read my words** suggests feelings for free. **Read with AI** shows only with a plan.
@@ -54,7 +54,7 @@ The contract turns the plan into a promise.
 - **When a week falls short:** The streak breaks, Unlocks wait, or The coach sees it.
 - **Type your name to sign:** she types "Riya" and taps **Sign it**.
 
-A switch offers a live call with a coach, for ₹10,000. Booking opens once payments are connected. Saying no changes nothing.
+A switch offers a live call with a coach, for ₹10,000. Saying yes asks the team and charges nothing while payments are off. Saying no changes nothing.
 
 ## Step six: the pyramids
 
@@ -67,7 +67,7 @@ Each focus pillar gets a pyramid. A pyramid has six layers, from the top down:
 5. **Project:** a bunch of tasks with a finish line.
 6. **Task:** the point at the bottom, one small thing she can tick today.
 
-Each pillar's guide asks three quick questions. **Write my own** lets her answer in her own words. Then she picks a value goal and a project for each pillar and taps **Build my pillars**. The chat ends with **Open my pillars** or **Add my interests**.
+Each pillar's guide asks three quick questions. **Write my own** lets her answer in her own words. Then she picks a value goal and a project for each pillar, from six of each, each with a plain why, and taps **Build my pillars**. The chat ends with **Open my pillars** or **Add my interests**.
 
 > **Pro tip:** a person who skips the session can still build a pillar by hand. On a pillar's page, **Set up this pillar** offers the guide's ready pyramid, or **Or start by hand with a foundation**.
 
@@ -86,9 +86,9 @@ Each pillar's guide asks three quick questions. **Write my own** lets her answer
 The strategy session and Pillars are core. You cannot switch them off for anyone, and they are always open.
 
 1. **Privacy:** her map, scores, fears and contract are hers. No admin screen shows them.
-2. **Coaches:** a life coach sees only what Riya shares on that link. There are five switches, including Pillars and pyramids, Routine and contract, and Life map answers. She can turn any off.
+2. **Coaches:** a life coach sees only what Riya shares on that link. There are six switches: Daily and streaks, Pillars and pyramids, Routine and contract, Life map answers, Reflection and Patterns. She can turn any off.
 3. **Making a coach:** use the **Life coaches** tab in Admin to answer people who asked to coach.
-4. **The live call:** until payments are live, a person asks under Help, and the team sets a time by hand.
+4. **The live call:** a person asks from the contract or the life map, every admin hears once in the inbox, and the team writes to set a time. Once payments are live it is paid first, and only the signed webhook marks it paid.
 
 ## The bottom line
 

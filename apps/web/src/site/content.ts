@@ -1,4 +1,4 @@
-import { MODULE_BY_KEY, MODULES, type AppModule, type LifeAreaKey, type ListingType, type RelationshipKey } from '@kreators/shared';
+import { LIVE_CALL_CENTS, MODULE_BY_KEY, MODULES, money, PLAN_CURRENCY, type AppModule, type LifeAreaKey, type ListingType, type RelationshipKey } from '@kreators/shared';
 
 /** The public story for each part of the app: what it is, how it goes, which relationships it serves. */
 export interface FeatureCopy {
@@ -31,7 +31,7 @@ export const FEATURES: Record<string, FeatureCopy> = {
   today: {
     tagline: 'Three small boxes. One better day.',
     pitch: 'Check in, do one small act, tick one task: that is the whole daily ask. Every tick pays xp, and the check-in pays points you can spend.',
-    more: ['A task has a do date, a due date if you want one, and a priority from P0 (do now) to P3 (whenever).', 'It can have a time and a length, repeat, hold subtasks, remind you and start a focus timer.', 'Say what kind of day it is, like deep work or family, and its pillar’s tasks move up. The kinds come from Shubham Aggarwal’s books.', 'Plan my week gives a day to each task that has none, so no day is overloaded. Nothing changes until you keep it.', 'A not to do list keeps a streak for each thing you stay away from.'],
+    more: ['A task has a do date, a due date if you want one, and a priority from P0 (do now) to P3 (whenever).', 'It can have a time and a length, repeat, hold subtasks, remind you and start a focus timer.', 'Time blocks give your day a shape. Pick a day template, like Deep work day or Family day, and its pillar’s tasks move up.', 'Most of the starting templates come from Shubham Aggarwal’s books. Change any of them, or make your own.', 'Plan my week gives a day to each task that has none, so no day is overloaded. Nothing changes until you keep it.', 'A not to do list keeps a streak for each thing you stay away from.'],
     steps: ['Open the app and check in.', 'Do the small act for your weakest pillar.', 'Plan a task or the whole week, then tick each on its day and watch the pyramid light up.'],
     relationships: ['servant_leader', 'friendship', 'parent_child', 'lover_partner', 'self', 'guru', 'divine'],
   },
@@ -45,8 +45,8 @@ export const FEATURES: Record<string, FeatureCopy> = {
   school: {
     tagline: 'Learn with a cohort, not alone.',
     pitch: 'Programs with lessons, assignments and a mentor who reads your work. You finish when a mentor says your work meets the bar, not when a timer runs out.',
-    more: ['Three courses come from Shubham Aggarwal’s books: The Relationship Method and the two Dictionaries of Mistakes.', 'Each lesson marks what comes from the book and gives you one thing to try.'],
-    steps: ['Pick a program and a cohort date.', 'Do the lessons, submit the assignments, join the sessions.', 'Get feedback, finish, and move straight into Work.'],
+    more: ['Your first course, Onboarding into kreators.app, is free and always open.', 'Three courses come from Shubham Aggarwal’s books: The Relationship Method and the two Dictionaries of Mistakes.', 'Each lesson marks what comes from the book and gives you one thing to try.', 'Each cohort has its own discussion, for the people in it. You stay private unless you choose to show your @username.'],
+    steps: ['Pick a program and a cohort date.', 'Do the lessons, submit the work, join the sessions.', 'Get feedback, finish, and move straight into Work.'],
     relationships: ['guru', 'servant_leader', 'self'],
     listing: 'program',
   },
@@ -89,7 +89,7 @@ export const FEATURES: Record<string, FeatureCopy> = {
   run: {
     tagline: 'Run with people, not past them.',
     pitch: 'Run clubs anyone can start. Every run has a start code the host shows at the line: enter it and your run is logged once.',
-    more: ['The minutes count toward your physical score.', 'Badges for the first run, the tenth, and the hundredth kilometre.'],
+    more: ['The minutes count toward your physical score.', 'Badges for the first run, the tenth, and the hundredth kilometre.', 'Log a run or a walk on your own too. It counts as movement and pays nothing.'],
     steps: ['Join a club near you, or start one.', 'At the start line, enter the code. Your run is logged and paid.', 'Watch your kilometres, earn badges, run brand collabs with giveaways.'],
     relationships: ['friendship', 'lover_partner', 'self'],
   },
@@ -123,18 +123,26 @@ export const FEATURES: Record<string, FeatureCopy> = {
   },
   life: {
     tagline: 'Five areas, one picture.',
-    pitch: 'Physical, financial, mental, emotional and spiritual, each scored from what you already log, each part opening the screen where you act on it. Private to you.',
+    pitch: 'Physical, financial, mental, emotional and spiritual, each scored from what you already log, each part opening the screen where you act on it. Only you see them. A life coach sees only the numbers you share.',
+    more: ['See your life by day, week, month, quarter, half year or year: the five areas, then the seven pillars, each next to the period before.', 'Emerging points out what goes together in what you log. It never says one thing caused another.'],
     steps: ['Keep logging what you log.', 'See the five scores and the week-on-week trend.', 'Tap the weakest part and go there.'],
     relationships: ['self', 'servant_leader', 'parent_child', 'lover_partner', 'guru', 'divine'],
   },
   wellbeing: {
     tagline: 'One score, four signals.',
-    pitch: 'Mood, sleep, stress and mindful minutes roll into one number you can watch week by week. Private to you, always.',
+    pitch: 'Mood, sleep, stress and mindful minutes roll into one number you can watch week by week. Only you see it, unless you share your numbers with a life coach.',
     steps: ['Log how you feel in two taps.', 'See the week as a chart.', 'Notice what moves the number.'],
     relationships: ['self', 'lover_partner'],
   },
   mood: { tagline: 'How are you, really?', pitch: 'Pick a face and see the week. That is it.', steps: ['Open Mood.', 'Pick a face.', 'See the pattern.'], relationships: ['self', 'parent_child', 'lover_partner'] },
   sleep: { tagline: 'Hours and quality.', pitch: 'Log last night in a few seconds and see how your sleep lines up with everything else.', steps: ['Log hours.', 'Rate the quality.', 'Watch the week.'], relationships: ['self', 'parent_child', 'lover_partner'] },
+  fitness: {
+    tagline: 'Move, eat, and see the week.',
+    pitch: 'Log a run, a walk or a workout in a few taps, and once a day tick your meals. The week shows as charts only you see, unless you share the numbers with a life coach.',
+    more: ['Mark each meal Good fuel, Tasty or both, and note your fruit and vegetables. Fasting? Tick that instead.', 'Add up protein by what you ate, in katoris, eggs and scoops, against a goal you set.', 'No sizes, no calories, and your weight is never saved: only minutes, distance, grams of protein and a few plain questions.', 'If you take supplements, you can keep your own list. It stays off until you switch it on. The app never suggests one and does not check them.', 'It pays nothing, so the numbers stay honest. Club runs with a start code live in Kreators Run.'],
+    steps: ['Log what you did and for how long.', 'Tick the meals you ate today.', 'Watch your active minutes and your month.'],
+    relationships: ['self', 'parent_child', 'lover_partner', 'friendship'],
+  },
   stress: { tagline: 'Level, and what is behind it.', pitch: 'Name the stress and the cause. Patterns show up faster than you expect.', steps: ['Set the level.', 'Name a cause.', 'See what repeats.'], relationships: ['self', 'servant_leader', 'parent_child', 'lover_partner'] },
   mindful: {
     tagline: 'Breathe, focus, and see how it went.',
@@ -146,14 +154,15 @@ export const FEATURES: Record<string, FeatureCopy> = {
   journal: {
     tagline: 'Write it down.',
     pitch: 'Entries with an emotion and a stress level. Nobody else sees them: not brands, not staff, not the leaderboard.',
+    more: ['Gratitude for today: three short lines, each under a prompt. A prompt you answered does not come back until you have been through the others.', 'Stuck? Prompt me gives you a question from sixteen categories, with why it helps.'],
     steps: ['Write a few lines.', 'Tag how you felt.', 'Look back a month later.'],
     relationships: ['self', 'parent_child', 'lover_partner', 'divine'],
   },
   reviews: {
-    tagline: 'Look back, by week, month, quarter or half year.',
+    tagline: 'Look back, from a day to a year.',
     pitch: 'See the numbers from every app for the period you pick, next to the one before. Then answer a few questions and keep one line.',
-    more: ['The numbers: check-ins, tasks, xp, kept days, mood, sleep, money, sales, lessons and people.', 'Get a reminder in your inbox when a planned review is due.', 'If you run a business, one switch adds business metrics, for your eyes only.'],
-    steps: ['Pick a period, or plan the next review on the calendar and repeat it.', 'Read the numbers, and the tasks you brought to it.', 'Answer the questions, rate it, keep one line.'],
+    more: ['Each review walks one layer of your pyramids, pillar by pillar: tasks each day, projects each week, up to foundations each year.', 'The numbers: check-ins, tasks, habits, xp, kept days, mood, sleep, water, focus, money, sales, lessons and people.', 'Each built-in question says the idea it comes from, such as CBT, ACT or the Gita.', 'Get a reminder in your inbox when a planned review is due.', 'If you run a business, one switch adds business metrics, for your eyes only.'],
+    steps: ['Pick a period, or plan the next review on the calendar and repeat it.', 'Read the numbers, your layer by pillar, and the tasks you brought.', 'Answer the questions, rate it, keep one line.'],
     relationships: ['self', 'parent_child', 'lover_partner', 'guru', 'divine'],
   },
   companion: {
@@ -274,8 +283,8 @@ export const FEATURES: Record<string, FeatureCopy> = {
   coaching: {
     tagline: 'A life coach in your corner.',
     pitch: 'Life coaches the team chose, with the Life coach badge. You pick what they see, never your journal.',
-    more: ['Ask one, or say yes when one asks.', 'Every step they take is in a change log you both read.'],
-    steps: ['Find a life coach and ask, or answer a coach who asked you.', 'Pick what they see: daily, pillars, routine, life map or reflection.', 'Read their notes, tick their tasks, and end it any time.'],
+    more: ['Ask one, say yes when one asks, or open a coach’s invite link.', 'Your coach reads a report of only the parts you share, and leaves notes and tasks for you.', 'Every step they take is in a change log you both read.'],
+    steps: ['Find a life coach and ask, or answer a coach who asked you.', 'Pick what they see: daily, pillars, routine, life map, reflection or patterns.', 'Read their notes, tick their tasks, and end it any time.'],
     relationships: ['guru', 'lover_partner', 'self', 'divine'],
   },
 };
@@ -296,7 +305,7 @@ export function featuresForRelationship(key: RelationshipKey): AppModule[] {
 
 /** The five areas of life, and which apps serve each. Another way to read the same seven relationships. */
 export const LIFE_AREA_FEATURES: Record<LifeAreaKey, string[]> = {
-  physical: ['run', 'wellbeing', 'sleep', 'mindful', 'life', 'store'],
+  physical: ['fitness', 'run', 'wellbeing', 'sleep', 'mindful', 'life', 'store'],
   financial: ['finance', 'shop', 'work', 'army', 'agency', 'win', 'fund', 'store', 'audience', 'content'],
   mental: ['stress', 'school', 'knowledge', 'library', 'tools', 'reviews', 'tv'],
   emotional: ['mood', 'journal', 'companion', 'discover', 'coaching', 'bond', 'community', 'party', 'circles', 'cards', 'profile'],
@@ -354,7 +363,7 @@ export const BRAND_PITCH = {
 
 /** The doubts a first-time visitor has, most common first. Each answer accepts the worry, then answers it. */
 export const SITE_FAQ: { q: string; a: string }[] = [
-  { q: 'What’s the catch?', a: 'Fair question. The daily game and every app are free to start and free to stay, Agency included: we take nothing from what you invoice. Two things cost money. Typing to the assistant needs a plan, because the model costs us money; plans are not on sale yet. The Shop takes 5% of each sale. Partner links in the Store may earn us a share, and every card says so.' },
+  { q: 'What’s the catch?', a: `Fair question. The daily game and every app are free to start and free to stay, Agency included: we take nothing from what you invoice. Three things cost money. Typing to the assistant needs a plan, because the model costs us money; plans are not on sale yet. The Shop takes 5% of each sale. An optional live call with a coach costs ${money(LIVE_CALL_CENTS, PLAN_CURRENCY)}, and it is not on sale yet either. Partner links in the Store may earn us a share, and every card says so.` },
   { q: 'How is this different from self-help?', a: 'Most self-help picks one part of your life. kreators.app works on all seven relationships at once, because each one holds up the others. And you do not only read a plan: you tick it, one small act and one task a day, on pyramids you built.' },
   { q: 'I run a small agency. Is this for me?', a: 'Yes. Agency is for a content agency or a freelance creator. Each client gets a dashboard with their deliverables moving from idea to published, your time, invoices and agreements. You can share one page with a client, and they can approve or send back what is waiting. It is switched off until you want it.' },
   { q: 'What can my client see?', a: 'Only what you switch on. You pick the parts (what is waiting, what is coming, what is live, the month so far) and whether they can approve, send back or write a note. They never see your fees, your private notes, your time line by line or your other clients. You can preview the page first, and a fresh link closes the old one.' },
@@ -366,9 +375,9 @@ export const SITE_FAQ: { q: string; a: string }[] = [
   { q: 'I’m doing fine. Is it still for me?', a: 'Yes. It is not only for fixing what hurts. Your pillars keep the good parts strong, and reviews show what is working, so you keep doing it.' },
   { q: 'Apps like this never stick for me.', a: 'That isn’t you. Most apps track one part of life and forget the other six. Here each tick climbs a pillar you chose, toward a foundation you wrote. And a task can only be ticked from its do date, so the plan stays honest.' },
   { q: 'Is the pay real?', a: 'It is real, and it is careful. Win pays per verified view, not per follower, and a reviewer checks before anything pays. Everything that pays out has a wait or a person who checks it. Points work today; money checkout turns on when payments go live.' },
-  { q: 'Will I be on my own?', a: 'No. Bumling, the app’s own guide, and seven characters walk with you. Every app ends with a How it works section, Help answers questions, and you can work with a life coach if you want one.' },
-  { q: 'I’m not ready for groups or events.', a: 'Start on your own. Circles, Run, Party and Community stay off until you or the setup chat switch them on, and your journal and Discover results are yours alone. Join people when you are ready.' },
+  { q: 'Will I be on my own?', a: 'No. Bumling, the app’s own guide, and seven characters walk with you. A free first course shows you around, every app ends with a How it works section, Help answers questions, and you can work with a life coach if you want one.' },
+  { q: 'I’m not ready for groups or events.', a: 'Start on your own. Circles, Run, Party and Community stay hidden until you or the setup chat bring them in, and your journal and Discover results are yours alone. Join people when you are ready.' },
   { q: 'Is there proof it works?', a: 'We will not show you a rating or a study we cannot point to. What we can show is how it works: the rules on this page are the rules the app keeps. Try it for a week and see what your first review says.' },
-  { q: 'Can I leave?', a: 'Any time. From the Profile tab you can export everything, erase your progress, or delete your account. Switching an app off is one tap.' },
+  { q: 'Can I leave?', a: 'Any time. From the Profile tab you can export everything, erase your progress, or delete your account. Hiding an app is one tap, and nothing is deleted.' },
   { q: 'Why do you ask for my phone and birthday?', a: 'So that everyone here is 18 or over. Nobody under 18 gets an account. Neither your phone number nor your birthday is ever shown to anyone else, and you can change the phone number under the Profile tab.' },
 ];

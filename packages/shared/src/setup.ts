@@ -28,6 +28,8 @@ export interface IdentityOption {
   blurb: string;
   /** How a reason says it, after "because": "you are studying". */
   because: string;
+  /** How the one-line summary says it, when the label does not read after "A": "yogi" for Yoga and breath. */
+  noun?: string;
   /** Typed words that tag it: lower case, whole words or phrases. */
   words: readonly string[];
   skill?: (typeof SKILLS)[number];
@@ -48,13 +50,13 @@ export const IDENTITIES: readonly IdentityOption[] = [
   { key: 'creator', label: 'Content creator', icon: 'Clapperboard', kind: 'role', blurb: 'I make content', because: 'you make content', words: ['creator', 'content creator', 'influencer', 'youtuber', 'instagrammer', 'vlogger', 'make content', 'create content', 'post content', 'make videos', 'my channel', 'my page', 'my followers', 'my subscribers'], focus: 'Creating', dayType: 'create', apps: { profile: 2, army: 2, win: 2, work: 1, content: 1, tools: 1, agency: 1 } },
   { key: 'freelancer', label: 'Freelancer', icon: 'Luggage', kind: 'role', blurb: 'I freelance for clients', because: 'you make things for clients', words: ['freelance', 'freelancer', 'freelancing', 'clients', 'my clients', 'client work', 'fiverr', 'upwork'], focus: 'Creating', apps: { work: 3, profile: 2, agency: 2, army: 1, finance: 1 } },
   { key: 'student', label: 'Student', icon: 'GraduationCap', kind: 'role', blurb: "I'm a student", because: 'you are studying', words: ['student', 'studying', 'college', 'university', 'uni', 'school', 'exams', 'semester', 'degree', 'final year', 'class 12'], focus: 'Study', dayType: 'learning', apps: { school: 3, work: 1, knowledge: 1, circles: 1 } },
-  { key: 'employee', label: 'Employee', icon: 'Briefcase', kind: 'role', blurb: 'I have a job', because: 'you have a job', words: ['my job', 'day job', 'full time job', 'i have a job', 'office', 'employee', 'corporate', 'salaried', 'working professional', '9 to 5', '9-5', 'nine to five', 'i work at', 'i work in'], focus: 'Work', apps: { reviews: 2, finance: 2, journal: 1, school: 1 } },
+  { key: 'employee', label: 'Employee', icon: 'Briefcase', kind: 'role', blurb: 'I have a job', because: 'you have a job', words: ['my job', 'day job', 'full time job', 'i have a job', 'office', 'employee', 'corporate', 'salaried', 'working professional', '9 to 5', '9-5', 'nine to five', 'i work at', 'i work in'], focus: 'Work', apps: { reviews: 2, finance: 2, journal: 1, school: 1 }, why: { reviews: 'you have a job, and a short look back shows where the week went', journal: 'you have a job, and a few lines a day keep track of how it feels' } },
   { key: 'founder', label: 'Founder', icon: 'Rocket', kind: 'role', blurb: 'I run a business', because: 'you run a business', words: ['founder', 'co-founder', 'cofounder', 'my business', 'own business', 'small business', 'startup', 'my brand', 'brand owner', 'business owner', 'shop owner', 'store owner', 'entrepreneur', 'my shop', 'my store', 'my company', 'run a business', 'run a brand', 'run a company', 'run a shop', 'run a store', 'run a startup', 'run a small', 'own a business', 'own a shop', 'own brand', 'd2c'], focus: 'Business', apps: { shop: 2, finance: 3, audience: 2, content: 2, automations: 1 } },
   { key: 'agency_owner', label: 'Agency or studio owner', icon: 'FolderKanban', kind: 'role', blurb: 'I run a content agency or studio', because: 'you run a content agency or studio', words: ['agency owner', 'own an agency', 'run an agency', 'run a content agency', 'my agency', 'content agency', 'creative agency', 'video agency', 'marketing agency', 'social media agency', 'production house', 'my studio', 'studio owner', 'retainer', 'retainers'], focus: 'Business', apps: { agency: 3, finance: 2, profile: 2, reviews: 1, army: 1 }, why: { agency: 'you run a content agency or studio, and its Team tab brings in your creators, editors and clients' } },
   { key: 'agency_team', label: 'Agency team member', icon: 'Users', kind: 'role', blurb: "I work in an agency's team", because: "you work in an agency's team", words: ['agency team', 'agency team member', 'agency job', 'i work at an agency', 'i work in an agency', 'i work for an agency', 'work at an agency', 'work in an agency', 'work for an agency', 'at a content agency', 'in a content agency', 'for a content agency', 'at a creative agency', 'at a video agency', 'at a marketing agency', 'at a social media agency', 'at a production house', 'join an agency'], focus: 'Work', dayType: 'deep_work', apps: { agency: 3, army: 1, work: 1, school: 1 }, why: { agency: "you work in an agency's team, and the owner lets you in from Agency's Team tab" } },
   { key: 'brand_client', label: 'Brand or client', icon: 'Store', kind: 'role', blurb: 'I hire creators for a brand', because: 'you hire creators for a brand', words: ['hire creators', 'hiring creators', 'hire influencers', 'hiring influencers', 'hire a creator', 'hire an editor', 'hire editors', 'hire an agency', 'hired an agency', 'brand manager', 'brand team', 'marketing team', 'marketing manager', 'influencer marketing', 'creator campaigns', 'influencer campaigns', 'run campaigns', 'our brand', "i'm the client", 'i am the client', 'on the brand side'], focus: 'Business', apps: { army: 3, agency: 2, work: 1, finance: 1 }, why: { army: 'you hire creators, and Army is where a brand runs its campaigns with them', agency: 'you hire creators, and Agency is where they share your pieces and paperwork with you' } },
   { key: 'explorer', label: 'Explorer', icon: 'Compass', kind: 'role', blurb: "I'm between things", because: 'you are working out what is next', words: ['between jobs', 'unemployed', 'jobless', 'gap year', 'figuring out', 'figuring it out', 'career change', 'quit my job', 'looking for a job', 'looking for work', 'fresh start', 'what is next'], focus: 'Other', apps: { work: 3, school: 2, knowledge: 1, journal: 1 } },
-  { key: 'coach', label: 'Life coach', icon: 'Target', kind: 'role', blurb: "I'm a life coach", because: 'you coach people', words: ["i'm a life coach", 'i am a life coach', 'im a life coach', "i'm a coach", 'i am a coach', 'im a coach', 'work as a coach', 'work as a life coach', 'certified coach', 'certified life coach', 'i coach people', 'coach for a living'], focus: 'Work', apps: { coaching: 3, shop: 2, profile: 1 } },
+  { key: 'coach', label: 'Life coach', icon: 'Target', kind: 'role', blurb: "I'm a life coach", because: 'you coach people', words: ["i'm a life coach", 'i am a life coach', 'im a life coach', "i'm a coach", 'i am a coach', 'im a coach', 'work as a coach', 'work as a life coach', 'certified coach', 'certified life coach', 'i coach people', 'coach for a living'], focus: 'Work', apps: { coaching: 3, shop: 2, profile: 1 }, why: { coaching: 'you coach people, and each student has a report of what they share' } },
   { key: 'run_host', label: 'Run club host', icon: 'Flag', kind: 'role', blurb: 'I host runs or a run club', because: 'you host runs', words: ['run club host', 'host runs', 'host a run', 'hosting runs', 'host a run club', 'run a run club', 'my run club', 'run club organiser', 'run club organizer', 'run leader', 'lead runs', 'pacer'], interest: 'Running', focus: 'Other', dayType: 'friends', apps: { run: 3, party: 2, community: 1, profile: 1 } },
   { key: 'parent', label: 'Parent or carer', icon: 'HandHeart', kind: 'role', blurb: 'I look after family', because: 'you look after family', words: ['parent', 'mom', 'mum', 'mother', 'dad', 'father', 'my kids', 'my son', 'my daughter', 'children', 'my baby', 'carer', 'caregiver', 'looking after'], focus: 'Family', interest: 'Parenting', dayType: 'family', apps: { sleep: 2, stress: 2, journal: 1, mood: 1, finance: 1 } },
   // What a creator makes.
@@ -80,15 +82,17 @@ export const IDENTITIES: readonly IdentityOption[] = [
   { key: 'earning', label: 'Earning', icon: 'Coins', kind: 'stage', blurb: 'Money comes in', because: 'your work already earns', words: ['brand deals', 'brand deal', 'sponsorships', 'sponsored', 'monetized', 'monetised', 'paid collabs', 'already earning'], level: 'Working', apps: { finance: 2, shop: 1, audience: 1, army: 1 } },
   { key: 'full_time', label: 'Full time', icon: 'Trophy', kind: 'stage', blurb: 'It is my living', because: 'this is your living', words: ['full time creator', 'full-time creator', 'creator full time', 'my living', 'main income'], level: 'Established', apps: { finance: 3, shop: 2, audience: 2, automations: 1, club: 1 } },
   // The rest of life: from your own words, or the extra pills on the first card.
-  { key: 'runner', label: 'Runner', icon: 'Footprints', kind: 'life', blurb: 'I run', because: 'you run', words: ['runner', 'running', 'marathon', 'half marathon', '5k', '10k', 'jogging'], interest: 'Running', apps: { run: 3, life: 1 } },
-  { key: 'gym', label: 'Gym regular', icon: 'Dumbbell', kind: 'life', blurb: 'I train', because: 'you train', words: ['gym', 'lifting', 'weights', 'workouts', 'bodybuilding', 'crossfit'], interest: 'Gym', apps: { life: 2, wellbeing: 1, sleep: 1 } },
-  { key: 'yogi', label: 'Yoga and breath', icon: 'Flower2', kind: 'life', blurb: 'I do yoga or meditate', because: 'you do yoga or meditate', words: ['yoga', 'meditate', 'meditation', 'breathwork', 'pranayama'], interest: 'Yoga', apps: { mindful: 3, wellbeing: 1 } },
+  { key: 'runner', label: 'Runner', icon: 'Footprints', kind: 'life', blurb: 'I run', because: 'you run', words: ['runner', 'running', 'marathon', 'half marathon', '5k', '10k', 'jogging', 'jogger', 'go for a run', 'go for runs'], interest: 'Running', apps: { run: 3, fitness: 2, life: 1 }, why: { fitness: 'you run, and Fitness keeps every run and walk in one place' } },
+  { key: 'gym', label: 'Gym regular', icon: 'Dumbbell', kind: 'life', blurb: 'I train', because: 'you train', words: ['gym', 'lifting', 'weights', 'workouts', 'bodybuilding', 'crossfit', 'work out', 'working out', 'strength training'], interest: 'Gym', apps: { fitness: 3, life: 2, wellbeing: 1, sleep: 1 }, why: { fitness: 'you train, and Fitness keeps every workout in one place' } },
+  { key: 'yogi', label: 'Yoga and breath', icon: 'Flower2', kind: 'life', blurb: 'I do yoga or meditate', because: 'you do yoga or meditate', noun: 'yogi', words: ['yoga', 'yogi', 'meditate', 'meditation', 'breathwork', 'pranayama', 'pranayam'], interest: 'Yoga', apps: { mindful: 3, fitness: 2, wellbeing: 1 }, why: { fitness: 'you do yoga or meditate, and Fitness counts yoga as movement' } },
+  // Swim is one of Fitness's eight kinds of movement, and Swimming one of the interests, so someone who swims gets a tag like someone who runs.
+  { key: 'swimmer', label: 'Swimmer', icon: 'WavesHorizontal', kind: 'life', blurb: 'I swim', because: 'you swim', words: ['swimmer', 'swimming', 'swim', 'swim laps', 'laps in the pool'], interest: 'Swimming', apps: { fitness: 3, life: 1, wellbeing: 1 }, why: { fitness: 'you swim, and Fitness keeps every swim in one place' } },
   // A reader leans to the books on Home, the short reads in Knowledge and School's courses.
   { key: 'reader', label: 'Reader', icon: 'BookOpen', kind: 'life', blurb: 'I read a lot', because: 'you read', words: ['reader', 'reading', 'books', 'bookworm'], interest: 'Books', dayType: 'learning', apps: { knowledge: 2, school: 2, journal: 1 } },
   { key: 'gamer', label: 'Gamer', icon: 'Gamepad2', kind: 'life', blurb: 'I play games', because: 'you play games', words: ['gamer', 'gaming', 'video games', 'playstation', 'xbox', 'esports', 'bgmi', 'valorant'], interest: 'Gaming', apps: { community: 2, circles: 1 } },
   { key: 'traveller', label: 'Traveller', icon: 'Plane', kind: 'life', blurb: 'I travel when I can', because: 'you travel', words: ['travel', 'traveller', 'traveler', 'travelling', 'traveling', 'backpacking'], interest: 'Travel', apps: { party: 1, finance: 1 } },
   { key: 'night_owl', label: 'Night owl', icon: 'MoonStar', kind: 'life', blurb: 'I come alive late', because: 'you are up late', words: ['night owl', 'up late', 'sleep late', 'late nights', 'nocturnal', 'stay up late'], apps: { sleep: 2 } },
-  { key: 'spiritual', label: 'Spiritual', icon: 'Sparkle', kind: 'life', blurb: 'Faith or practice matters to me', because: 'faith or practice matters to you', words: ['spiritual', 'spirituality', 'my faith', 'god', 'temple', 'church', 'mosque', 'prayer', 'pray', 'bhakti'], interest: 'Spirituality', apps: { mindful: 2, journal: 1 } },
+  { key: 'spiritual', label: 'Spiritual', icon: 'Sparkle', kind: 'life', blurb: 'Faith or practice matters to me', because: 'faith or practice matters to you', noun: 'spiritual person', words: ['spiritual', 'spirituality', 'my faith', 'god', 'temple', 'church', 'mosque', 'prayer', 'pray', 'bhakti'], interest: 'Spirituality', apps: { mindful: 2, journal: 1 } },
   { key: 'volunteer', label: 'Volunteer', icon: 'HandHelping', kind: 'life', blurb: 'I give my time', because: 'you give your time', words: ['volunteer', 'volunteering', 'ngo', 'charity', 'social work'], interest: 'Volunteering', apps: { community: 2, party: 1 } },
 ];
 
@@ -127,6 +131,8 @@ export interface SetupGoal {
   /** The profile goal it fills, when one fits. */
   profileGoal?: (typeof GOALS)[number];
   apps: Readonly<Record<string, number>>;
+  /** A reason for one app that says more than `because`, as on a tag. */
+  why?: Readonly<Record<string, string>>;
 }
 
 export const SETUP_GOALS: readonly SetupGoal[] = [
@@ -137,12 +143,13 @@ export const SETUP_GOALS: readonly SetupGoal[] = [
   { key: 'sell', label: 'Sell what I make', icon: 'ShoppingBag', blurb: 'Courses, downloads, sessions and memberships, in Shop.', because: 'you want to sell', to: 'sell what you make', words: ['sell', 'selling', 'products', 'merch', 'my course', 'digital products', 'presets', 'ebook', 'my services'], profileGoal: 'Sell what I make', apps: { shop: 3, profile: 2, finance: 1, audience: 1, automations: 1 } },
   { key: 'money', label: 'Sort out my money', icon: 'Wallet', blurb: 'Money in and out, dues, budgets and goals, in Finance.', because: 'you want your money sorted', to: 'sort out your money', words: ['save money', 'saving', 'savings', 'budget', 'budgeting', 'debt', 'loan', 'expenses', 'spending', 'my money', 'finances', 'taxes'], apps: { finance: 3, reviews: 1 } },
   { key: 'people', label: 'Meet new people', icon: 'UsersRound', blurb: 'Small tables near you, a feed, events and friends.', because: 'you want to meet people', to: 'meet people', words: ['meet people', 'friends', 'make friends', 'network', 'networking', 'community', 'people like me', 'collab', 'collabs', 'collaborate', 'new to the city', 'new in town', 'just moved'], profileGoal: 'Collaborate', apps: { circles: 3, community: 2, bond: 2, party: 2, club: 1 } },
-  { key: 'health', label: 'Feel better day to day', icon: 'HeartPulse', blurb: 'Mood, sleep, stress and calm, on one score.', because: 'you want to feel better day to day', to: 'feel better day to day', words: ['feel better', 'mood', 'mental health', 'calm', 'peace', 'health', 'healthy', 'happier', 'sleep better'], profileGoal: 'Get healthier habits', apps: { wellbeing: 3, mood: 2, sleep: 2, stress: 2, mindful: 2, life: 1 } },
-  { key: 'move', label: 'Move more', icon: 'Footprints', blurb: 'Run clubs, movement minutes and a body score.', because: 'you want to move more', to: 'move more', words: ['fitness', 'get fit', 'lose weight', 'weight loss', 'exercise', 'run more', 'move more', 'workout', 'be active'], profileGoal: 'Get healthier habits', apps: { run: 3, life: 2, wellbeing: 1 } },
+  { key: 'health', label: 'Feel better day to day', icon: 'HeartPulse', blurb: 'Mood, sleep, stress and calm, on one score.', because: 'you want to feel better day to day', to: 'feel better day to day', words: ['feel better', 'mood', 'mental health', 'calm', 'peace', 'health', 'healthy', 'happier', 'sleep better'], profileGoal: 'Get healthier habits', apps: { wellbeing: 3, mood: 2, sleep: 2, stress: 2, mindful: 2, life: 1, fitness: 1 } },
+  { key: 'move', label: 'Move more', icon: 'Footprints', blurb: 'Log runs, walks and workouts in Fitness, or join a run club.', because: 'you want to move more', to: 'move more', words: ['fitness', 'get fit', 'lose weight', 'weight loss', 'exercise', 'run more', 'move more', 'workout', 'be active', 'walk more', 'more walks', 'swim more', 'cycling', 'play sports', 'play a sport'], profileGoal: 'Get healthier habits', apps: { fitness: 3, run: 2, life: 2, wellbeing: 1 } },
+  { key: 'eat', label: 'Eat well', icon: 'UtensilsCrossed', blurb: 'A quick check-in on your meals each day, in Fitness. Nothing to weigh.', because: 'you want to eat well', to: 'eat well', words: ['eat well', 'eat better', 'eating well', 'eating better', 'eat healthy', 'eat healthier', 'healthy eating', 'my diet', 'diet', 'nutrition', 'protein', 'my meals', 'fruit and veg'], profileGoal: 'Get healthier habits', apps: { fitness: 3, life: 1, wellbeing: 1 } },
   { key: 'life', label: 'Work on myself', icon: 'Landmark', blurb: 'The deeper path: your seven relationships, a routine and a plan.', because: 'you want to work on yourself', to: 'work on yourself', words: ['my life', 'life together', 'purpose', 'discipline', 'self improvement', 'self-improvement', 'better person', 'habits', 'routine', 'relationships', 'grow as a person'], apps: { journal: 2, reviews: 2, life: 2, mindful: 1, discover: 2 } },
   { key: 'clients', label: 'Manage my clients and invoices', icon: 'FolderKanban', blurb: 'Clients, deliverables, time, invoices and approvals, in Agency.', because: 'you want your client work in one place', to: 'manage your clients and invoices', words: ['manage clients', 'manage my clients', 'client management', 'invoice', 'invoices', 'invoicing', 'send invoices', 'bill clients', 'client approvals', 'client portal'], apps: { agency: 3, finance: 2, shop: 1 } },
-  { key: 'plan', label: 'Plan my week and stay on track', icon: 'CalendarRange', blurb: 'Plan my week on Daily is always on. Reviews adds a calendar and reminders for looking back.', because: 'you want to plan your week and stay on track', to: 'plan your week and stay on track', words: ['plan my week', 'plan my day', 'plan my time', 'stay on track', 'stay organized', 'stay organised', 'time management', 'manage my time', 'be more productive', 'to-do list', 'to do list'], apps: { reviews: 3, mindful: 1, journal: 1, life: 1 } },
-  { key: 'find_coach', label: 'Work with a life coach', icon: 'Target', blurb: 'A coach the team checked sees what you share and helps you keep going.', because: 'you want a coach in your corner', to: 'work with a life coach', words: ['need a life coach', 'want a life coach', 'find a life coach', 'get a life coach', 'need a coach', 'want a coach', 'find a coach', 'get a coach', 'my coach', 'accountability', 'keep me accountable', 'hold me accountable'], apps: { coaching: 3, life: 1, reviews: 1 } },
+  { key: 'plan', label: 'Plan my week and stay on track', icon: 'CalendarRange', blurb: 'Plan my week on Daily is always on. Reviews adds a calendar and reminders for looking back.', because: 'you want to plan your week and stay on track', to: 'plan your week and stay on track', words: ['plan my week', 'plan my day', 'plan my time', 'stay on track', 'stay organized', 'stay organised', 'time management', 'manage my time', 'be more productive', 'to-do list', 'to do list'], apps: { reviews: 3, mindful: 1, journal: 1, life: 1 }, why: { journal: 'you want to stay on track, and a few lines a day show how it went' } },
+  { key: 'find_coach', label: 'Work with a life coach', icon: 'Target', blurb: 'A coach the team checked sees what you share and helps you keep going.', because: 'you want a coach in your corner', to: 'work with a life coach', words: ['need a life coach', 'want a life coach', 'find a life coach', 'get a life coach', 'need a coach', 'want a coach', 'find a coach', 'get a coach', 'my coach', 'accountability', 'keep me accountable', 'hold me accountable'], apps: { coaching: 3, life: 1, reviews: 1 }, why: { reviews: 'you want a coach in your corner, and a coach can read the reviews you share' } },
 ];
 
 export const SETUP_GOAL_BY_KEY: Record<string, SetupGoal> = byKey(SETUP_GOALS.map((g) => [g.key, g]));
@@ -158,16 +165,18 @@ export interface SetupBlocker {
   apps: Readonly<Record<string, number>>;
   /** With this ticked, at most this many apps come on: less to look at, not more. Time short: three; focus hard: four. */
   cap?: number;
+  /** A reason for one app that says more than `because`, as on a tag. */
+  why?: Readonly<Record<string, string>>;
 }
 
 export const SETUP_BLOCKERS: readonly SetupBlocker[] = [
   { key: 'time', label: 'Not enough time', icon: 'Hourglass', because: 'time is short', words: ['no time', 'not enough time', 'busy', 'too busy', 'short on time'], cap: 3, apps: {} },
   { key: 'focus', label: 'Hard to focus (ADHD counts)', icon: 'Tornado', because: 'focus is hard', words: ['adhd', 'distracted', 'procrastinate', 'procrastinating', 'procrastination', "can't focus", 'cant focus', 'hard to focus', 'overthinking'], cap: 4, apps: { mindful: 1 } },
-  { key: 'energy', label: 'Low energy or feeling lazy', icon: 'BatteryLow', because: 'energy runs low', words: ['lazy', 'laziness', 'tired', 'no energy', 'low energy', 'unmotivated', 'no motivation', 'burnt out', 'burned out', 'burnout', 'exhausted'], apps: { sleep: 2, mood: 1, wellbeing: 1 } },
+  { key: 'energy', label: 'Low energy or feeling lazy', icon: 'BatteryLow', because: 'energy runs low', words: ['lazy', 'laziness', 'tired', 'no energy', 'low energy', 'unmotivated', 'no motivation', 'burnt out', 'burned out', 'burnout', 'exhausted'], apps: { sleep: 2, fitness: 2, mood: 1, wellbeing: 1 }, why: { fitness: 'energy runs low, and Fitness counts even a short walk' } },
   { key: 'start', label: 'Not sure where to start', icon: 'Signpost', because: 'you are not sure where to start', words: ['where to start', 'how to start', "don't know how", 'dont know how', 'confused', 'feel lost', "i'm lost", 'no idea'], apps: { school: 2, knowledge: 2 } },
   { key: 'alone', label: 'Doing it alone', icon: 'UserRound', because: 'you are doing it alone', words: ['alone', 'lonely', 'loneliness', 'no friends', 'by myself', 'isolated', 'on my own'], apps: { circles: 2, community: 2, bond: 1, party: 1 } },
   { key: 'cash', label: 'Money is tight', icon: 'WalletMinimal', because: 'money is tight', words: ['broke', 'no money', 'money is tight', 'tight on money', "can't afford", 'cant afford', 'in debt'], apps: { finance: 2, win: 1, work: 1 } },
-  { key: 'stress', label: 'Stress or worry', icon: 'WavesHorizontal', because: 'stress gets in', words: ['stress', 'stressed', 'anxious', 'anxiety', 'worry', 'worried', 'overwhelmed', 'pressure'], apps: { stress: 2, journal: 2, mindful: 1 } },
+  { key: 'stress', label: 'Stress or worry', icon: 'WavesHorizontal', because: 'stress gets in the way', words: ['stress', 'stressed', 'anxious', 'anxiety', 'worry', 'worried', 'overwhelmed', 'pressure'], apps: { stress: 2, journal: 2, mindful: 1 } },
   { key: 'sleep', label: 'Bad sleep', icon: 'Moon', because: 'sleep is off', words: ['bad sleep', 'insomnia', "can't sleep", 'cant sleep', 'sleep badly', 'no sleep', 'sleep at 4', 'sleep at 3'], apps: { sleep: 3 } },
 ];
 
@@ -211,6 +220,7 @@ export const SETUP_COMBOS: readonly SetupCombo[] = [
   { when: ['earning', 'money'], apps: { finance: 2 }, because: 'creator money comes in bits, so it helps to see it in one place' },
   { when: ['full_time', 'sell'], apps: { automations: 2, shop: 1 }, because: 'this is your living, so selling should run while you sleep' },
   { when: ['runner', 'people'], apps: { run: 2 }, because: 'you run and want company' },
+  { when: ['gym', 'move'], apps: { fitness: 2 }, because: 'you train and want to see every workout in one place' },
   { when: ['night_owl', 'health'], apps: { sleep: 2 }, because: 'you are up late and want to feel better' },
   { when: ['student', 'earn'], apps: { work: 2, win: 2 }, because: 'you study and want to earn on the side' },
   { when: ['student', 'work'], apps: { work: 2 }, because: 'you study and want paid work that fits around classes' },
@@ -238,7 +248,8 @@ export const SETUP_COMBOS: readonly SetupCombo[] = [
   { when: ['social', 'clients'], apps: { agency: 2 }, because: 'you run pages for brands and want their posts and approvals in one place' },
   { when: ['editor', 'clients'], apps: { agency: 2 }, because: 'you edit for clients and want their pieces and approvals in one place' },
   { when: ['founder', 'plan'], apps: { reviews: 2 }, because: 'you run a business and can track its numbers in each review' },
-  { when: ['plan', 'focus'], apps: { mindful: 2, reviews: 1 }, because: 'you want to stay on track and focus is hard, so short focus sessions help' },
+  { when: ['plan', 'focus'], apps: { mindful: 2 }, because: 'you want to stay on track and focus is hard, so short focus sessions help' },
+  { when: ['plan', 'focus'], apps: { reviews: 1 }, because: 'you want to stay on track and focus is hard, so a short look back helps' },
   { when: ['founder', 'sell'], apps: { shop: 2, automations: 1 }, because: 'you run a business and want to sell more' },
   { when: ['founder', 'grow'], apps: { audience: 2, content: 1 }, because: 'you run a business and want more people to know it' },
   { when: ['founder', 'money'], apps: { finance: 2, reviews: 1 }, because: 'a business needs its money in one place' },
@@ -246,7 +257,9 @@ export const SETUP_COMBOS: readonly SetupCombo[] = [
   { when: ['parent', 'money'], apps: { finance: 1 }, because: 'a family budget is easier in one place' },
   { when: ['move', 'people'], apps: { run: 2 }, because: 'run clubs are moving and meeting in one' },
   { when: ['people', 'alone'], apps: { circles: 2, bond: 1 }, because: 'you do it alone and want people around' },
-  { when: ['health', 'stress'], apps: { stress: 2, mindful: 1 }, because: 'you want to feel better and stress gets in' },
+  { when: ['move', 'energy'], apps: { fitness: 2 }, because: 'you want to move more and energy runs low, so a short walk counts' },
+  { when: ['eat', 'energy'], apps: { fitness: 2 }, because: 'energy runs low and you want to see how you eat' },
+  { when: ['health', 'stress'], apps: { stress: 2, mindful: 1 }, because: 'you want to feel better and stress gets in the way' },
   { when: ['health', 'sleep'], apps: { sleep: 2 }, because: 'better days start with better nights' },
   { when: ['health', 'energy'], apps: { sleep: 1, mood: 1 }, because: 'low energy shows up in sleep and mood first' },
   { when: ['learn', 'start'], apps: { school: 2, knowledge: 1 }, because: 'a program gives you a first step' },
@@ -329,7 +342,7 @@ export function identityLine(a: SetupAnswers): string {
     })
     .map((k) => {
       const o = IDENTITY_BY_KEY[k];
-      const label = lowerFirst(o?.label ?? k);
+      const label = lowerFirst(o?.noun ?? o?.label ?? k);
       if (o?.kind !== 'service') return label;
       return has('freelancer') ? `freelance ${label}` : has('agency_team') ? `agency ${label}` : label;
     });
@@ -363,12 +376,14 @@ export function matchSetup(a: SetupAnswers, available?: readonly string[]): Setu
   const goals = a.goals.map((k) => SETUP_GOAL_BY_KEY[k]).filter((g): g is SetupGoal => Boolean(g));
   const blockers = a.blockers.map((k) => SETUP_BLOCKER_BY_KEY[k]).filter((b): b is SetupBlocker => Boolean(b));
   for (const t of tags) for (const [app, w] of Object.entries(t.apps)) if (!t.why?.[app]) add(app, w, t.because);
-  for (const g of goals) for (const [app, w] of Object.entries(g.apps)) add(app, w * 2, g.because);
-  for (const b of blockers) for (const [app, w] of Object.entries(b.apps)) add(app, w, b.because);
+  for (const g of goals) for (const [app, w] of Object.entries(g.apps)) if (!g.why?.[app]) add(app, w * 2, g.because);
+  for (const b of blockers) for (const [app, w] of Object.entries(b.apps)) if (!b.why?.[app]) add(app, w, b.because);
   const keys = new Set([...a.identities, ...a.goals, ...a.blockers]);
   for (const c of SETUP_COMBOS) if (c.when.every((k) => keys.has(k))) for (const [app, w] of Object.entries(c.apps)) add(app, w, c.because, true);
-  // A tag's own reason for one app is as telling as a pair, and comes after the pairs so an equal pair still gives the reason.
+  // An answer's own reason for one app is as telling as a pair, and comes after the pairs so an equal pair still gives the reason.
   for (const t of tags) for (const [app, w] of Object.entries(t.apps)) if (t.why?.[app]) add(app, w, t.why[app]!, true);
+  for (const g of goals) for (const [app, w] of Object.entries(g.apps)) if (g.why?.[app]) add(app, w * 2, g.why[app]!, true);
+  for (const b of blockers) for (const [app, w] of Object.entries(b.apps)) if (b.why?.[app]) add(app, w, b.why[app]!, true);
 
   const why = (app: string) => {
     const list = sources.get(app) ?? [];
@@ -413,7 +428,7 @@ export function matchSetup(a: SetupAnswers, available?: readonly string[]): Setu
   const wants = (k: string) => a.goals.includes(k);
   const availability = (wants('work') || wants('earn')) && ['freelancer', 'explorer', 'student', 'creator', 'agency_team'].some(has) ? 'Open to work' : (wants('people') || wants('grow')) && has('creator') ? 'Open to collabs' : '';
   const signs = ['focus', 'energy', 'stress', 'sleep'];
-  const session = wants('life') ? 'now' : (wants('health') || wants('move')) && a.blockers.some((b) => signs.includes(b)) ? 'soon' : 'later';
+  const session = wants('life') ? 'now' : (wants('health') || wants('move') || wants('eat')) && a.blockers.some((b) => signs.includes(b)) ? 'soon' : 'later';
   return {
     apps: picked.map(pick),
     more,
@@ -557,7 +572,7 @@ export interface ChoiceGroup {
 export const SETUP_GOAL_GROUPS: readonly ChoiceGroup[] = [
   { label: 'Money and work', icon: 'Banknote', keys: ['earn', 'work', 'sell', 'clients', 'money'] },
   { label: 'Grow', icon: 'Sprout', keys: ['learn', 'grow', 'people', 'plan'] },
-  { label: 'You', icon: 'UserRound', keys: ['health', 'move', 'life', 'find_coach'] },
+  { label: 'You', icon: 'UserRound', keys: ['health', 'move', 'eat', 'life', 'find_coach'] },
 ];
 
 export const SETUP_ROLE_GROUPS: readonly ChoiceGroup[] = [
@@ -565,6 +580,9 @@ export const SETUP_ROLE_GROUPS: readonly ChoiceGroup[] = [
   { label: 'What you do', icon: 'BriefcaseBusiness', keys: ['employee', 'founder', 'brand_client', 'coach', 'run_host'] },
   { label: 'Where you are in life', icon: 'Compass', keys: ['student', 'explorer', 'parent'] },
 ];
+
+/** The one group of life tags on the setup chat's who-you-are card, so someone who moves is led to Fitness without typing it. */
+export const SETUP_MOVE_GROUP: ChoiceGroup = { label: 'How you move', icon: 'Footprints', keys: ['runner', 'gym', 'yogi', 'swimmer'] };
 
 export const SETUP_BLOCKER_GROUPS: readonly ChoiceGroup[] = [
   { label: 'Time and energy', icon: 'Hourglass', keys: ['time', 'energy', 'sleep'] },
@@ -580,7 +598,7 @@ export const SETUP_APP_LINES: Readonly<Record<string, string>> = {
   win: 'Get paid for views on brand videos.',
   agency: 'For content agencies and freelancers: clients, deliverables, invoices and approvals.',
   party: 'Meetups and events near you.',
-  run: 'Run clubs near you. Runs earn points.',
+  run: 'Run clubs near you. Club runs earn xp and points.',
   community: 'Post, ask and cheer each other on.',
   club: 'A members club with perks.',
   bond: 'Stay friends with people you meet.',
@@ -590,9 +608,10 @@ export const SETUP_APP_LINES: Readonly<Record<string, string>> = {
   mood: 'Tap a face each day.',
   sleep: 'Log your nights, sleep better.',
   stress: 'Note your stress and what causes it.',
+  fitness: 'Log runs, walks, swims and workouts, and tick your meals. Nothing to weigh or count.',
   mindful: 'Calm breathing and focus sessions, with sounds, lo-fi music and a rating for each.',
-  journal: 'Write it down, with how you felt.',
-  reviews: 'Look back each week, with reminders. Business numbers too, once you switch them on.',
+  journal: 'Write it down, with how you felt, plus three lines of gratitude a day.',
+  reviews: 'Look back by day, week, month or year, with reminders. Business numbers too, once you switch them on.',
   companion: 'A chat about how you are doing. Not a therapist.',
   coaching: 'Work with a life coach, or coach your students. You choose what they see.',
   cards: 'Unlock card games with points, then shuffle, flip and play them with the people you are with.',

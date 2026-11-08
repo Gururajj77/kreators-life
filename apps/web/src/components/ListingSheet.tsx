@@ -121,7 +121,7 @@ export function ListingSheet({ id, onClose, feature }: Props) {
           </div>
           <p className="m-0 text-subhead text-ink-soft">
             Sold by {l.sellerName}
-            {l.sellerHandle ? ` (@${l.sellerHandle})` : ''}. Listed {prettyDate(l.createdAt.slice(0, 10))}. Settle the payment and the handover between you; kreators.app takes nothing from it.
+            {l.sellerHandle ? ` (@${l.sellerHandle})` : ''}. Listed {prettyDate(l.createdAt)}. Settle the payment and the handover between you; kreators.app takes nothing from it.
           </p>
 
           {!l.mine && (
@@ -240,7 +240,7 @@ export function ListingSheet({ id, onClose, feature }: Props) {
                 <div className="mt-sm flex flex-wrap gap-xs">
                   {l.status === 'live' && (
                     <Button variant="outline" size="sm" onClick={() => promote.mutate()} disabled={promote.isPending || Boolean(l.featuredUntil && l.featuredUntil > new Date().toISOString())}>
-                      {l.featuredUntil && l.featuredUntil > new Date().toISOString() ? `Featured until ${prettyDate(l.featuredUntil.slice(0, 10))}` : `Feature for ${feature.days} days · ${feature.feePoints} points`}
+                      {l.featuredUntil && l.featuredUntil > new Date().toISOString() ? `Featured until ${prettyDate(l.featuredUntil)}` : `Feature for ${feature.days} days · ${feature.feePoints} points`}
                     </Button>
                   )}
                   {l.status === 'live' && (
@@ -303,7 +303,7 @@ function Chat({ messages, text, setText, onSend, busy, error, title }: { message
           <li key={m.id} className={`max-w-[85%] rounded-tile px-sm py-xs ${m.mine ? 'self-end bg-ink text-on-ink' : 'self-start bg-paper'}`}>
             <span className="block text-subhead"><Inert text={m.body} /></span>
             <span className={`block text-caption ${m.mine ? 'text-on-ink/70' : 'text-ink-soft'}`}>
-              {m.mine ? 'You' : m.senderName} · {prettyDate(m.createdAt.slice(0, 10))}
+              {m.mine ? 'You' : m.senderName} · {prettyDate(m.createdAt)}
             </span>
           </li>
         ))}

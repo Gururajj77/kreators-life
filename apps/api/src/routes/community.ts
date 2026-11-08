@@ -1,7 +1,8 @@
 import { Hono, type Context } from 'hono';
 import { canModerate, canMute, canUndo, communityRankOf, FEED_FILTERS, MAX_REPLY_DEPTH, threadOrder, FEED_SORTS, isReaction, MAX_PINNED, mentionsIn, POST_CATEGORIES, type CommunityPost, type CommunityRank, type CommunityReply, type FeedFilter, type FeedSort, type ReactionCounts, type ReactionKind } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { anonAlias, audit, isGuide, isStaff, nameOf, newId, notify, notifyMany, nowIso, oneOf, parseList, rankOf, pageOf, paged } from '../db';
+import { anonAlias, audit, blockedEither, hiddenByBlock, isGuide, isStaff, nameOf, newId, notify, notifyMany, nowIso, oneOf, parseList, rankOf, pageOf, paged, seenBy } from '../db';
+import { endLinksOnBlock } from '../coaching';
 import { rewardSocial } from '../rewards';
 
 export const community = new Hono<AppEnv>();
@@ -111,18 +112,18 @@ export async function holdsFirstPosts(db: D1Database): Promise<boolean> {
  * Tell the people a post or reply mentions by @handle, at most MAX_MENTIONS of them, never the writer and never
  * across a block either way. Returns who was told, so a follower who was also mentioned is not told twice.
  */
-async function tellMentioned(db: D1Database, writer: UserRow, text: string, postId: string, label = nameOf(writer)): Promise<Set<string>> {
+async function tellMentioned(db: D1Database, writer: UserRow, text: string, postId: string, label: string, anonymous: boolean, replyId?: string): Promise<Set<string>> {
   const told = new Set<string>();
   const handles = mentionsIn(text);
   if (handles.length === 0) return told;
   const rows = await db
     .prepare(
-      `SELECT id FROM users u WHERE u.handle IN (${handles.map(() => '?').join(',')}) AND u.id != ?
-        AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = u.id AND b.blocked_id = ?) OR (b.blocker_id = ? AND b.blocked_id = u.id))`,
+      `SELECT id FROM users u WHERE u.handle IN (${handles.map((_, i) => `?${i + 3}`).join(',')}) AND u.id != ?1 AND NOT ${hiddenByBlock('u.id', '?1', '?2')}`,
     )
-    .bind(...handles, writer.id, writer.id, writer.id)
+    .bind(writer.id, anonymous ? 1 : 0, ...handles)
     .all<{ id: string }>();
-  await notifyMany(db, rows.results.map((r) => r.id), 'mention', `${label} mentioned you`, text.slice(0, 120), `/community?post=${postId}`);
+  // The note opens the post's replies and, for a reply, lands on that reply (`#reply-<id>`, the row's id in the replies sheet).
+  await notifyMany(db, rows.results.map((r) => r.id), 'mention', `${label} mentioned you`, text.slice(0, 120), `/community?post=${postId}${replyId ? `#reply-${replyId}` : ''}`);
   for (const r of rows.results) told.add(r.id);
   return told;
 }
@@ -141,7 +142,7 @@ community.get('/', async (c) => {
   const binds: unknown[] = [user.id];
   if (!showHidden) clauses.push('p.hidden_at IS NULL');
   // Nobody sees a post by someone they blocked, or by someone who blocked them. Staff reading the hidden view still see everything.
-  if (!showHidden) clauses.push('NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ?1 AND b.blocked_id = p.user_id) OR (b.blocker_id = p.user_id AND b.blocked_id = ?1))');
+  if (!showHidden) clauses.push(`NOT ${hiddenByBlock('?1', 'p.user_id', 'p.anonymous')}`);
   // A held first post shows to its author until a guide says okay; guides find it under the waiting list.
   clauses.push('(p.held_at IS NULL OR p.user_id = ?1)');
   // An anonymous post never shows under Following: that would say who wrote it.
@@ -201,17 +202,22 @@ community.post('/', async (c) => {
   await db.prepare('INSERT INTO community_posts (id, user_id, category, body, product_id, created_at, held_at, anonymous) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(id, user.id, category, text, productId, now, held ? now : null, anonymous ? 1 : 0).run();
   await follow(db, id, user.id);
   const awarded = held ? { xp: 0, points: 0 } : await rewardSocial(db, user.id, 'post', id);
-  if (!held) await tellMentioned(db, user, text, id, anonymous ? await anonAlias(c.env, user.id, id) : nameOf(user));
+  if (!held) await tellMentioned(db, user, text, id, anonymous ? await anonAlias(c.env, user.id, id) : nameOf(user), anonymous);
   const row = await db.prepare(`${POST_SELECT} WHERE p.id = ?2`).bind(user.id, id).first<PostRow>();
   return c.json({ post: await presentPost(c, row), awarded, held }, 201);
 });
 
-/** A post in a members-only feed is seen, reacted to and answered only by the product's owner and the people who bought it; any other post is open. */
-async function canSeePost(db: D1Database, userId: string, postId: string): Promise<boolean> {
+/**
+ * A post in a members-only feed is seen, reacted to and answered only by the product's owner and the people who bought it; any other post is open.
+ * A block keeps a post away from reacting, following and answering just as it does from the feed (`hiddenByBlock`). `throughBlock` is only for a guide
+ * reading replies from the view that shows everything.
+ */
+async function canSeePost(db: D1Database, userId: string, postId: string, throughBlock = false): Promise<boolean> {
+  const unblocked = throughBlock ? '' : `AND NOT ${hiddenByBlock('?1', 'p.user_id', 'p.anonymous')}`;
   return Boolean(
     await db
-      .prepare(`SELECT 1 FROM community_posts p WHERE p.id = ? AND (p.product_id IS NULL OR EXISTS (SELECT 1 FROM products pr WHERE pr.id = p.product_id AND (pr.owner_id = ? OR EXISTS (SELECT 1 FROM orders o WHERE o.product_id = pr.id AND o.buyer_id = ? AND o.status IN ('paid','test')))))`)
-      .bind(postId, userId, userId)
+      .prepare(`SELECT 1 FROM community_posts p WHERE p.id = ?2 ${unblocked} AND (p.product_id IS NULL OR EXISTS (SELECT 1 FROM products pr WHERE pr.id = p.product_id AND (pr.owner_id = ?1 OR EXISTS (SELECT 1 FROM orders o WHERE o.product_id = pr.id AND o.buyer_id = ?1 AND o.status IN ('paid','test')))))`)
+      .bind(userId, postId)
       .first(),
   );
 }
@@ -244,7 +250,7 @@ community.post('/:id/follow-post', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const post = await db.prepare('SELECT id FROM community_posts WHERE id = ? AND hidden_at IS NULL').bind(c.req.param('id')).first<{ id: string }>();
-  if (!post) return c.json({ error: 'not found' }, 404);
+  if (!post || !(await canSeePost(db, user.id, post.id))) return c.json({ error: 'not found' }, 404);
   const had = await db.prepare('SELECT 1 FROM community_post_follows WHERE post_id = ? AND user_id = ?').bind(post.id, user.id).first();
   if (had) await db.prepare('DELETE FROM community_post_follows WHERE post_id = ? AND user_id = ?').bind(post.id, user.id).run();
   else await follow(db, post.id, user.id);
@@ -299,13 +305,28 @@ async function presentReplies(c: Context<AppEnv>, rows: ReplyRow[]): Promise<Com
 // The replies to a post, in reading order: each one under what it answers. Hidden ones and anyone blocked either way are left out.
 community.get('/:id/replies', async (c) => {
   const ask = pageOf(c);
-  if (!(await canSeePost(c.env.DB, c.get('user').id, c.req.param('id')))) return c.json({ error: 'not found' }, 404);
-  const rows = await c.env.DB.prepare(`${REPLY_SELECT} WHERE r.post_id = ?2 AND r.hidden_at IS NULL AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ?1 AND b.blocked_id = r.user_id) OR (b.blocker_id = r.user_id AND b.blocked_id = ?1)) ORDER BY r.created_at ASC LIMIT 500`)
+  if (!(await canSeePost(c.env.DB, c.get('user').id, c.req.param('id'), isGuide(c.get('user'))))) return c.json({ error: 'not found' }, 404);
+  const rows = await c.env.DB.prepare(`${REPLY_SELECT} WHERE r.post_id = ?2 AND r.hidden_at IS NULL AND NOT ${hiddenByBlock('?1', 'r.user_id', 'r.anonymous')} ORDER BY r.created_at ASC LIMIT 500`)
     .bind(c.get('user').id, c.req.param('id'))
     .all<ReplyRow>();
   const ordered = threadOrder(await presentReplies(c, rows.results)).slice(ask.offset, ask.offset + ask.limit);
   const pg = paged(ordered, ask);
   return c.json({ page: pg.page, replies: pg.items });
+});
+
+// One post, for a link that names it (an inbox note's `/community?post=<id>`, a search result): the feed's own rules, so a post a guide
+// hid, one held for a guide's okay (unless it is yours) or one by someone blocked either way is not found.
+community.get('/posts/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const id = c.req.param('id');
+  if (!(await canSeePost(db, user.id, id))) return c.json({ error: 'not found' }, 404);
+  const row = await db
+    .prepare(`${POST_SELECT} WHERE p.id = ?2 AND p.hidden_at IS NULL AND (p.held_at IS NULL OR p.user_id = ?1)`)
+    .bind(user.id, id)
+    .first<PostRow>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  return c.json({ post: await presentPost(c, row) });
 });
 
 community.post('/:id/replies', async (c) => {
@@ -320,7 +341,7 @@ community.post('/:id/replies', async (c) => {
   // An answer to a reply sits under it. Past the deepest level it lands beside the one it answers, so a long argument stays readable.
   let parent: { id: string; user_id: string; parent_id: string | null; depth: number; anonymous: number } | null = null;
   if (typeof body.parentId === 'string' && body.parentId) {
-    parent = await db.prepare('SELECT id, user_id, parent_id, depth, anonymous FROM community_replies WHERE id = ? AND post_id = ? AND hidden_at IS NULL').bind(body.parentId, post.id).first();
+    parent = await db.prepare(`SELECT r.id, r.user_id, r.parent_id, r.depth, r.anonymous FROM community_replies r WHERE r.id = ?2 AND r.post_id = ?3 AND r.hidden_at IS NULL AND NOT ${hiddenByBlock('?1', 'r.user_id', 'r.anonymous')}`).bind(user.id, body.parentId, post.id).first();
     if (!parent) return c.json({ error: 'that reply is gone' }, 404);
   }
   const atBottom = parent !== null && parent.depth >= MAX_REPLY_DEPTH;
@@ -331,14 +352,18 @@ community.post('/:id/replies', async (c) => {
   await db.prepare('INSERT INTO community_replies (id, post_id, user_id, body, created_at, anonymous, parent_id, depth) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(id, post.id, user.id, text, nowIso(), anonymous ? 1 : 0, parentId, depth).run();
   // Whoever is named in a notice is the made-up name when the writer chose one, never the real name.
   const label = anonymous ? await anonAlias(c.env, user.id, post.id) : nameOf(user);
-  if (post.user_id !== user.id) await notify(db, post.user_id, 'reply', `${label} replied to your post`, text.slice(0, 120), `/community?post=${post.id}`);
-  const told = await tellMentioned(db, user, text, post.id, label);
-  if (parent && parent.user_id !== user.id && parent.user_id !== post.user_id && !told.has(parent.user_id)) {
-    await notify(db, parent.user_id, 'reply', `${label} replied to you`, text.slice(0, 120), `/community?post=${post.id}`);
+  // Every note about a reply opens the post's replies on that reply.
+  const at = `/community?post=${post.id}#reply-${id}`;
+  const followers = await db.prepare('SELECT user_id FROM community_post_follows WHERE post_id = ? AND user_id != ? AND user_id != ? LIMIT 200').bind(post.id, user.id, post.user_id).all<{ user_id: string }>();
+  // Whoever a block keeps this line from hears nothing about it (`seenBy`); a block by name still lets an anonymous line through, or the note would say who wrote it.
+  const reach = await seenBy(db, user.id, anonymous, [post.user_id, parent?.user_id, ...followers.results.map((f) => f.user_id)]);
+  if (reach.has(post.user_id)) await notify(db, post.user_id, 'reply', `${label} replied to your post`, text.slice(0, 120), at);
+  const told = await tellMentioned(db, user, text, post.id, label, anonymous, id);
+  if (parent && parent.user_id !== post.user_id && reach.has(parent.user_id) && !told.has(parent.user_id)) {
+    await notify(db, parent.user_id, 'reply', `${label} replied to you`, text.slice(0, 120), at);
     told.add(parent.user_id);
   }
-  const followers = await db.prepare('SELECT user_id FROM community_post_follows WHERE post_id = ? AND user_id != ? AND user_id != ? LIMIT 200').bind(post.id, user.id, post.user_id).all<{ user_id: string }>();
-  await notifyMany(db, followers.results.filter((f) => !told.has(f.user_id)).map((f) => f.user_id), 'thread', 'New reply on a post you follow', `${label}: ${text.slice(0, 100)}`, `/community?post=${post.id}`);
+  await notifyMany(db, followers.results.filter((f) => reach.has(f.user_id) && !told.has(f.user_id)).map((f) => f.user_id), 'thread', 'New reply on a post you follow', `${label}: ${text.slice(0, 100)}`, at);
   await follow(db, post.id, user.id);
   const awarded = await rewardSocial(db, user.id, 'reply', id);
   const row = await db.prepare(`${REPLY_SELECT} WHERE r.id = ?2`).bind(user.id, id).first<ReplyRow>();
@@ -364,6 +389,8 @@ export async function blockBehind(c: Context<AppEnv>, target: string | undefined
   if (target === me.id) return c.json({ error: 'that is you' }, 400);
   const db = c.env.DB;
   const now = nowIso();
+  // A block by name ends any coaching between the two. A block behind a made-up name leaves it: ending it would say who the name was.
+  if (!alias) await endLinksOnBlock(db, me.id, nameOf(me), target);
   await db.batch([
     alias
       ? db.prepare('INSERT INTO blocks (blocker_id, blocked_id, reason, created_at, by_name) VALUES (?, ?, ?, ?, 0) ON CONFLICT (blocker_id, blocked_id) DO NOTHING').bind(me.id, target, '', now)
@@ -378,7 +405,7 @@ export async function blockBehind(c: Context<AppEnv>, target: string | undefined
 community.post('/replies/:id/react', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const reply = await db.prepare('SELECT id FROM community_replies WHERE id = ? AND hidden_at IS NULL').bind(c.req.param('id')).first<{ id: string }>();
+  const reply = await db.prepare(`SELECT r.id FROM community_replies r WHERE r.id = ?2 AND r.hidden_at IS NULL AND NOT ${hiddenByBlock('?1', 'r.user_id', 'r.anonymous')}`).bind(user.id, c.req.param('id')).first<{ id: string }>();
   if (!reply) return c.json({ error: 'not found' }, 404);
   const body = await c.req.json<{ kind?: unknown }>().catch(() => ({}) as { kind?: unknown });
   const kind = isReaction(body.kind) ? body.kind : 'like';
@@ -404,12 +431,15 @@ community.post('/follow/:userId', async (c) => {
   if (!other) return c.json({ error: 'not found' }, 404);
   if (other.id === user.id) return c.json({ error: 'that is you' }, 400);
   const had = await db.prepare('SELECT 1 FROM follows WHERE follower_id = ? AND owner_id = ?').bind(user.id, other.id).first();
+  // A block reads like nobody, so a new follow never reaches the inbox of someone who blocked them. An old follow can still be undone.
+  if (!had && (await blockedEither(db, user.id, other.id))) return c.json({ error: 'not found' }, 404);
   let awarded = { xp: 0, points: 0 };
   if (had) await db.prepare('DELETE FROM follows WHERE follower_id = ? AND owner_id = ?').bind(user.id, other.id).run();
   else {
     await db.prepare('INSERT INTO follows (follower_id, owner_id, created_at) VALUES (?, ?, ?)').bind(user.id, other.id, nowIso()).run();
     awarded = await rewardSocial(db, other.id, 'follower', user.id);
-    await notify(db, other.id, 'follow', `${nameOf(user)} followed you`, '', '/community');
+    // The note is about the follower, so it opens their page, by id: a handle can pass to someone else once they leave.
+    await notify(db, other.id, 'follow', `${nameOf(user)} followed you`, '', `/people/${user.id}`);
   }
   const n = await db.prepare('SELECT COUNT(*) AS n FROM follows WHERE owner_id = ?').bind(other.id).first<{ n: number }>();
   return c.json({ following: !had, followers: n?.n ?? 0, awarded });
@@ -528,12 +558,12 @@ moderate.get('/held', async (c) => {
 moderate.post('/posts/:id/approve', async (c) => {
   const db = c.env.DB;
   const mod = c.get('user');
-  const post = await db.prepare('SELECT p.id, p.user_id, p.body FROM community_posts p WHERE p.id = ? AND p.held_at IS NOT NULL').bind(c.req.param('id')).first<{ id: string; user_id: string; body: string }>();
+  const post = await db.prepare('SELECT p.id, p.user_id, p.body, p.anonymous FROM community_posts p WHERE p.id = ? AND p.held_at IS NOT NULL').bind(c.req.param('id')).first<{ id: string; user_id: string; body: string; anonymous: number }>();
   if (!post) return c.json({ error: 'not found' }, 404);
   await db.prepare('UPDATE community_posts SET held_at = NULL WHERE id = ?').bind(post.id).run();
   await rewardSocial(db, post.user_id, 'post', post.id);
   const author = await db.prepare('SELECT * FROM users WHERE id = ?').bind(post.user_id).first<UserRow>();
-  if (author) await tellMentioned(db, author, post.body, post.id);
+  if (author) await tellMentioned(db, author, post.body, post.id, post.anonymous === 1 ? await anonAlias(c.env, author.id, post.id) : nameOf(author), post.anonymous === 1);
   await notify(db, post.user_id, 'moderation', 'Your first post is up', 'A guide said okay. Welcome to the community.', `/community?post=${post.id}`);
   const row = await db.prepare(`${POST_SELECT} WHERE p.id = ?2`).bind(mod.id, post.id).first<PostRow>();
   return c.json({ post: await presentPost(c, row) });

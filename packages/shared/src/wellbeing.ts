@@ -8,7 +8,8 @@ import type { Unlock } from './badges.ts';
 // Wellbeing logs
 // ---------------------------------------------------------------------------
 
-export type LogKind = 'mood' | 'sleep' | 'stress' | 'mindful' | 'move';
+/** `eat` is Fitness's daily eating check-in (one a day, written only through /fitness, `@kreators/shared/fitness`). */
+export type LogKind = 'mood' | 'sleep' | 'stress' | 'mindful' | 'move' | 'eat';
 
 export interface MoodOption {
   value: number;
@@ -56,22 +57,15 @@ export function wellbeingLabel(score: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Water and reminders, for Daily and Journal. A bubble on a laptop, a section on a phone; never a floating button on a phone.
+// Water and reminders, for Daily and Journal. A bubble on a laptop, a section on a phone or a tablet; never a floating button on a phone.
 // ---------------------------------------------------------------------------
 
-/** The water reminder has its own trigger every two hours, so every two hours is the shortest gap and the others are multiples of it. */
-export const WATER_EVERY_CHOICES = [120, 240] as const;
 export const WATER_GOAL_MIN = 500;
 export const WATER_GOAL_MAX = 6000;
 export const WATER_GLASS_MIN = 50;
 export const WATER_GLASS_MAX = 1000;
 /** The most one tap can add, and the most a day can hold, so a slip of the thumb cannot ruin a day's number. */
 export const WATER_DAY_MAX = 10_000;
-/** The inbox line a water reminder rewrites is `water-<person>-<their day>`. Once that day is over the line is no use: a reminder to drink for a day that has gone. */
-export function pastWaterNote(id: string, today: string): boolean {
-  const m = /^water-.+-(\d{4}-\d{2}-\d{2})$/.exec(id);
-  return Boolean(m && m[1]! < today);
-}
 export const MAX_CUSTOM_REMINDERS = 12;
 export const REMINDER_TITLE_MAX = 60;
 export const WEEKDAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
@@ -84,10 +78,6 @@ export interface WaterState {
   /** Whole glasses drunk, and how many make the goal. */
   glasses: number;
   goalGlasses: number;
-  on: boolean;
-  everyMin: number;
-  from: string;
-  to: string;
   /** The last seven days, oldest first, for the small chart. */
   week: { day: string; ml: number }[];
 }
@@ -281,10 +271,11 @@ export const HELP_FAQ = [
   { q: 'What does Plan my week do?', a: 'On Daily, it looks at your open tasks and suggests a day for each one that has none. It puts the most important first and spreads them so no day is overloaded. It also shows how strong the plan is, out of a hundred, and a few notes on what to look at. Nothing changes until you tap Keep. It uses rules, not an AI, so it costs no credits.' },
   { q: 'What are time blocks and day templates?', a: 'A time block is a named part of your day with a colour and a tag, like Deep work from 10 am to 1 pm or Sleep from 11 pm to 7 am. A day template lays blocks on the clock, like Deep work day or Family day, and it is your kind of day. Open Time blocks from Daily, or the gear in Plan my week, to change names, times and colours, add or delete blocks, and make your own templates. You start with 14 of each. It uses rules, not an AI.' },
   { q: 'How do I give one day a different template?', a: 'Open Time blocks and tap the day in the week. Pick a template under Kind of day, or pick Follow your week to undo it. That changes only that date. To change every Monday, say, set it under Your usual week. Daily has the same Kind of day picker for its own day.' },
-  { q: 'How do tasks get into a time block?', a: 'Pick a block in the task\'s form. With none picked, a task with a time sits in the block that time falls in. Plan my week suggests a block from the task\'s area of life and pillar, and nothing changes until you keep it. On Daily, sort By time block or By area to see tasks in coloured boxes; P0 stays first in each.' },
+  { q: 'How do tasks get into a time block?', a: 'Pick a block in the task\'s form. With none picked, a task with a time sits in the block that time falls in, and a task with no block or time shows as Suggested in the block that fits, with Keep here. Plan my week suggests a block from the task\'s area of life and pillar, and nothing changes until you keep it. On Daily, sort By time block or By area to see tasks in coloured boxes; P0 stays first in each.' },
   { q: 'How do I see my tasks in Google, Apple or Outlook Calendar?', a: 'Under Profile, switch on Calendar. You get a private address to subscribe to in your calendar app. It shows each open task that has a day, with its time when it has one. It never shows notes, your journal or your mood. A fresh link closes the old one. It shows your tasks in the calendar; it does not change them from there.' },
+  { q: 'Can I change how dates and times read?', a: 'Yes. On the Profile tab, Dates and times sets your time zone, your date format and a 12 or 24 hour clock. Every screen follows it, and your reminders arrive by that zone. Printed paper keeps its own format.' },
   { q: 'Can the app block other apps or websites while I focus?', a: 'No. A web app cannot block other apps. What it can do is time your focus sessions, play a background sound, and show how focused each one felt. Use your phone\'s own focus mode, or a blocker app, beside it.' },
-  { q: 'What is Agency, and who is it for?', a: 'Agency is for a content agency or a freelance creator who makes videos, posts, scripts and newsletters for clients. Add a client, then move each deliverable from idea to published. Log your time, make invoices and agreements, and share a page where the client approves what is waiting. Switch it on under Features.' },
+  { q: 'What is Agency, and who is it for?', a: 'Agency is for a content agency or a freelance creator who makes videos, posts, scripts and newsletters for clients. Add a client, then move each deliverable from idea to published. Log your time, make invoices and agreements, and share a page where the client approves what is waiting. Show it under Features.' },
   { q: 'How do I share a dashboard with a client?', a: 'Open the client, find Client link and switch it on. Copy the link and send it. Under it you pick what they can see (what is waiting, coming up, published, the month so far, notes, and more) and what they can do (approve or send back, write notes). Use Open preview to see exactly what they see. A fresh link closes the old one.' },
   { q: 'What can a client never see?', a: 'Your private notes, your fee for each piece and the retainer amount, your time line by line, your other clients, and what a brand wrote in Army. Hours, invoices, agreements and channels stay off until you switch them on.' },
   { q: 'Can a client read and download an invoice or an agreement?', a: 'Yes. Each has its own link they open without signing in. They can save a copy as a PDF (the Download PDF button uses your browser\'s print and save), and write a comment to ask for a change. You switch each of those off per invoice or per agreement, and you can switch off the bank details, tax numbers, due date and notes on one invoice.' },
@@ -298,17 +289,17 @@ export const HELP_FAQ = [
   { q: 'Why can I not tick a task yet?', a: 'A task needs ten minutes after being written or renamed before it can be ticked, and it cannot be ticked before its do date. Only six ticks a day pay xp; the rest still count as done.' },
   { q: 'What is the difference between a do date and a due date?', a: 'The do date is the day you will do the task. It shows on Daily from that day and cannot be ticked before it. The due date is the deadline. After it the task says Overdue, but you can still tick it. The do date cannot come after the due date.' },
   { q: 'What do P0, P1, P2 and P3 mean?', a: 'They are priority tags. P0 (red) is do now, P1 (orange) is important, P2 (purple) is normal and P3 (grey) is whenever. Pick one on a task, then sort Daily by priority. A tag never changes what a tick pays.' },
-  { q: 'What is Emerging?', a: 'Patterns the app notices in what you already log: a task you keep ticking, or how sleep and mood went on the same days. It says what happened together, never what caused what. Only you see it, nothing is stored, and your journal is counted by day, never read. Find it on Home under Emerging, or open the Emerging page.' },
+  { q: 'What is Emerging?', a: 'Patterns the app notices in what you already log: a task you keep ticking, or how sleep and mood went on the same days. It says what happened together, never what caused what. Only you see it, unless you switch Patterns on for a life coach. Nothing is stored, and your journal is counted by day, never read. Find it on Home under Emerging, or open the Emerging page.' },
   { q: 'How do I make a task repeat?', a: 'Tap the pencil on a task and pick Repeat: every day, on weekdays, every week on days you choose, every month or every year, every one or more of them, with an end day if you like. It needs a do date or a due date. When you tick it, the next one is made. A repeating task shows a Habit tag.' },
   { q: 'Where did my task with no date go?', a: 'Under Not scheduled yet, below Tasks on Daily. It stays there until you pick a do date or a due date. Then it moves up into Tasks on that day.' },
   { q: 'What are subtasks, and what does Remember do?', a: 'Subtasks are a small checklist inside a task. They pay no xp. Remember is a tag for things to keep in mind. With a day, it also sends a note to your inbox on that day, at its time (9:00 when it has none). With no day, it waits in To remember on Daily. Tasks the strategy session made for you carry a From pillar tag, and tasks that repeat carry a Habit tag.' },
   { q: 'How do I focus on one task?', a: 'Tap the pencil on a task, add how many minutes it takes, then tap Start focus. Mindfulness opens with that task picked and that many minutes on the timer. The Focus dashboard there can show your time in minutes or hours.' },
   { q: 'Points versus xp?', a: 'Xp levels you and your pillars up. Points come from showing up. You can trade points for rewards, for things people sell, and for events.' },
-  { q: 'How do I sell something?', a: 'Switch Shop on from Apps. Make a product, publish it, and share your Profile page.' },
+  { q: 'How do I sell something?', a: 'Open Shop from Apps, or Show it there. Make a product, publish it, and share your public page.' },
   { q: 'How do I get work?', a: 'Work lists opportunities from brands and the team. Apply once per opportunity and follow its status in Work.' },
   { q: 'Is the Companion a therapist?', a: 'No. It reflects and asks questions. If you are in danger, contact your local emergency number or go to the nearest hospital. In India, Tele-MANAS is 14416.' },
   { q: 'Where do the journal prompts come from?', a: `Under Prompt me in Journal there are prompts in sixteen categories, such as shadow work, inner child, gratitude, boundaries, manifestation scripting, 3-6-9 writing, money, body and a weekly reset. Each says why it helps and what you can reasonably expect. ${JOURNAL_PROMPT_CREDIT} They are for reflection, not therapy or medical advice, and a hopeful prompt is a planning tool, not a promise. Which prompts you were shown stays on your device and is never sent to us or to the assistant.` },
-  { q: 'Who can see my journal?', a: 'Only you. Journal entries and wellbeing scores are never shown to brands, staff, the leaderboard or Club selection.' },
+  { q: 'Who can see my journal?', a: 'Only you. Journal entries, gratitude lines and wellbeing scores are never shown to brands, staff, the leaderboard or Club selection. A life coach never sees your journal or gratitude.' },
   { q: 'What are Games?', a: 'Nine card games you unlock once with points in Rewards, then play in the app. You shuffle, draw, flip and drag cards around a table. Nothing is posted to you. Games switches on when you unlock your first one.' },
   { q: 'What is focus mode?', a: 'On a game table, or on the focus timer in Mindfulness, the icon with four corner brackets hides the menu, the assistant and everything else, so it has the whole screen. Press Escape or tap the icon again to leave.' },
   { q: 'What is Discover?', a: 'A quiz about how you think, feel and act, with puzzles and real situations. It shows your top strengths across the seven relationships, a detailed read on five personality traits and on your reasoning, and, if you add it, your emotional intelligence. It is a self-check, not an IQ test or a diagnosis.' },
@@ -324,8 +315,9 @@ export const HELP_FAQ = [
   { q: 'What does numerology in Discover work out?', a: 'It sits beside the body, mind and purpose layers of Human design. From your birth date it gives your life path, birthday number and attitude. From the full name on your birth record it adds your expression, soul urge, personality and maturity, and the numbers your name is missing. It shows where you are in your personal year, month and day, keeps the master numbers 11, 22 and 33 whole, and points out the turning point 10 and the karmic numbers 13, 14, 16 and 19. Then it sets your numbers next to your Discover answers: where they agree, where they stretch you, and how they fit your Human design. Numerology is a system for reflection, not science.' },
   { q: 'How much will a reward pay me?', a: 'Open the reward and use What could I earn. Type the number of views your post might get and it shows the points. Nothing is paid under the minimum views, a post stops earning at the most one post can pay, and a reviewer must confirm the views first. The pool also has to have points left.' },
   { q: 'Can I answer buyers’ questions on my product page?', a: 'Yes. In the product editor, add up to six questions and answers, such as who it is for and how long it takes. They show as a fold-out list at the foot of the page.' },
-  { q: 'What is the line of the day on Home?', a: 'One line under Water and reminders, from a philosopher or written for this app, in turn. It changes every day, and every line is shown once before any comes back, which takes about a year. Nothing is saved about you, and the same day shows the same line to everyone.' },
+  { q: 'What is the line of the day on Home?', a: 'One line under Water and reminders, from a philosopher or written for this app, in turn. It changes every day, and every line is shown once before any comes back, which takes about a year. Nothing is saved about you, and the same day shows the same line to everyone. Another line shows a new one, a tip or a quote, when you want it.' },
   { q: 'Who sees my Discover results?', a: 'Only you. They never reach brands, staff, the leaderboard or a life coach. You choose whether they shape your next steps on Home, and whether the assistant may read a short summary. You can delete a result any time.' },
-  { q: 'Why are my apps in this order?', a: 'Lists put the apps that matter most to you first: the ones that are on, then the ones that fit what you told the setup chat, then the ones you open most on this device. The order catches up the next time you open the app.' },
-  { q: 'Where is the water button?', a: 'On a laptop, a small Water bubble sits at the left of Daily and Journal, and a Water button sits above a game table. On a phone, the Water section is inside Home, Daily and Journal.' },
+  { q: 'Why are my apps in this order?', a: 'Each group keeps one order, so an app stays where you last saw it, with the ones you have not hidden first. Your own order comes before it: tap Arrange apps under Profile, Features.' },
+  { q: 'Where is the water button?', a: 'On a phone or a tablet, the Water section is inside Home, Daily and Journal. On a laptop, it is a small bubble at the left of Daily and Journal, and still a section on Home. A game table has a Water button of its own.' },
+  { q: 'Why did water reminders stop?', a: 'The app no longer sends water notes to your inbox. Your goal, your glasses and your week stay. If you want a nudge, add your own reminder under Reminders in the water card.' },
 ] as const;

@@ -11,6 +11,7 @@ import {
   LISTING_TYPE_META,
   LISTING_TYPES,
   MODULE_BY_KEY,
+  MODULE_GROUP_ORDER,
   MODULE_GROUPS,
   MODULES,
   OPPORTUNITY_TYPES,
@@ -60,9 +61,14 @@ import { dateTime, longDate } from '../lib/date';
 import { StatusTag } from '../components/StatusTag';
 import { Fold } from '../components/Fold';
 import { ConfirmDelete } from '../components/ConfirmDelete';
+import { evenGrid, evenTile } from '../lib/bento';
+import { TileGroups } from '../components/TileGroups';
 
 const ADMIN_HONORS = HONORS.filter((h) => h.source === 'admin' && h.key !== 'pro');
 const KEY_STORE = 'kreators.adminKey';
+/** What a person sees: one app a row on a phone, two on a small tablet, three from md, in even rows (lib/bento.ts). */
+const APP_LIST_COLS = { base: 1, sm: 2, md: 3 } as const;
+const FUNNEL_COLS = { base: 1, md: 2 } as const;
 const PERMISSION_NAMES: Record<Permission, string> = { talent: 'Talent', cohorts: 'Cohorts', events: 'Events', finance: 'Finance', moderation: 'Moderation', support: 'Support', review: 'Review', mentor: 'Mentor', coach: 'Life coach' };
 const TAB_KEYS = ['people', 'flags', 'listings', 'coaches', 'codes', 'discounts', 'agencyhouse', 'orders', 'webhooks', 'kyc', 'ops', 'redemptions', 'audit'] as const;
 type Tab = (typeof TAB_KEYS)[number];
@@ -533,7 +539,7 @@ export function Admin() {
                             e.stopPropagation();
                             askFirst({
                               title: `Delete ${u.displayName || 'this account'}?`,
-                              body: 'Their details and what they made go. Money records stay, without their name. This cannot be undone.',
+                              body: 'What is private goes. Their events, runs and sessions still to come are cancelled, and whoever was coming is told. Money records and what others rely on stay, without their name. This cannot be undone.',
                               yes: 'Yes, delete it',
                               keep: 'Keep this account',
                               act: async () => {
@@ -723,8 +729,13 @@ export function Admin() {
                   {preview && (
                     <>
                       <p className="mt-sm m-0 text-caption text-ink-soft">Tick to allow, untick to block. Struck through means not allowed, and locked apps cannot be blocked. Reset returns an app to the usual rules.</p>
-                      <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 sm:grid-cols-2 md:grid-cols-3">
-                        {MODULES.map((m) => {
+                      {/* Every app, by the groups in their one order, each with its own even rows (TileGroups). */}
+                      <TileGroups
+                        className="mt-sm"
+                        list
+                        cols={APP_LIST_COLS}
+                        groups={MODULE_GROUP_ORDER.map((g) => ({ key: g, name: MODULE_GROUPS[g], tiles: MODULES.filter((m) => m.group === g) }))}
+                        render={(m, tileClass) => {
                           const a = preview.access[m.key];
                           const allowed = Boolean(a?.available);
                           const mine = overrides.filter((o) => o.flagKey === m.key && o.subjectType === 'user' && o.subjectId === selected.id);
@@ -747,7 +758,7 @@ export function Admin() {
                               },
                             });
                           return (
-                            <li key={m.key} className={`flex items-center gap-xs rounded-inner-sm px-xs py-xs ${allowed ? 'bg-paper' : 'bg-line'}`}>
+                            <li key={m.key} className={`flex items-center gap-xs rounded-inner-sm px-xs py-xs ${allowed ? 'bg-paper' : 'bg-line'} ${tileClass}`}>
                               <label className="toy toy-flat flex min-h-[44px] min-w-0 flex-1 cursor-pointer items-center gap-xs rounded-inner-sm px-xs">
                                 <input type="checkbox" checked={allowed} disabled={busy || Boolean(m.locked)} onChange={(e) => void setAccess(e.target.checked)} className="size-[20px] shrink-0" aria-label={`Allow ${m.name}`} />
                                 <span className="min-w-0">
@@ -768,8 +779,8 @@ export function Admin() {
                               )}
                             </li>
                           );
-                        })}
-                      </ul>
+                        }}
+                      />
                     </>
                   )}
                 </div>
@@ -1443,11 +1454,11 @@ export function Admin() {
                 </Button>
               </div>
               <p className="mt-xs m-0 text-subhead text-ink-soft">Counted from our own tables, nothing leaves the server. Each bar is the share of the step before it.</p>
-              <ul className="mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
-                {funnels?.map((f) => {
+              <ul className={`mt-sm grid list-none gap-xs p-0 m-0 ${evenGrid(funnels?.length ?? 0, FUNNEL_COLS)}`}>
+                {funnels?.map((f, fi, all) => {
                   const top = Math.max(1, f.steps[0]?.count ?? 0);
                   return (
-                    <li key={f.name} className="rounded-tile bg-card p-sm shadow-toy-soft">
+                    <li key={f.name} className={`rounded-tile bg-card p-sm shadow-toy-soft ${evenTile(fi, all.length, FUNNEL_COLS)}`}>
                       <p className="m-0 text-headline">{f.name}</p>
                       <ol className="mt-xs m-0 flex list-none flex-col gap-xs p-0">
                         {f.steps.map((s, i) => {
@@ -1502,12 +1513,7 @@ export function Admin() {
               <h2 id="coaches-heading" className="text-title2">
                 Life coaches
               </h2>
-              <p className="mt-xs m-0 text-subhead text-ink-soft">A life coach works only with students who said yes, and never sees the journal.</p>
-              <ul className="mt-xs m-0 flex list-disc flex-col gap-xs pl-md text-subhead text-ink-soft">
-                <li>A student has up to {MAX_COACHES} coaches.</li>
-                <li>Giving or taking the badge is the Life coach permission.</li>
-                <li>Every change is audited, and the person is told.</li>
-              </ul>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">A life coach works only with students who said yes, and never sees the journal. A student has up to {MAX_COACHES} coaches. Every change is audited, and the person is told.</p>
 
               <h3 className="mt-md text-headline">Asked to be a life coach</h3>
               <div className="mt-sm">
@@ -1525,6 +1531,22 @@ export function Admin() {
                     { key: 'email', label: 'Email', get: (r) => r.email ?? '', wide: true },
                     { key: 'about', label: 'Their coaching', get: (r) => r.about, wrap: true },
                     { key: 'asked', label: 'Asked', get: (r) => r.askedAt, render: (r) => day(r.askedAt) },
+                    {
+                      // One tap each way: Yes is the Life coach permission through the one permissions route, which tells the person; No closes the ask and tells them too.
+                      key: 'answer',
+                      label: 'Answer',
+                      get: () => '',
+                      render: (r) => (
+                        <span className="flex flex-wrap gap-xs">
+                          <Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => makeCoach(r.userId, true).then(() => loadCoaches()))}>
+                            Yes
+                          </Button>
+                          <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(() => adminApi.declineCoachAsk(key, r.userId).then(() => loadCoaches()))}>
+                            No
+                          </Button>
+                        </span>
+                      ),
+                    },
                   ]}
                   bulk={[
                     { label: 'Make life coach', onClick: (rows) => run(() => each(rows, (r) => makeCoach(r.userId, true)).then(() => loadCoaches())) },

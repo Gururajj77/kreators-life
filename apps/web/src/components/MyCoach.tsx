@@ -1,4 +1,4 @@
-import { BADGE_META, COACH_SHARE_META, COACH_SHARE_PARTS, MAX_COACHES, type CoachLink, type CoachSharePart, LOCALE } from '@kreators/shared';
+import { BADGE_META, COACH_SHARE_META, COACH_SHARE_PARTS, MAX_COACHES, type CoachLink, type CoachSharePart } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -6,13 +6,18 @@ import { api } from '../lib/api';
 import { useAuthed, useRefreshAll } from '../lib/queries';
 import { Button } from './Button';
 import { ConfirmDelete } from './ConfirmDelete';
+import { Fold } from './Fold';
 import { Nudge } from './Nudge';
 import { Pager, usePage } from './Pager';
 import { RoleBadge } from './RoleBadge';
 import { Sheet } from './Sheet';
+import { SkeletonList } from './Skeleton';
 import { Toggle } from './Toggle';
+import { longDate } from '../lib/date';
+import { focusHeadingAfter } from '../lib/focusHeading';
+import { RED_YES } from '../lib/ui';
 
-const day = (iso: string) => new Date(iso).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
+const day = longDate;
 
 /** A person in a coaching list: the first letter of their name, with their badge on it. */
 export function CoachFace({ name, badge, size = 40 }: { name: string; badge: CoachLink['coach']['badge']; size?: number }) {
@@ -25,11 +30,11 @@ export function CoachFace({ name, badge, size = 40 }: { name: string; badge: Coa
 }
 
 /**
- * The side of the student in coaching, the one block for it: asks to answer, each coach with the five parts they may see
- * as switches, and ending it. On the Profile tab and in Coaching, both reading the same data, so a change in one
- * shows in the other. Its calls live under /me/coach, which no app switch can close.
+ * The side of the student in coaching, the one block for it: asks to answer, each coach with the six parts they may see as switches (in a fold,
+ * so a long list never fills the page; open while an ask waits, since that is when they choose), and ending it. On the Profile tab and in
+ * Coaching, both reading the same data, so a change in one shows in the other. Its calls live under /me/coach, which no app switch can close.
  */
-// `inCoaching`: on the Coaching page itself, whose lede already says this, so the block skips it and points down to the list of coaches.
+// `inCoaching`: on the Coaching page itself, inside its own fold, so the block skips its heading and lede and points down to the list of coaches.
 export function MyCoachSection({ id = 'coach', title = 'Your life coach', inCoaching = false }: { id?: string; title?: string; inCoaching?: boolean }) {
   const pg = usePage('coach');
   const q = useAuthed(['my-coach', pg.query], () => api.myCoach(pg.query));
@@ -48,20 +53,23 @@ export function MyCoachSection({ id = 'coach', title = 'Your life coach', inCoac
       setEnding(null);
       setUnasking(null);
       done();
+      // The row's buttons go with the link, so the keyboard's place moves to this block's heading.
+      focusHeadingAfter(inCoaching ? 'my-coach-heading' : `${id}-heading`);
     },
   });
   const links = (q.data?.links ?? []).filter((l) => l.student.id !== l.coach.id);
   const error = answer.error ?? share.error ?? end.error;
   return (
-    <section id={id} className="mt-lg scroll-mt-[64px]" aria-labelledby={`${id}-heading`}>
-      <h2 id={`${id}-heading`} className="text-title2">
-        {title}
-      </h2>
+    <section id={id} className={inCoaching ? '' : 'mt-lg scroll-mt-[64px]'} aria-labelledby={inCoaching ? undefined : `${id}-heading`}>
       {!inCoaching && (
-        <p className="mt-xs m-0 text-subhead text-ink-soft">
-          A coach the team chose sees only what you switch on, never your journal. End it any time.
-        </p>
+        <>
+          <h2 id={`${id}-heading`} className="text-title2">
+            {title}
+          </h2>
+          <p className="mt-xs m-0 text-subhead text-ink-soft">A coach the team chose sees only what you switch on, never your journal. End it any time.</p>
+        </>
       )}
+      {q.isPending && <SkeletonList className="mt-sm" count={1} lines={2} label="Loading your life coach" />}
       {q.data && links.length === 0 && (
         <p className="mt-sm m-0 text-subhead">
           No life coach yet.{' '}
@@ -90,16 +98,26 @@ export function MyCoachSection({ id = 'coach', title = 'Your life coach', inCoac
                   </span>
                 </span>
               </div>
-              {(l.status === 'active' || mineToAnswer) && (
-                <fieldset className="m-0 mt-sm border-0 p-0">
-                  <legend className="text-subhead font-semibold">{waiting ? 'What they would see' : 'What they see'}</legend>
-                  <div className="mt-xs flex flex-col gap-xs">
+              {/* The coach asked to see patterns: the same switch, one tap, and it stays their choice. */}
+              {l.status === 'active' && !l.share.patterns && l.patternsAskedAt && (
+                <div className="mt-sm flex flex-wrap-reverse items-center justify-between gap-sm rounded-tile bg-paper p-sm">
+                  <p className="m-0 min-w-[60%] flex-1 text-subhead">{l.coach.name} asked to see your patterns. It is your choice.</p>
+                  <Button size="sm" variant="outline" disabled={share.isPending} onClick={() => share.mutate({ id: l.id, part: 'patterns', on: true })}>
+                    Turn it on
+                  </Button>
+                </div>
+              )}
+              {/* Every link they can still choose on, a waiting one they asked for too: they see each switch before anything is shared. */}
+              <Fold title={waiting ? 'What they would see' : 'What they see'} hint={`${COACH_SHARE_PARTS.filter((part) => l.share[part]).length} of ${COACH_SHARE_PARTS.length}`} defaultOpen={waiting} className="mt-sm">
+                <fieldset className="m-0 border-0 p-0">
+                  <legend className="sr-only">{waiting ? 'What they would see' : 'What they see'}</legend>
+                  <div className="flex flex-col gap-xs">
                     {COACH_SHARE_PARTS.map((part) => (
                       <Toggle key={part} on={l.share[part]} disabled={share.isPending} onChange={(on) => share.mutate({ id: l.id, part, on })} label={COACH_SHARE_META[part].name} hint={COACH_SHARE_META[part].blurb} />
                     ))}
                   </div>
                 </fieldset>
-              )}
+              </Fold>
               <div className="mt-sm flex flex-wrap gap-xs">
                 {mineToAnswer && (
                   <>
@@ -117,7 +135,7 @@ export function MyCoachSection({ id = 'coach', title = 'Your life coach', inCoac
                   </Button>
                 )}
                 {l.status === 'active' && (
-                  <Button variant="ghost" disabled={end.isPending} onClick={() => setEnding(l)}>
+                  <Button variant="ghost" disabled={end.isPending} onClick={() => { end.reset(); setEnding(l); }}>
                     End coaching
                   </Button>
                 )}
@@ -146,8 +164,14 @@ export function MyCoachSection({ id = 'coach', title = 'Your life coach', inCoac
       />
       <Sheet open={Boolean(ending)} onClose={() => setEnding(null)} title={`End coaching with ${ending?.coach.name ?? 'your coach'}?`}>
         <p className="m-0 text-callout">They stop seeing your progress at once and are told. Their notes and the change log stay with you.</p>
+        {/* Said here too: the list's own error line sits under this sheet, out of sight. */}
+        {end.isError && (
+          <p role="alert" className="mt-sm m-0 text-subhead text-r1">
+            That did not work. Try again.
+          </p>
+        )}
         <div className="mt-md flex flex-col gap-xs">
-          <button type="button" disabled={end.isPending} onClick={() => ending && end.mutate(ending.id)} className="toy min-h-[48px] rounded-pill bg-r1 px-md text-headline text-on-fill">
+          <button type="button" disabled={end.isPending} onClick={() => ending && end.mutate(ending.id)} className={RED_YES}>
             Yes, end it
           </button>
           <Button variant="outline" full onClick={() => setEnding(null)}>

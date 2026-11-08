@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import { DAILY_GROUPED_MAX, dayTypeOf, slotIndexOfTask, slotOrder, PLAN_DEFAULT_MINUTES, startingTemplateFor, weekDates, type DayPlan, type DayTypeResponse, type TemplateSlot, MONTH_RE, MONTH_TASKS_MAX, monthShift, repeatLabel, type MonthProject, type MonthTask, type TodayMonthResponse, PLAN_DAY_MINUTES, planWeek, type PlanTask, MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, notToDoStreak, notToDoWeek, POINTS, RELATIONSHIPS, sparkFor, XP, zonedToUtc, type CheckinResponse, type NotToDo, type NotToDoStatus, type RelationshipKey, TODAY_AGENCY_MAX, type TodayAgency, type TodayEvent, type TodayResponse, type TodayWaitingResponse, parseLifeArea, isTaskSort } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { resolveAccess } from '../access';
-import { DATE_RE, dateNearToday, getUser, newId, notify, nowIso, pageOf, paged, shiftDate, toNode, type NodeRow, taskGate, withSubtasks } from '../db';
-import { dayPlan, ensureTimeBlocks, kindsBetween, loadBlocking } from '../timeBlocks';
+import { DATE_RE, dateNearToday, getUser, newId, noteStmt, nowIso, pageOf, paged, shiftDate, streakNow, toNode, type NodeRow, taskGate, withSubtasks } from '../db';
+import { dayPlan, kindsBetween, loadBlocking } from '../timeBlocks';
 
 export const today = new Hono<AppEnv>();
 
@@ -219,7 +219,6 @@ today.get('/', async (c) => {
   // The day's plan (its day template, the kind of day): read first, since the six shown and the `?block=` cut depend on it.
   const grouped = c.req.query('group') === '1';
   const blockAsk = c.req.query('block');
-  await ensureTimeBlocks(db, user);
   const blocking = await loadBlocking(db, user.id, [date]);
   const day = dayPlan(blocking, date);
   const block = blockAsk === 'none' ? 'none' : blockAsk && BLOCK_ID_RE.test(blockAsk) && blocking.blocks.some((b) => b.id === blockAsk) ? blockAsk : null;
@@ -261,10 +260,10 @@ today.get('/', async (c) => {
       .prepare(
         `SELECT
         (SELECT COALESCE(SUM(estimate_min), 0) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) <= ?2 AND estimate_min IS NOT NULL) AS planned,
-        (SELECT COALESCE(SUM(estimate_min), 0) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'done' AND completed_at LIKE ?3 AND estimate_min IS NOT NULL) AS done,
+        (SELECT COALESCE(SUM(estimate_min), 0) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'done' AND completed_at >= ?3 AND completed_at < ?4 AND estimate_min IS NOT NULL) AS done,
         (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) <= ?2 AND due_time IS NOT NULL) AS timed`,
       )
-      .bind(user.id, date, `${date}%`)
+      .bind(user.id, date, date, shiftDate(date, 1))
       .first<{ planned: number; done: number; timed: number }>(),
     // The main list is only what has a day that has come. A task with no date at all (no do date and no due date) waits in the not scheduled list below it until either is picked.
     db
@@ -308,12 +307,12 @@ today.get('/', async (c) => {
       )
       .bind(user.id, date, PLAN_DEFAULT_MINUTES)
       .all<{ time_block_id: string | null; due_time: string | null; min: number }>(),
-    // A gentle nudge in the inbox, once a day, when a reminder time is set and
-    // the day's check-in has not happened yet.
+    // A gentle nudge in the inbox, once a day, when a reminder time is set and the day's check-in has not happened yet. Looked up
+    // by its own id and the cron's check-in note (`sendReminders`), never by kind: your own reminders, tasks and focus are reminders too.
     (async () => {
       if (user.reminder_time && user.last_checkin !== date) {
-        const already = await db.prepare("SELECT 1 FROM notifications WHERE user_id = ? AND kind = 'reminder' AND created_at >= ?").bind(user.id, `${date}T00:00:00`).first();
-        if (!already) await notify(db, user.id, 'reminder', 'Your daily three are waiting', 'Check in, do your small act, tick a task.', '/today');
+        const already = await db.prepare('SELECT 1 FROM notifications WHERE user_id = ? AND id IN (?, ?)').bind(user.id, `daily-${user.id}-${date}`, `checkin-${user.id}-${date}`).first();
+        if (!already) await noteStmt(db, { id: `daily-${user.id}-${date}`, userId: user.id, kind: 'reminder', title: 'Your daily three are waiting', body: 'Check in, do your small act, tick a task.', link: '/today' }, 'once').run();
       }
     })(),
   ]);
@@ -331,7 +330,7 @@ today.get('/', async (c) => {
   const res: TodayResponse = {
     date,
     checkedIn: user.last_checkin === date,
-    streak: user.streak,
+    streak: streakNow(user.streak, user.last_checkin, date),
     tasks: shown.slice(0, tasks.length),
     backlog: shown.slice(tasks.length, tasks.length + back.results.length),
     backlogTotal: backTotal?.n ?? 0,
@@ -370,7 +369,6 @@ today.get('/waiting', async (c) => {
   const area = areaAsk === 'none' ? 'none' : parseLifeArea(areaAsk);
   const cut = area === 'none' ? ' AND n.life_area IS NULL' : area ? ` AND n.life_area = '${area}'` : '';
   const grouped = c.req.query('group') === '1';
-  await ensureTimeBlocks(db, user);
   const blocking = await loadBlocking(db, user.id, [date]);
   const day = dayPlan(blocking, date);
   const useContext = contextApplies(day, blocking.defaultId) ? 1 : 0;
@@ -394,7 +392,6 @@ today.get('/week-plan', async (c) => {
   const date = dateParam(c.req.query('date'));
   const hours = Math.max(1, Math.min(12, Math.round(Number(c.req.query('hours')) || PLAN_DAY_MINUTES / 60)));
   const db = c.env.DB;
-  await ensureTimeBlocks(db, user);
   const dates = weekDates(date).slice(0, 7);
   const [rows, blocking] = await Promise.all([
     db
@@ -432,8 +429,6 @@ today.get('/month', async (c) => {
   if (dayAsked !== undefined && !DATE_RE.test(dayAsked)) return c.json({ error: 'day must be a real day like 2026-11-02' }, 400);
   const start = `${month}-01`;
   const end = `${monthShift(month, 1)}-01`;
-  // The day's sheet sets a kind from the person's templates, so the starting set is there (nothing is read when it already is).
-  await ensureTimeBlocks(db, user);
   const [gate, rows, projects, kindRead] = await Promise.all([
     taskGate(db, user.id),
     db
@@ -628,7 +623,6 @@ today.get('/day-type', async (c) => {
   const user = c.get('user');
   const date = dayTypeDay(c.req.query('date'), c.req.query('today'));
   if (!date) return c.json({ error: 'Pick today or tomorrow.' }, 400);
-  await ensureTimeBlocks(db, user);
   const blocking = await loadBlocking(db, user.id, [date]);
   const templateId = blocking.overrides[date] ?? null;
   const tpl = templateId ? blocking.templates.find((t) => t.id === templateId) : null;
@@ -649,7 +643,6 @@ today.put('/day-type', async (c) => {
     const cleared: DayTypeResponse = { date, kind: null, templateId: null };
     return c.json(cleared);
   }
-  await ensureTimeBlocks(db, user);
   const blocking = await loadBlocking(db, user.id, [date]);
   let tpl;
   if (asksTemplate) {

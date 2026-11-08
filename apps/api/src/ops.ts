@@ -2,7 +2,7 @@ import { TRACKED_EVENTS, type TrackedEvent } from '@kreators/shared';
 import type { Context, Next } from 'hono';
 import { LIMITS, type LimitName } from './limits';
 import type { AppEnv, Env } from './env';
-import { newId, nowIso } from './db';
+import { newId, nowIso, sessionUser } from './db';
 import { fetchT, TIMEOUT } from './http';
 
 /**
@@ -71,20 +71,30 @@ export async function track(db: D1Database, userId: string | null, name: Tracked
 export async function limited(db: D1Database, key: string, max: number, windowSec: number): Promise<boolean> {
   const now = Math.floor(Date.now() / 1000);
   const windowStart = now - (now % windowSec);
-  await db
-    .prepare('INSERT INTO rate_limits (key, window_start, count) VALUES (?1, ?2, 1) ON CONFLICT(key) DO UPDATE SET count = CASE WHEN window_start = ?2 THEN count + 1 ELSE 1 END, window_start = ?2')
+  // One round trip: the count comes back with the write.
+  const row = await db
+    .prepare('INSERT INTO rate_limits (key, window_start, count) VALUES (?1, ?2, 1) ON CONFLICT(key) DO UPDATE SET count = CASE WHEN window_start = ?2 THEN count + 1 ELSE 1 END, window_start = ?2 RETURNING count')
     .bind(key, windowStart)
-    .run();
-  const row = await db.prepare('SELECT count FROM rate_limits WHERE key = ?').bind(key).first<{ count: number }>();
+    .first<{ count: number }>();
   return (row?.count ?? 0) > max;
 }
 
 export const ipOf = (c: Context<AppEnv>) => c.req.header('CF-Connecting-IP') ?? c.req.header('X-Forwarded-For') ?? 'local';
 
+/**
+ * What a count's key holds in place of an address or a typed email (the founder, 2026-11-07): a salted hash, so rate_limits holds neither. The same words
+ * always give the same key, so a limit counts as it did. The salt is the one the /go redirect uses, with the same fallback, so a limit still counts on a
+ * server with none set; `:limit:` keeps these apart from a click's hash, so the two tables cannot be joined on it.
+ */
+export async function limitKey(env: { CLICK_SALT?: string }, raw: string): Promise<string> {
+  return (await sha(`${env.CLICK_SALT ?? 'kreators-local'}:limit:${raw}`)).slice(0, 32);
+}
+
 /** Middleware: the named limit from limits.ts, per address, or per person once there is a session. */
-export function rateLimit(name: LimitName, by?: 'address', when?: 'discountCode' | 'appPrefs') {
+export function rateLimit(name: LimitName, by?: 'address', when?: 'discountCode' | 'appPrefs' | 'datePrefs' | 'adminKey') {
   const { max, windowSec } = LIMITS[name];
   return async (c: Context<AppEnv>, next: Next) => {
+    if (when === 'adminKey') return adminKeyDoor(c, next, `${name}:ip:${await limitKey(c.env, ipOf(c))}`, max, windowSec);
     // A limit that counts only code tries looks at the body (Hono keeps it, so the route still reads it).
     if (when === 'discountCode') {
       const body = await c.req.json<{ discountCode?: unknown }>().catch(() => null);
@@ -95,17 +105,50 @@ export function rateLimit(name: LimitName, by?: 'address', when?: 'discountCode'
       const body = await c.req.json<{ appPrefs?: unknown }>().catch(() => null);
       if (!body || body.appPrefs === undefined) return next();
     }
+    // The same for the date and time format (Profile): the form sends it only when it changed.
+    if (when === 'datePrefs') {
+      const body = await c.req.json<{ datePrefs?: unknown }>().catch(() => null);
+      if (!body || body.datePrefs === undefined) return next();
+    }
     // `by: 'address'` counts the address even for a signed-in person, so one address cannot try codes through many accounts.
-    const who = by === 'address' ? ipOf(c) : (c.get('user')?.id ?? ipOf(c));
+    const userId = by === 'address' ? undefined : c.get('user')?.id;
+    const who = userId ?? (await limitKey(c.env, ipOf(c)));
     if (await limited(c.env.DB, `${name}${by === 'address' ? ':ip' : ''}:${who}`, max, windowSec)) return c.json({ error: 'too many tries, wait a minute' }, 429);
     await next();
   };
+}
+
+/**
+ * The door to /api/admin with the shared key. Only a request that carries a key is looked at, and an admin's own session never is, even beside an
+ * old key left on a device, so signing in as an admin is never slowed. Each try takes a place before the compare, so however many arrive at once
+ * no more than the limit are ever compared; a right key gives its place back, so using the key wears nothing out. Once an address has spent its
+ * places even the right key waits, or a good guess would still show. Both sides are hashed first, so the compare takes the same time whatever the
+ * length. admin.ts trusts only the flag set here, so a method with no door (OPTIONS) opens nothing and cannot be used to test a guess.
+ */
+async function adminKeyDoor(c: Context<AppEnv>, next: Next, place: string, max: number, windowSec: number) {
+  const given = c.req.header('X-Admin-Key');
+  if (!given) return next();
+  if ((await sessionUser(c))?.role === 'admin') return next();
+  if (await limited(c.env.DB, place, max, windowSec)) return c.json({ error: 'too many tries, wait a minute' }, 429);
+  if (c.env.ADMIN_KEY && safeEqual(await sha(given), await sha(c.env.ADMIN_KEY))) {
+    await c.env.DB.prepare('UPDATE rate_limits SET count = count - 1 WHERE key = ? AND count > 0').bind(place).run();
+    c.set('adminKeyOk', true);
+  }
+  return next();
 }
 
 /** SHA-256 as hex, for salted hashes. */
 export async function sha(text: string): Promise<string> {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** Constant-time compare of two strings of the same kind (hex hashes, signatures). */
+export function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
 /** The token in an unsubscribe link: the person's id and a hash only this server can make. */

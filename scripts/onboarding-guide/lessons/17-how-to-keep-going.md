@@ -24,10 +24,10 @@ On the seventh day of your check-in streak you get 50 points more. That bonus co
 
 ## The end of a week
 
-Switch on **Reviews** in the Reflection group if it is not on yet. Then look back.
+Show **Reviews** in the Reflection group if it is hidden. Then look back.
 
 1. Open the week that just ended. The app brings your numbers from every app you use, next to the week before.
-2. Answer four short questions: what went well, what got in the way, which pillar needs you most, and one thing to do differently.
+2. Answer the questions one at a time: your projects, pillar by pillar, what went well, what got stuck, and which pillar needs a next task.
 3. Tap **Save this review**. It is saved with the numbers as they were.
 
 A task you marked **Bring it to my review** waits under **Tasks you brought**. To make this a habit, tap **Schedule a review**, pick a day and a time, and the inbox reminds you.
@@ -60,10 +60,10 @@ Your public page carries a trust score. It grows from your xp, points, best stre
 
 ## The end of your first month
 
-1. **Write the month's review.** The questions ask what you are proud of, what slid and what you will change.
+1. **Write the month's review.** It walks your goal outcomes, pillar by pillar, then what came from your effort and what the next month needs.
 2. **Look at Life.** The five areas of life always go physical, financial, mental, emotional, spiritual. Each one holds up the next, so a weak one pulls down the one after it. Start with the first weak one.
 3. **Check your life map.** On Pillars, if your life has moved, tap **Run the session again**. Or tap **Build the pillars for your focus** when you are ready for more.
-4. **Tidy your apps.** Switch off what you did not open this month.
+4. **Tidy your apps.** Hide what you did not open this month.
 
 ## After a bad week
 

@@ -1,4 +1,4 @@
-import { EXPENSE_CATEGORIES, formatCount, INCOME_CATEGORIES, LOCALE, money, MONTH_RE, monthShift, type FinanceDue, type FinanceGoal, type FinanceRecurring, type FinanceSplit, type FinanceSummary, type FinanceTransaction, typedCents } from '@kreators/shared';
+import { EXPENSE_CATEGORIES, formatCount, INCOME_CATEGORIES, money, MONTH_RE, monthShift, type FinanceDue, type FinanceGoal, type FinanceRecurring, type FinanceSplit, type FinanceSummary, type FinanceTransaction, typedCents } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { PeriodPanel } from '../components/PeriodPanel';
@@ -11,16 +11,19 @@ import { Sheet } from '../components/Sheet';
 import { ConfirmDelete } from '../components/ConfirmDelete';
 import { Toggle } from '../components/Toggle';
 import { api } from '../lib/api';
-import { shortDate, todayLocal } from '../lib/date';
+import { shortDate, todayLocal, inZone, monthYear } from '../lib/date';
 import { FIELD, FIELD_LINE } from '../lib/ui';
 import { useParamState } from '../lib/useParamState';
 import { Fold } from '../components/Fold';
 
 import { useAuthed } from '../lib/queries';
 import { EmergenceSlot } from '../components/EmergenceSlot';
+import { evenGrid, evenTile } from '../lib/bento';
 
-const monthName = (m: string) => new Date(`${m}-01T00:00:00`).toLocaleDateString(LOCALE, { month: 'short', year: 'numeric' });
-const shortMonth = (m: string) => new Date(`${m}-01T00:00:00`).toLocaleDateString(LOCALE, { month: 'short' });
+// One tile a currency, so the row stays full however many are owed (lib/bento.ts).
+const OWED_COLS = { base: 1, sm: 2 } as const;
+const monthName = (m: string) => monthYear(`${m}-01`);
+const shortMonth = (m: string) => inZone(`${m}-01`, { month: 'short' });
 const day = (d: string) => shortDate(d);
 const shiftMonth = monthShift;
 /** A typed amount in cents through `typedCents` ("1,250.50" and "₹1.005" read right, a minus kept); junk reads as 0, so the form stays shut. */
@@ -88,7 +91,7 @@ export function Finance() {
 
       {d && (
         <>
-          <PeriodPanel id="finance-period" parts={['finance', 'shop']} />
+          <PeriodPanel id="finance-period" parts={['finance', 'moneyMore', 'shop']} />
           <EmergenceSlot app="finance" max={2} />
           <section className="mt-lg" aria-labelledby="month-heading">
             <div className="flex items-center justify-between gap-xs">
@@ -126,10 +129,11 @@ export function Finance() {
               )}
             </p>
             {d.owedToYou.length > 0 && (
-              <div className="mt-sm grid grid-cols-1 gap-xs sm:grid-cols-2" data-pillar="self" aria-label="Agency invoices owed to you">
-                {d.owedToYou.map((o) => (
+              <div className={`mt-sm grid gap-xs ${evenGrid(d.owedToYou.length, OWED_COLS)}`} data-pillar="self" aria-label="Agency invoices owed to you">
+                {d.owedToYou.map((o, i) => (
                   <StatTile
                     key={o.currency}
+                    className={evenTile(i, d.owedToYou.length, OWED_COLS)}
                     to="/agency?tab=invoices"
                     label="Owed to you, invoices"
                     value={money(o.cents, o.currency)}

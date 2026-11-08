@@ -19,8 +19,9 @@ const lines = (sel) => page.evaluate((sel) => [...document.querySelectorAll(`${s
 const QC = 'section[aria-label^="Bumling AI assistant"]';
 // The assistant on Daily: open it, start a flow, leave for Home with it open, come back.
 await page.goto(`${ORIGIN}/today`, { waitUntil: 'networkidle0' });
-await page.click('button[aria-label="Open the assistant"]'); await s(900);
-await click(`${QC} button`, 'Mark my not to do list'); await s(400);
+// The panel is its own chunk, downloaded the first time the button is reached, so wait for it rather than a fixed time.
+await page.click('button[aria-label="Open the assistant"]'); await page.waitForSelector(`${QC} [data-msg]`, { timeout: 10000 }); await s(400);
+console.log('flow tapped:', await click(`${QC} button`, 'Mark my not to do list')); await s(400);
 // Lines can still be arriving: wait until two reads 200 ms apart agree (or the card is up), at most about four seconds.
 for (let i = 0, n = -1; i < 20; i++) {
   const now = (await lines(QC)).length;
@@ -41,7 +42,7 @@ console.log('after start over:', (await lines(QC)).length, 'lines');
 const kept = await lines(QC);
 await click(`${QC} button`, 'Close'); await s(300);
 console.log('closed, panel gone:', !(await page.$(QC)));
-await page.click('button[aria-label="Open the assistant"]'); await s(600);
+await page.click('button[aria-label="Open the assistant"]'); await page.waitForSelector(`${QC} [data-msg]`, { timeout: 10000 }); await s(400);
 console.log('reopened with the same chat:', JSON.stringify(kept) === JSON.stringify(await lines(QC)));
 // The session: Keep my map, leave with Back, come back with Forward.
 await page.goto(`${ORIGIN}/session`, { waitUntil: 'networkidle0' }); await s(1500);

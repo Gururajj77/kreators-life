@@ -23,7 +23,7 @@ Next is her guide's small act for today, like "Dew's small act for today". It is
 
 Under **Tasks** sit the tasks from her pillars. A task pays 20 xp when ticked. Her first three ticks have no wait. After that, a task must be ten minutes old and ten minutes after her last tick.
 
-To plan one, Riya taps the pencil beside it. The plan opens right under the task.
+To plan one, Riya taps the pencil beside it. The plan opens right under the task. Its first field, **Task**, is the task's name, so she can change the words there. **Delete task**, at the plan's foot, asks first.
 
 1. **Do on:** the do date. The task shows on Daily from that day, and cannot be ticked before. **Tomorrow** and **Next week** are quick picks.
 2. **Due by:** the deadline. After it the task shows Overdue, but it never stops a tick.
@@ -63,7 +63,7 @@ Riya plans "Edit the brand reel": do date Thursday, due Friday, P1, Financial, 9
 
 ## Step seven: not to do and Habits
 
-**Not to do** is the list of things she stays away from, up to seven. Riya adds "No phone in bed" and taps **Add**. Each day she ticks the ones she kept. A kept day pays 5 xp and grows the streak. The three-dot button opens **I slipped today** and **Remove from the list**.
+**Not to do** is the list of things she stays away from, up to seven. Riya adds "No phone in bed" and taps **Add**. Each day she ticks the ones she kept. A kept day pays 5 xp and grows the streak. The three-dot button opens **I slipped today** and **Remove from the list**. A quiet line under the list, **Yesterday: 2 not marked**, marks yesterday in place, and never an earlier day.
 
 **Habits** sits under it. When a task she ticked on three or more days in eight weeks lines up with better or worse days, it shows as a **Good habit** or a **Bad habit**. A line says what went together, never what caused what. A bad one can go to the not to do list.
 
@@ -76,7 +76,7 @@ Daily is core and always on. You cannot switch it off for anyone.
 1. **Privacy:** her tasks, not to do list and habits are hers. No admin screen lists them.
 2. **Coaches:** a coach sees Daily and streaks only if Riya shares it on their link.
 3. **XP by hand:** in **Admin**, **People**, tap her row. Under **XP**, add or take away xp with a note. The note and your name go to the audit log.
-4. **Reviews:** Reviews starts off. Riya turns it on herself under **Apps** (Reflection). **What does this person see?** only allows or blocks an app; it never switches one on for her.
+4. **Reviews:** Reviews starts hidden. Riya unhides it herself under **Apps** (Reflection). **What does this person see?** only allows or blocks an app; it never unhides one for her.
 5. **Wait and cap:** after her first three ticks, a task must be ten minutes old and ten minutes after her last tick, and only six ticks a day pay xp. These guard against people gaming the boxes.
 
 ## The bottom line

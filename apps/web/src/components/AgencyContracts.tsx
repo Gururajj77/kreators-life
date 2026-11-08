@@ -1,4 +1,4 @@
-import { contractAsText, docRef, CONTRACT_STATUSES, CONTRACT_STATUS_NAME, CONTRACT_STATUS_TONE, CONTRACT_TEMPLATES, type AgencyTemplate, type BoardColumn, type ContractListItem, type ContractStatus, LOCALE } from '@kreators/shared';
+import { contractAsText, docRef, CONTRACT_STATUSES, CONTRACT_STATUS_NAME, CONTRACT_STATUS_TONE, CONTRACT_TEMPLATES, type AgencyTemplate, type BoardColumn, type ContractListItem, type ContractStatus } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -7,6 +7,7 @@ import { api, ApiError } from '../lib/api';
 import { useAuthed } from '../lib/queries';
 import { useParamState } from '../lib/useParamState';
 import { tie } from '../lib/text';
+import { Phrases } from './Phrases';
 import { AgencyDocsList } from './AgencyDocs';
 import { AgencyInvoices, FILTER_SELECT, PAPER_FILL, PaperLoading, PaperRowMenu, paperRow } from './AgencyInvoices';
 import { Button } from './Button';
@@ -19,8 +20,9 @@ import { StatusTag } from './StatusTag';
 import { CardHead } from './CardHead';
 import { useView, ViewToggle } from './ViewToggle';
 import { FIELD } from '../lib/ui';
+import { longDate } from '../lib/date';
 
-const day = (iso: string) => new Date(iso).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
+const day = longDate;
 const TEMPLATE_NAME: Record<string, string> = Object.fromEntries(CONTRACT_TEMPLATES.map((t) => [t.key, t.name]));
 
 /** Where an agreement can go from a board: draft and sent move between themselves and to void. A signed one is a record; only the client signs. */
@@ -413,11 +415,12 @@ export function AgreementTemplates() {
               </form>
             ) : (
               <div className="flex flex-wrap items-center justify-between gap-xs">
-                <span className="min-w-0 flex-1">
+                {/* The name keeps at least 40% of the row, so the longer "Tap again to remove" wraps under it instead of squeezing it. */}
+                <span className="min-w-0 flex-1 basis-[40%]">
                   <span className="block text-card-title">{tie(t.name)}</span>
                   <span className="block text-card-note text-ink-soft">{t.summary}</span>
                 </span>
-                <span className="flex gap-xs">
+                <span className="ml-auto flex gap-xs">
                   <Button
                     size="sm"
                     variant="outline"
@@ -432,6 +435,7 @@ export function AgreementTemplates() {
                   <Button
                     size="sm"
                     variant="ghost"
+                    className={armed === t.id ? 'red-armed' : ''}
                     onClick={() => armRemove(t.id)}
                     aria-label={armed === t.id ? `Tap again to remove template ${t.name}` : `Remove template ${t.name}`}
                   >
@@ -462,7 +466,7 @@ function Card({ c }: { c: ContractListItem }) {
             as "ENGAGEMENT AGREEMENT" (20 letters) stays on one line instead of leaving "AGREEMENT" alone. */}
         {tie(c.title, 20)}
       </Link>
-      <p data-kfoot="" className="mt-xs m-0 text-caption text-ink-soft">{tie(`${c.clientName || 'No client yet'}, ${c.signedAt ? `signed ${day(c.signedAt)}` : c.sentAt ? `sent ${day(c.sentAt)}` : `changed ${day(c.updatedAt)}`}`)}</p>
+      <p data-kfoot="" className="mt-xs m-0 text-caption text-ink-soft"><Phrases text={tie(`${c.clientName || 'No client yet'}, ${c.signedAt ? `signed ${day(c.signedAt)}` : c.sentAt ? `sent ${day(c.sentAt)}` : `changed ${day(c.updatedAt)}`}`)} at={/(?<=,) /} /></p>
     </div>
   );
 }

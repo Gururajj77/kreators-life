@@ -3,7 +3,7 @@ import { Building2, PencilLine } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { adminApi } from '../lib/api';
-import { todayLocal } from '../lib/date';
+import { todayLocal, longDate } from '../lib/date';
 import { useAutosave } from '../lib/useAutosave';
 import { SaveLine } from '../screens/AgencyContract';
 import { Button } from './Button';
@@ -16,7 +16,7 @@ import { StatusTag } from './StatusTag';
 import { FIELD } from '../lib/ui';
 
 const KIND_NAME: Record<string, string> = { invoice: 'Invoice', contract: 'Agreement', doc: 'Document' };
-const day = (iso: string) => new Date(iso).toLocaleDateString('en-CA');
+const day = longDate;
 
 /**
  * Admin, Agency house templates. The starting points the super admin made for everyone who uses Agency, listed, then opened as paper
@@ -116,7 +116,7 @@ export function AdminHouseTemplates({ adminKey }: { adminKey: string }) {
             { key: 'summary', label: 'Holds', get: (r) => r.summary, wrap: true },
             { key: 'business', label: 'Business details', get: (r) => (r.includeBusiness ? 'Included' : 'Not included'), filter: true },
             { key: 'active', label: 'Active', get: (r) => r.status === 'active', filter: true, edit: { kind: 'toggle', onEdit: (r, v) => change(r, { status: v ? 'active' : 'retired' }) } },
-            { key: 'updated', label: 'Changed', get: (r) => day(r.updatedAt), wide: true },
+            { key: 'updated', label: 'Changed', get: (r) => r.updatedAt, render: (r) => day(r.updatedAt), wide: true },
           ]}
         />
       </div>

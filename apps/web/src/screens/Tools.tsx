@@ -11,7 +11,7 @@ import { api } from '../lib/api';
 import { FeaturedTag } from './Store';
 import { useAuthed } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
-import { FIELD } from '../lib/ui';
+import { FIELD, RED_YES } from '../lib/ui';
 import { ErrorLine } from '../components/ErrorLine';
 import { MoreMenu } from '../components/MoreMenu';
 import { SkeletonList } from '../components/Skeleton';
@@ -98,7 +98,7 @@ function ToolRow({ t, reviewer, onChange }: { t: Tool; reviewer: boolean; onChan
                 type="button"
                 disabled={remove.isPending}
                 onClick={() => remove.mutate(undefined, { onSuccess: () => setRemoving(false) })}
-                className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill disabled:opacity-50"
+                className={RED_YES}
               >
                 Yes, remove it
               </button>

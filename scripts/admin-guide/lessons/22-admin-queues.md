@@ -85,11 +85,11 @@ Riya's friend asks to become a life coach.
 
 1. Open **Life coaches**. **Asked to be a life coach** lists the asks.
 2. Tick a row and tap **Make life coach**, or **Say no**.
-3. Under **Life coaches**, **Take the badge** ends every link of theirs and tells their students.
+3. Under **Life coaches**, **Take the badge** ends every link of theirs, tells their students and closes their invite link.
 4. **Link a coach and a student** offers **Ask the student** or **Link now**. Link now only if the student already agreed.
 5. **Every link** lists them all, with **End**.
 
-A student can have up to three coaches.
+Making someone a life coach also switches Coaching on for them. **Link now** starts with Patterns off, since the student never saw that switch. A student who says yes sees all six and picks. A student can have up to three coaches.
 
 ## Agency templates
 

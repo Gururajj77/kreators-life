@@ -3,6 +3,7 @@ import { ArrowUpRight, Footprints, PartyPopper, UsersRound, type LucideIcon } fr
 import { Link } from 'react-router';
 import { Icon } from './Icon';
 import { StatusTag } from './StatusTag';
+import { clockTime } from '../lib/date';
 
 /** A short day for a row ("4 Nov"), from a YYYY-MM-DD day, read as that calendar day and never shifted by a zone. */
 const shortDay = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -99,7 +100,7 @@ export function TodayEvents({ events }: { events: TodayEvent[] }) {
               <span className="min-w-0 flex-1">
                 <span className="block text-subhead font-semibold">{e.title}</span>
                 <span className="block text-caption text-ink-soft">
-                  {EVENT_KIND[e.kind]}, {new Date(e.at).toLocaleTimeString(LOCALE, { hour: 'numeric', minute: '2-digit' })}
+                  {EVENT_KIND[e.kind]}, {clockTime(e.at)}
                 </span>
               </span>
               <Icon icon={ArrowUpRight} size={16} className="shrink-0 text-ink-mute" />

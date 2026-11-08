@@ -4,19 +4,19 @@ You are good at something. Maybe you edit, write, shoot or teach. The Contributi
 In this lesson you'll learn:
 
 - What each app in Contribution and Creation is for, in a line or two.
-- Which ones are on from the start and which you switch on.
+- Which ones show from the start and which you unhide.
 - How work here gets checked by a real person before it pays.
 - What grows as you use them.
 
-## What is on from the start
+## What shows from the start
 
-A new account starts with **School**, **Work**, **Army** and the **Shop** on. The rest are off until you or the setup chat turn them on. Open **Apps**, then the **Contribution** or **Creation** group, and use the switch beside each app.
+A new account starts with **School**, **Work**, **Army** and the **Shop** on. The rest start hidden on a new account, unless the setup chat showed them for you. Open **Apps**, open the **Contribution** or **Creation** group, open **Hidden apps** at its end and tap the eye beside each app you want.
 
 ## Contribution: learn and earn
 
 These apps are about giving your skill to others and getting better at it.
 
-- **School:** cohorts with lessons, assignments, live sessions and a mentor's feedback. Tap **Enrol** beside a cohort. You are in one right now: this program lives in School. A program priced in points asks again before it spends.
+- **School:** cohorts with lessons, assignments, live sessions and a mentor's feedback. Tap **Enrol** beside a cohort. You are in one right now: this program lives in School. A program priced in points asks again before it spends. A lesson ends in its ways in, up to six: **Download resource**, **Watch video**, **Open resource** or a book. A video plays right in the lesson. Each cohort has its own **Discussion**, where you stay private unless you pick Public.
 - **Work:** opportunities from brands and the team. Write **A short note** and tap **Send application**. Your public portfolio and skills go with it, one application per person. You can **Withdraw** later.
 - **Army:** brand campaigns from brief to delivery. You see a brief once the team assigns you to it. Then you tap **Upload a version**, and the brand approves it or asks for changes.
 - **Win:** content rewards. A brand funds a pool, you post a video about them, and verified views turn into points. Each reward has **What could I earn?** so you can see the payout first. When your video is up, tap **Submit my video**.
@@ -62,9 +62,9 @@ These apps need people on both sides. Learners need mentors. Brands need creator
 - **Your Servitude pillar:** its question is "Who did you serve today?" A client, a learner or a brand counts. Put that work in its pyramid as projects and tasks.
 - **You:** a skill shared becomes a skill sharpened. Teaching what you know is one of the fastest ways to learn it better.
 
-> **Pro tip:** do not switch on every app here at once. Pick one way to learn and one way to earn. Add a third only when those two feel easy.
+> **Pro tip:** do not keep every app here showing at once. Pick one way to learn and one way to earn. Add a third only when those two feel easy.
 
-> **Result:** you know which apps fit your work, you have one switched on to learn and one to earn, and you know who checks your work before it pays.
+> **Result:** you know which apps fit your work, you have one showing to learn and one to earn, and you know who checks your work before it pays.
 
 ## The bottom line
 

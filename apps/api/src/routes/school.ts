@@ -1,8 +1,9 @@
 import { quoteCode, redeem, release, type Quoted } from '../discounts';
 import { Hono } from 'hono';
 import { ADMIN_GUIDE_PROGRAM, LESSON_BODY_MAX, LESSON_TITLE_MAX, MAX_PROGRAM_INVITES, isProgramVisibility, lessonBodyProblem, programTakesEnrolment, programVisibleTo, type Cohort, type CohortSession, type CourseAssignment, type Enrollment, type LearningItem, type Program, type ProgramInvite, type ProgramVisibility, type Submission } from '@kreators/shared';
+import { LESSON_RESOURCE_REPEAT, LESSON_RESOURCES_FULL, MAX_LESSON_RESOURCES, lessonResourceKindOf, lessonResourceLink, parseLessonResources, storedLessonResources } from '@kreators/shared/lessonResources';
 import type { AppEnv, UserRow } from '../env';
-import { audit, can, DELETED_NAME, inBatches, liveUser, nameOf, newId, notify, nowIso, num, oneOf, personBy, str, pageOf, paged, httpUrl } from '../db';
+import { audit, badLink, blockedEither, can, DELETED_NAME, inBatches, liveUser, LINK_PROBLEM, nameOf, newId, notify, nowIso, num, objectBody, oneOf, personBy, str, pageOf, paged, httpUrl } from '../db';
 
 export const school = new Hono<AppEnv>();
 
@@ -227,7 +228,7 @@ school.post('/programs/:id/invites', async (c) => {
   if (!who) return c.json({ error: 'type their email, @username or friend code' }, 400);
   const target = await personBy(db, who);
   if (target && target.id === user.id) return c.json({ error: 'That is you. Invite someone else.' }, 400);
-  const blocked = target ? await db.prepare('SELECT 1 AS x FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)').bind(user.id, target.id, target.id, user.id).first() : null;
+  const blocked = target ? await blockedEither(db, user.id, target.id) : false;
   if (!target || target.display_name === DELETED_NAME || blocked) return c.json({ error: NOT_FOUND_PERSON }, 404);
   const count = await db.prepare('SELECT COUNT(*) AS n FROM program_invites WHERE program_id = ?').bind(a.row.id).first<{ n: number }>();
   if ((count?.n ?? 0) >= MAX_PROGRAM_INVITES) return c.json({ error: `A program can have up to ${MAX_PROGRAM_INVITES} people invited.` }, 400);
@@ -332,33 +333,20 @@ school.post('/programs/:id/items', async (c) => {
   const problem = lessonBodyProblem(words);
   if (problem) return c.json({ error: problem }, 400);
   const asked = str(body.contentRef, 500);
-  if (asked && !lessonResource(asked)) return c.json({ error: 'Use an https link (a YouTube or Vimeo video, or a file), or a /resources/ file.' }, 400);
+  const firstLink = lessonResourceLink(asked);
+  if (asked && !firstLink) return c.json({ error: LINK_REFUSED }, 400);
   const n = await db.prepare('SELECT COALESCE(MAX(sequence), -1) + 1 AS n FROM learning_items WHERE program_id = ?').bind(a.row.id).first<{ n: number }>();
   const id = newId();
-  await db.prepare('INSERT INTO learning_items (id, program_id, module_title, content_type, content_ref, body, sequence, published) VALUES (?, ?, ?, ?, ?, ?, ?, 1)').bind(id, a.row.id, title, oneOf(body.contentType, ['lesson', 'video', 'reading'] as const, 'lesson'), lessonResource(asked) || null, words, n?.n ?? 0).run();
+  // A link given with a new lesson is its first resource, of the kind it reads as.
+  await db.batch([
+    db.prepare('INSERT INTO learning_items (id, program_id, module_title, content_type, content_ref, body, sequence, published) VALUES (?, ?, ?, ?, ?, ?, ?, 1)').bind(id, a.row.id, title, oneOf(body.contentType, ['lesson', 'video', 'reading'] as const, 'lesson'), firstLink || null, words, n?.n ?? 0),
+    ...(firstLink ? [db.prepare("INSERT INTO lesson_resources (id, item_id, position, kind, ref, label) VALUES (?, ?, 1, ?, ?, '')").bind(newId(), id, lessonResourceKindOf(firstLink), firstLink)] : []),
+  ]);
   await audit(db, user.id, 'lesson.add', 'learning_item', id, a.row.id, title);
   return c.json({ ok: true, id }, 201);
 });
 
-/** A lesson's resource: an https link (a YouTube or Vimeo video plays in the lesson, anything else opens or downloads) or one of the
- * app's own skill files under /resources/. Empty when it is neither. */
-function lessonResource(v: unknown): string {
-  const t = typeof v === 'string' ? v.trim().slice(0, 500) : '';
-  // The seeded skill files are percent-encoded ("Shubham%20Editor%20Skill.md", "%2B"), so escapes and "+" are allowed in a segment;
-  // a ".." in the path or hidden behind an escape (an encoded dot or slash), or an escape that does not decode, is refused.
-  if (/^\/resources\/[\w.%+-]+(\/[\w.%+-]+)*$/.test(t) && !t.includes('..')) {
-    let decoded = '';
-    try {
-      decoded = decodeURIComponent(t);
-    } catch {
-      return '';
-    }
-    if (decoded.includes('..') || decoded.slice('/resources/'.length).split('/').length !== t.slice('/resources/'.length).split('/').length) return '';
-    return t;
-  }
-  const link = httpUrl(t);
-  return /^https:\/\//i.test(link) ? link : '';
-}
+const LINK_REFUSED = 'Use an https link (a YouTube or Vimeo video, or a file), or a /resources/ file.';
 
 /** A lesson and whether this person may change it: whoever may edit its program (its creator, a manager of one of its cohorts, an
  * admin, or the team with the cohorts permission on a public program). */
@@ -369,9 +357,9 @@ async function lessonFor(db: D1Database, user: UserRow, id: string) {
   return { item, edit: Boolean(a?.edit) };
 }
 
-// Change a lesson in place, from its card on the cohort page: its title, kind and words, and its resource. Each part is optional; what
-// is sent is checked the way adding a lesson checks it. The resource change keeps its own audit line; the rest is one `lesson.edit`
-// line that names the parts changed, never the words.
+// Change a lesson in place, from its card on the cohort page: its title, kind and words. Each part is optional; what is sent is checked
+// the way adding a lesson checks it, and it is one `lesson.edit` line that names the parts changed, never the words. `contentRef` is the
+// single link a tab of the older app still sends: it changes the lesson's first link. Its resources have routes of their own below.
 school.patch('/items/:id', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
@@ -382,8 +370,8 @@ school.patch('/items/:id', async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
   let ref = item.content_ref;
   if (body.contentRef !== undefined) {
-    ref = lessonResource(body.contentRef);
-    if (!ref) return c.json({ error: 'Use an https link (a YouTube or Vimeo video, or a file), or a /resources/ file.' }, 400);
+    ref = lessonResourceLink(body.contentRef);
+    if (!ref) return c.json({ error: LINK_REFUSED }, 400);
   }
   let title = item.module_title;
   if (body.moduleTitle !== undefined) {
@@ -399,10 +387,113 @@ school.patch('/items/:id', async (c) => {
   }
   const kind = body.contentType !== undefined ? oneOf(body.contentType, ['lesson', 'video', 'reading'] as const, item.content_type) : item.content_type;
   await db.prepare('UPDATE learning_items SET module_title = ?, content_type = ?, content_ref = ?, body = ? WHERE id = ?').bind(title, kind, ref, words, item.id).run();
-  if (ref !== item.content_ref) await audit(db, user.id, 'lesson.resource', 'learning_item', item.id, item.content_ref ?? '', ref ?? '');
+  if (ref && ref !== item.content_ref) {
+    const first = (await resourcesOf(db, item.id)).find((r) => r.kind !== 'book');
+    await db.batch([
+      first
+        ? db.prepare("UPDATE lesson_resources SET kind = ?, ref = ?, label = '' WHERE id = ?").bind(lessonResourceKindOf(ref), ref, first.id)
+        : db.prepare("INSERT INTO lesson_resources (id, item_id, position, kind, ref, label) SELECT ?1, ?2, COALESCE(MAX(position), 0) + 1, ?3, ?4, '' FROM lesson_resources WHERE item_id = ?2").bind(newId(), item.id, lessonResourceKindOf(ref), ref),
+      keepFirstLink(db, item.id),
+    ]);
+    await audit(db, user.id, 'lesson.resource', 'learning_item', item.id, item.content_ref ?? '', ref);
+  }
   const changed = [title !== item.module_title ? 'title' : '', kind !== item.content_type ? 'kind' : '', words !== item.body ? 'words' : ''].filter(Boolean);
   if (changed.length) await audit(db, user.id, 'lesson.edit', 'learning_item', item.id, item.module_title, changed.join(', '));
   return c.json({ ok: true, contentRef: ref, moduleTitle: title, contentType: kind, body: words });
+});
+
+/** One lesson's resources in their order, as stored. */
+const resourcesOf = async (db: D1Database, itemId: string) => (await db.prepare('SELECT id, kind, ref, label FROM lesson_resources WHERE item_id = ? ORDER BY position, id').bind(itemId).all<ResourceRow>()).results;
+/** `content_ref` stays a true copy of the lesson's first link (a book has none), in the same batch as the change, so a tab of the older app reads what is there. */
+const keepFirstLink = (db: D1Database, itemId: string) => db.prepare("UPDATE learning_items SET content_ref = (SELECT ref FROM lesson_resources WHERE item_id = ?1 AND kind != 'book' ORDER BY position, id LIMIT 1) WHERE id = ?1").bind(itemId);
+/** A resource in the audit line: what it is, never more than the person typed. */
+const resourceLine = (r: { kind: string; ref: string; label: string }) => `${r.kind}: ${r.ref}${r.label ? ` (${r.label})` : ''}`;
+
+// A lesson's resources, for whoever may edit its program: add one, change one, move one up or down, remove one. Each write is one
+// batch with the first-link copy, and one `lesson.resource` line.
+school.post('/items/:id/resources', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const found = await lessonFor(db, user, c.req.param('id'));
+  if (!found) return c.json({ error: 'not found' }, 404);
+  if (!found.edit) return c.json({ error: 'the people who run this program change its lessons' }, 403);
+  const { resources, problem } = parseLessonResources([await objectBody(c)]);
+  const next = resources[0];
+  if (!next) return c.json({ error: problem ?? 'Pick what kind of resource this is.' }, 400);
+  const now = await resourcesOf(db, found.item.id);
+  if (now.length >= MAX_LESSON_RESOURCES) return c.json({ error: LESSON_RESOURCES_FULL }, 400);
+  if (now.some((r) => r.kind === next.kind && r.ref === next.ref)) return c.json({ error: LESSON_RESOURCE_REPEAT }, 400);
+  const id = newId();
+  // The most a lesson holds and the no-repeat rule are checked again inside the insert, so two taps at once cannot pass them both.
+  const [added] = await db.batch([
+    db
+      .prepare(
+        `INSERT INTO lesson_resources (id, item_id, position, kind, ref, label)
+         SELECT ?1, ?2, COALESCE(MAX(position), 0) + 1, ?3, ?4, ?5 FROM lesson_resources WHERE item_id = ?2
+         HAVING COUNT(*) < ?6 AND COALESCE(SUM(kind = ?3 AND ref = ?4), 0) = 0`,
+      )
+      .bind(id, found.item.id, next.kind, next.ref, next.label, MAX_LESSON_RESOURCES),
+    keepFirstLink(db, found.item.id),
+  ]);
+  if (added?.meta.changes !== 1) return c.json({ error: LESSON_RESOURCE_REPEAT }, 409);
+  await audit(db, user.id, 'lesson.resource', 'learning_item', found.item.id, '', resourceLine(next));
+  return c.json({ ok: true, id }, 201);
+});
+
+// Change one in place. What is not sent stays as it was; the whole row is read again by the one reader.
+school.patch('/items/:id/resources/:resourceId', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const found = await lessonFor(db, user, c.req.param('id'));
+  if (!found) return c.json({ error: 'not found' }, 404);
+  if (!found.edit) return c.json({ error: 'the people who run this program change its lessons' }, 403);
+  const now = await resourcesOf(db, found.item.id);
+  const row = now.find((r) => r.id === c.req.param('resourceId'));
+  if (!row) return c.json({ error: 'not found' }, 404);
+  const body = await objectBody(c);
+  const { resources, problem } = parseLessonResources([{ kind: body.kind ?? row.kind, ref: body.ref ?? row.ref, label: body.label ?? row.label }]);
+  const next = resources[0];
+  if (!next) return c.json({ error: problem ?? 'Pick what kind of resource this is.' }, 400);
+  if (now.some((r) => r.id !== row.id && r.kind === next.kind && r.ref === next.ref)) return c.json({ error: LESSON_RESOURCE_REPEAT }, 400);
+  await db.batch([db.prepare('UPDATE lesson_resources SET kind = ?, ref = ?, label = ? WHERE id = ? AND item_id = ?').bind(next.kind, next.ref, next.label, row.id, found.item.id), keepFirstLink(db, found.item.id)]);
+  await audit(db, user.id, 'lesson.resource', 'learning_item', found.item.id, resourceLine(row), resourceLine(next));
+  return c.json({ ok: true });
+});
+
+// Move one a place up or down: the list is numbered again from 1 in the new order.
+school.post('/items/:id/resources/:resourceId/move', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const found = await lessonFor(db, user, c.req.param('id'));
+  if (!found) return c.json({ error: 'not found' }, 404);
+  if (!found.edit) return c.json({ error: 'the people who run this program change its lessons' }, 403);
+  const now = await resourcesOf(db, found.item.id);
+  const at = now.findIndex((r) => r.id === c.req.param('resourceId'));
+  if (at < 0) return c.json({ error: 'not found' }, 404);
+  const to = oneOf((await objectBody(c)).to, ['up', 'down', ''] as const, '');
+  if (!to) return c.json({ error: 'pick up or down' }, 400);
+  const other = to === 'up' ? at - 1 : at + 1;
+  if (other < 0 || other >= now.length) return c.json({ error: to === 'up' ? 'It is already first.' : 'It is already last.' }, 400);
+  const order = now.map((r) => r.id);
+  [order[at], order[other]] = [order[other]!, order[at]!];
+  await db.batch([...order.map((id, i) => db.prepare('UPDATE lesson_resources SET position = ? WHERE id = ? AND item_id = ?').bind(i + 1, id, found.item.id)), keepFirstLink(db, found.item.id)]);
+  await audit(db, user.id, 'lesson.resource', 'learning_item', found.item.id, `${resourceLine(now[at]!)}, place ${at + 1}`, `place ${other + 1}`);
+  return c.json({ ok: true });
+});
+
+// Remove one (the screen asks for a second tap). A book lesson left with none shows The book again.
+school.delete('/items/:id/resources/:resourceId', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const found = await lessonFor(db, user, c.req.param('id'));
+  if (!found) return c.json({ error: 'not found' }, 404);
+  if (!found.edit) return c.json({ error: 'the people who run this program change its lessons' }, 403);
+  const row = (await resourcesOf(db, found.item.id)).find((r) => r.id === c.req.param('resourceId'));
+  if (!row) return c.json({ error: 'not found' }, 404);
+  const [gone] = await db.batch([db.prepare('DELETE FROM lesson_resources WHERE id = ? AND item_id = ?').bind(row.id, found.item.id), keepFirstLink(db, found.item.id)]);
+  if (gone?.meta.changes !== 1) return c.json({ error: 'not found' }, 404);
+  await audit(db, user.id, 'lesson.resource', 'learning_item', found.item.id, resourceLine(row), '');
+  return c.json({ ok: true });
 });
 
 // Move a lesson one place up or down. The two lessons trade places and the numbers they held, so the gaps a builder left (the guides
@@ -542,6 +633,7 @@ school.post('/cohorts/:id/enroll', async (c) => {
 });
 
 interface ItemRow { id: string; program_id: string; module_title: string; content_type: LearningItem['contentType']; content_ref: string | null; body: string; sequence: number; published: number }
+interface ResourceRow { id: string; kind: string; ref: string; label: string }
 interface AssignRow { id: string; program_id: string; title: string; instructions: string; rubric: string; due_days: number; sequence: number }
 interface SubRow { id: string; assignment_id: string; cohort_id: string; learner_user_id: string; learner_name: string; url: string | null; text: string; status: Submission['status']; submitted_at: string }
 interface FbRow { id: string; submission_id: string; reviewer_name: string; comment: string; grade: string | null; created_at: string }
@@ -558,8 +650,9 @@ school.get('/cohorts/:id', async (c) => {
   const mentor = role?.mentor ?? false;
   const enrolled = await db.prepare('SELECT 1 FROM enrollments WHERE cohort_id = ? AND learner_user_id = ? AND status != \'withdrawn\'').bind(k.id, user.id).first();
   if (!enrolled && !mentor) return role?.access.visible ? c.json({ error: 'you are not in this cohort' }, 403) : c.json({ error: 'not found' }, 404);
-  const [items, assigns, subs, fbs, sessions, att, enrolls] = await Promise.all([
+  const [items, resourceRows, assigns, subs, fbs, sessions, att, enrolls] = await Promise.all([
     db.prepare('SELECT * FROM learning_items WHERE program_id = ? AND published = 1 ORDER BY sequence').bind(k.program_id).all<ItemRow>(),
+    db.prepare('SELECT r.item_id, r.id, r.kind, r.ref, r.label FROM lesson_resources r JOIN learning_items i ON i.id = r.item_id WHERE i.program_id = ? AND i.published = 1 ORDER BY r.item_id, r.position, r.id').bind(k.program_id).all<ResourceRow & { item_id: string }>(),
     db.prepare('SELECT * FROM course_assignments WHERE program_id = ? ORDER BY sequence').bind(k.program_id).all<AssignRow>(),
     mentor
       ? db.prepare('SELECT s.*, u.display_name AS learner_name FROM submissions s JOIN users u ON u.id = s.learner_user_id WHERE s.cohort_id = ? ORDER BY s.submitted_at DESC').bind(k.id).all<SubRow>()
@@ -569,6 +662,8 @@ school.get('/cohorts/:id', async (c) => {
     db.prepare('SELECT a.session_id, a.user_id, a.status, u.display_name FROM attendance a JOIN users u ON u.id = a.user_id WHERE a.session_id IN (SELECT id FROM cohort_sessions WHERE cohort_id = ?)').bind(k.id).all<{ session_id: string; user_id: string; status: string; display_name: string }>(),
     mentor ? db.prepare("SELECT e.*, u.display_name AS learner_name FROM enrollments e JOIN users u ON u.id = e.learner_user_id WHERE e.cohort_id = ? AND e.status != 'withdrawn'").bind(k.id).all<{ id: string; cohort_id: string; learner_user_id: string; learner_name: string; status: Enrollment['status']; payment_status: Enrollment['paymentStatus']; enrolled_at: string; completed_at: string | null }>() : Promise.resolve({ results: [] }),
   ]);
+  const resourcesByItem = new Map<string, ResourceRow[]>();
+  for (const r of resourceRows.results) resourcesByItem.set(r.item_id, [...(resourcesByItem.get(r.item_id) ?? []), r]);
   const visibleSubs = subs.results.filter((s) => mentor || s.learner_user_id === user.id);
   const submissions: Submission[] = visibleSubs.map((s) => ({ id: s.id, assignmentId: s.assignment_id, cohortId: s.cohort_id, learnerId: s.learner_user_id, learnerName: nameOf({ display_name: s.learner_name }), url: s.url, text: s.text, status: s.status, submittedAt: s.submitted_at, feedback: fbs.results.filter((f) => f.submission_id === s.id).map((f) => ({ id: f.id, reviewerName: nameOf({ display_name: f.reviewer_name }), comment: f.comment, grade: f.grade, createdAt: f.created_at })) }));
   const sess: CohortSession[] = sessions.results.map((s) => ({ id: s.id, cohortId: s.cohort_id, title: s.title, startsAt: s.starts_at, endsAt: s.ends_at, onlineUrl: s.online_url, attended: att.results.some((a) => a.session_id === s.id && a.user_id === user.id), attendance: mentor ? att.results.filter((a) => a.session_id === s.id).map((a) => ({ userId: a.user_id, name: nameOf(a), status: a.status })) : undefined }));
@@ -582,7 +677,7 @@ school.get('/cohorts/:id', async (c) => {
   const me = await db.prepare('SELECT * FROM enrollments WHERE cohort_id = ? AND learner_user_id = ?').bind(k.id, user.id).first<{ status: Enrollment['status']; completed_at: string | null }>();
   return c.json({
     cohort: toCohort(k),
-    items: items.results.map((i): LearningItem => ({ id: i.id, programId: i.program_id, moduleTitle: i.module_title, contentType: i.content_type, contentRef: i.content_ref, body: i.body, sequence: i.sequence, published: i.published === 1 })),
+    items: items.results.map((i): LearningItem => ({ id: i.id, programId: i.program_id, moduleTitle: i.module_title, contentType: i.content_type, contentRef: i.content_ref, resources: storedLessonResources(resourcesByItem.get(i.id) ?? []), body: i.body, sequence: i.sequence, published: i.published === 1 })),
     assignments: assigns.results.map((a): CourseAssignment => ({ id: a.id, programId: a.program_id, title: a.title, instructions: a.instructions, rubric: a.rubric, dueDays: a.due_days, sequence: a.sequence })),
     submissions,
     sessions: sess,
@@ -598,12 +693,13 @@ school.post('/assignments/:id/submit', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  if (badLink(body.url)) return c.json({ error: LINK_PROBLEM }, 400);
   const cohortId = str(body.cohortId, 64);
   const a = await db.prepare('SELECT a.*, k.manager_user_id FROM course_assignments a JOIN cohorts k ON k.program_id = a.program_id WHERE a.id = ? AND k.id = ?').bind(c.req.param('id'), cohortId).first<AssignRow & { manager_user_id: string | null }>();
   if (!a) return c.json({ error: 'not found' }, 404);
   const enrolled = await db.prepare("SELECT 1 FROM enrollments WHERE cohort_id = ? AND learner_user_id = ? AND status = 'enrolled'").bind(cohortId, user.id).first();
   if (!enrolled) return c.json({ error: 'you are not in this cohort' }, 403);
-  const url = str(body.url, 500) || null;
+  const url = httpUrl(body.url) || null;
   const text = str(body.text, 5000);
   if (!url && !text) return c.json({ error: 'a link or some text' }, 400);
   const now = nowIso();

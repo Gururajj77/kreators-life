@@ -10,6 +10,9 @@ import '../components/fx/spotlight';
 import { useSession } from '../lib/store';
 import { tie } from '../lib/text';
 
+/** A grid of listing cards: one to a row on a phone, two on a tablet, three on a laptop, in even rows (evenGrid in lib/bento.ts). */
+export const LISTING_COLS = { base: 1, md: 2, lg: 3 } as const;
+
 /** A card is a preview, so its line is short: the first sentence when it is short enough, else the first words and an ellipsis. The page itself has all of it. */
 function cardBlurb(text: string, max = 16): string {
   const t = text.trim().replace(/\s+/g, ' ');
@@ -42,7 +45,7 @@ function splitFacts(facts: ListingFact[], by: string): { kind: string | null; sh
  * link (the title's link stretched over it), so there is one thing to tap; with `showFeature` the app's icon is its own small link to
  * that app's feature page, laid over the card.
  */
-export function ListingCard({ listing, showFeature = true }: { listing: Listing; showFeature?: boolean }) {
+export function ListingCard({ listing, showFeature = true, className = '' }: { listing: Listing; showFeature?: boolean; /** Its span in an even grid (lib/bento.ts). */ className?: string }) {
   const token = useSession((s) => s.token);
   const meta = LISTING_TYPE_META[listing.type];
   const module = MODULE_BY_KEY[meta.moduleKey];
@@ -84,7 +87,7 @@ export function ListingCard({ listing, showFeature = true }: { listing: Listing;
   return (
     <li
       data-pillar={accent}
-      className="fx-spot toy toy-soft group flex min-w-0 flex-col rounded-card bg-card p-md text-ink has-[.listing-go:focus-visible]:outline-3 has-[.listing-go:focus-visible]:outline-offset-3 has-[.listing-go:focus-visible]:outline-[color:var(--deep-self)]"
+      className={`fx-spot toy toy-soft group flex min-w-0 flex-col rounded-card bg-card p-md text-ink has-[.listing-go:focus-visible]:outline-3 has-[.listing-go:focus-visible]:outline-offset-3 has-[.listing-go:focus-visible]:outline-[color:var(--deep-self)] ${className}`}
     >
       {/* The cover sits inside the card's padding, its corners concentric with the card's (32 less 16). */}
       {hasCover && (

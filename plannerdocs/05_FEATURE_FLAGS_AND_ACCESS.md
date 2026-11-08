@@ -1,9 +1,9 @@
 # 05 — Feature flags, entitlements and access control
 
-Last updated: 2026-11-05
+Last updated: 2026-11-07
 
 **Product:** kreators.app
-**Version:** 0.6, reconciled with the app on 5 November 2026
+**Version:** 0.7, reconciled with the app on 7 November 2026
 **Source of truth:** `apps/api/src/access.ts`, `apps/api/src/db.ts` (`can`, `isGuide`, `isStaff`, `orgRole`), `packages/shared/src/modules.ts` (`MODULES`, `MODULE_GROUP_ORDER`, `GROUP_OPEN_DEFAULT`, `AppPrefs`, `moduleState`), `packages/shared/src/roles.ts` (`PERMISSIONS`, `isStaffFor`), `apps/api/src/routes/admin.ts` (the flag routes), `apps/api/src/agencyTeamAccess.ts`, `apps/api/src/portalAccess.ts`, `apps/api/src/teamLinkAccess.ts`, and the Flags and People pages under Admin.
 
 ## 1. Purpose
@@ -19,8 +19,8 @@ One flag per module, keyed by the module key: `army`, `agency`, `companion`. The
 - `module_settings` holds `key`, `enabled`, `min_role` (user, sub_admin, admin) and `rollout` (0 to 100). A module with no row is enabled, with the minimum role from `MODULES` and a rollout of 100.
 - `flag_overrides` holds `flag_key`, `subject_type` (user, role, organization), `subject_id`, `enabled`, `expires_at`, `reason` and `created_by`. Expired overrides are ignored when read. An override cannot switch off a locked module (the route answers 400, "That part of the app is always on.").
 - `MODULES` carries each module's own defaults: `defaultOn`, `minRole`, and `locked` for the parts a person cannot switch off. The locked ones are Home, Daily, Pillars, Search and the Assistant.
-- There are 46 modules in six groups. The groups always come in one order (`MODULE_GROUP_ORDER`): Contribution, Reflection, Connection, Creation, Essentials, then Operations, the team's own group.
-- `users.modules` is the person's own on or off per app. The setup chat writes it for the apps that fit the person's answers. It switches only `setupSwitchable` apps: Contribution, Creation, Connection and Reflection, never the essentials or the team's tools. Afterwards a person changes it on the Apps page or under Profile, Features (`PATCH /me/modules`). Both draw the same group list with a switch beside each app.
+- There are 47 modules in six groups. The groups always come in one order (`MODULE_GROUP_ORDER`): Contribution, Reflection, Connection, Creation, Essentials, then Operations, the team's own group.
+- `users.modules` is the person's own on or off per app. The setup chat writes it for the apps that fit the person's answers. It switches only `setupSwitchable` apps: Contribution, Creation, Connection and Reflection, never the essentials or the team's tools. Afterwards a person changes it on the Apps page or under Profile, Features (`PATCH /me/modules`). Both draw the same group list. On screen this is hide and unhide, never on and off: a quiet eye on each row, the same per-person switch underneath.
 - `users.app_prefs_json` (migration 0074) is the person's own arrangement of the groups. It says which groups start open and the order of apps inside a group. It never changes what is available or on (§12).
 - The flags and live overrides are kept by each Worker instance for five seconds (`ACCESS_TTL_MS`). Every admin route that writes a flag or an override drops that copy at once (`forgetAccessContext`). So a change shows on the next request there, and within five seconds everywhere else.
 
@@ -28,7 +28,7 @@ One flag per module, keyed by the module key: `army`, `agency`, `companion`. The
 
 "On for a new account" is the module's own default. The setup chat then switches on the apps that fit and off the rest. The table follows the one group order.
 
-The Apps page and Profile, Features list every app that is available to the person, on or off, with its switch. Locked apps are not listed there. The laptop sidebar and the phone menu list the apps that are on, under their group. Inside a group the apps come in the person's own order first (§12), then by context: what is on, then what fits their answers, then what they open most on this device.
+The Apps page and Profile, Features list every app that is available to the person, shown or hidden. Locked apps are not listed there. The laptop sidebar and the phone menu list the apps that are shown, under their group. Inside a group the apps come in the person's own order first (§12), then in the default order, which is the order of `MODULES` (the table below).
 
 | Group | Key | Name | Path | On for a new account | Minimum role | Locked |
 |---|---|---|---|---|---|---|
@@ -37,36 +37,37 @@ The Apps page and Profile, Features list every app that is available to the pers
 | Contribution | `army` | Army | `/army` | on | user |  |
 | Contribution | `win` | Win | `/win` | off | user |  |
 | Contribution | `agency` | Agency | `/agency` | off | user |  |
-| Reflection | `discover` | Discover | `/discover` | off | user |  |
 | Reflection | `life` | Life | `/life` | on | user |  |
+| Reflection | `journal` | Journal | `/journal` | on | user |  |
+| Reflection | `reviews` | Reviews | `/reviews` | off | user |  |
+| Reflection | `mindful` | Mindfulness | `/mindful` | off | user |  |
+| Reflection | `fitness` | Fitness | `/fitness` | off | user |  |
 | Reflection | `wellbeing` | Wellbeing | `/wellbeing` | off | user |  |
 | Reflection | `mood` | Mood | `/mood` | off | user |  |
 | Reflection | `sleep` | Sleep | `/sleep` | off | user |  |
 | Reflection | `stress` | Stress | `/stress` | off | user |  |
-| Reflection | `mindful` | Mindfulness | `/mindful` | off | user |  |
-| Reflection | `journal` | Journal | `/journal` | on | user |  |
-| Reflection | `reviews` | Reviews | `/reviews` | off | user |  |
-| Reflection | `companion` | Companion | `/companion` | off | user |  |
 | Reflection | `coaching` | Coaching | `/coaching` | off | user |  |
-| Connection | `cards` | Games | `/cards` | off | user |  |
-| Connection | `party` | Party | `/party` | off | user |  |
-| Connection | `run` | Kreators Run | `/run` | off | user |  |
+| Reflection | `companion` | Companion | `/companion` | off | user |  |
+| Reflection | `discover` | Discover | `/discover` | off | user |  |
 | Connection | `community` | Community | `/community` | off | user |  |
+| Connection | `run` | Kreators Run | `/run` | off | user |  |
 | Connection | `club` | Club | `/club` | off | user |  |
+| Connection | `party` | Party | `/party` | off | user |  |
 | Connection | `bond` | Bond | `/bond` | off | user |  |
 | Connection | `circles` | Circles | `/circles` | off | user |  |
-| Creation | `profile` | Public page | `/profile` | on | user |  |
+| Connection | `cards` | Games | `/cards` | off | user |  |
 | Creation | `shop` | Shop | `/shop` | on | user |  |
-| Creation | `store` | Store | `/store` | off | user |  |
-| Creation | `audience` | Audience | `/shop/audience` | off | user |  |
+| Creation | `profile` | Public page | `/profile` | on | user |  |
 | Creation | `content` | Content | `/shop/content` | off | user |  |
+| Creation | `audience` | Audience | `/shop/audience` | off | user |  |
 | Creation | `automations` | Auto-DM | `/shop/automations` | off | user |  |
 | Creation | `finance` | Finance | `/finance` | off | user |  |
-| Creation | `library` | My purchases | `/library` | off | user |  |
+| Creation | `fund` | Fund | `/fund` | off | user |  |
+| Creation | `tv` | TV | `/tv` | off | user |  |
 | Creation | `knowledge` | Knowledge | `/knowledge` | off | user |  |
 | Creation | `tools` | Tools | `/tools` | off | user |  |
-| Creation | `tv` | TV | `/tv` | off | user |  |
-| Creation | `fund` | Fund | `/fund` | off | user |  |
+| Creation | `store` | Store | `/store` | off | user |  |
+| Creation | `library` | My purchases | `/library` | off | user |  |
 | Essentials | `home` | Home | `/home` | on | user | yes |
 | Essentials | `today` | Daily | `/today` | on | user | yes |
 | Essentials | `tower` | Pillars | `/tower` | on | user | yes |
@@ -75,11 +76,11 @@ The Apps page and Profile, Features list every app that is available to the pers
 | Essentials | `notifications` | Inbox | `/inbox` | on | user |  |
 | Essentials | `help` | Help | `/help` | on | user |  |
 | Essentials | `assistant` | Assistant | `/plans` | on | user | yes |
-| Operations | `manage` | Manage | `/manage` | on | staff |  |
 | Operations | `admin` | Admin | `/admin` | on | admin |  |
-| Operations | `observability` | Observability | `/internal/observability` | on | staff |  |
+| Operations | `manage` | Manage | `/manage` | on | staff |  |
+| Operations | `observability` | Dev Tools | `/internal/observability` | on | staff |  |
 
-The count by group: Contribution 5, Reflection 11, Connection 7, Creation 12, Essentials 8, Operations 3. Games is switched on when a person unlocks a game in Rewards.
+The count by group: Contribution 5, Reflection 12, Connection 7, Creation 12, Essentials 8, Operations 3. Observability's key, route and code keep that word, and the app is called Dev Tools. Games is switched on when a person unlocks a game in Rewards.
 
 ## 4. Evaluation order
 
@@ -91,7 +92,7 @@ The count by group: Contribution 5, Reflection 11, Connection 7, Creation 12, Es
 4. Then, if the person's role ranks below the minimum role, the module is unavailable with reason `role`. An override that switches a module on does not lift the minimum role.
 5. A module is `on` when it is available and either locked, switched on by the person, or on by default.
 
-The result is one record per module: `available`, `on`, and a reason (`ok`, `disabled`, `override`, `rollout` or `role`). `GET /me` returns it and `Gate` uses it on the client. The same pure function scores every account for Observability, and Admin's "what does this person see?" preview uses it too.
+The result is one record per module: `available`, `on`, and a reason (`ok`, `disabled`, `override`, `rollout` or `role`). `GET /me` returns it and `Gate` uses it on the client. The same pure function scores every account for Dev Tools, and Admin's "what does this person see?" preview uses it too.
 
 The API enforces it too. `MODULE_FOR_PREFIX` in `access.ts` maps every API prefix to the module or modules that own it. A middleware in `index.ts` runs after the session check. It resolves access for the person and answers 403 ("<Name> is not available on your account.", with the module key) unless at least one of the path's modules is available. Only `available` counts, not the person's own on/off. Switching an app off for yourself is a preference the client keeps, and other screens may still read its data. A two-segment prefix (`studio/brands`) wins over its one-segment parent (`studio`). A prefix not in the map is the core and always open, so a new route file must be added to the map.
 
@@ -103,6 +104,8 @@ The API enforces it too. `MODULE_FOR_PREFIX` in `access.ts` maps every API prefi
 | `assistant/feelings` (the feelings reader in the strategy session) | `assistant` |
 | `connect` (photos, the conversation and who to meet inside an event) | `party`, `run` (either) |
 | `wellbeing` | `wellbeing`, `mood`, `sleep`, `stress`, `mindful`, `life` (any) |
+| `fitness` (movement, the eating check-in and `fitness/supplements`) | `fitness` |
+| `manage/community` (a guide's tools; mounted before `/manage`, whose staff-only check covers the rest) | `community` |
 | `coach` (the coach's side and the directory) | `coaching` |
 | `studio`, `kyc` | `shop` |
 | `studio/links`, `studio/content` | `content`, `automations` (either) |
@@ -114,13 +117,13 @@ The API enforces it too. `MODULE_FOR_PREFIX` in `access.ts` maps every API prefi
 | `proposals` | `tv`, `fund` (either) |
 | `internal` | `observability` |
 
-`reviews/kpis` sits under `reviews`, so business metrics need Reviews available and the person's own switch. `agency/team`, `agency/docs` and the team link's owner routes sit under `agency`.
+`reviews/kpis` sits under `reviews`, so business metrics need Reviews available and the person's own switch. `agency/team`, `agency/docs` and the team link's owner routes sit under `agency`. `school/cohorts/:id/talk` (a cohort's discussion) and `school/items/:id/resources` (a lesson's resources) sit under `school`. `run/move` (Kreators Run's own log) sits under `run`, so it works with Fitness off and writes the same movement log. `journal/gratitude` and `journal/gratitude-settings` sit under `journal`.
 
 Always open (the core):
 
-- `me`, with everything under it. That includes `me/coach`, where a student answers, shares and ends a coaching link. It includes `me/teams`, where a person answers an Agency team invite, leaves a team or reads a client member's view. It includes `me/calendar`, `me/activity`, and `me/legal`, where a person saves privacy choices and accepts the terms notice. So switching an app off never stops anyone from saying no, leaving, or changing a privacy choice.
-- `onboarding`, `session`, `nodes`, `today`, `insights`, `rewards`, `inbox`, `search`, `support`, `home`, `media`, `reminders`, `credits`, `discounts` (it only prices a code; each checkout is gated where it lives), `store` (a product's checkout and follow) and `orgs` (see the open item below).
-- `insights` (Emerging) is core but stricter than the gate. It reads only the apps that are `on` for the person, available and switched on, and sends no read for an app that is off.
+- `me`, with everything under it. That includes `me/coach`, where a student answers, shares and ends a coaching link, answers a coach's invite link (`me/coach/join/:token`) and keeps their section choices (`me/coach/prefs`). It includes `me/teams`, where a person answers an Agency team invite, leaves a team or reads a client member's view. It includes `me/calendar`, `me/activity`, and `me/legal`, where a person saves privacy choices and accepts the terms notice. So switching an app off never stops anyone from saying no, leaving, or changing a privacy choice.
+- `onboarding`, `session` (with the live call, `session/call`), `nodes`, `today`, `time-blocks` (read by every Daily, and settings, so always open), `insights` (with `insights/dashboard`), `rewards`, `inbox`, `search`, `support`, `home`, `media`, `reminders`, `credits`, `discounts` (it only prices a code; each checkout is gated where it lives), `store` (a product's checkout and follow) and `orgs` (see the open item below).
+- `insights` (Emerging) is core but stricter than the gate. It reads only the apps that are `on` for the person, available and switched on, and sends no read for an app that is off. A coach's patterns take a different door: the student's own Patterns switch on that link, under `coach` (see 08 §2).
 
 **Open item:** `/orgs` (brands, their teammates, `routes/orgs.ts`) is mounted in `index.ts` but has no line in `MODULE_FOR_PREFIX`. So it is open as core even when Army is off for the person. Its own checks still apply (`orgRole`, or the `talent` permission, to add a teammate). Whether it should map to `army` is a decision for the founder; it is listed under Known gaps.
 
@@ -128,7 +131,7 @@ The `admin` routes sit outside the session check and have their own (§7). The p
 
 ## 5. Access model as built
 
-- **Roles:** `user` (shown as Creator), `sub_admin` (Staff) and `admin`, ranked. A module's minimum role keeps Manage behind staff, Admin behind admins and the Operations group behind staff. Only an admin changes a role, and every change is audited. Nobody changes their own role, on either door. `POST /admin/users/:id/role` (the Admin console) and `POST /internal/users/:id/role` (Observability) both answer 400 "you cannot change your own role". The admin-key door has no signed-in person, so the key can still set any role; that is what it is for.
+- **Roles:** `user` (shown as Creator), `sub_admin` (Staff) and `admin`, ranked. A module's minimum role keeps Manage behind staff, Admin behind admins and the Operations group behind staff. Only an admin changes a role, and every change is audited. Nobody changes their own role, on either door. `POST /admin/users/:id/role` (the Admin console) and `POST /internal/users/:id/role` (Dev Tools) both answer 400 "you cannot change your own role". The admin-key door has no signed-in person, so the key can still set any role; that is what it is for.
 - **Permissions:** nine jobs, held in `users.permissions`. `can(user, permission)` is the one check, and it calls `isStaffFor`:
 
 | Permission | What it is for | Who may hold it |
@@ -145,7 +148,7 @@ The `admin` routes sit outside the session check and have their own (§7). The p
 
   A plain user holding a staff permission still fails. An admin passes everything except `coach`. Life coach is the one permission an admin does not hold unless given it, and a creator who holds it wears the Life coach badge. People ask to become a coach in the setup chat or under Coaching. The admins are told once, and giving the permission (through the one permissions route, which tells the person) is the yes. Taking it away ends every link of theirs and tells their students.
 - **Guides:** `isGuide` in `db.ts` is `can(user, 'moderation')`, the one guide rule (2026-11-03). It decides who hides, pins, holds and approves first posts under `/manage/community`, and who opens, renames or closes a Community channel. A staff member without moderation no longer does any of it; every admin does, and so does a creator given it (5 November: `moderation` is in `CREATOR_PERMISSIONS`, and the Community and Channels screens check `isStaffFor(user, 'moderation')`, the same rule). `isStaff` (an admin or a sub admin) is a separate check: staff see an anonymous writer's id so a report can be acted on. Muting in Community goes by rank (member, guide, staff, admin): only someone of a lower rank can be muted.
-- **Super admin:** a role of `admin`. It is never locked out of an unlock (points, xp, badge). It may give xp, points, badges, honors, a plan and credits by hand (all audited), reads the app's own log (Observability, Logs) and sets any event's attendee code. Only an admin's own session (not the key alone) makes, changes or retires an Agency house template. Founder addresses in `admins.ts` and `ADMIN_EMAILS` become admins on sign-up or sign-in (`promoteBootstrapAdmin`, audited).
+- **Super admin:** a role of `admin`. It is never locked out of an unlock (points, xp, badge). It may give xp, points, badges, honors, a plan and credits by hand (all audited), reads the app's own log (Dev Tools, Logs) and sets any event's attendee code. Only an admin's own session (not the key alone) makes, changes or retires an Agency house template. Founder addresses in `admins.ts` and `ADMIN_EMAILS` become admins on sign-up or sign-in (`promoteBootstrapAdmin`, audited).
 - **Ownership:** every owner-scoped query filters by the session user. Someone else's row answers 404 or 403.
 - **Brands:** `orgRole` and `orgIdsOf` decide who sees a campaign or a listing. Adding a teammate is `INSERT OR IGNORE`, so adding someone who is already in the brand cannot demote an owner. A brand team can be given Agency with a `flag_overrides` row whose `subject_type` is `organization`.
 - **Entitlements:** a Club event needs an approved membership that has not expired; so does a Club-only Work listing (`isClubMember`). A gated product, store item, tool or card game needs the xp floor, the points floor and the badge from `unlockFor` (any mix; "Unlocks at 500 xp, 2,000 points and the First tick badge"). A membership product checks the order's expiry. A members-only Community feed (posts tied to a membership product) is seen, reacted to and answered only by the product's owner and the people who bought it. That is `canSeePost` in `community.ts`, with an order that is `paid` or `test`. Liking, reading the replies and replying to a post you cannot see all answer 404, so its existence does not leak. The plan and its credits (`PLANS`, `credit_accounts`) gate typing to the assistant, not a module. The Companion never shows a paywall: without a plan it answers with its free built-in replies.
@@ -159,9 +162,9 @@ The `admin` routes sit outside the session check and have their own (§7). The p
 - **No CORS.** The API sends no `Access-Control-Allow-Origin`, so no other site can read an answer from a browser.
 - **Blocked paths.** A path that should hold nothing answers 404 from the Worker and never the app shell. That covers any segment starting with a dot, `.env`, `.git`, backups, dumps, `.sql`, `.map`, config and project files, `/src`, `/logs` and `/tmp`. `/.well-known/` is left open. The rule is `blockedPath` in `apps/api/src/headers.ts`; `scripts/check-exposed.sh` asks for these paths and expects 404.
 - **What a browser may keep.** An authenticated answer is `no-store`. Only anonymous answers that are the same for every visitor (Explore, an uploaded picture) are public. The Workers cache copy is skipped for any request that carries Authorization or a cookie.
-- **Who is told.** `securityAlerts` writes to every admin's inbox (kind `team`) when failed sign-ins, answers of 429, server errors or a role or permission change cross a line in the last fifteen minutes. It tells them once an hour per kind. Reading the log itself is still only for a super admin.
+- **Who is told.** `securityAlerts` writes to every admin's inbox (kind `team`) when failed sign-ins, answers of 429, server errors or a role or permission change cross a line in the last fifteen minutes. It tells them once an hour per kind, and each new note also goes out as one private email with counts only (2026-11-07). Reading the log itself is still only for a super admin.
 - **Consent gates behaviour, not access.** A person's privacy choices (`attribution`, `embeds`, `marketing`, all off until they say yes) decide three things. They decide whether the tracked-link cookie is set, whether a YouTube or Vimeo video loads, and whether marketing mail is sent. `sendEmail({ marketing: true })` sends only with a recorded yes and refuses with none. Receipts and password resets are never marketing. They do not change what any role or module may do.
-- **The terms notice.** `LEGAL_VERSION` is the day the terms or privacy policy last changed; it is now 2026-11-05. When it changes, every account sees the one-time terms notice again. Accepting it is core (`me/legal`), and it does not change access.
+- **The terms notice.** `LEGAL_VERSION` is the day the terms or privacy policy last changed; it is now 2026-11-07. When it changes, every account sees the one-time terms notice again. Accepting it is core (`me/legal`), and it does not change access.
 
 ## 5b. Agency team members (wave 14, migrations 0076 and 0081)
 
@@ -203,7 +206,9 @@ Every change is written to the audit log and shown under Admin, Audit. The actio
 
 Two parts of Admin check more than the admin door. Discount codes (`/admin/discounts`) also need the finance permission, which every admin holds. House templates (`/admin/agency/templates`) need a signed-in admin; the shared key alone cannot make one.
 
-The admin routes are not behind the session check; they have their own. They open with the `X-Admin-Key` header (compared in constant time with `ADMIN_KEY`) or with a signed-in admin's session. With no key set and no signed-in person they answer 503. With neither the key nor an admin they answer 403. The key is there for the first admin; after that an admin's session is enough.
+The admin routes are not behind the session check; they have their own. They open with the `X-Admin-Key` header or with a signed-in admin's session. With no key set and no signed-in person they answer 503. With neither the key nor an admin they answer 403. The key is there for the first admin; after that an admin's session is enough.
+
+The key has its own door since 2026-11-07 (limit `adminKey`, ten tries in ten minutes per address, on every method of `/admin/*`, `adminKeyDoor` in `ops.ts`). Each try takes a place before the compare, and a right key gives its place back. The compare is of the SHA-256 of both sides through `safeEqual`. Once the tries are spent even the right key answers 429. An admin's own session is never counted, and a method with no door (OPTIONS) opens nothing.
 
 Not built from v0.1: values per environment, flag owners and dependencies, a rollback button (the audit log shows the old value and the admin sets it back), and a confirmation step for high-impact flags.
 
@@ -220,8 +225,9 @@ flag_overrides    flag_key=agency   subject_type=organization  subject_id=<org> 
 ## 9. What a person sees
 
 - A module that is unavailable to the person is not listed on the Apps page or under Profile, Features. Its route shows the `Gate` screen, headed "<Name> is off", with "It is not available on your account right now."
-- A module that is available but switched off is listed on the Apps page and under Profile, Features with its switch off. Its route shows the same heading with "It is switched off. Turn it on from Apps." and an Open Apps button. Module names are public; nothing is hidden about their existence.
-- The Apps page is one accordion per group in its pillar's colour, saying "N of M on". Opening a group lists its apps: the name opens an app that is on, and the switch turns it on or off.
+- A module that is available but hidden sits in its group's Hidden apps fold on the Apps page and under Profile, Features. Its route shows the same heading with "It is switched off. Turn it on from Apps." and an Open Apps button (the one screen line that still says switched off). Module names are public; nothing is hidden about their existence.
+- The Apps page is one accordion per group in its pillar's colour, saying "N of M shown". Opening a group lists the apps that are shown: the name opens the app, and a quiet eye at its right hides it. A hidden app leaves that list for the Hidden apps fold, with Unhide. The count line reads "N shown, M hidden", and while an app is hidden an eye button beside it opens every hidden app in one panel.
+- A hidden app's widgets leave Home too (06 §3), and the brief never links into an app that is off (`briefPath`).
 - A person's own switch never changes what is available to others.
 - Deep links are re-checked on every visit, because `Gate` reads the live `/me`. A reminder's link (`/reviews?kind=…`) therefore lands on the Gate screen if the app is off.
 - The service worker takes over on the next load (`autoUpdate`, `skipWaiting`), so a cached page is replaced after a deploy.
@@ -240,11 +246,11 @@ A new module needs:
 - a route file with a rate limit for each write;
 - its tables, with export, erase and delete decided (see 04, §13).
 
-A new app slots into its group by context, after any apps a person has placed in their own order (`orderInGroup`). Groups never move.
+A new app takes its place in `MODULES`, which is the default order inside its group, after any apps a person has placed in their own order (`orderInGroup`). Groups never move. It also brings a picture for Home's tile (`scripts/app-art/build.mjs`; the scan fails without one).
 
 ## 11. Required tests, with status
 
-As of 2026-11-05 the shared suite has 553 tests passing and the smoke test 1,610 checks.
+As of 2026-11-07 the shared suite has 851 tests passing and the smoke test 2,508 checks.
 
 - A disabled module cannot be reached through the UI: holds (`Gate`).
 - A disabled module cannot be reached through the API: holds ("a switched-off app refuses its API" demands a 403 and "the core stays open while an app is off"). An override is refused the same way ("an override refuses the API too", "and the door opens again when it is removed"), and so is a rollout the person falls outside.
@@ -261,6 +267,8 @@ As of 2026-11-05 the shared suite has 553 tests passing and the smoke test 1,610
 - Only guides moderate: holds ("only guides pin", "only a guide opens a Community channel").
 - Business metrics are refused until the person switches them on: holds (403 on every route but the switch).
 - App prefs accept only known groups and each group's own apps, once each: holds (`appPrefs.test.ts`, and the smoke checks "app prefs refuse an app placed in another group", "app prefs belong to their owner", "app prefs are in the export").
+- The admin key is held to ten tries per address, a right key gives its place back and an admin's session is never counted: holds (the smoke's Admin section).
+- A coach reads only what the link shares, and Patterns stay off on an older link: holds (the Life coaches section of the smoke test, and `coachReport.test.ts`).
 - Also proven: "access resolves on the server", "a flag can be switched off", "an override for one person can be set", "the override reaches that person".
 
 ## 12. App groups, their order and a person's app prefs (2026-11-04)
@@ -272,6 +280,27 @@ The groups are display, not access. Nothing here changes what is available or on
 - **Picking.** Under Profile, Features each group has a "Starts open on Apps and in the menu" switch. "Arrange apps" turns the rows into a drag list with Move up and Move down. Apps move only inside their group, and groups never reorder. Reset order clears a group's order.
 - **Saved on the account.** `users.app_prefs_json` (migration 0074) holds `open` and `order`. `PATCH /me {appPrefs}` saves the whole set. `appPrefsProblem` is the one check: it refuses an unknown group, an app of another group and a repeat. `parseAppPrefs` is the one reader. The keys are looked up in objects with no prototype, so "constructor" finds nothing. The limit `prefs` applies only when a save carries `appPrefs`. It is on `GET /me` as `user.appPrefs`, in the export, gone with the account and untouched by an erase.
 - **Per tab.** Which groups a person opened during a visit is kept for that tab only (`useKept`), and forgotten on reload, sign-out or another device.
+- **The default order inside a group (2026-11-07, the founder).** `MODULES` is that order. Connection: Community, Kreators Run, Club, Party, Bond, Circles, then Games. Reflection, by importance: Life, Journal, Reviews, Mindfulness, Fitness, Wellbeing, Mood, Sleep, Stress, Coaching, Companion, Discover. Creation, by value: Shop, Public page, Content, Audience, Auto-DM, Finance, Fund, TV, Knowledge, Tools, Store, My purchases. Essentials ends Leaderboard, Inbox, Help, Assistant. Operations: Admin, Manage, Dev Tools. This ended the rule that lists moved by context: `useModules` now only puts what is on first, `lib/context.ts` is gone, and a device drops its `kreators.appUse` visit times. Fits you still marks and leads the hidden apps.
+
+## 13. New route prefixes and limits (5 to 7 November 2026)
+
+`LIMITS` now holds 63 names and `ROUTE_LIMITS` 262 method and path pairs. A limit only refuses; it never changes who may do what.
+
+| Limit | Count and window | Guards |
+|---|---|---|
+| `adminKey` | 10 in 10 minutes, per address | every method of `/admin/*`, counted only for a key that is not right |
+| `gratitude` | 240 an hour | `PUT /journal/gratitude/:day`, `POST …/another`, `POST …/pick`, `PUT /journal/gratitude-settings` |
+| `coachRead` | 300 an hour | `GET /coach/students/:id/report` and `/patterns` |
+| `coachLookup` | 120 an hour | `GET /coach/lookup` |
+| `coachJoin` | 60 an hour, per address | `GET /public/coach-join/:token`, `GET` and `POST /me/coach/join/:token` |
+| `coachJoinLink` | 300 an hour, per coach | the same doors, whatever the address |
+| `programInvite` | 100 a day | `POST /school/programs/:id/invites` |
+| `courseInvite` | 100 a day | `POST /studio/products/:id/invites` |
+| `onboardingSave` | 300 in 10 minutes, per address | `PUT /public/agency/:token/onboarding` |
+| `onboardingSubmit` | 10 in 10 minutes, per address | `POST /public/agency/:token/onboarding/submit` |
+| `contractAnswers` | 300 in 10 minutes, per address | `PUT /public/contracts/:token/answers` |
+
+`insights` went from 120 to 240 an hour and now also guards `GET /insights/dashboard`, since stepping through periods asks twice a step. The everyday limit `prefs` guards the new writes under `/time-blocks`, `/fitness`, `/fitness/supplements`, `/run/move`, `/school/items/:id/resources`, `PUT /me/coach/prefs`, `PATCH /me` when it carries `datePrefs` (`when`) and the cohort's own settings. `POST /session/call` shares `checkout`. `POST /coach/invite` and `POST /coach/students/:id/patterns/ask` share `coachWrite`. `POST /school/cohorts/:id/talk` shares `message`; a report on its lines shares `ticket` and a block shares `follow`.
 
 ## Known gaps
 
@@ -279,8 +308,7 @@ The groups are display, not access. Nothing here changes what is available or on
 - No confirmation step before switching a module off in production.
 - Reading another brand's data is enforced in code but not covered by a smoke check.
 - `/orgs` is not in `MODULE_FOR_PREFIX` and is open as core (reported 2026-11-01, not changed; see §4).
-- Left open on purpose by the security pass (`docs/security/SECURITY_REPORT.md`): session tokens live in `localStorage` (the content security policy, no third-party scripts and no HTML sinks are what protect them); the `X-Admin-Key` door under `/api/admin` has no rate limit and a development default; there is no second factor for staff.
-- The commits "first launch" and "mini edit" (early on 5 November) hold the work up to migration 0082; the rest of 5 November is not committed yet. Before a deploy these new files must be added to git: `apps/api/migrations/0083_agency_due_index.sql`, the two Google Sans Flex font files (`apps/web/public/fonts/google-sans-flex-latin.woff2` and `-latin-ext.woff2`), `apps/web/src/components/fx/FractalGlass.tsx`, `apps/web/src/components/RowCard.tsx`, and the insights golden test files (`packages/shared/src/insights.golden.test.ts`, `insights.golden.fixtures.ts` and the three files in `packages/shared/src/__golden__/`). Those are all the untracked files under `apps/` and `packages/` on 2026-11-05.
+- Left open on purpose by the security pass (`docs/security/SECURITY_REPORT.md`): session tokens live in `localStorage` (the content security policy, no third-party scripts and no HTML sinks are what protect them); there is no second factor for staff (left out for now, 2026-11-07).
 
 ## What changed since this was written
 
@@ -300,3 +328,4 @@ The groups are display, not access. Nothing here changes what is available or on
   - §11: team, team link, guide and app prefs checks; 553 shared tests and 1,610 smoke checks.
   - New §12: app groups, their order and a person's app prefs.
   - Known gaps: the guide rule mismatch and the files to add to git.
+- 2026-11-07 (version 0.7, migrations 0001 to 0119, 47 modules): Fitness joined Reflection; §3's table follows the new default order inside each group and names Dev Tools; §4 adds `fitness`, `manage/community`, `time-blocks`, `insights/dashboard`, the coach's join and prefs routes and the live call; §7 has the admin key's door; §9 says hide and unhide; §12 has the default order and the end of ordering by context; new §13 lists the new limits. Known gaps: the admin key's missing limit and the files to add to git are gone (the second is now one line in 04).

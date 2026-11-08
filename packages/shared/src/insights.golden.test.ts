@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { INSIGHT_APPS, insightsFor, insightsForApp, insightsForEvery, insightsForPlace, isPillarLine, RELATIONSHIPS } from './index';
+import { INSIGHT_APPS, insightsForApp, insightsForPlace, isPillarLine, RELATIONSHIPS } from './index';
+import { insightsFor, insightsForEvery } from './insights';
 import { GOLDEN_CASES, goldenFacts } from './insights.golden.fixtures';
 
 // Emerging's golden output (2026-11-05): the whole answer of `insightsFor` and what every place shows, for three synthetic people,

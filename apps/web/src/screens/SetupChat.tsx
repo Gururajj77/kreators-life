@@ -15,6 +15,7 @@ import {
   SETUP_BLOCKER_GROUPS,
   SETUP_GOAL_BY_KEY,
   SETUP_GOAL_GROUPS,
+  SETUP_MOVE_GROUP,
   SETUP_ROLE_GROUPS,
   setupSwitchable,
   type AppPick,
@@ -34,7 +35,7 @@ import { AppIcon } from '../components/AppIcon';
 import { Icon } from '../components/Icon';
 import { ChatActions, ChatLinks, ChatScreen, ChoiceChips, ChoiceGroups, typingTime, type ChatChoice, type ChatChoiceGroup, type ChatLine } from '../components/Chat';
 import { api, errorText } from '../lib/api';
-import { explainTyped, isQuestion } from '../lib/explain';
+import { isQuestion } from '../lib/isQuestion';
 import { forgetKept, useKept, useKeptRef } from '../lib/kept';
 import { useModules } from '../lib/modules';
 import { useMe, useRefreshAll } from '../lib/queries';
@@ -42,7 +43,7 @@ import { useSession } from '../lib/store';
 import { ToggleChevron } from '../components/ToggleMark';
 
 // ---------------------------------------------------------------------------
-// One guide, a few taps. Dew asks what brings you here, which of a few things sound like you, what you make
+// One guide, a few taps. Bumling asks what brings you here, which of a few things sound like you, what you make
 // (only when you make things), and what gets in your way. Every list comes in small groups. You can type an
 // answer, or a question about anything you see, at any point.
 // ---------------------------------------------------------------------------
@@ -79,6 +80,17 @@ const said = (labels: string[]) => listed(labels.map((l, i) => (i === 0 || /^I\b
 const kindOf = (k: string): IdentityKind | 'own' => IDENTITY_BY_KEY[k]?.kind ?? 'own';
 const uniq = <T,>(xs: T[]) => [...new Set(xs)];
 const makes = (a: SetupAnswers) => ['creator', 'freelancer', 'agency_owner', 'agency_team'].some((k) => a.identities.includes(k));
+/** The tags the who-you-are card asks about: the roles, then how you move. Anything else you said stays when it is answered. */
+const onWhoCard = (k: string) => kindOf(k) === 'role' || SETUP_MOVE_GROUP.keys.includes(k);
+/** What to do first in an app that was just shown, said at the end. Two at most, the best fit first, so the last card stays short. */
+const FIRST_STEP: Readonly<Record<string, string>> = {
+  agency: 'Agency is ready. Add your first client, then move each deliverable from idea to published. A page you can share lets the client approve their work.',
+  reviews: 'Reviews is ready. Pick a day for your first look back, and you get a reminder.',
+  fitness: 'Fitness is ready. Log a walk or a workout, or tick your meals. It is private and pays nothing.',
+  journal: 'Journal is ready. Write a line, or start with three lines of gratitude.',
+  coaching: 'Coaching is ready. Find a life coach there and ask. Nothing is shared until you say yes.',
+  school: 'School is ready. Start with Onboarding into kreators.app, a free course that shows you around.',
+};
 /** "I'm a student" said back: "you're a student". */
 const youSay = (k: string) => (IDENTITY_BY_KEY[k]?.blurb ?? k).replace(/^I'm /, "you're ").replace(/^I /, 'you ');
 
@@ -96,7 +108,7 @@ function Check({ on }: { on: boolean }) {
   );
 }
 
-/** What was picked up from something typed, as small pills inside one of Dew's lines. */
+/** What was picked up from something typed, as small pills inside one of Bumling's lines. */
 function Tags({ keys }: { keys: string[] }) {
   const tag = (k: string): { icon: IconName; label: string } => {
     if (k.startsWith('goal:')) return { icon: SETUP_GOAL_BY_KEY[k.slice(5)]?.icon ?? OWN_TAG_ICON, label: SETUP_GOAL_BY_KEY[k.slice(5)]?.label ?? k.slice(5) };
@@ -167,13 +179,13 @@ function MatchList({ answers, available, onSend }: { answers: SetupAnswers; avai
         </button>
         {!more && m.more.length > 0 && (
           <button type="button" onClick={() => setMore(true)} className="inline-flex min-h-[44px] items-center text-subhead font-semibold underline underline-offset-4">
-            Show {m.more.length} more
+            See {m.more.length} more
           </button>
         )}
       </div>
-      <ChatActions next={on.length === 1 ? 'Switch on 1 app' : `Switch on ${on.length} apps`} ready={on.length > 0} onNext={() => onSend({ apps: JSON.stringify(on) }, `Switch on ${listed(on.map((k) => MODULE_BY_KEY[k]!.name))}`)} />
+      <ChatActions next={on.length === 1 ? 'Show 1 app' : `Show ${on.length} apps`} ready={on.length > 0} onNext={() => onSend({ apps: JSON.stringify(on) }, `Show ${listed(on.map((k) => MODULE_BY_KEY[k]!.name))}`)} />
       <p className="mt-xs m-0 text-caption text-ink-soft">
-        Everything else stays off for now. You can change it anytime.{adds.length > 0 ? ` I'll also add ${listed(adds)} to your profile.` : ''}
+        Everything else stays hidden for now. You can show any app anytime.{adds.length > 0 ? ` I'll also add ${listed(adds)} to your profile.` : ''}
       </p>
     </div>
   );
@@ -181,7 +193,7 @@ function MatchList({ answers, available, onSend }: { answers: SetupAnswers; avai
 
 /**
  * The first chat. The account comes first when there is none; then a few grouped taps; then the apps that fit,
- * switched on. The strategy session waits in Pillars and is offered at the end when the answers ask for it.
+ * shown. The strategy session waits in Pillars and is offered at the end when the answers ask for it.
  */
 export function SetupChat() {
   const nav = useNavigate();
@@ -212,7 +224,7 @@ export function SetupChat() {
     timers.current = [];
   };
 
-  /** Dew says a few lines at a typing pace, then the next ask shows. */
+  /** Bumling says a few lines at a typing pace, then the next ask shows. */
   const say = useCallback(
     (lines: Line[], next: { part?: Part; ask: Ask | null; answers?: SetupAnswers; asked?: Question[]; picks?: string[] }) => {
       clearTimers();
@@ -255,7 +267,7 @@ export function SetupChat() {
       answers: a,
       asked,
       picks: a.goals,
-      ask: { kind: 'groups', groups: groupsOf(SETUP_GOAL_GROUPS, goalChoice), max: MAX_SETUP_GOALS, done: 'Next', more: 'Your answers decide which apps you get. Earning brings the apps that pay you. Client work brings Agency, for their work, time, invoices and approvals. Planning brings Reviews, with a calendar and reminders. Feeling better brings the mood, sleep and stress trackers. “Work on myself” adds the strategy session, a deeper setup for your seven relationships.' },
+      ask: { kind: 'groups', groups: groupsOf(SETUP_GOAL_GROUPS, goalChoice), max: MAX_SETUP_GOALS, done: 'Next', more: 'Your answers decide which apps you get. Earning brings the apps that pay you. Client work brings Agency, for their work, time, invoices and approvals. Planning brings Reviews, with a calendar and reminders. Feeling better brings the mood, sleep and stress trackers. Moving more or eating well brings Fitness. “Work on myself” adds the strategy session, a deeper setup for your seven relationships.' },
     });
 
   const askWho = (a: SetupAnswers, asked: Question[], lead: Line[]) =>
@@ -263,8 +275,8 @@ export function SetupChat() {
       part: 'who',
       answers: a,
       asked,
-      picks: a.identities.filter((k) => kindOf(k) === 'role'),
-      ask: { kind: 'groups', groups: groupsOf(SETUP_ROLE_GROUPS, tagChoice), done: 'Next', skip: 'None of these', more: 'This helps me suggest apps that fit your life. A student who edits videos needs other apps than an agency owner. Pick more than one, or describe yourself in the box below.' },
+      picks: a.identities.filter(onWhoCard),
+      ask: { kind: 'groups', groups: groupsOf([...SETUP_ROLE_GROUPS, SETUP_MOVE_GROUP], tagChoice), done: 'Next', skip: 'None of these', more: 'This helps me suggest apps that fit your life. A student who edits videos needs other apps than an agency owner. Pick more than one, or describe yourself in the box below.' },
     });
 
   const askWork = (a: SetupAnswers, asked: Question[], lead: Line[]) => {
@@ -296,15 +308,15 @@ export function SetupChat() {
       answers: a,
       asked,
       picks: a.blockers,
-      ask: { kind: 'groups', groups: groupsOf(SETUP_BLOCKER_GROUPS, blockerChoice), done: 'Next', skip: 'Nothing, skip', more: 'Honest answers help me get this right. If you are busy or easily distracted, I switch on fewer apps. If you are tired or stressed, I add the trackers. If you feel alone in this, I add ways to meet people.' },
+      ask: { kind: 'groups', groups: groupsOf(SETUP_BLOCKER_GROUPS, blockerChoice), done: 'Next', skip: 'Nothing, skip', more: 'Honest answers help me get this right. If you are busy or easily distracted, I show fewer apps. If you are tired or stressed, I add the trackers. If you feel alone in this, I add ways to meet people.' },
     });
 
   const showMatch = (a: SetupAnswers, asked: Question[], lead: Line[]) =>
-    say([...lead, "Here are the apps I'd switch on for you, based on your answers. Untick any you don't want, then tap the button to switch them on."], {
+    say([...lead, "Here are the apps I'd show you, based on your answers. Untick any you don't want, then tap the button to show them."], {
       part: 'match',
       answers: a,
       asked,
-      ask: { kind: 'form', render: (send) => <MatchList answers={a} available={available} onSend={send} />, more: 'Tap “Why these apps?” to see why each one is here. You can switch any app on or off later, in Profile, under Features.' },
+      ask: { kind: 'form', render: (send) => <MatchList answers={a} available={available} onSend={send} />, more: 'Tap “Why these apps?” to see why each one is here. You can hide or show any app later, in Apps or in Profile, under Features.' },
     });
 
   /** The next open question, or the match when every one is answered. */
@@ -323,7 +335,7 @@ export function SetupChat() {
       coach === 'coach'
         ? 'You are a life coach here already: your badge says so. Coaching is where your students are.'
         : coach
-          ? 'You said you are a life coach, so I asked the team to make you one. They check every coach first. The answer lands in your inbox, and then your badge says Life coach and students can find you in Coaching.'
+          ? 'You said you are a life coach. Asked. The team will look at it. The answer lands in your inbox, and then your badge says Life coach and students can find you in Coaching.'
           : null;
     const session =
       m.session === 'now'
@@ -343,11 +355,10 @@ export function SetupChat() {
     setChat((c) => ({ ...c, doneChips: withSession }));
     say(
       [
-        `All set! 🎉 ${on.length === 1 ? "I've switched on your app." : `I've switched on your ${on.length} apps.`}`,
+        `All set! 🎉 ${on.length === 1 ? 'Your app is ready.' : `Your ${on.length} apps are ready.`}`,
         'Five tabs are always there: Home, Daily, Pillars, Apps and Profile.',
         'Daily gives you three small things to do each day. Pillars is where you work on the seven relationships in your life.',
-        ...(on.includes('agency') ? ['Agency is on. Add your first client, then move each deliverable from idea to published. A page you can share lets the client approve their work.'] : []),
-        ...(on.includes('reviews') ? ['Reviews is on. Pick a day for your first look back, and you get a reminder.'] : []),
+        ...on.filter((k) => FIRST_STEP[k] && !(coachLine && k === 'coaching')).slice(0, 2).map((k) => FIRST_STEP[k]!),
         ...(coachLine ? [coachLine] : []),
         session,
         'Or start with Discover, a quiz that shows your strengths and shapes your next steps to fit you.',
@@ -410,7 +421,7 @@ export function SetupChat() {
   };
 
   const submitSetup = (a: SetupAnswers, apps: string[]) => {
-    say([], { ask: { kind: 'wait', text: 'Switching on your apps…' } });
+    say([], { ask: { kind: 'wait', text: 'Getting your apps ready…' } });
     api
       .setup({ ...a, apps })
       .then(async (r) => {
@@ -459,7 +470,7 @@ export function SetupChat() {
       return next({ ...a, goals }, asked('goals'), [`Got it. You want to ${listed(goals.map((g) => SETUP_GOAL_BY_KEY[g]!.to))}.`]);
     }
     if (c.part === 'who') {
-      const identities = uniq([...list, ...a.identities.filter((k) => kindOf(k) !== 'role')]);
+      const identities = uniq([...list, ...a.identities.filter((k) => !onWhoCard(k))]);
       return next({ ...a, identities }, asked('who'), [list.length ? `So ${listed(list.map(youSay))}. Nice!` : 'No problem. You can tell me more in your own words anytime.']);
     }
     if (c.part === 'work') {
@@ -512,8 +523,10 @@ export function SetupChat() {
     const keep = { part: c.part, ask: c.ask };
     if (c.part === 'account' || c.part === 'private') return say(["Let's make your account first. Then ask me anything."], keep);
     if (isQuestion(text)) {
-      const lines = explainTyped(text);
-      return say(lines.length ? [...lines, 'Anything else you want to know? If not, pick your answer below.'] : ['Good question! I can explain any app or word you see here. Try asking “What is Work?”'], keep);
+      const reply = (lines: string[]) => say(lines.length ? [...lines, 'Anything else you want to know? If not, pick your answer below.'] : ['Good question! I can explain any app or word you see here. Try asking “What is Work?”'], keep);
+      // The answers are their own small chunk, fetched the first time someone asks, so they never weigh on the first download.
+      void import('../lib/explain').then((m) => reply(m.explainTyped(text)), () => reply([]));
+      return;
     }
     if (c.part === 'done') return say(["You're all set! You can change your answers anytime in Profile."], keep);
     const read = readAbout(text);
@@ -564,7 +577,7 @@ export function SetupChat() {
         ask: { kind: 'chips', chips: [{ value: 'go', label: 'Yes, change my answers' }, { value: 'keep', label: 'No, keep them as they are' }] },
       });
     }
-    askGoals(EMPTY, [], [hi, "I'll ask you a few quick questions. Your answers decide which apps I switch on for you.", 'Tap the answers that fit. You can also type in your own words, or ask me what anything means.']);
+    askGoals(EMPTY, [], [hi, "I'll ask you a few quick questions. Your answers decide which apps I show you.", 'Tap the answers that fit. You can also type in your own words, or ask me what anything means.']);
   };
   const beginRef = useKeptRef(scope, 'begin', begin);
   beginRef.current = begin;

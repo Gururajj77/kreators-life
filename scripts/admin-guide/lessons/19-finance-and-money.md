@@ -9,12 +9,12 @@ In this lesson you'll learn:
 - How Agency invoices show up in Finance.
 - What an admin can and cannot see here.
 
-## Switch Finance on
+## Find Finance
 
-Finance is off on a new account. It sits in the Creation group.
+Finance starts hidden on a new account, unless the setup chat showed it for her. It sits in the Creation group.
 
 1. Riya opens the Apps tab and opens the Creation group.
-2. She turns on the switch beside Finance.
+2. She opens **Hidden apps** at its end and taps the eye beside Finance.
 3. She taps Finance to open it.
 
 The cover shows four numbers for all time: **earned, spent, kept and platform points**. Under them are two solid buttons, **Money in** and **Money out**. Under those sit four quiet ones: **Owed, Monthly, Goal and Budgets**.
@@ -79,7 +79,7 @@ The **Budgets** part shows how each one is going this month.
 
 ## Read the month
 
-The month view has arrows to go back and forward. It shows **in, out, net and platform points**, bars over recent months and a **By category** chart. **Entries** lists every line for the month. The **By period** block shows the same numbers for a week, a month, a quarter or a half year.
+The month view has arrows to go back and forward. It shows **in, out, net and platform points**, bars over recent months and a **By category** chart. **Entries** lists every line for the month. The **By period** block shows the same numbers for a day, a week, a month, a quarter or a half year.
 
 Riya can also use the assistant. Its free flows include **Add money in or out**, **Note money owed**, **Settle something owed**, **Set a money goal** and **Add to a money goal**.
 

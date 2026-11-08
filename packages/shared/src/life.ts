@@ -16,7 +16,7 @@ export type LifeAreaKey = 'physical' | 'financial' | 'mental' | 'emotional' | 's
 export const LIFE_AREA_ORDER: readonly LifeAreaKey[] = ['physical', 'financial', 'mental', 'emotional', 'spiritual'];
 
 export const LIFE_AREAS: Record<LifeAreaKey, { name: string; icon: IconName; blurb: string; path: string; relationship: RelationshipKey }> = {
-  physical: { name: 'Physical', icon: 'Activity', blurb: 'Sleep, movement and breath.', path: '/wellbeing', relationship: 'self' },
+  physical: { name: 'Physical', icon: 'Activity', blurb: 'Sleep, movement, breath and eating.', path: '/wellbeing', relationship: 'self' },
   financial: { name: 'Financial', icon: 'Wallet', blurb: 'What comes in, what goes out, where you are heading.', path: '/finance', relationship: 'servant_leader' },
   mental: { name: 'Mental', icon: 'Brain', blurb: 'Stress, focus, and what you are learning.', path: '/stress', relationship: 'guru' },
   emotional: { name: 'Emotional', icon: 'Heart', blurb: 'Mood, what you wrote, and the people close to you.', path: '/mood', relationship: 'lover_partner' },

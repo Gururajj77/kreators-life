@@ -17,7 +17,7 @@ Written 2026-11-01 from `apps/api/src/index.ts`, `access.ts`, `limits.ts`, `env.
 | `/auth/*` | anyone (limited per address and per email) | none | sign-up, sign-in, forgot, reset, sign-out, anonymous device session |
 | `/public/*` (explore, media, certificates, invoices, agency, contracts, calendar, legal, page by handle, client-error) | anyone (limited per address) | none | the owner's own switches decide what a public page shows; links carry long random tokens |
 | `/webhooks/razorpay`, `/webhooks/meta` | the provider only | none | signature checked on the raw body first, payload stored, duplicates ignored; exempt from the wrong-origin check |
-| `/admin/*` | `X-Admin-Key` header (shared secret, `ADMIN_KEY`) or a signed-in `admin` | none | not covered by the session check; no per-address limit yet (see SECURITY_REPORT, open items) |
+| `/admin/*` | `X-Admin-Key` header (shared secret, `ADMIN_KEY`) or a signed-in `admin` | none | not covered by the session check; wrong keys are limited per address (`adminKey`), an admin's session is not (see SECURITY_REPORT, closed item 2) |
 | `/me`, `/me/coach`, `/me/calendar`, `/me/legal` | signed in | none (core) | `/me/coach` is core so a student can always say no or end a link |
 | `/onboarding`, `/session`, `/nodes`, `/today`, `/rewards`, `/inbox`, `/search`, `/credits`, `/store` | signed in | none (core) | |
 | `/school` `/work` `/army` `/win` `/agency` `/party` `/run` `/community` `/club` `/leaderboard` `/cards` `/discover` `/bond` `/circles` `/life` `/journal` `/reviews` `/companion` `/assistant` `/finance` `/tools` `/market` `/kyc` | signed in | the module of the same name (`/market` is `store`, `/kyc` is `shop`) | switched off or not rolled out to the person: 403 |
@@ -28,7 +28,7 @@ Written 2026-11-01 from `apps/api/src/index.ts`, `access.ts`, `limits.ts`, `env.
 | `/resources` | signed in | `knowledge` | |
 | `/proposals` | signed in | `tv` or `fund` | |
 | `/manage`, `/manage/resources`, `/manage/community` | staff (`sub_admin`, `admin`) | `manage` | permission checked per route |
-| `/internal/*` (Observability, Logs, roles) | staff; logs and role changes admin only | `observability` | reads `app_logs`; role changes audited |
+| `/internal/*` (Dev Tools, Logs, roles) | staff; logs and role changes admin only | `observability` | reads `app_logs`; role changes audited |
 | `/orgs`, `/reminders`, `/media`, `/reviews/kpis` | signed in | none or the parent module | media upload: 1 MB, magic bytes checked |
 
 Outside `/api`: `/go/:code` (tracked links, writes the click after redirecting, salted hash of the address, no raw address), `/out/:kind/:id` (partner links), `/sitemap.xml`, `/` (site home with the absolute share image).
@@ -44,7 +44,7 @@ Secret means set with `wrangler secret put` (never in `wrangler.jsonc`, never in
 | `AI` | binding (optional) | Workers AI for the companion and a writer fallback |
 | `ADMIN_KEY` | yes | shared admin key for `/api/admin` |
 | `ADMIN_EMAILS` | no | extra founder addresses promoted to admin |
-| `CLICK_SALT` | yes | salt for hashing click addresses and anonymous aliases |
+| `CLICK_SALT` | yes | salt for hashing click addresses, anonymous aliases, and the addresses and typed emails in `rate_limits` keys (`limitKey` in `ops.ts`) |
 | `RAZORPAY_KEY_ID` | no (public id) | checkout |
 | `RAZORPAY_KEY_SECRET` | yes | creates orders and refunds |
 | `RAZORPAY_WEBHOOK_SECRET` | yes | verifies webhook signatures |
@@ -81,9 +81,9 @@ Secret means set with `wrangler secret put` (never in `wrangler.jsonc`, never in
 
 | Feature | Risk | Control |
 |---|---|---|
-| Sign-in, reset | guessing, enumeration | PBKDF2 100k, decoy hash for unknown email, limits per address and per email, one-time hashed reset tokens, same answer for any email |
+| Sign-in, reset | guessing, enumeration | PBKDF2 100k, decoy hash for unknown email, limits per address and per email (each kept only as a salted hash), one-time hashed reset tokens, same answer for any email |
 | Sessions | theft of a token from the browser | Bearer token in `localStorage` (accepted decision), at most 3 devices, strict CSP, no third-party scripts besides Razorpay checkout, no raw HTML sinks (`scripts/scan.sh`) |
-| Admin key | one secret opens `/api/admin` | long random value, constant-time compare; rotate; remove once founders are admins |
+| Admin key | one secret opens `/api/admin` | long random value, constant-time compare of its hash, ten tries in ten minutes per address (`adminKey`); rotate; remove once founders are admins |
 | Uploads | wrong file types, size | 1 MB, JPEG/PNG/WebP/AVIF/GIF by first bytes, base64 in D1, served with `nosniff` |
 | Research fetch | server-side request forgery | `safeurl.ts`: public https only, redirects re-checked, timeout and size cap |
 | Payments | forged paid orders | `paid` only in the webhook after signature verification |

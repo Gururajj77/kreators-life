@@ -2,7 +2,9 @@ import { quoteCode, redeem, release, type Quoted } from '../discounts';
 import { Hono } from 'hono';
 import { DEFAULT_ZONE, EVENT_TYPE_META, EVENT_TYPES, type EventRegistration, type PartyEvent } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { audit, can, liveUser, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, str, isClubMember, pageOf, paged, httpUrl } from '../db';
+import { audit, can, inBatches, liveUser, nameOf, newId, noteStmt, notify, nowIso, num, oneOf, str, isClubMember, pageOf, paged, httpUrl } from '../db';
+import { openTurn, routeTurn, type Share, type Turn } from '../cronTick';
+import { ROUTE_TRIPS, tripsOf } from '../d1Batch';
 import { claimEventCode, codeOf, guestView, hostView, setEventCode } from '../attendee';
 
 export const party = new Hono<AppEnv>();
@@ -178,13 +180,16 @@ async function paidFor(db: D1Database, reg: { id: string; user_id: string; paid_
  */
 async function promoteNext(db: D1Database, ev: { id: string; title: string; price_points: number; capacity: number | null }): Promise<void> {
   const cap = ev.capacity ?? 1_000_000;
-  const wait = await db.prepare(`SELECT r.id, r.user_id FROM event_registrations r JOIN users u ON u.id = r.user_id WHERE r.event_id = ? AND r.status = 'waitlisted' AND ${liveUser('u')} ORDER BY r.registered_at LIMIT 20`).bind(ev.id).all<{ id: string; user_id: string }>();
+  const price = Math.max(0, ev.price_points);
+  const wait = await db.prepare(`SELECT r.id, r.user_id, u.points FROM event_registrations r JOIN users u ON u.id = r.user_id WHERE r.event_id = ? AND r.status = 'waitlisted' AND ${liveUser('u')} ORDER BY r.registered_at LIMIT 20`).bind(ev.id).all<{ id: string; user_id: string; points: number }>();
+  // Who cannot pay is known from that read, so a guarded update is tried only on someone who can, and those told go together: a long waitlist of people short of points is one trip, not two each.
+  const short: string[] = [];
+  const tellShort = () => inBatches(db, short.map((userId) => noteStmt(db, { userId, kind: 'party', title: `A seat opened up: ${ev.title}`, body: `You need ${price} points to take it, so you are still on the waitlist.`, link: `/party/${ev.id}` })));
   for (const next of wait.results) {
-    const price = Math.max(0, ev.price_points);
     if (price > 0) {
-      const debit = await db.prepare('UPDATE users SET points = points - ? WHERE id = ? AND points >= ?').bind(price, next.user_id, price).run();
-      if (debit.meta.changes !== 1) {
-        await notify(db, next.user_id, 'party', `A seat opened up: ${ev.title}`, `You need ${price} points to take it, so you are still on the waitlist.`, `/party/${ev.id}`);
+      const debit = next.points >= price ? await db.prepare('UPDATE users SET points = points - ? WHERE id = ? AND points >= ?').bind(price, next.user_id, price).run() : null;
+      if (debit?.meta.changes !== 1) {
+        short.push(next.user_id);
         continue;
       }
     }
@@ -195,12 +200,15 @@ async function promoteNext(db: D1Database, ev: { id: string; title: string; pric
       .run();
     if (moved.meta.changes !== 1) {
       if (price > 0) await db.prepare('UPDATE users SET points = points + ? WHERE id = ?').bind(price, next.user_id).run();
+      await tellShort();
       return;
     }
     if (price > 0) await db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(next.user_id, -price, 'ticket', next.id, nowIso()).run();
     await notify(db, next.user_id, 'party', `A seat opened up: ${ev.title}`, price > 0 ? `You are off the waitlist. ${price} points were taken for the ticket.` : 'You are off the waitlist.', `/party/${ev.id}`);
+    await tellShort();
     return;
   }
+  await tellShort();
 }
 
 party.post('/events/:id/cancel-rsvp', async (c) => {
@@ -318,29 +326,75 @@ party.patch('/events/:id', async (c) => {
   if (row.host_user_id !== user.id && !can(user, 'events')) return c.json({ error: 'the host changes an event' }, 403);
   const body = await c.req.json<{ status?: string }>().catch(() => ({}) as { status?: string });
   const status = oneOf(body.status, ['published', 'cancelled', 'done'] as const, 'published');
-  // The event's status moves first and only when it changes, so two cancel taps at once notify and refund once.
+  // The event's status moves first and only when it changes. A cancel always goes on to the seats, moved or not: each guest moves once, so two taps at
+  // once refund once, and a second tap after a stop finishes what the first one left (the cron does too, `finishCancelledEvents`).
   const moved = await db.prepare('UPDATE events SET status = ? WHERE id = ? AND status != ?').bind(status, row.id, status).run();
-  if (moved.meta.changes !== 1) return c.json({ ok: true });
-  await audit(db, user.id, 'event.status', 'event', row.id, row.status, status);
-  if (status === 'cancelled') {
-    const regs = await db.prepare("SELECT id, user_id, status, paid_points FROM event_registrations WHERE event_id = ? AND status IN ('registered','attended','waitlisted')").bind(row.id).all<{ id: string; user_id: string; status: string; paid_points: number | null }>();
-    const refunded: string[] = [];
-    const told: string[] = [];
-    for (const r of regs.results) {
-      // Each guest's row moves first, guarded, and only a row that moved is refunded what it paid.
-      const flip = await db.prepare("UPDATE event_registrations SET status = 'cancelled' WHERE id = ? AND status = ?").bind(r.id, r.status).run();
-      if (flip.meta.changes !== 1) continue;
-      const back = r.status === 'waitlisted' ? 0 : await paidFor(db, r);
-      if (back > 0) {
-        await db.batch([
-          db.prepare('UPDATE users SET points = points + ? WHERE id = ?').bind(back, r.user_id),
-          db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(r.user_id, back, 'refund', r.id, nowIso()),
-        ]);
-        refunded.push(r.user_id);
-      } else told.push(r.user_id);
-    }
-    if (refunded.length) await notifyMany(db, refunded, 'party', `Cancelled: ${row.title}`, 'The points you paid for the ticket are back in your balance.', '/party');
-    if (told.length) await notifyMany(db, told, 'party', `Cancelled: ${row.title}`, 'The host cancelled this event.', '/party');
-  }
+  if (moved.meta.changes === 1) await audit(db, user.id, 'event.status', 'event', row.id, row.status, status);
+  // A big event's seats may take more trips than one tap has: what is left is finished by the next ticks (`finishCancelledEvents`), each guest once.
+  if (status === 'cancelled') await cancelEventSeats(db, row, await routeTurn(db, () => tripsOf(db), ROUTE_TRIPS)());
   return c.json({ ok: true });
 });
+
+/** Guests to one transaction when an event is cancelled: four statements each, so a batch stays under fifty. */
+const SEATS_A_BATCH = 12;
+
+/**
+ * An event was cancelled (the status has already moved): every guest's seat goes, what they paid comes back, and they are told, all three together.
+ * The host's own cancel, a host closing their account (`deleteAccount`) and the cron's sweep (`finishCancelledEvents`) all come here, and it can run
+ * any number of times: each guest's batch is one transaction, the refund is guarded on the seat still being open, and the seat moves last, so a stop
+ * part way leaves the rest open for the next run and never strands anyone. A guest who registers again gets a new row id, so their note is a new one.
+ */
+export async function cancelEventSeats(db: D1Database, ev: { id: string; title: string }, share?: Share): Promise<boolean> {
+  // What came back is what was paid, never the list price: a seat that cost nothing, or a waitlist row, refunds nothing (`paidFor`, in one read).
+  const regs = await db
+    .prepare(
+      `SELECT r.id, r.user_id, r.status,
+        CASE WHEN r.status = 'waitlisted' THEN 0 ELSE COALESCE(r.paid_points, (SELECT -SUM(l.amount) FROM points_ledger l WHERE l.user_id = r.user_id AND l.reason = 'ticket' AND l.ref = r.id), 0) END AS paid
+       FROM event_registrations r WHERE r.event_id = ? AND r.status IN ('registered','attended','waitlisted')`,
+    )
+    .bind(ev.id)
+    .all<{ id: string; user_id: string; status: string; paid: number }>();
+  const open = 'EXISTS (SELECT 1 FROM event_registrations WHERE id = ? AND status = ?)';
+  const now = nowIso();
+  for (let i = 0; i < regs.results.length; i += SEATS_A_BATCH) {
+    // A cron tick stops here when its share is spent, and the next tick goes on with the seats still open.
+    if (share && share.left() <= 0) {
+      share.more();
+      return false;
+    }
+    await db.batch(
+      regs.results.slice(i, i + SEATS_A_BATCH).flatMap((r) => {
+        const back = Math.max(0, r.paid);
+        return [
+          ...(back > 0
+            ? [
+                db.prepare(`UPDATE users SET points = points + ? WHERE id = ? AND ${open}`).bind(back, r.user_id, r.id, r.status),
+                db.prepare(`INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) SELECT ?, ?, 'refund', ?, ? WHERE ${open}`).bind(r.user_id, back, r.id, now, r.id, r.status),
+              ]
+            : []),
+          noteStmt(db, { id: `cancelled-${r.id}`, userId: r.user_id, kind: 'party', title: `Cancelled: ${ev.title}`, body: back > 0 ? 'The points you paid for the ticket are back in your balance.' : 'The host cancelled this event.', link: '/party', at: now }, 'once'),
+          db.prepare("UPDATE event_registrations SET status = 'cancelled' WHERE id = ? AND status = ?").bind(r.id, r.status),
+        ];
+      }),
+    );
+  }
+  return true;
+}
+
+/** Events still in the last month that were cancelled with seats left open: a run that stopped part way. The cron finishes them, a few each tick. */
+export async function finishCancelledEvents(db: D1Database, turn: Turn = openTurn(db)): Promise<number> {
+  const stuck = await db
+    .prepare("SELECT e.id, e.title FROM events e WHERE e.starts_at >= ? AND e.status = 'cancelled' AND EXISTS (SELECT 1 FROM event_registrations r WHERE r.event_id = e.id AND r.status IN ('registered','attended','waitlisted')) LIMIT 5")
+    .bind(new Date(Date.now() - 30 * 86_400_000).toISOString())
+    .all<{ id: string; title: string }>();
+  if (!stuck.results.length) return 0;
+  const share = await turn();
+  for (const ev of stuck.results) {
+    if (share.left() < 2) {
+      share.more();
+      break;
+    }
+    await cancelEventSeats(db, ev, share);
+  }
+  return stuck.results.length;
+}

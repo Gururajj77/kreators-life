@@ -2,8 +2,8 @@
 // the whole output of `insightsFor` and `insightsForApp`, and by the CPU benchmark. Not in the barrel; test and bench only.
 
 import { RELATIONSHIPS, type RelationshipKey } from './core.ts';
-import { addDays, zonedToUtc } from './dates.ts';
-import type { InsightFacts, InsightOpenTaskFact, InsightTaskFact } from './insights.ts';
+import { addDays, isoWeekday, zonedToUtc } from './dates.ts';
+import type { InsightFacts, InsightOpenTaskFact, InsightTaskFact } from './insightPlaces.ts';
 import type { DayTemplate } from './timeBlocks.ts';
 import type { PeriodNumbers } from './periods.ts';
 
@@ -35,6 +35,8 @@ export interface GoldenOptions {
   apps: string[];
   focusPillars?: RelationshipKey[];
   rich: boolean;
+  /** Fitness and gratitude (2026-11-07): movement (more on Saturdays), the eating check-in and gratitude days, all leaning to good days. */
+  fit?: boolean;
 }
 
 const BASE_NUMBERS: PeriodNumbers = { days: 7, checkins: 5, tasksDone: 40, smallActs: 0, xp: 300, activeDays: 6, notToDoKept: 5, notToDoSlipped: 2, moodAvg: 3.4, sleepAvg: 6.6, stressAvg: 2.8, mindfulMin: 60, moveMin: 90, journalEntries: 3, journalMoodAvg: null, incomeCents: 0, expenseCents: 450000, orders: 0, salesCents: 0, salesPoints: 0, lessonsDone: 0, programsDone: 0, applications: 0, decisions: 0, events: 0, posts: 0, circles: 0, runs: 0, runMetres: 0 };
@@ -55,6 +57,7 @@ export function goldenFacts(o: GoldenOptions): InsightFacts {
   const expenses: InsightFacts['expenses'] = [];
   const checkins: string[] = [];
   const agencyDue: string[] = [];
+  const gratitudeDays: string[] = [];
   let id = 0;
   const ntdItems = o.rich
     ? [
@@ -110,6 +113,12 @@ export function goldenFacts(o: GoldenOptions): InsightFacts {
     if (o.apps.includes('journal') && (good ? r() < 0.7 : r() < 0.2)) journalAt.push(at(day, 21 * 60 + Math.floor(r() * 60)));
     if (o.apps.includes('finance') && r() < 0.8) expenses.push({ date: day, cents: (good ? 20000 : 90000) + Math.floor(r() * 50000) });
     if (o.apps.includes('agency') && r() < 0.35) agencyDue.push(day);
+    // Drawn last, and only for the fit person, so the other people's numbers are as they were.
+    if (o.fit) {
+      if (good ? r() < 0.75 : r() < 0.25) wellbeing.push({ kind: 'move', date: day, value: 20 + Math.floor(r() * 40) + (isoWeekday(day) === 6 ? 45 : 0) });
+      if (r() < 0.8) wellbeing.push({ kind: 'eat', date: day, value: good ? 4 + Math.floor(r() * 2) : 2 + Math.floor(r() * 2) });
+      if (good ? r() < 0.6 : r() < 0.2) gratitudeDays.push(day);
+    }
   }
   const open: InsightOpenTaskFact[] = Array.from({ length: o.open }, (_, i) => {
     const recurring = i < 24;
@@ -123,6 +132,14 @@ export function goldenFacts(o: GoldenOptions): InsightFacts {
       openDay: i % 3 ? addDays(o.today, (i % 20) - 10) : null,
     };
   });
+  // Budgets (2026-11-07): two, the month's spending split between them from the expenses above, with no draw, so nobody's numbers move.
+  const money = o.rich && o.apps.includes('finance');
+  const spendBy = new Map<string, number>();
+  for (const e of expenses) spendBy.set(e.date.slice(0, 7), (spendBy.get(e.date.slice(0, 7)) ?? 0) + e.cents);
+  const budgetSpend = [...spendBy.entries()].flatMap(([month, cents]) => [
+    { month, category: 'Food', cents: Math.round(cents * 0.7) },
+    { month, category: 'Travel', cents: Math.round(cents * 0.3) },
+  ]);
   const ticks30 = new Map<RelationshipKey, number>();
   const from30 = addDays(o.today, -29);
   for (const t of done) if (t.completedAt >= at(from30, 0)) ticks30.set(t.relationship, (ticks30.get(t.relationship) ?? 0) + 1);
@@ -149,7 +166,9 @@ export function goldenFacts(o: GoldenOptions): InsightFacts {
     dayTypes,
     routine,
     journalAt,
+    ...(o.fit ? { gratitudeDays } : {}),
     expenses,
+    ...(money ? { budgets: [{ category: 'Food', monthlyCents: 1000000 }, { category: 'Travel', monthlyCents: 1000000 }], budgetSpend } : {}),
     review: o.rich && o.apps.includes('reviews') ? { kind: 'week', start: addDays(o.today, -16), end: addDays(o.today, -10), then: BASE_NUMBERS, since: { ...BASE_NUMBERS, tasksDone: 62, sleepAvg: 6.1, moodAvg: 3.9 }, sinceStart: addDays(o.today, -9), sinceEnd: addDays(o.today, -3), ended: true } : null,
     discover: o.rich && o.apps.includes('discover') ? { growth: 'parent_child', steps: true } : null,
     agencyDue,
@@ -176,5 +195,7 @@ export const GOLDEN_CASES: Record<string, GoldenOptions> = {
   light: { seed: 11, today: '2026-11-05', zone: 'Asia/Kolkata', days: 60, perDay: 5, unique: 0.3, open: 60, apps: ['home', 'today', 'tower', 'mood', 'sleep'], rich: false },
   heavy: { seed: 23, today: '2026-11-05', zone: 'Asia/Kolkata', days: 84, perDay: 20, unique: 0.25, open: 300, apps: EVERY_APP, rich: true },
   // Across the clocks going back (1 November 2026 in New York), with focus pillars and most titles their own.
+  // Fitness, Kreators Run and gratitude on (2026-11-07): moving, eating well and gratitude all on the person's good days.
+  fit: { seed: 53, today: '2026-11-05', zone: 'Asia/Kolkata', days: 84, perDay: 8, unique: 0.4, open: 120, apps: [...EVERY_APP, 'fitness', 'run'], rich: true, fit: true },
   zoned: { seed: 37, today: '2026-11-05', zone: 'America/New_York', days: 84, perDay: 14, unique: 0.6, open: 1000, apps: EVERY_APP.filter((a) => a !== 'finance'), focusPillars: ['parent_child', 'divine'], rich: true },
 };

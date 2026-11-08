@@ -11,6 +11,7 @@
 //   SHOOT_LIST=shots.json                a JSON array of shots instead of the default list
 //   SHOOT_CHROME=/path/to/chrome         the browser binary
 //   SHOOT_TOKEN=<session token>          an account prepared elsewhere (shots-all.mjs), instead of a fresh one
+//   SHOOT_NO_PNG=1                       take each shot and write no file, for a probe run (the list writes about 150 MB a run otherwise)
 //
 // A shot is { path, name?, desktop?, width?, height?, theme?, needsSession?, before?, viewport? }: `viewport: true` shoots only the first screen, not the whole page.
 // a phone is 390 by 844, a laptop 1440 by 900, a phone on its side `desktop: true, width: 844, height: 390`.
@@ -119,7 +120,8 @@ try {
       if (shot.before) await page.evaluate(shot.before);
       const name = shot.name ?? (shot.path.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'site');
       const file = path.join(OUT, `${name}-${shot.desktop ? `${width}x${height}` : 'phone'}-${theme}.png`);
-      await page.screenshot({ path: file, fullPage: !shot.viewport });
+      // SHOOT_NO_PNG=1: the same capture (a full-page one resizes the page, which the probes may depend on) with nothing written, for a probe run over the whole list.
+      await page.screenshot({ ...(process.env.SHOOT_NO_PNG === '1' ? {} : { path: file }), fullPage: !shot.viewport });
       console.log(`shot ${file}`);
       if (PROBE) {
         // The screenshot may have set off another measure (a resize, the fonts): the probe waits for that one too.

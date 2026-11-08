@@ -34,6 +34,52 @@ interface Props {
 }
 
 /**
+ * The tick box itself, the one look. It only draws: the real checkbox and the row around it are the caller's, which sets `--check-color`.
+ * When the box goes from empty to ticked, the tick draws itself in (its stroke runs from start to end); never on the first paint, and
+ * under reduced motion it is only set.
+ */
+export function CheckMark({ checked, color, deep, text, locked = false, busy = false, large = false }: { checked: boolean; color: string; deep: string; text: string; locked?: boolean; busy?: boolean; large?: boolean }) {
+  const box = useRef<HTMLSpanElement>(null);
+  const was = useRef(checked);
+  useEffect(() => {
+    const before = was.current;
+    was.current = checked;
+    if (!checked || before) return;
+    const path = box.current?.querySelector('path');
+    if (!path) return;
+    const len = path.getTotalLength();
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      gsap.set(path, { strokeDasharray: 'none', strokeDashoffset: 0 });
+      return;
+    }
+    const tween = gsap.fromTo(path, { strokeDasharray: len, strokeDashoffset: len }, { strokeDashoffset: 0, duration: 0.3, ease: 'power2.out', onComplete: () => void gsap.set(path, { strokeDasharray: 'none' }) });
+    return () => {
+      tween.kill();
+    };
+  }, [checked]);
+  return (
+    <span
+      ref={box}
+      aria-hidden="true"
+      className={`check-box flex shrink-0 items-center justify-center rounded-[10px] border-[3px] ${large ? 'size-[40px]' : 'size-[32px]'} ${busy ? 'animate-pulse' : ''}`}
+      style={{
+        borderColor: locked && !checked ? 'var(--color-ink-mute)' : color,
+        background: checked ? color : 'var(--color-card)',
+        boxShadow: `0 3px 0 0 ${locked && !checked ? 'var(--color-line)' : deep}`,
+      }}
+    >
+      {checked ? (
+        <Icon icon={Check} size={22} strokeWidth={3} color={text} />
+      ) : locked ? (
+        <Icon icon={Clock} size={18} color="var(--color-ink-soft)" />
+      ) : (
+        <Icon icon={Check} size={22} strokeWidth={3} color={color} className="check-preview" />
+      )}
+    </span>
+  );
+}
+
+/**
  * The one way to record an action anywhere in the app: a row with a checkbox.
  * The whole row is the tap target, and it is a real checkbox for screen readers.
  */
@@ -57,26 +103,6 @@ export function CheckRow({
   marks,
 }: Props) {
   const id = useId();
-  // When the box goes from empty to ticked, the tick draws itself in (its stroke runs from start to end); never on the first paint,
-  // and under reduced motion it is only set.
-  const box = useRef<HTMLSpanElement>(null);
-  const was = useRef(checked);
-  useEffect(() => {
-    const before = was.current;
-    was.current = checked;
-    if (!checked || before) return;
-    const path = box.current?.querySelector('path');
-    if (!path) return;
-    const len = path.getTotalLength();
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      gsap.set(path, { strokeDasharray: 'none', strokeDashoffset: 0 });
-      return;
-    }
-    const tween = gsap.fromTo(path, { strokeDasharray: len, strokeDashoffset: len }, { strokeDashoffset: 0, duration: 0.3, ease: 'power2.out', onComplete: () => void gsap.set(path, { strokeDasharray: 'none' }) });
-    return () => {
-      tween.kill();
-    };
-  }, [checked]);
   // After a tap on a locked row, show the live reason. It updates as a wait
   // counts down and disappears on its own once the row unlocks.
   const [asked, setAsked] = useState(false);
@@ -108,24 +134,7 @@ export function CheckRow({
             aria-describedby={note ? `${id}-note` : undefined}
             aria-busy={busy || undefined}
           />
-          <span
-            ref={box}
-            aria-hidden="true"
-            className={`check-box flex shrink-0 items-center justify-center rounded-[10px] border-[3px] ${large ? 'size-[40px]' : 'size-[32px]'} ${busy ? 'animate-pulse' : ''}`}
-            style={{
-              borderColor: locked && !checked ? 'var(--color-ink-mute)' : color,
-              background: checked ? color : 'var(--color-card)',
-              boxShadow: `0 3px 0 0 ${locked && !checked ? 'var(--color-line)' : deep}`,
-            }}
-          >
-            {checked ? (
-              <Icon icon={Check} size={22} strokeWidth={3} color={text} />
-            ) : locked ? (
-              <Icon icon={Clock} size={18} color="var(--color-ink-soft)" />
-            ) : (
-              <Icon icon={Check} size={22} strokeWidth={3} color={color} className="check-preview" />
-            )}
-          </span>
+          <CheckMark checked={checked} color={color} deep={deep} text={text} locked={locked} busy={busy} large={large} />
           <span className="min-w-0 flex-1">
             <span className={`block ${subtitle ? 'text-row-title' : 'text-body'} ${checked && strike ? 'text-ink-mute line-through' : ''}`}>{title}</span>
             {(subtitle || badge) && (

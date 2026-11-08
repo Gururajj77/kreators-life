@@ -9,9 +9,9 @@ In this lesson you'll learn:
 - How Circles seat people under aliases.
 - What the team runs, and what an admin checks.
 
-## Switch them on
+## Find them
 
-All three are off on a new account. Riya opens **Apps**, taps the **Connection** group and turns on **Party**, **Kreators Run** and **Circles**.
+All three start hidden on a new account, unless the setup chat showed them for her. Riya opens **Apps**, opens the **Connection** group, opens **Hidden apps** at its end and taps the eye beside **Party**, **Kreators Run** and **Circles**.
 
 ## Step by step: Riya hosts a meetup
 
@@ -64,7 +64,7 @@ Each run gets a start code only the host sees: six letters and numbers, or a wor
 
 The app has four sections: **Clubs**, **My runs**, **Brand collabs** and **Discussions**.
 
-- **My runs:** kilometres over thirty days, a weekly streak, and badges.
+- **My runs:** kilometres over thirty days, a weekly streak, and badges. **Log a run or walk**, at its top, needs no club and no code. It counts as movement in Life and pays nothing.
 - **Brand collabs:** posted by events staff or a brand's own team. Only a host applies, with **Apply with a club**.
 - **Discussions:** one per run, for its host, club members and runners who logged it. Open for thirty days after the run. A line can be anonymous.
 

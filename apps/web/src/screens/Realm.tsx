@@ -15,8 +15,8 @@ import {
 } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { AnimatePresence } from 'motion/react';
-import { useEffect, useState } from 'react';
-import { Navigate, useParams } from 'react-router';
+import { Suspense, useEffect, useState } from 'react';
+import { Navigate, useParams, useSearchParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { useCelebrate } from '../components/Celebration';
@@ -27,12 +27,14 @@ import { StatusTag } from '../components/StatusTag';
 import { Pyramid } from '../components/Pyramid';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
+import { Skeleton } from '../components/Skeleton';
 import { ConfirmDelete } from '../components/ConfirmDelete';
 import { TaskRow } from '../components/TaskRow';
 import { ProjectSelect, StartFocus, Subtasks, TaskPlanFields, planBody, planOf, planProblem, type Plan } from '../components/TaskPlan';
 import { api } from '../lib/api';
 import { FIELD } from '../lib/ui';
-import { localDateTimeValue, todayLocal } from '../lib/date';
+import { dayLabel, localDateTimeValue, todayLocal } from '../lib/date';
+import { lazyNamed } from '../lib/lazy';
 import { fillVar, ON_FILL } from '../lib/relFill';
 import { useAuthed, useMe, useNodes, useRefreshAll } from '../lib/queries';
 import { placementLine } from '../components/LifeMap';
@@ -42,6 +44,9 @@ import { Icon } from '../components/Icon';
 import { Check } from 'lucide-react';
 import { Fold } from '../components/Fold';
 import { EmergenceSlot } from '../components/EmergenceSlot';
+
+// The same form as "Add a task" on Daily, downloaded the first time the fold opens.
+const AddTaskForm = lazyNamed(() => import('../components/TaskMonth'), 'AddTaskForm');
 
 /** The layers above the tasks, top down like the pyramid: the foundation first, projects last. */
 const RUNGS = KINDS.filter((k) => k !== 'task');
@@ -65,6 +70,10 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
   // Opened from a project's "Add a due day" line: the edit sheet starts in its due day field.
   const [focusDue, setFocusDue] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // "Add a task" opens in place, like Daily's; an Emerging card's "Add a task to …" (`?add=1`) lands with it open.
+  const [params] = useSearchParams();
+  const [addOpen, setAddOpen] = useState(params.get('add') === '1');
+  const [added, setAdded] = useState<string | null>(null);
   const fail = (e: unknown) => setNotice(e instanceof Error ? e.message : 'That did not work. Try again.');
 
   const state = me.data?.relationships.find((r) => r.key === relationship);
@@ -209,11 +218,40 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
               ) : (
                 <p className="mt-sm m-0 rounded-tile bg-card p-sm text-subhead text-ink-soft shadow-toy-soft">Nothing waiting. Add one below.</p>
               )}
-              <Button full className="mt-sm" plusToX expanded={adding === 'task'} onClick={() => setAdding('task')} disabled={projects.length === 0}>
-                Add a task
-              </Button>
-              {/* The caption of the button above: it says why that one button is off, so it sits centred under it. */}
-              {projects.length === 0 && <p className="mt-xs m-0 text-center text-caption text-balance text-ink-soft">Tasks need a project. Open the pyramid below to add one.</p>}
+              {/* A fold whose plus turns into a cross, opening the form right here (the founder's layout pass, 2026-11-06): this pillar's own
+                  projects, so a task never lands on another pillar by accident. Saving folds it again and says where the task went. */}
+              {projects.length > 0 ? (
+                <Fold
+                  className="mt-sm"
+                  title="Add a task"
+                  adds
+                  open={addOpen}
+                  onOpenChange={(o) => {
+                    setAddOpen(o);
+                    if (o) setAdded(null);
+                  }}
+                >
+                  <Suspense fallback={<Skeleton className="h-[240px]" />}>
+                    <AddTaskForm
+                      today={today}
+                      projects={projects}
+                      autoFocus
+                      note="No do date? It waits in Not scheduled yet on Daily. A new task can be ticked after ten minutes."
+                      onAdded={(title, doDate) => {
+                        setAddOpen(false);
+                        setAdded(!doDate ? `Added “${title}”. It waits in Not scheduled yet on Daily.` : doDate === today ? `Added “${title}” to today's tasks.` : `Added “${title}”. It shows on Daily from ${dayLabel(doDate)}.`);
+                      }}
+                    />
+                  </Suspense>
+                </Fold>
+              ) : (
+                <p className="mt-sm m-0 text-subhead text-ink-soft">Tasks need a project. Open the pyramid below to add one.</p>
+              )}
+              {added && (
+                <p role="status" className="mt-xs m-0 text-subhead text-ink-soft">
+                  {added}
+                </p>
+              )}
             </section>
 
             <section className="mt-lg" aria-labelledby="ladder-heading">
@@ -351,7 +389,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
         <EmergenceSlot app="pillar" rel={relationship} max={2} />
       </Screen>
 
-      <AddSheet kind={adding} relationship={relationship} nodes={nodes} today={today} onClose={() => setAdding(null)} />
+      <AddSheet kind={adding} relationship={relationship} nodes={nodes} onClose={() => setAdding(null)} />
       <EditSheet
         node={editing}
         focusDue={focusDue}
@@ -364,18 +402,17 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
   );
 }
 
-function AddSheet({ kind, relationship, nodes, today, onClose }: { kind: NodeKind | null; relationship: RelationshipKey; nodes: Node[]; today: string; onClose: () => void }) {
+/** A new layer of the pyramid, in a sheet. A task has its own form, in place under Tasks to do. */
+function AddSheet({ kind, relationship, nodes, onClose }: { kind: NodeKind | null; relationship: RelationshipKey; nodes: Node[]; onClose: () => void }) {
   const refresh = useRefreshAll({ insights: true });
   const [title, setTitle] = useState('');
   const [parentId, setParentId] = useState('');
-  const [plan, setPlan] = useState<Plan>(() => planOf(null, today));
   const meta = kind ? KIND_META[kind] : null;
   const parent = kind ? parentKind(kind) : null;
   const parents = parent ? nodes.filter((n) => n.kind === parent && n.status === 'active') : [];
 
   useEffect(() => {
     setTitle('');
-    setPlan(planOf(null, today));
     setParentId(parents[0]?.id ?? '');
     // Reset the form each time a rung's add button opens the sheet.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -384,7 +421,7 @@ function AddSheet({ kind, relationship, nodes, today, onClose }: { kind: NodeKin
   const create = useMutation({
     mutationFn: () => {
       if (!kind) throw new Error('no kind');
-      return api.createNode({ kind, parentId: parent ? parentId : null, relationship, title: title.trim(), ...(kind === 'task' ? planBody(plan) : {}) });
+      return api.createNode({ kind, parentId: parent ? parentId : null, relationship, title: title.trim() });
     },
     onSuccess: () => {
       refresh();
@@ -426,18 +463,12 @@ function AddSheet({ kind, relationship, nodes, today, onClose }: { kind: NodeKin
               </select>
             </label>
           )}
-          {kind === 'task' && (
-            <>
-              <TaskPlanFields plan={plan} onChange={setPlan} today={today} />
-              <p className="m-0 text-subhead text-ink-soft">No do date? It waits in Not scheduled yet on Daily. A new task can be ticked after ten minutes.</p>
-            </>
-          )}
           {create.isError && (
             <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
               {create.error instanceof Error ? create.error.message : 'Could not add it. Try again.'}
             </p>
           )}
-          <Button type="submit" size="lg" full disabled={create.isPending || !title.trim() || (kind === 'task' && planProblem(plan) !== null)}>
+          <Button type="submit" size="lg" full disabled={create.isPending || !title.trim()}>
             Add {meta.label.toLowerCase()}
           </Button>
         </form>
@@ -528,7 +559,7 @@ function EditSheet({ node, focusDue = false, onClose }: { node: Node | null; foc
           {node.kind === 'task' && (
             <>
               {movable && projects.length > 0 && <ProjectSelect projects={projects} value={parentId} onChange={setParentId} />}
-              <TaskPlanFields plan={plan} onChange={setPlan} today={todayLocal()} />
+              <TaskPlanFields plan={plan} onChange={setPlan} today={todayLocal()} pillar={node.relationship} taskId={node.id} />
               <Subtasks task={node} />
               <StartFocus task={{ ...node, estimateMin: Number(plan.minutes) > 0 ? Number(plan.minutes) : node.estimateMin }} />
             </>

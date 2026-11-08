@@ -56,7 +56,7 @@ Tap a set-up pillar to open its page.
 
 - **Tasks to do** lists the open tasks for this pillar, with **Add a task** under them. A task needs a project to hang from.
 - **The pyramid** shows each layer. Open a layer to see what is there, change it, or add to it. A layer only opens for adding after the one above it has something in it.
-- A project with a due day shows its pace: **On track**, **Slipping** or **Behind**. That comes from how many of its tasks are done, set against how much time has gone.
+- A project with a due day shows its pace: **On track**, **Slipping** or **Behind**. That comes from how many of its tasks are done, set against how much time has gone. Tap **Add a due day to see the pace.** to set one.
 
 Tap any item to change or remove it. Removing asks first, since it takes everything under it too.
 

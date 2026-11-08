@@ -2,7 +2,7 @@
 // copyright notices, and the one-click unsubscribe. The choices are stored per person and changed from Profile; the popup asks once.
 import { CONSENT_PURPOSES, CONSENT_VERSION, LEGAL_DOCS, LEGAL_VERSION, NO_CONSENT, parseConsent, type BusinessInfo, type ConsentChoices } from '@kreators/shared';
 import { Hono } from 'hono';
-import { newId, notifyMany, nowIso, str } from '../db';
+import { adminIds, newId, notifyMany, nowIso, str } from '../db';
 import type { AppEnv, Env } from '../env';
 import { unsubscribeToken } from '../ops';
 
@@ -103,8 +103,8 @@ legalPublic.post('/copyright-notice', async (c) => {
   if (!signature) return c.json({ error: 'type your full name as your signature' }, 400);
   const id = newId();
   await db.prepare('INSERT INTO copyright_notices (id, kind, name, email, work, urls, statement, signature, status, note, created_at, resolved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)').bind(id, kind, name, email, work, urls, statement, signature, 'new', '', nowIso()).run();
-  const admins = await db.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 20").all<{ id: string }>();
-  await notifyMany(db, admins.results.map((a) => a.id), 'team', kind === 'counter' ? 'Copyright counter-notice' : 'Copyright notice', `${name} sent one about ${urls.slice(0, 160)}`, '/admin');
+  // No link: the notice has no page in the app (Admin lists none yet), so the note holds what it says and opens nothing unrelated.
+  await notifyMany(db, await adminIds(db), 'team', kind === 'counter' ? 'Copyright counter-notice' : 'Copyright notice', `${name} sent one about ${urls.slice(0, 160)}`, null);
   return c.json({ ok: true, reference: id.slice(0, 8) }, 201);
 });
 

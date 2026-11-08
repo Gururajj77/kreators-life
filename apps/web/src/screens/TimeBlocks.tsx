@@ -44,9 +44,14 @@ import { useSession } from '../lib/store';
 import { KindsSlot } from '../components/EmergenceSlot';
 import { useParamState } from '../lib/useParamState';
 import { dayLabel, shortDay, todayLocal, weekday } from '../lib/date';
+import { focusHeadingAfter } from '../lib/focusHeading';
 import { FIELD, LABEL, SELECT_SM } from '../lib/ui';
+import { evenGrid, evenTile } from '../lib/bento';
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+// The week's days: stacked on a phone, four columns on a tablet (three days, then four, in even rows: lib/bento.ts), the whole week on a laptop.
+const WEEK_COLS = { base: 1, md: 4, lg: 7 } as const;
+const APPLY_COLS = { base: 1, sm: 2 } as const;
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 /** A name the person does not have yet: "My day", then "My day 2" and on. */
 function freeName(base: string, taken: readonly string[]): string {
@@ -143,9 +148,13 @@ function Loaded({
     if (!scrollTo) return;
     const el = document.getElementById(`tpl-${scrollTo}`);
     if (!el) return;
-    el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    el.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    // The keyboard's place goes with the page, to the card's own toggle, so Tab carries on into the form it opened.
+    el.querySelector('button')?.focus({ preventScroll: true });
     setScrollTo(null);
   }, [scrollTo, data.templates]);
+  // A save folds the form the focused button sits in, so focus goes back to the row's toggle that opened it.
+  const backToToggle = (panel: string) => requestAnimationFrame(() => document.querySelector<HTMLElement>(`[aria-controls="${panel}"]`)?.focus({ preventScroll: true }));
 
   const openTemplate = (id: string) => {
     setOpenTpl(id);
@@ -158,10 +167,11 @@ function Loaded({
   const makeDefault = useMutation({ mutationFn: (id: string) => api.updateDayTemplate(id, { isDefault: true }), onSuccess: refresh });
   const saveTpl = useMutation({
     mutationFn: (v: { id: string; d: TemplateDraft }) => api.updateDayTemplate(v.id, v.d),
-    onSuccess: (r) => {
+    onSuccess: (r, v) => {
       refresh();
       setOpenTpl(null);
       setNote(`Saved ${r.template.name}.`);
+      backToToggle(`tpl-body-${v.id}`);
     },
   });
   const newTpl = useMutation({
@@ -182,10 +192,11 @@ function Loaded({
   });
   const saveBlock = useMutation({
     mutationFn: (v: { id: string; d: BlockDraft }) => api.updateTimeBlock(v.id, v.d),
-    onSuccess: (r) => {
+    onSuccess: (r, v) => {
       refresh();
       setOpenBlock(null);
       setNote(`Saved ${r.block.name}.`);
+      backToToggle(`blk-${v.id}`);
     },
   });
   const order = useMutation({ mutationFn: (ids: string[]) => api.orderTimeBlocks(ids), onSuccess: refresh });
@@ -200,6 +211,8 @@ function Loaded({
       if (c.kind === 'block') setOpenBlock(null);
       else setOpenTpl(null);
       setNote(c.kind === 'block' ? 'Block deleted.' : 'Template deleted.');
+      // Its row goes with it, so the keyboard's place moves to the list's heading.
+      focusHeadingAfter(c.kind === 'block' ? 'tb-blocks' : 'tb-templates');
     },
   });
   const restore = useMutation({
@@ -277,12 +290,12 @@ function Loaded({
           </div>
         }
       >
-        <ul className="m-0 grid list-none gap-xs p-0 md:grid-cols-4 lg:grid-cols-7" aria-busy={stale || undefined}>
-          {data.days.map((d) => {
+        <ul className={`m-0 grid list-none gap-xs p-0 ${evenGrid(data.days.length, WEEK_COLS)}`} aria-busy={stale || undefined}>
+          {data.days.map((d, i) => {
             const t = tplOf(d.templateId);
             const isToday = d.date === today;
             return (
-              <li key={d.date} className="flex">
+              <li key={d.date} className={`flex ${evenTile(i, data.days.length, WEEK_COLS)}`}>
                 <button
                   type="button"
                   aria-pressed={d.date === picked}
@@ -648,9 +661,11 @@ function ApplyFold({
             { value: 'once', label: 'This week only' },
           ]}
         />
-        <div className="grid gap-xs sm:grid-cols-2">
-          {data.days.map((d) => (
-            <CheckRow key={d.weekday} checked={weekdays.includes(d.weekday)} onToggle={() => toggle(d.weekday)} title={weekday(d.date, 'long')} />
+        <div className={`grid gap-xs ${evenGrid(data.days.length, APPLY_COLS)}`}>
+          {data.days.map((d, i) => (
+            <div key={d.weekday} className={evenTile(i, data.days.length, APPLY_COLS)}>
+              <CheckRow checked={weekdays.includes(d.weekday)} onToggle={() => toggle(d.weekday)} title={weekday(d.date, 'long')} />
+            </div>
           ))}
         </div>
         {apply.error ? <ErrorLine e={apply.error} /> : null}

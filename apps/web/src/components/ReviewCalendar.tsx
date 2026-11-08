@@ -5,6 +5,7 @@ import gsap from 'gsap';
 import { Bell, Check, type LucideIcon } from 'lucide-react';
 import { api } from '../lib/api';
 import { prettyDate } from '../lib/date';
+import { focusHeadingAfter } from '../lib/focusHeading';
 import { useAuthed } from '../lib/queries';
 import { tie } from '../lib/text';
 import { Button } from './Button';
@@ -12,6 +13,7 @@ import { CalendarGrid } from './Charts';
 import { CloseButton } from './CloseButton';
 import { Fold } from './Fold';
 import { Inert } from './Inert';
+import { periodCell, periodGrid } from './PeriodFilter';
 import { RepeatPicker } from './RepeatPicker';
 import { SkeletonList } from './Skeleton';
 import { Sheet } from './Sheet';
@@ -22,9 +24,9 @@ import { FIELD } from '../lib/ui';
 /** The words on this panel, in short plain sentences. */
 const COPY = {
   lede: 'Pick a day to plan a look back. You get a note in your inbox on that day.',
-  legend: 'A bell is a reminder. A tick is a review you wrote.',
+  legend: 'A bell is a reminder. A tick is a review you wrote. A dot is a daily review.',
   empty: 'Nothing is scheduled yet. Tap a day, or schedule one here.',
-  note: 'You get a note in your inbox on the day. On the first day of a week, month, quarter or half year it opens the one that just ended.',
+  note: 'You get a note in your inbox on the day. On the first day of a week, month, quarter, half year or year it opens the one that just ended. A daily review set before noon opens the day before.',
   pastOnce: 'Pick today or a day to come, so the reminder has a day to fall on.',
 } as const;
 
@@ -49,10 +51,14 @@ export function ReviewCalendar({ today, onOpenPeriod }: { today: string; onOpenP
   const d = q.data;
   const refresh = () => qc.invalidateQueries({ queryKey: ['reviews', 'schedule'] });
 
+  // Daily reviews would mark every day, so they never take a day's mark (2026-11-07): one written is a small dot under the day, and a
+  // daily reminder rings no bell (it is listed under Coming up). The tick and the bell stay for the longer reviews.
   const marks: Record<string, { color: string; icon?: LucideIcon }> = {};
+  const dots: Record<string, boolean> = {};
   for (const [day, v] of Object.entries(d?.days ?? {})) {
-    if (v.written.length > 0) marks[day] = { color: 'var(--color-r4)', icon: Check };
-    else if (v.scheduled.length > 0) marks[day] = { color: 'var(--color-r5)', icon: Bell };
+    if (v.written.some((w) => w.kind !== 'day')) marks[day] = { color: 'var(--color-r4)', icon: Check };
+    else if (v.scheduled.some((x) => x.kind !== 'day')) marks[day] = { color: 'var(--color-r5)', icon: Bell };
+    if (v.written.some((w) => w.kind === 'day')) dots[day] = true;
   }
   const schedules = d?.schedules ?? [];
   const coming = schedules.filter((s) => s.enabled && s.nextOn).sort((a, b) => (a.nextOn ?? '').localeCompare(b.nextOn ?? '')).slice(0, 3);
@@ -85,7 +91,7 @@ export function ReviewCalendar({ today, onOpenPeriod }: { today: string; onOpenP
       </h2>
       <p className="mt-xs m-0 text-balance text-subhead text-ink-soft">{COPY.lede}</p>
       <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
-        <CalendarGrid month={month} marks={marks} label="Review calendar" today={today} selected={picked} onPick={(day) => setPicked(day)} onMonth={(m) => {
+        <CalendarGrid month={month} marks={marks} dots={dots} dotLabel="a daily review written" label="Review calendar" today={today} selected={picked} onPick={(day) => setPicked(day)} onMonth={(m) => {
             setMonth(m);
             setPicked(null);
           }} />
@@ -137,20 +143,51 @@ export function ReviewCalendar({ today, onOpenPeriod }: { today: string; onOpenP
   );
 }
 
-type DayData = { scheduled: { id: string; kind: PeriodKind; time: string; name: string }[]; written: { kind: PeriodKind; start: string; end: string }[] };
+/**
+ * Removing a scheduled review, once or a whole repeating series, is a second tap, not a sheet (the founder, 2026-11-06: a reminder schedule
+ * is a small remove): it holds no words of the person's, reviews they wrote stay and it can be set again. The first tap turns the label to
+ * "Tap again to …" on solid red and says the reviews stay; it lapses after four seconds. The button's look at rest does not change.
+ */
+function RemoveTwice({ series, pending, size, onArm, onRemove }: { series: boolean; pending: boolean; size?: 'sm'; onArm: () => void; onRemove: () => void }) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const t = window.setTimeout(() => setArmed(false), 4000);
+    return () => window.clearTimeout(t);
+  }, [armed]);
+  const rest = series ? 'Remove the series' : 'Remove';
+  return (
+    <>
+      <Button
+        variant="outline"
+        size={size}
+        disabled={pending}
+        className={armed ? 'red-armed' : ''}
+        onClick={() => {
+          if (armed) {
+            setArmed(false);
+            onRemove();
+          } else {
+            onArm();
+            setArmed(true);
+          }
+        }}
+      >
+        <span aria-live="polite">{armed ? `Tap again to ${rest.toLowerCase()}` : rest}</span>
+      </Button>
+      {armed && <span className="order-last basis-full text-caption text-ink-soft">Reviews you wrote stay.</span>}
+    </>
+  );
+}
+
+type DayData = { scheduled: { id: string; kind: PeriodKind; time: string; name: string }[]; written: { kind: PeriodKind; start: string; end: string; name?: string }[] };
 
 /**
- * One day of the calendar, in a card right under it: the reminders that fall on it (Edit opens the schedule form, Remove asks for a second
- * tap, "Tap again to remove", which lapses after four seconds) and the reviews written for a period that ended on it. Focus moves to its heading when a day is picked; Escape or
+ * One day of the calendar, in a card right under it: the reminders that fall on it (Edit opens the schedule form, Remove is a second tap,
+ * `RemoveTwice`) and the reviews written for a period that ended on it. Focus moves to its heading when a day is picked; Escape or
  * the close button folds it and hands focus back to the day that opened it. Its buttons are outlines, so the screen keeps one solid one.
  */
 function DayPanel({ day, data, loading, schedules, onClose, onAdd, onEdit, onOpen, onChanged }: { day: string | null; data: DayData | undefined; loading: boolean; schedules: ReviewSchedule[]; onClose: () => void; onAdd: (day: string) => void; onEdit: (s: ReviewSchedule) => void; onOpen: (p: Period) => void; onChanged: () => void }) {
-  const [sure, setSure] = useState<string | null>(null);
-  useEffect(() => {
-    if (!sure) return;
-    const t = window.setTimeout(() => setSure(null), 4000);
-    return () => window.clearTimeout(t);
-  }, [sure]);
   const box = useRef<HTMLElement>(null);
   const head = useRef<HTMLHeadingElement>(null);
   const back = useRef<HTMLElement | null>(null);
@@ -158,13 +195,11 @@ function DayPanel({ day, data, loading, schedules, onClose, onAdd, onEdit, onOpe
     mutationFn: (id: string) => api.reviewScheduleRemove(id),
     onSuccess: () => {
       onChanged();
-      setSure(null);
       // The removed row's Remove button is gone, so focus cannot stay on it: bring it to the day's heading instead.
       requestAnimationFrame(() => head.current?.focus({ preventScroll: true }));
     },
   });
   useEffect(() => {
-    setSure(null);
     remove.reset(); // a failed remove on another day does not follow the person here
     if (!day) return;
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -220,20 +255,18 @@ function DayPanel({ day, data, loading, schedules, onClose, onAdd, onEdit, onOpe
           const full = schedules.find((x) => x.id === s.id);
           const series = Boolean(full?.repeat);
           return (
-            <div key={s.id} className="rounded-tile bg-paper p-sm">
+            <div key={`${day}-${s.id}`} className="rounded-tile bg-paper p-sm">
               <p className="m-0 text-card-title">
                 <Inert text={nameOf(s)} />
               </p>
               <p className="m-0 text-card-note text-ink-soft">{`Reminder at ${timeText(s.time)}${full ? `, ${full.label.toLowerCase()}` : ''}`}</p>
-              <div className="mt-xs flex flex-wrap gap-xs">
+              <div className="mt-xs flex flex-wrap items-center gap-xs">
+                <RemoveTwice series={series} size="sm" pending={remove.isPending} onArm={() => remove.reset()} onRemove={() => remove.mutate(s.id)} />
                 {full && (
-                  <Button variant="outline" size="sm" onClick={() => onEdit(full)}>
+                  <Button variant="outline" size="sm" className="ml-auto" onClick={() => onEdit(full)}>
                     Edit
                   </Button>
                 )}
-                <Button variant="outline" size="sm" disabled={remove.isPending} onClick={() => (sure === s.id ? remove.mutate(s.id) : setSure(s.id))}>
-                  <span aria-live="polite">{sure === s.id ? (series ? 'Tap again to remove the whole series' : 'Tap again to remove') : series ? 'Remove the series' : 'Remove'}</span>
-                </Button>
               </div>
             </div>
           );
@@ -242,7 +275,7 @@ function DayPanel({ day, data, loading, schedules, onClose, onAdd, onEdit, onOpe
           <div key={`${w.kind}-${w.start}`} className="flex items-center justify-between gap-sm rounded-tile bg-paper p-sm">
             <div className="min-w-0">
               <StatusTag tone="good">Written</StatusTag>
-              <p className="mt-xs m-0 text-subhead text-ink-soft">{tie(`${PERIOD_META[w.kind].name} for ${prettyDate(w.start)} to ${prettyDate(w.end)}`)}</p>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">{tie(`${w.name ?? PERIOD_META[w.kind].name} for ${w.start === w.end ? prettyDate(w.start) : `${prettyDate(w.start)} to ${prettyDate(w.end)}`}`)}</p>
             </div>
             <Button variant="outline" size="sm" onClick={() => onOpen({ kind: w.kind, start: w.start, end: w.end })}>
               Open it
@@ -250,8 +283,8 @@ function DayPanel({ day, data, loading, schedules, onClose, onAdd, onEdit, onOpe
           </div>
         ))}
         {remove.isError && (
-          <p role="alert" className="m-0 text-subhead">
-            That did not work. Try again.
+          <p role="alert" className="m-0 text-subhead text-r1">
+            {(remove.error as Error | null)?.message || 'That did not work. Try again.'}
           </p>
         )}
         <Button variant="outline" full onClick={() => onAdd(day)}>
@@ -270,12 +303,7 @@ function ScheduleForm({ state, today, onClose, onSaved }: { state: FormState | n
   const [time, setTime] = useState<string>(REVIEW_REMINDER_TIME);
   const [repeat, setRepeat] = useState<Repeat | null>(null);
   const [name, setName] = useState('');
-  const [sure, setSure] = useState(false);
-  useEffect(() => {
-    if (!sure) return;
-    const t = window.setTimeout(() => setSure(false), 4000);
-    return () => window.clearTimeout(t);
-  }, [sure]);
+  // A deliberate seed: each time the sheet opens it starts from the reminder or the day it was opened with.
   useEffect(() => {
     if (!state) return;
     setKind(state.existing?.kind ?? 'week');
@@ -283,8 +311,8 @@ function ScheduleForm({ state, today, onClose, onSaved }: { state: FormState | n
     setTime(state.existing?.time ?? REVIEW_REMINDER_TIME);
     setRepeat(state.existing?.repeat ?? null);
     setName(state.existing?.name ?? '');
-    setSure(false);
-    remove.reset(); // a failed remove from the last time the form was open is not shown again
+    save.reset(); // a failed save or remove from the last time the form was open is not shown again
+    remove.reset();
   }, [state, today]);
   const problem = !repeat && day < today ? COPY.pastOnce : null;
   const save = useMutation({
@@ -300,9 +328,10 @@ function ScheduleForm({ state, today, onClose, onSaved }: { state: FormState | n
   const remove = useMutation({
     mutationFn: () => api.reviewScheduleRemove(existing!.id),
     onSuccess: () => {
-      setSure(false);
       onSaved();
       onClose();
+      // The row that opened this form goes with it, so the keyboard's place moves to the calendar's heading.
+      focusHeadingAfter('rcal-heading');
     },
   });
   return (
@@ -316,12 +345,15 @@ function ScheduleForm({ state, today, onClose, onSaved }: { state: FormState | n
       >
         <div>
           <span className="block text-subhead font-semibold">Which review</span>
-          <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label="Which review">
-            {PERIOD_KINDS.map((k) => (
-              <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={`toy min-h-[44px] rounded-pill border-2 px-sm text-subhead font-medium ${kind === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-                {PERIOD_META[k].short}
-              </button>
-            ))}
+          {/* Six reviews since the day came (2026-11-07): one row where there is room, else three over three, never one pill alone. */}
+          <div className="@container mt-xs" role="group" aria-label="Which review">
+            <div className={periodGrid(PERIOD_KINDS.length)}>
+              {PERIOD_KINDS.map((k, i) => (
+                <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={`toy min-h-[44px] min-w-0 rounded-pill border-2 px-xs text-subhead font-medium ${periodCell(i, PERIOD_KINDS.length)} ${kind === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                  <span className="whitespace-nowrap">{PERIOD_META[k].short}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-xs">
@@ -345,20 +377,21 @@ function ScheduleForm({ state, today, onClose, onSaved }: { state: FormState | n
             {problem}
           </p>
         )}
-        {(save.isError || remove.isError) && (
+        {save.isError && (
           <p role="alert" className="m-0 text-subhead">
-            {((save.error ?? remove.error) as Error | null)?.message || 'That did not save. Try again.'}
+            {(save.error as Error | null)?.message || 'That did not save. Try again.'}
+          </p>
+        )}
+        {remove.isError && (
+          <p role="alert" className="m-0 text-subhead text-r1">
+            {(remove.error as Error | null)?.message || 'That did not work. Try again.'}
           </p>
         )}
         <div className="flex flex-wrap gap-xs">
           <Button type="submit" disabled={Boolean(problem) || save.isPending || !day}>
             {save.isPending ? 'Saving' : existing ? 'Save changes' : 'Schedule it'}
           </Button>
-          {existing && (
-            <Button variant="outline" disabled={remove.isPending} onClick={() => (sure ? remove.mutate() : setSure(true))}>
-              <span aria-live="polite">{sure ? (existing.repeat ? 'Tap again to remove the whole series' : 'Tap again to remove') : existing.repeat ? 'Remove the series' : 'Remove'}</span>
-            </Button>
-          )}
+          {existing && <RemoveTwice series={Boolean(existing.repeat)} pending={remove.isPending} onArm={() => remove.reset()} onRemove={() => remove.mutate()} />}
         </div>
       </form>
     </Sheet>

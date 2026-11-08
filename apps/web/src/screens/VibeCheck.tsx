@@ -747,7 +747,7 @@ function Learn({ result, floors, onNext }: { result: OnboardingResponse; floors:
               [Sun, 'Daily', 'Three boxes a day: check in, one small act, one task.'],
               [Landmark, 'Pillars', 'One pyramid per relationship. Tap a pillar to see it or change it.'],
               [House, 'Home', 'Your numbers first, then where to go next.'],
-              [LayoutGrid, 'Apps', 'Switch on only what you need.'],
+              [LayoutGrid, 'Apps', 'Show only what you need.'],
             ] as const
           ).map(([glyph, name, line]) => (
             <li key={name} className="flex items-center gap-sm">

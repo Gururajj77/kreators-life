@@ -18,19 +18,19 @@ Home opens with a dark card. It shows the date and a greeting with your first na
 
 - **Your level:** opens your pillars.
 - **Your streak:** how many days in a row you checked in. It opens Daily.
-- **Your mood:** today's face, or "Log your mood" if you have not picked one.
+- **Your mood:** today's face, or "Log your mood" if you have not picked one. It shows while Mood is on.
 
 Beside them sit **My page**, your public page, and a bell for your Inbox. Your picture opens the Profile tab. **Search anything** sits at the foot of the card, with results right under it as you type.
 
 ## Water, then a line for the day
 
-Next comes **Water and reminders**. Tap **+ Glass** each time you drink. Three round buttons switch the card between **Water**, **Reminders** and **Settings**, where you add your own reminders and set your goal.
+Next comes **Water and reminders**. Tap **+ Glass** each time you drink. Three round buttons switch the card between **Water**, **Reminders**, where you add your own, and **Settings**, where you set your goal and your glass.
 
 Under it sits the line of the day. It takes turns: a line from a philosopher one day, then a line written for the app the next. Every line shows once before any comes back. Tap the round **Another line** button to see a new one. It then takes turns between a tip, a small thing to do today, and a line to think about.
 
 ## Breathe and focus
 
-Next is **Breathe and focus**, the same panel you find in Mindfulness. It has four tabs: **Breathe**, **Timer**, **Pomodoro** and **Stopwatch**. The Mindfulness lesson covers it in full.
+Next is **Breathe and focus**, the same panel you find in Mindfulness. It has four tabs: **Breathe**, **Timer**, **Pomodoro** and **Stopwatch**. It shows here while Mindfulness is on. The Mindfulness lesson covers it in full.
 
 ## Your daily brief
 
@@ -39,7 +39,9 @@ Next is **Breathe and focus**, the same panel you find in Mindfulness. It has fo
 - **What changed:** three things that moved in your own numbers.
 - **Next steps:** three small things to do next.
 
-The brief runs on plain rules, not AI, so it never costs credits. It never points at an app you have switched off. If you take the Discover quiz and allow it, the steps start to fit how you work.
+The brief can also note a good week of movement, offer a short walk on a day you have not moved, and remind you of your eating check-in and the day's gratitude, each only while its app is on.
+
+The brief runs on plain rules, not AI, so it never costs credits. It never points at an app you have hidden. If you take the Discover quiz and allow it, the steps start to fit how you work.
 
 ## Getting started
 
@@ -63,14 +65,14 @@ Below the brief, Home shows numbers before actions. Results come first, and ever
 
 - **Your metrics:** your Life score, your mood and your wellbeing. Tap one for the detail.
 - **Your numbers:** your day streak, xp today, your points and your level, with a bar for how far you are into it.
-- **Emerging:** up to three patterns from your own logs, once there is one ready. A later lesson covers it.
+- **Emerging:** up to three patterns from your own logs, or one quiet line and **See all** while nothing is ready. A later lesson covers it.
 - **Daily:** today's boxes, to tick right here.
 - **Up next:** events, runs and circles you joined.
 - **Xp, last 14 days:** pick **By day** for a line with a green dot on each day you ticked a task, or **By source** for a ring of where your xp came from.
 - **Your pillars:** a bar for each of the seven.
-- **Go to:** every app you have switched on.
+- **Go to:** every app you have not hidden, as picture tiles: a sideways row on a phone.
 
-Some parts show only when their app is on, like Life, Knowledge and Money this month.
+Everything on Home that belongs to an app shows only while that app is not hidden.
 
 ## Xp and levels
 

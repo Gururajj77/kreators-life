@@ -29,6 +29,10 @@ import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
 import { Toggle } from './Toggle';
 import { FIELD } from '../lib/ui';
+import { evenGrid, evenTile } from '../lib/bento';
+
+// However many metrics a person keeps, the rows stay full (lib/bento.ts).
+const METRIC_COLS = { base: 1, lg: 2 } as const;
 
 const STATUS: Record<KpiStatus, { tone: TagTone; word: string }> = {
   on: { tone: 'good', word: 'On target' },
@@ -130,9 +134,9 @@ export function BusinessMetrics({ kind, date }: { kind: PeriodKind; date: string
               No {PERIOD_META[kind].short.toLowerCase()} metrics yet. Add one, such as pieces published or sales calls.
             </p>
           )}
-          <ul className="mt-sm grid list-none gap-sm p-0 m-0 md:grid-cols-2">
-            {d.readings.map((r) => (
-              <li key={r.kpi.id}>
+          <ul className={`mt-sm grid list-none gap-sm p-0 m-0 ${evenGrid(d.readings.length, METRIC_COLS)}`}>
+            {d.readings.map((r, i) => (
+              <li key={r.kpi.id} className={evenTile(i, d.readings.length, METRIC_COLS)}>
                 <Card r={r} currency={d.currency} date={date} onEdit={() => setEditing(r.kpi)} />
               </li>
             ))}
@@ -233,6 +237,7 @@ function Card({ r, currency, date, onEdit }: { r: KpiReading; currency: string; 
                 size="sm"
                 variant="ghost"
                 aria-live="polite"
+                className={clearArmed ? 'red-armed' : ''}
                 onClick={() => {
                   if (clearArmed) {
                     setClearArmed(false);
@@ -383,7 +388,7 @@ function MetricSheet({ editing, kind, onClose, currency }: { editing: Kpi | 'new
           How often
         </label>
         <select id="m-cadence" value={cadence} onChange={(e) => setCadence(e.target.value as PeriodKind)} className={FIELD}>
-          {PERIOD_KINDS.map((k) => (
+          {PERIOD_KINDS.filter((k) => k !== 'day').map((k) => (
             <option key={k} value={k}>
               {PERIOD_META[k].short}
             </option>

@@ -5,6 +5,7 @@ import {
   phoneProblem,
   CHARACTER_STAGES,
   MODULE_BY_KEY,
+  MODULES,
   daysSince,
   evolutionFor,
   IDENTITY_STAGES,
@@ -15,14 +16,14 @@ import {
   type RelationshipState,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { badgeState, badgesFor, getStats, getUser, honorKeys, newId, nowIso, parseModules, randomCode, str, toUser, publicOf } from '../db';
+import { badgeState, badgesFor, DELETED_NAME_PROBLEM, keptStats, getUser, honorKeys, httpUrl, isDeletedName, LINK_PROBLEM, newId, nowIso, objectBody, parseModules, randomCode, str, toUser, publicOf } from '../db';
 import { resolveAccess } from '../access';
 import { hashPassword, randomHex, safeEqual } from './auth';
 import { sendEmail, track } from '../ops';
-import { deleteAccount } from '../account';
+import { deleteAccount, StillClosing } from '../account';
 import { askToCoach, isCoach } from '../coaching';
 import { currencyOf, parseSocials } from '../db';
-import { appPrefsProblem, isAutoHandle, isCurrency, MAX_INTERESTS, parseAppPrefs, parseIdentities, parseLinkBlocks, passwordProblem, TRACKED_EVENTS, type TrackedEvent } from '@kreators/shared';
+import { appPrefsProblem, datePrefsProblem, isAutoHandle, isCurrency, MAX_INTERESTS, parseAppPrefs, parseDatePrefs, parseIdentities, parseLinkBlocks, passwordProblem, TRACKED_EVENTS, type TrackedEvent } from '@kreators/shared';
 import type { Organization, PortfolioItem } from '@kreators/shared';
 
 export const me = new Hono<AppEnv>();
@@ -39,18 +40,12 @@ me.get('/', async (c) => {
       .prepare('SELECT relationship, score, xp FROM relationship_scores WHERE user_id = ?')
       .bind(user.id)
       .all<{ relationship: RelationshipKey; score: number; xp: number }>(),
+    // Only the foundations here: the tasks under each pillar are read by Pillars, the one screen that shows them (GET /me/pillar-tasks), since this answer is read after every write.
     db
-      .prepare(
-        `SELECT relationship,
-          SUM(CASE WHEN kind = 'pillar' AND status != 'archived' THEN 1 ELSE 0 END) AS pillars,
-          SUM(CASE WHEN kind = 'task' AND status = 'active' THEN 1 ELSE 0 END) AS active_tasks,
-          SUM(CASE WHEN kind = 'task' AND status = 'done' THEN 1 ELSE 0 END) AS done_tasks,
-          MIN(CASE WHEN kind = 'pillar' AND status != 'archived' THEN created_at END) AS first_pillar
-         FROM nodes WHERE user_id = ? GROUP BY relationship`,
-      )
+      .prepare("SELECT relationship, COUNT(*) AS pillars, MIN(created_at) AS first_pillar FROM nodes INDEXED BY idx_nodes_user_done WHERE user_id = ? AND kind = 'pillar' AND status != 'archived' GROUP BY relationship")
       .bind(user.id)
-      .all<{ relationship: RelationshipKey; pillars: number; active_tasks: number; done_tasks: number; first_pillar: string | null }>(),
-    getStats(db, user.id),
+      .all<{ relationship: RelationshipKey; pillars: number; first_pillar: string | null }>(),
+    keptStats(db, user),
     honorKeys(db, user),
     resolveAccess(db, user),
     db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL').bind(user.id).first<{ n: number }>(),
@@ -75,8 +70,6 @@ me.get('/', async (c) => {
       xp,
       level: levelFromXp(xp),
       pillars: n?.pillars ?? 0,
-      activeTasks: n?.active_tasks ?? 0,
-      doneTasks: n?.done_tasks ?? 0,
       stage: evolutionFor(CHARACTER_STAGES, xp, floorAgeDays ?? 0).stage.stage,
       floorAgeDays,
       answered: answered.has(r.key),
@@ -96,6 +89,16 @@ me.get('/', async (c) => {
     stats: { tasksDone: stats.tasksDone, sparksDone: stats.sparksDone, projectsCleared: stats.projectsCleared },
   };
   return c.json(body);
+});
+
+// The open and ticked tasks under each pillar, for Pillars' cards. It visits every task the person has, so only the screen that shows them asks.
+me.get('/pillar-tasks', async (c) => {
+  const rows = await c.env.DB.prepare(
+    "SELECT relationship, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active_tasks, SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done_tasks FROM nodes INDEXED BY idx_nodes_user_done WHERE user_id = ? AND kind = 'task' AND status IN ('active', 'done') GROUP BY relationship",
+  )
+    .bind(c.get('user').id)
+    .all<{ relationship: RelationshipKey; active_tasks: number; done_tasks: number }>();
+  return c.json({ pillars: rows.results.map((r) => ({ relationship: r.relationship, activeTasks: r.active_tasks, doneTasks: r.done_tasks })) });
 });
 
 // The badge gallery: what you hold with its date, and the count behind every rule so a bar can be drawn. Only you see this.
@@ -139,6 +142,7 @@ me.patch('/', async (c) => {
     .json<Record<string, unknown>>()
     .catch(() => ({}) as Record<string, unknown>);
   const displayName = typeof body.displayName === 'string' ? body.displayName.trim().slice(0, 40) : user.display_name;
+  if (isDeletedName(displayName)) return c.json({ error: DELETED_NAME_PROBLEM }, 400);
   const focus = typeof body.focus === 'string' ? body.focus.trim().slice(0, 40) : user.creator_type;
   const optIn = typeof body.leaderboardOptIn === 'boolean' ? (body.leaderboardOptIn ? 1 : 0) : user.leaderboard_opt_in;
   const bio = typeof body.bio === 'string' ? body.bio.trim().slice(0, 200) : user.bio;
@@ -197,14 +201,21 @@ me.patch('/', async (c) => {
     if (bad) return c.json({ error: bad }, 400);
     appPrefs = JSON.stringify(parseAppPrefs(body.appPrefs));
   }
+  // How dates and times read on their screens: either part, over what they had; anything but one of the choices is refused.
+  let datePrefs = user.date_prefs_json ?? null;
+  if ('datePrefs' in body) {
+    const bad = datePrefsProblem(body.datePrefs);
+    if (bad) return c.json({ error: bad }, 400);
+    datePrefs = JSON.stringify(parseDatePrefs({ ...parseDatePrefs(datePrefs), ...(body.datePrefs as object) }));
+  }
   const avatarUrl = 'avatarUrl' in body ? (/^https?:\/\//.test(str(body.avatarUrl, 500)) ? str(body.avatarUrl, 500) : '') : user.avatar_url;
   const socials = body.socials && typeof body.socials === 'object' ? JSON.stringify(parseSocials(JSON.stringify(body.socials))) : user.socials_json;
   const publicJson = body.publicSettings && typeof body.publicSettings === 'object' ? JSON.stringify(parsePublicSettings({ ...publicOf(user), ...(body.publicSettings as Record<string, unknown>) })) : user.public_json;
   // Link blocks: cleaned in shared, every block gets an id here so clicks can be counted.
   const links = Array.isArray(body.links) ? JSON.stringify(parseLinkBlocks(body.links).map((b) => ({ ...b, id: b.id || newId().slice(0, 12) }))) : user.links_json;
   await db
-    .prepare('UPDATE users SET display_name = ?, creator_type = ?, leaderboard_opt_in = ?, bio = ?, reminder_time = ?, handle = ?, skills = ?, categories = ?, goals = ?, experience_level = ?, availability = ?, location = ?, open_to_intros = ?, interests = ?, identities = ?, city = ?, area = ?, lat = ?, lng = ?, timezone = ?, currency = ?, app_prefs_json = ?, avatar_url = ?, socials_json = ?, public_json = ?, links_json = ?, phone = ? WHERE id = ?')
-    .bind(displayName, focus, optIn, bio, reminderTime, handle, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, identities, city, area, lat, lng, timezone, currency, appPrefs, avatarUrl, socials, publicJson, links, phone, user.id)
+    .prepare('UPDATE users SET display_name = ?, creator_type = ?, leaderboard_opt_in = ?, bio = ?, reminder_time = ?, handle = ?, skills = ?, categories = ?, goals = ?, experience_level = ?, availability = ?, location = ?, open_to_intros = ?, interests = ?, identities = ?, city = ?, area = ?, lat = ?, lng = ?, timezone = ?, currency = ?, app_prefs_json = ?, date_prefs_json = ?, avatar_url = ?, socials_json = ?, public_json = ?, links_json = ?, phone = ? WHERE id = ?')
+    .bind(displayName, focus, optIn, bio, reminderTime, handle, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, identities, city, area, lat, lng, timezone, currency, appPrefs, datePrefs, avatarUrl, socials, publicJson, links, phone, user.id)
     .run();
   if (handle && isAutoHandle(user.handle) && !isAutoHandle(handle)) await track(db, user.id, 'profile_published', { minutesSinceSignup: Math.round((Date.now() - new Date(user.created_at).getTime()) / 60_000) });
   // Picking the Life coach tag on Profile asks to become one, as the setup chat does (askToCoach tells the admins once).
@@ -225,8 +236,8 @@ me.get('/portfolio', async (c) => {
 me.post('/portfolio', async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
   const title = str(body.title, 120);
-  const url = str(body.url, 500);
-  if (!title || !url) return c.json({ error: 'a title and a link' }, 400);
+  const url = httpUrl(body.url);
+  if (!title || !url) return c.json({ error: `a title and ${LINK_PROBLEM}` }, 400);
   const id = newId();
   await c.env.DB.prepare('INSERT INTO portfolio_items (id, user_id, title, description, url, visibility, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
     .bind(id, c.get('user').id, title, str(body.description, 500), url, body.visibility === 'private' ? 'private' : 'public', nowIso())
@@ -249,13 +260,24 @@ me.get('/export', async (c) => {
     ['nodes', 'SELECT * FROM nodes WHERE user_id = ?'],
     ['subtasks', 'SELECT * FROM subtasks WHERE user_id = ?'],
     ['wellbeing', 'SELECT * FROM wellbeing_logs WHERE user_id = ?'],
+    // Supplements in Fitness (migration 0104): the list, each day one was taken, and the switches.
+    ['supplements', 'SELECT id, name, kind, amount, time_of_day, days_json, position, paused_at, created_at, updated_at FROM supplements WHERE user_id = ?'],
+    ['supplementDays', 'SELECT supplement_id, day, taken_at FROM supplement_days WHERE user_id = ?'],
+    ['fitnessPrefs', 'SELECT * FROM fitness_prefs WHERE user_id = ?'],
     ['journal', 'SELECT * FROM journal_entries WHERE user_id = ?'],
+    // Gratitude for the day on Journal (migration 0102): the three lines and the prompt each answered.
+    ['gratitude', 'SELECT day, lines_json, created_at, updated_at FROM gratitude_days WHERE user_id = ?'],
+    // Its prompts per person (migration 0106): the prompts kept for the open days, the prompts seen by round, and the usual three.
+    ['gratitudeOffers', 'SELECT day, prompts_json, created_at, updated_at FROM gratitude_offers WHERE user_id = ?'],
+    ['gratitudeSeen', 'SELECT grp, prompt, round, how, day, seen_at FROM gratitude_seen WHERE user_id = ?'],
+    ['gratitudePrefs', 'SELECT usual_json, updated_at FROM gratitude_prefs WHERE user_id = ?'],
     ['orders', 'SELECT * FROM orders WHERE buyer_id = ? OR owner_id = ?'],
     // Private courses: the ones you were invited to, and the people you invited to yours.
     ['productInvites', 'SELECT i.product_id, i.user_id, i.created_at FROM product_invites i JOIN products p ON p.id = i.product_id WHERE i.user_id = ? OR p.owner_id = ?'],
     ['bookings', 'SELECT * FROM bookings WHERE buyer_id = ? OR owner_id = ?'],
     ['finance', 'SELECT * FROM finance_transactions WHERE user_id = ?'],
-    ['invoices', 'SELECT * FROM invoices WHERE user_id = ?'],
+    // Never a paper's link key (invoices, agreements, other documents, a client link or team link): whoever holds the file could open a client's paper with it.
+    ['invoices', "SELECT id, user_id, number, client_name, client_email, items_json, total_cents, currency, status, issue_date, due_date, note, (token IS NOT NULL AND token != '') AS has_link, paid_at, created_at, agency_client_id, doc_json, revised_at, agency_cycle_id, voided_from FROM invoices WHERE user_id = ?"],
     ['points', 'SELECT * FROM points_ledger WHERE user_id = ?'],
     ['notifications', 'SELECT * FROM notifications WHERE user_id = ?'],
     ['notToDo', 'SELECT * FROM not_to_do WHERE user_id = ?'],
@@ -299,6 +321,9 @@ me.get('/export', async (c) => {
     ['coachNotes', 'SELECT * FROM coach_notes WHERE coach_id = ? OR student_id = ?'],
     ['coachLog', 'SELECT * FROM coach_log WHERE coach_id = ? OR student_id = ?'],
     ['coachProfile', 'SELECT * FROM coach_profiles WHERE user_id = ?'],
+    // What shows on their Coaching pages, and that a coach has an invite link (never the token: it is a live key).
+    ['coachPrefs', 'SELECT * FROM coach_prefs WHERE user_id = ?'],
+    ['coachInvite', 'SELECT coach_id, created_at FROM coach_invites WHERE coach_id = ?'],
     ['postsFollowed', 'SELECT * FROM community_post_follows WHERE user_id = ?'],
     ['replyReactions', 'SELECT * FROM community_reply_reactions WHERE user_id = ?'],
     ['seasonResults', 'SELECT * FROM season_results WHERE user_id = ?'],
@@ -325,7 +350,7 @@ me.get('/export', async (c) => {
     ['customReminders', 'SELECT * FROM custom_reminders WHERE user_id = ?'],
     ['agencySettings', 'SELECT * FROM agency_settings WHERE user_id = ?'],
     // The password hash and salt of a client link or a team link are never exported, nor are their sessions.
-    ['agencyClients', 'SELECT id, user_id, name, contact_name, contact_email, status, health, channels_json, retainer_cents, pieces_per_month, hours_per_month, renewal_date, notes, campaign_id, billing_json, portal_token, portal_json, created_at, updated_at, stage, stage_since, lifecycle_json, ticks_json, revisions_per_piece, (portal_pass_hash IS NOT NULL) AS portal_has_password, portal_pass_set_at, portal_last_opened_day, onboarding_json, onboarded_at, onboarding_needed, team_link_token, team_link_json, (team_link_pass_hash IS NOT NULL) AS team_link_has_password, team_link_pass_set_at, team_link_opened_day FROM agency_clients WHERE user_id = ?'],
+    ['agencyClients', 'SELECT id, user_id, name, contact_name, contact_email, status, health, channels_json, retainer_cents, pieces_per_month, hours_per_month, renewal_date, notes, campaign_id, billing_json, (portal_token IS NOT NULL) AS has_client_link, portal_json, created_at, updated_at, stage, stage_since, lifecycle_json, ticks_json, revisions_per_piece, (portal_pass_hash IS NOT NULL) AS portal_has_password, portal_pass_set_at, portal_last_opened_day, onboarding_json, onboarded_at, onboarding_needed, (team_link_token IS NOT NULL) AS has_team_link, team_link_json, (team_link_pass_hash IS NOT NULL) AS team_link_has_password, team_link_pass_set_at, team_link_opened_day FROM agency_clients WHERE user_id = ?'],
     ['agencyPasswordRequests', 'SELECT * FROM agency_password_requests WHERE user_id = ?'],
     ['agencyRetainers', 'SELECT * FROM agency_retainers WHERE user_id = ?'],
     ['agencyCycles', 'SELECT * FROM agency_cycles WHERE user_id = ?'],
@@ -333,9 +358,9 @@ me.get('/export', async (c) => {
     ['agencyItems', 'SELECT * FROM agency_items WHERE user_id = ?'],
     ['agencyNotes', 'SELECT * FROM agency_notes WHERE user_id = ?'],
     ['agencyTime', 'SELECT * FROM agency_time WHERE user_id = ?'],
-    ['agencyContracts', 'SELECT * FROM agency_contracts WHERE user_id = ?'],
+    ['agencyContracts', "SELECT id, user_id, client_id, title, template_key, status, doc_json, (token IS NOT NULL AND token != '') AS has_link, answers_json, acceptance_json, sent_at, signed_at, revised_at, created_at, updated_at, voided_from FROM agency_contracts WHERE user_id = ?"],
     ['agencyDocComments', 'SELECT * FROM agency_doc_comments WHERE user_id = ?'],
-    ['agencyDocs', 'SELECT * FROM agency_docs WHERE user_id = ?'],
+    ['agencyDocs', "SELECT id, user_id, client_id, kind, title, status, body_json, (token IS NOT NULL AND token != '') AS has_link, answers_json, approval_json, sent_at, approved_at, revised_at, created_at, updated_at, voided_from FROM agency_docs WHERE user_id = ?"],
     ['agencyDocLog', 'SELECT * FROM agency_doc_log WHERE user_id = ?'],
     ['agencyTemplates', 'SELECT * FROM agency_templates WHERE user_id = ?'],
     // The Agency team: the people on yours, and the teams you joined (without the client it ties you to or the owner's details).
@@ -366,8 +391,102 @@ me.get('/export', async (c) => {
     ['financeBudgets', 'SELECT * FROM finance_budgets WHERE user_id = ?'],
     ['xpEvents', 'SELECT * FROM xp_events WHERE user_id = ?'],
     ['pillarScores', 'SELECT * FROM relationship_scores WHERE user_id = ?'],
+    // 2026-11-07, the cross-check (scripts/data-coverage.mjs): the rest of what a person wrote or what is about them. No hash, salt, session or
+    // code someone else could use, and of another person nothing beyond what this person is shown on their own screens.
+    ['accountDetails', 'SELECT lat, lng, referred_by, fee_bps, is_pro, getting_started_hidden_at, time_blocks_seeded_at FROM users WHERE id = ?'],
+    ['onboardingAnswers', 'SELECT question_id, relationship, value, points, created_at FROM onboarding_answers WHERE user_id = ?'],
+    ['smallActs', 'SELECT date, relationship, created_at FROM spark_completions WHERE user_id = ?'],
+    ['honors', 'SELECT honor_key, note, awarded_at FROM honors WHERE user_id = ?'],
+    ['rewardReservations', 'SELECT * FROM redemptions WHERE user_id = ?'],
+    ['appOverrides', "SELECT flag_key, enabled, expires_at, reason, created_at FROM flag_overrides WHERE subject_type = 'user' AND subject_id = ?"],
+    ['researchRuns', 'SELECT r.* FROM research_runs r JOIN brands b ON b.id = r.brand_id WHERE b.owner_id = ?'],
+    // People: friends, who you follow and who follows you, introductions, reactions, and Bond chats (made-up names only: a chat never names the other person).
+    ['friends', 'SELECT id, requester_id, recipient_id, status, created_at, answered_at FROM friendships WHERE requester_id = ? OR recipient_id = ?'],
+    ['following', 'SELECT owner_id, created_at FROM follows WHERE follower_id = ?'],
+    ['followers', 'SELECT follower_id, created_at FROM follows WHERE owner_id = ?'],
+    ['introductions', 'SELECT * FROM introductions WHERE requester_user_id = ? OR recipient_user_id = ?'],
+    ['postReactions', 'SELECT post_id, kind, created_at FROM community_likes WHERE user_id = ?'],
+    ['bondChats', 'SELECT id, source, created_at, last_message_at, CASE WHEN a_user_id = ? THEN a_alias ELSE b_alias END AS my_alias, CASE WHEN a_user_id = ? THEN b_alias ELSE a_alias END AS their_alias FROM bond_chats WHERE a_user_id = ? OR b_user_id = ?'],
+    ['mutes', 'SELECT reason, created_at FROM community_mutes WHERE user_id = ?'],
+    ['clubMembership', 'SELECT id, membership_type, status, note, decision_note, starts_at, ends_at, created_at FROM memberships WHERE user_id = ?'],
+    ['organizations', 'SELECT o.id, o.name, o.type, m.role, m.status, m.created_at FROM organization_members m JOIN organizations o ON o.id = m.organization_id WHERE m.user_id = ?'],
+    // Events: your seats and what you said about them, and what you host. A code is a live key, so a host's code is never in here. A circle's seat is your own row only.
+    ['eventSeats', 'SELECT id, event_id, status, registered_at, checked_in_at, networking_opt_in, paid_points FROM event_registrations WHERE user_id = ?'],
+    ['eventFeedback', 'SELECT event_id, rating, comment, created_at FROM event_feedback WHERE user_id = ?'],
+    ['eventsHosted', 'SELECT * FROM events WHERE host_user_id = ?'],
+    ['eventPhotoLinks', 'SELECT app, event_id, url, note, updated_at FROM event_photos WHERE set_by = ?'],
+    ['attendeeCodesSet', 'SELECT app, thing_id, xp, created_at, updated_at FROM attendee_codes WHERE created_by = ?'],
+    ['circleSignups', 'SELECT event_id, note, status, created_at FROM circle_signups WHERE user_id = ?'],
+    ['circleSeats', 'SELECT group_id, alias, character, revealed, status FROM circle_members WHERE user_id = ?'],
+    ['circlesMade', 'SELECT * FROM circle_events WHERE created_by = ?'],
+    ['runClubsHosted', 'SELECT * FROM run_clubs WHERE host_user_id = ?'],
+    ['runsHosted', 'SELECT r.id, r.club_id, r.title, r.meeting_point, r.starts_at, r.ends_at, r.metres, r.xp, r.status, r.created_at FROM runs r JOIN run_clubs k ON k.id = r.club_id WHERE k.host_user_id = ?'],
+    ['collabApplications', 'SELECT * FROM run_collab_applications WHERE user_id = ?'],
+    ['collabsPosted', 'SELECT * FROM run_collabs WHERE created_by = ?'],
+    // Work, rewards, Army, TV and Fund: what you sent in, what was said about it, and what you posted or wrote as a reviewer.
+    ['applications', 'SELECT * FROM applications WHERE creator_user_id = ?'],
+    ['applicationLog', 'SELECT e.application_id, e.event_type, e.note, e.created_at FROM application_events e LEFT JOIN applications a ON a.id = e.application_id WHERE e.actor_user_id = ? OR a.creator_user_id = ?'],
+    ['opportunitiesPosted', 'SELECT * FROM opportunities WHERE created_by = ?'],
+    ['rewardsMade', 'SELECT * FROM bounties WHERE created_by = ?'],
+    ['rewardEntries', 'SELECT * FROM bounty_submissions WHERE user_id = ?'],
+    ['rewardEntryNumbers', 'SELECT m.submission_id, m.views, m.likes, m.comments, m.shares, m.source, m.note, m.fetched_at FROM social_metrics m JOIN bounty_submissions s ON s.id = m.submission_id WHERE s.user_id = ?'],
+    ['campaignsOwned', 'SELECT * FROM campaigns WHERE owner_user_id = ?'],
+    ['campaignRoles', 'SELECT * FROM campaign_assignments WHERE creator_user_id = ?'],
+    ['campaignLog', 'SELECT campaign_id, event_type, note, created_at FROM campaign_events WHERE actor_user_id = ?'],
+    ['deliverableVersions', 'SELECT * FROM deliverable_versions WHERE submitted_by = ?'],
+    ['deliverableFeedback', 'SELECT f.id, f.deliverable_version_id, f.comment, f.status, f.created_at FROM feedback_items f JOIN deliverable_versions v ON v.id = f.deliverable_version_id WHERE f.author_user_id = ? OR v.submitted_by = ?'],
+    ['pitches', 'SELECT * FROM proposals WHERE user_id = ?'],
+    ['pitchLog', 'SELECT l.proposal_id, l.from_stage, l.to_stage, l.note, l.created_at FROM decision_log l LEFT JOIN proposals p ON p.id = l.proposal_id WHERE l.actor_user_id = ? OR p.user_id = ?'],
+    // School: as a learner, and what you made or ran.
+    ['enrollments', 'SELECT * FROM enrollments WHERE learner_user_id = ?'],
+    ['handIns', 'SELECT * FROM submissions WHERE learner_user_id = ?'],
+    ['handInFeedback', 'SELECT f.submission_id, f.comment, f.grade, f.created_at FROM submission_feedback f LEFT JOIN submissions s ON s.id = f.submission_id WHERE f.reviewer_user_id = ? OR s.learner_user_id = ?'],
+    ['attendance', 'SELECT session_id, status, checked_in_at FROM attendance WHERE user_id = ?'],
+    ['programsMade', 'SELECT * FROM programs WHERE created_by = ?'],
+    ['programLessons', 'SELECT i.* FROM learning_items i JOIN programs p ON p.id = i.program_id WHERE p.created_by = ?'],
+    ['programAssignments', 'SELECT a.* FROM course_assignments a JOIN programs p ON p.id = a.program_id WHERE p.created_by = ?'],
+    ['cohortsManaged', 'SELECT * FROM cohorts WHERE manager_user_id = ?'],
+    // The Shop, as a seller: what you sell, the people you gathered (their names and emails, as your own list shows them), and how a link did, in counts.
+    ['products', 'SELECT * FROM products WHERE owner_id = ?'],
+    ['productLessons', 'SELECT l.* FROM lessons l JOIN products p ON p.id = l.product_id WHERE p.owner_id = ?'],
+    ['coupons', 'SELECT * FROM coupons WHERE owner_id = ?'],
+    ['availability', 'SELECT * FROM availability WHERE owner_id = ?'],
+    ['availabilityOverrides', 'SELECT * FROM availability_overrides WHERE owner_id = ?'],
+    ['leads', 'SELECT * FROM leads WHERE owner_id = ?'],
+    ['broadcasts', 'SELECT * FROM broadcasts WHERE owner_id = ?'],
+    ['sequences', 'SELECT * FROM sequences WHERE owner_id = ?'],
+    ['dmAutomations', 'SELECT * FROM dm_automations WHERE owner_id = ?'],
+    ['dmSends', 'SELECT s.automation_id, s.recipient_handle, s.status, s.created_at FROM dm_sends s JOIN dm_automations a ON a.id = s.automation_id WHERE a.owner_id = ?'],
+    ['trackedLinks', 'SELECT * FROM tracked_links WHERE owner_id = ?'],
+    ['linkClicks', 'SELECT link_id, country, COUNT(*) AS clicks, MIN(created_at) AS first_at, MAX(created_at) AS last_at FROM link_clicks INDEXED BY idx_clicks_link WHERE link_id IN (SELECT id FROM tracked_links WHERE owner_id = ?) GROUP BY link_id, country'],
+    ['contentItems', 'SELECT * FROM content_items WHERE owner_id = ?'],
+    ['funnels', 'SELECT * FROM funnels WHERE owner_id = ?'],
+    ['pageVisits', 'SELECT kind, ref, COUNT(*) AS n, MIN(created_at) AS first_at, MAX(created_at) AS last_at FROM page_events WHERE owner_id = ? GROUP BY kind, ref'],
+    ['reviewsReceived', 'SELECT product_id, rating, body, approved, created_at FROM testimonials WHERE owner_id = ?'],
+    // The Shop, as a buyer: your reviews, your paid questions and their answers, what you finished, and a list that holds your own address.
+    ['reviewsWritten', 'SELECT id, product_id, rating, body, approved, created_at FROM testimonials WHERE author_id = ?'],
+    ['dmQuestions', 'SELECT * FROM dm_requests WHERE buyer_id = ? OR owner_id = ?'],
+    ['certificates', 'SELECT code, product_id, issued_at FROM certificates WHERE user_id = ?'],
+    ['lessonProgress', 'SELECT lesson_id, completed_at FROM lesson_progress WHERE user_id = ?'],
+    ['quizAttempts', 'SELECT lesson_id, score, passed, created_at FROM quiz_attempts WHERE user_id = ?'],
+    ['listsYouAreOn', 'SELECT owner_id, source, message, created_at FROM leads WHERE lower(email) = (SELECT lower(email) FROM users WHERE id = ?)'],
+    // What you made for everyone as the team, and notes you wrote on someone else's Agency.
+    ['knowledgeWritten', 'SELECT * FROM resources WHERE author_id = ?'],
+    ['toolsSuggested', 'SELECT * FROM tools WHERE suggested_by = ?'],
+    ['storeItemsMade', 'SELECT * FROM store_items WHERE created_by = ?'],
+    ['storeKitsMade', 'SELECT * FROM store_kits WHERE created_by = ?'],
+    ['houseTemplatesMade', 'SELECT * FROM agency_house_templates WHERE created_by = ?'],
+    ['discountCodesMade', 'SELECT code, kind, note, created_at FROM discount_codes WHERE created_by = ?'],
+    ['agencyNotesWritten', 'SELECT id, item_id, body, created_at FROM agency_notes WHERE author_id = ? AND user_id != ?'],
+    // What the app itself keeps about you. Mail by subject only: a body can hold a live link.
+    ['emailsSent', 'SELECT to_email, subject, status, created_at, sent_at FROM email_outbox WHERE user_id = ?'],
+    ['appLog', 'SELECT at, area, method, path, status FROM app_logs WHERE actor_id = ?'],
+    ['auditTrail', "SELECT action, resource_type, resource_id, created_at FROM audit_logs WHERE actor_user_id = ? OR (resource_type = 'user' AND resource_id = ?)"],
+    ['accountTimeline', "SELECT entity, type, data_json, created_at FROM timeline_events WHERE entity IN ('user', 'kyc') AND entity_id = ?"],
   ];
   const out: Record<string, unknown> = { exportedAt: nowIso(), user: toUser(user) };
+  // Nothing of their own to export yet: the starting set is the app's, kept in code until their first change. Said plainly, since a date, a weekday or a task can name one by its id.
+  if (!user.time_blocks_seeded_at) out.timeBlocksNote = 'You have not changed your time blocks or day templates, so those lists are empty and you are on the app’s starting set. An id like t-deep-… or b-deep-… on a day, a weekday or a task names a starting one.';
   // Every table in a few batches (one round trip each) instead of one trip per table.
   for (let i = 0; i < tables.length; i += 30) {
     const part = tables.slice(i, i + 30);
@@ -389,8 +508,15 @@ me.delete('/', async (c) => {
   // The request is logged without a name: the date, and that it was done.
   const requestId = newId();
   const asked = nowIso();
-  await deleteAccount(db, user.id);
+  try {
+    await deleteAccount(db, user.id, c.env);
+  } catch (e) {
+    if (e instanceof StillClosing) return c.json({ error: e.message, again: true }, 409);
+    throw e;
+  }
   await db.prepare("INSERT INTO data_requests (id, kind, requested_at, completed_at, outcome) VALUES (?, 'delete', ?, ?, 'account deleted')").bind(requestId, asked, nowIso()).run();
+  // The app log's line for this very request is written after the answer, from the session's person: it names nobody now the account is gone.
+  c.set('user', undefined as never);
   return c.json({ ok: true });
 });
 
@@ -402,16 +528,42 @@ me.post('/events', async (c) => {
   return c.json({ ok: true });
 });
 
-// Switch one of your own modules on or off.
+/** The list form of PATCH /me/modules, read whole: the apps and their new state, or why the whole list is refused. */
+function readModuleChanges(raw: unknown): { key: string; on: boolean }[] | string {
+  if (!Array.isArray(raw) || raw.length === 0) return 'name at least one app';
+  if (raw.length > MODULES.length) return 'that is more apps than there are';
+  const seen = new Set<string>();
+  const changes: { key: string; on: boolean }[] = [];
+  for (const item of raw as unknown[]) {
+    const { key, on } = (item !== null && typeof item === 'object' ? item : {}) as { key?: unknown; on?: unknown };
+    const m = typeof key === 'string' ? MODULE_BY_KEY[key] : undefined;
+    if (!m) return 'no such module';
+    if (m.locked) return 'that one stays on';
+    if (typeof on !== 'boolean') return 'say true or false for each app';
+    if (seen.has(m.key)) return 'name each app once';
+    seen.add(m.key);
+    changes.push({ key: m.key, on });
+  }
+  return changes;
+}
+
+// Hide or show your own apps: one with { key, on }, or several with { changes: [{ key, on }, ...] }. The list is one write, since several
+// calls at once would each read the same old list and overwrite each other, and a list with anything wrong in it writes nothing.
 me.patch('/modules', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const body = await c.req.json<{ key?: string; on?: boolean }>().catch(() => ({}) as { key?: string; on?: boolean });
-  const m = body.key ? MODULE_BY_KEY[body.key] : undefined;
-  if (!m) return c.json({ error: 'no such module' }, 404);
-  if (m.locked) return c.json({ error: 'that one stays on' }, 400);
+  const body = await objectBody(c);
   const mine = parseModules(user.modules);
-  mine[m.key] = body.on !== false;
+  if (body.changes !== undefined) {
+    const changes = readModuleChanges(body.changes);
+    if (typeof changes === 'string') return c.json({ error: changes }, 400);
+    for (const { key, on } of changes) mine[key] = on;
+  } else {
+    const m = typeof body.key === 'string' ? MODULE_BY_KEY[body.key] : undefined;
+    if (!m) return c.json({ error: 'no such module' }, 404);
+    if (m.locked) return c.json({ error: 'that one stays on' }, 400);
+    mine[m.key] = body.on !== false;
+  }
   await db.prepare('UPDATE users SET modules = ? WHERE id = ?').bind(JSON.stringify(mine), user.id).run();
   return c.json({ modules: mine });
 });
@@ -448,7 +600,7 @@ me.post('/reset', async (c) => {
     db.prepare("DELETE FROM redemptions WHERE user_id = ? AND status = 'reserved'").bind(user.id),
     db.prepare('UPDATE relationship_scores SET score = 0, xp = 0 WHERE user_id = ?').bind(user.id),
     db
-      .prepare("UPDATE users SET xp = 0, points = 0, streak = 0, best_streak = 0, last_checkin = NULL, onboarded_at = NULL, reminder_time = NULL, identities = '[]', intake_json = '{}' WHERE id = ?")
+      .prepare("UPDATE users SET xp = 0, points = 0, streak = 0, best_streak = 0, last_checkin = NULL, onboarded_at = NULL, reminder_time = NULL, identities = '[]', intake_json = '{}', stats_json = NULL, stats_at = NULL WHERE id = ?")
       .bind(user.id),
   ]);
   return c.json({ ok: true, at: nowIso() });

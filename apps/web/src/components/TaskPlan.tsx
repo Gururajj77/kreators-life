@@ -1,5 +1,6 @@
-import { LIFE_AREA_ORDER, LIFE_AREAS, PRIORITIES, RELATIONSHIPS, addDays, blockOfTask, blocksInDay, mondayOf, templateForDate, timeLabel, type LifeAreaKey, type MonthProject, type Node, type Priority, type Repeat, type TemplateSlot, type TimeBlock, type TimeBlocksResponse } from '@kreators/shared';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { LIFE_AREA_ORDER, LIFE_AREAS, PRIORITIES, RELATIONSHIPS, addDays, blockOfTask, blocksInDay, mondayOf, openDay, templateForDate, type TodayResponse, type LifeAreaKey, type MonthProject, type Node, type Priority, type RelationshipKey, type Repeat, type TemplateSlot, type TimeBlock, type TimeBlocksResponse } from '@kreators/shared';
+import { blockMismatch, blockMismatchLine, blockUsedMin } from '@kreators/shared/blockHints';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { X } from 'lucide-react';
@@ -11,6 +12,7 @@ import { RulerPicker } from './RulerPicker';
 import { Toggle } from './Toggle';
 import { FIELD, FIELD_LINE } from '../lib/ui';
 import { useTimeBlocks } from '../lib/useTimeBlocks';
+import { todayLocal, clockOf, slotRange } from '../lib/date';
 import { ConfirmDelete, DELETE_BTN } from './ConfirmDelete';
 import { FieldLabel } from './Field';
 
@@ -51,7 +53,7 @@ export function TimeBlockSelect({ value, onChange, day, time }: { value: string 
     : timeBlock
       ? `By its time it falls in ${timeBlock.name}.`
       : time
-        ? `At ${timeLabel(time)} it falls between this day's blocks, so it sits outside them. Pick one to place it.`
+        ? `At ${clockOf(time)} it falls between this day's blocks, so it sits outside them. Pick one to place it.`
         : 'With no time, Plan my week suggests a block. Pick one to place it now.';
   return (
     <label className="block">
@@ -80,6 +82,36 @@ export function TimeBlockSelect({ value, onChange, day, time }: { value: string 
       </select>
       <span className="mt-xs block text-caption text-ink-soft">{hint}</span>
     </label>
+  );
+}
+
+/**
+ * Under the time: when it falls in a block meant for another area or pillar and a block of that day fits better (`blockMismatch`), one
+ * quiet line and a "Use <block>'s time" link that sets the time to the free start Daily's Move it would pick. Words only: it never stops
+ * a save. When Daily's answer for that day is already read (the form opened from Daily, or Daily seen today), it passes the same load,
+ * timed tasks and time now as Daily's line, so both name the same block and time; otherwise it reads the blocks alone.
+ */
+function TimeFitHint({ plan, pillar, day, taskId, onUse, className = '' }: { plan: Plan; pillar: RelationshipKey; day: string; taskId?: string; onUse: (time: string) => void; className?: string }) {
+  const q = useTimeBlocks(mondayOf(day));
+  const qc = useQueryClient();
+  const { slots, inDay, other } = blocksForDay(q.data, day);
+  const daily = qc
+    .getQueriesData<TodayResponse>({ queryKey: ['today', day] })
+    .map(([, d]) => d)
+    .find((d) => d?.day?.date === day && d.day.slotPlannedMin);
+  const used = daily?.day ? blockUsedMin(daily.day.slots, daily.day.slotPlannedMin) : undefined;
+  const taken = (daily?.tasks ?? []).filter((x) => x.id !== taskId && x.dueTime && openDay(x) === day);
+  const now = new Date();
+  const after = day === todayLocal() ? now.getHours() * 60 + now.getMinutes() : null;
+  const m = blockMismatch({ timeBlockId: null, dueTime: plan.time, lifeArea: plan.lifeArea, relationship: pillar, priority: plan.priority, estimateMin: Number(plan.minutes) > 0 ? Number(plan.minutes) : null }, slots, [...inDay, ...other], { used, taken, after });
+  if (!m) return null;
+  return (
+    <p className={`m-0 text-caption text-ink-soft ${className}`} data-time-fit={m.better.id}>
+      {blockMismatchLine(m, slotRange)}{' '}
+      <button type="button" onClick={() => onUse(m.start)} className="relative font-semibold text-ink underline underline-offset-4 after:absolute after:inset-x-0 after:top-1/2 after:h-[44px] after:-translate-y-1/2 after:content-['']">
+        Use {m.better.name}’s time
+      </button>
+    </p>
   );
 }
 
@@ -170,7 +202,7 @@ export const planProblem = (p: Plan): string | null =>
   p.doDate && p.dueDate && p.doDate > p.dueDate ? 'Do it on or before the day it is due.' : p.repeat && !p.doDate && !p.dueDate ? 'Pick a do date or a due date for it to repeat from.' : null;
 
 /** The fields of a task's plan: when to do it, when it is due, how it repeats, its priority, its area of life and time block, a reminder, a time and a length. */
-export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange: (p: Plan) => void; today: string }) {
+export function TaskPlanFields({ plan, onChange, today, pillar, taskId }: { plan: Plan; onChange: (p: Plan) => void; today: string; /** The task's pillar, for the hint when its time falls in a block meant for others. */ pillar?: RelationshipKey; /** The task being edited (none for a new one), left out of the timed tasks the hint steps past. */ taskId?: string }) {
   const set = (patch: Partial<Plan>) => onChange({ ...plan, ...patch });
   const dated = Boolean(plan.doDate || plan.dueDate);
   const problem = planProblem(plan);
@@ -244,6 +276,8 @@ export function TaskPlanFields({ plan, onChange, today }: { plan: Plan; onChange
           <input type="number" min={5} max={600} step={5} value={plan.minutes} onChange={(e) => set({ minutes: e.target.value })} placeholder="25" className={FIELD} />
         </label>
       </div>
+      {/* Right under the time and minutes on a phone; from the tablet width, under the whole row (the chips stay beside the fields). */}
+      {pillar && !plan.timeBlockId && plan.time && <TimeFitHint plan={plan} pillar={pillar} taskId={taskId} day={plan.doDate || plan.dueDate || today} onUse={(time) => set({ time })} className="w-full sm:order-last" />}
       {/* On a phone the five chips are one even row across the full width, like the quick days above; wider, at the right. */}
       <div className="grid w-full grid-cols-5 gap-xs sm:ml-auto sm:flex sm:w-auto sm:flex-wrap sm:justify-end" role="group" aria-label="How long it should take">
         {ESTIMATES.map((m) => (
@@ -448,6 +482,8 @@ export function TaskPanel({ task, today }: { task: Node; today: string }) {
           setPlan(next);
         }}
         today={today}
+        pillar={projects.find((p) => p.id === parentId)?.relationship ?? task.relationship}
+        taskId={task.id}
       />
       {save.isError && (
         <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">

@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, CSSProperties } from 'react';
+import type { ButtonHTMLAttributes, CSSProperties, Ref } from 'react';
 import { AnimatedIcon } from './AnimatedIcon';
 
 type Variant = 'primary' | 'outline' | 'ghost' | 'color' | 'light' | 'shimmer';
@@ -15,6 +15,8 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
   plusToX?: boolean;
   /** For a `plusToX` button that opens a form in place: whether it is open now. Also sets `aria-expanded`. */
   expanded?: boolean;
+  /** The button itself, for a screen that moves focus to it. */
+  ref?: Ref<HTMLButtonElement>;
 }
 
 export function Button({ variant = 'primary', color, deep, size = 'md', full = false, plusToX = false, expanded, className = '', style, children, ...rest }: Props) {

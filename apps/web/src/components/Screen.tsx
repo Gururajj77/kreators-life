@@ -27,6 +27,8 @@ export function Screen({ children, tabs = true, columns = false, wide = false, h
   return (
     <>
       <SkipLink />
+      {/* On this page (PageContents.tsx) draws here, so the keyboard meets it before the page and not after every control in it. */}
+      <div data-contents-slot="" className="contents" />
       {/* tabIndex -1 lets the skip link land here; the page itself is not a control, so it draws no ring when it is focused. */}
       <main id="main" tabIndex={-1} className={`safe-top screen focus-visible:outline-none mx-auto w-full px-md md:w-auto md:px-lg ${width} ${tabs ? 'pb-2xl md:pb-lg' : 'pb-lg'} ${columns ? 'screen-columns' : ''} ${className}`}>
         {children}

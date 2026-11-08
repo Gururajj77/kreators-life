@@ -1,3 +1,4 @@
+import { ROUTE_TRIPS, tripsOf } from '../d1Batch';
 import { Hono, type Context } from 'hono';
 import {
   AGENT_LIMITS,
@@ -18,7 +19,7 @@ import {
   type RelationshipKey,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { newId, nowIso } from '../db';
+import { newId, nowIso, streakNow } from '../db';
 import { accountOf, creditAccount, spend, usedToday } from '../credits';
 import { summaryFor } from './wellbeing';
 import { ToolError } from '../assistant/dispatch';
@@ -46,6 +47,8 @@ const ONLY_READS = 'The Companion only reads. Bumling can change things.';
 const MAX_RESULT = 8_000;
 /** Tool calls run from one model turn; the rest are answered with a note. */
 const MAX_CALLS = 4;
+/** A read tool's route at most, in D1 round trips. One message is one invocation, with fifty queries on the free plan. */
+const TOOL_TRIPS = 8;
 /** The chat lines a model may see, before they are fitted to the plan's context. */
 const HISTORY = 40;
 const MAX_TEXT = 2000;
@@ -85,7 +88,7 @@ async function factsFor(c: Context<AppEnv>, date: string): Promise<{ plain: Plai
       .prepare("SELECT title FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' ORDER BY COALESCE(do_date, due_date) IS NULL, COALESCE(do_date, due_date) ASC LIMIT 5")
       .bind(user.id)
       .all<{ title: string }>(),
-    summaryFor(db, user.id, date, user.streak),
+    summaryFor(db, user.id, date, streakNow(user.streak, user.last_checkin, date)),
   ]);
   const rel = weak ? RELATIONSHIP_BY_KEY[weak.relationship] : null;
   const mood = summary.parts.find((p) => p.kind === 'mood')?.latest ?? null;
@@ -93,7 +96,7 @@ async function factsFor(c: Context<AppEnv>, date: string): Promise<{ plain: Plai
   return {
     plain: {
       name: user.display_name || 'friend',
-      streak: user.streak,
+      streak: streakNow(user.streak, user.last_checkin, date),
       weakest: rel ? { name: rel.name.toLowerCase(), character: rel.character, question: rel.question } : null,
       spark: rel ? sparkFor(rel.key, date) : 'Take three slow breaths.',
       openTasks: tasks.results.length,
@@ -305,6 +308,10 @@ export function companionRoutes(appFetch: AppFetch) {
         stopped = 'user';
         break;
       }
+      if (tripsOf(db) + step + TOOL_TRIPS >= ROUTE_TRIPS) {
+        stopped = 'steps';
+        break;
+      }
       // Stop before a call that could push the message past what it may spend.
       const next = creditsFor({ input: tokensOfMessages(messages) + tokensOf(JSON.stringify(specs)), output: MAX_OUT }, cfg.price);
       if (creditsFor(tokens, cfg.price) + next > budget) {
@@ -343,7 +350,8 @@ export function companionRoutes(appFetch: AppFetch) {
       }
       messages.push({ role: 'assistant', content: res.content || null, tool_calls: res.toolCalls });
       for (const [i, tc] of res.toolCalls.entries()) {
-        messages.push({ role: 'tool', tool_call_id: tc.id, content: i < MAX_CALLS ? await runCall(tc) : JSON.stringify({ error: `Not run: at most ${MAX_CALLS} at once. Call it again.` }) });
+        const room = tripsOf(db) + step + TOOL_TRIPS <= ROUTE_TRIPS;
+        messages.push({ role: 'tool', tool_call_id: tc.id, content: !room ? JSON.stringify({ error: 'Not run: this message has done what one message can. Answer from what you have.' }) : i < MAX_CALLS ? await runCall(tc) : JSON.stringify({ error: `Not run: at most ${MAX_CALLS} at once. Call it again.` }) });
       }
       if (step === limit.steps - 1) stopped = 'steps';
     }

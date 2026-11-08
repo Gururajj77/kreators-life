@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
 import { FOCUS_MAX_MINUTES, LOCALE, FOCUS_VIEWS, isFocusMode, isFocusView, type FocusRoundRow, weekStart, wellbeingLabel, type FocusBucket, type FocusResponse, type FocusTask, type FocusView, type LogKind, type RelationshipKey, type WellbeingLog, type WellbeingSummary, parseFocusSettings } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { DATE_RE, dateNearToday, newId, nowIso, shiftDate } from '../db';
+import { DATE_RE, dateNearOwnDay, dateNearToday, likeFit, newId, nowIso, shiftDate, streakNow } from '../db';
+import { parseMove } from '@kreators/shared/fitness';
+import { moveExtra } from '../fitness';
 
 export const wellbeing = new Hono<AppEnv>();
 
@@ -112,7 +114,7 @@ wellbeing.get('/focus/tasks', async (c) => {
   }
   // With ?q= it finds open tasks by name, so a person with many tasks can still pick any one (Plan my week uses it); without it, the nearest sixty.
   const q = (c.req.query('q') ?? '').trim().replace(/[%_]/g, '').slice(0, 60);
-  const rows = await c.env.DB.prepare(`SELECT id, title, relationship, COALESCE(do_date, due_date) AS due_date, remind FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active'${q ? ' AND title LIKE ?' : ''} ORDER BY COALESCE(do_date, due_date) IS NULL, COALESCE(do_date, due_date) ASC, created_at DESC LIMIT ${q ? 12 : 60}`).bind(...[userId, ...(q ? [`%${q}%`] : [])]).all<{ id: string; title: string; relationship: RelationshipKey; due_date: string | null; remind: number | null }>();
+  const rows = await c.env.DB.prepare(`SELECT id, title, relationship, COALESCE(do_date, due_date) AS due_date, remind FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active'${q ? ' AND title LIKE ?' : ''} ORDER BY COALESCE(do_date, due_date) IS NULL, COALESCE(do_date, due_date) ASC, created_at DESC LIMIT ${q ? 12 : 60}`).bind(...[userId, ...(q ? [`%${likeFit(q)}%`] : [])]).all<{ id: string; title: string; relationship: RelationshipKey; due_date: string | null; remind: number | null }>();
   const tasks: FocusTask[] = rows.results.map((r) => ({ id: r.id, title: r.title, relationship: r.relationship, dueDate: r.due_date, remind: (r.remind ?? 0) === 1 }));
   return c.json({ tasks });
 });
@@ -315,7 +317,7 @@ wellbeing.get('/focus', async (c) => {
 wellbeing.get('/summary', async (c) => {
   const user = c.get('user');
   const today = c.req.query('date') && DATE_RE.test(c.req.query('date')!) ? c.req.query('date')! : new Date().toISOString().slice(0, 10);
-  return c.json(await summaryFor(c.env.DB, user.id, today, user.streak));
+  return c.json(await summaryFor(c.env.DB, user.id, today, streakNow(user.streak, user.last_checkin, today)));
 });
 
 wellbeing.get('/:kind', async (c) => {
@@ -341,8 +343,15 @@ wellbeing.post('/:kind', async (c) => {
   if (!Number.isFinite(raw)) return c.json({ error: 'value required' }, 400);
   const value =
     kind === 'sleep' ? clamp(Math.round(raw * 2) / 2, 0, 14) : kind === 'mindful' || kind === 'move' ? clamp(Math.round(raw), 1, 600) : clamp(Math.round(raw), 1, 5);
-  const extra = body.extra && typeof body.extra === 'object' ? body.extra : {};
+  let extra: Record<string, unknown> = body.extra && typeof body.extra === 'object' ? body.extra : {};
   const note = typeof body.note === 'string' ? body.note.trim().slice(0, 500) : '';
+  // Movement (Life's quick log, the assistant) is Fitness's own log: today or yesterday, and only what Fitness's one reader keeps beside the minutes.
+  if (kind === 'move') {
+    if (!dateNearOwnDay(date, user.timezone)) return c.json({ error: 'You can log today or yesterday.' }, 400);
+    const m = parseMove({ ...extra, minutes: value, note });
+    if (typeof m === 'string') return c.json({ error: m }, 400);
+    extra = JSON.parse(moveExtra(m)) as Record<string, unknown>;
+  }
   const now = nowIso();
   const id = newId();
   if (kind === 'mindful' || kind === 'move') {
@@ -360,7 +369,7 @@ wellbeing.post('/:kind', async (c) => {
     ]);
   }
   const row = await db.prepare('SELECT * FROM wellbeing_logs WHERE id = ?').bind(id).first<Row>();
-  return c.json({ log: row ? toLog(row) : null, summary: await summaryFor(db, user.id, date, user.streak) }, 201);
+  return c.json({ log: row ? toLog(row) : null, summary: await summaryFor(db, user.id, date, streakNow(user.streak, user.last_checkin, date)) }, 201);
 });
 
 // The kind in the path is part of the address: a sleep id under /mood/ deletes nothing and says so.

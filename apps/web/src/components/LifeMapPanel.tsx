@@ -1,8 +1,8 @@
-import { BREATHING, mantraLine, OPTIONAL_PILLARS, PENALTIES, RELATIONSHIP_BY_KEY, RELATIONSHIPS, SCORE_LABEL, SCORECARD, weightWord, type RelationshipKey, LOCALE } from '@kreators/shared';
+import { BREATHING, mantraLine, OPTIONAL_PILLARS, PENALTIES, RELATIONSHIP_BY_KEY, RELATIONSHIPS, SCORE_LABEL, SCORECARD, weightWord, type RelationshipKey } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { api } from '../lib/api';
-import { todayLocal } from '../lib/date';
+import { todayLocal, longDate, shortDate, clockOf } from '../lib/date';
 import { useAuthed, useMe } from '../lib/queries';
 import { Avatar } from './Avatar';
 import { LiveCallLine } from './LiveCall';
@@ -66,7 +66,7 @@ export function LifeMapPanel() {
   const away = a.away ?? [];
   const unbuilt = focus.filter((k) => !built.has(k));
   const relScores = RELATIONSHIPS.map((r) => a.scores[r.key]);
-  const when = new Date(a.createdAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
+  const when = longDate(a.createdAt);
   return (
     <section id="life-map" className="mt-lg scroll-mt-[64px]" aria-labelledby="life-map-heading">
       <h2 id="life-map-heading" className="text-title2">
@@ -174,10 +174,10 @@ export function LifeMapPanel() {
       {d.routine && (
         <Section id="routine-heading" title="Your routine" lede="Built from your day. You can change any of it.">
           <ul className="mb-sm m-0 flex list-none flex-wrap gap-x-md gap-y-xs p-0 text-subhead">
-            <li>Up at {a.realDay.wake}</li>
-            <li>Lights out {a.realDay.sleep}</li>
+            <li>Up at {clockOf(a.realDay.wake)}</li>
+            <li>Lights out {clockOf(a.realDay.sleep)}</li>
             <li>
-              Work {a.realDay.workStart} to {a.realDay.workEnd}
+              Work {clockOf(a.realDay.workStart)} to {clockOf(a.realDay.workEnd)}
             </li>
           </ul>
           <RoutinePanel general={d.routine.general} exceptional={d.routine.exceptional} date={date} />
@@ -194,12 +194,12 @@ export function LifeMapPanel() {
       )}
 
       {d.contract && (
-        <Section id="contract-heading" title="The contract" lede={`Signed ${d.contract.signedName} on ${new Date(d.contract.signedAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' })}.`}>
+        <Section id="contract-heading" title="The contract" lede={`Signed ${d.contract.signedName} on ${shortDate(d.contract.signedAt)}.`}>
           <ul className="m-0 flex list-none flex-col gap-xs p-0 text-subhead">
             <li>At least {d.contract.minDays} days a week. This week: {d.week.done} of 7 done.</li>
-            <li>Check-in at {d.contract.checkinTime}; a reminder lands in your inbox on any day you have not.</li>
+            <li>Check-in at {clockOf(d.contract.checkinTime)}; a reminder lands in your inbox on any day you have not.</li>
             <li>A short week: {PENALTIES.find((p) => p.key === d.contract?.penalty)?.name.toLowerCase() ?? 'the streak breaks'}.</li>
-            <li>Weekly check on {d.contract.nextWeekly}. Monthly review on {d.contract.nextMonthly}.</li>
+            <li>Weekly review on {longDate(d.contract.nextWeekly)}. Monthly review on {longDate(d.contract.nextMonthly)}.</li>
           </ul>
           <LiveCallLine />
         </Section>

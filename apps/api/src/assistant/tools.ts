@@ -16,10 +16,10 @@ import {
   parsePriority,
   parseRepeat,
   PERIOD_KINDS,
-  PERIOD_META,
-  periodFor,
   periodLabel,
   periodShift,
+  reviewNameFor,
+  reviewPeriodNow,
   RELATIONSHIP_BY_KEY,
   RELATIONSHIPS,
   repeatLabel,
@@ -62,6 +62,9 @@ import {
   type WellbeingLog,
   type WellbeingSummary,
 } from '@kreators/shared';
+import { gratitudePromptByKey, gratitudePromptsForDay, GRATITUDE_LINE_MAX, GRATITUDE_LINES, type GratitudeDay } from '@kreators/shared/gratitude';
+import { EAT_FRUIT_MAX, EAT_FULLNESS, EAT_MOMENTS, EAT_PACKAGED, EAT_VEG_MAX, EFFORT_LEVELS, mealLabel, MOVE_KIND_META, MOVE_KINDS, MOVE_MINUTES_MAX, typedMetres, type EatLog, type FitnessResponse, type MoveLog } from '@kreators/shared/fitness';
+import { shiftDate } from '../db';
 import { must, seg, ToolError, type Answer, type Req } from './dispatch';
 
 /**
@@ -219,6 +222,9 @@ const R = {
   money: ['finance', 'home', 'life', 'reviews'],
   reviews: ['reviews'],
   agency: ['agency', 'today', 'home', 'inbox'],
+  // Fitness (2026-11-07): its own screen, Kreators Run's tool, Life's physical area, the brief and the review numbers.
+  fitness: ['fitness', 'run', 'home', 'life', 'reviews', 'insights'],
+  gratitude: ['gratitude', 'journal-days', 'home', 'reviews', 'insights'],
 } as const;
 
 /** The layers in the person's words, mapped to the keys the app stores. */
@@ -400,6 +406,27 @@ export const TOOLS: readonly Tool[] = [
     },
   },
   {
+    name: 'get_fitness',
+    risk: 'read',
+    sensitive: true,
+    needs: ['fitness'],
+    refresh: [],
+    title: 'Look at your movement and eating',
+    description: 'Fitness: the active minutes of the last seven days, and the last fourteen days of movement (kind, minutes, kilometres, effort 1 to 5) and of the daily eating check-in (the meals, each Good fuel, Tasty, Both or Just ate; fasting; servings of fruit and of vegetables; packaged, fried or sweet; how full they felt; meals without a screen; null means they did not say; a score for the day, 0 to 100, from fruit and veg, packaged food and meals without a screen, none on a fasting day or until fruit or vegetables are said, even 0). Never weight, size or calories. Protein grams, the protein goal and supplements stay on the Fitness screen and are never read here: say so if asked.',
+    params: { type: 'object', properties: {} },
+    run: async (_a, io) => {
+      const f = must(await io.call({ method: 'GET', path: `/fitness?day=${io.date}` })) as FitnessResponse;
+      const since = shiftDate(io.date, -13);
+      return {
+        data: {
+          weekMinutes: f.weekMinutes,
+          moves: f.moves.filter((m) => m.date >= since).slice(0, 60).map((m) => ({ id: m.id, date: m.date, kind: m.kind, minutes: m.minutes, km: m.metres ? m.metres / 1000 : null, effort: m.effort, club: m.source === 'club', note: m.note })),
+          eating: f.eats.filter((e) => e.date >= since).map((e) => ({ date: e.date, fasting: e.fasting, meals: e.meals.map((m) => ({ meal: m.moment, felt: mealLabel(m) })), fruit: e.fruit, veg: e.veg, packaged: e.packaged === null ? null : EAT_PACKAGED[e.packaged], fullness: e.fullness === null ? null : EAT_FULLNESS[e.fullness], screenFree: e.screenFree, score: e.dayScore, note: e.note })),
+        },
+      };
+    },
+  },
+  {
     name: 'read_discover',
     risk: 'read',
     sensitive: true,
@@ -419,7 +446,7 @@ export const TOOLS: readonly Tool[] = [
     refresh: [],
     title: 'Read your journal',
     description:
-      "The person's own journal entries, newest first, optionally matching words or a date range. Call it only when they ask about their journal. Never bring the journal up yourself, and quote it only when they ask.",
+      "The person's own journal entries, newest first, and their gratitude for the day (three short lines a day, each under a prompt), optionally matching words or a date range. Call it only when they ask about their journal or their gratitude. Never bring the journal up yourself, and quote it only when they ask.",
     params: {
       type: 'object',
       properties: {
@@ -430,18 +457,29 @@ export const TOOLS: readonly Tool[] = [
       },
     },
     run: async (a, io) => {
-      const r = must(await io.call({ method: 'GET', path: '/journal?size=100' })) as { entries: JournalEntry[]; stats: { total: number } };
       const words = str(a.query).toLowerCase();
       const from = str(a.from);
       const to = str(a.to);
-      const hits = r.entries.filter((e) => {
-        const day = e.createdAt.slice(0, 10);
+      const range = `${/^\d{4}-\d{2}-\d{2}$/.test(from) ? `&from=${from}` : ''}${/^\d{4}-\d{2}-\d{2}$/.test(to) ? `&to=${to}` : ''}`;
+      // The entries and the gratitude days (migration 0102) are both the journal: read together, through the same routes a tap uses.
+      const [r, g] = await Promise.all([io.call({ method: 'GET', path: '/journal?size=100' }), io.call({ method: 'GET', path: `/journal/gratitude?size=50${range}` })]);
+      const journal = must(r) as { entries: JournalEntry[]; stats: { total: number } };
+      const thanks = must(g) as { days: GratitudeDay[] };
+      // The day it is filed on in the person's zone, as on Journal, so an entry at 1 am sits on the same day as that day's gratitude.
+      const dayOfEntry = (e: JournalEntry) => e.day ?? e.createdAt.slice(0, 10);
+      const hits = journal.entries.filter((e) => {
+        const day = dayOfEntry(e);
         return (!words || `${e.title} ${e.body}`.toLowerCase().includes(words)) && (!from || day >= from) && (!to || day <= to);
       });
+      const limit = Number(a.limit ?? 5);
       return {
         data: {
-          total: r.stats.total,
-          entries: hits.slice(0, Number(a.limit ?? 5)).map((e) => ({ id: e.id, date: e.createdAt.slice(0, 10), title: e.title, body: e.body.slice(0, 1500), feeling: feeling(e.emotion), stress: e.stress })),
+          total: journal.stats.total,
+          entries: hits.slice(0, limit).map((e) => ({ id: e.id, date: dayOfEntry(e), title: e.title, body: e.body.slice(0, 1500), feeling: feeling(e.emotion), stress: e.stress })),
+          gratitude: thanks.days
+            .map((d) => ({ date: d.day, lines: d.lines.filter((l) => l.text).map((l) => ({ prompt: gratitudePromptByKey(l.prompt)?.text ?? '', text: l.text })) }))
+            .filter((d) => !words || d.lines.some((l) => l.text.toLowerCase().includes(words)))
+            .slice(0, limit),
         },
       };
     },
@@ -478,11 +516,12 @@ export const TOOLS: readonly Tool[] = [
     needs: ['reviews'],
     refresh: [],
     title: 'Look at a review',
-    description: "A review for a period: this one or the last one. Gives the period, its numbers, the prompts to answer, and the answers if it was written already.",
+    description: "A review for a period, a day up to a year: this one or the last one. Gives the period, its numbers, the layer it walks (a day's tasks, a week's projects, and so on), the prompts to answer, and the answers if it was written already.",
     params: { type: 'object', properties: { kind: { type: 'string', enum: PERIOD_KINDS }, which: { type: 'string', enum: ['this', 'last'] } }, required: ['kind'] },
     run: async (a, io) => {
       const kind = str(a.kind) as PeriodKind;
-      const now = periodFor(kind, io.date);
+      // "This" half or year is the one Reviews opens: the one just turned early on, so the half's two parts come at their times.
+      const now = reviewPeriodNow(kind, io.date);
       const p = a.which === 'last' ? periodShift(now, -1) : now;
       const r = must(await io.call({ method: 'GET', path: `/reviews?kind=${kind}&date=${p.start}` })) as ReviewsResponse;
       const t = r.templates.find((x) => (r.review ? (r.review.templateId ?? `builtin:${kind}`) === x.id : x.builtIn)) ?? r.templates[0];
@@ -490,7 +529,18 @@ export const TOOLS: readonly Tool[] = [
       return {
         data: {
           period: periodLabel(r.period),
+          // The review's own name: for half a year the part it is (the mid-year check-in or the start-of-year setting).
+          name: r.review?.templateName || t?.name || reviewNameFor(r.period),
           numbers: { xp: s.xp, tasksDone: s.tasksDone, checkins: s.checkins, days: s.days },
+          // Reviews by layer (2026-11-07): the layer of the person's own pyramids this review walks, pillar by pillar (titles and counts only).
+          layer: r.summary.layer
+            ? {
+                walks: layerKey(r.summary.layer.kind),
+                pillars: r.summary.layer.pillars
+                  .filter((g) => g.total > 0)
+                  .map((g) => ({ pillar: pillarName(g.relationship), total: g.total, items: g.items.map((i) => ({ id: i.id, title: i.title, status: i.status, under: i.under, tasksDone: i.done, tasksOpen: i.open, pace: i.pace?.label ?? null, ...(i.late ? { late: true } : {}) })) })),
+              }
+            : null,
           written: Boolean(r.review),
           prompts: r.review ? r.review.prompts : (t?.prompts ?? []),
           answers: r.review?.answers ?? [],
@@ -836,7 +886,7 @@ export const TOOLS: readonly Tool[] = [
       const kind = str(a.kind) as LogKind;
       const extra = kind === 'sleep' && a.quality ? { quality: Number(a.quality) } : kind === 'mindful' ? { kind: 'chat' } : {};
       const r = must(await io.call({ method: 'POST', path: `/wellbeing/${kind}`, body: { date: dayOf(a.day, io), value: Number(a.value), extra, note: str(a.note) } })) as { log: WellbeingLog; summary: WellbeingSummary };
-      const said: Record<LogKind, string> = { mood: 'Logged your mood', sleep: 'Logged your sleep', stress: 'Logged your stress', mindful: 'Logged mindful minutes', move: 'Logged time moving' };
+      const said: Record<LogKind, string> = { mood: 'Logged your mood', sleep: 'Logged your sleep', stress: 'Logged your stress', mindful: 'Logged mindful minutes', move: 'Logged time moving', eat: 'Logged how you ate' };
       return { label: said[kind], undo: { method: 'DELETE', path: `/wellbeing/${kind}/${seg(r.log.id)}` }, data: { logged: kind, value: r.log.value, score: r.summary.score, scoreLabel: r.summary.label } };
     },
   },
@@ -855,6 +905,103 @@ export const TOOLS: readonly Tool[] = [
     run: async (a, io) => {
       const r = must(await io.call({ method: 'POST', path: '/journal', body: { title: str(a.title), body: str(a.body), emotion: a.feeling ? Number(a.feeling) : null } })) as { entry: JournalEntry };
       return { label: 'Wrote a journal entry', undo: { method: 'DELETE', path: `/journal/${seg(r.entry.id)}` }, data: { saved: true, id: r.entry.id } };
+    },
+  },
+  {
+    name: 'write_gratitude',
+    risk: 'write',
+    needs: ['journal'],
+    refresh: R.gratitude,
+    title: 'Write gratitude for the day',
+    description: `Write the person's gratitude for today or yesterday on Journal: up to ${GRATITUDE_LINES} short lines, each under the day's own prompt, in their own words; add nothing of your own. Lines already written stay; new ones fill the empty places.`,
+    params: {
+      type: 'object',
+      properties: { lines: { type: 'array', items: { type: 'string', maxLength: GRATITUDE_LINE_MAX }, maxItems: GRATITUDE_LINES }, day: DAY },
+      required: ['lines'],
+    },
+    run: async (a, io) => {
+      const day = dayOf(a.day, io);
+      const words = (Array.isArray(a.lines) ? a.lines : [a.lines]).map(str).filter(Boolean);
+      if (!words.length) throw new ToolError('Say what they are grateful for first.');
+      // The same three prompts the person sees on Journal that day (kept per person, migration 0106), with the words already written.
+      const got = must(await io.call({ method: 'GET', path: `/journal/gratitude?day=${day}&today=${io.date}` })) as { gratitude: GratitudeDay | null; prompts?: string[] };
+      const before = got.gratitude;
+      const keys = got.prompts ?? before?.lines.map((l) => l.prompt) ?? gratitudePromptsForDay(day).map((p) => p.key);
+      const base = keys.map((prompt, i) => ({ prompt, text: before?.lines[i]?.text ?? '' }));
+      const queue = [...words];
+      const lines = base.map((l) => (l.text || !queue.length ? l : { prompt: l.prompt, text: queue.shift()! }));
+      if (queue.length === words.length) throw new ToolError(`All ${GRATITUDE_LINES} lines for that day are written already. They can change them on Journal.`);
+      const saved = (must(await io.call({ method: 'PUT', path: `/journal/gratitude/${day}`, body: { lines, today: io.date, ifUpdatedAt: before?.updatedAt ?? '' } })) as { gratitude: GratitudeDay | null }).gratitude;
+      // Undo only a day that had nothing before: emptying it removes it. A day with lines already kept has no Undo, so their words never sit in the action log.
+      // The undo carries the version this write made, so once the person changes the day on Journal the undo answers 409 and their words stay.
+      const empty = lines.map((l) => ({ prompt: l.prompt, text: '' }));
+      return {
+        label: `Wrote ${words.length - queue.length === 1 ? 'a line' : `${words.length - queue.length} lines`} of gratitude`,
+        undo: before || !saved ? null : { method: 'PUT', path: `/journal/gratitude/${day}`, body: { lines: empty, today: io.date, ifUpdatedAt: saved.updatedAt } },
+        data: { saved: true, day, written: lines.filter((l) => l.text).length, left: queue.length },
+      };
+    },
+  },
+  {
+    name: 'log_movement',
+    risk: 'write',
+    needs: ['fitness'],
+    refresh: R.fitness,
+    title: 'Log movement',
+    description: `Log movement on Fitness for today or yesterday: what it was (${MOVE_KINDS.join(', ')}), for how many minutes, and if they said, the distance in kilometres (${MOVE_KINDS.filter((k) => MOVE_KIND_META[k].distance).join(', ')} only) and the effort 1 to 5 (${EFFORT_LEVELS.map((e, i) => `${i + 1} ${e}`).join(', ')}). It pays nothing.`,
+    params: {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', enum: [...MOVE_KINDS] },
+        minutes: { type: 'integer', minimum: 1, maximum: MOVE_MINUTES_MAX },
+        km: { type: 'number', minimum: 0, maximum: 300 },
+        effort: { type: 'integer', minimum: 1, maximum: 5 },
+        note: { type: 'string', maxLength: 500 },
+        day: DAY,
+      },
+      required: ['kind', 'minutes'],
+    },
+    run: async (a, io) => {
+      // Kilometres read from their digits (typedMetres), never through a float sum.
+      const metres = a.km === undefined || a.km === null || a.km === '' || Number(a.km) === 0 ? null : typedMetres(String(a.km));
+      if (metres === 'bad') throw new ToolError('That distance does not look right. Say it in kilometres, like 5.2.');
+      const r = must(await io.call({ method: 'POST', path: '/fitness/move', body: { date: dayOf(a.day, io), kind: str(a.kind), minutes: Number(a.minutes), metres, effort: a.effort ? Number(a.effort) : null, note: str(a.note) } })) as { move: MoveLog };
+      return { label: `Logged ${r.move.minutes} minutes of ${str(a.kind)}`, undo: { method: 'DELETE', path: `/fitness/move/${seg(r.move.id)}` }, data: { logged: true, id: r.move.id, date: r.move.date } };
+    },
+  },
+  {
+    name: 'log_eating',
+    risk: 'write',
+    needs: ['fitness'],
+    refresh: R.fitness,
+    title: 'Do the eating check-in',
+    description: `The day's eating check-in on Fitness, for today or yesterday, one a day. Meals are any of ${EAT_MOMENTS.join(', ')}; goodFuel and tasty list which of those meals were good fuel or tasty (a meal can be both). Or fasting true instead of meals. Then servings of fruit (0 to ${EAT_FRUIT_MAX}) and of vegetables (0 to ${EAT_VEG_MAX}), packaged, fried or sweet (0 none, 1 some, 2 a lot), how full they felt after (0 still hungry, 1 just right, 2 too full) and meals without a screen. Put in only what they said: leave out anything they did not mention, and send 0 only when they said none, since the score leaves out what was not said. A day gets no score until fruit or vegetables are said, whatever else they said. Grams of protein are added on the Fitness screen, not here: this keeps whatever the day already has. Never weight, size or calories. Doing it again replaces the rest of the day's.`,
+    params: {
+      type: 'object',
+      properties: {
+        meals: { type: 'array', items: { type: 'string', enum: [...EAT_MOMENTS] }, maxItems: EAT_MOMENTS.length },
+        goodFuel: { type: 'array', items: { type: 'string', enum: [...EAT_MOMENTS] }, maxItems: EAT_MOMENTS.length },
+        tasty: { type: 'array', items: { type: 'string', enum: [...EAT_MOMENTS] }, maxItems: EAT_MOMENTS.length },
+        fasting: { type: 'boolean' },
+        fruit: { type: 'integer', minimum: 0, maximum: EAT_FRUIT_MAX },
+        veg: { type: 'integer', minimum: 0, maximum: EAT_VEG_MAX },
+        packaged: { type: 'integer', minimum: 0, maximum: 2 },
+        fullness: { type: 'integer', minimum: 0, maximum: 2 },
+        screenFree: { type: 'integer', minimum: 0, maximum: 5 },
+        note: { type: 'string', maxLength: 500 },
+        day: DAY,
+      },
+    },
+    run: async (a, io) => {
+      const date = dayOf(a.day, io);
+      // A first check-in for the day can be undone. One that replaced the day's older one cannot, so the older note never sits in the action log.
+      const had = (must(await io.call({ method: 'GET', path: `/fitness?day=${io.date}` })) as FitnessResponse).eats.some((e) => e.date === date);
+      const n = (v: unknown) => (v === undefined || v === null || v === '' ? undefined : Number(v));
+      const list = (v: unknown) => (Array.isArray(v) ? (v as string[]) : []);
+      const meals = list(a.meals).map((moment) => ({ moment, fuel: list(a.goodFuel).includes(moment), tasty: list(a.tasty).includes(moment) }));
+      const body = { date, meals, fasting: a.fasting === true || a.fasting === 'true', fruit: n(a.fruit), veg: n(a.veg), packaged: n(a.packaged) ?? null, fullness: n(a.fullness) ?? null, screenFree: n(a.screenFree), note: str(a.note) };
+      const r = must(await io.call({ method: 'PUT', path: '/fitness/eat', body })) as { eat: EatLog };
+      return { label: had ? 'Replaced the eating check-in' : 'Did the eating check-in', undo: had ? null : { method: 'DELETE', path: `/fitness/eat/${seg(r.eat.id)}` }, data: { saved: true, date: r.eat.date, score: r.eat.dayScore, fasting: r.eat.fasting, replaced: had } };
     },
   },
 
@@ -984,7 +1131,8 @@ export const TOOLS: readonly Tool[] = [
     },
     run: async (a, io) => {
       const kind = str(a.kind) as PeriodKind;
-      const now = periodFor(kind, io.date);
+      // "This" half or year is the one Reviews opens: the one just turned early on, so the half's two parts come at their times.
+      const now = reviewPeriodNow(kind, io.date);
       const p = a.which === 'last' ? periodShift(now, -1) : now;
       const r = must(await io.call({ method: 'GET', path: `/reviews?kind=${kind}&date=${p.start}` })) as ReviewsResponse;
       const t = r.templates.find((x) => (r.review ? (r.review.templateId ?? `builtin:${kind}`) === x.id : x.builtIn)) ?? r.templates[0];
@@ -993,7 +1141,7 @@ export const TOOLS: readonly Tool[] = [
       ) as { review: { id: string } | null };
       // A first review can be undone. One that replaced an older one cannot, so the older words never sit in the action log.
       return {
-        label: `${r.review ? 'Replaced' : 'Saved'} your ${PERIOD_META[kind].name.toLowerCase()} for ${periodLabel(r.period)}`,
+        label: `${r.review ? 'Replaced' : 'Saved'} your ${(t && !t.builtIn ? t.name : reviewNameFor(r.period)).toLowerCase()} for ${periodLabel(r.period)}`,
         undo: !r.review && put.review ? { method: 'DELETE', path: `/reviews/${seg(put.review.id)}` } : null,
         data: { saved: true, period: periodLabel(r.period), replaced: Boolean(r.review) },
       };
@@ -1013,7 +1161,7 @@ export const TOOLS: readonly Tool[] = [
       const r = must(await io.call({ method: 'GET', path: `/reminders?day=${dayOf(a.day, io)}` })) as RemindersResponse;
       return {
         data: {
-          water: { ml: r.water.ml, goalMl: r.water.goalMl, glassMl: r.water.glassMl, glasses: r.water.glasses, goalGlasses: r.water.goalGlasses, on: r.water.on },
+          water: { ml: r.water.ml, goalMl: r.water.goalMl, glassMl: r.water.glassMl, glasses: r.water.glasses, goalGlasses: r.water.goalGlasses },
           custom: r.custom.map((x) => ({ id: x.id, title: x.title, time: x.time, enabled: x.enabled })),
           tasksToRemember: r.tasks.map((t) => ({ id: t.id, title: t.title, day: t.day, time: t.time })),
         },

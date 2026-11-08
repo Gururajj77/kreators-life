@@ -1,9 +1,12 @@
 import { AMBIENT_SOUNDS, BREAK_BEATS, type AmbientKind, type FocusSettings } from '@kreators/shared';
 import { useEffect, useRef, useState } from 'react';
-import { bento } from '../lib/bento';
+import { evenGrid, evenTile } from '../lib/bento';
 import { playBeats, startAmbient, unlockAudio, type Ambient } from '../lib/sound';
 import { Toggle } from './Toggle';
 import { AppIcon } from './AppIcon';
+
+/** The background sounds: three to a row on a phone, five from the tablet, in even rows (lib/bento.ts). */
+const SOUND_COLS = { base: 3, md: 5 } as const;
 
 /** The words on this panel, in short plain sentences. */
 const COPY = {
@@ -97,7 +100,7 @@ export function SoundControls({ settings, onChange, breaks = false, part = 'all'
       <div className={off ? 'opacity-50' : ''}>
         <p className="m-0 text-subhead font-semibold">{bare(COPY.background)}</p>
         <p className="mt-xs m-0 text-caption text-ink-soft">{COPY.background2}</p>
-        <div className="mt-xs grid grid-cols-3 gap-xs md:grid-cols-5" role="group" aria-label={bare(COPY.background)}>
+        <div className={`mt-xs grid gap-xs ${evenGrid(AMBIENT_SOUNDS.length, SOUND_COLS)}`} role="group" aria-label={bare(COPY.background)}>
           {AMBIENT_SOUNDS.map((s, i) => (
             <button
               key={s.key}
@@ -105,7 +108,7 @@ export function SoundControls({ settings, onChange, breaks = false, part = 'all'
               disabled={off}
               aria-pressed={settings.ambient === s.key}
               onClick={() => set({ ambient: s.key })}
-              className={`toy flex min-h-[64px] flex-col items-center justify-center gap-xs rounded-tile border-2 p-xs text-subhead font-semibold disabled:opacity-60 ${bento(i, AMBIENT_SOUNDS.length, 3, 5)} ${settings.ambient === s.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+              className={`toy flex min-h-[64px] flex-col items-center justify-center gap-xs rounded-tile border-2 p-xs text-subhead font-semibold disabled:opacity-60 ${evenTile(i, AMBIENT_SOUNDS.length, SOUND_COLS)} ${settings.ambient === s.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
             >
               <AppIcon name={s.icon} size={20} />
               {s.name}

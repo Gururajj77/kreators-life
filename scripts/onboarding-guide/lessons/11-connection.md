@@ -9,9 +9,9 @@ In this lesson you'll learn:
 - What the Games app is for.
 - Which people make a community work, and how you might become one.
 
-## Switch them on
+## Find them
 
-The Connection apps are off on a new account, unless the setup chat turned some on for you. Open **Apps**, open the **Connection** group, and turn on the ones you want: **Community**, **Bond**, **Party**, **Kreators Run**, **Circles**, **Club** and **Games**.
+**Community**, **Bond**, **Party**, **Kreators Run**, **Circles**, **Club** and **Games** start hidden on a new account, unless the setup chat showed them for you. Open **Apps**, open the **Connection** group, open **Hidden apps** at its end and tap the eye beside each one you want.
 
 ## Community: posts and replies
 
@@ -51,12 +51,12 @@ Under **Introductions**, turn on **Open to introductions** to meet people from e
 
 ## Blocking
 
-You can block anyone, any time, from a post's **More** menu or under a line in a channel. A block works both ways. Neither of you sees the other's posts, replies or lines, and neither can send the other a request. The other person is not told. Lift it under **People you blocked** with **Unblock**.
+You can block anyone, any time, from a post's **More** menu or under a line in a channel. A block works both ways. Neither of you sees the other's posts, replies or lines, and neither can send the other a request. The other person is not told. Lift it under **People you blocked** with **Unblock**. A block you made from a made-up name is listed under that name, so it never tells you who wrote it.
 
 ## Events, runs and circles
 
 - **Party:** meetups, workshops and bigger days. Tap **RSVP**, or **Join the waitlist** when it is full. Anyone can **Host a meetup**.
-- **Kreators Run:** run clubs near you. Join one, or **Start a club** of your own. At the start line, tap **Enter the start code** to log your run.
+- **Kreators Run:** run clubs near you. Join one, or **Start a club** of your own. At the start line, tap **Enter the start code** to log your run. **Discussions** has one thread per run, for its people, open until thirty days after it. On your own, **Log a run or walk** under **My runs** needs no club and no code. It counts as movement and pays nothing.
 - **Circles:** small groups that meet each week, matched by interests. Everyone at the table has a made-up name.
 - **Club:** a membership you apply to. People get in on the quality of their work and how they show up, never on follower counts.
 
@@ -77,7 +77,7 @@ A good community does not run itself. It needs people in a few roles:
 - **Creators** who make things others learn from.
 - **Brands** who bring real work and rewards.
 
-Anyone can host a meetup or start a club today. Guide, mentor and life coach are roles you can grow into once people know you. If you coach people already, open **Coaching** and look for **Are you a life coach?**
+Anyone can host a meetup or start a club today. Guide, mentor and life coach are roles you can grow into once people know you. If you coach people already, open **Coaching** and look for **Are you a life coach?** The next lesson walks through coaching.
 
 ## What grows over time
 

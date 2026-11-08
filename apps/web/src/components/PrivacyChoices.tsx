@@ -1,9 +1,10 @@
-import { CONSENT_PURPOSES, LEGAL_VERSION, LOCALE, type ConsentChoices } from '@kreators/shared';
+import { CONSENT_PURPOSES, LEGAL_VERSION, type ConsentChoices } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { api } from '../lib/api';
 import { globalPrivacyControl, useConsent } from '../lib/consent';
 import { Section } from './Section';
+import { longDate } from '../lib/date';
 
 /** Profile, "Privacy choices": the three things the popup asked about, each a tick that saves at once, and what the person agreed to and when. */
 export function PrivacyChoices() {
@@ -19,7 +20,7 @@ export function PrivacyChoices() {
   });
   const gpc = globalPrivacyControl();
   const d = q.data;
-  const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' }) : null);
+  const when = (iso: string | null | undefined) => (iso ? longDate(iso) : null);
   return (
     <Section id="privacy-choices" title="Privacy choices" lede="Asked once, changed here any time. Each tick saves at once.">
       <ul className="flex list-none flex-col gap-xs p-0 m-0">

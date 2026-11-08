@@ -121,9 +121,9 @@ describe('the calendar feed', () => {
 });
 
 describe('the inbox has an Agency tab', () => {
-  it('holds the agency kind, between Coaching and Team', () => {
+  it('holds the agency kind, between School and coaching and Team', () => {
     expect(INBOX_TAB_META.agency.kinds).toEqual(['agency']);
-    expect(INBOX_TABS.indexOf('agency')).toBe(INBOX_TABS.indexOf('coaching') + 1);
+    expect(INBOX_TABS.indexOf('agency')).toBe(INBOX_TABS.indexOf('learning') + 1);
     expect(INBOX_TABS.at(-1)).toBe('team');
   });
 });

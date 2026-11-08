@@ -14,6 +14,7 @@ import { cards } from './routes/cards';
 import { discover } from './routes/discover';
 import { admin } from './routes/admin';
 import { wellbeing } from './routes/wellbeing';
+import { fitness } from './routes/fitness';
 import { journal } from './routes/journal';
 import { inbox } from './routes/inbox';
 import { manageResources, resources } from './routes/resources';
@@ -47,7 +48,7 @@ import { secureHeaders } from 'hono/secure-headers';
 import { rateLimit } from './ops';
 import { isOpenDoor, ROUTE_LIMITS } from './limits';
 import { legalPublic, meLegal } from './routes/legal';
-import { pruneVitals, vitalsPublic } from './routes/vitals';
+import { vitalsPublic } from './routes/vitals';
 import { adminGuideBypass, modulesForPath, resolveAccess } from './access';
 import { MODULE_BY_KEY } from '@kreators/shared';
 import { finance, publicInvoices } from './routes/finance';
@@ -64,7 +65,7 @@ import { assistantRoutes } from './routes/assistant';
 import { feelings } from './routes/feelings';
 import { credits } from './routes/credits';
 import { discounts } from './routes/discounts';
-import { coach, myCoach } from './routes/coach';
+import { coach, coachJoinPublic, myCoach } from './routes/coach';
 import { media, mediaPublic } from './routes/media';
 import { reminders } from './routes/reminders';
 import { agency, agencyPublic } from './routes/agency';
@@ -81,8 +82,10 @@ import { agencyOther, docsPublic } from './routes/agencyOther';
 import { connect } from './routes/connect';
 import { activity } from './routes/activity';
 import { booksPublic } from './routes/books';
-import { logger, pruneLogs, writeClientError, writeLog } from './logs';
+import { logger, writeClientError, writeLog } from './logs';
 import { blockedPath, originAllowed, PAGE_HEADERS } from './headers';
+import { countingD1, guardedFetch, newTally, noteTick } from './d1Guard';
+import { batchedReads } from './d1Batch';
 
 const app = new Hono<AppEnv>().basePath('/api');
 
@@ -120,7 +123,8 @@ app.use(
 app.use('*', async (c, next) => {
   await next();
   const path = new URL(c.req.url).pathname;
-  const sensitive = path.startsWith('/api/auth/') || path.startsWith('/api/me/') || path === '/api/me';
+  // A client's paper and a team or invite link answer as the person they were opened for, so they are never kept either.
+  const sensitive = path.startsWith('/api/auth/') || path.startsWith('/api/me/') || path === '/api/me' || /^\/api\/public\/(invoices|contracts|agency|team-link|coach-join)(\/|$)/.test(path);
   if (!sensitive && (path.startsWith('/api/public/') || c.res.headers.has('Cache-Control'))) return;
   try {
     c.res.headers.set('Cache-Control', 'no-store');
@@ -168,6 +172,7 @@ app.route('/public/team-link', teamLinkPublic);
 app.route('/public/contracts', contractsPublic);
 app.route('/public/calendar', calendarPublic);
 app.route('/public/books', booksPublic);
+app.route('/public/coach-join', coachJoinPublic);
 app.route('/public', publicPage);
 // Webhooks verify their own signatures.
 app.route('/webhooks', webhooks);
@@ -230,6 +235,7 @@ app.route('/rewards', rewards);
 app.route('/cards', cards);
 app.route('/discover', discover);
 app.route('/wellbeing', wellbeing);
+app.route('/fitness', fitness);
 app.route('/journal', journal);
 app.route('/inbox', inbox);
 app.route('/resources', resources);
@@ -333,21 +339,35 @@ async function handle(req: Request, env: Env, ctx: ExecutionContext): Promise<Re
   return withPageHeaders(await root.fetch(req, env, ctx));
 }
 
+/** One request: the binding gathers independent reads into one round trip (d1Batch.ts). */
+const answer = (req: Request, env: Env, ctx: ExecutionContext) => handle(req, { ...env, DB: batchedReads(env.DB) }, ctx);
+
 export default {
-  fetch: handle,
+  // D1_GUARD is set only on the test server (d1Guard.ts); in production this looks at one property and goes straight to the answer.
+  fetch: (req: Request, env: Env, ctx: ExecutionContext) => (env.D1_GUARD ? guardedFetch(req, env, ctx, answer) : answer(req, env, ctx)),
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(
+    // Under the guard the tick is counted, and /__scheduled answers only once it is done.
+    if (env.D1_GUARD) {
+      const tally = newTally();
+      const counted = { ...env, DB: countingD1(env.DB, tally) };
+      const done = tick(event, counted).then(() => noteTick(tally, event.cron));
+      ctx.waitUntil(done);
+      await done;
+      return;
+    }
+    ctx.waitUntil(tick(event, env));
+  },
+};
+
+function tick(event: ScheduledEvent, env: Env) {
+  return (
       runScheduled(env, event.cron)
         .then(async (r) => {
           console.log('scheduled', JSON.stringify(r));
           const did = Object.entries(r).filter(([, n]) => n > 0).map(([k, n]) => `${k} ${n}`).join(', ');
           // A quiet run leaves no line; one that did something says what, and the old lines are tidied away.
           if (did) await writeLog(env.DB, { level: 'info', area: 'cron', message: did });
-          await pruneLogs(env.DB);
-          await pruneVitals(env.DB);
-          await env.DB.prepare('DELETE FROM session_evictions WHERE created_at < ?').bind(new Date(Date.now() - 30 * 86_400_000).toISOString()).run();
         })
-        .catch((err) => writeLog(env.DB, { level: 'error', area: 'cron', message: err instanceof Error ? `${err.name}: ${err.message}` : String(err) })),
-    );
-  },
-};
+        .catch((err) => writeLog(env.DB, { level: 'error', area: 'cron', message: err instanceof Error ? `${err.name}: ${err.message}` : String(err) }))
+  );
+}

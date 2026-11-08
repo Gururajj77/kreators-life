@@ -1,7 +1,10 @@
 import { Hono } from 'hono';
 import {
+  AGENCY_DOC_KIND_META,
+  money,
   CONTRACT_STATUSES,
   CONTRACT_STATUS_NAME,
+  type AgencyDocKind,
   INVOICE_STATUS_NAME,
   contractAsText,
   contractTemplateDoc,
@@ -60,8 +63,8 @@ import { createInvoice, INV_SELECT, nextNumberAfter, restoreInvoice, setInvoiceS
 import { logStmt, type LogActor } from '../lifecycle';
 import { actorOf } from '../agencyTeamAccess';
 import { billingOf, settingsFor } from './agency';
-import { parseEmailNote } from '@kreators/shared/agencyEmail';
-import { coverFrom, emailCopy, emailProblem, logDoc, maskEmail, ownLogo, publicUrl } from '../agencyPaper';
+import { parseEmailNote, type ClientPapers, type EmailPaper } from '@kreators/shared/agencyEmail';
+import { coverFrom, emailCopy, emailProblem, logDoc, logOtherPapers, maskEmail, ownLogo, paperPath, publicUrl } from '../agencyPaper';
 
 /**
  * Agency's paper: designed invoices with a calculator, and agreements made from a template. Owner only, like the rest of Agency;
@@ -881,6 +884,7 @@ agencyDocs.post('/invoices/:id/email', async (c) => {
     replyTo: invoiceFromProfile(settings.profile).email,
   });
   await logDoc(db, user.id, 'invoice', row.id, result.sent ? 'emailed' : 'email-not-sent', maskEmail(who.to));
+  await logOtherPapers(db, user.id, row.agency_client_id, cover?.message, row.id, result.sent ? 'emailed' : 'email-not-sent', maskEmail(who.to));
   await audit(db, user.id, 'agency_doc.email', 'invoice', row.id, '', maskEmail(who.to));
   return c.json({ ok: true, ...result, to: maskEmail(who.to) });
 });
@@ -907,8 +911,44 @@ agencyDocs.post('/contracts/:id/email', async (c) => {
     replyTo: invoiceFromProfile(settings.profile).email,
   });
   await logDoc(db, user.id, 'contract', row.id, result.sent ? 'emailed' : 'email-not-sent', maskEmail(who.to));
+  await logOtherPapers(db, user.id, row.client_id, cover?.message, row.id, result.sent ? 'emailed' : 'email-not-sent', maskEmail(who.to));
   await audit(db, user.id, 'agency_doc.email', 'contract', row.id, '', maskEmail(who.to));
   return c.json({ ok: true, ...result, to: maskEmail(who.to) });
+});
+
+// What an email note can name: this client's agreements, invoices and other documents, newest first, each with where the client opens it
+// (nothing while it is a draft; a void one is not listed). It writes nothing. Owner only: no team rule opens it, since a member is never given a client's link.
+const PAPERS_PER_KIND = 24;
+/** A paper changed after it was emailed: a word fixed before the first email is not "revised paper" to the client. */
+const changedSince = (type: 'invoice' | 'contract' | 'doc', alias: string) =>
+  `EXISTS (SELECT 1 FROM agency_doc_log l WHERE l.user_id = ${alias}.user_id AND l.doc_type = '${type}' AND l.doc_id = ${alias}.id AND l.event IN ('emailed', 'email-not-sent') AND l.created_at < ${alias}.revised_at)`;
+agencyDocs.get('/clients/:id/papers', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const id = c.req.param('id');
+  const owned = await db.prepare('SELECT 1 AS x FROM agency_clients WHERE id = ? AND user_id = ?').bind(id, user.id).first();
+  if (!owned) return c.json({ error: 'not found' }, 404);
+  const [invoices, contracts, docs] = await Promise.all([
+    db
+      .prepare(`SELECT i.id, i.number, i.total_cents, i.currency, i.status, i.token, ${changedSince('invoice', 'i')} AS changed, json_extract(i.doc_json, '$.title') AS title FROM invoices i WHERE i.user_id = ? AND i.agency_client_id = ? AND i.status != 'void' ORDER BY i.created_at DESC LIMIT ?`)
+      .bind(user.id, id, PAPERS_PER_KIND)
+      .all<{ id: string; number: string; total_cents: number; currency: string; status: string; token: string | null; changed: number; title: string | null }>(),
+    db
+      .prepare(`SELECT k.id, k.title, k.template_key, k.status, k.token, ${changedSince('contract', 'k')} AS changed FROM agency_contracts k WHERE k.user_id = ? AND k.client_id = ? AND k.status != 'void' ORDER BY k.created_at DESC LIMIT ?`)
+      .bind(user.id, id, PAPERS_PER_KIND)
+      .all<{ id: string; title: string; template_key: string; status: string; token: string | null; changed: number }>(),
+    db
+      .prepare(`SELECT d.id, d.title, d.kind, d.status, d.token, ${changedSince('doc', 'd')} AS changed FROM agency_docs d WHERE d.user_id = ? AND d.client_id = ? ORDER BY d.created_at DESC LIMIT ?`)
+      .bind(user.id, id, PAPERS_PER_KIND)
+      .all<{ id: string; title: string; kind: AgencyDocKind; status: string; token: string | null; changed: number }>(),
+  ]);
+  const papers: EmailPaper[] = [
+    ...contracts.results.map((k): EmailPaper => ({ kind: 'contract', id: k.id, title: k.title, number: docRef('AGR', k.id), status: k.status, amount: '', totalCents: 0, currency: '', advance: false, docKind: k.template_key, revised: k.changed === 1, path: k.status === 'draft' ? '' : paperPath('contract', k.token) })),
+    ...invoices.results.map((i): EmailPaper => ({ kind: 'invoice', id: i.id, title: i.title ?? 'Invoice', number: i.number, status: i.status, amount: money(i.total_cents, i.currency), totalCents: i.total_cents, currency: i.currency, advance: /advance/i.test(i.title ?? ''), docKind: '', revised: i.changed === 1, path: i.status === 'draft' ? '' : paperPath('invoice', i.token) })),
+    ...docs.results.map((d): EmailPaper => ({ kind: 'doc', id: d.id, title: d.title, number: docRef(AGENCY_DOC_KIND_META[d.kind]?.refPrefix ?? 'DOC', d.id), status: d.status, amount: '', totalCents: 0, currency: '', advance: false, docKind: d.kind, revised: d.changed === 1, path: d.status === 'draft' ? '' : paperPath('doc', d.token) })),
+  ];
+  const answer: ClientPapers = { papers, base: publicUrl(c.env, '') };
+  return c.json(answer);
 });
 
 // What was done with a document: emailed a copy, approved. Owner only.

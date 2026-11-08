@@ -16,13 +16,13 @@ Next is your guide's small act for today, like "Dew's small act for today". It i
 
 ## Your tasks
 
-Under **Tasks** you see what is open for today, from the pillars you set up. Tap the box to tick one. It pays 20 xp and sends a ripple up its pyramid.
+Under **Tasks** you see what is open for today, from the pillars you set up. Six show at a time. The rest wait in a fold that says how many, like **8 more waiting**, and both follow **Sort by**. Tap the box to tick one. It pays 20 xp and sends a ripple up its pyramid.
 
 Your first three ticks have no wait. After that, a task must be ten minutes old, and ten minutes after your last tick. So you do the thing first, then tick it. Up to six tasks a day pay xp. The rest still count as done.
 
 ## Planning a task
 
-Tap the pencil beside a task. Its plan opens right under it.
+Tap the pencil beside a task. Its plan opens right under it. The first field, **Task**, is its name, so you can change the words right there.
 
 1. **Do on:** the do date, the day you will do it. The task shows on Daily from that day, and cannot be ticked before. **Today**, **Tomorrow** and **Next week** are quick picks.
 2. **Due by:** the deadline. After it the task shows Overdue, but you can still tick it.
@@ -32,7 +32,7 @@ Tap the pencil beside a task. Its plan opens right under it.
 6. **Time** and **Minutes:** when you will do it, and how long it should take. Quick picks run from 15 minutes to an hour and a half.
 7. **Subtasks:** small steps inside the task, up to twenty. They pay nothing and never stop you ticking the task.
 
-Tap **Save plan**. Once a task has minutes, **Start focus** opens Mindfulness with the task picked and the timer set to that length.
+Tap **Save plan**. Once a task has minutes, **Start focus** opens Mindfulness with the task picked and the timer set to that length. **Delete task**, at the foot of the plan, asks first.
 
 > **Pro tip:** the do date and the due date are not the same thing. The do date is when you will work on it. The due date is when it must be done. The do date can never come after the due date.
 

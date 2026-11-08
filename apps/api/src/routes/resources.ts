@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Resource, ResourceKind } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { nameOf, newId, nowIso, requireRole, pageOf, paged } from '../db';
+import { badLink, httpUrl, likeFit, LINK_PROBLEM, nameOf, newId, nowIso, requireRole, pageOf, paged } from '../db';
 
 export const resources = new Hono<AppEnv>();
 
@@ -32,7 +32,7 @@ resources.get('/', async (c) => {
   const tag = (c.req.query('tag') ?? '').trim();
   const ask = pageOf(c);
   const rows = tag
-    ? await c.env.DB.prepare(`${SELECT} WHERE r.published = 1 AND r.tags LIKE ? ORDER BY r.created_at DESC LIMIT ? OFFSET ?`).bind(`%"${tag}"%`, ask.limit, ask.offset).all<Row>()
+    ? await c.env.DB.prepare(`${SELECT} WHERE r.published = 1 AND r.tags LIKE ? ORDER BY r.created_at DESC LIMIT ? OFFSET ?`).bind(`%"${likeFit(tag, 46)}"%`, ask.limit, ask.offset).all<Row>()
     : await c.env.DB.prepare(`${SELECT} WHERE r.published = 1 ORDER BY r.created_at DESC LIMIT ? OFFSET ?`).bind(ask.limit, ask.offset).all<Row>();
   const pg = paged(rows.results, ask);
   return c.json({ page: pg.page, resources: pg.items.map(toR) });
@@ -53,7 +53,7 @@ function parse(body: Record<string, unknown>, prev?: Row) {
   const title = typeof body.title === 'string' ? body.title.trim().slice(0, 140) : (prev?.title ?? '');
   const summary = typeof body.summary === 'string' ? body.summary.trim().slice(0, 300) : (prev?.summary ?? '');
   const text = typeof body.body === 'string' ? body.body.trim().slice(0, 20000) : (prev?.body ?? '');
-  const url = typeof body.url === 'string' && body.url.trim() ? body.url.trim().slice(0, 500) : body.url === null ? null : (prev?.url ?? null);
+  const url = typeof body.url === 'string' ? httpUrl(body.url) || null : body.url === null ? null : (prev?.url ?? null);
   const tags = Array.isArray(body.tags) ? body.tags.filter((t): t is string => typeof t === 'string').map((t) => t.trim().toLowerCase()).filter(Boolean).slice(0, 8) : prev ? (JSON.parse(prev.tags || '[]') as string[]) : [];
   const published = typeof body.published === 'boolean' ? body.published : prev ? prev.published === 1 : false;
   return { kind, title, summary, text, url, tags, published };
@@ -68,6 +68,7 @@ manageResources.get('/', async (c) => {
 
 manageResources.post('/', async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  if (badLink(body.url)) return c.json({ error: LINK_PROBLEM }, 400);
   const p = parse(body);
   if (!p.title) return c.json({ error: 'title required' }, 400);
   const id = newId();
@@ -83,6 +84,7 @@ manageResources.patch('/:id', async (c) => {
   const prev = await c.env.DB.prepare(`${SELECT} WHERE r.id = ?`).bind(c.req.param('id')).first<Row>();
   if (!prev) return c.json({ error: 'not found' }, 404);
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  if (badLink(body.url)) return c.json({ error: LINK_PROBLEM }, 400);
   const p = parse(body, prev);
   await c.env.DB.prepare('UPDATE resources SET kind = ?, title = ?, summary = ?, body = ?, url = ?, tags = ?, published = ?, updated_at = ? WHERE id = ?')
     .bind(p.kind, p.title, p.summary, p.text, p.url, JSON.stringify(p.tags), p.published ? 1 : 0, nowIso(), prev.id)

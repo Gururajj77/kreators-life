@@ -1,4 +1,4 @@
-import { AnimatePresence, m as motion, useDragControls } from 'motion/react';
+import { AnimatePresence, m as motion, useDragControls, useReducedMotion } from 'motion/react';
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { tick } from './fx/haptics';
@@ -12,12 +12,16 @@ interface Props {
   onClose: () => void;
   title: string;
   children: ReactNode;
+  /** The popup's own small round icon actions (settings, a More menu): they sit in the rail under Close, outside the panel, so they stay in reach however far it scrolls. A word button or a full-width action stays in the popup. */
+  rail?: ReactNode;
 }
 
-export function Sheet({ open, onClose, title, children }: Props) {
+export function Sheet({ open, onClose, title, children, rail }: Props) {
   const id = useId();
   // A tablet or laptop (the md test): the dialog is centred and scales in; on a phone it rises from the bottom and can be dragged down.
   const wide = useWide();
+  // Under reduced motion the dialog is simply there: nothing rises or scales (the scrim only fades).
+  const still = useReducedMotion();
   const grab = useDragControls();
   const dialog = useRef<HTMLDivElement>(null);
   // Focus moves in when it opens, Tab stays inside, Escape closes it (the top one only), and focus returns to what opened it.
@@ -43,22 +47,23 @@ export function Sheet({ open, onClose, title, children }: Props) {
             type="button"
             aria-label="Close"
             tabIndex={-1}
-            className="fixed inset-0 z-40 bg-ink/50"
+            className="sheet-scrim fixed inset-0 z-40 bg-ink/50"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
           />
+          {/* The dialog is a frame: it animates and drags as a whole and holds the rail and the panel. The scrolling and the fill belong to the
+              panel alone, so the rail never moves as the words scroll (the founder, 2026-11-07; "Popups" in app.css places it). */}
           <motion.div
             ref={dialog}
             role="dialog"
             aria-modal="true"
             aria-labelledby={id}
-            className="fx-sheen-top fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[90dvh] w-full max-w-[480px] overflow-y-auto rounded-t-card bg-card px-md pt-md text-ink md:bottom-auto md:top-1/2 md:max-w-[600px] md:-translate-y-1/2 md:rounded-card md:p-lg"
-            style={{ paddingBottom: 'calc(64px + env(safe-area-inset-bottom))' }}
-            initial={wide ? { opacity: 0, scale: 0.96, y: 12 } : { y: '100%' }}
+            className="sheet-frame dialog-frame fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-[480px] text-ink md:bottom-auto md:top-1/2 md:max-w-[600px] md:-translate-y-1/2"
+            initial={still ? false : wide ? { opacity: 0, scale: 0.96, y: 12 } : { y: '100%' }}
             animate={wide ? { opacity: 1, scale: 1, y: 0 } : { y: 0 }}
-            exit={wide ? { opacity: 0, scale: 0.97, y: 8 } : { y: '100%' }}
+            exit={still ? undefined : wide ? { opacity: 0, scale: 0.97, y: 8 } : { y: '100%' }}
             transition={{ type: 'spring', stiffness: 420, damping: 38 }}
             drag={wide ? false : 'y'}
             dragControls={grab}
@@ -72,19 +77,25 @@ export function Sheet({ open, onClose, title, children }: Props) {
               }
             }}
           >
-            {/* The grab bar: drag it down to let the sheet go (a phone). The close button and Escape do the same for everyone else. */}
-            <div className="fx-grab -mt-xs mb-xs flex h-[32px] items-start justify-center md:hidden" aria-hidden="true" onPointerDown={(e) => grab.start(e)}>
-              <div className="h-[6px] w-[48px] rounded-pill bg-line" />
-            </div>
-            <div className="flex items-start justify-between gap-md">
-              <h2 id={id} className="min-w-0 text-title2">
-                {title}
-              </h2>
-              <button type="button" onClick={onClose} aria-label="Close" className="toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink">
+            <div className="dialog-rail">
+              <button type="button" onClick={onClose} aria-label="Close" data-tip="Close" className="sheet-close rail-tip toy toy-soft relative flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink">
                 <Icon icon={X} size={20} />
               </button>
+              {rail}
             </div>
-            <div className="mt-md">{children}</div>
+            <div className="sheet-panel dialog-panel fx-sheen-top overflow-y-auto rounded-t-card bg-card px-md pt-md md:rounded-card md:p-lg" style={{ paddingBottom: 'calc(64px + env(safe-area-inset-bottom))' }}>
+              {/* The grab bar: drag it down to let the sheet go (a phone). The close button and Escape do the same for everyone else. */}
+              <div className="fx-grab -mt-xs mb-xs flex h-[32px] items-start justify-center md:hidden" aria-hidden="true" onPointerDown={(e) => grab.start(e)}>
+                <div className="h-[6px] w-[48px] rounded-pill bg-line" />
+              </div>
+              {/* The title keeps the room the round Close gave it, so the panel is the height it was. */}
+              <div className="min-h-[44px]">
+                <h2 id={id} className="min-w-0 text-title2">
+                  {title}
+                </h2>
+              </div>
+              <div className="mt-md">{children}</div>
+            </div>
           </motion.div>
         </>
       )}

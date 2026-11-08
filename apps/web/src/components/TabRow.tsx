@@ -37,6 +37,8 @@ export function TabRow<K extends string>({
   pillClass,
   align = 'start',
   lead,
+  max,
+  natural = false,
 }: {
   items: readonly TabRowItem<K>[];
   value?: K;
@@ -51,6 +53,10 @@ export function TabRow<K extends string>({
   align?: 'start' | 'end';
   /** Words that open the row ("Sort by"): they travel with the pills, so with `align="end"` they sit right beside them. */
   lead?: ReactNode;
+  /** At most this many pills before All, whatever the width (Inbox keeps three, the founder 2026-11-07). */
+  max?: number;
+  /** Pills keep their own width even when some are behind All, instead of sharing the free width; under 34rem of the nearest @container they fill their line again (Inbox, the founder 2026-11-07). */
+  natural?: boolean;
 }) {
   const row = useRef<HTMLDivElement>(null);
   const measure = useRef<HTMLDivElement>(null);
@@ -67,7 +73,7 @@ export function TabRow<K extends string>({
     const work = () => {
       if (!live) return;
       const width = box.clientWidth - (leadRef.current ? leadRef.current.offsetWidth + 8 : 0);
-      const cap = window.matchMedia('(min-width: 768px)').matches ? MAX_WIDE : MAX_NARROW;
+      const cap = Math.min(max ?? Infinity, window.matchMedia('(min-width: 768px)').matches ? MAX_WIDE : MAX_NARROW);
       const pills = [...ruler.querySelectorAll<HTMLElement>('[data-pill]')].map((p) => p.offsetWidth);
       const more = ruler.querySelector<HTMLElement>('[data-more]')?.offsetWidth ?? 96;
       const gap = 8;
@@ -101,7 +107,7 @@ export function TabRow<K extends string>({
       live = false;
       ro.disconnect();
     };
-  }, [items, value]);
+  }, [items, value, max]);
 
   // The showing tab is never hidden: the measure keeps its place first, then fills the rest in order.
   const [keys, squeezed] = fits.split('|');
@@ -114,7 +120,8 @@ export function TabRow<K extends string>({
   const hidden = items.filter((i) => !shown.includes(i));
   const pressed = (k: K) => (value === undefined ? undefined : k === value);
   // When some tabs are behind All, the shown ones share the free width, so the row reaches All with no gap.
-  const fill = hidden.length > 0 ? 'flex-1 justify-center text-center' : '';
+  // `natural` keeps them their own width, except in a row under 34rem of its container (a phone), where the line is theirs alone.
+  const fill = hidden.length === 0 ? '' : natural ? '@max-[34rem]:flex-1 @max-[34rem]:justify-center @max-[34rem]:text-center' : 'flex-1 justify-center text-center';
   const pill = (on: boolean, disabled = false, wrap = false) =>
     `${wrap ? 'min-w-[44px] whitespace-normal text-balance' : 'shrink-0 whitespace-nowrap'} ${pillClass ? pillClass(on, disabled) : `toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}`;
 

@@ -1,4 +1,4 @@
-import { IDENTITY_STAGES, LEADERBOARD_POOL, LEADERBOARD_SCOPES, isLeaderboardScope, type LeaderboardBlock, type LeaderboardEntry, type LeaderboardOption, type LeaderboardScope, type LeaderboardSort, LOCALE, formatCount } from '@kreators/shared';
+import { IDENTITY_STAGES, SETUP_GOAL_GROUPS, LEADERBOARD_POOL, LEADERBOARD_SCOPES, isLeaderboardScope, type LeaderboardBlock, type LeaderboardEntry, type LeaderboardOption, type LeaderboardScope, type LeaderboardSort, formatCount } from '@kreators/shared';
 import { useSearchParams } from 'react-router';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
@@ -12,13 +12,18 @@ import { useLeaderboard, useAuthed, useMe, useRefreshAll } from '../lib/queries'
 import { useMutation } from '@tanstack/react-query';
 import { Toggle } from '../components/Toggle';
 import { ErrorLine } from '../components/ErrorLine';
-import { bento } from '../lib/bento';
+import { evenGrid, evenTile } from '../lib/bento';
+import { TileGroups } from '../components/TileGroups';
 import { api } from '../lib/api';
 import { Medal } from 'lucide-react';
 import { AppIcon } from '../components/AppIcon';
 import { Icon } from '../components/Icon';
 import { IconTag } from '../components/FactTag';
 import { FilterBar, FilterSelect } from '../components/FilterSelect';
+import { shortDate } from '../lib/date';
+
+/** One board a row on a phone, two from the tablet, in even rows (lib/bento.ts). */
+const BLOCK_COLS = { base: 1, md: 2 } as const;
 
 const SORTS: { key: LeaderboardSort; label: string; stat: (e: LeaderboardEntry) => string }[] = [
   { key: 'xp', label: 'All time', stat: (e) => `${formatCount(e.xp)} xp` },
@@ -147,7 +152,7 @@ export function Leaderboard() {
   const statFor = (e: LeaderboardEntry) => (by === 'xp' && pillarBoard ? `${formatCount(e.xp)} xp here` : sort.stat(e));
   const open = (b: LeaderboardBlock) => {
     patch({ scope: b.scope, value: b.value });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   };
   const goalBlocks = (blocks.data?.blocks ?? []).filter((b) => b.scope === 'goal');
   const pillarBlocks = (blocks.data?.blocks ?? []).filter((b) => b.scope === 'pillar');
@@ -236,18 +241,21 @@ export function Leaderboard() {
             <Pager page={q.data.page} label="people" />
             {by === 'season' && (
               <p className="mt-sm m-0 text-subhead text-ink-soft">
-                {q.data.season.label}, ends {new Date(q.data.season.endsAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' })}.
+                {q.data.season.label}, ends {shortDate(q.data.season.endsAt)}.
               </p>
             )}
           </section>
 
           {goalBlocks.some((b) => b.people > 0) && (
             <Section id="lb-goals" title="Boards by goal" lede="What people are working on. Open one to see the whole board.">
-              <ul className="grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
-                {goalBlocks.filter((b) => b.people > 0).map((b, i, arr) => (
-                  <BlockCard key={b.value} b={b} onOpen={() => open(b)} className={bento(i, arr.length, 1, 2)} />
-                ))}
-              </ul>
+              {/* Past ten boards, by the setup chat's own groups of goals (TileGroups). */}
+              <TileGroups
+                list
+                cols={BLOCK_COLS}
+                flat={goalBlocks.filter((b) => b.people > 0)}
+                groups={SETUP_GOAL_GROUPS.map((g) => ({ key: g.label, name: g.label, tiles: goalBlocks.filter((b) => b.people > 0 && g.keys.includes(b.value)) }))}
+                render={(b, className) => <BlockCard key={b.value} b={b} onOpen={() => open(b)} className={className} />}
+              />
               {goalBlocks.some((b) => b.people === 0) && (
                 <Fold className="mt-sm" title="Boards with no one yet" hint={String(goalBlocks.filter((b) => b.people === 0).length)}>
                   <p className="m-0 text-caption text-ink-soft">{goalBlocks.filter((b) => b.people === 0).map((b) => b.label).join(', ')}.</p>
@@ -257,9 +265,9 @@ export function Leaderboard() {
           )}
           {pillarBlocks.some((b) => b.people > 0) && (
             <Section id="lb-pillars" title="Boards by pillar" lede="Ranked by the xp each person earned in that pillar alone.">
-              <ul className="grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
+              <ul className={`grid list-none gap-xs p-0 m-0 ${evenGrid(pillarBlocks.filter((b) => b.people > 0).length, BLOCK_COLS)}`}>
                 {pillarBlocks.filter((b) => b.people > 0).map((b, i, arr) => (
-                  <BlockCard key={b.value} b={b} onOpen={() => open(b)} className={bento(i, arr.length, 1, 2)} />
+                  <BlockCard key={b.value} b={b} onOpen={() => open(b)} className={evenTile(i, arr.length, BLOCK_COLS)} />
                 ))}
               </ul>
             </Section>

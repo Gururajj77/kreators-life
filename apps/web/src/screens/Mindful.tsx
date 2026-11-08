@@ -1,11 +1,10 @@
-import { LOCALE } from '@kreators/shared';
 import { FocusDashboard } from '../components/FocusDashboard';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { AreaLine, Donut, Legend } from '../components/Charts';
 import { Hero, HeroNumber } from '../components/Hero';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
-import { lastDays, shortDay } from '../lib/date';
+import { lastDays, shortDay, eventTime } from '../lib/date';
 import { useLogs, useWellbeing } from '../lib/queries';
 import { useFocusPortal } from '../lib/focusPortal';
 import { Icon } from '../components/Icon';
@@ -18,6 +17,7 @@ import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { useRefreshAll } from '../lib/queries';
 import { EmergenceSlot } from '../components/EmergenceSlot';
+import { RED_YES } from '../lib/ui';
 
 export function Mindful() {
   const wb = useWellbeing();
@@ -38,7 +38,7 @@ export function Mindful() {
   const refresh = useRefreshAll();
   const [toDelete, setToDelete] = useState<{ id: string; label: string } | null>(null);
   const remove = useMutation({ mutationFn: (id: string) => api.deleteLog('mindful', id), onSuccess: () => (setToDelete(null), refresh()) });
-  const when = (iso: string) => new Date(iso).toLocaleString(LOCALE, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const when = eventTime;
 
   return (
     <Screen>
@@ -61,7 +61,7 @@ export function Mindful() {
 
       <FocusDashboard />
 
-      <PeriodPanel id="mindful-period" parts={['wellbeing']} />
+      <PeriodPanel id="mindful-period" parts={['wellbeing', 'focus']} />
       <EmergenceSlot app="mindful" max={2} />
       <section className="mt-lg" aria-labelledby="thirty-heading">
         <h2 id="thirty-heading" className="text-title2">
@@ -136,7 +136,7 @@ export function Mindful() {
                 type="button"
                 disabled={remove.isPending}
                 onClick={() => toDelete && remove.mutate(toDelete.id)}
-                className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill disabled:opacity-50"
+                className={RED_YES}
               >
                 Yes, delete it
               </button>

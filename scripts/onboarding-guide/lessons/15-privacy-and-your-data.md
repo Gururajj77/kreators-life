@@ -12,15 +12,16 @@ In this lesson you'll learn:
 
 Some things in the app are for your eyes only. They never reach brands, the team, the leaderboard or your public page.
 
-- **Your journal:** every entry, every prompt you wrote about. Not even a coach sees it.
-- **Your wellbeing logs:** mood, sleep, stress and mindful minutes, and the one wellbeing score made from them. Only a coach you said yes to can see the numbers, and only while you allow it.
+- **Your journal:** every entry, every prompt you wrote about, and your gratitude lines. Not even a coach sees it.
+- **Your wellbeing logs:** mood, sleep, stress, mindful minutes, your movement and how you ate, and the one wellbeing score. Only a coach you said yes to can see the numbers, and only while you allow it.
+- **Your supplements:** if you keep the list in Fitness, only you see it. Not a coach, not the assistant.
 - **Discover:** your quiz answers, your results and the add-ons, like love languages and how your mind works.
 - **Your phone and date of birth:** asked once at sign-up, never shown to anyone.
 - **Finance:** your money in and money out. The screen says it: "Only you can see this."
 - **Your year:** the grid of days on the Profile tab.
-- **Emerging:** the patterns the app notices. They are worked out fresh each time you look, and never saved.
+- **Emerging:** the patterns the app notices. They are worked out fresh each time you look, and never saved. A coach sees them only if you switch Patterns on.
 
-Your tags, the words the setup chat gave you, pick your apps. They never show on your public page. Some badges are private too. The Focus, Reflection and Money families show only to you, and only counts are used for them, never what you wrote.
+Your tags, the words you picked on Profile or in the setup chat, mark the apps that fit you. They never show on your public page. Some badges are private too. The Focus, Reflection and Money families show only to you, and only counts are used for them, never what you wrote.
 
 ## What others may see, and your switch for it
 
@@ -43,7 +44,7 @@ You are not on it until you tick **Show me on the leaderboard** on the Profile t
 
 ### A life coach
 
-If you work with a coach, you pick what they see, in five parts: Daily and streaks, pillars and pyramids, routine and contract, life map answers, and reflection. All five start on. Reflection is your wellbeing numbers and saved reviews, never your journal or a tracker's note. Turn any part off, or end the link, at any time.
+If you work with a coach, you pick what they see, in six parts: Daily and streaks, pillars and pyramids, routine and contract, life map answers, reflection and patterns. All are on for a new coach, and Patterns is off for a coach you had before. Reflection is your wellbeing numbers and saved reviews. A coach never sees your journal, gratitude, supplements, money or a note. Turn any part off, or end the link, at any time.
 
 ### The assistant
 
@@ -70,6 +71,7 @@ The first time you visit, a small card called **Your privacy** asks about three 
 - **Three devices at once:** your account can be open on three phones or laptops. Sign in on a fourth and the oldest one is signed out. That device then says why.
 - **Change password:** on the Profile tab, under Account. Every other device is then signed out.
 - **Forgot it:** the sign-in screen has **Forgot your password?** It mails you a link that works for thirty minutes.
+- **Your clock:** on the Profile tab, **Dates and times** sets your time zone and how dates and clocks read. Every screen and every reminder follows it, and printed paper keeps its own. If your device is on another clock, **Use this zone** moves you to it.
 - **Your calendar:** under **Calendar**, **Show my tasks in my calendar** starts off. It shows task titles, pillars, priorities and times, never your notes or journal. **Make a fresh link** stops the old one.
 
 > **Pro tip:** if you lose a phone, change your password from any other device. That one step signs the lost phone out.
@@ -79,8 +81,8 @@ The first time you visit, a small card called **Your privacy** asks about three 
 On the Profile tab, the **Your data** card has three buttons.
 
 1. **Export my data:** everything we hold about you, as one file you can keep.
-2. **Erase everything:** your pillars, xp, streak and badges go, and you start over. A sheet asks first, with a red **Yes, erase everything** and **Keep my progress**. After it, the setup chat opens again.
-3. **Delete my account:** a sheet lists what goes. You type DELETE, then tap **Delete everything**. Your name, page, pillars, logs, journal and messages are gone. Money records stay, without your name.
+2. **Erase everything:** your pillars, xp, streak and badges go, and you start over. A sheet asks first, with a red **Yes, erase everything** and **Keep my progress**. After it, the setup chat opens again. Your journal, gratitude, trackers and Fitness logs stay.
+3. **Delete my account:** a sheet lists what happens. You type DELETE, then tap **Delete my account**. Your name, page, pillars, logs, journal and messages are gone. Your events, runs and sessions still to come are cancelled, and whoever was coming is told. What you never sold goes, and what you sold is archived for the people who bought it. Money records and what others rely on stay, without your name. A note already in someone else's inbox keeps the words it was written with.
 
 > **Result:** you know what is yours alone, which switch shares each part, and how to leave with your data.
 

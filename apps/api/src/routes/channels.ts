@@ -19,7 +19,7 @@ import {
   type ChannelScope,
 } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { anonAlias, audit, isGuide, isStaff, nameOf, newId, notify, notifyMany, nowIso, pageOf, paged, rankOf, str } from '../db';
+import { anonAlias, audit, blockedByName, blockedEither, hiddenByBlock, isGuide, isStaff, nameOf, newId, notify, notifyMany, nowIso, pageOf, paged, rankOf, seenBy, str } from '../db';
 import { blockBehind } from './community';
 
 /**
@@ -64,14 +64,14 @@ interface MsgRow {
 }
 
 
-/** ?1 is always the person reading. */
-const NOT_BLOCKED = (col: string) => `NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ?1 AND b.blocked_id = ${col}) OR (b.blocker_id = ${col} AND b.blocked_id = ?1))`;
+/** ?1 is always the person reading; `alias` is the table holding the line. */
+const LINE_SHOWN = (alias: string) => `NOT ${hiddenByBlock('?1', `${alias}.user_id`, `${alias}.anonymous`)}`;
 
 // ?1 is the viewer. The unread count stops at a hundred lines, which is all the dot can show.
 const LIST_SQL = `SELECT c.*,
   (SELECT COUNT(*) FROM channel_members m WHERE m.channel_id = c.id AND m.status = 'member') AS members,
   cm.status AS my_status, cm.role AS my_role,
-  (SELECT COUNT(*) FROM (SELECT 1 FROM channel_messages x WHERE x.channel_id = c.id AND cm.status = 'member' AND x.created_at > cm.last_read_at AND x.user_id != ?1 AND x.deleted_at IS NULL AND ${NOT_BLOCKED('x.user_id')} LIMIT 100)) AS unread,
+  (SELECT COUNT(*) FROM (SELECT 1 FROM channel_messages x WHERE x.channel_id = c.id AND cm.status = 'member' AND x.created_at > cm.last_read_at AND x.user_id != ?1 AND x.deleted_at IS NULL AND ${LINE_SHOWN('x')} LIMIT 100)) AS unread,
   (SELECT MAX(x.created_at) FROM channel_messages x WHERE x.channel_id = c.id AND x.deleted_at IS NULL) AS last_line_at
   FROM channels c LEFT JOIN channel_members cm ON cm.channel_id = c.id AND cm.user_id = ?1`;
 
@@ -122,17 +122,17 @@ async function freeSlug(db: D1Database, scope: ChannelScope, name: string, excep
 }
 
 /** Tell the people a line mentions, once each, never the writer and never across a block. A private channel tells only its members. */
-async function tellMentioned(db: D1Database, writer: UserRow, text: string, ch: ChRow, label: string): Promise<Set<string>> {
+async function tellMentioned(db: D1Database, writer: UserRow, text: string, ch: ChRow, label: string, anonymous: boolean): Promise<Set<string>> {
   const told = new Set<string>();
   const handles = mentionsIn(text);
   if (handles.length === 0) return told;
   const rows = await db
     .prepare(
-      `SELECT u.id FROM users u WHERE u.handle IN (${handles.map(() => '?').join(',')}) AND u.id != ?
-        AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = u.id AND b.blocked_id = ?) OR (b.blocker_id = ? AND b.blocked_id = u.id))
-        AND (? = 'public' OR EXISTS (SELECT 1 FROM channel_members m WHERE m.channel_id = ? AND m.user_id = u.id AND m.status = 'member'))`,
+      `SELECT u.id FROM users u WHERE u.handle IN (${handles.map((_, i) => `?${i + 5}`).join(',')}) AND u.id != ?1
+        AND NOT ${hiddenByBlock('u.id', '?1', '?2')}
+        AND (?3 = 'public' OR EXISTS (SELECT 1 FROM channel_members m WHERE m.channel_id = ?4 AND m.user_id = u.id AND m.status = 'member'))`,
     )
-    .bind(...handles, writer.id, writer.id, writer.id, ch.kind, ch.id)
+    .bind(writer.id, anonymous ? 1 : 0, ch.kind, ch.id, ...handles)
     .all<{ id: string }>();
   await notifyMany(db, rows.results.map((r) => r.id), 'mention', `${label} mentioned you in ${ch.name}`, text.slice(0, 120), linkFor(ch));
   for (const r of rows.results) told.add(r.id);
@@ -150,7 +150,7 @@ async function presentLines(c: Context<AppEnv>, ch: ChRow, rows: MsgRow[]): Prom
   const parents = new Map<string, { name: string; body: string }>();
   if (parentIds.length > 0) {
     const ps = await db
-      .prepare(`SELECT m.id, m.user_id, m.body, m.anonymous, u.display_name FROM channel_messages m JOIN users u ON u.id = m.user_id WHERE m.channel_id = ?2 AND m.deleted_at IS NULL AND m.id IN (${parentIds.map((_, i) => `?${i + 3}`).join(',')}) AND ${NOT_BLOCKED('m.user_id')}`)
+      .prepare(`SELECT m.id, m.user_id, m.body, m.anonymous, u.display_name FROM channel_messages m JOIN users u ON u.id = m.user_id WHERE m.channel_id = ?2 AND m.deleted_at IS NULL AND m.id IN (${parentIds.map((_, i) => `?${i + 3}`).join(',')}) AND ${LINE_SHOWN('m')}`)
       .bind(viewer.id, ch.id, ...parentIds)
       .all<{ id: string; user_id: string; body: string; anonymous: number; display_name: string }>();
     for (const p of ps.results) parents.set(p.id, { name: p.anonymous === 1 ? await aliasOf(p.user_id) : nameOf(p), body: p.body.slice(0, 100) });
@@ -200,7 +200,7 @@ function channelRouter(scope: ChannelScope) {
     const n = await c.env.DB.prepare(
       `SELECT COUNT(*) AS n FROM channel_members cm JOIN channels c ON c.id = cm.channel_id
        WHERE cm.user_id = ?1 AND cm.status = 'member' AND c.scope = ?2 AND c.archived_at IS NULL
-         AND EXISTS (SELECT 1 FROM channel_messages x WHERE x.channel_id = c.id AND x.created_at > cm.last_read_at AND x.user_id != ?1 AND x.deleted_at IS NULL AND ${NOT_BLOCKED('x.user_id')})`,
+         AND EXISTS (SELECT 1 FROM channel_messages x WHERE x.channel_id = c.id AND x.created_at > cm.last_read_at AND x.user_id != ?1 AND x.deleted_at IS NULL AND ${LINE_SHOWN('x')})`,
     )
       .bind(user.id, scope)
       .first<{ n: number }>();
@@ -250,7 +250,7 @@ function channelRouter(scope: ChannelScope) {
     // Who is in a private room is for those in it. A public channel shows a count only, since lines there can be anonymous.
     if (scope === 'bond' && row.my_status === 'member') {
       const ms = await db
-        .prepare(`SELECT m.user_id, m.role, u.display_name, u.handle FROM channel_members m JOIN users u ON u.id = m.user_id WHERE m.channel_id = ?2 AND m.status = 'member' AND ${NOT_BLOCKED('m.user_id')} ORDER BY m.joined_at LIMIT ${MAX_CHANNEL_MEMBERS}`)
+        .prepare(`SELECT m.user_id, m.role, u.display_name, u.handle FROM channel_members m JOIN users u ON u.id = m.user_id WHERE m.channel_id = ?2 AND m.status = 'member' AND NOT ${blockedByName('?1', 'm.user_id')} ORDER BY m.joined_at LIMIT ${MAX_CHANNEL_MEMBERS}`)
         .bind(user.id, row.id)
         .all<{ user_id: string; role: 'member' | 'mod'; display_name: string; handle: string | null }>();
       members = ms.results.map((m) => ({ userId: m.user_id, name: nameOf(m), handle: m.handle, role: m.role, owner: m.user_id === row.created_by }));
@@ -356,8 +356,7 @@ function channelRouter(scope: ChannelScope) {
       if (!target || target === user.id) return c.json({ error: 'Who do you want to ask?' }, 400);
       const friends = await db.prepare("SELECT 1 FROM friendships WHERE status = 'accepted' AND ((requester_id = ?1 AND recipient_id = ?2) OR (requester_id = ?2 AND recipient_id = ?1))").bind(user.id, target).first();
       if (!friends) return c.json({ error: 'You can only ask friends. Add them as a friend first.' }, 403);
-      const blocked = await db.prepare('SELECT 1 FROM blocks WHERE (blocker_id = ?1 AND blocked_id = ?2) OR (blocker_id = ?2 AND blocked_id = ?1)').bind(user.id, target).first();
-      if (blocked) return c.json({ error: 'not possible' }, 400);
+      if (await blockedEither(db, user.id, target)) return c.json({ error: 'not possible' }, 400);
       const seat = await db.prepare('SELECT status FROM channel_members WHERE channel_id = ? AND user_id = ?').bind(row.id, target).first<{ status: string }>();
       if (seat) return c.json({ error: seat.status === 'member' ? 'They are already in.' : 'You already asked them.' }, 409);
       const now = nowIso();
@@ -398,7 +397,7 @@ function channelRouter(scope: ChannelScope) {
     const cursor = after ?? before ?? 0;
     const sql = `SELECT m.seq, m.id, m.user_id, m.body, m.anonymous, m.reply_to, m.created_at, u.display_name, u.handle, u.role, u.permissions
       FROM channel_messages m JOIN users u ON u.id = m.user_id
-      WHERE m.channel_id = ?2 AND m.deleted_at IS NULL AND m.seq ${before ? '<' : '>'} ?3 AND ${NOT_BLOCKED('m.user_id')}
+      WHERE m.channel_id = ?2 AND m.deleted_at IS NULL AND m.seq ${before ? '<' : '>'} ?3 AND ${LINE_SHOWN('m')}
       ORDER BY m.seq ${forward ? 'ASC' : 'DESC'} LIMIT ?4`;
     const rows = await db.prepare(sql).bind(user.id, row.id, cursor, CHANNEL_LINES + 1).all<MsgRow>();
     const more = rows.results.length > CHANNEL_LINES;
@@ -434,7 +433,7 @@ function channelRouter(scope: ChannelScope) {
     let parent: { id: string; user_id: string } | null = null;
     if (typeof body.replyTo === 'string' && body.replyTo) {
       parent = await db
-        .prepare(`SELECT m.id, m.user_id FROM channel_messages m WHERE m.id = ?2 AND m.channel_id = ?3 AND m.deleted_at IS NULL AND ${NOT_BLOCKED('m.user_id')}`)
+        .prepare(`SELECT m.id, m.user_id FROM channel_messages m WHERE m.id = ?2 AND m.channel_id = ?3 AND m.deleted_at IS NULL AND ${LINE_SHOWN('m')}`)
         .bind(user.id, body.replyTo, row.id)
         .first<{ id: string; user_id: string }>();
       if (!parent) return c.json({ error: 'That line is gone.' }, 404);
@@ -446,8 +445,8 @@ function channelRouter(scope: ChannelScope) {
     await db.prepare('UPDATE channel_members SET last_read_at = ? WHERE channel_id = ? AND user_id = ?').bind(now, row.id, user.id).run();
     // Whoever is named in a notice is the made-up name when the writer chose one, never the real name.
     const label = anonymous ? await anonAlias(c.env, user.id, `channel:${row.id}`) : nameOf(user);
-    const told = await tellMentioned(db, user, text, row, label);
-    if (parent && parent.user_id !== user.id && !told.has(parent.user_id)) await notify(db, parent.user_id, 'reply', `${label} replied to you in ${row.name}`, text.slice(0, 120), linkFor(row));
+    const told = await tellMentioned(db, user, text, row, label, anonymous);
+    if (parent && !told.has(parent.user_id) && (await seenBy(db, user.id, anonymous, [parent.user_id])).has(parent.user_id)) await notify(db, parent.user_id, 'reply', `${label} replied to you in ${row.name}`, text.slice(0, 120), linkFor(row));
     const saved = await db
       .prepare('SELECT m.seq, m.id, m.user_id, m.body, m.anonymous, m.reply_to, m.created_at, u.display_name, u.handle, u.role, u.permissions FROM channel_messages m JOIN users u ON u.id = m.user_id WHERE m.id = ?')
       .bind(id)
@@ -486,7 +485,7 @@ function channelRouter(scope: ChannelScope) {
     const row = await open(c);
     if (!row || (scope === 'bond' && row.my_status !== 'member')) return c.json({ error: 'not found' }, 404);
     const line = await db
-      .prepare(`SELECT m.id, m.seq, m.user_id, m.body FROM channel_messages m WHERE m.id = ?2 AND m.channel_id = ?3 AND m.deleted_at IS NULL AND ${NOT_BLOCKED('m.user_id')}`)
+      .prepare(`SELECT m.id, m.seq, m.user_id, m.body FROM channel_messages m WHERE m.id = ?2 AND m.channel_id = ?3 AND m.deleted_at IS NULL AND ${LINE_SHOWN('m')}`)
       .bind(user.id, c.req.param('mid'), row.id)
       .first<{ id: string; seq: number; user_id: string; body: string }>();
     if (!line) return c.json({ error: 'not found' }, 404);

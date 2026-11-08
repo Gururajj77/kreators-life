@@ -79,11 +79,12 @@ import { payForCall } from '../components/LiveCall';
 import { ChatActions, ChatLinks, ChatScreen, ChoiceChips, ChoiceGroups, chip, typingTime } from '../components/Chat';
 import { api, errorText } from '../lib/api';
 import { FIELD } from '../lib/ui';
-import { todayLocal } from '../lib/date';
+import { todayLocal, clockOf } from '../lib/date';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
 import { useAssistantModel, useSession } from '../lib/store';
 import { explainTyped } from '../lib/explain';
 import { forgetKept, useKept, useKeptRef } from '../lib/kept';
+import { evenGrid, evenTile } from '../lib/bento';
 
 // ---------------------------------------------------------------------------
 // The hosts. Each part is run by one of the seven, in that character's own voice: Dew calm and clear, Ember
@@ -683,7 +684,7 @@ function DayForm({ initial, onSend }: { initial: RealDay; onSend: Send }) {
           <input value={d.evening} onChange={(e) => setD({ ...d, evening: e.target.value })} maxLength={200} placeholder="Scrolling, a show, work mail" className={FIELD} />
         </label>
       </div>
-      <ChatActions full next="That is my day" onNext={() => onSend({ ...d }, `Up at ${d.wake}, lights out ${d.sleep}, work ${d.workStart} to ${d.workEnd}${d.gym ? `, gym ${d.gym}` : ''}${d.evening ? `, evenings: ${d.evening}` : ''}`)} />
+      <ChatActions full next="That is my day" onNext={() => onSend({ ...d }, `Up at ${clockOf(d.wake)}, lights out ${clockOf(d.sleep)}, work ${clockOf(d.workStart)} to ${clockOf(d.workEnd)}${d.gym ? `, gym ${clockOf(d.gym)}` : ''}${d.evening ? `, evenings: ${d.evening}` : ''}`)} />
     </div>
   );
 }
@@ -707,7 +708,7 @@ function RoutineCard({ data }: { data: Data }) {
             <p className="m-0 flex items-center justify-between text-headline">
               <span>{b.name}</span>
               <span className="text-caption text-ink-soft">
-                {b.start} to {b.end}
+                {clockOf(b.start)} to {clockOf(b.end)}
               </span>
             </p>
             {b.steps.length > 0 && (
@@ -810,7 +811,7 @@ function ContractForm({ initial, placeholder, onSend }: { initial: Data['contrac
           </li>
         ))}
       </ul>
-      <p className="mt-md m-0 text-subhead text-ink-soft">Weekly check on Sunday night, five minutes. Monthly review in thirty days. The app keeps both dates.</p>
+      <p className="mt-md m-0 text-subhead text-ink-soft">Weekly review on Sunday night, a few minutes. Monthly review in thirty days. The app keeps both dates.</p>
       <label className="mt-xs block">
         <span className="block text-subhead font-semibold">Type your name to sign</span>
         <input value={c.signedName} onChange={(e) => setC({ ...c, signedName: e.target.value })} maxLength={80} placeholder={placeholder} className={FIELD} />
@@ -819,7 +820,7 @@ function ContractForm({ initial, placeholder, onSend }: { initial: Data['contrac
       <div className="mt-md">
         <Toggle on={call} onChange={setCall} label="I would like a live call with a coach" hint={`A person goes through your answers with you, for ${money(LIVE_CALL_CENTS, PLAN_CURRENCY)}. ${PAYMENTS_LIVE ? 'You pay once you sign.' : 'Nothing is charged yet: the team writes to you to set a time.'} Saying no changes nothing.`} />
       </div>
-      <ChatActions full next="Sign it" ready={Boolean(c.signedName.trim())} onNext={() => onSend({ minDays: String(c.minDays), checkinTime: c.checkinTime, penalty: c.penalty, signedName: c.signedName.trim(), call: call ? 'yes' : 'no' }, `${c.minDays} days a week, check-in at ${c.checkinTime}, ${PENALTIES.find((p) => p.key === c.penalty)?.name.toLowerCase()}. Signed ${c.signedName.trim()}.${call ? ' And I would like a live call.' : ''}`)} />
+      <ChatActions full next="Sign it" ready={Boolean(c.signedName.trim())} onNext={() => onSend({ minDays: String(c.minDays), checkinTime: c.checkinTime, penalty: c.penalty, signedName: c.signedName.trim(), call: call ? 'yes' : 'no' }, `${c.minDays} days a week, check-in at ${clockOf(c.checkinTime)}, ${PENALTIES.find((p) => p.key === c.penalty)?.name.toLowerCase()}. Signed ${c.signedName.trim()}.${call ? ' And I would like a live call.' : ''}`)} />
     </div>
   );
 }
@@ -889,15 +890,18 @@ function PicksForm({ focus, result, own: ownWords = {}, onSend }: { focus: Relat
   );
 }
 
+// One focus pillar takes the width; two sit side by side (lib/bento.ts).
+const PYRAMID_COLS = { base: 1, md: 2 } as const;
+
 /** The pyramids themselves, one per focus pillar, with the words the answers gave them. */
 function PyramidsCard({ focus, result, picks }: { focus: RelationshipKey[]; result: OnboardingResponse; picks: LadderPicks }) {
   return (
-    <div className="grid gap-sm md:grid-cols-2">
-      {focus.map((k) => {
+    <div className={`grid gap-sm ${evenGrid(focus.length, PYRAMID_COLS)}`}>
+      {focus.map((k, i) => {
         const l = result.ladders[k];
         const words: Partial<Record<NodeKind, string>> = { pillar: picks[k]?.pillar || l.pillar, principle: l.principle, value_goal: picks[k]?.valueGoal || l.valueGoal, outcome: l.outcome, project: picks[k]?.project || l.project, task: projectTasks(k, picks[k]?.project || l.project, l.branch)?.[0] ?? l.tasks[0] ?? 'Your first task' };
         return (
-          <div key={k} className="rounded-card bg-card p-md shadow-toy-soft">
+          <div key={k} className={`rounded-card bg-card p-md shadow-toy-soft ${evenTile(i, focus.length, PYRAMID_COLS)}`}>
             <p className="m-0 flex items-center gap-xs text-subhead font-semibold" style={{ color: `var(--deep-${k})` }}>
               <Avatar relationship={k} size={24} decorative still />
               {RELATIONSHIP_BY_KEY[k].name}
@@ -1104,14 +1108,14 @@ export function SessionChat() {
 
   const goSteps = (data: Data) => {
     if (!data.result) return goDone(data);
-    say('bumling', ['Here is what your answers built. For each pillar, pick a value goal (how you want to feel) and a project (what you will work on), or write your own.'], { stage: { part: 'steps' }, ask: { kind: 'form', render: (send) => <PicksForm focus={data.focus} result={data.result!} own={data.picks} onSend={send} />, more: 'The value goal is how you want to feel more often. The project is a few weeks of small tasks. Your first task shows up on Daily tomorrow.' } });
+    say('bumling', ['Here is what your answers built. For each pillar, pick a value goal (how you want to feel) and a project (what you will work on), or write your own.'], { stage: { part: 'steps' }, ask: { kind: 'form', render: (send) => <PicksForm focus={data.focus} result={data.result!} own={data.picks} onSend={send} />, more: 'The value goal is how you want to feel more often. The project is a few weeks of small tasks. Your first task shows up on Daily today.' } });
   };
 
   const goDone = (data: Data) => {
     const order = priorityOrder(placedOf(data), data.insecurities, data.away);
     const lines: (string | { node: ReactNode })[] = ['Your pillars are ready. Each one is a pyramid: the foundation at the top, down to your first task at the point.'];
     if (data.result) lines.push({ node: <PyramidsCard focus={data.focus} result={data.result} picks={data.picks} /> });
-    lines.push(`Here is the order to work through all seven. Start with ${listOf(data.focus.map(pillar))} this month. When those hold at Courage, move on to the next one on the list.`, { node: <NextStepsCard order={order} focus={data.focus} /> }, ...(data.away.length ? [`${listOf(data.away.map(pillar))} ${data.away.length === 1 ? 'is' : 'are'} set aside, so ${data.away.length === 1 ? 'it stays' : 'they stay'} out of the list. Turn ${data.away.length === 1 ? 'it' : 'them'} back on from your life map whenever you like.`] : []), 'From tomorrow, tick your morning routine on Daily. On Sunday night, take five minutes for the weekly check. In thirty days you will do a review. Everything from this session is saved at the bottom of Pillars, as your life map.', 'What would you like to do now? You can open your pillars, or add your interests so people with the same interests can find you.');
+    lines.push(`Here is the order to work through all seven. Start with ${listOf(data.focus.map(pillar))} this month. When those hold at Courage, move on to the next one on the list.`, { node: <NextStepsCard order={order} focus={data.focus} /> }, ...(data.away.length ? [`${listOf(data.away.map(pillar))} ${data.away.length === 1 ? 'is' : 'are'} set aside, so ${data.away.length === 1 ? 'it stays' : 'they stay'} out of the list. Turn ${data.away.length === 1 ? 'it' : 'them'} back on from your life map whenever you like.`] : []), 'From tomorrow, tick your morning routine on Daily. On Sunday night, take a few minutes for your weekly review, and in thirty days do your monthly one. Both are in Reviews, under Apps. If it is hidden, unhide it there.', 'Everything from this session is saved at the bottom of Pillars, as your life map.', 'What would you like to do now? You can open your pillars, or add your interests so people with the same interests can find you.');
     say('bumling', lines, { stage: { part: 'done' }, ask: { kind: 'chips', chips: DONE_CHIPS } });
   };
 

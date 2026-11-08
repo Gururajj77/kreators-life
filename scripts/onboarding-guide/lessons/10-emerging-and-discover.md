@@ -4,6 +4,7 @@ You log a mood, tick a task, write a few lines. Put a few weeks of them side by 
 In this lesson you'll learn:
 
 - What patterns Emerging looks for, and where they show up.
+- How to see your life by period, area by area and pillar by pillar.
 - Why it says things happen together, and never that one causes another.
 - How good and bad habits are found, and what to do with each.
 - How the Discover quiz and its add-ons work, as a mirror and never a diagnosis.
@@ -14,15 +15,20 @@ You are too close to your own days to see their shape. Emerging steps back for y
 
 ## What it notices
 
-It reads only apps you have on. A few things it looks for:
+It reads only apps you have not hidden. A few things it looks for:
 
 - **Tasks you keep doing:** the same task ticked on 3 days in 4 weeks, which does not repeat yet.
 - **Sleep and mood:** your mood on days after more sleep, against days after less.
 - **Focus and tasks:** how many tasks you tick on days with a focus session, and on days without.
 - **Stress and calm:** your stress on days with ten mindful minutes, or with your water goal met.
 - **Journal and mood:** your mood on days you wrote. It reads only when you wrote, never what.
+- **Water:** your days with the goal met beside the days without, and the day you drink least.
+- **Budgets:** a budget that keeps running over. It says "ran over", never "failed".
+- **When you move:** the weekday you move most, once enough days have movement.
+- **How you eat:** days you said you ate well beside your other check-in days, on mood, stress or sleep that night.
+- **Gratitude and mood:** your mood on days you wrote your gratitude, and on days you did not.
 
-Each card shows a number, a tag in the corner, one sentence, a small chart and a line on where it came from. It has one action, and a More menu where **Not now** hides it on this device.
+Each card shows a number, a tag in the corner, one sentence, a small chart and a line on where it came from. It has one action, and a More menu where **Not now** hides it on this device. **Show again** brings it back.
 
 ## Together, never because
 
@@ -30,9 +36,15 @@ Every card that sets two kinds of day side by side ends with the same words: "Th
 
 ## Where it shows up
 
-- **Home:** your top three, with **See all**.
+- **Home:** your top three, or one quiet line and **See all** while nothing is ready.
 - **Daily, Pillars, Life, Journal, Reviews** and more: the patterns that touch each one.
-- **The Emerging page:** two counts, **Patterns found** and **Still watching**, then **What stands out**, **Good and bad habits** and **Still watching**. A pattern still watching says what it needs, like "Log sleep and mood on 3 more days".
+- **The Emerging page:** your life by period, then two counts, **Patterns found** and **Still watching**, then **What stands out**, **Good and bad habits** and **Still watching**. The patterns sit under the areas of life they touch. A pattern still watching says what it needs, like "Log sleep and mood on 3 more days".
+
+## Your life, by period
+
+Tap **See all** to open the Emerging page. At the top you can pick a day, a week, a month, a quarter, a half year or a year. Pick nothing and it stays on the last 8 weeks.
+
+**Your life** then shows that period: the five areas of life, then the seven pillars, each number next to the period before, and only for the apps you have not hidden. The patterns below follow the same period. A short period cannot hold many days, so more of them wait under **Still watching**. **Back to the last 8 weeks** returns you. **Review it** opens the same period on Reviews, while Reviews is not hidden.
 
 ## Good and bad habits
 
@@ -42,7 +54,7 @@ This is the part people use most. Emerging takes a task you tick often, on at le
 - **Bad habit:** the days with it went clearly worse. The card offers **Add to not to do**, which opens right in the card.
 - **Still watching:** not enough days yet, or no clear gap. It needs at least 5 days with it and 7 without.
 
-A not to do item is checked the same way, slip days against kept days. Daily shows your good and bad habits in a section called **Habits**, under the not to do list.
+A not to do item is checked the same way, slip days against kept days. Moving is checked too, days you moved against days you did not, while Fitness or Kreators Run is showing. Moving is only ever a **Good habit**, since a worse day after a walk is no reason to stop walking. Daily shows your good and bad habits in a section called **Habits**, under the not to do list.
 
 > **Pro tip:** keep logging mood and sleep, even on dull days. Emerging can only compare what you log, and the plain days are what make the gap clear.
 
@@ -50,7 +62,7 @@ A not to do item is checked the same way, slip days against kept days. Daily sho
 
 Discover shows you how you tend to think, feel and act. It never compares you with anyone else.
 
-Discover starts off. Switch it on in the **Reflection** group of **Apps**, or tap **Take the Discover quiz** at the end of the setup chat.
+Discover starts hidden on a new account, unless the setup chat showed it for you. Open **Apps**, open the **Reflection** group, open **Hidden apps** at its end and tap the eye beside **Discover**, or tap **Take the Discover quiz** at the end of the setup chat.
 
 ## The quiz
 

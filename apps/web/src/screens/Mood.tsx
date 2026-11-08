@@ -1,4 +1,4 @@
-import { MOODS, LOCALE } from '@kreators/shared';
+import { MOODS } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { PeriodPanel } from '../components/PeriodPanel';
@@ -9,8 +9,8 @@ import { MoodFace } from '../components/MoodFace';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
-import { FIELD } from '../lib/ui';
-import { lastDays, shortDay, todayLocal } from '../lib/date';
+import { FIELD, RED_YES } from '../lib/ui';
+import { lastDays, shortDay, todayLocal, dayLabel, fullDay } from '../lib/date';
 import { useLogs, useRefreshAll, useWellbeing } from '../lib/queries';
 import { EmergenceSlot } from '../components/EmergenceSlot';
 
@@ -194,7 +194,7 @@ export function Mood() {
                   <span className="min-w-0 flex-1">
                     <span className="block text-card-title">{m.name}</span>
                     <span className="block truncate text-card-note text-ink-soft">
-                      {new Date(`${l.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', month: 'short', day: 'numeric' })}
+                      {dayLabel(l.date)}
                       {l.note ? `. ${l.note}` : ''}
                     </span>
                   </span>
@@ -226,7 +226,7 @@ function MoodDaySheet({ date, existing, onClose, onChanged }: { date: string | n
   };
   const save = useMutation({ mutationFn: () => api.log('mood', { date: date!, value, note }), onSuccess: done });
   const remove = useMutation({ mutationFn: () => api.deleteLog('mood', existing!.id), onSuccess: done });
-  const pretty = date ? new Date(`${date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long' }) : '';
+  const pretty = date ? fullDay(date) : '';
   const failed = save.error ?? remove.error;
   return (
     <Sheet open={date !== null} onClose={onClose} title={pretty}>
@@ -266,7 +266,7 @@ function MoodDaySheet({ date, existing, onClose, onChanged }: { date: string | n
                 type="button"
                 disabled={remove.isPending}
                 onClick={() => remove.mutate()}
-                className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill disabled:opacity-50"
+                className={RED_YES}
               >
                 Yes, delete it
               </button>

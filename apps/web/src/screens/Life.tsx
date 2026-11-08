@@ -1,4 +1,4 @@
-import { LIFE_AREAS, RELATIONSHIP_BY_KEY, type LifeArea, LOCALE } from '@kreators/shared';
+import { LIFE_AREAS, RELATIONSHIP_BY_KEY, type LifeArea } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -17,6 +17,7 @@ import { AppIcon } from '../components/AppIcon';
 import { Icon } from '../components/Icon';
 import { ArrowUpRight } from 'lucide-react';
 import { EmergenceSlot } from '../components/EmergenceSlot';
+import { weekday } from '../lib/date';
 
 /** Five areas of a life on one screen, each part opening the place where you act on it. */
 export function Life() {
@@ -87,7 +88,7 @@ export function Life() {
                 { values: wb.data.week.map((w) => (w.mood === null ? null : ((w.mood - 1) / 4) * 100)), color: 'var(--color-r3)', label: 'Mood' },
               ]}
               max={100}
-              labels={wb.data.week.map((w) => new Date(`${w.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short' }))}
+              labels={wb.data.week.map((w) => weekday(w.date))}
               allLabels
               height={160}
               label="Sleep, calm and mood as scores out of a hundred for the last seven days"

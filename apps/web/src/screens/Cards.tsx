@@ -21,13 +21,17 @@ import { api } from '../lib/api';
 import { useCardGames, useRefreshAll } from '../lib/queries';
 import { fillVar } from '../lib/relFill';
 import { tie } from '../lib/text';
+import { evenGrid, evenTile } from '../lib/bento';
 
 /** How many decks and cards a game has, in words. */
+// The covers: one to a row on a phone, three on a laptop, in even rows on the Games page and the Rewards shelf alike (lib/bento.ts).
+export const GAME_COLS = { base: 1, lg: 3 } as const;
+
 const countLine = (g: CardGameCard) => `${g.decks.length === 1 ? '1 deck' : `${formatCount(g.decks.length)} decks`}, ${formatCount(g.total)} cards`;
 
 /**
- * The cover of a game, its colour as a gradient, laid out the way the founder set it (2026-11-04): Yours or Locked at the top left and its
- * size in decks and cards at the top right (never cut: it keeps its width and the tags wrap first), its name and line under them, its
+ * The cover of a game, its colour as a gradient, laid out the way the founder set it (2026-11-04): its size in decks and cards at the top
+ * left (never cut: it keeps its width and the tags wrap first) and Yours or Locked at the top right, its name and line under them, its
  * guide at the bottom left and `cta` at the bottom right: Play when the whole cover is the link, the price on a game that is not yours yet.
  */
 export function GameCover({ game, state, cta, className = '' }: { game: CardGameCard; state?: ReactNode; cta?: ReactNode; className?: string }) {
@@ -36,8 +40,8 @@ export function GameCover({ game, state, cta, className = '' }: { game: CardGame
     <div className={`relative flex flex-col overflow-hidden rounded-card p-md text-on-fill ${className}`} style={{ background: `linear-gradient(135deg, ${fillVar(rel)}, color-mix(in oklab, ${fillVar(rel)} 72%, var(--fill-shade)))` } as CSSProperties}>
       <HeroBlobs seed={game.key} />
       <div className="relative flex items-start justify-between gap-sm">
-        <span className="flex min-w-0 flex-wrap gap-xs">{state}</span>
         <span className="shrink-0 whitespace-nowrap text-caption opacity-90">{countLine(game)}</span>
+        <span className="flex min-w-0 flex-wrap justify-end gap-xs">{state}</span>
       </div>
       <h2 className="relative mt-sm text-balance text-title3">{tie(game.name)}</h2>
       <p className="relative mt-xs m-0 text-balance text-subhead">{game.tagline}</p>
@@ -55,10 +59,10 @@ export function GameCover({ game, state, cta, className = '' }: { game: CardGame
  * One game in a grid (the Games page and the Rewards shelf): a game that is yours is one link, the whole cover, to its table; one that is
  * not keeps its cover with its price on it and an outline Unlock (or the lock) under it, so the grid never holds a solid button.
  */
-export function GameTile({ game: g, index, busy, onUnlock }: { game: CardGameCard; index?: number; busy: boolean; onUnlock: (g: CardGameCard) => void }) {
+export function GameTile({ game: g, index, busy, onUnlock, className = '' }: { game: CardGameCard; index?: number; busy: boolean; onUnlock: (g: CardGameCard) => void; className?: string }) {
   return (
     // Two rows of the grid (a subgrid): the covers in a row line up, and so do the Unlock or Locked blocks under them.
-    <SpotlightCard as="li" index={index} data-pillar={g.accent} className="row-span-2 grid grid-rows-subgrid gap-xs rounded-card">
+    <SpotlightCard as="li" index={index} data-pillar={g.accent} className={`row-span-2 grid grid-rows-subgrid gap-xs rounded-card ${className}`}>
       {g.unlocked ? (
         // The whole cover opens the game; the Play pill only shows that it does.
         <Link to={`/cards/${g.key}`} aria-label={`Play ${g.name}`} className="toy row-span-2 flex rounded-card">
@@ -166,9 +170,9 @@ export function Cards() {
               See them in Rewards
             </Link>
           </p>
-          <ul className="mt-sm grid list-none grid-cols-1 gap-sm p-0 m-0 lg:grid-cols-3">
+          <ul className={`mt-sm grid list-none gap-sm p-0 m-0 ${evenGrid(data.games.length, GAME_COLS)}`}>
             {data.games.map((g, i) => (
-              <GameTile key={g.key} game={g} index={i} busy={unlock.isPending} onUnlock={setAsking} />
+              <GameTile key={g.key} game={g} index={i} busy={unlock.isPending} onUnlock={setAsking} className={evenTile(i, data.games.length, GAME_COLS)} />
             ))}
           </ul>
         </>

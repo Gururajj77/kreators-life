@@ -32,7 +32,7 @@ export const ICON_NAMES = [
   'KeyRound', 'Landmark', 'LayoutList', 'Leaf', 'LetterH', 'LifeBuoy', 'Lightbulb', 'Link', 'ListChecks', 'ListPlus', 'Lock', 'Luggage', 'Mail',
   'Map', 'Medal', 'Megaphone', 'MessageCircle', 'MessageCircleHeart', 'MessagesSquare', 'MicSignal', 'MicVocal', 'Minus', 'Moon', 'MoonStar',
   'Mountain', 'Newspaper', 'NotebookPen', 'NotebookText', 'OctagonX', 'Orbit', 'Package', 'Palette', 'PartyPopper', 'PenLine', 'PersonStanding',
-  'PiggyBank', 'Plane', 'Presentation', 'Puzzle', 'RadioTower', 'Rainbow', 'Receipt', 'Recycle', 'Repeat', 'Rocket', 'Route', 'ScanSearch',
+  'PiggyBank', 'Pill', 'Plane', 'Presentation', 'Puzzle', 'RadioTower', 'Rainbow', 'Receipt', 'Recycle', 'Repeat', 'Rocket', 'Route', 'ScanSearch',
   'Scissors', 'Search', 'SearchCheck', 'Share2', 'Shield', 'ShieldCheck', 'Shirt', 'ShoppingBag', 'ShoppingCart', 'Signpost', 'Smartphone', 'Spade',
   'Sparkle', 'Sparkles', 'Speech', 'Sprout', 'SquareCheck', 'SquarePlay', 'Star', 'Store', 'Sun', 'Sunrise', 'Swords', 'Tag', 'Target', 'Telescope',
   'Tent', 'ThumbsUp', 'Ticket', 'Toolbox', 'Tornado', 'TreeDeciduous', 'TreePine', 'TrendingUp', 'Triangle', 'Trophy', 'Tv', 'Type', 'Undo2',
@@ -57,7 +57,7 @@ export const knowledgeKindIcon = (kind: string): IconName => (Object.hasOwn(KNOW
 /** Each role has a small badge: it sits on the profile picture and under the logo. It is not an earned badge. */
 export const ROLE_META: Record<Role, { name: string; blurb: string; icon: IconName; accent: RelationshipKey }> = {
   user: { name: 'Creator', blurb: 'Learns, works, connects and sells.', icon: 'Sparkles', accent: 'self' },
-  sub_admin: { name: 'Staff', blurb: 'Runs parts of Kreators, as far as their permissions go.', icon: 'Shield', accent: 'guru' },
+  sub_admin: { name: 'Staff', blurb: 'Runs parts of kreators.app, as far as their permissions go.', icon: 'Shield', accent: 'guru' },
   admin: { name: 'Admin', blurb: 'Everything, including roles, permissions and which features exist.', icon: 'KeyRound', accent: 'divine' },
 };
 

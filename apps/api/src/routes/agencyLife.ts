@@ -32,12 +32,14 @@ import {
 } from '@kreators/shared';
 import { fillEmail, emptyEmailVars } from '@kreators/shared/agencyEmail';
 import type { AppEnv } from '../env';
-import { dayFromDevice, nameOf, newId, notify, nowIso, num, randomCode, shiftDate, str } from '../db';
+import { dayFromDevice, nameOf, newId, noteStmt, notify, nowIso, num, randomCode, shiftDate, str } from '../db';
 import { sendEmail } from '../ops';
 import { ownLogo, publicUrl } from '../agencyPaper';
 import { dateOrNull, moneyIn } from '../agencyUtil';
 import { billingOf, clientRow, settingsFor } from './agency';
 import { runAgencyCycles } from '../agencyCycles';
+import { routeTurn } from '../cronTick';
+import { ROUTE_TRIPS, tripsOf } from '../d1Batch';
 import { applyStageEvent, closePasswordRequest, logStmt, moveStage, syncStageFromAgreements, type RetainerRow } from '../lifecycle';
 import { actorOf } from '../agencyTeamAccess';
 import { teamLockRowForToken } from '../teamLinkAccess';
@@ -274,7 +276,7 @@ agencyLife.post('/retainers/:id/confirm', async (c) => {
   await logStmt(db, user.id, r.client_id, actorOf(c), 'retainer', `The retainer started on ${startDay} for ${r.months} months.`).run();
   await applyStageEvent(db, user.id, r.client_id, 'retainer_active', 'The retainer started.');
   // The first month now, if its day has come in the owner's zone; the cron makes the rest.
-  const made = await runAgencyCycles(db, { retainerId: r.id });
+  const made = await runAgencyCycles(db, { retainerId: r.id }, routeTurn(db, () => tripsOf(db), ROUTE_TRIPS));
   return c.json({ ok: true, made });
 });
 
@@ -532,7 +534,11 @@ agencyLifePublic.post('/password-request', async (c) => {
   await db.batch([
     logStmt(db, client.user_id, client.id, 'client', 'password', team ? 'Their team asked for a new password for the team link.' : 'The client asked for a new password.'),
     // One stable note per client and link, so a second ask after a dismissal brings the same line back to the top instead of adding another.
-    db.prepare('INSERT OR REPLACE INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)').bind(team ? `pwreq-team-${client.id}` : `pwreq-${client.id}`, client.user_id, 'agency', `${who} asked for a new password`, team ? 'Set a new one for the team link on their page, then send it to them yourself.' : 'Set a new one on their page, then send it to them yourself.', `/agency/${client.id}${team ? '?cseg=link' : ''}`, now),
+    noteStmt(
+      db,
+      { id: team ? `pwreq-team-${client.id}` : `pwreq-${client.id}`, userId: client.user_id, kind: 'agency', title: `${who} asked for a new password`, body: team ? 'Set a new one for the team link on their page, then send it to them yourself.' : 'Set a new one on their page, then send it to them yourself.', link: `/agency/${client.id}${team ? '?cseg=link' : ''}`, at: now },
+      'renew',
+    ),
   ]);
   const owner = await db.prepare('SELECT email FROM users WHERE id = ?').bind(client.user_id).first<{ email: string | null }>();
   if (owner?.email) {

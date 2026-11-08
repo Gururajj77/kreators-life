@@ -1,3 +1,4 @@
+import type { User } from '@kreators/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { LazyMotion } from 'motion/react';
 import { StrictMode } from 'react';
@@ -5,6 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { App, routePattern } from './App';
 import { CelebrationProvider } from './components/Celebration';
 import { ApiError } from './lib/api';
+import { setDateDisplay } from './lib/date';
 import { useSession } from './lib/store';
 import './app.css';
 
@@ -25,8 +27,19 @@ const queryClient = new QueryClient({
 let lastToken = useSession.getState().token;
 useSession.subscribe((s) => {
   if (s.token === lastToken) return;
-  if (lastToken) queryClient.clear();
+  if (lastToken) {
+    queryClient.clear();
+    setDateDisplay(null);
+  }
   lastToken = s.token;
+});
+
+// Times on screen follow the account (lib/date.ts): its zone and date format are set the moment it lands, before any screen draws with it.
+if (!lastToken) setDateDisplay(null);
+queryClient.getQueryCache().subscribe((e) => {
+  if (e.type !== 'updated' || e.query.queryKey.length !== 1 || e.query.queryKey[0] !== 'me') return;
+  const user = (e.query.state.data as { user?: User } | undefined)?.user;
+  if (user) setDateDisplay(user);
 });
 
 // Page speed notes load beside the app, not in its first download. The browser keeps the timings it took before (buffered), so

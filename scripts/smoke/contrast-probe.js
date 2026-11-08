@@ -182,6 +182,8 @@
     if (cs.visibility === 'hidden' || cs.display === 'none') return;
     const rect = el.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
+    // Words only a screen reader gets (`sr-only`, a 1px clipped box) draw nothing, so there is no contrast to judge.
+    if (rect.width <= 1 && rect.height <= 1 && cs.overflow === 'hidden') return;
     const op = opacityOf(el);
     if (op === 0) return;
     const colorCss = kind === 'placeholder' ? getComputedStyle(el, '::placeholder').color : el instanceof SVGElement ? cs.fill : cs.color;

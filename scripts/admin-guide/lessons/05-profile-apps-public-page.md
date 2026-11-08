@@ -4,7 +4,7 @@ Riya wants two things now. She wants the app to show only what she uses. And she
 In this lesson you'll learn:
 
 - What sits on the Profile tab, from top to bottom.
-- How Riya switches apps, sets how groups open and puts apps in her own order.
+- How Riya hides and unhides apps, sets how groups open and puts apps in her own order.
 - How she builds her public page, with links and switches.
 - Where her badges and her year live, and what an admin can do.
 
@@ -14,13 +14,13 @@ The Profile tab opens with a cover: her picture, her name and a small badge for 
 
 ## Step two: who you are
 
-Under **Who you are** are the tags the setup chat gave her, like Content creator and Freelancer.
+Under **Who you are**, every tag is a tile to pick, like Content creator and Freelancer.
 
-1. Riya taps **Change my tags and apps**.
-2. The setup chat opens again, with her last answers filled in.
-3. She now shoots for brands too, so under For clients she adds **Shooting**. Then she switches on the apps it suggests.
+1. She now shoots for brands too, so under **For clients** she taps the **Videographer** tile. It saves at once.
+2. Tags mark the apps that fit her. Picking one never changes her apps.
+3. To change her apps by her answers, she taps **Match my apps again**. The setup chat opens with her last answers filled in, and only the chat shows and hides apps for her.
 
-Tags pick her apps and fill in her skills and interests. They never show on her public page.
+Tags never show on her public page.
 
 ## Step three: Appearance and Features
 
@@ -28,8 +28,8 @@ Tags pick her apps and fill in her skills and interests. They never show on her 
 
 **Features** lists her apps in groups, always in this order: Contribution, Reflection, Connection, Creation and Essentials. A sixth group, Operations, is for the team only.
 
-1. Each group shows how many apps are on, like "3 of 7 on". Riya opens Creation.
-2. Each app has a switch. Off hides an app; nothing is deleted.
+1. Each group shows how many apps it shows, like "3 of 7 shown". Riya opens Creation.
+2. Each app has a round eye that hides it, and hidden apps wait under **Hidden apps** at the end of the group. Nothing is deleted.
 3. An app that fits her answers says **Fits you**, and why.
 4. Each group has a switch, **Starts open on Apps and in the menu**. She turns it on for Contribution and Creation, the two she uses most.
 5. She taps **Arrange apps**. Now she can drag an app by its handle, or use **Move up** and **Move down**. Apps stay inside their group. She taps **Done**.
@@ -58,7 +58,7 @@ Riya taps **Edit page**. This is the Public page app.
 
 1. **Username:** her page address, like /u/riya_edits. Three to twenty letters, numbers or underscores.
 2. **Bio**, **Photo link** and **Links** for Instagram, YouTube and a website.
-3. **Time zone**, **Currency** and **City**.
+3. **Dates and times** (time zone, date format, time format), **Currency** and **City**. The Profile tab has the same **Dates and times**, and every screen and reminder follows it.
 4. **What is public:** ten switches. **My page is public** comes first, and every other switch needs it on. The rest are social icons, links, portfolio, what she sells, posts, activity, badges, friend requests and chats.
 5. She taps **Save profile**. At the top, **Copy** copies her page link and **Open** shows it.
 

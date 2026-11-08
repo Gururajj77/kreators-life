@@ -1,6 +1,6 @@
 import { BADGE_META, badgeRoleOf, RELATIONSHIP_BY_KEY, groupStartsOpen, MODULE_GROUPS, orderInGroup, type ModuleGroup } from '@kreators/shared';
 import { useEffect, useState, type ReactNode } from 'react';
-import { CircleUserRound, Landmark, LayoutGrid, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Bell, CircleUserRound, Landmark, LayoutGrid, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { AnimatedIcon, type AnimatedName } from './AnimatedIcon';
 import { AppIcon } from './AppIcon';
 import { FocusPill } from './FocusPill';
@@ -60,6 +60,24 @@ function UnreadTag({ n }: { n: number }) {
       {n > 9 ? '9+' : n}
       <span className="sr-only"> unread</span>
     </StatusTag>
+  );
+}
+
+/**
+ * The Inbox at the top of the sidebar (tablet and laptop only; a phone has no sidebar, so its count stays on the Apps tab): a round button in
+ * the theme button's own look, with the unread count on it.
+ */
+function BellLink({ unread }: { unread: number }) {
+  const label = unread > 0 ? `Inbox, ${unread} unread` : 'Inbox';
+  return (
+    <NavLink to="/inbox" aria-label={label} title={label} className="toy toy-soft relative flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-card-strong text-ink-soft hover:text-ink">
+      <Icon icon={Bell} size={22} />
+      {unread > 0 && (
+        <span aria-hidden="true" className="absolute -top-[2px] -right-[2px] flex min-w-[18px] items-center justify-center rounded-pill bg-r1 px-[4px] text-caption2 font-semibold leading-[18px] text-on-fill">
+          {unread > 9 ? '9+' : unread}
+        </span>
+      )}
+    </NavLink>
   );
 }
 
@@ -180,7 +198,7 @@ export function TabBar() {
             {BADGE_META[badgeRoleOf(me.data.user)].name}
           </p>
         )}
-        {sidebarApps.length === 0 && <p className="mt-sm m-0 text-footnote text-ink-soft">Nothing switched on yet. Pick apps under Apps.</p>}
+        {sidebarApps.length === 0 && <p className="mt-sm m-0 text-footnote text-ink-soft">Every app is hidden. Show some from Apps.</p>}
         {groupOrder.map((g) => {
           const list = appsOf(g);
           if (list.length === 0) return null;
@@ -212,7 +230,7 @@ export function TabBar() {
           );
         })}
         <div className="mt-lg flex items-center justify-between gap-sm">
-          <Link to="/" className="text-caption text-ink-soft hover:text-ink">
+          <Link to="/" className="inline-flex min-h-[44px] items-center text-caption text-ink-soft hover:text-ink">
             About kreators.app
           </Link>
           <SignOut />
@@ -240,14 +258,14 @@ export function TabBar() {
             </Link>
           </div>
         )}
-        {/* Your role, right under the logo, as a tag in its own colour, with the theme button beside it. Folded, only the theme button. */}
-        <div className={`mt-xs flex min-h-[44px] items-center gap-xs ${mini ? 'justify-center' : 'justify-between px-xs'}`}>
+        {/* Your role, right under the logo, as a tag in its own colour, with the bell and the theme button beside it. Folded, the theme button with the bell under it, above Home. */}
+        <div className={`mt-xs flex min-h-[44px] items-center gap-xs ${mini ? 'flex-col justify-center' : 'justify-between'}`}>
           {!mini && me.data ? (
             (() => {
               const role = badgeRoleOf(me.data.user);
               const rel = RELATIONSHIP_BY_KEY[BADGE_META[role].accent];
               return (
-                <span className="inline-flex min-h-[32px] items-center gap-xs rounded-pill py-[4px] pr-sm pl-[4px] text-caption font-medium" style={{ background: `var(--soft-${rel.key})`, color: `var(--deep-${rel.key})` }}>
+                <span className="inline-flex min-h-[32px] items-center gap-xs whitespace-nowrap rounded-pill py-[4px] pr-sm pl-[4px] text-caption font-medium" style={{ background: `var(--soft-${rel.key})`, color: `var(--deep-${rel.key})` }}>
                   <RoleBadge role={role} size={24} />
                   {BADGE_META[role].name}
                 </span>
@@ -256,7 +274,17 @@ export function TabBar() {
           ) : (
             !mini && <span />
           )}
-          <ThemeToggle />
+          {mini ? (
+            <>
+              <ThemeToggle />
+              <BellLink unread={unread} />
+            </>
+          ) : (
+            <div className="flex shrink-0 items-center gap-xs">
+              <BellLink unread={unread} />
+              <ThemeToggle />
+            </div>
+          )}
         </div>
         <ul ref={side.ref} className="fx-slide mt-md flex list-none flex-col gap-xs p-0 m-0">
           {TABS.map((t) => (
@@ -264,10 +292,7 @@ export function TabBar() {
               <NavLink to={t.to} aria-label={mini ? t.label : undefined} title={mini ? t.label : undefined} className={({ isActive }) => `tab relative flex min-h-[48px] items-center gap-sm rounded-pill text-callout font-medium transition-colors ${mini ? 'justify-center px-0' : 'px-sm'} ${isActive ? (side.ready ? 'text-on-ink' : 'bg-ink text-on-ink') : 'text-ink-soft hover:bg-paper hover:text-ink'}`}>
                 {({ isActive }) => (
                   <>
-                    <span className="relative flex size-[28px] items-center justify-center">
-                      {t.icon(isActive, 24)}
-                      {badge(t.to)}
-                    </span>
+                    <span className="relative flex size-[28px] items-center justify-center">{t.icon(isActive, 24)}</span>
                     {!mini && t.label}
                   </>
                 )}

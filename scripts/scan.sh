@@ -60,6 +60,33 @@ out=$(grep -rnw "font-extrabold" --include='*.tsx' --include='*.ts' screens site
   | grep -vE "^site/ClientPortal\.tsx:" || true)
 if [ -n "$out" ]; then echo "$out"; hits=$((hits + $(echo "$out" | wc -l | tr -d ' '))); fi
 
+echo "inbox: every note is written by noteStmt in notes.ts (its kind an InboxKind, so every kind has a tab); no other INTO notifications (2026-11-07)"
+out=$(grep -rniE "into[[:space:]]+notifications" ../../api/src 2>/dev/null | grep -vE "^\.\./\.\./api/src/notes\.ts:" || true)
+if [ -n "$out" ]; then echo "$out"; hits=$((hits + $(echo "$out" | wc -l | tr -d ' '))); fi
+
+echo "time blocks: someone with no rows has the starting set in code, so only timeBlocks.ts, its route file, insights.ts (startingSet) and the export read these tables (2026-11-07)"
+out=$(grep -rnE "(FROM|JOIN)[[:space:]]+(time_blocks|day_templates|day_template_slots)\b" ../../api/src 2>/dev/null | grep -vE "^\.\./\.\./api/src/(timeBlocks\.ts|routes/timeBlocks\.ts|routes/insights\.ts|routes/me\.ts|account\.ts):" || true)
+if [ -n "$out" ]; then echo "$out"; hits=$((hits + $(echo "$out" | wc -l | tr -d ' '))); fi
+
+echo "inbox: every note's link is a route in App.tsx and its hash an id the app draws, so it lands (scripts/check-note-links.mjs; 2026-11-07)"
+out=$(node "$ROOT/scripts/check-note-links.mjs" 2>/dev/null)
+if [ "$?" != "0" ] && [ -z "$out" ]; then out="scripts/check-note-links.mjs did not run"; fi
+if [ -n "$out" ]; then echo "$out"; hits=$((hits + $(echo "$out" | wc -l | tr -d ' '))); fi
+
+echo "apps: every module brings its picture for Home's tiles, and no two share one (scripts/app-art/build.mjs --check; 2026-11-07)"
+out=$(node --experimental-strip-types "$ROOT/scripts/app-art/build.mjs" --check 2>/dev/null)
+if [ "$?" != "0" ] && [ -z "$out" ]; then out="scripts/app-art/build.mjs --check did not run"; fi
+if [ -n "$out" ]; then echo "$out"; hits=$((hits + $(echo "$out" | wc -l | tr -d ' '))); fi
+
+echo "privacy: every table that names a person says what the export and the delete do with it, and the code does it (scripts/data-coverage.mjs; 2026-11-07)"
+out=$(node "$ROOT/scripts/data-coverage.mjs" 2>/dev/null)
+if [ "$?" != "0" ] && [ -z "$out" ]; then out="scripts/data-coverage.mjs did not run"; fi
+if [ -n "$out" ]; then echo "$out"; hits=$((hits + $(echo "$out" | wc -l | tr -d ' '))); fi
+
+echo "dates: an instant is never cut to its UTC day before a date helper shows it, or the day is wrong ahead of UTC (lib/date.ts takes an instant; 2026-11-07)"
+out=$(grep -rnE "\b(prettyDate|shortDay|shortDate|longDate|dayLabel|fullDay|monthYear)\([^()]*[A-Za-z]+(At|Until)\.slice\(0, 10\)\)" "$ROOT/apps/web/src" 2>/dev/null)
+if [ -n "$out" ]; then echo "$out"; hits=$((hits + $(echo "$out" | wc -l | tr -d ' '))); fi
+
 if [ "$hits" = "0" ]; then echo "clean"; exit 0; fi
 echo "$hits hit(s)"
 exit 1

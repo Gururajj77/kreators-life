@@ -8,16 +8,16 @@ In this lesson you'll learn:
 - How she sets sounds, a daily goal and a nudge.
 - What an admin can switch and check for this app.
 
-## Switch it on
+## Find it
 
-Mindfulness starts off on a new account. Riya opens **Apps**, taps the **Reflection** group and turns on the switch beside **Mindfulness**. The screen opens from Wellbeing too.
+Mindfulness starts hidden on a new account, unless the setup chat showed it for her. Riya opens **Apps**, opens the **Reflection** group, opens **Hidden apps** at its end and taps the eye beside **Mindfulness**. The screen opens from Wellbeing too.
 
 The hero shows her mindful minutes this week. Under it is one dark card called **Breathe and focus**, with four tabs: **Breathe**, **Timer**, **Pomodoro** and **Stopwatch**.
 
 ## Step by step: Breathe
 
 1. Riya taps the **Breathe** tab.
-2. She picks a pattern. Calm exhale is first: in for 4, hold for 4, out for 6, rest for 2. Others are Box, 4-7-8, Even, Triangle, Longer out and Sigh.
+2. She picks a pattern. Calm exhale is first: in for 4, hold for 4, out for 6, rest for 2. Others are Box, 4-7-8, Even, Triangle, Longer out, Pranayam and Sigh.
 3. She picks a cue: Soft chime, Bell, Voice or No cue.
 4. She taps a quick length, such as 3 minutes, or drags the ruler from 1 to 30.
 5. She taps **Start**. A row of glass circles fills one step at a time, each with the word and the seconds left.

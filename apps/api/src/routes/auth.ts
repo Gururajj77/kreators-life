@@ -1,11 +1,11 @@
 import { Hono } from 'hono';
 import { birthDateProblem, normalizePhone, passwordProblem, phoneProblem, RELATIONSHIPS, MAX_DEVICES } from '@kreators/shared';
-import { limited, sendEmail, track } from '../ops';
+import { limited, limitKey, safeEqual, sendEmail, track } from '../ops';
 import { recordAcceptance } from './legal';
 import { promoteBootstrapAdmin } from '../admins';
 import { LIMITS } from '../limits';
 import type { AppEnv, UserRow } from '../env';
-import { getUser, newFriendCode, newHandle, newId, nowIso, randomCode, sessionUser, toUser } from '../db';
+import { DELETED_NAME_PROBLEM, getUser, isDeletedName, newFriendCode, newHandle, newId, nowIso, randomCode, sessionUser, toUser } from '../db';
 
 export const auth = new Hono<AppEnv>();
 
@@ -17,13 +17,7 @@ export async function hashPassword(password: string, salt: string): Promise<stri
   return Array.from(new Uint8Array(bits), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** Constant-time compare of two strings of the same kind (hex hashes). */
-export function safeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
+export { safeEqual };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EMAIL_MAX = 254;
@@ -98,6 +92,7 @@ auth.post('/signup', async (c) => {
   const salt = randomHex(16);
   const hash = await hashPassword(password, salt);
   const displayName = typeof body.displayName === 'string' ? body.displayName.trim().slice(0, 40) : '';
+  if (isDeletedName(displayName)) return c.json({ error: DELETED_NAME_PROBLEM }, 400);
 
   let user = await sessionUser(c);
   if (user && user.email) user = null; // already an account; make a new one rather than overwrite
@@ -137,7 +132,7 @@ auth.post('/signin', async (c) => {
   const wrong = { error: 'no account with that email and password' };
   if (!EMAIL_RE.test(email) || email.length > EMAIL_MAX || !password || password.length > 1024) return c.json(wrong, 401);
   // One account can only be tried so often, whatever the address it is tried from.
-  if (await limited(db, `signin-email:${email}`, LIMITS.signinEmail.max, LIMITS.signinEmail.windowSec)) return c.json({ error: 'too many tries, wait a minute' }, 429);
+  if (await limited(db, `signin-email:${await limitKey(c.env, email)}`, LIMITS.signinEmail.max, LIMITS.signinEmail.windowSec)) return c.json({ error: 'too many tries, wait a minute' }, 429);
   const user = await db.prepare('SELECT * FROM users WHERE email = ?').bind(email).first<UserRow>();
   if (!user || !user.password_hash || !user.password_salt) {
     await hashPassword(password, DECOY_SALT);
@@ -165,7 +160,7 @@ auth.post('/forgot', async (c) => {
   const body = await c.req.json<{ email?: string }>().catch(() => ({}) as { email?: string });
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   if (!EMAIL_RE.test(email) || email.length > EMAIL_MAX) return c.json({ error: 'that email does not look right' }, 400);
-  if (await limited(db, `forgot-email:${email}`, LIMITS.forgotEmail.max, LIMITS.forgotEmail.windowSec)) return c.json({ ok: true, minutes: RESET_MINUTES });
+  if (await limited(db, `forgot-email:${await limitKey(c.env, email)}`, LIMITS.forgotEmail.max, LIMITS.forgotEmail.windowSec)) return c.json({ ok: true, minutes: RESET_MINUTES });
   const user = await db.prepare('SELECT * FROM users WHERE email = ?').bind(email).first<UserRow>();
   if (user && user.password_hash) {
     const now = new Date();

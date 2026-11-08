@@ -3,21 +3,16 @@ import {
   DAILY_HABITS_MAX,
   addDays,
   CAUSE_WORDS,
-  classifyHabitTie,
   HABIT_MIN_TICKS,
   HABIT_TIE_MIN_DAYS,
   INSIGHT_BASIS_TAIL,
   MAX_NOT_TO_DO,
-  insightsFor,
   insightsForApp,
   isoWeekday,
   localStamp,
   money,
-  sameTask,
   splitCompare,
-  suggestRepeat,
   taskIsHabit,
-  suggestTime,
   taskKey,
   zonedToUtc,
   type Insight,
@@ -26,6 +21,7 @@ import {
   type PeriodNumbers,
   type RelationshipKey,
 } from './index';
+import { classifyHabitTie, insightsFor, sameTask, suggestRepeat, suggestTime } from './insights';
 
 // Emerging (2026-11-04): patterns from what a person already logs. Rules only; these tests pin every rule and its minimums.
 

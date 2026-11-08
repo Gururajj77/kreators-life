@@ -10,6 +10,9 @@ export function focusablesIn(root: HTMLElement): HTMLElement[] {
 /** Dialogs open right now, the last one on top: Escape and the Tab trap belong to the top one only. */
 const open: symbol[] = [];
 
+/** Whether a dialog still holds focus: until it has closed, focus moved elsewhere comes straight back (a modal one) or is handed on when it closes. */
+export const dialogOpen = () => open.length > 0;
+
 interface Options {
   /** A modal dialog keeps focus inside until it closes. A panel the page stays usable beside (the assistant, the reminders bubble) only wraps Tab at its ends. */
   modal?: boolean;
@@ -30,12 +33,21 @@ export function useDialogFocus(ref: RefObject<HTMLElement | null>, active: boole
     escape.current = onEscape;
   });
 
+  // What held focus as it opened, read while rendering: by the time the effect below runs, a field in the dialog with autoFocus already holds it,
+  // and focus would then go nowhere on closing (a form sheet opened from a button).
+  const opening = useRef(false);
+  const openedFrom = useRef<HTMLElement | null>(null);
+  if (active !== opening.current) {
+    opening.current = active;
+    if (active && typeof document !== 'undefined') openedFrom.current = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+  }
+
   useEffect(() => {
     const root = ref.current;
     if (!active || !root) return;
     const me = Symbol('dialog');
     open.push(me);
-    const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+    const opener = openedFrom.current;
     if (focusIn && !root.contains(document.activeElement)) {
       const target = root.querySelector<HTMLElement>('[data-autofocus]:not(:disabled)') ?? focusablesIn(root)[0] ?? root;
       if (target === root && !root.hasAttribute('tabindex')) root.setAttribute('tabindex', '-1');

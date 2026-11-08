@@ -1,6 +1,6 @@
 // The water card's second and third panels (settings, and the person's own reminders), downloaded after the first paint so Daily's and
 // Home's first download stays inside its budget; the card mounts them hidden, so what is typed in either is kept as before.
-import { MAX_CUSTOM_REMINDERS, REMINDER_TIME, REMINDER_TITLE_MAX, WATER_EVERY_CHOICES, WEEKDAY_NAMES, weekdaysLabel, type CustomReminder } from '@kreators/shared';
+import { MAX_CUSTOM_REMINDERS, REMINDER_TIME, REMINDER_TITLE_MAX, WEEKDAY_NAMES, weekdaysLabel, type CustomReminder } from '@kreators/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../lib/api';
@@ -8,39 +8,23 @@ import { ConfirmDelete } from './ConfirmDelete';
 import { Icon } from './Icon';
 import { Check } from 'lucide-react';
 import { FIELD } from '../lib/ui';
-import { Toggle } from './Toggle';
 import { ChipSelect } from './ChipSelect';
-import { msg, litres, shortDay, hhmm, minutesOf, withNow, GOALS, GLASSES, HOURS, everyLabel, useWaterActions } from './Reminders';
+import { msg, litres, shortDay, withNow, GOALS, GLASSES, useWaterActions } from './Reminders';
+import { clockOf } from '../lib/date';
 
-/** The water settings, the card's second panel: the reminder switch and five pickers (goal, glass, how often, from and to). */
+/** The water settings, the card's second panel: the daily goal and the size of a glass. Water sends no notes (2026-11-07), so nothing else is left to set. */
 export function WaterSettings() {
   const { q, settle } = useWaterActions();
   const w = q.data?.water;
   if (!w) return null;
-  const every = everyLabel(w);
   return (
     <>
-      <Toggle
-        compact
-        on={w.on}
-        onChange={(on) => settle.mutate({ on })}
-        disabled={settle.isPending}
-        label={
-          <>
-            <span className="block text-row-title text-ink">Remind me to drink</span>
-            <span className="block text-card-note text-ink-soft">Until the goal is met. Notes land in your Inbox.</span>
-          </>
-        }
-      />
-      {/* Five pickers in the look of the focus panel's: two to a row, How often across its own. */}
+      {/* Two pickers in the look of the focus panel's, side by side. */}
       <div className="mf-sets" role="group" aria-label="Water settings">
         <ChipSelect label="Daily goal" value={w.goalMl} valueLabel={litres(w.goalMl)} options={withNow(GOALS, w.goalMl, litres)} onChange={(goalMl) => settle.mutate({ goalMl })} />
         <ChipSelect label="A glass" value={w.glassMl} valueLabel={`${w.glassMl} ml`} options={withNow(GLASSES, w.glassMl, (n) => `${n} ml`)} onChange={(glassMl) => settle.mutate({ glassMl })} />
-        <ChipSelect label="How often" value={w.everyMin} valueLabel={`Every ${every}`} options={WATER_EVERY_CHOICES.map((m) => ({ value: m, label: `Every ${m / 60} hours` }))} onChange={(everyMin) => settle.mutate({ everyMin })} />
-        <ChipSelect label="From" value={minutesOf(w.from)} valueLabel={w.from} options={withNow(HOURS, minutesOf(w.from), hhmm)} onChange={(m) => settle.mutate({ from: hhmm(m) })} />
-        <ChipSelect label="To" value={minutesOf(w.to)} valueLabel={w.to} options={withNow(HOURS, minutesOf(w.to), hhmm)} onChange={(m) => settle.mutate({ to: hhmm(m) })} />
       </div>
-      <p className="mf-line">{w.on ? `A note every ${every}, ${w.from} to ${w.to}, until you reach ${litres(w.goalMl)}.` : 'Reminders are off. Your goal still shows on the panel.'}</p>
+      <p className="mf-line">{`That is ${w.goalGlasses} ${w.goalGlasses === 1 ? 'glass' : 'glasses'} of ${w.glassMl} ml a day.`}</p>
       {settle.error && <p role="alert" className="mf-line">{msg(settle.error)}</p>}
     </>
   );
@@ -100,7 +84,7 @@ export function YourReminders({ tasks = true, onLeave }: { tasks?: boolean; /** 
                 <span className="min-w-0">
                   <span className={`block text-row-title ${r.enabled ? '' : 'text-ink-soft line-through'}`}>{r.title}</span>
                   <span className="block text-card-note text-ink-soft">
-                    {r.time} · {weekdaysLabel(r.days)}
+                    {clockOf(r.time)} · {weekdaysLabel(r.days)}
                   </span>
                 </span>
               </label>
@@ -187,7 +171,7 @@ export function YourReminders({ tasks = true, onLeave }: { tasks?: boolean; /** 
                   <TickBox />
                   <span className="min-w-0">
                     <span className="block text-row-title">{t.title}</span>
-                    <span className="block text-card-note text-ink-soft">{t.day ? `${shortDay(t.day)} · ${t.time ?? '09:00'}` : 'No day yet, so no note'}</span>
+                    <span className="block text-card-note text-ink-soft">{t.day ? `${shortDay(t.day)} · ${clockOf(t.time ?? '09:00')}` : 'No day yet, so no note'}</span>
                   </span>
                 </label>
               </li>

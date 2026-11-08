@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { CAMPAIGN_STATUSES, type Campaign, type CampaignAssignment, type CampaignEvent, type Deliverable, type DeliverableVersion } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { audit, can, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, orgIdsOf, orgRole, str, pageOf, paged } from '../db';
+import { audit, can, httpUrl, LINK_PROBLEM, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, orgIdsOf, orgRole, str, pageOf, paged } from '../db';
 
 export const army = new Hono<AppEnv>();
 
@@ -187,7 +187,7 @@ export async function uploadVersion(db: D1Database, user: UserRow, deliverableId
   if (!d) return { ok: false, status: 404, error: 'not found' };
   const who = await whoFor(db, user, { id: d.campaign_id, organization_id: d.organization_id });
   if (who !== 'creator' && who !== 'staff') return { ok: false, status: 403, error: 'assigned creators upload work' };
-  if (!url) return { ok: false, status: 400, error: 'a link to the work' };
+  if (!httpUrl(url)) return { ok: false, status: 400, error: LINK_PROBLEM };
   const n = await db.prepare('SELECT COALESCE(MAX(version_number), 0) + 1 AS n FROM deliverable_versions WHERE deliverable_id = ?').bind(d.id).first<{ n: number }>();
   const id = newId();
   await db.batch([

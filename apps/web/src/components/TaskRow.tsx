@@ -1,8 +1,8 @@
-import { RELATIONSHIP_BY_KEY, mondayOf, taskIsHabit, timeLabel, type Node } from '@kreators/shared';
+import { RELATIONSHIP_BY_KEY, mondayOf, taskIsHabit, type Node } from '@kreators/shared';
 import { m as motion, useReducedMotion } from 'motion/react';
 import type { ReactNode } from 'react';
 import { ListChecks, Pencil } from 'lucide-react';
-import { dueLabel, todayLocal } from '../lib/date';
+import { dueLabel, todayLocal, clockOf } from '../lib/date';
 import { useTimeBlocks } from '../lib/useTimeBlocks';
 import { minutesUntil, useNow } from '../lib/useNow';
 import { CheckRow } from './CheckRow';
@@ -49,7 +49,7 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
     </StatusTag>
   ) : null;
 
-  const when = [task.dueTime ? timeLabel(task.dueTime) : null, task.estimateMin ? `${task.estimateMin} min` : null].filter(Boolean).join(' · ');
+  const when = [task.dueTime ? clockOf(task.dueTime) : null, task.estimateMin ? `${task.estimateMin} min` : null].filter(Boolean).join(' · ');
   const timeChip = when && !done ? <FactTag kind="when">{when}</FactTag> : null;
   // The block mark draws only once its block is found in the same cached read TaskTags uses (TaskBlockMark), so a row whose block is
   // its only mark never grows an empty band while that read loads, fails or misses the id.
@@ -67,6 +67,7 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
   return (
     <motion.li
       data-pillar={rel.key}
+      data-task-id={task.id}
       layout={!reduce}
       initial={{ opacity: 0, y: reduce ? 0 : 8 }}
       animate={{ opacity: 1, y: 0 }}

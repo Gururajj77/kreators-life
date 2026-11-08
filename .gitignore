@@ -18,4 +18,4 @@ scripts/smoke/server.log
 shubham.md
 videos
 scripts/cards/decks.json
-
+__pycache__

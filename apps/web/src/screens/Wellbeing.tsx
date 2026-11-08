@@ -1,4 +1,4 @@
-import { MODULE_BY_KEY, MOODS, STRESS_LEVELS, type LogKind, LOCALE } from '@kreators/shared';
+import { MODULE_BY_KEY, MOODS, STRESS_LEVELS, type LogKind } from '@kreators/shared';
 import { AppIcon } from '../components/AppIcon';
 import { Link, useNavigate } from 'react-router';
 import { useMutation } from '@tanstack/react-query';
@@ -20,6 +20,7 @@ import { ArrowUpRight, EyeOff } from 'lucide-react';
 import { CardHead } from '../components/CardHead';
 import { Icon } from '../components/Icon';
 import '../components/fx/spotlight';
+import { weekday } from '../lib/date';
 
 /** The four trackers; each wears its app's own icon from the registry. */
 const ROWS: { kind: LogKind; name: string; path: string; color: string; pillar: 'parent_child' | 'guru' | 'friendship' | 'lover_partner'; tint: string; max: number; format: (v: number | null) => string }[] = [
@@ -41,7 +42,7 @@ export function Wellbeing() {
   const refresh = useRefreshAll();
   const { modules } = useModules();
   // A tracker this person may switch (available, not locked) and has hidden. Hidden ones stay listed, tagged, and a tap shows them
-  // again with the same per-person switch the Apps page's Unhide uses, never a dead end on an "off" page.
+  // again with the same per-person switch the Apps page's eye uses, never a dead end on an "off" page.
   const modOf = (kind: LogKind) => modules.find((m) => m.key === kind) ?? null;
   const switchable = ROWS.filter((r) => {
     const m = modOf(r.kind);
@@ -109,7 +110,7 @@ export function Wellbeing() {
           </Hero>
         )}
       </header>
-      <PeriodPanel id="wellbeing-period" parts={['wellbeing', 'journal']} />
+      <PeriodPanel id="wellbeing-period" parts={['wellbeing', 'water', 'journal']} />
       <EmergenceSlot app="wellbeing" max={2} />
       {d && (
         <>
@@ -135,7 +136,7 @@ export function Wellbeing() {
               <EmojiRow
                 items={d.week.map((w) => {
                   const m = w.mood === null ? null : (MOODS.find((x) => x.value === w.mood) ?? null);
-                  return { label: new Date(`${w.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short' }).slice(0, 2), color: m?.color ?? null, mood: m?.value ?? null };
+                  return { label: weekday(w.date).slice(0, 2), color: m?.color ?? null, mood: m?.value ?? null };
                 })}
               />
             </div>
@@ -188,7 +189,7 @@ export function Wellbeing() {
           <ul className="mt-md flex list-none flex-col gap-xs p-0 m-0">
             {ROWS.map((r) => {
               const p = d.parts.find((x) => x.kind === r.kind);
-              const series = d.week.map((w) => (r.kind === 'mindful' ? w.mindful : r.kind === 'move' ? null : w[r.kind]));
+              const series = d.week.map((w) => (r.kind === 'mindful' ? w.mindful : r.kind === 'move' || r.kind === 'eat' ? null : w[r.kind]));
               const hidden = isHidden(r.kind);
               const inner = (
                 <>

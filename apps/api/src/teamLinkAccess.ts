@@ -1,7 +1,7 @@
 import type { Context, Next } from 'hono';
 import type { AppEnv } from './env';
 import { LIMITS } from './limits';
-import { limited, sha } from './ops';
+import { limited, limitKey, sha } from './ops';
 import { randomHex } from './routes/auth';
 import { nowIso } from './db';
 import { agencyFace, passwordMatches, PORTAL_SESSION_HOURS, type LockRow } from './portalAccess';
@@ -55,11 +55,6 @@ export function clearTeamLinkSessions(db: D1Database, clientId: string): D1Prepa
   return db.prepare('DELETE FROM team_link_sessions WHERE client_id = ?').bind(clientId);
 }
 
-/** The cron's tidy-up: team sessions past their twelve hours. */
-export async function pruneExpiredTeamLinkSessions(db: D1Database): Promise<void> {
-  await db.prepare('DELETE FROM team_link_sessions WHERE expires_at <= ?').bind(nowIso()).run();
-}
-
 /** The client behind a team link, in the lock row's shape (the team link's own hash and salt), or null. A switched-off link has no token. */
 export async function teamLockRowForToken(db: D1Database, token: string): Promise<LockRow | null> {
   if (!/^[A-Z0-9]{16}$/.test(token)) return null;
@@ -90,7 +85,7 @@ export async function unlockTeamLink(c: Context<AppEnv>, client: LockRow | null,
   const db = c.env.DB;
   const body = await c.req.json<{ password?: unknown }>().catch(() => ({}) as { password?: unknown });
   const password = typeof body.password === 'string' ? body.password.slice(0, 200) : '';
-  if (await limited(db, `team-link:${linkKey.slice(0, 64)}`, LIMITS.teamLinkLoginLink.max, LIMITS.teamLinkLoginLink.windowSec)) {
+  if (await limited(db, `team-link:${await limitKey(c.env, linkKey)}`, LIMITS.teamLinkLoginLink.max, LIMITS.teamLinkLoginLink.windowSec)) {
     c.set('logNote', 'team link unlock: too many tries on one link');
     return c.json({ error: 'too many tries, wait a minute' }, 429);
   }

@@ -52,6 +52,23 @@ export default defineConfig({
           if (id.includes('/packages/shared/src/agencyEmail')) return 'agency-email';
           // The value goals and projects on offer (a subpath export, text only the strategy session and the vibe check read).
           if (id.includes('/packages/shared/src/ladderChoices')) return 'ladder-choices';
+          // Daily's block hints (a subpath export: a suggestion inside a block and the quiet mismatch line), read only by the grouped view
+          // and the task form, both lazy; it imports the rest of shared and shared never imports it, so no cycle.
+          if (id.includes('/packages/shared/src/blockHints')) return 'block-hints';
+          // How each app works (HOW_TO, about 40 kB of text) left the barrel on 2026-11-07: help.ts is the subpath export
+          // `@kreators/shared/help`, read only by the How it works card (components/HowItWorksPanel.tsx, fetched the first time a screen
+          // shows the section) and the tests. It imports the rest of shared and nothing in the barrel imports it, so no cycle; the glossary
+          // (TERMS) stayed in the barrel as terms.ts. Before: entry 477.9 kB, first download 1,495.6 kB, shared 399.9 kB.
+          if (id.includes('/packages/shared/src/help.ts')) return 'shared-help';
+          // A lesson's resources (a subpath export that reads the rest of shared, like blockHints, and that nothing in the barrel imports), read only by the lazy cohort page.
+          if (id.includes('/packages/shared/src/lessonResources.ts')) return 'lesson-resources';
+          // Gratitude for the day's prompts (a subpath export and a leaf: it imports only types), read only by the Journal screen.
+          if (id.includes('/packages/shared/src/gratitude.ts')) return 'gratitude';
+          // Fitness's model (a subpath export: the movement kinds, the readers and the eating score) is a leaf (it imports only types), read by
+          // the Fitness screen and Kreators Run's tool, both lazy, so it loads with them and never with the first download.
+          if (id.includes('/packages/shared/src/fitness.ts')) return 'shared-fitness';
+          // A coach's report (a subpath export and a leaf: the section switches and the rules behind suggestions), read by the Coaching screens, both lazy.
+          if (id.includes('/packages/shared/src/coachReport.ts')) return 'shared-coach';
           // The line of the day (a long list of text) is a chunk of its own, which keeps the shared chunk under the 400 kB a chunk may
           // be. It must stay a leaf (lines.ts imports nothing): a split-off file that imports the rest of shared makes a cycle between
           // the two chunks and the app stops at "Cannot access before initialization" (design.ts did, 2026-11-04).
@@ -64,9 +81,12 @@ export default defineConfig({
           // imports nothing but types) are one chunk of their own, which kept the shared chunk under 400 kB once time blocks came in
           // (2026-11-06; circles joined when the block colours took it to 400.1 kB; dayKinds, the kinds-of-day reading and
           // `templateForDate`, joined with "Your kinds of day", importing only dates.ts beside it).
+          // dayTypes (the kinds of day, a list of text importing only a type) joined on 2026-11-07, when Daily's block hints and the
+          // inbox's kinds took the shared chunk to 400.3 kB. money (the currencies, `money()` and `typedCents`, importing only a type)
+          // joined the same day, when the year in Reviews, gratitude and Fitness took it to 400.1 kB.
           // Each must stay a leaf, for the reason above.
           if (id.includes('/packages/shared/src/focusRun.ts')) return 'shared-focus-run';
-          if (/\/packages\/shared\/src\/(core|dates|books|store|activity|circles|dayKinds)\.ts$/.test(id)) return 'shared-base';
+          if (/\/packages\/shared\/src\/(core|dates|books|store|activity|circles|dayKinds|dayTypes|money)\.ts$/.test(id)) return 'shared-base';
           if (id.includes('/packages/shared/src/')) return 'shared';
           // The icons the shared registries name (every app, setup tag, role...) are one map the shell needs, so it is a
           // chunk of its own: preloaded with the first download, but kept out of the entry's 480 kB budget.

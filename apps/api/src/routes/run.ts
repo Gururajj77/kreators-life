@@ -2,8 +2,10 @@ import { Hono, type Context } from 'hono';
 import { CHANNEL_LINES, channelCursor, channelMessageProblem, cleanChannelMessage, MAX_RUN_METRES, MAX_RUN_MINUTES, mentionsIn, normalizeCode, RUN_CODE_WINDOW, RUN_PACES, RUN_REWARD, RUN_TALK_DAYS_AFTER, runEntryState, runTalkClosesAt, runTalkOpen, weekStreak, type Run, type RunClub, type RunClubDetail, type RunCollab, type RunCollabApplication, type RunCollabsResponse, type RunEntry, type RunResponse, type RunTalk, type RunTalkLine, type RunTracking, type Page } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
 import { newRunCode, setRunCode } from '../attendee';
-import { anonAlias, audit, badgesNow, can, diffBadges, isStaff, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, orgIdsOf, orgRole, str, pageOf, paged } from '../db';
+import { anonAlias, audit, badgesNow, can, dayFromDevice, diffBadges, hiddenByBlock, isStaff, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, orgIdsOf, orgRole, seenBy, shiftDate, str, pageOf, paged } from '../db';
 import { blockBehind } from './community';
+import { LOG_COLS, logMoveFrom, removeMoveFrom, toMove, type LogRow } from '../fitness';
+import { RUN_TOOL_KINDS, type RunMovesResponse } from '@kreators/shared/fitness';
 
 /**
  * Kreators Run: run clubs like meetups, with one difference that makes the points honest. Every run has a start code
@@ -394,15 +396,17 @@ run.get('/collabs', async (c) => {
   const staff = can(user, 'events');
   const ask = pageOf(c);
   const appAsk = pageOf(c, 'a');
-  const [collabs, myClubs, mineApps, posterApps] = await Promise.all([
+  const [collabs, myClubs, posterApps] = await Promise.all([
     db.prepare(`${COLLAB} WHERE (c.status = 'open' AND c.ends_at >= ?) OR c.created_by = ? ORDER BY c.status = 'open' DESC, c.ends_at LIMIT ? OFFSET ?`).bind(now, user.id, ask.limit, ask.offset).all<CollabRow>(),
     db.prepare(`${CLUB} WHERE k.status = 'active' AND k.host_user_id = ?1 ORDER BY k.created_at`).bind(user.id, now).all<ClubRow>(),
-    db.prepare(`${APP} WHERE k.host_user_id = ? ORDER BY a.created_at DESC LIMIT 100`).bind(user.id).all<AppRow>(),
     db.prepare(`${APP} JOIN run_collabs c ON c.id = a.collab_id WHERE c.created_by = ? ${staff ? 'OR 1 = 1' : ''} ORDER BY a.created_at DESC LIMIT ? OFFSET ?`).bind(user.id, appAsk.limit, appAsk.offset).all<AppRow>(),
   ]);
   const titles = new Map(collabs.results.map((k) => [k.id, k.title]));
   const pg = paged(collabs.results, ask);
   const apg = paged(posterApps.results, appAsk);
+  // A host's own applications, only for the collabs on this page: never a bare cap that could leave one out.
+  const shown = pg.items.map((k) => k.id);
+  const mineApps = shown.length ? await db.prepare(`${APP} WHERE k.host_user_id = ?1 AND a.collab_id IN (${shown.map((_, i) => `?${i + 2}`).join(',')}) ORDER BY a.created_at DESC`).bind(user.id, ...shown).all<AppRow>() : { results: [] as AppRow[] };
   const res: RunCollabsResponse = {
     page: pg.page,
     collabs: pg.items.map((k) => toCollab(k, mineApps.results.filter((a) => a.collab_id === k.id).map(toApp), k.created_by === user.id || staff)),
@@ -468,7 +472,7 @@ run.post('/collabs/:id/apply', async (c) => {
   if (await db.prepare('SELECT 1 FROM run_collab_applications WHERE collab_id = ? AND club_id = ?').bind(collab.id, club.id).first()) return c.json({ error: 'this club already applied' }, 409);
   const id = newId();
   await db.prepare("INSERT INTO run_collab_applications (id, collab_id, club_id, user_id, note, status, created_at, decided_at) VALUES (?, ?, ?, ?, ?, 'applied', ?, NULL)").bind(id, collab.id, club.id, user.id, str(body.note, 1000), now).run();
-  await notify(db, collab.created_by, 'run', `${club.name} applied: ${collab.title}`, 'Accept or decline under Kreators Run, Brand collabs.', '/run?tab=collabs');
+  await notify(db, collab.created_by, 'collab', `${club.name} applied: ${collab.title}`, 'Accept or decline under Kreators Run, Brand collabs.', '/run?tab=collabs');
   return c.json({ application: { id, status: 'applied' } }, 201);
 });
 
@@ -484,7 +488,7 @@ run.post('/collabs/:id/applications/:appId', async (c) => {
   const status = oneOf(body.status, ['accepted', 'declined'] as const, 'declined');
   await db.prepare('UPDATE run_collab_applications SET status = ?, decided_at = ? WHERE id = ?').bind(status, nowIso(), app.id).run();
   await audit(db, user.id, 'run.collab.decide', 'run_collab_application', app.id, app.status, status);
-  await notify(db, app.user_id, 'run', status === 'accepted' ? `Accepted: ${collab.title}` : `Not this time: ${collab.title}`, status === 'accepted' ? `Giveaway for your runners: ${collab.giveaway}. Add a run and pick the collab.` : 'Thanks for applying.', `/run/clubs/${app.club_id}`);
+  await notify(db, app.user_id, 'collab', status === 'accepted' ? `Accepted: ${collab.title}` : `Not this time: ${collab.title}`, status === 'accepted' ? `Giveaway for your runners: ${collab.giveaway}. Add a run and pick the collab.` : 'Thanks for applying.', `/run/clubs/${app.club_id}`);
   return c.json({ ok: true });
 });
 
@@ -500,8 +504,8 @@ interface TalkRow { id: string; title: string; club_id: string; club_name: strin
 interface TalkListRow extends TalkRow { people: number; unread: number; last_line_at: string | null }
 interface LineRow { seq: number; id: string; user_id: string; body: string; anonymous: number; reply_to: string | null; created_at: string; display_name: string; handle: string | null }
 
-/** ?1 is always the person reading. */
-const TALK_NOT_BLOCKED = (col: string) => `NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ?1 AND b.blocked_id = ${col}) OR (b.blocker_id = ${col} AND b.blocked_id = ?1))`;
+/** ?1 is always the person reading; `alias` is the table holding the line. */
+const TALK_LINE_SHOWN = (alias: string) => `NOT ${hiddenByBlock('?1', `${alias}.user_id`, `${alias}.anonymous`)}`;
 /** Whether ?1 is one of run `r`'s people (joined with its club as `k`). */
 const TALK_PERSON = `(k.host_user_id = ?1
   OR EXISTS (SELECT 1 FROM run_members m WHERE m.club_id = r.club_id AND m.user_id = ?1 AND m.status = 'member' AND m.joined_at <= r.ends_at)
@@ -516,7 +520,7 @@ const TALK_LIST = `SELECT r.id, r.title, r.club_id, r.starts_at, r.ends_at, r.st
   (SELECT MAX(x.created_at) FROM run_messages x WHERE x.run_id = r.id AND x.deleted_at IS NULL) AS last_line_at,
   (SELECT COUNT(*) FROM (SELECT 1 FROM run_messages x WHERE x.run_id = r.id AND x.deleted_at IS NULL AND x.user_id != ?1
      AND x.created_at > COALESCE((SELECT d.last_read_at FROM run_discussion_reads d WHERE d.run_id = r.id AND d.user_id = ?1), '')
-     AND ${TALK_NOT_BLOCKED('x.user_id')} LIMIT 100)) AS unread
+     AND ${TALK_LINE_SHOWN('x')} LIMIT 100)) AS unread
   FROM runs r JOIN run_clubs k ON k.id = r.club_id`;
 
 const talkLink = (runId: string) => `/run?tab=talk&run=${runId}`;
@@ -549,7 +553,7 @@ async function presentRunLines(c: Context<AppEnv>, t: TalkRow, rows: LineRow[]):
   const parentIds = [...new Set(rows.map((r) => r.reply_to).filter((x): x is string => Boolean(x)))];
   const parents = new Map<string, { name: string; body: string }>();
   if (parentIds.length > 0) {
-    const ps = await c.env.DB.prepare(`SELECT m.id, m.user_id, m.body, m.anonymous, u.display_name FROM run_messages m JOIN users u ON u.id = m.user_id WHERE m.run_id = ?2 AND m.deleted_at IS NULL AND m.id IN (${parentIds.map((_, i) => `?${i + 3}`).join(',')}) AND ${TALK_NOT_BLOCKED('m.user_id')}`)
+    const ps = await c.env.DB.prepare(`SELECT m.id, m.user_id, m.body, m.anonymous, u.display_name FROM run_messages m JOIN users u ON u.id = m.user_id WHERE m.run_id = ?2 AND m.deleted_at IS NULL AND m.id IN (${parentIds.map((_, i) => `?${i + 3}`).join(',')}) AND ${TALK_LINE_SHOWN('m')}`)
       .bind(viewer.id, t.id, ...parentIds)
       .all<{ id: string; user_id: string; body: string; anonymous: number; display_name: string }>();
     for (const p of ps.results) parents.set(p.id, { name: p.anonymous === 1 ? await aliasOf(p.user_id) : nameOf(p), body: p.body.slice(0, 100) });
@@ -600,7 +604,7 @@ run.get('/talk/unread', async (c) => {
      WHERE r.status != 'cancelled' AND r.ends_at >= ?2 AND ${TALK_PERSON}
        AND EXISTS (SELECT 1 FROM run_messages x WHERE x.run_id = r.id AND x.deleted_at IS NULL AND x.user_id != ?1
          AND x.created_at > COALESCE((SELECT d.last_read_at FROM run_discussion_reads d WHERE d.run_id = r.id AND d.user_id = ?1), '')
-         AND ${TALK_NOT_BLOCKED('x.user_id')})`,
+         AND ${TALK_LINE_SHOWN('x')})`,
   )
     .bind(user.id, since)
     .first<{ n: number }>();
@@ -626,7 +630,7 @@ run.get('/talk/:runId/messages', async (c) => {
   const forward = after !== null;
   const cursor = after ?? before ?? 0;
   const rows = await db
-    .prepare(`${LINE_SQL} WHERE m.run_id = ?2 AND m.deleted_at IS NULL AND m.seq ${before ? '<' : '>'} ?3 AND ${TALK_NOT_BLOCKED('m.user_id')} ORDER BY m.seq ${forward ? 'ASC' : 'DESC'} LIMIT ?4`)
+    .prepare(`${LINE_SQL} WHERE m.run_id = ?2 AND m.deleted_at IS NULL AND m.seq ${before ? '<' : '>'} ?3 AND ${TALK_LINE_SHOWN('m')} ORDER BY m.seq ${forward ? 'ASC' : 'DESC'} LIMIT ?4`)
     .bind(user.id, t.id, cursor, CHANNEL_LINES + 1)
     .all<LineRow>();
   const more = rows.results.length > CHANNEL_LINES;
@@ -661,7 +665,7 @@ run.post('/talk/:runId/messages', async (c) => {
   let parent: { id: string; user_id: string } | null = null;
   if (typeof body.replyTo === 'string' && body.replyTo) {
     parent = await db
-      .prepare(`SELECT m.id, m.user_id FROM run_messages m WHERE m.id = ?2 AND m.run_id = ?3 AND m.deleted_at IS NULL AND ${TALK_NOT_BLOCKED('m.user_id')}`)
+      .prepare(`SELECT m.id, m.user_id FROM run_messages m WHERE m.id = ?2 AND m.run_id = ?3 AND m.deleted_at IS NULL AND ${TALK_LINE_SHOWN('m')}`)
       .bind(user.id, body.replyTo, t.id)
       .first<{ id: string; user_id: string }>();
     if (!parent) return c.json({ error: 'That line is gone.' }, 404);
@@ -680,7 +684,7 @@ run.post('/talk/:runId/messages', async (c) => {
     const named = await db
       .prepare(
         `SELECT u.id FROM users u, runs r JOIN run_clubs k ON k.id = r.club_id
-         WHERE r.id = ?2 AND u.handle IN (${handles.map((_, i) => `?${i + 3}`).join(',')}) AND u.id != ?1 AND ${TALK_NOT_BLOCKED('u.id')}
+         WHERE r.id = ?2 AND u.handle IN (${handles.map((_, i) => `?${i + 3}`).join(',')}) AND u.id != ?1 AND NOT ${hiddenByBlock('u.id', '?1', anonymous ? '1' : '0')}
            AND u.id IN (${TALK_PEOPLE})`,
       )
       .bind(user.id, t.id, ...handles)
@@ -688,7 +692,7 @@ run.post('/talk/:runId/messages', async (c) => {
     for (const r of named.results) told.add(r.id);
     await notifyMany(db, [...told], 'mention', `${label} mentioned you in ${t.title}`, text.slice(0, 120), talkLink(t.id));
   }
-  if (parent && parent.user_id !== user.id && !told.has(parent.user_id)) await notify(db, parent.user_id, 'reply', `${label} replied to you in ${t.title}`, text.slice(0, 120), talkLink(t.id));
+  if (parent && !told.has(parent.user_id) && (await seenBy(db, user.id, anonymous, [parent.user_id])).has(parent.user_id)) await notify(db, parent.user_id, 'reply', `${label} replied to you in ${t.title}`, text.slice(0, 120), talkLink(t.id));
   const saved = await db.prepare(`${LINE_SQL} WHERE m.id = ?`).bind(id).first<LineRow>();
   return c.json({ line: saved ? ((await presentRunLines(c, t, [saved]))[0] ?? null) : null, seq: res.meta.last_row_id }, 201);
 });
@@ -718,7 +722,7 @@ run.post('/talk/:runId/messages/:mid/report', async (c) => {
   const t = await talkFor(db, user, c.req.param('runId'));
   if (!t) return c.json({ error: 'not found' }, 404);
   const line = await db
-    .prepare(`SELECT m.id, m.seq, m.user_id, m.body FROM run_messages m WHERE m.id = ?2 AND m.run_id = ?3 AND m.deleted_at IS NULL AND ${TALK_NOT_BLOCKED('m.user_id')}`)
+    .prepare(`SELECT m.id, m.seq, m.user_id, m.body FROM run_messages m WHERE m.id = ?2 AND m.run_id = ?3 AND m.deleted_at IS NULL AND ${TALK_LINE_SHOWN('m')}`)
     .bind(user.id, c.req.param('mid'), t.id)
     .first<{ id: string; seq: number; user_id: string; body: string }>();
   if (!line) return c.json({ error: 'not found' }, 404);
@@ -740,3 +744,18 @@ run.post('/talk/:runId/messages/:mid/block-author', async (c) => {
   // An anonymous writer is blocked under the run's made-up name for them, so Bond never names them.
   return blockBehind(c, line?.user_id, line?.anonymous === 1 ? await anonAlias(c.env, line.user_id, `run:${t.id}`) : null);
 });
+
+// ---- Log a run or walk on your own (2026-11-07): the same movement log as Fitness (one action, two callers, ../fitness.ts), apart
+// from a club entry. It needs no club and no start code, and it pays nothing: no xp, no points, and no run badge (those count club
+// entries only). It counts as movement in Life, like every movement log.
+run.get('/move', async (c) => {
+  const day = dayFromDevice(c.req.query('day'));
+  const rows = await c.env.DB.prepare(`SELECT ${LOG_COLS} FROM wellbeing_logs WHERE user_id = ? AND kind = 'move' AND date >= ? AND date <= ? ORDER BY date DESC, created_at DESC LIMIT 60`)
+    .bind(c.get('user').id, shiftDate(day, -6), day)
+    .all<LogRow>();
+  const moves = rows.results.map(toMove).filter((m) => m.source === 'self' && RUN_TOOL_KINDS.includes(m.kind));
+  const res: RunMovesResponse = { day, moves, minutes: moves.reduce((a, m) => a + m.minutes, 0) };
+  return c.json(res);
+});
+run.post('/move', (c) => logMoveFrom(c, RUN_TOOL_KINDS));
+run.delete('/move/:id', (c) => removeMoveFrom(c, RUN_TOOL_KINDS));

@@ -1,4 +1,4 @@
-import { PRODUCT_KIND_META, productHasOwnCover, BADGES, HONORS, RELATIONSHIPS, LOCALE, formatCount } from '@kreators/shared';
+import { BADGE_FAMILIES, PRODUCT_KIND_META, productHasOwnCover, BADGES, HONORS, RELATIONSHIPS, formatCount } from '@kreators/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Inert } from '../components/Inert';
 import { useState } from 'react';
@@ -19,9 +19,9 @@ import { Reveal } from '../components/fx/Reveal';
 import { PenLine } from 'lucide-react';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
-import { bento } from '../lib/bento';
 import { captureRef, useSession } from '../lib/store';
 import { Stars } from '../components/Stars';
+import { TileGroups } from '../components/TileGroups';
 import { IconTag } from '../components/FactTag';
 import { CardHead } from '../components/CardHead';
 import '../components/fx/spotlight';
@@ -29,6 +29,7 @@ import { useMe } from '../lib/queries';
 import { useSeedOnce } from '../lib/useSeed';
 import { FIELD } from '../lib/ui';
 import { SITE_SECONDARY } from '../site/buttons';
+import { dateTime, monthYear, shortDate } from '../lib/date';
 
 const SOCIAL_LABEL = { instagram: 'Instagram', youtube: 'YouTube', x: 'X', website: 'Website' } as const;
 type SocialKey = keyof typeof SOCIAL_LABEL;
@@ -64,6 +65,9 @@ function SocialIcon({ k }: { k: SocialKey }) {
     </svg>
   );
 }
+
+/** Badges and honors: two to a row on a phone, three from the tablet, in even rows (lib/bento.ts). */
+const MEDAL_COLS = { base: 2, md: 3 } as const;
 
 export function Public() {
   const { handle = '', id = '' } = useParams();
@@ -116,6 +120,8 @@ export function Public() {
     ) : null;
   const socialKeys = d ? (Object.keys(SOCIAL_LABEL) as SocialKey[]).filter((k) => d.socials[k]) : [];
   const hasSocials = socialKeys.length > 0;
+  // Badges and honors in one grid, two to a row on a phone and three from the tablet, in even rows (lib/bento.ts).
+  const medals = d ? [...d.badges.map((k) => BADGES.find((b) => b.key === k)).filter((b) => b !== undefined), ...d.honors.map((k) => HONORS.find((h) => h.key === k)).filter((h) => h !== undefined)] : [];
 
   return (
     <Screen tabs={false}>
@@ -255,7 +261,7 @@ export function Public() {
                         <span className="block text-card-title">{p.title}</span>
                         <span className="block text-card-note text-ink-soft">
                           {meta.name}
-                          {p.kind === 'event' && p.startsAt ? `, ${new Date(p.startsAt).toLocaleString(LOCALE, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''}
+                          {p.kind === 'event' && p.startsAt ? `, ${dateTime(p.startsAt)}` : ''}
                           {p.rating ? `, rated ${p.rating}` : ''}
                         </span>
                       </span>
@@ -297,7 +303,7 @@ export function Public() {
                   </li>
                 ))}
               </ul>
-              <p className="mt-sm m-0 text-caption text-ink-soft">Member since {new Date(d.activity.memberSince).toLocaleDateString(LOCALE, { month: 'short', year: 'numeric' })}.</p>
+              <p className="mt-sm m-0 text-caption text-ink-soft">Member since {monthYear(d.activity.memberSince)}.</p>
             </Reveal>
           )}
           {(d.badges.length > 0 || d.honors.length > 0) && (
@@ -306,18 +312,26 @@ export function Public() {
                 Badges
               </h2>
               <p className="mt-xs m-0 text-subhead text-ink-soft">Earned here, or given by the kreators.app team.</p>
-              <ul className="mt-sm grid list-none grid-cols-2 gap-xs p-0 m-0 md:grid-cols-3">
-                {[...d.badges.map((k) => BADGES.find((b) => b.key === k)).filter((b) => b !== undefined), ...d.honors.map((k) => HONORS.find((h) => h.key === k)).filter((h) => h !== undefined)].map((b, i, all) => (
-                  // bento: the first tiles take two columns until the last row is full, so the grid never ends in a lone tile or a hole.
-                  // The name and how it is earned at the top left, the medal in the top right corner (the card rules, 2026-11-05).
-                  <li key={b.key} className={`fx-spot rounded-tile bg-card p-sm shadow-toy-soft ${bento(i, all.length, 2, 3)}`}>
+              {/* Even rows in each part: every row full and its tiles one width, so a grid never ends in a lone tile or a hole. Past ten, by family (TileGroups).
+                  The name and how it is earned at the top left, the medal in the top right corner (the card rules, 2026-11-05). */}
+              <TileGroups
+                className="mt-sm"
+                list
+                cols={MEDAL_COLS}
+                flat={medals}
+                groups={[
+                  ...BADGE_FAMILIES.map((f) => ({ key: f, name: f, tiles: medals.filter((b) => 'family' in b && b.family === f) })),
+                  { key: 'awarded', name: 'Awarded', tiles: medals.filter((b) => !('family' in b)) },
+                ]}
+                render={(b, className) => (
+                  <li key={b.key} className={`fx-spot rounded-tile bg-card p-sm shadow-toy-soft ${className}`}>
                     <CardHead tag={<BadgeMedal k={b.key} size="sm" decorative />}>
                       <p className="m-0 text-balance text-card-title">{b.name}</p>
                       <p className="m-0 text-card-note text-ink-soft">{b.how}</p>
                     </CardHead>
                   </li>
-                ))}
-              </ul>
+                )}
+              />
             </Reveal>
           )}
           {d.posts.length > 0 && (
@@ -336,7 +350,7 @@ export function Public() {
                 {d.posts.map((p) => (
                   <li key={p.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
                     <p className="m-0 text-caption text-ink-soft">
-                      {p.category}, {new Date(p.createdAt).toLocaleDateString(LOCALE, { month: 'short', day: 'numeric' })}
+                      {p.category}, {shortDate(p.createdAt)}
                     </p>
                     <p className="mt-xs m-0 whitespace-pre-wrap text-prose"><Inert text={p.body} /></p>
                     <p className="mt-xs m-0 text-caption text-ink-soft">

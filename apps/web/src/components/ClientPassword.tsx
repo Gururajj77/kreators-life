@@ -1,7 +1,7 @@
 import { PORTAL_PASSWORD_MIN, makePortalPassword, portalPasswordProblem, type ClientLifecycle } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { MoreHorizontal, ShieldOff, Sparkles, X } from 'lucide-react';
-import { useEffect, useId, useState, type CSSProperties, type FormEvent } from 'react';
+import { useEffect, useId, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { ApiError, api } from '../lib/api';
 import { useCopy } from '../lib/clipboard';
@@ -16,6 +16,7 @@ import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
 import { CardHead } from './CardHead';
 import { ToggleChevron } from './ToggleMark';
+import { RED_YES } from '../lib/ui';
 
 /**
  * The password on a client's link, in one module (2026-11-04, wave 11). The password is the owner's: only they set, change, generate or
@@ -180,8 +181,6 @@ export function ShownOnce({ password, note = COPY.shownOnce }: { password: strin
 }
 
 /** The red yes of a confirm sheet (the look `ConfirmSheet` and Sign out use), beside an outline Keep. */
-const RED_YES = 'toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill disabled:opacity-50';
-const RED_YES_STYLE = { '--toy-color': 'var(--deep-servant_leader)' } as CSSProperties;
 
 type Done = null | { kind: 'saved'; password: string | null } | { kind: 'removed' } | { kind: 'dismissed' };
 
@@ -406,7 +405,7 @@ export function ClientPassword({
               </p>
             )}
             <div className="mt-md flex flex-wrap gap-xs pb-xl">
-              <button type="button" onClick={() => remove.mutate()} disabled={remove.isPending} className={RED_YES} style={RED_YES_STYLE}>
+              <button type="button" onClick={() => remove.mutate()} disabled={remove.isPending} className={RED_YES}>
                 {remove.isPending ? 'Removing' : 'Yes, remove it'}
               </button>
               <Button variant="outline" onClick={() => setRemoving(false)}>

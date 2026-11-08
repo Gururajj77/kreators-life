@@ -1,4 +1,4 @@
-import { RELATIONSHIP_BY_KEY, LOCALE } from '@kreators/shared';
+import { RELATIONSHIP_BY_KEY } from '@kreators/shared';
 import { useEffect, useState } from 'react';
 import { Button } from '../components/Button';
 import { StatTile } from '../components/Charts';
@@ -10,6 +10,7 @@ import { api } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
 import { useParamState } from '../lib/useParamState';
 import { FIELD_FILTER } from '../lib/ui';
+import { clockSeconds, shortDate } from '../lib/date';
 
 const LEVELS: [string, string][] = [
   ['', 'Every line'],
@@ -20,7 +21,7 @@ const LEVELS: [string, string][] = [
 const LEVEL_ITEMS = LEVELS.map(([key, label]) => ({ key, label }));
 const TONE = { error: RELATIONSHIP_BY_KEY.servant_leader.color, warn: RELATIONSHIP_BY_KEY.friendship.color, info: RELATIONSHIP_BY_KEY.self.color } as const;
 const WORD = { error: 'Error', warn: 'Refused', info: 'Change' } as const;
-const clock = (iso: string) => new Date(iso).toLocaleString(LOCALE, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' });
+const clock = (iso: string) => `${shortDate(iso)}, ${clockSeconds(iso)}`;
 
 /**
  * The app's own log, as data: what happened, where, by whom and how it went, newest first. For super admins, because it names people.
@@ -55,7 +56,7 @@ export function Logs() {
 
   return (
     <Screen howTo={false}>
-      <PageHeader back={{ to: '/internal/observability', label: 'Observability' }} eyebrow="Operations" title="Logs" lede="What is happening, where and by whom. Changes, refused requests and errors. Lines are kept for thirty days." />
+      <PageHeader back={{ to: '/internal/observability', label: 'Dev Tools' }} eyebrow="Operations" title="Logs" lede="What is happening, where and by whom. Changes, refused requests and errors. Lines are kept for thirty days." />
 
       {!isAdmin && me.data && (
         <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-subhead">
@@ -160,7 +161,7 @@ export function Logs() {
                   {l.actorId && l.actorName ? (
                     <>
                       By{' '}
-                      <button type="button" onClick={() => { setActor(l.actorId!); pg.reset(); }} className="font-bold underline underline-offset-4" aria-label={`Show only the lines by ${l.actorName}`}>
+                      <button type="button" onClick={() => { setActor(l.actorId!); pg.reset(); }} className="relative font-bold underline underline-offset-4 before:absolute before:-inset-x-xs before:-inset-y-[15px] before:min-w-[44px] before:content-['']" aria-label={`Show only the lines by ${l.actorName}`}>
                         {l.actorName}
                       </button>
                     </>

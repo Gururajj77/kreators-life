@@ -18,7 +18,7 @@ The header has **Start over** and **Close**. What you finish stays saved, so you
 
 For each relationship, you see a list of feelings, from Shame and Fear up through Courage to Oneness. Each one comes with how it sounds in your head, like "I'm scared and I'm doing it anyway" for Courage.
 
-1. Tick every feeling you have in that relationship, on good days and on bad ones.
+1. Tick every feeling you have in that relationship, on good days and on bad ones. Each feeling carries two tags: its number on the scale and its dimension. You still pick by the words.
 2. If words come easier than lists, open **Say it in your own words**. Type how it feels, then tap **Read my words**. It suggests feelings, and you choose which to tick. With a plan, **Read with AI** does the same with a model.
 3. Love, Teachers and Faith have a switch, **Not part of my life right now**. Set one aside and it stays out of your focus and gets no pyramid.
 
@@ -58,12 +58,13 @@ Bumling shows your map and suggests up to two relationships to work on first. Fl
 - **Your routine:** six blocks for the day. They are the morning routine, food and water, work, people, learning and reflection, and lights out. Only the morning has steps to tick. Each week you keep your deal, wake-up moves thirty minutes earlier, toward 6:30.
 - **Practices:** Lumen offers a mantra, a breathing exercise, a line to say and something to read. You can use your own words, or none for now.
 - **The contract:** how many days a week you will keep the routine (five to start), a check-in time, and what a short week costs. You pick from three: the streak breaks, unlocks wait, or the coach sees it. You sign by typing your name, then tap **Sign it**.
+- **The live call:** a switch on the same card, **I would like a live call with a coach**. A person goes through your answers with you, for ₹10,000. Say yes and your ask goes to the team, who write to you to set a time. Nothing is charged yet, and saying no changes nothing. You can also ask later from the contract on your life map.
 
 On your check-in time, a reminder lands in your inbox on any day you have not checked in.
 
 ## Part six: your pillars
 
-Now each focus pillar's guide asks its short questions. A question with choices also has **Write my own**. Then one card lets you pick the value goal and project for each pillar. Tap **Build my pillars**, and the pyramids are made. The chat ends with **Open my pillars**, or **Add my interests** first.
+Now each focus pillar's guide asks its short questions. A question with choices also has **Write my own**. Then one card lets you pick the value goal and project for each pillar, from six of each, each with a plain why. Tap **Build my pillars**, and the pyramids are made. The chat ends with **Open my pillars**, or **Add my interests** first.
 
 ## Your life map
 

@@ -61,7 +61,13 @@ const time = (v: unknown, fb: string) => (typeof v === 'string' && TIME_RE.test(
 
 /** Everything the session holds for one person on a date. Also read for a student by their life coach, who gets only the parts that student shares. */
 export async function latest(db: D1Database, userId: string, date: string): Promise<SessionResponse> {
-  const a = await db.prepare("SELECT * FROM assessments WHERE user_id = ? AND kind = 'onboard' ORDER BY created_at DESC LIMIT 1").bind(userId).first<ARow>();
+  // Independent reads go out together, so the assistant's get_routine and the screens cost one trip here, not four.
+  const [a, r, c, days] = await Promise.all([
+    db.prepare("SELECT * FROM assessments WHERE user_id = ? AND kind = 'onboard' ORDER BY created_at DESC LIMIT 1").bind(userId).first<ARow>(),
+    db.prepare('SELECT * FROM routines WHERE user_id = ? ORDER BY created_at DESC LIMIT 1').bind(userId).first<RRow>(),
+    db.prepare('SELECT * FROM contracts WHERE user_id = ? ORDER BY signed_at DESC LIMIT 1').bind(userId).first<CRow>(),
+    db.prepare('SELECT day, day_type, steps_json, done FROM routine_days WHERE user_id = ? AND day > ? AND day <= ?').bind(userId, shiftDate(date, -7), date).all<DRow>(),
+  ]);
   let assessment: Assessment | null = null;
   if (a) {
     const ps = await db.prepare('SELECT relationship, core_level, floor_level, evidence FROM placements WHERE assessment_id = ?').bind(a.id).all<PRow>();
@@ -81,9 +87,6 @@ export async function latest(db: D1Database, userId: string, date: string): Prom
       createdAt: a.created_at,
     };
   }
-  const r = await db.prepare('SELECT * FROM routines WHERE user_id = ? ORDER BY created_at DESC LIMIT 1').bind(userId).first<RRow>();
-  const c = await db.prepare('SELECT * FROM contracts WHERE user_id = ? ORDER BY signed_at DESC LIMIT 1').bind(userId).first<CRow>();
-  const days = await db.prepare('SELECT day, day_type, steps_json, done FROM routine_days WHERE user_id = ? AND day > ? AND day <= ?').bind(userId, shiftDate(date, -7), date).all<DRow>();
   const byDay = new Map(days.results.map((d) => [d.day, d]));
   const today = byDay.get(date);
   const week = Array.from({ length: 7 }, (_, i) => shiftDate(date, i - 6)).map((d) => (byDay.has(d) ? byDay.get(d)!.done === 1 : null));

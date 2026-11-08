@@ -10,7 +10,8 @@ import { LOVE_KEYS, LOVE_LANGUAGES, LOVE_PAIRS, MIND_SCREENS, TYPE_NAMES, TYPE_S
 import { invoiceTotals, tdsGrossupNote } from './index';
 import { MONTH_RE, MONTH_TASKS_MAX, monthGrid, monthShift, productPayWays } from './index';
 import { nextOccurrence, openDay, parsePriority, parseRepeat, priorityTag, repeatLabel, isTaskSort, sortTasks, type Priority, type Repeat, type RepeatKind } from './index';
-import { BADGES as ALL_BADGES, HOW_TO, kmLabel, MODULES as MODS, paceLabel, RUN_BADGES, runEntryState, TERMS, termGroups, weekStart, weekStreak } from './index';
+import { BADGES as ALL_BADGES, kmLabel, MODULES as MODS, paceLabel, RUN_BADGES, runEntryState, TERMS, termGroups, weekStart, weekStreak } from './index';
+import { HOW_TO } from './help';
 import { earningGuide, nextBadge, unlockFor } from './index';
 import { ageOn, birthDateProblem, MIN_AGE, normalizePhone, phoneProblem } from './index';
 import { BRAND_SOURCE_KINDS, BRAND_SOURCE_META, PIECE_KINDS, PIECE_META, RESEARCH_KINDS, RESEARCH_META, sourceKindOf, strategyPath, threadOrder, anonAliasFrom, MAX_REPLY_DEPTH } from './index';
@@ -1712,10 +1713,18 @@ describe('the contract templates', () => {
     }
   });
   it('survives being read back, and names no brand but the person\'s own', () => {
+    // A name is a word the templates only ever write with a capital, and contact details are an address or a long number. So any name fails
+    // here unless someone adds it to this list of plain words, and this file never has to hold a real one.
+    const PLAIN_CAPITALS = new Set(['Address', 'Approach', 'Appropriate', 'Audio', 'B', 'Background', 'CAC', 'CTA', 'Camera', 'Caption', 'Challenges', 'Clean', 'Closing', 'Conflicts', 'Core', 'Creator', 'Debates', 'Demonstrate', 'Design', 'Disclaimer', 'Drive', 'Email', 'GOVERNING', 'GST', 'Generate', 'Guessing', 'Half', 'Hypothesis', 'INR', 'IP', 'India', 'Integration', 'Language', 'Learn', 'Length', 'Lighting', 'Motion', 'Music', 'Negative', 'Negotiables', 'Nothing', 'Objectives', 'Organic', 'Per', 'Personal', 'Phone', 'Positive', 'Quality', 'Quantities', 'ROAS', 'Rankings', 'Removing', 'Representation', 'Representative', 'Required', 'Reviews', 'Sound', 'Step', 'Target', 'Things', 'Transition', 'Two', 'Typography', 'UGC', 'Until', 'Viewer']);
+    const inLowerCase = new Set(CONTRACT_TEMPLATES.flatMap((t) => JSON.stringify(t.doc).match(/\b[a-z]+\b/g) ?? []));
     for (const t of CONTRACT_TEMPLATES) {
       const back = parseContractDoc(JSON.parse(JSON.stringify(t.doc)));
       expect(back?.sections.length).toBe(t.doc.sections.length);
-      expect(JSON.stringify(t.doc)).not.toMatch(/Kreators|Shubham|BrandingBum|Vox ?pop/i);
+      const doc = JSON.stringify(t.doc);
+      expect(doc, t.key).not.toMatch(/@|www\.|https?:|\w\.(?:app|com|in|org|net|co)\b|\d{5,}/i);
+      for (const word of doc.match(/\b[A-Z][A-Za-z]*\b/g) ?? []) {
+        if (!inLowerCase.has(word.toLowerCase())) expect(PLAIN_CAPITALS.has(word), `${t.key}: ${word}`).toBe(true);
+      }
     }
   });
   it('fills what it knows and leaves a blank line for the rest', () => {
@@ -2224,17 +2233,6 @@ describeFixes('typed money becomes cents without a float', () => {
     expectFix(Number.isNaN(typedCents('abc'))).toBe(true);
     expectFix(Number.isNaN(typedCents('1e21'))).toBe(true);
     expectFix(kpiFromInput('money', 1.005)).toBe(101);
-  });
-});
-
-import { pastWaterNote } from './index';
-describeFixes('water reminders from a day that is over', () => {
-  itFixes('only a line from an earlier day is past', () => {
-    expectFix(pastWaterNote('water-abc-123-2026-10-31', '2026-11-01')).toBe(true);
-    expectFix(pastWaterNote('water-abc-123-2026-11-01', '2026-11-01')).toBe(false);
-    expectFix(pastWaterNote('water-abc-123-2026-11-02', '2026-11-01')).toBe(false);
-    expectFix(pastWaterNote('task-abc-2026-10-31', '2026-11-01')).toBe(false);
-    expectFix(pastWaterNote('water-bad', '2026-11-01')).toBe(false);
   });
 });
 

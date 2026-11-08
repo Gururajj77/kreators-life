@@ -49,7 +49,7 @@ else
   fi
   # Secrets for this server only: an admin key and a founder address the checks sign up with.
   (cd apps/api && exec pnpm exec wrangler dev --port "$PORT" --persist-to "$STATE" --test-scheduled \
-      --var ADMIN_KEY:smoke-admin-key --var ADMIN_EMAILS:founder@smoke.test --var CLICK_SALT:smoke-salt "${MODEL_VARS[@]}" \
+      --var ADMIN_KEY:smoke-admin-key --var ADMIN_EMAILS:founder@smoke.test --var CLICK_SALT:smoke-salt --var D1_GUARD:1 "${MODEL_VARS[@]}" \
       > "$HERE/server.log" 2>&1) &
   SERVER_PID=$!
   STARTED=1

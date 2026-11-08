@@ -24,7 +24,7 @@ const PURPOSE_ICON: Record<ConsentPurpose['key'], LucideIcon> = { attribution: L
 const CHAT_PATHS = ['/onboarding', '/session'];
 
 /**
- * The one-time privacy question, and, for an account made before the terms were written down, the terms notice once.
+ * The one-time privacy question, and, for an account that has not accepted this `LEGAL_VERSION`, the terms notice once.
  * Compact by default: one short line with Accept all and Reject all, equally easy, and a quiet "Choose for each" that unfolds
  * the three choices as switches inside the card itself (2026-11-06, no sheet over the page): the card grows, in the page's flow on
  * a public phone page and upward from the bottom edge elsewhere. All three start off. On a laptop it is a small glass card at the bottom left, low
@@ -157,7 +157,7 @@ export function ConsentPopup() {
       {step === 'terms' ? (
         <div className="flex flex-col gap-xs">
           <p className="m-0 text-subhead text-ink-soft">
-            <span className="font-bold text-ink">Our terms are in plain words now</span> (version {LEGAL_VERSION}). Please read the{' '}
+            <span className="font-bold text-ink">Our terms and privacy policy changed</span> (version {LEGAL_VERSION}). Please read the{' '}
             <Link to="/terms" target="_blank" className="font-bold text-ink underline underline-offset-4">
               terms of use
             </Link>{' '}

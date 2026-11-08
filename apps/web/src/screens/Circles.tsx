@@ -1,4 +1,4 @@
-import { CIRCLE_STATUS_META, CIRCLE_STATUSES, dressCodeFor, INTERESTS, type CircleEvent, type CircleStatus, LOCALE } from '@kreators/shared';
+import { CIRCLE_STATUS_META, CIRCLE_STATUSES, dressCodeFor, INTERESTS, type CircleEvent, type CircleStatus } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Inert } from '../components/Inert';
 import { useEffect, useRef, useState } from 'react';
@@ -20,11 +20,11 @@ import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
 import { useSeedOnce } from '../lib/useSeed';
 import { useNow } from '../lib/useNow';
 import { FIELD } from '../lib/ui';
-import { eventTime } from '../lib/date';
+import { eventTime, clockTime, weekday } from '../lib/date';
 import { StatusTag } from '../components/StatusTag';
 
 const when = eventTime;
-const weekly = (iso: string) => `Every ${new Date(iso).toLocaleDateString(LOCALE, { weekday: 'long' })} at ${new Date(iso).toLocaleTimeString(LOCALE, { hour: 'numeric', minute: '2-digit' })}`;
+const weekly = (iso: string) => `Every ${weekday(iso, 'long')} at ${clockTime(iso)}`;
 const countdown = (iso: string, now: number) => {
   const ms = new Date(iso).getTime() - now;
   if (ms <= 0) return 'now';

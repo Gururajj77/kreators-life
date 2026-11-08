@@ -1,5 +1,5 @@
 # Signing up and the setup chat
-Riya edits videos in Pune. She posts her own Reels, and she edits for brands on the side. Today she opens kreators.app for the first time. In a few taps the app should know who she is and switch on what fits her.
+Riya edits videos in Pune. She posts her own Reels, and she edits for brands on the side. Today she opens kreators.app for the first time. In a few taps the app should know who she is and show what fits her.
 
 In this lesson you'll learn:
 
@@ -52,11 +52,11 @@ After each answer, Bumling says it back in plain words. Under every question sit
 
 ## Step five: the apps
 
-Bumling shows a short list of apps, each with one line. Since Riya said time is tight, the list is short on purpose. **Why these apps?** shows the reason for each one. She could untick any app she does not want. She keeps all three and taps **Switch on 3 apps**. Every other app the chat can switch is turned off, and she can turn any of them on later.
+Bumling shows a short list of apps, each with one line. Since Riya said time is tight, the list is short on purpose. **Why these apps?** shows the reason for each one. She could untick any app she does not want. She keeps all three and taps **Show 3 apps**. Every other app the chat can show or hide is hidden, and she can show any of them later.
 
 The last card offers a few next steps: **Go to Home**, the strategy session, the Discover quiz, and **Add my interests**. Riya picks Go to Home.
 
-> **Pro tip:** tell new people they can run this again any time. On the Profile tab, **Change my tags and apps** opens the same chat with their last answers filled in.
+> **Pro tip:** tell new people they can run this again any time. On the Profile tab, **Match my apps again** opens the same chat with their last answers filled in.
 
 ## Step six: the privacy card
 

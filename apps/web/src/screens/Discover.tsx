@@ -1,30 +1,4 @@
-import {
-  DISCOVER_CORE_STEPS,
-  DISCOVER_SCENES,
-  EQ_DIMS,
-  EQ_FEELINGS,
-  EQ_PEOPLE,
-  EQ_READING,
-  EQ_SCALE,
-  puzzleAt,
-  DISCOVER_SECTIONS,
-  DISCOVER_STATEMENTS,
-  DISCOVER_STEPS,
-  DISCOVER_STRENGTHS,
-  analyseDiscover,
-  DISCOVER_TRIADS,
-  DISCOVER_WORDS,
-  RELATIONSHIP_BY_KEY,
-  TRAITS,
-  isExtraKind,
-  type ExtraKind,
-  discoverProgress,
-  emptyDiscoverAnswers,
-  type DiscoverAnswers,
-  type DiscoverPuzzle,
-  type PuzzleKind,
-  type DiscoverResult,
-  type PuzzleCell, LOCALE } from '@kreators/shared';
+import { DISCOVER_CORE_STEPS, DISCOVER_SCENES, EQ_DIMS, EQ_FEELINGS, EQ_PEOPLE, EQ_READING, EQ_SCALE, puzzleAt, DISCOVER_SECTIONS, DISCOVER_STATEMENTS, DISCOVER_STEPS, DISCOVER_STRENGTHS, analyseDiscover, DISCOVER_TRIADS, DISCOVER_WORDS, RELATIONSHIP_BY_KEY, TRAITS, isExtraKind, type ExtraKind, discoverProgress, emptyDiscoverAnswers, type DiscoverAnswers, type DiscoverPuzzle, type PuzzleKind, type DiscoverResult, type PuzzleCell } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router';
@@ -46,6 +20,11 @@ import { IconTag } from '../components/FactTag';
 import { CardHead } from '../components/CardHead';
 import { TabRow } from '../components/TabRow';
 import { EmergenceSlot } from '../components/EmergenceSlot';
+import { evenGrid, evenTile } from '../lib/bento';
+import { longDate } from '../lib/date';
+
+/** The top strengths: stacked on a phone, one row from the tablet (the bento's own width step), in even rows. */
+const TOP_COLS = { base: 1, sm: 3 } as const;
 
 /** Every step of the quiz in order, with where its answer lives. */
 interface Step {
@@ -712,7 +691,7 @@ function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, 
   const growthRel = RELATIONSHIP_BY_KEY[result.growth];
   return (
     <>
-      <p className="mt-xs m-0 text-subhead text-ink-soft">Taken {new Date(at).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long', year: 'numeric' })}. Only you can see this.</p>
+      <p className="mt-xs m-0 text-subhead text-ink-soft">Taken {longDate(at)}. Only you can see this.</p>
       <TabRow className="mt-sm" pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-md text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`} label="Parts of your result" items={TABS.filter(([k]) => k !== 'eq' || result.eq).map(([key, label]) => ({ key, label }))} value={tab} onChange={setTab} />
       {tab === 'personality' && <PersonalityTab result={result} />}
       {tab === 'eq' && <EqTab result={result} />}
@@ -722,13 +701,14 @@ function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, 
       {tab === 'strengths' && (
         <>
       <Section id="top" title="Your top three strengths">
-        <ol className="bento m-0 list-none p-0">
+        {/* One row of three equal cells from the tablet (even rows, lib/bento.ts); the first keeps its larger guide, so the order still reads. */}
+        <ol className={`bento m-0 list-none p-0 ${evenGrid(result.top.length, TOP_COLS)}`}>
           {result.top.map((key, n) => {
             const rel = RELATIONSHIP_BY_KEY[key];
             const s = DISCOVER_STRENGTHS[key];
             const score = result.strengths.find((x) => x.key === key)!.score;
             return (
-              <li key={key} className={`relative overflow-hidden rounded-card p-md text-on-fill ${n === 0 ? 'bento-w2' : ''}`} style={fillOf(rel.color)}>
+              <li key={key} className={`relative overflow-hidden rounded-card p-md text-on-fill ${evenTile(n, result.top.length, TOP_COLS)}`} style={fillOf(rel.color)}>
                 <HeroBlobs seed={key} />
                 <div className="relative flex items-center gap-sm">
                   <Avatar relationship={key} size={n === 0 ? 72 : 56} decorative still mood="happy" />
@@ -989,7 +969,7 @@ export function Discover() {
               <div className="flex flex-wrap-reverse items-center justify-between gap-sm rounded-card bg-card p-md shadow-toy-soft">
                 <div className="min-w-0 flex-1 basis-[60%]">
                   <p className="m-0 text-subhead text-ink-soft">
-                    {new Date(result.createdAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long', year: 'numeric' })}
+                    {longDate(result.createdAt)}
                   </p>
                   <p className="mt-xs m-0 text-headline">
                     {result.result.top.map((k) => DISCOVER_STRENGTHS[k].name).join(', ')}
@@ -1003,7 +983,7 @@ export function Discover() {
                 <ul className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
                   {data.history.map((h) => (
                     <li key={h.id} className="flex items-center justify-between gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-                      <span className="text-subhead">{new Date(h.createdAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' })}: {h.result.top.map((k) => DISCOVER_STRENGTHS[k].name).join(', ')}</span>
+                      <span className="text-subhead">{longDate(h.createdAt)}: {h.result.top.map((k) => DISCOVER_STRENGTHS[k].name).join(', ')}</span>
                       <Button size="sm" variant="ghost" onClick={() => { setShown(h); setMode('result'); }}>
                         Open
                       </Button>

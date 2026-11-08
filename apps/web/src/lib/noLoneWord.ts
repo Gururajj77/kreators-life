@@ -1,12 +1,12 @@
 import { useEffect, type RefObject } from 'react';
 
-/* No lone last word on a phone, for the typed paper (an agreement, a document) where CSS cannot do it: the owner's paper is plain
+/* No lone last word on a phone or a tablet (the paper beside the sidebar is about as narrow), for the typed paper (an agreement, a document) where CSS cannot do it: the owner's paper is plain
    editable text, so a nowrap span cannot go in, and `text-wrap: balance` gives up past six lines while `pretty` leaves some alone.
-   On a phone screen each clause, list line and heading whose last line holds one word gets a little right padding (from 0.75em up to
+   Under the laptop width each clause, list line and heading whose last line holds one word gets a little right padding (from 0.75em up to
    4.5em, the smallest that works) so the word before it comes down too. Only the box narrows: the words, paper and laptops are
    untouched (the padding is a screen-only rule in app.css), and the region being typed in is left as it is until focus leaves. */
 
-const NARROW = 'screen and (max-width: 47.99rem)';
+const NARROW = 'screen and (max-width: 63.99rem)';
 const STEP_EM = 0.75;
 const MAX_STEPS = 6;
 const PARTS = '.legal-clause, .legal-list li, .legal-sec-h';

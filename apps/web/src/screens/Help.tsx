@@ -209,7 +209,7 @@ export function Help() {
         <h2 id="faq-heading" className="text-title2">
           Common questions
         </h2>
-        <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+        <ul data-reading className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {HELP_FAQ.map((f) => (
             <li key={f.q}>
               <Fold title={f.q}>
@@ -226,11 +226,11 @@ export function Help() {
           .
         </p>
         <p className="mt-xs m-0 text-subhead text-ink-soft">
-          Patterns in what you already log, like a task you keep doing, are on{' '}
+          Patterns in what you already log, by week, month or more, are on{' '}
           <Link to="/insights" className="underline underline-offset-4">
             Emerging
           </Link>
-          . Only you see them.
+          . Only you see them, unless you share them with a life coach.
         </p>
         <p className="mt-xs m-0 text-subhead text-ink-soft">
           Shape each day with blocks and day templates on{' '}
@@ -239,6 +239,7 @@ export function Help() {
           </Link>
           .
         </p>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">On a laptop, the small dashes at the top right of a page list its sections. Point at them to read the names, and click one to go there.</p>
       </section>
 
       <section className="mt-lg" id="write" aria-labelledby="write-heading">

@@ -30,7 +30,9 @@ export const kpis = new Hono<AppEnv>();
 interface KpiRow { id: string; name: string; unit: Kpi['unit']; direction: Kpi['direction']; cadence: PeriodKind; target: number; source: string; created_at: string }
 const toKpi = (r: KpiRow): Kpi => ({ id: r.id, name: r.name, unit: r.unit, direction: r.direction, cadence: r.cadence, target: r.target, source: r.source, createdAt: r.created_at });
 
-const kindOf = (v: string | undefined): PeriodKind => ((PERIOD_KINDS as readonly string[]).includes(v ?? '') ? (v as PeriodKind) : 'month');
+/** Business metrics keep the week to the year (2026-11-07): a day is too short for a business number, so the daily review has none. */
+const KPI_KINDS = PERIOD_KINDS.filter((k) => k !== 'day');
+const kindOf = (v: string | undefined): PeriodKind => ((KPI_KINDS as readonly string[]).includes(v ?? '') ? (v as PeriodKind) : 'month');
 
 async function enabledFor(db: D1Database, userId: string): Promise<boolean> {
   const r = await db.prepare('SELECT enabled FROM kpi_prefs WHERE user_id = ?').bind(userId).first<{ enabled: number }>();
@@ -98,7 +100,7 @@ function fieldsOf(body: Record<string, unknown>, prev?: KpiRow) {
     // A metric read from Agency has its unit and its good direction fixed by what it measures.
     unit: def ? def.unit : oneOf(body.unit, KPI_UNITS, prev?.unit ?? 'number'),
     direction: def ? def.direction : oneOf(body.direction, ['up', 'down'] as const, prev?.direction ?? 'up'),
-    cadence: oneOf(body.cadence, PERIOD_KINDS, prev?.cadence ?? 'month'),
+    cadence: oneOf(body.cadence, KPI_KINDS, prev?.cadence ?? 'month'),
     target: 'target' in body ? (num(body.target, 0, 0, 1_000_000_000_00) ?? 0) : (prev?.target ?? 0),
     source,
   };

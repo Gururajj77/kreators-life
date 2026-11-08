@@ -2,14 +2,17 @@ import { Hono } from 'hono';
 import { BOOKS, type BookState, type BooksResponse } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { nowIso } from '../db';
+import { cache } from '../cachecontrol';
 
 /**
  * Where each of the founder's books can be had: the Shop product made under a team account (a draft says only "coming soon",
  * a live one gives its id and price) and the School program built from it (only once published, with its first open cohort).
  * Public and read-only, so the Book page in the app and the public site read the same answer; it names nobody and changes nothing,
- * so it needs no limit. Core: no line in MODULE_FOR_PREFIX, since the screens decide what to show by the person's own switches.
+ * so it needs no limit. It looks for each title through every product, so a shared copy keeps a burst of readers (or one script) from spending the free plan's rows a day.
+ * Core: no line in MODULE_FOR_PREFIX, since the screens decide what to show by the person's own switches.
  */
 export const booksPublic = new Hono<AppEnv>();
+booksPublic.use('*', cache('public', { edgeSeconds: 60 }));
 
 interface ProductHit {
   id: string;

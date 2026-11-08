@@ -1,5 +1,5 @@
 # Welcome and your first steps
-Most apps hand you a long list of buttons on day one. kreators.app starts with a short chat instead. You tell it who you are and what you want, and it switches on the apps that fit. Everything else waits until you need it.
+Most apps hand you a long list of buttons on day one. kreators.app starts with a short chat instead. You tell it who you are and what you want, and it shows the apps that fit. Everything else waits until you need it.
 
 In this lesson you'll learn:
 
@@ -44,16 +44,16 @@ Under every question you will see two small links:
 
 The typing box at the bottom works at any time. Type "what is School?" and you get a plain answer. Then your choices come back, just as you left them.
 
-> **Pro tip:** be honest about what gets in your way. If time is short or focus is hard, Bumling switches on fewer apps. A short list you use beats a long list you ignore.
+> **Pro tip:** be honest about what gets in your way. If time is short or focus is hard, Bumling shows fewer apps. A short list you use beats a long list you ignore.
 
 ## Step four: your apps
 
 Bumling now shows a short list of apps, at most five. Each one has a single line about what it does. Tap **Why these apps?** to see the reason for each one.
 
 - Untick any app you do not want.
-- Tap the button, like **Switch on 3 apps**.
+- Tap the button, like **Show 3 apps**.
 
-The apps that fit go on. Most of the others go off. Nothing is lost: you can switch any app on later.
+The apps that fit are shown. Most of the others are hidden. Nothing is lost: you can show any app later.
 
 The last card offers a few next steps. You may see **Go to Home**, an app to open, **Start the strategy session**, **Take the Discover quiz** and **Add my interests**. Pick whichever feels right today.
 
@@ -77,17 +77,17 @@ For your first two weeks, Home shows a short list called **Getting started**. It
 
 ## Why it works this way
 
-The app is big. It has apps for learning, earning, money, friends, calm and more. If all of them were on at once, you would not know where to start. The chat keeps your first week small, so you can build a habit before you add more.
+The app is big. It has apps for learning, earning, money, friends, calm and more. If all of them showed at once, you would not know where to start. The chat keeps your first week small, so you can build a habit before you add more.
 
 ## What develops over time
 
 Your first answers are not set in stone. As you change, your apps can change too.
 
-- On the **Profile** tab, **Change my tags and apps** runs the same chat again, with your last answers filled in.
-- Under **Profile**, then **Features**, every app has a switch. Apps that suit your answers say "Fits you".
-- On the **Apps** tab, open a group to see its apps and switch them.
+- On the **Profile** tab, **Match my apps again** runs the same chat again, with your last answers filled in.
+- Under **Profile**, then **Features**, every app can be hidden or unhidden. Apps that suit your answers say "Fits you".
+- On the **Apps** tab, open a group to see its apps, hide one, or show one again under **Hidden apps**.
 
-Your tags help pick your apps. They never show on your public page.
+Your tags mark the apps that fit you. Tap a tile under **Who you are** to change one. They never show on your public page.
 
 > **Result:** you have an account, a few apps that fit you, and a clear way around. Home is open.
 

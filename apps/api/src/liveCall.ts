@@ -1,6 +1,6 @@
 import { LIVE_CALL_CENTS, money, PAYMENTS_LIVE, PLAN_CURRENCY, type LiveCallAnswer, type LiveCallRequest, type LiveCallStatus } from '@kreators/shared';
 import type { Env, UserRow } from './env';
-import { nameOf, newId, notify, notifyMany, nowIso } from './db';
+import { adminIds, nameOf, newId, notify, notifyMany, nowIso } from './db';
 import { paymentsConfig, providerFor } from './payments';
 import { logEvent } from './ops';
 
@@ -26,8 +26,7 @@ const toRequest = (r: CallRow): LiveCallRequest => ({ id: r.id, status: r.status
 
 /** The admins to tell: every super admin, in the Team tab of their inbox. */
 async function tellAdmins(db: D1Database, title: string, body: string): Promise<void> {
-  const admins = await db.prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY created_at LIMIT 20").all<{ id: string }>();
-  await notifyMany(db, admins.results.map((a) => a.id), 'team', title, body, '/admin?tab=people');
+  await notifyMany(db, await adminIds(db), 'team', title, body, '/admin?tab=people');
 }
 
 /** The person's open ask, if any: asked, being paid, paid or booked. */

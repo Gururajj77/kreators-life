@@ -1,6 +1,6 @@
-import { LIFE_AREA_ORDER, LIFE_AREAS, RELATIONSHIP_BY_KEY, TASK_SORTS, addDays, groupTasks, openDay, isTaskSort, parseLifeArea, sortTasks, type LifeAreaKey, type Node, LOCALE } from '@kreators/shared';
+import { LIFE_AREA_ORDER, LIFE_AREAS, RELATIONSHIP_BY_KEY, TASK_SORTS, addDays, openDay, isTaskSort, parseLifeArea, sortTasks, type LifeAreaKey, type Node } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { Link, useSearchParams } from 'react-router';
 import { useModule } from '../lib/modules';
@@ -26,14 +26,13 @@ import { RemindersSection, useUndatedRemember } from '../components/Reminders';
 import { TaskRow } from '../components/TaskRow';
 import { WeekPlanButton } from '../components/WeekPlan';
 import { api } from '../lib/api';
-import { dayLabel, prettyDate } from '../lib/date';
+import { dayLabel, prettyDate, clockTime } from '../lib/date';
 import { lazyNamed } from '../lib/lazy';
 import { keys, useAuthed, useMe, useRefreshAll, useToday } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { useActionQueue } from '../lib/useActionQueue';
 import { useParamState } from '../lib/useParamState';
 import { DayTemplateSelect, DayTypeNote, useDayTemplate } from '../components/DayTypePicker';
-import { TaskGroups } from '../components/TaskGroups';
 import { TabRow } from '../components/TabRow';
 import { FilterSelect } from '../components/FilterSelect';
 
@@ -49,17 +48,22 @@ const outline = 'toy toy-ink btn-outline inline-flex min-h-[44px] items-center j
 /**
  * Room for the Water bubble at the bottom left (see Today's Screen): the bubble's right edge (16px past the sidebar plus up to 10rem)
  * and an 8px gap, less the column's own left gap (32px, and from the laptop width half of what the window has past the 1072px frame).
+ * From the `lg` width, where the bubble is: a tablet has the Water and reminders section in the page like a phone, so its column keeps the room.
  */
-const WATER_LANE = 'md:[&>*]:ml-[max(0px,calc(10rem_-_var(--spacing-xs)_-_max(0px,(100vw_-_1040px_-_var(--spacing-lg))_/_2)))]';
+const WATER_LANE = 'lg:[&>*]:ml-[max(0px,calc(10rem_-_var(--spacing-xs)_-_max(0px,(100vw_-_1040px_-_var(--spacing-lg))_/_2)))]';
 
 // The month calendar downloads only when its toggle is opened.
 const TaskMonth = lazyNamed(() => import('../components/TaskMonth'), 'TaskMonth');
 const AddTaskForm = lazyNamed(() => import('../components/TaskMonth'), 'AddTaskForm');
 // A task's plan form downloads the first time a plan is opened, so the whole form stays out of the first download.
 const TaskPanel = lazyNamed(() => import('../components/TaskPlan'), 'TaskPanel');
+// The grouped view (By time block, By area) and its block hints load only when a grouped sort is picked.
+const TaskGroups = lazyNamed(() => import('../components/TaskGroups'), 'TaskGroups');
+// Supplements (2026-11-07): its own small chunk, downloaded only for someone with Fitness on.
+const SupplementsToday = lazyNamed(() => import('../components/SupplementsToday'), 'SupplementsToday');
 
 /** A task on Daily with its plan panel one tap away. */
-function DailyTask({ t, date, queue, onToggle, subtitle, focus = false }: { t: Node; date: string; queue: ReturnType<typeof useActionQueue>; onToggle: () => void; subtitle?: string; focus?: boolean }) {
+function DailyTask({ t, date, queue, onToggle, subtitle, focus = false, below }: { t: Node; date: string; queue: ReturnType<typeof useActionQueue>; onToggle: () => void; subtitle?: string; focus?: boolean; /** A quiet line under the row (a block suggestion or a mismatch, from the grouped view). */ below?: ReactNode }) {
   // A reminder note opens Daily on its task (`?task=<id>`): that task starts with its plan open and is scrolled into view, once.
   const [open, setOpen] = useState(focus);
   useEffect(() => {
@@ -80,12 +84,17 @@ function DailyTask({ t, date, queue, onToggle, subtitle, focus = false }: { t: N
       editOpen={open}
       editControls={`task-plan-${t.id}`}
       panel={
-        open ? (
-          <div id={`task-plan-${t.id}`}>
-            <Suspense fallback={<Skeleton className="mt-xs h-[240px]" />}>
-              <TaskPanel task={t} today={date} />
-            </Suspense>
-          </div>
+        below || open ? (
+          <>
+            {below}
+            {open && (
+              <div id={`task-plan-${t.id}`}>
+                <Suspense fallback={<Skeleton className="mt-xs h-[240px]" />}>
+                  <TaskPanel task={t} today={date} />
+                </Suspense>
+              </div>
+            )}
+          </>
         ) : null
       }
     />
@@ -248,24 +257,24 @@ export function Today() {
   // Water and reminders links to To remember while a task tagged Remember has no day; the heading stays when the filter hides them all.
   const rememberHidden = area !== '' && remembered.length === 0 && undatedRemember;
   const areaName = area === 'none' ? 'with no area' : area ? `for ${LIFE_AREAS[area].name}` : '';
-  const groups = grouped && dayPlan ? groupTasks(tasks, grouped, context) : null;
   // The true count (2026-11-06): the server counts every open task whose day has come under the same cuts, and how many are late; an
   // older answer for another area can only count what is here.
   const totalWaiting = cutHere ? Math.max(tasks.length, data?.tasksTotal ?? tasks.length) : tasks.length;
   const lateWaiting = cutHere ? (data?.tasksLate ?? 0) : 0;
   const restWaiting = totalWaiting - tasks.length;
   const clearFilters = () => setAreaRaw('');
-  const doneAt = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString(LOCALE, { hour: 'numeric', minute: '2-digit' }) : '');
+  const doneAt = (iso: string | null) => (iso ? clockTime(iso) : '');
   const taskDone = Boolean(data && data.doneRecently > 0);
   const doneCount = data ? Number(data.checkedIn) + Number(data.spark.done) + Number(taskDone) : 0;
   const identity = me.data?.identity ?? null;
 
   // The streak pill opens the Leaderboard only while the person has it on (it is on for everyone unless switched off).
   const lb = useModule('leaderboard');
+  const fitnessOn = useModule('fitness')?.on ?? false;
   const leaderboardOn = Boolean(lb?.available && lb.on);
   return (
     // How it works comes in with the day: drawn under the loading cards, it would be pushed down when the day lands.
-    // From the tablet width the Water bubble (ReminderBubble, fixed at the bottom left, 16px past the sidebar, up to 10rem wide) keeps a
+    // From the laptop width the Water bubble (ReminderBubble, fixed at the bottom left, 16px past the sidebar, up to 10rem wide) keeps a
     // lane of its own: the column moves right only by as much as the bubble would reach into it, so no line ever sits under it (at 1280
     // it covered the start of "Your day"). Where the page's own gutter is wide enough (about 1376px and up) nothing moves.
     <Screen columns={false} howTo={!isPending} className={WATER_LANE}>
@@ -478,8 +487,10 @@ export function Today() {
               </div>
             )}
             <DayBlocks tasks={tasks.filter((t) => openDay(t) === date)} day={dayPlan} loose={data?.looseTasks} looseTotal={data?.looseTotal} />
-            {groups && tasks.length > 0 ? (
-              <TaskGroups groups={groups} by={grouped!} more={Boolean(data.tasksMore) && !(cutHere && restWaiting > 0)} renderTask={(t) => <DailyTask key={t.id} t={t} date={date} queue={queue} focus={t.id === focusTask} onToggle={() => tick(t.id)} />} />
+            {grouped && dayPlan && tasks.length > 0 ? (
+              <Suspense fallback={<SkeletonList count={3} lines={2} label="Loading the groups" />}>
+                <TaskGroups tasks={tasks} context={{ ...context, slotPlannedMin: dayPlan.slotPlannedMin, day: date }} by={grouped} more={Boolean(data.tasksMore) && !(cutHere && restWaiting > 0)} renderTask={(t, below) => <DailyTask key={t.id} t={t} date={date} queue={queue} focus={t.id === focusTask} onToggle={() => tick(t.id)} below={below} />} />
+              </Suspense>
             ) : tasks.length > 0 ? (
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                 <AnimatePresence initial={false}>
@@ -513,7 +524,8 @@ export function Today() {
             )}
             {/* The rest of what waits past the ones shown, in a fold that reads them only once opened. */}
             {cutHere && restWaiting > 0 && tasks.length > 0 && (
-              <Fold className="mt-xs" title={`${restWaiting} more waiting`}>
+              // A Remember note opens Daily on its task (`?task=<id>`): when that task is not among the ones shown, this opens on it.
+              <Fold className="mt-xs" title={`${restWaiting} more waiting`} defaultOpen={Boolean(focusTask) && !tasks.some((t) => t.id === focusTask)}>
                 <MoreWaiting date={date} area={area} group={grouped !== null} ask={grouped !== null ? '' : (ownSort ?? '')} sort={sort} context={context} queue={queue} onToggle={tick} focusTask={focusTask} />
               </Fold>
             )}
@@ -624,6 +636,11 @@ export function Today() {
 
           <NotToDoBlock />
           <HabitsSlot app="today" tasks={[...allTasks, ...(data.backlog ?? []), ...(data.done ?? [])]} />
+          {fitnessOn && (
+            <Suspense fallback={null}>
+              <SupplementsToday date={date} />
+            </Suspense>
+          )}
           <KindsSlot />
           <EmergenceSlot app="today" max={2} exclude={['habit-tie', 'daytype-done']} />
         </>

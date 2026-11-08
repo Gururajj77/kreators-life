@@ -2,13 +2,14 @@ import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEv
 import { Link, useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { EyeOff, HelpCircle, ListChecks } from 'lucide-react';
-import { formatCount, LOCALE, money, NOT_TO_DO_TITLE_MAX, RELATIONSHIP_BY_KEY, RELATIONSHIPS, taskKey, type HabitTie, type LifeAreaKey, type Node, type Insight, type InsightApp, type InsightKey, type InsightChart, type RelationshipKey, type Repeat, type TagTone } from '@kreators/shared';
+import { formatCount, INSIGHT_BASIS_TAIL, LOCALE, money, NOT_TO_DO_TITLE_MAX, RELATIONSHIP_BY_KEY, RELATIONSHIPS, taskKey, type HabitTie, type LifeAreaKey, type Node, type Insight, type InsightApp, type InsightKey, type InsightChart, type RelationshipKey, type Repeat, type TagTone } from '@kreators/shared';
 import { api } from '../lib/api';
 import { useMe } from '../lib/queries';
 import { todayLocal } from '../lib/date';
+import { focusHeading, focusHeadingAfter } from '../lib/focusHeading';
 import { fillVar } from '../lib/relFill';
 import { tbClass, tbStyle } from '../lib/blockColor';
-import { bento } from '../lib/bento';
+import { evenGrid, evenTile } from '../lib/bento';
 import { FIELD, LABEL } from '../lib/ui';
 import { HBars, PillBars, Donut, Legend, WeekDots } from './Charts';
 import { Section, SeeAll } from './Section';
@@ -69,13 +70,7 @@ export function SetAsideList({ id, list, onShow }: { id?: string; list: readonly
   );
 }
 
-/** Moves focus to a block's heading (made focusable for the moment, never a tab stop), when the control that had it is about to go. */
-export function focusHeading(id: string | undefined) {
-  const el = id ? document.getElementById(id) : null;
-  if (!el) return;
-  if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
-  el.focus();
-}
+export { focusHeading };
 
 /**
  * One quiet line at the foot of a block whose place has cards set aside: "Show 2 set aside", an inline toggle that opens the list in
@@ -141,6 +136,13 @@ const TAG: Record<Insight['key'], { tone: TagTone; word: string }> = {
   'discover-strength': { tone: 'calm', word: 'Strength' },
   'agency-load': { tone: 'calm', word: 'Same days' },
   'block-kept': { tone: 'calm', word: 'Time blocks' },
+  'gratitude-mood': { tone: 'calm', word: 'Same days' },
+  'move-weekday': { tone: 'calm', word: 'Your week' },
+  'eat-days': { tone: 'calm', word: 'Same days' },
+  'water-days': { tone: 'calm', word: 'Same days' },
+  'water-weekday': { tone: 'calm', word: 'Your week' },
+  'budget-over': { tone: 'calm', word: 'Budgets' },
+  'budget-pace': { tone: 'calm', word: 'Your pace' },
 };
 
 function tagOf(i: Insight): { tone: TagTone; word: string } {
@@ -148,6 +150,10 @@ function tagOf(i: Insight): { tone: TagTone; word: string } {
   if (i.key === 'pillar-balance' && i.strength >= 60) return { tone: 'warn', word: 'Worth a look' };
   // Time blocks kept: good when 60% or more of a block's tasks were ticked inside it (the line's strength is 50 or more then).
   if (i.key === 'block-kept' && i.strength >= 50) return { tone: 'good', word: 'Blocks kept' };
+  // Budgets: running over is a plain fact (warm, never red), holding is good; the sentence says which one and by how much.
+  if (i.key === 'budget-over') return i.strength >= 30 ? { tone: 'warm', word: 'Runs over' } : { tone: 'good', word: 'Held' };
+  // A month that has ended says how it ended; one still running, where it stands.
+  if (i.key === 'budget-pace') return i.strength >= 30 ? { tone: 'warm', word: /\b(ran|run) over\b/.test(i.text) ? 'Ran over' : 'Ahead' } : { tone: 'good', word: i.text.includes('held') ? 'Held' : 'On pace' };
   // A good or bad habit: the word is always shown, so the colour is never the only sign.
   if (i.tie) return i.tie.verdict === 'good' ? { tone: 'good', word: 'Good habit' } : { tone: 'bad', word: 'Bad habit' };
   return TAG[i.key];
@@ -165,18 +171,18 @@ function valueText(v: number, unit: string): string {
 
 const PAIR_COLORS = ['var(--color-r6)', 'var(--color-ink-mute)'];
 
-function InsightChartView({ chart, insight }: { chart: InsightChart; insight: Insight }) {
+export function InsightChartView({ chart, insight, brief = false }: { chart: InsightChart; insight: Pick<Insight, 'relationship' | 'key'>; /** One pairing only (/insights): the sentence names the other, so the card stays short. */ brief?: boolean }) {
   const tone = insight.relationship ? fillVar(RELATIONSHIP_BY_KEY[insight.relationship]) : 'var(--color-r6)';
   if (chart.kind === 'pair') {
     // Since a review, only the mover the number speaks of is drawn; the sentence names the other. How many days stand behind each row is
     // in the line under the chart (and read out with the chart), so a card on a phone stays short.
-    const rows = insight.key === 'review-since' ? chart.rows.slice(0, 2) : chart.rows;
+    const rows = brief || insight.key === 'review-since' ? chart.rows.slice(0, 2) : chart.rows;
     const top = new Map<string, number>();
     for (const r of rows) top.set(r.unit, Math.max(top.get(r.unit) ?? 0, Math.abs(r.value)));
     return (
       <HBars
         stacked
-        label={rows.map((r) => `${r.label}: ${valueText(r.value, r.unit)}, ${formatCount(r.n)} days`).join('. ')}
+        label={rows.map((r) => `${r.label}: ${valueText(r.value, r.unit)}, ${formatCount(r.n)} ${insight.key === 'budget-over' ? 'months' : 'days'}`).join('. ')}
         rows={rows.map((r, i) => ({
           key: `${i}-${r.label}`,
           label: r.label,
@@ -358,7 +364,7 @@ function InsightActions({
 }
 
 /** One pattern: the number first, one sentence, a small chart, where it came from, and one outline action. */
-export function InsightCard({ insight, onHide }: { insight: Insight; onHide?: () => void }) {
+export function InsightCard({ insight, onHide, corner = false }: { insight: Insight; onHide?: () => void; /** /insights (2026-11-07): the state tag in the top right corner beside the "…", the number alone on the left. */ corner?: boolean }) {
   const tag = tagOf(insight);
   // Every card carries its "…" in the title row, centred on the number, and its state tag in the foot on the left, beside the outline
   // action that takes the rest of the width (2026-11-06, the founder's card rule: a card's title and "…" share one row, a state tag goes
@@ -366,18 +372,26 @@ export function InsightCard({ insight, onHide }: { insight: Insight; onHide?: ()
   return (
     <article className="flex h-full w-full flex-col gap-sm rounded-tile bg-card p-md shadow-toy-soft" aria-label={insight.text}>
       <div className="flex items-center justify-between gap-sm">
-        <p className={`m-0 min-w-0 tabular-nums ${insight.headline.length > 10 ? 'text-title2' : 'text-title1'}`}>{insight.headline}</p>
-        <InsightMore insight={insight} onHide={onHide} />
+        <p className={`m-0 min-w-0 tabular-nums ${insight.headline.length > 10 ? 'text-title2' : 'text-title1'} ${corner && insight.headline.length <= 10 ? 'whitespace-nowrap' : ''}`}>{insight.headline}</p>
+        {corner ? (
+          <div className="flex shrink-0 items-center gap-xs">
+            <StatusTag tone={tag.tone}>{tag.word}</StatusTag>
+            <InsightMore insight={insight} onHide={onHide} />
+          </div>
+        ) : (
+          <InsightMore insight={insight} onHide={onHide} />
+        )}
       </div>
       <p className="m-0 text-balance text-callout">{insight.text}</p>
       {/* Beside a taller card the chart takes the room left and sits in its middle, so the card never ends in an empty band (2026-11-05). */}
       {insight.chart && (
         <div className="flex flex-1 flex-col justify-center">
-          <InsightChartView chart={insight.chart} insight={insight} />
+          <InsightChartView chart={insight.chart} insight={insight} brief={corner} />
         </div>
       )}
-      {insight.basis && <p className="m-0 text-caption text-ink-soft">{insight.basis}</p>}
-      <InsightActions insight={insight} onHide={onHide} menu={false} lead={<StatusTag tone={tag.tone}>{tag.word}</StatusTag>} />
+      {/* /insights says it once in its cover, so its cards leave the tail off the small line. */}
+      {insight.basis && <p className="m-0 text-caption text-ink-soft">{corner ? insight.basis.replace(` ${INSIGHT_BASIS_TAIL}`, '') : insight.basis}</p>}
+      {!corner ? <InsightActions insight={insight} onHide={onHide} menu={false} lead={<StatusTag tone={tag.tone}>{tag.word}</StatusTag>} /> : insight.action ? <InsightActions insight={insight} onHide={onHide} menu={false} /> : null}
     </article>
   );
 }
@@ -424,7 +438,7 @@ export function HabitSheet({ insight, onClose }: { insight: Insight; onClose: ()
         <div>
           <p className="m-0 text-headline">{h.title}</p>
           <p className="mt-xs m-0 text-subhead text-ink-soft">
-            {pillar.name} · {formatCount(h.ticks)} ticks in 4 weeks
+            {pillar.name} · {formatCount(h.ticks)} ticks {h.within ?? 'in 4 weeks'}
           </p>
         </div>
         <RepeatPicker value={repeat} anchor={first} onChange={setRepeat} onAnchor={setFirst} />
@@ -478,7 +492,7 @@ export function NotToDoFold({ id, title, relationship, onClose }: { id: string; 
     try {
       await api.notToDoAdd(t, relationship);
       await qc.invalidateQueries();
-      onClose();
+      close();
     } catch (e) {
       setErr(e);
     } finally {
@@ -519,17 +533,24 @@ export function NotToDoFold({ id, title, relationship, onClose }: { id: string; 
   );
 }
 
-/** The cards in a bento grid: the first ones take the full row until the last row is full, so no card is ever alone. */
-export function InsightGrid({ list, onHide }: { list: Insight[]; onHide?: (id: string) => void }) {
-  return (
-    <ul className="m-0 grid list-none grid-cols-1 gap-sm p-0 md:grid-cols-2">
+// Two to a row from the laptop; a tablet's column beside the sidebar (464px) takes the phone's one, so a card's sentence keeps its width (CLAUDE.md, the 768 line).
+const PAIR_COLS = { base: 1, lg: 2 } as const;
+/** /insights: two to a row only where a card has room for its number, its tag and its menu on one line; by the column's own width. */
+const WIDE_PAIR_COLS = { base: 1, '@3xl': 2 } as const;
+
+/** The cards in even rows (lib/bento.ts): two to a row from the tablet, an odd first one across the row, so no card is ever alone. */
+export function InsightGrid({ list, onHide, corner = false }: { list: Insight[]; onHide?: (id: string) => void; corner?: boolean }) {
+  const cols = corner ? WIDE_PAIR_COLS : PAIR_COLS;
+  const grid = (
+    <ul className={`m-0 grid list-none gap-sm p-0 ${evenGrid(list.length, cols)}`}>
       {list.map((i, n) => (
-        <Reveal as="li" key={i.id} index={n} className={`flex ${bento(n, list.length, 1, 2)}`}>
-          <InsightCard insight={i} onHide={onHide ? () => onHide(i.id) : undefined} />
+        <Reveal as="li" key={i.id} index={n} className={`flex ${evenTile(n, list.length, cols)}`}>
+          <InsightCard insight={i} corner={corner} onHide={onHide ? () => onHide(i.id) : undefined} />
         </Reveal>
       ))}
     </ul>
   );
+  return corner ? <div className="@container">{grid}</div> : grid;
 }
 
 /**
@@ -547,7 +568,16 @@ export function EmergenceBlock({ app, rel, max, lede = 'Patterns in what you log
   if (!list.length && (!aside.length || quietWhenAllAside)) return null;
   return (
     <Section id={id} title="Emerging" lede={list.length ? lede : 'You set these aside.'} span className={className} action={<SeeAll to="/insights">See all</SeeAll>}>
-      {list.length > 0 && <InsightGrid list={list} onHide={hide} />}
+      {list.length > 0 && (
+        <InsightGrid
+          list={list}
+          onHide={(x) => {
+            hide(x);
+            // The card and its menu go, so the keyboard's place moves to the block's heading (or, when the block leaves too, nowhere).
+            focusHeadingAfter(id);
+          }}
+        />
+      )}
       <SetAsideFold list={aside} onShow={show} heading={id} />
     </Section>
   );
@@ -593,7 +623,14 @@ export function HabitsBlock({ app, className = '', tasks = [] }: { app: InsightA
                     <AreaTag area={area} />
                   </div>
                 )}
-                <InsightActions insight={i} onHide={() => hide(i.id)} compact />
+                <InsightActions
+                  insight={i}
+                  onHide={() => {
+                    hide(i.id);
+                    focusHeadingAfter(`habits-${app}`);
+                  }}
+                  compact
+                />
               </li>
             );
           })}

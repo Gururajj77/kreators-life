@@ -12,6 +12,7 @@ import { ToggleChevron } from './ToggleMark';
  * focused element with it, so focus goes back to the fold's own button instead of falling to the page (2026-11-06).
  */
 export function Fold({
+  id: landId,
   title,
   hint,
   defaultOpen = false,
@@ -22,6 +23,8 @@ export function Fold({
   children,
   className = '',
 }: {
+  /** An id a link's hash can name (`/today#supplements`): the link lands here and opens the fold (lib/useLandOnHash.ts). */
+  id?: string;
   title: ReactNode;
   hint?: ReactNode;
   defaultOpen?: boolean;
@@ -37,7 +40,8 @@ export function Fold({
   const open = openProp ?? own;
   const setOpen = (f: (o: boolean) => boolean) => {
     const next = f(open);
-    setOwn(next);
+    // Its own state is what it shows while nobody holds it, so a tap while a screen holds it (Select on Apps) leaves that as it was.
+    if (openProp === undefined) setOwn(next);
     onOpenChange?.(next);
   };
   const id = useId();
@@ -55,6 +59,7 @@ export function Fold({
   const fill = tone === 'plain' ? 'px-xs hover:bg-line' : 'px-sm py-xs bg-paper aria-expanded:bg-line';
   return (
     <div
+      id={landId}
       className={className}
       onFocus={() => {
         focusInside.current = true;
@@ -66,11 +71,11 @@ export function Fold({
         if (to && !e.currentTarget.contains(to)) focusInside.current = false;
       }}
     >
-      <button ref={button} type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)} className={`toy toy-flat flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile text-left ${fill}`}>
+      <button ref={button} type="button" aria-expanded={open} aria-controls={id} data-land-open={landId ? '' : undefined} onClick={() => setOpen((o) => !o)} className={`toy toy-flat flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile text-left ${fill}`}>
         {/* The title takes the row's width (flex-1), so its box never shrinks to its words and the rectangle fixer can even a two-line title. */}
         <span className="min-w-0 flex-1">
           <span className="text-headline">{title}</span>
-          {hint !== undefined && hint !== '' && <span className="ml-xs whitespace-nowrap text-callout text-ink-soft">{hint}</span>}
+          {hint !== undefined && hint !== '' && <span className="ml-xs inline-block max-w-[calc(100%-var(--spacing-xs))] text-callout text-ink-soft">{hint}</span>}
         </span>
         {adds ? (
           <AnimatedIcon name="plusToX" size={16} active={open} className="text-ink-soft" />

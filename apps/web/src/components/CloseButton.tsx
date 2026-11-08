@@ -2,7 +2,7 @@ import { X } from 'lucide-react';
 import { Icon } from './Icon';
 
 /**
- * The one round close button for a panel that is not a Sheet (the Sheet draws its own): 44px, glass, an X that turns a quarter as a
+ * The one round close button for a panel in the page that is not a Sheet (a Sheet draws its own, in its rail outside the card): 44px, glass, an X that turns a quarter as a
  * mouse points at it or the keyboard reaches it, with its words for screen readers and as a tooltip. Still under reduced motion.
  */
 export function CloseButton({ onClick, label = 'Close' }: { onClick: () => void; label?: string }) {

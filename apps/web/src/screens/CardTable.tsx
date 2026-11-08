@@ -462,7 +462,8 @@ function FocusButton({ on, onClick }: { on: boolean; onClick: () => void }) {
     >
       {/* The animated maximize/minimize icon: corners out to enter, in to leave (the still lucide glyph until it loads). */}
       <AnimatedIcon name="maximizeMinimize" size={22} active={on} />
-      <span className="hidden sm:inline">{on ? 'Leave focus' : 'Focus mode'}</span>
+      {/* Words on a wide phone and from the laptop width; beside a tablet's sidebar the toolbar needs the room to stay on one line. */}
+      <span className="hidden sm:inline md:hidden lg:inline">{on ? 'Leave focus' : 'Focus mode'}</span>
     </button>
   );
 }

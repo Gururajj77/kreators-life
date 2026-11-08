@@ -4,7 +4,7 @@ For the person on call (today that is the founder). Plain steps, in order.
 
 ## Where to look
 
-- **The app's own log**: sign in as an admin, open Admin, then Logs (`/internal/logs`). One line per change, refusal, server error, cron run and browser error: area, cleaned path (ids replaced), status, time taken, who. Never a body, never journal or wellbeing lines. Kept thirty days. Only a super admin (role `admin`) can read it. Observability (`/internal/observability`) has the counts.
+- **The app's own log**: sign in as an admin, open Admin, then Logs (`/internal/logs`). One line per change, refusal, server error, cron run and browser error: area, cleaned path (ids replaced), status, time taken, who. Never a body, never journal or wellbeing lines. Kept thirty days. Only a super admin (role `admin`) can read it. Dev Tools (`/internal/observability`) has the counts.
 - **Live Worker output**: `pnpm cf:logs` (a live tail of `console.error` lines). A 500 answer carries a `requestId`; the same id is in the log line, in brackets, and in the tail.
 - **The audit trail**: role, permission, deletion and payout changes are rows in `audit_logs` (Admin shows them).
 - **Cloudflare**: dashboard, Workers, kreators-life, Metrics and Logs; D1 for the database; Security Events if the zone is behind Cloudflare's firewall.
@@ -18,13 +18,15 @@ For the person on call (today that is the founder). Plain steps, in order.
 
 ## What each alert means
 
-The cron (every fifteen minutes) looks at the last fifteen minutes and tells every admin in the inbox (Team tab), at most once an hour per kind (`apps/api/src/alerts.ts`).
+The cron (every fifteen minutes) looks at the last fifteen minutes and tells every admin in the inbox (Team tab), at most once an hour per kind (`apps/api/src/alerts.ts`). Each new note also goes out as one private email with the same counts. While `RESEND_API_KEY` is not set the mail only waits in the outbox, and the note says "Mail is not set up on this server, so this inbox note is the only alert."
+
+Locked out of `/api/admin` with the key (it answers 429)? Ten wrong keys from your address spend its tries for up to ten minutes, and then even the right key waits. Signing in with an admin account is never slowed, so use that. If you did not make those tries, someone is guessing: rotate `ADMIN_KEY` (SECRETS.md).
 
 | Alert | Level | Likely cause | Look at |
 |---|---|---|---|
 | Many failed sign-ins | 20 or more in 15 minutes | password guessing, or a user who forgot | Logs, area `auth`, status 401; how many different times; the per-address and per-email limits are already slowing it |
 | Many requests were slowed down | 100 or more answers of 429 | a script hammering the app, or a bug that retries | Logs, status 429, which area |
-| Many server errors | 20 or more answers of 5xx | a bad deploy, D1 trouble, a provider outage | Logs, level error, the repeated message and its `requestId`; `pnpm cf:logs` |
+| Many server errors | 20 or more answers of 5xx | a daily limit passed on Workers Free (every D1 query fails until 05:30 IST; the dashboard's D1 metrics say which, docs/performance.md), a bad deploy, D1 trouble, a provider outage | Logs, level error, the repeated message and its `requestId`; `pnpm cf:logs` |
 | A role or a permission changed | any | you did it, or someone got admin | Audit trail, who did it; if it was not you, treat as an emergency |
 
 ## First three actions when one fires

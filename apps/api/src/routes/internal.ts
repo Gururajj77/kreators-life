@@ -1,7 +1,8 @@
+import { tripsOf } from '../d1Batch';
 import { CARD_GAMES, isRole, MODULES, roleRank, ROLES, type LogEntry, type LogsResponse, type ObservabilityResponse, type ObservedAdditions, type ObservedUser, type Role } from '@kreators/shared';
 import { Hono } from 'hono';
 import { accessFor, loadAccessContext } from '../access';
-import { audit, getUser, pageOf, paged } from '../db';
+import { audit, getUser, likeFit, pageOf, paged } from '../db';
 import type { AppEnv, UserRow } from '../env';
 import { vitalsSummary } from './vitals';
 
@@ -119,6 +120,28 @@ interface LogRow { id: number; at: string; level: LogEntry['level']; area: strin
 
 // The app's own log: what happened, where and by whom. Super admins only, because it names people. No bodies, and nothing from the
 // private areas (journal, wellbeing, Companion, Discover, assistant) beyond a bare server-error line.
+// How many D1 queries one invocation may really make on this account (Cloudflare's own pages say 50 on Workers Free in one place and 1,000 to its services in another). It only asks
+// `SELECT 1`, so it changes nothing and reads no rows, and it stops at the first refusal. A super admin opens it once after a deploy (docs/performance.md, the Free plan section).
+// Never under the guard: the test server has no such limit, and the smoke suite's own ceiling would see a thousand trips.
+internal.get('/platform-limit', async (c) => {
+  if (roleRank(c.get('user').role) < roleRank('admin')) return c.json({ error: 'only a super admin runs this' }, 403);
+  const db = c.env.DB;
+  const before = tripsOf(db);
+  let queries = 0;
+  let refused = '';
+  const most = c.env.D1_GUARD ? 2 : 1100;
+  while (queries < most) {
+    try {
+      await db.prepare('SELECT 1 AS x').first();
+      queries += 1;
+    } catch (e) {
+      refused = e instanceof Error ? e.message.slice(0, 120) : 'refused';
+      break;
+    }
+  }
+  return c.json({ queries: queries + before, refused, plan: refused ? `This invocation stopped at ${queries + before} queries.` : `No limit met in ${queries + before} queries.` });
+});
+
 internal.get('/logs', async (c) => {
   const user = c.get('user');
   if (roleRank(user.role) < roleRank('admin')) return c.json({ error: 'only a super admin reads the logs' }, 403);
@@ -144,19 +167,28 @@ internal.get('/logs', async (c) => {
   }
   if (q) {
     where.push("(LOWER(path) LIKE ? OR LOWER(message) LIKE ? OR LOWER(COALESCE(actor_name, '')) LIKE ? OR actor_id = ?)");
-    binds.push(`%${q}%`, `%${q}%`, `%${q}%`, q);
+    binds.push(`%${likeFit(q)}%`, `%${likeFit(q)}%`, `%${likeFit(q)}%`, q);
   }
   const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const since24 = new Date(Date.now() - 86_400_000).toISOString();
-  const week = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const [rows, counts, areas, actors] = await Promise.all([
+  // The counts and the filters list the last day, not the last week, and come from one read of its lines: each filter tap asks again, on the free plan's 5 million rows a day.
+  const [rows, lines] = await Promise.all([
     db.prepare(`SELECT * FROM app_logs ${clause} ORDER BY id DESC LIMIT ? OFFSET ?`).bind(...binds, ask.limit, ask.offset).all<LogRow>(),
-    db.prepare('SELECT level, COUNT(*) AS n FROM app_logs WHERE at >= ? GROUP BY level').bind(since24).all<{ level: string; n: number }>(),
-    db.prepare('SELECT DISTINCT area FROM app_logs WHERE at >= ? ORDER BY area').bind(week).all<{ area: string }>(),
-    db.prepare('SELECT actor_id, MAX(actor_name) AS actor_name, COUNT(*) AS n FROM app_logs WHERE actor_id IS NOT NULL AND at >= ? GROUP BY actor_id ORDER BY n DESC LIMIT 60').bind(week).all<{ actor_id: string; actor_name: string | null; n: number }>(),
+    db.prepare('SELECT level, area, actor_id, MAX(actor_name) AS actor_name, COUNT(*) AS n FROM app_logs WHERE at >= ? GROUP BY level, area, actor_id').bind(since24).all<{ level: string; area: string; actor_id: string | null; actor_name: string | null; n: number }>(),
   ]);
   const pg = paged(rows.results, ask);
-  const n = (l: string) => counts.results.find((r) => r.level === l)?.n ?? 0;
+  const n = (l: string) => lines.results.reduce((sum, r) => (r.level === l ? sum + r.n : sum), 0);
+  const byActor = new Map<string, { actor_id: string; actor_name: string | null; n: number }>();
+  for (const r of lines.results) {
+    if (r.actor_id === null) continue;
+    const one = byActor.get(r.actor_id);
+    if (one) {
+      one.n += r.n;
+      if (r.actor_name !== null && (one.actor_name === null || r.actor_name > one.actor_name)) one.actor_name = r.actor_name;
+    } else byActor.set(r.actor_id, { actor_id: r.actor_id, actor_name: r.actor_name, n: r.n });
+  }
+  const areas = { results: [...new Set(lines.results.map((r) => r.area))].sort().map((area) => ({ area })) };
+  const actors = { results: [...byActor.values()].sort((a, b) => b.n - a.n).slice(0, 60) };
   const res: LogsResponse = {
     logs: pg.items.map((r) => ({ id: r.id, at: r.at, level: r.level, area: r.area, method: r.method, path: r.path, status: r.status, ms: r.ms, actorId: r.actor_id, actorName: r.actor_name, message: r.message })),
     page: pg.page,

@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 /** The version of the terms and the privacy policy (the day they were last changed). A new version is shown to people once. */
-export const LEGAL_VERSION = '2026-11-05';
+export const LEGAL_VERSION = '2026-11-07';
 export const LEGAL_DOCS = [
   { key: 'terms', name: 'Terms of use', path: '/terms' },
   { key: 'privacy', name: 'Privacy policy', path: '/privacy' },
@@ -43,20 +43,24 @@ export interface RetentionRule {
   why: string;
 }
 export const RETENTION: readonly RetentionRule[] = [
-  { category: 'Your account, profile, pillars, tasks, trackers and everything you add', keep: 'Until you delete your account, then gone at once', why: 'It is your data and the reason the app exists.' },
-  { category: 'Your journal and wellbeing logs', keep: 'Until you delete an entry or your account', why: 'Only you can read them.' },
+  { category: 'Your account, profile, pillars, tasks, trackers and everything you add', keep: 'Until you delete your account, then gone at once. What other people rely on stays without your name, such as a product someone bought, the title of an event that had guests, a run club others joined, a paid reward entry without its link or notes, a pitch the team said yes to without its title or words, a campaign role and its work link, and what the team made.', why: 'It is your data and the reason the app exists. What stays is there for the people who count on it.' },
+  { category: 'Your journal, gratitude lines and wellbeing logs', keep: 'Until you delete an entry, empty a day\'s lines or delete your account. A note of which gratitude prompts you wrote under or skipped (the prompt and the day, never your words) stays until you delete your account.', why: 'Only you can read them, unless you share wellbeing numbers with a life coach. The note keeps a prompt from coming back too soon.' },
+  { category: 'A life coach\'s closed invite link (only a hash of it)', keep: 'A year', why: 'So opening an old link says it was closed.' },
+  { category: 'Supplements you list in Fitness, and the days you ticked them', keep: 'Until you remove them or delete your account', why: 'It is your own list. Only you see it.' },
   { category: 'Sign-in sessions', keep: 'Until you sign out, you pass the device limit, or thirty days after you were signed out by it', why: 'To keep you signed in, and to say why you were signed out.' },
   { category: 'A client\'s unlock of an Agency link that has a password (a random token kept only as a hash)', keep: 'Twelve hours, or until the owner changes the password', why: 'So a client does not type the password on every page.' },
   { category: 'A client\'s ask for a new Agency link password (the day, and a short reason if they gave one)', keep: 'Until the owner sets a new one or dismisses it, then ninety days', why: 'So the owner knows the link may be at risk.' },
   { category: 'Password reset links', keep: 'Thirty minutes to use; the used or expired row is removed within a week', why: 'Safety.' },
+  { category: 'Counts of tries, such as sign-ins (each kept under your account, or a scrambled form of the email typed or your device\'s address, never the email or address itself)', keep: 'Two days', why: 'To slow down anyone guessing a password, and to stop abuse. A count holds nothing else.' },
   { category: 'The app\'s own log (changes, refusals, errors, who did it)', keep: 'Thirty days', why: 'To find and fix problems and to spot abuse. Never holds what you wrote.' },
   { category: 'Emails we sent you (receipts, resets)', keep: 'Ninety days in the outbox, then deleted', why: 'To show what was sent if something goes wrong.' },
+  { category: 'A note already in someone else\'s inbox', keep: 'Until they delete it or their account, even after you delete yours. It keeps the words it was written with, which can hold your name or a line of yours.', why: 'A note does not record who it came from, so we cannot find it to change it.' },
   { category: 'Raw payment messages from the payment provider', keep: 'One year, then the raw text is cleared and the order stays', why: 'To settle a dispute about a payment.' },
-  { category: 'Orders, invoices and money records', keep: 'Seven years, with your name taken off when you delete your account', why: 'The tax and accounting law where the business is registered asks for it.' },
+  { category: 'Orders, invoices and money records', keep: 'Seven years. When you delete your account, your name and the words typed on an order or invoice come off, and the entries you typed in Finance go at once.', why: 'The tax and accounting law where the business is registered asks for it.' },
   { category: 'Discount codes you used (which code, what it took off, when)', keep: 'Until you delete your account', why: 'To hold each code to its limits and to show what it cost.' },
   { category: 'Tracked link clicks (an address hash, never the address)', keep: 'Thirteen months', why: 'So a creator can compare this year with last year.' },
   { category: 'Your terms and privacy choices', keep: 'Until you delete your account', why: 'To show what you agreed to and when.' },
-  { category: 'Lines you write in Community and Bond channels and run discussions', keep: 'A year after each line was written, or until you delete the line or your account', why: 'A channel is a running chat, not a record.' },
+  { category: 'Lines you write in Community and Bond channels, run discussions and School cohort discussions', keep: 'A year after each line was written (a cohort thread goes a year after its newest line), or until you delete the line or your account', why: 'A channel is a running chat, not a record.' },
   { category: 'Data requests (the date, what was asked, when it was done; no names)', keep: 'Three years', why: 'To show we answered in time.' },
   { category: 'Copyright notices', keep: 'Three years after they were settled', why: 'To show what was done about a notice.' },
 ];
@@ -72,7 +76,7 @@ export interface Subprocessor {
 }
 export const SUBPROCESSORS: readonly Subprocessor[] = [
   { name: 'Cloudflare', does: 'Runs the app and its database, and serves the website', data: 'Everything you put in the app, and the address of your device while a page loads', where: 'A global network; data is held in the region Cloudflare picks for our database', when: 'Always' },
-  { name: 'Resend', does: 'Sends email: receipts, password resets, payout notices', data: 'Your email address and the words of the email', where: 'United States', when: 'When we email you' },
+  { name: 'Resend', does: 'Sends email: receipts, password resets, payout notices, and notes people send, such as an Agency copy or a coach\'s invite', data: 'The address it goes to and the words of the email', where: 'United States', when: 'When we email you, or a member sends a note' },
   { name: 'Razorpay', does: 'Takes card and bank payments', data: 'What you buy and what you pay; card and bank details go to Razorpay and never to us', where: 'India', when: 'Only when you pay with money' },
   { name: 'Anthropic', does: 'Writes pieces in Content when a writing model is connected', data: 'The folder of the brand you are writing for: its links, the research from them and your brief', where: 'United States', when: 'Only when you write a piece in Content' },
   { name: 'OpenRouter and the model hosts it uses', does: 'Runs the assistant and the Companion when you type to them with a plan', data: 'What you type, the chat so far and what the assistant or the Companion looks up. A model that keeps nothing is the only one that may read your journal, mood, sleep or trackers', where: 'United States and others, by model', when: 'Only when you type to the assistant or the Companion with a plan' },
@@ -83,7 +87,7 @@ export const SUBPROCESSORS: readonly Subprocessor[] = [
 ];
 
 /** The days after which a thing is removed by the daily tidy-up. One list, read by the cron. */
-export const RETENTION_DAYS = { outbox: 90, webhooks: 365, clicks: 396, resets: 7, requests: 1095, notices: 1095, channelLines: 365, passwordRequests: 90 } as const;
+export const RETENTION_DAYS = { outbox: 90, webhooks: 365, clicks: 396, resets: 7, requests: 1095, notices: 1095, channelLines: 365, passwordRequests: 90, rateLimits: 2 } as const;
 
 /** What the business that runs kreators.app wants shown on the contact page and in the copyright notice process. Every field is set by the owner, never in code. */
 export interface BusinessInfo {

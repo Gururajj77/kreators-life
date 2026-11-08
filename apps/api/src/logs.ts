@@ -7,8 +7,11 @@ import type { AppEnv } from './env';
  * and leave nothing but a bare server-error line, with no name and no path.
  */
 export type LogLevel = 'info' | 'warn' | 'error';
-const PRIVATE_AREAS = new Set(['journal', 'wellbeing', 'companion', 'discover', 'assistant']);
-const KEEP_DAYS = 30;
+const PRIVATE_AREAS = new Set(['journal', 'wellbeing', 'companion', 'discover', 'assistant', 'fitness']);
+/** Kreators Run's own movement tool writes the same wellbeing rows as Fitness, so its paths are private too, though the rest of /run is not. */
+const isPrivatePath = (clean: string, area: string): boolean => PRIVATE_AREAS.has(area) || clean === '/run/move' || clean.startsWith('/run/move/');
+/** Old lines go after thirty days (`tidyOld` in cron.ts). */
+export const LOG_KEEP_DAYS = 30;
 /** A plain read that takes longer than this is logged as a warning ("slow read"), so slow screens show up in Logs with their time. */
 export const SLOW_READ_MS = 1500;
 
@@ -29,7 +32,9 @@ export function cleanPath(path: string): string {
   const parts = path.replace(/^\/api/, '').split('/');
   // The address of a client link, agreement, invoice or document is its key: it never reaches the log (parts[0] is empty, so /public/agency/<token> is at 3).
   // A page of the app that holds one (/a/<token>, /k/, /i/, /d/) is named the same way.
-  const at = parts[1] === 'public' && (parts[2] === 'agency' || parts[2] === 'contracts' || parts[2] === 'invoices') ? (parts[2] === 'agency' && parts[3] === 'doc' ? 4 : 3) : ['a', 'k', 'i', 'd'].includes(parts[1] ?? '') ? 2 : -1;
+  // A life coach's invite link (/public/coach-join/<token>, /me/coach/join/<token>, the page /coach/join/<token>) is the same, and so is a team link (/public/team-link/<token>, the page /t/<token>).
+  const invite = parts[1] === 'public' && parts[2] === 'coach-join' ? 3 : parts[1] === 'me' && parts[2] === 'coach' && parts[3] === 'join' ? 4 : parts[1] === 'coach' && parts[2] === 'join' ? 3 : -1;
+  const at = invite > 0 ? invite : parts[1] === 'public' && (parts[2] === 'agency' || parts[2] === 'contracts' || parts[2] === 'invoices' || parts[2] === 'team-link') ? (parts[2] === 'agency' && parts[3] === 'doc' ? 4 : 3) : ['a', 'k', 'i', 'd', 't'].includes(parts[1] ?? '') ? 2 : -1;
   return parts
     .map((seg, i) => (i === at && seg ? ':token' : /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(seg) || /^[0-9a-f]{16,}$/i.test(seg) || /^\d{5,}$/.test(seg) ? ':id' : seg))
     .join('/')
@@ -46,12 +51,6 @@ export async function writeLog(db: D1Database, line: LogLine): Promise<void> {
   } catch {
     // a log line must never break the request it describes
   }
-}
-
-/** Old lines go after thirty days. Run by the cron. */
-export async function pruneLogs(db: D1Database): Promise<number> {
-  const done = await db.prepare('DELETE FROM app_logs WHERE at < ?').bind(new Date(Date.now() - KEEP_DAYS * 86_400_000).toISOString()).run();
-  return done.meta.changes ?? 0;
 }
 
 /**
@@ -86,7 +85,7 @@ export const logger = (): MiddlewareHandler<AppEnv> => async (c, next) => {
       void p;
     }
   };
-  if (PRIVATE_AREAS.has(area)) {
+  if (isPrivatePath(clean, area)) {
     if (level === 'error') run(writeLog(c.env.DB, { level, area: 'private', status, ms: Date.now() - started, message: 'a server error in a private area' }));
     return;
   }

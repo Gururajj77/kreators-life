@@ -1,5 +1,5 @@
-import { money, PRODUCT_KIND_META, PRODUCT_KINDS, productHasOwnCover, productStatusLabel, type Booking, type Order, type Product, type ProductKind, LOCALE, formatCount } from '@kreators/shared';
-import { longDate, dateTime } from '../lib/date';
+import { money, PRODUCT_KIND_META, PRODUCT_KINDS, productHasOwnCover, productStatusLabel, type Booking, type Order, type Product, type ProductKind, formatCount } from '@kreators/shared';
+import { longDate, dateTime, dayLabel, weekday } from '../lib/date';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -87,7 +87,7 @@ export function Studio({ tab = 'home' }: { tab?: ShopTab }) {
                 </Link>
               </div>
               <div className="mt-sm">
-                <AreaLine values={d.analytics.days.map((x) => x.orders)} max={Math.max(3, ...d.analytics.days.map((x) => x.orders))} labels={d.analytics.days.map((x) => new Date(`${x.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short' }))} color="var(--color-r6)" height={160} empty="No orders in the last two weeks" label="Orders per day for the last fourteen days" />
+                <AreaLine values={d.analytics.days.map((x) => x.orders)} max={Math.max(3, ...d.analytics.days.map((x) => x.orders))} labels={d.analytics.days.map((x) => weekday(x.date))} color="var(--color-r6)" height={160} empty="No orders in the last two weeks" label="Orders per day for the last fourteen days" />
               </div>
             </div>
             <div className="mt-xs flex items-center gap-md rounded-card bg-card p-md shadow-toy-soft">
@@ -600,14 +600,14 @@ function OverridesSection() {
         {overrides.data?.overrides.map((o) => (
           <li key={o.date} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
             <span className="flex-1 text-headline">
-              {new Date(`${o.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', day: 'numeric', month: 'short' })}
+              {dayLabel(o.date)}
               <span className="text-ink-soft">{o.ranges.length === 0 ? ', day off' : `, ${o.ranges.map((r) => `${fmt(r.startMin)} to ${fmt(r.endMin)}`).join(', ')}`}</span>
             </span>
             <Button
               variant="ghost"
               onClick={() => {
                 remove.reset();
-                setRemoving({ date: o.date, label: new Date(`${o.date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'short', day: 'numeric', month: 'short' }) });
+                setRemoving({ date: o.date, label: dayLabel(o.date) });
               }}
               disabled={remove.isPending}
             >

@@ -1,4 +1,4 @@
-import { ATTENDEE_CODE_MAX, ATTENDEE_CODE_MIN, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, attendeeXpLocked, BADGES, kmLabel, normalizeCode, paceLabel, RELATIONSHIP_BY_KEY, RUN_BADGES, RUN_PACE_META, RUN_PACES, RUN_REWARD, type Run as RunItem, type RunClub, type RunCollab, type RunCollabApplication, type RunPace, type RunResponse, type RunTracking, type TagTone, LOCALE } from '@kreators/shared';
+import { ATTENDEE_CODE_MAX, ATTENDEE_CODE_MIN, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, attendeeXpLocked, BADGES, kmLabel, normalizeCode, paceLabel, RELATIONSHIP_BY_KEY, RUN_BADGES, RUN_PACE_META, RUN_PACES, RUN_REWARD, type Run as RunItem, type RunClub, type RunCollab, type RunCollabApplication, type RunPace, type RunResponse, type RunTracking, type TagTone } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Footprints, Gift } from 'lucide-react';
 import { Fragment, useState } from 'react';
@@ -17,7 +17,7 @@ import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { ConfirmDelete } from '../components/ConfirmDelete';
 import { api } from '../lib/api';
-import { shortDay, eventTime } from '../lib/date';
+import { shortDay, eventTime, clockTime, shortDate } from '../lib/date';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
 import { useNow } from '../lib/useNow';
 import { Pager, usePage } from '../components/Pager';
@@ -30,8 +30,9 @@ import { useSeedOnce } from '../lib/useSeed';
 import { RowCard } from '../components/RowCard';
 import { Reveal } from '../components/fx/Reveal';
 import { ToggleChevron } from '../components/ToggleMark';
+import { RunMoveTool } from '../components/RunMoveTool';
 
-const day = (iso: string) => new Date(iso).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' });
+const day = shortDate;
 const REL = RELATIONSHIP_BY_KEY.friendship;
 const pill = (tint: string) => ({ background: `var(--tint-${tint})` });
 const TINT_TONE: Record<'green' | 'red' | 'yellow' | 'purple' | 'sky', TagTone> = { green: 'good', red: 'bad', yellow: 'warn', purple: 'deep', sky: 'info' };
@@ -234,8 +235,11 @@ function TrackingTab({ t }: { t: RunTracking }) {
   const km = (m: number) => kmLabel(m).replace(' km', '');
   return (
     <>
+      {/* The run-or-walk tool (2026-11-07): logged on your own, apart from club entries, and paying nothing. The tiles under it are club runs only. */}
+      <RunMoveTool />
       {/* Run wears the app cover, so the month's numbers sit in the tiles rather than a coloured hero (one or the other, never both). */}
-      <div className="mt-md grid grid-cols-2 gap-xs md:grid-cols-3">
+      <h2 className="mt-lg text-title2">Club runs</h2>
+      <div className="mt-sm grid grid-cols-2 gap-xs md:grid-cols-3">
         <StatTile label="Km this month" value={km(t.monthMetres)} hint="since the 1st" />
         <StatTile label="Runs this month" value={t.monthRuns} hint={t.monthRuns === 0 ? 'none logged yet' : 'since the 1st'} />
         <StatTile label="Runs" value={t.runs} hint="logged with a start code" />
@@ -697,12 +701,13 @@ function RunCodeEditor({ r, onRecode, busy }: { r: RunItem; onRecode: (change: {
 function RunTalk({ runId }: { runId: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <li className="list-none">
+    // A note about the run's photo folder opens the club on `#run-photos-<id>`, which lands here and opens it (lib/useLandOnHash.ts).
+    <li id={`run-photos-${runId}`} className="list-none">
       <span className="flex flex-wrap items-center gap-xs">
         <Link to={`/run?tab=talk&run=${runId}`} className="inline-flex min-h-[44px] items-center px-xs text-subhead font-semibold underline underline-offset-4 hover:text-ink-soft">
           Open the discussion
         </Link>
-        <button type="button" aria-expanded={open} aria-controls={`run-people-${runId}`} onClick={() => setOpen((v) => !v)} className="toy toy-flat inline-flex min-h-[44px] items-center gap-xs rounded-pill px-md text-subhead font-medium underline underline-offset-4">
+        <button type="button" aria-expanded={open} aria-controls={`run-people-${runId}`} data-land-open="" onClick={() => setOpen((v) => !v)} className="toy toy-flat inline-flex min-h-[44px] items-center gap-xs rounded-pill px-md text-subhead font-medium underline underline-offset-4">
           {open ? 'Hide photos and people' : 'Photos and people'}
           <ToggleChevron open={open} />
         </button>
@@ -724,7 +729,7 @@ function RunCard({ r, host, member, onLog, onRecode, onStatus, busy }: { r: RunI
         <p className="m-0 text-balance text-card-title">{r.title}</p>
       </CardHead>
       <p className="m-0 text-card-note text-ink-soft">
-        {eventTime(r.startsAt)} to {new Date(r.endsAt).toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' })}, {kmLabel(r.metres)}
+        {eventTime(r.startsAt)} to {clockTime(r.endsAt)}, {kmLabel(r.metres)}
         {r.meetingPoint ? `, ${r.meetingPoint}` : ''}
       </p>
       <p className="mt-xs m-0 text-card-note text-ink-soft">{stateLine(r)}.</p>

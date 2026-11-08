@@ -8,7 +8,7 @@ import { useAuthed } from '../lib/queries';
 import { Button } from './Button';
 import { Fold } from './Fold';
 import { Sheet } from './Sheet';
-import { feeCents, FIELD } from '../lib/ui';
+import { feeCents, FIELD, RED_YES } from '../lib/ui';
 import { FieldLabel } from './Field';
 import { useCopy } from '../lib/clipboard';
 import { PasswordField, ShownOnce } from './ClientPassword';
@@ -426,10 +426,10 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
         {client &&
           (confirm ? (
             <>
-              <Button variant="outline" onClick={() => remove.mutate()} disabled={remove.isPending}>
+              <button type="button" onClick={() => remove.mutate()} disabled={remove.isPending} className={RED_YES}>
                 Yes, remove it
-              </Button>
-              <Button variant="ghost" onClick={() => setConfirm(false)}>
+              </button>
+              <Button variant="outline" onClick={() => setConfirm(false)}>
                 Keep it
               </Button>
               <p className="m-0 basis-full text-subhead text-ink-soft">{COPY.removeAsk}</p>

@@ -6,11 +6,12 @@ In this lesson you'll learn:
 - How Riya opens the Journal and writes her first entry.
 - How the calendar lets her add or fix any past day.
 - How Prompt me gives her a question when she does not know what to write.
+- How Gratitude for today keeps three short lines a day.
 - What an admin can and cannot do with the Journal.
 
 ## Where the Journal lives
 
-The Journal is in the Reflection group of apps. It is on for every new account, so Riya does not need to switch it on. She finds it under Apps, in the Reflection group, or she taps Journal from the Wellbeing screen.
+The Journal is in the Reflection group of apps. It shows on every new account, so Riya does not need to unhide it. She finds it under Apps, in the Reflection group, or she taps Journal from the Wellbeing screen.
 
 The screen opens with a back link to Wellbeing and the title Journal. Under it sits the water and reminders section. On a laptop it is a small bubble at the left instead.
 
@@ -41,7 +42,7 @@ A day in the future cannot take an entry. The server refuses it.
 
 ## Prompt me
 
-Some nights Riya stares at the box. Under New entry is a section called **Not sure what to write?**
+Some nights Riya stares at the box. Further down the page is a section called **Not sure what to write?**
 
 1. She picks a **Category** from the dropdown, or leaves it on Every category.
 2. She taps **Prompt me**.
@@ -55,6 +56,16 @@ There are sixteen categories, such as Shadow work, Inner child, Gratitude and jo
 
 Which prompts she has seen stays on her own device. It is never sent to the server. The heavy categories end with a care note: stop, and talk to a professional or someone you trust.
 
+## Gratitude for today
+
+Right under **New entry** sits **Gratitude for today**: three short lines, each under its own prompt, from one of the seven pillars or the day itself.
+
+1. Riya types a line. It saves as she types, with no button to tap.
+2. On an empty line, she taps the pillar's name to pick another. The round arrows give her **Another prompt** from the same pillar.
+3. **Make these my usual three** keeps those pillars for each new day.
+
+A prompt she wrote under or skipped comes back only after the rest of that pillar's prompts. Only today and yesterday can change. Older days are read only, and a dot on the calendar marks a day with lines. It pays nothing.
+
 ## Changing or deleting an entry
 
 1. Riya taps an entry in My journals. The sheet opens with her words.
@@ -65,7 +76,7 @@ Which prompts she has seen stays on her own device. It is never sent to the serv
 
 ## The rest of the screen
 
-- **By period:** a block that picks a week, month, quarter or half year and shows her journal and wellbeing numbers for it.
+- **By period:** a block that picks a day, a week, a month, a quarter or a half year and shows her journal and wellbeing numbers for it.
 - **Emerging:** patterns from her own logs, when there is one ready. It reads when she wrote, never what she wrote.
 - **How it works:** the steps of the app, folded at the foot.
 
@@ -77,13 +88,13 @@ Which prompts she has seen stays on her own device. It is never sent to the serv
 
 The Journal is the most private part of the app. You cannot read it, and you should never try to.
 
-- **No staff view:** no admin screen shows a journal entry. Journal data never reaches brands, staff, the leaderboard or Club picks.
-- **Coaches never see it:** a life coach can see many things a student shares, but never the journal.
+- **No staff view:** no admin screen shows a journal entry or a gratitude line. Journal data never reaches brands, staff, the leaderboard or Club picks.
+- **Coaches never see it:** a life coach can see many things a student shares, but never the journal or gratitude.
 - **The assistant:** it reads the journal only for its owner, only when the owner asks about it, and only through a model that keeps no data.
 - **Logs stay clean:** the Logs page never holds journal words. At most it keeps a bare error line with no person and no path.
 - **Switching it:** in Admin, **Flags**, you can turn the Journal off for everyone, set a rollout share or a minimum role. Use this with care, since it is on for all new accounts.
 - **One person:** in Admin, **People**, open a person and use **What does this person see?** to tick or untick Journal for them.
-- **Their data, their call:** a person's export holds their entries, and deleting the account deletes them.
+- **Their data, their call:** a person's export holds their entries and gratitude, and deleting the account deletes them.
 
 If a member writes to Help about a lost entry, you cannot restore it. A deleted entry is gone for good, and the app says so before it goes.
 

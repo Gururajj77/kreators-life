@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { useSession } from '../lib/store';
-import { bento } from '../lib/bento';
+import { evenGrid, evenTile } from '../lib/bento';
 import { useFocusPrefs } from '../lib/focusPrefs';
 import { useParamState } from '../lib/useParamState';
 import { HBars, PillBars, StatTile } from './Charts';
@@ -32,7 +32,8 @@ export function FocusDashboard() {
   // The optional daily goal adds one tile: the days in this stretch that met it. A count only, never a streak.
   const goal = useFocusPrefs().settings.goalMinutes;
   const tiles = goal ? 6 : 5;
-  const cols = goal ? 3 : 5;
+  // Two to a row on a phone and a tablet; five in one row from the laptop width, or six as two rows of three. Even rows (lib/bento.ts).
+  const cols = { base: 2, lg: goal ? 3 : 5 };
   const maxMin = d ? Math.max(unit === 'hours' ? 0.5 : 30, ...d.buckets.map((b) => scale(b.minutes, unit))) : unit === 'hours' ? 0.5 : 30;
   const maxTasks = d ? Math.max(3, ...d.buckets.map((b) => b.tasksDone)) : 3;
 
@@ -70,10 +71,10 @@ export function FocusDashboard() {
 
       {d && (
         <>
-          <div className={`mt-sm grid grid-cols-2 gap-xs ${goal ? 'md:grid-cols-3' : 'md:grid-cols-5'}`}>
-            <StatTile className={bento(0, tiles, 2, cols)} label="Focus time" value={show(d.totals.minutes, unit)} hint={`${d.totals.rounds} ${d.totals.rounds === 1 ? 'session' : 'sessions'}`} />
+          <div className={`mt-sm grid gap-xs ${evenGrid(tiles, cols)}`}>
+            <StatTile className={evenTile(0, tiles, cols)} label="Focus time" value={show(d.totals.minutes, unit)} hint={`${d.totals.rounds} ${d.totals.rounds === 1 ? 'session' : 'sessions'}`} />
             <StatTile
-              className={bento(1, tiles, 2, cols)}
+              className={evenTile(1, tiles, cols)}
               label="Focus quality"
               value={
                 d.totals.quality === null ? (
@@ -86,10 +87,10 @@ export function FocusDashboard() {
               }
               hint={d.totals.rated > 0 ? `${d.totals.rated} ${d.totals.rated === 1 ? 'session' : 'sessions'} rated` : 'Rate a session first'}
             />
-            <StatTile className={bento(2, tiles, 2, cols)} label="Tasks ticked" value={d.totals.tasksDone} hint="in the same stretch" />
-            <StatTile className={bento(3, tiles, 2, cols)} label="Active" value={`${d.totals.activeBuckets} of ${d.buckets.length}`} hint={view === 'day' ? 'days with a session' : view === 'week' ? 'weeks with a session' : 'months with a session'} />
-            <StatTile className={bento(4, tiles, 2, cols)} label="Best" value={d.best ? show(d.best.minutes, unit) : 'None yet'} hint={d.best ? d.best.label : 'Finish a session'} />
-            {goal && <StatTile className={bento(5, tiles, 2, cols)} label="Days the goal was met" value={`${focusGoalMet(d.dayMinutes, goal)} of ${d.dayMinutes.length}`} hint={`${goal} minutes a day`} />}
+            <StatTile className={evenTile(2, tiles, cols)} label="Tasks ticked" value={d.totals.tasksDone} hint="in the same stretch" />
+            <StatTile className={evenTile(3, tiles, cols)} label="Active" value={`${d.totals.activeBuckets} of ${d.buckets.length}`} hint={view === 'day' ? 'days with a session' : view === 'week' ? 'weeks with a session' : 'months with a session'} />
+            <StatTile className={evenTile(4, tiles, cols)} label="Best" value={d.best ? show(d.best.minutes, unit) : 'None yet'} hint={d.best ? d.best.label : 'Finish a session'} />
+            {goal && <StatTile className={evenTile(5, tiles, cols)} label="Days the goal was met" value={`${focusGoalMet(d.dayMinutes, goal)} of ${d.dayMinutes.length}`} hint={`${goal} minutes a day`} />}
           </div>
           <p className="mt-sm m-0 text-subhead text-ink-soft">{d.trend}</p>
 

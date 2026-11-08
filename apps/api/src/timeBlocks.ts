@@ -25,7 +25,9 @@ import {
 import { nowIso } from './db';
 
 // Time blocks, day templates and the weekly pattern on the server (docs/time-blocks.md). Every read and write is the person's own.
-// The starting set is added once per person (`ensureTimeBlocks`) with fixed ids, so two first reads at once add it once.
+// The starting set lives in code until the person's first change to a block or a template (2026-11-07, the founder: the rows were 769 of the
+// 1,076 a sign-up wrote). Until then every read answers from `startingSet` with the same fixed ids the rows get, so a task, a date or a
+// weekday that points at a starting block or template keeps pointing at it. `users.time_blocks_seeded_at` says which: empty is code, set is rows.
 
 export interface TimeBlockRow {
   id: string;
@@ -96,35 +98,72 @@ export function toDayTemplate(r: DayTemplateRow, slots: TemplateSlot[]): DayTemp
   };
 }
 
-/** The statements that add the starting blocks and templates (only the seeds asked for), each one statement over a JSON list. */
-function seedStatements(db: D1Database, userId: string, blockSeeds: ReadonlySet<string>, templateSeeds: ReadonlySet<string>, opts: { allowDefault: boolean; blockSortFrom: number; templateSortFrom: number }): D1PreparedStatement[] {
-  const now = nowIso();
-  const blocks = STARTING_BLOCKS.filter((b) => blockSeeds.has(b.seed)).map((b) => ({
+const startingBlockRows = (userId: string, seeds?: ReadonlySet<string>, sortFrom = 0): TimeBlockRow[] =>
+  STARTING_BLOCKS.filter((b) => !seeds || seeds.has(b.seed)).map((b) => ({
     id: seededBlockId(b.seed, userId),
+    user_id: userId,
     seed: b.seed,
     name: b.name,
     tag: b.tag,
     color: b.color,
-    area: b.area,
-    pillar: b.pillar,
-    sort: opts.blockSortFrom + STARTING_BLOCKS.indexOf(b),
+    life_area: b.area,
+    relationship: b.pillar,
+    sort: sortFrom + STARTING_BLOCKS.indexOf(b),
+    created_at: '',
+    updated_at: '',
   }));
-  const templates = STARTING_TEMPLATES.filter((t) => templateSeeds.has(t.seed)).map((t) => ({
+const startingTemplateRows = (userId: string, seeds?: ReadonlySet<string>, allowDefault = true, sortFrom = 0): DayTemplateRow[] =>
+  STARTING_TEMPLATES.filter((t) => !seeds || seeds.has(t.seed)).map((t) => ({
     id: seededTemplateId(t.seed, userId),
+    user_id: userId,
     seed: t.seed,
-    kind: t.sourceKind,
+    source_kind: t.sourceKind,
     name: t.name,
     lead: t.lead,
     second: t.second,
     why: t.why,
     source: t.source,
-    def: opts.allowDefault && t.isDefault ? 1 : 0,
-    sort: opts.templateSortFrom + STARTING_TEMPLATES.indexOf(t),
+    is_default: allowDefault && t.isDefault ? 1 : 0,
+    sort: sortFrom + STARTING_TEMPLATES.indexOf(t),
     color: t.color,
+    created_at: '',
+    updated_at: '',
   }));
+const startingSlots = (t: (typeof STARTING_TEMPLATES)[number], userId: string): TemplateSlot[] => t.slots.map((s) => ({ blockId: seededBlockId(s.block, userId), start: minuteOf(s.start) ?? 0, end: minuteOf(s.end) ?? 0 }));
+
+/** What a person who has changed nothing has: the same blocks and templates, through the same mappers, as their rows would give. `slots: false` as in `loadBlocking`. */
+export function startingSet(userId: string, opts: { slots?: boolean } = {}): { blocks: TimeBlock[]; templates: DayTemplate[] } {
+  return {
+    blocks: startingBlockRows(userId).map(toTimeBlock),
+    templates: startingTemplateRows(userId).map((r, i) => toDayTemplate(r, opts.slots === false ? [] : startingSlots(STARTING_TEMPLATES[i]!, userId))),
+  };
+}
+/** One starting block as its row would read, by its id; null when the id is not one. */
+export const startingBlockRow = (userId: string, id: string): TimeBlockRow | null => startingBlockRows(userId).find((r) => r.id === id) ?? null;
+/** One starting template by its id, with its slots; null when the id is not one. */
+export const startingTemplate = (userId: string, id: string): DayTemplate | null => startingSet(userId).templates.find((t) => t.id === id) ?? null;
+
+/**
+ * Whether the person's starting set is rows yet. Read beside whatever it decides about, in one `Promise.all`: the binding sends the reads of one
+ * turn as one batch (d1Batch.ts), so one answer sees one state.
+ */
+export async function blocksWritten(db: D1Database, userId: string): Promise<boolean> {
+  const row = await db.prepare('SELECT time_blocks_seeded_at AS at FROM users WHERE id = ?').bind(userId).first<{ at: string | null }>();
+  return Boolean(row?.at);
+}
+
+/** Only the batch that made this claim adds rows: a later one from another tab, read before the first, must not bring back what was deleted since. Unclaimed (a restore) always adds. */
+const claimed = (claim: number) => `WHERE ?${claim} IS NULL OR (SELECT time_blocks_seeded_at FROM users WHERE id = ?1) = ?${claim}`;
+
+/** The statements that add the starting blocks and templates (only the seeds asked for), each one statement over a JSON list. */
+function seedStatements(db: D1Database, userId: string, blockSeeds: ReadonlySet<string>, templateSeeds: ReadonlySet<string>, opts: { allowDefault: boolean; blockSortFrom: number; templateSortFrom: number; claim?: string }): D1PreparedStatement[] {
+  const now = nowIso();
+  const claim = opts.claim ?? null;
+  const blocks = startingBlockRows(userId, blockSeeds, opts.blockSortFrom);
+  const templates = startingTemplateRows(userId, templateSeeds, opts.allowDefault, opts.templateSortFrom);
   const slots = STARTING_TEMPLATES.filter((t) => templateSeeds.has(t.seed)).flatMap((t) => {
     const tid = seededTemplateId(t.seed, userId);
-    return t.slots.map((s, i) => ({ id: `${tid}-${i}`, tid, block: seededBlockId(s.block, userId), start: minuteOf(s.start) ?? 0, end: minuteOf(s.end) ?? 0 }));
+    return startingSlots(t, userId).map((s, i) => ({ id: `${tid}-${i}`, tid, block: s.blockId, start: s.start, end: s.end }));
   });
   const out: D1PreparedStatement[] = [];
   if (blocks.length)
@@ -133,63 +172,66 @@ function seedStatements(db: D1Database, userId: string, blockSeeds: ReadonlySet<
         .prepare(
           `INSERT OR IGNORE INTO time_blocks (id, user_id, seed, name, tag, color, life_area, relationship, sort, created_at, updated_at)
            SELECT json_extract(value, '$.id'), ?1, json_extract(value, '$.seed'), json_extract(value, '$.name'), json_extract(value, '$.tag'), json_extract(value, '$.color'),
-             json_extract(value, '$.area'), json_extract(value, '$.pillar'), json_extract(value, '$.sort'), ?2, ?2 FROM json_each(?3)`,
+             json_extract(value, '$.life_area'), json_extract(value, '$.relationship'), json_extract(value, '$.sort'), ?2, ?2 FROM json_each(?3) ${claimed(4)}`,
         )
-        .bind(userId, now, JSON.stringify(blocks)),
+        .bind(userId, now, JSON.stringify(blocks), claim),
     );
   if (templates.length)
     out.push(
       db
         .prepare(
           `INSERT OR IGNORE INTO day_templates (id, user_id, seed, source_kind, name, lead, second, why, source, is_default, sort, color, created_at, updated_at)
-           SELECT json_extract(value, '$.id'), ?1, json_extract(value, '$.seed'), json_extract(value, '$.kind'), json_extract(value, '$.name'), json_extract(value, '$.lead'),
-             json_extract(value, '$.second'), json_extract(value, '$.why'), json_extract(value, '$.source'), json_extract(value, '$.def'), json_extract(value, '$.sort'),
-             json_extract(value, '$.color'), ?2, ?2 FROM json_each(?3)`,
+           SELECT json_extract(value, '$.id'), ?1, json_extract(value, '$.seed'), json_extract(value, '$.source_kind'), json_extract(value, '$.name'), json_extract(value, '$.lead'),
+             json_extract(value, '$.second'), json_extract(value, '$.why'), json_extract(value, '$.source'), json_extract(value, '$.is_default'), json_extract(value, '$.sort'),
+             json_extract(value, '$.color'), ?2, ?2 FROM json_each(?3) ${claimed(4)}`,
         )
-        .bind(userId, now, JSON.stringify(templates)),
+        .bind(userId, now, JSON.stringify(templates), claim),
     );
-  if (slots.length) out.push(slotInsert(db, userId, slots));
+  if (slots.length) out.push(slotInsert(db, userId, slots, claim));
   return out;
 }
 
-/** One statement that adds a list of slots (`{ id, tid, block, start, end }`) for the person. */
-export function slotInsert(db: D1Database, userId: string, slots: { id: string; tid: string; block: string; start: number; end: number }[]): D1PreparedStatement {
+/**
+ * One statement that adds a list of slots (`{ id, tid, block, start, end }`) for the person. Outside a claim (the seeding batch adds both ends itself), a slot
+ * whose block or template another tab deleted since it was checked is left out: the foreign key would otherwise turn that moment into a 500.
+ */
+export function slotInsert(db: D1Database, userId: string, slots: { id: string; tid: string; block: string; start: number; end: number }[], claim: string | null = null): D1PreparedStatement {
+  const columns = `INSERT OR IGNORE INTO day_template_slots (id, template_id, user_id, block_id, start_min, end_min)
+       SELECT json_extract(value, '$.id'), json_extract(value, '$.tid'), ?1, json_extract(value, '$.block'), json_extract(value, '$.start'), json_extract(value, '$.end') FROM json_each(?2)`;
+  if (claim) return db.prepare(`${columns} ${claimed(3)}`).bind(userId, JSON.stringify(slots), claim);
   return db
     .prepare(
-      `INSERT OR IGNORE INTO day_template_slots (id, template_id, user_id, block_id, start_min, end_min)
-       SELECT json_extract(value, '$.id'), json_extract(value, '$.tid'), ?1, json_extract(value, '$.block'), json_extract(value, '$.start'), json_extract(value, '$.end') FROM json_each(?2)`,
+      `${columns} WHERE EXISTS (SELECT 1 FROM time_blocks WHERE id = json_extract(value, '$.block') AND user_id = ?1) AND EXISTS (SELECT 1 FROM day_templates WHERE id = json_extract(value, '$.tid') AND user_id = ?1)`,
     )
     .bind(userId, JSON.stringify(slots));
 }
 
 /**
- * Adds the starting blocks and day templates the first time a person's blocks are read (once: `users.time_blocks_seeded_at`). The session's
- * user row is already loaded, so a person who has them costs no read. Fixed ids and INSERT OR IGNORE make two first reads at once add them once.
+ * Writes the starting blocks and day templates as the person's rows, in one batch, just before their first change to a block or a template:
+ * nothing else needs them, since a task, a date and a weekday only hold an id and the ids never change. Safe against two tabs: the batch
+ * first claims the account with a stamp no other batch has (`WHERE time_blocks_seeded_at IS NULL`) and each insert runs only under that
+ * claim, so a tab that read the account before another tab's first change adds nothing, and a template deleted in between stays deleted.
  */
 export async function ensureTimeBlocks(db: D1Database, user: { id: string; time_blocks_seeded_at?: string | null }): Promise<void> {
   if (user.time_blocks_seeded_at) return;
-  if (user.time_blocks_seeded_at === undefined) {
-    const row = await db.prepare('SELECT time_blocks_seeded_at AS at FROM users WHERE id = ?').bind(user.id).first<{ at: string | null }>();
-    if (row?.at) {
-      user.time_blocks_seeded_at = row.at;
-      return;
-    }
-  }
-  const now = nowIso();
+  // Still a UTC ISO time, with three more digits so that two batches never hold one stamp.
+  const claim = nowIso().replace('Z', `${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}Z`);
   await db.batch([
-    ...seedStatements(db, user.id, new Set(STARTING_BLOCKS.map((b) => b.seed)), new Set(STARTING_TEMPLATES.map((t) => t.seed)), { allowDefault: true, blockSortFrom: 0, templateSortFrom: 0 }),
-    db.prepare('UPDATE users SET time_blocks_seeded_at = ? WHERE id = ? AND time_blocks_seeded_at IS NULL').bind(now, user.id),
+    db.prepare('UPDATE users SET time_blocks_seeded_at = ? WHERE id = ? AND time_blocks_seeded_at IS NULL').bind(claim, user.id),
+    ...seedStatements(db, user.id, new Set(STARTING_BLOCKS.map((b) => b.seed)), new Set(STARTING_TEMPLATES.map((t) => t.seed)), { allowDefault: true, blockSortFrom: 0, templateSortFrom: 0, claim }),
   ]);
-  user.time_blocks_seeded_at = now;
+  user.time_blocks_seeded_at = claim;
 }
 
-/** Adds back any starting block or template whose seed the person no longer has. Never touches one that still exists, never the pattern. */
+/** Adds back any starting block or template whose seed the person no longer has. Never touches one that still exists, never the pattern. With no rows yet, none can be missing. */
 export async function restoreStartingSet(db: D1Database, userId: string): Promise<{ blocks: number; templates: number }> {
-  const [b, t, any] = await db.batch([
+  const [written, b, t, any] = await db.batch([
+    db.prepare('SELECT time_blocks_seeded_at AS at FROM users WHERE id = ?').bind(userId),
     db.prepare('SELECT seed, sort FROM time_blocks WHERE user_id = ?').bind(userId),
     db.prepare('SELECT seed, sort FROM day_templates WHERE user_id = ?').bind(userId),
     db.prepare('SELECT 1 AS one FROM day_templates WHERE user_id = ? AND is_default = 1').bind(userId),
   ]);
+  if (!(written!.results as { at: string | null }[])[0]?.at) return { blocks: 0, templates: 0 };
   const haveB = new Set((b!.results as { seed: string | null }[]).map((r) => r.seed).filter(Boolean));
   const haveT = new Set((t!.results as { seed: string | null }[]).map((r) => r.seed).filter(Boolean));
   const maxB = Math.max(-1, ...(b!.results as { sort: number }[]).map((r) => r.sort));
@@ -213,19 +255,24 @@ export interface Blocking {
 }
 
 /** Everything a person's days are made from, plus the date changes for the dates asked about. One round trip. */
-export async function loadBlocking(db: D1Database, userId: string, dates: readonly string[]): Promise<Blocking> {
+export async function loadBlocking(db: D1Database, userId: string, dates: readonly string[], opts: { slots?: boolean } = {}): Promise<Blocking> {
   const days = [...new Set(dates)];
-  const [b, t, s, p, d] = await db.batch([
+  const noSlots = opts.slots === false;
+  // `slots: false` is for what only needs which template a day has (a period's kinds of day): a person's slots are the most rows here, about 130, and a review reads this twice.
+  const [written, b, t, s, p, d] = await db.batch([
+    db.prepare('SELECT time_blocks_seeded_at AS at FROM users WHERE id = ?').bind(userId),
     db.prepare('SELECT * FROM time_blocks WHERE user_id = ? ORDER BY sort ASC, created_at ASC').bind(userId),
     db.prepare('SELECT * FROM day_templates WHERE user_id = ? ORDER BY sort ASC, created_at ASC').bind(userId),
-    db.prepare('SELECT template_id, block_id, start_min, end_min FROM day_template_slots WHERE user_id = ? ORDER BY start_min ASC').bind(userId),
+    noSlots ? db.prepare('SELECT template_id, block_id, start_min, end_min FROM day_template_slots WHERE 0') : db.prepare('SELECT template_id, block_id, start_min, end_min FROM day_template_slots WHERE user_id = ? ORDER BY start_min ASC').bind(userId),
     db.prepare('SELECT weekday, template_id FROM week_patterns WHERE user_id = ?').bind(userId),
     db.prepare('SELECT day, kind, template_id FROM day_types WHERE user_id = ? AND day IN (SELECT value FROM json_each(?))').bind(userId, JSON.stringify(days)),
   ]);
   const slotsBy = new Map<string, TemplateSlot[]>();
   for (const r of s!.results as SlotRow[]) slotsBy.set(r.template_id, [...(slotsBy.get(r.template_id) ?? []), { blockId: r.block_id, start: r.start_min, end: r.end_min }]);
-  const blocks = (b!.results as TimeBlockRow[]).map(toTimeBlock);
-  const templates = (t!.results as DayTemplateRow[]).map((r) => toDayTemplate(r, slotsBy.get(r.id) ?? []));
+  // No rows yet: the starting set from code, read beside the pattern and the dates in this one batch.
+  const start = (written!.results as { at: string | null }[])[0]?.at ? null : startingSet(userId, { slots: !noSlots });
+  const blocks = start?.blocks ?? (b!.results as TimeBlockRow[]).map(toTimeBlock);
+  const templates = start?.templates ?? (t!.results as DayTemplateRow[]).map((r) => toDayTemplate(r, slotsBy.get(r.id) ?? []));
   const ids = new Set(templates.map((x) => x.id));
   const defaultId = templates.find((x) => x.isDefault)?.id ?? templates[0]?.id ?? '';
   const pattern: (string | null)[] = [null, null, null, null, null, null, null];
@@ -246,15 +293,23 @@ export function accountDay(user: { created_at?: string | null; timezone?: string
 /**
  * The person's kinds of day from `from` to `to`, both included (2026-11-06, docs/time-blocks.md): each day the template set for it,
  * else the weekly pattern's, the default counting as none, read through the shared `kindsOfDays`, with each template's colour
- * (`templateColor`). Reads only, one round trip; the starting set is not added here.
+ * (`templateColor`). Reads only, one round trip.
  */
-export async function kindsBetween(db: D1Database, user: { id: string; created_at?: string | null; timezone?: string | null }, from: string, to: string): Promise<{ blocking: Blocking; kinds: KindsOfDays; colors: Record<string, BlockColor | null> }> {
+export async function kindsBetween(db: D1Database, user: { id: string; created_at?: string | null; timezone?: string | null }, from: string, to: string, opts: { read?: Promise<Blocking> } = {}): Promise<{ blocking: Blocking; kinds: KindsOfDays; colors: Record<string, BlockColor | null> }> {
   const dates: string[] = [];
   for (let d = from, i = 0; d <= to && i < 400; d = addDays(d, 1), i += 1) dates.push(d);
-  const blocking = await loadBlocking(db, user.id, dates);
+  const blocking = await (opts.read ?? loadBlocking(db, user.id, dates));
   const kinds = kindsOfDays({ templates: blocking.templates, defaultId: blocking.defaultId, pattern: blocking.pattern, overrides: blocking.overrides, since: accountDay(user) }, from, to);
   const colors: Record<string, BlockColor | null> = Object.create(null) as Record<string, BlockColor | null>;
   for (const t of blocking.templates) colors[t.id] = templateColor(t, blocking.blocks);
+  // A read without slots: a kind that has days and no colour of its own takes its longest block's, so those few slots are read now.
+  const blank = opts.read ? kinds.tally.map((x) => x.templateId).filter((id) => !colors[id] && !blocking.templates.find((t) => t.id === id)?.color) : [];
+  if (blank.length) {
+    const rows = await db.prepare(`SELECT template_id, block_id, start_min, end_min FROM day_template_slots WHERE user_id = ? AND template_id IN (${blank.map(() => '?').join(', ')}) ORDER BY start_min ASC`).bind(user.id, ...blank).all<SlotRow>();
+    for (const t of blocking.templates) {
+      if (blank.includes(t.id)) colors[t.id] = templateColor({ ...t, slots: rows.results.filter((r) => r.template_id === t.id).map((r) => ({ blockId: r.block_id, start: r.start_min, end: r.end_min })) }, blocking.blocks);
+    }
+  }
   return { blocking, kinds, colors };
 }
 
@@ -274,14 +329,30 @@ export function dayPlan(blocking: Blocking, date: string): DayPlan {
   };
 }
 
+/** The same match as the SQL below, over the starting names (all plain letters, so case folds the same). */
+const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
 /** A block or template of the person's by its name (no case, trimmed), for the assistant; screens send ids. */
 export async function blockIdByName(db: D1Database, userId: string, name: string): Promise<string | null> {
-  const row = await db.prepare('SELECT id FROM time_blocks WHERE user_id = ? AND lower(trim(name)) = lower(trim(?)) ORDER BY sort LIMIT 1').bind(userId, name).first<{ id: string }>();
-  return row?.id ?? null;
+  const [row, written] = await Promise.all([db.prepare('SELECT id FROM time_blocks WHERE user_id = ? AND lower(trim(name)) = lower(trim(?)) ORDER BY sort LIMIT 1').bind(userId, name).first<{ id: string }>(), blocksWritten(db, userId)]);
+  if (written) return row?.id ?? null;
+  return startingBlockRows(userId).find((r) => sameName(r.name, name))?.id ?? null;
 }
 export async function templateIdByName(db: D1Database, userId: string, name: string): Promise<string | null> {
-  const row = await db.prepare('SELECT id FROM day_templates WHERE user_id = ? AND lower(trim(name)) = lower(trim(?)) ORDER BY sort LIMIT 1').bind(userId, name).first<{ id: string }>();
-  return row?.id ?? null;
+  const [row, written] = await Promise.all([db.prepare('SELECT id FROM day_templates WHERE user_id = ? AND lower(trim(name)) = lower(trim(?)) ORDER BY sort LIMIT 1').bind(userId, name).first<{ id: string }>(), blocksWritten(db, userId)]);
+  if (written) return row?.id ?? null;
+  return startingTemplateRows(userId).find((r) => sameName(r.name, name))?.id ?? null;
+}
+/** A block or template of the person's by its id: one of their rows, or a starting one while they have none. */
+export async function ownBlockId(db: D1Database, userId: string, id: string): Promise<string | null> {
+  const [row, written] = await Promise.all([db.prepare('SELECT id FROM time_blocks WHERE id = ? AND user_id = ?').bind(id, userId).first<{ id: string }>(), blocksWritten(db, userId)]);
+  if (written) return row?.id ?? null;
+  return startingBlockRow(userId, id)?.id ?? null;
+}
+export async function ownTemplateId(db: D1Database, userId: string, id: string): Promise<string | null> {
+  const [row, written] = await Promise.all([db.prepare('SELECT id FROM day_templates WHERE id = ? AND user_id = ?').bind(id, userId).first<{ id: string }>(), blocksWritten(db, userId)]);
+  if (written) return row?.id ?? null;
+  return startingTemplateRows(userId).find((r) => r.id === id)?.id ?? null;
 }
 
 /**
@@ -293,8 +364,8 @@ export async function blockFromBody(db: D1Database, userId: string, body: { time
     const v = body.timeBlockId;
     if (v === null || v === '' || v === 'none') return { id: null };
     if (typeof v !== 'string') return { error: 'pick one of your time blocks' };
-    const own = await db.prepare('SELECT id FROM time_blocks WHERE id = ? AND user_id = ?').bind(v, userId).first<{ id: string }>();
-    return own ? { id: own.id } : { error: 'pick one of your time blocks' };
+    const own = await ownBlockId(db, userId, v);
+    return own ? { id: own } : { error: 'pick one of your time blocks' };
   }
   if ('timeBlock' in body && body.timeBlock !== undefined) {
     const v = body.timeBlock;

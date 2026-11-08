@@ -12,7 +12,7 @@ import { Sheet } from './Sheet';
 import { DELETE_BTN } from './ConfirmDelete';
 import { ToggleChevron, ToggleIcon } from './ToggleMark';
 import { Ellipsis } from 'lucide-react';
-import { FIELD } from '../lib/ui';
+import { FIELD, RED_YES } from '../lib/ui';
 
 type Queue = ReturnType<typeof useActionQueue>;
 
@@ -201,7 +201,7 @@ export function NotToDoList({ items, date, queue }: Props) {
               </p>
             )}
             <div className="flex flex-wrap gap-xs">
-              <button type="button" disabled={queue.isPending(`ntd-${removing.id}`)} onClick={() => remove(removing)} className={DELETE_BTN}>
+              <button type="button" disabled={queue.isPending(`ntd-${removing.id}`)} onClick={() => remove(removing)} className={RED_YES}>
                 Yes, remove it
               </button>
               <Button variant="outline" onClick={() => setRemoving(null)}>

@@ -20,8 +20,11 @@ import { Sheet } from './Sheet';
 import { ConfirmDelete } from './ConfirmDelete';
 import { StatusTag } from './StatusTag';
 import { useView, ViewToggle } from './ViewToggle';
+import { evenGrid, evenTile } from '../lib/bento';
 
 const PER_STEP = 25;
+// The new invoice's choices: however many templates a person keeps, the rows stay full (lib/bento.ts).
+const PICK_COLS = { base: 1, md: 2 } as const;
 
 /** A select in a filter row; the right padding keeps the words clear of its arrow. */
 export const FILTER_SELECT = 'min-h-[44px] max-w-full rounded-pill border-2 border-line bg-card pl-sm pr-xl text-subhead font-medium text-ink';
@@ -305,6 +308,9 @@ function NewInvoice({ open, clientId, onClose, onMade }: { open: boolean; client
     onError: (e: Error) => setErr(e.message),
   });
   const card = 'toy toy-soft rounded-tile border-2 border-line bg-card p-sm text-left disabled:opacity-50';
+  const own = (mine.data?.templates ?? []).filter((t) => t.scope === 'own');
+  const house = (mine.data?.templates ?? []).filter((t) => t.scope === 'house');
+  const startCount = INVOICE_STARTERS.length + 1; // Blank, then the built-in ones.
   return (
     <Sheet open={open} onClose={onClose} title="New invoice">
       <div className="grid gap-sm pb-xl">
@@ -325,33 +331,33 @@ function NewInvoice({ open, clientId, onClose, onMade }: { open: boolean; client
           </div>
         )}
         <p className="m-0 text-subhead text-ink-soft">Pick a starting point. Every one starts from your business details, and you set the amounts in the designer.</p>
-        <div role="group" aria-label="Starting points" className="grid gap-xs md:grid-cols-2">
-          <button type="button" disabled={!id || make.isPending} onClick={() => make.mutate({})} className={card}>
+        <div role="group" aria-label="Starting points" className={`grid gap-xs ${evenGrid(startCount, PICK_COLS)}`}>
+          <button type="button" disabled={!id || make.isPending} onClick={() => make.mutate({})} className={`${card} ${evenTile(0, startCount, PICK_COLS)}`}>
             <span className="block text-card-title">Blank</span>
             <span className="mt-xs block text-card-note text-ink-soft">One line, from your profile.</span>
           </button>
-          {INVOICE_STARTERS.map((t) => (
-            <button key={t.key} type="button" disabled={!id || make.isPending} onClick={() => make.mutate({ starter: t.key })} className={card}>
+          {INVOICE_STARTERS.map((t, i) => (
+            <button key={t.key} type="button" disabled={!id || make.isPending} onClick={() => make.mutate({ starter: t.key })} className={`${card} ${evenTile(i + 1, startCount, PICK_COLS)}`}>
               <span className="block text-card-title">{t.name}</span>
               <span className="mt-xs block text-card-note text-ink-soft">{t.blurb}</span>
             </button>
           ))}
         </div>
         <h3 className="m-0 mt-xs text-headline">Your templates</h3>
-        {mine.data && mine.data.templates.filter((t) => t.scope === 'own').length === 0 && <p className="m-0 text-subhead text-ink-soft">None yet. Open any invoice and tap Save as template to keep it as a starting point.</p>}
-        <div role="group" aria-label="Your templates" className="grid gap-xs md:grid-cols-2">
-          {(mine.data?.templates ?? []).filter((t) => t.scope === 'own').map((t) => (
-            <button key={t.id} type="button" disabled={!id || make.isPending} onClick={() => make.mutate({ templateId: t.id })} className={card}>
+        {mine.data && own.length === 0 && <p className="m-0 text-subhead text-ink-soft">None yet. Open any invoice and tap Save as template to keep it as a starting point.</p>}
+        <div role="group" aria-label="Your templates" data-tile-list="their own, named by them" className={`grid gap-xs ${evenGrid(own.length, PICK_COLS)}`}>
+          {own.map((t, i) => (
+            <button key={t.id} type="button" disabled={!id || make.isPending} onClick={() => make.mutate({ templateId: t.id })} className={`${card} ${evenTile(i, own.length, PICK_COLS)}`}>
               <span className="block text-card-title">{t.name}</span>
               <span className="mt-xs block text-card-note text-ink-soft">{t.summary}</span>
             </button>
           ))}
         </div>
         <h3 className="m-0 mt-xs text-headline">House templates</h3>
-        {mine.data && mine.data.templates.filter((t) => t.scope === 'house').length === 0 && <p className="m-0 text-subhead text-ink-soft">No house templates yet.</p>}
-        <div role="group" aria-label="House templates" className="grid gap-xs md:grid-cols-2">
-          {(mine.data?.templates ?? []).filter((t) => t.scope === 'house').map((t) => (
-            <button key={t.id} type="button" disabled={!id || make.isPending} onClick={() => make.mutate({ houseId: t.id })} className={card}>
+        {mine.data && house.length === 0 && <p className="m-0 text-subhead text-ink-soft">No house templates yet.</p>}
+        <div role="group" aria-label="House templates" data-tile-list="the team's, named by them" className={`grid gap-xs ${evenGrid(house.length, PICK_COLS)}`}>
+          {house.map((t, i) => (
+            <button key={t.id} type="button" disabled={!id || make.isPending} onClick={() => make.mutate({ houseId: t.id })} className={`${card} ${evenTile(i, house.length, PICK_COLS)}`}>
               <span className="flex flex-wrap items-center gap-xs text-card-title">
                 {t.name}
                 <StatusTag tone="info">House template</StatusTag>
@@ -458,6 +464,7 @@ export function InvoiceTemplates() {
                   <Button
                     size="sm"
                     variant="outline"
+                    className={sure === t.id ? 'red-armed' : ''}
                     onClick={() => {
                       if (sure === t.id) {
                         remove.mutate(t.id);

@@ -6,9 +6,37 @@
  *   - 20 or more server errors (5xx),
  *   - a role or a permission changed.
  * Each alert is sent at most once an hour per admin: the inbox row's id carries the kind and the hour, and INSERT OR IGNORE does the rest.
- * The text holds counts only, never a person's name, address or a request.
+ * A note that is new also goes out as one private email to that admin, so the mail follows the same once an hour (2026-11-07).
+ * The text holds counts only, never a person's name, address, a request or a secret.
  */
+// Alerts go to the team's own inbox tab (kind `team`). notes.ts imports only a type, so Node still loads this file without db.ts.
+import { noteStmt } from './notes.ts';
+import type { Turn } from './cronTick.ts';
+
+/** What the alerts need to send mail. cron.ts hands it over, so this file imports nothing from ops.ts and still loads in Node for the smoke test. */
+export interface AlertMailer {
+  /** False while no mail provider is set up: the mail only waits in the outbox, and the inbox note says so. */
+  ready: boolean;
+  /** The site's own address (PUBLIC_URL), for the link to the log. No link without it, and never the Host of a request. */
+  site?: string;
+  send: (msg: { userId: string; to: string; subject: string; body: string; private: true }) => Promise<void>;
+}
+
+/** Said in the inbox note while mail is not set up, so nobody counts on an email that cannot come. */
+export const ALERT_NO_MAIL = 'Mail is not set up on this server, so this inbox note is the only alert.';
+
+/** The one email for an alert: the same counts as the inbox note, and no name, address, token or secret. */
+export function alertMail(a: { title: string; body: string }, site = ''): { subject: string; body: string } {
+  const home = site.trim().replace(/\/+$/, '');
+  return {
+    subject: `kreators.app security alert: ${a.title}`,
+    body: `${a.body}\n\n${home ? `Open the log: ${home}/internal/logs\n\n` : ''}You get this because you are an admin of kreators.app. It holds counts only, and each kind of alert comes at most once an hour.`,
+  };
+}
+
 export const ALERT_WINDOW_MIN = 15;
+/** What the alerts may take from a tick when several go out: every note and a handful of mails. */
+const ALERT_TRIPS = 10;
 export const ALERT_LEVELS = { failedSignins: 20, tooMany: 100, serverErrors: 20 } as const;
 
 export interface AlertFacts {
@@ -50,21 +78,42 @@ export function alertsFor(f: AlertFacts): { kind: string; title: string; body: s
   return out;
 }
 
-/** Look, and tell every admin once an hour per kind. Returns how many inbox rows were written. */
-export async function securityAlerts(db: D1Database, now = new Date()): Promise<number> {
+/** Look, and tell every admin once an hour per kind, in the inbox and by email. Returns how many inbox rows were written. */
+export async function securityAlerts(db: D1Database, mailer: AlertMailer, now = new Date(), turn?: Turn): Promise<number> {
   const found = alertsFor(await alertFacts(db, now));
   if (found.length === 0) return 0;
-  const admins = await db.prepare("SELECT id FROM users WHERE role = 'admin'").all<{ id: string }>();
+  // In a cron tick the alerts go first in line. One mail is a call out and a line in the outbox; at the very most a tick mails a few, and every note is in by then.
+  const share = turn ? await turn(ALERT_TRIPS) : null;
+  const admins = await db.prepare("SELECT id, email FROM users WHERE role = 'admin'").all<{ id: string; email: string | null }>();
   const hour = now.toISOString().slice(0, 13);
-  const notes = found.flatMap((a) =>
-    admins.results.map((admin) =>
-      db
-        .prepare("INSERT OR IGNORE INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'team', ?, ?, '/internal/logs', NULL, ?)")
-        .bind(`alert-${a.kind}-${hour}-${admin.id}`, admin.id, a.title, a.body, now.toISOString()),
-    ),
+  const body = (a: { body: string }) => (mailer.ready ? a.body : `${a.body} ${ALERT_NO_MAIL}`);
+  const rows = found.flatMap((alert) =>
+    admins.results.map((admin) => ({
+      alert,
+      admin,
+      note: noteStmt(db, { id: `alert-${alert.kind}-${hour}-${admin.id}`, userId: admin.id, kind: 'team', title: alert.title, body: body(alert), link: '/internal/logs', at: now.toISOString() }, 'once'),
+    })),
   );
   // One round trip a fifty notes, not one each; the id makes each one once an hour. No import of db.ts here: the smoke test loads this file in Node.
-  let written = 0;
-  for (let i = 0; i < notes.length; i += 50) for (const done of await db.batch(notes.slice(i, i + 50))) written += done.meta.changes ?? 0;
-  return written;
+  const fresh: typeof rows = [];
+  for (let i = 0; i < rows.length; i += 50) {
+    const part = rows.slice(i, i + 50);
+    (await db.batch(part.map((r) => r.note))).forEach((done, j) => {
+      const row = part[j];
+      if (row && (done.meta.changes ?? 0) > 0) fresh.push(row);
+    });
+  }
+  // The notes are in, so a mail that fails loses nothing: it is tried once, and nothing here can stop the cron or the next admin's mail.
+  for (const { alert, admin } of fresh) {
+    if (!admin.email) continue;
+    if (share) {
+      if (share.left() < 2) {
+        share.more();
+        break;
+      }
+      share.outbound();
+    }
+    await mailer.send({ userId: admin.id, to: admin.email, private: true, ...alertMail(alert, mailer.site) }).catch(() => undefined);
+  }
+  return fresh.length;
 }

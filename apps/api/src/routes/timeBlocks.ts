@@ -10,6 +10,7 @@ import {
   mondayOf,
   parseSlots,
   parseTimeBlockBody,
+  STARTING_TEMPLATES,
   templateForDate,
   timeBlockProblem,
   weekDates,
@@ -22,10 +23,12 @@ import {
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { DATE_RE, dayFromDevice, newId, nowIso } from '../db';
-import { ensureTimeBlocks, kindsBetween, loadBlocking, slotInsert, templateIdByName, toDayTemplate, toTimeBlock, restoreStartingSet, type DayTemplateRow, type TimeBlockRow } from '../timeBlocks';
+import { blocksWritten, ensureTimeBlocks, kindsBetween, loadBlocking, ownTemplateId, slotInsert, startingBlockRow, startingSet, startingTemplate, templateIdByName, toDayTemplate, toTimeBlock, restoreStartingSet, type DayTemplateRow, type TimeBlockRow } from '../timeBlocks';
 
 // Time blocks, day templates and the weekly pattern (docs/time-blocks.md). Core like /today, so it is not in MODULE_FOR_PREFIX.
 // Every query filters by the session user; an id that is not the person's own answers 404. Every write is under `prefs` in limits.ts.
+// A person who has changed nothing has no rows: the reads below find the starting set in code, and a change that gets past its checks calls
+// `ensureTimeBlocks` just before it writes. A date or a weekday only holds a template's id, which never changes, so neither needs the rows.
 export const timeBlocks = new Hono<AppEnv>();
 
 type Json = Record<string, unknown>;
@@ -35,23 +38,27 @@ const bodyOf = async (c: { req: { json: <T>() => Promise<T> } }): Promise<Json> 
 };
 
 async function ownBlock(db: D1Database, userId: string, id: string): Promise<TimeBlockRow | null> {
-  return db.prepare('SELECT * FROM time_blocks WHERE id = ? AND user_id = ?').bind(id, userId).first<TimeBlockRow>();
+  const [row, written] = await Promise.all([db.prepare('SELECT * FROM time_blocks WHERE id = ? AND user_id = ?').bind(id, userId).first<TimeBlockRow>(), blocksWritten(db, userId)]);
+  return written ? row : startingBlockRow(userId, id);
 }
 async function ownTemplate(db: D1Database, userId: string, id: string): Promise<DayTemplate | null> {
-  const [t, s] = await db.batch([
-    db.prepare('SELECT * FROM day_templates WHERE id = ? AND user_id = ?').bind(id, userId),
-    db.prepare('SELECT block_id, start_min, end_min FROM day_template_slots WHERE template_id = ? AND user_id = ? ORDER BY start_min').bind(id, userId),
+  const [written, t, s] = await Promise.all([
+    blocksWritten(db, userId),
+    db.prepare('SELECT * FROM day_templates WHERE id = ? AND user_id = ?').bind(id, userId).all<DayTemplateRow>(),
+    db.prepare('SELECT block_id, start_min, end_min FROM day_template_slots WHERE template_id = ? AND user_id = ? ORDER BY start_min').bind(id, userId).all<{ block_id: string; start_min: number; end_min: number }>(),
   ]);
-  const row = (t!.results as DayTemplateRow[])[0];
+  if (!written) return startingTemplate(userId, id);
+  const row = t.results[0];
   if (!row) return null;
-  return toDayTemplate(row, (s!.results as { block_id: string; start_min: number; end_min: number }[]).map((r) => ({ blockId: r.block_id, start: r.start_min, end: r.end_min })));
+  return toDayTemplate(row, s.results.map((r) => ({ blockId: r.block_id, start: r.start_min, end: r.end_min })));
 }
 /** The person's block ids and names, for checking slots. */
 async function blockNames(db: D1Database, userId: string): Promise<{ ids: Set<string>; names: Record<string, string> }> {
-  const rows = await db.prepare('SELECT id, name FROM time_blocks WHERE user_id = ?').bind(userId).all<{ id: string; name: string }>();
+  const [rows, written] = await Promise.all([db.prepare('SELECT id, name FROM time_blocks WHERE user_id = ?').bind(userId).all<{ id: string; name: string }>(), blocksWritten(db, userId)]);
+  const list = written ? rows.results : startingSet(userId, { slots: false }).blocks;
   const names: Record<string, string> = Object.create(null) as Record<string, string>;
-  for (const r of rows.results) names[r.id] = r.name;
-  return { ids: new Set(rows.results.map((r) => r.id)), names };
+  for (const r of list) names[r.id] = r.name;
+  return { ids: new Set(list.map((r) => r.id)), names };
 }
 const slotRows = (templateId: string, slots: TemplateSlot[]) => slots.map((s) => ({ id: newId(), tid: templateId, block: s.blockId, start: s.start, end: s.end }));
 
@@ -64,8 +71,8 @@ async function templateFromBody(db: D1Database, userId: string, body: Json): Pro
     const v = body.templateId;
     if (v === null || v === '') return { id: null };
     if (typeof v !== 'string') return { error: 'Pick one of your day templates.', status: 400 };
-    const row = await db.prepare('SELECT id FROM day_templates WHERE id = ? AND user_id = ?').bind(v, userId).first<{ id: string }>();
-    return row ? { id: row.id } : { error: 'not found', status: 404 };
+    const id = await ownTemplateId(db, userId, v);
+    return id ? { id } : { error: 'not found', status: 404 };
   }
   if ('template' in body) {
     const v = body.template;
@@ -86,7 +93,6 @@ timeBlocks.get('/month', async (c) => {
   if (asked !== undefined && !DATE_RE.test(asked)) return c.json({ error: 'day must be a real day like 2026-11-02' }, 400);
   const to = dayFromDevice(asked);
   const from = `${to.slice(0, 7)}-01`;
-  await ensureTimeBlocks(db, user);
   const { kinds, colors } = await kindsBetween(db, user, from, to);
   const res: KindsMonthResponse = { from, to, kinds: kinds.tally.map((t) => ({ ...t, color: colors[t.templateId] ?? null })), none: kinds.none };
   return c.json(res);
@@ -99,7 +105,6 @@ timeBlocks.get('/', async (c) => {
   const asked = c.req.query('week');
   if (asked !== undefined && !DATE_RE.test(asked)) return c.json({ error: 'week must be a real day like 2026-11-02' }, 400);
   const monday = mondayOf(asked ?? dayFromDevice(c.req.query('day')));
-  await ensureTimeBlocks(db, user);
   const dates = weekDates(monday);
   const b = await loadBlocking(db, user.id, dates);
   const ids = new Set(b.templates.map((t) => t.id));
@@ -120,10 +125,10 @@ timeBlocks.get('/', async (c) => {
 timeBlocks.post('/blocks', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  await ensureTimeBlocks(db, user);
   const body = await bodyOf(c);
   const problem = timeBlockProblem(body, false);
   if (problem) return c.json({ error: problem }, 400);
+  await ensureTimeBlocks(db, user);
   const count = await db.prepare('SELECT COUNT(*) AS n, COALESCE(MAX(sort), -1) AS top FROM time_blocks WHERE user_id = ?').bind(user.id).first<{ n: number; top: number }>();
   if ((count?.n ?? 0) >= MAX_TIME_BLOCKS) return c.json({ error: `You have the most blocks you can keep (${MAX_TIME_BLOCKS}).` }, 409);
   const f = parseTimeBlockBody(body);
@@ -143,9 +148,9 @@ timeBlocks.put('/blocks/order', async (c) => {
   const user = c.get('user');
   const body = await bodyOf(c);
   const ids = Array.isArray(body.ids) ? body.ids.filter((x): x is string => typeof x === 'string') : [];
-  const have = await db.prepare('SELECT id FROM time_blocks WHERE user_id = ?').bind(user.id).all<{ id: string }>();
-  const own = new Set(have.results.map((r) => r.id));
+  const { ids: own } = await blockNames(db, user.id);
   if (ids.length !== own.size || new Set(ids).size !== ids.length || ids.some((id) => !own.has(id))) return c.json({ error: 'Send every one of your blocks, each once.' }, 400);
+  await ensureTimeBlocks(db, user);
   const now = nowIso();
   if (ids.length) await db.batch(ids.map((id, i) => db.prepare('UPDATE time_blocks SET sort = ?, updated_at = ? WHERE id = ? AND user_id = ?').bind(i, now, id, user.id)));
   return c.json({ ok: true });
@@ -160,6 +165,7 @@ timeBlocks.patch('/blocks/:id', async (c) => {
   const problem = timeBlockProblem(body, true);
   if (problem) return c.json({ error: problem }, 400);
   const f = parseTimeBlockBody(body);
+  await ensureTimeBlocks(db, user);
   await db
     .prepare('UPDATE time_blocks SET name = ?, tag = ?, color = ?, life_area = ?, relationship = ?, updated_at = ? WHERE id = ? AND user_id = ?')
     .bind(
@@ -174,7 +180,9 @@ timeBlocks.patch('/blocks/:id', async (c) => {
     )
     .run();
   const fresh = await ownBlock(db, user.id, row.id);
-  return c.json({ block: fresh ? toTimeBlock(fresh) : null });
+  // Another tab deleted it between the check and the write.
+  if (!fresh) return c.json({ error: 'not found' }, 404);
+  return c.json({ block: toTimeBlock(fresh) });
 });
 
 // Deleting a block: its slots go, tasks that had it picked keep everything else and lose the block, then the block goes. One batch.
@@ -183,6 +191,7 @@ timeBlocks.delete('/blocks/:id', async (c) => {
   const user = c.get('user');
   const row = await ownBlock(db, user.id, c.req.param('id'));
   if (!row) return c.json({ error: 'not found' }, 404);
+  await ensureTimeBlocks(db, user);
   const touched = await db.prepare('SELECT COUNT(DISTINCT template_id) AS n FROM day_template_slots WHERE block_id = ? AND user_id = ?').bind(row.id, user.id).first<{ n: number }>();
   const res = await db.batch([
     db.prepare('DELETE FROM day_template_slots WHERE block_id = ? AND user_id = ?').bind(row.id, user.id),
@@ -197,7 +206,6 @@ timeBlocks.delete('/blocks/:id', async (c) => {
 timeBlocks.post('/templates', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  await ensureTimeBlocks(db, user);
   const body = await bodyOf(c);
   let from: DayTemplate | null = null;
   if (body.fromId !== undefined && body.fromId !== null) {
@@ -208,10 +216,13 @@ timeBlocks.post('/templates', async (c) => {
   const merged: Json = { ...(from ? { lead: from.lead, second: from.second } : {}), ...body };
   const problem = dayTemplateProblem(merged, false);
   if (problem) return c.json({ error: problem }, 400);
-  const [count, worn] = await Promise.all([
+  // The most a person may keep counts the starting ones, rows or not.
+  const [written, counted, worn] = await Promise.all([
+    blocksWritten(db, user.id),
     db.prepare('SELECT COUNT(*) AS n, COALESCE(MAX(sort), -1) AS top FROM day_templates WHERE user_id = ?').bind(user.id).first<{ n: number; top: number }>(),
     db.prepare('SELECT DISTINCT color FROM day_templates WHERE user_id = ? AND color IS NOT NULL').bind(user.id).all<{ color: string }>(),
   ]);
+  const count = written ? counted : { n: STARTING_TEMPLATES.length, top: STARTING_TEMPLATES.length - 1 };
   if ((count?.n ?? 0) >= MAX_DAY_TEMPLATES) return c.json({ error: `You have the most day templates you can keep (${MAX_DAY_TEMPLATES}).` }, 409);
   let slots: TemplateSlot[] = [];
   if (body.slots !== undefined) {
@@ -227,9 +238,10 @@ timeBlocks.post('/templates', async (c) => {
   // theirs wears yet, so no two kinds look alike while the wheel lasts; with every colour taken, a copy keeps its source's.
   let color = 'color' in body ? blockColorOf(body.color) : null;
   if (!('color' in body)) {
-    const taken = new Set((worn.results ?? []).map((r) => r.color));
+    const taken = new Set(written ? (worn.results ?? []).map((r) => r.color) : STARTING_TEMPLATES.map((t) => t.color));
     color = TIME_BLOCK_SWATCHES.find((k) => !taken.has(k)) ?? from?.color ?? null;
   }
+  await ensureTimeBlocks(db, user);
   await db.batch([
     db
       .prepare('INSERT INTO day_templates (id, user_id, seed, source_kind, name, lead, second, why, source, is_default, sort, color, created_at, updated_at) VALUES (?, ?, NULL, NULL, ?, ?, ?, NULL, NULL, 0, ?, ?, ?, ?)')
@@ -266,8 +278,12 @@ timeBlocks.patch('/templates/:id', async (c) => {
     stmts.push(db.prepare('UPDATE day_templates SET is_default = 0 WHERE user_id = ? AND is_default = 1').bind(user.id));
     stmts.push(db.prepare('UPDATE day_templates SET is_default = 1 WHERE id = ? AND user_id = ?').bind(tpl.id, user.id));
   }
+  await ensureTimeBlocks(db, user);
   await db.batch(stmts);
-  return c.json({ template: await ownTemplate(db, user.id, tpl.id) });
+  const fresh = await ownTemplate(db, user.id, tpl.id);
+  // Another tab deleted it between the check and the write.
+  if (!fresh) return c.json({ error: 'not found' }, 404);
+  return c.json({ template: fresh });
 });
 
 // Deleting a template: never the default. Its slots, the date changes that point at it and its weekdays go (those days follow the default).
@@ -277,6 +293,7 @@ timeBlocks.delete('/templates/:id', async (c) => {
   const tpl = await ownTemplate(db, user.id, c.req.param('id'));
   if (!tpl) return c.json({ error: 'not found' }, 404);
   if (tpl.isDefault) return c.json({ error: 'Make another template the default first.' }, 409);
+  await ensureTimeBlocks(db, user);
   const res = await db.batch([
     db.prepare('DELETE FROM day_template_slots WHERE template_id = ? AND user_id = ?').bind(tpl.id, user.id),
     db.prepare('DELETE FROM day_types WHERE user_id = ? AND (template_id = ? OR (template_id IS NULL AND kind = ?))').bind(user.id, tpl.id, tpl.sourceKind),
@@ -291,7 +308,6 @@ timeBlocks.delete('/templates/:id', async (c) => {
 timeBlocks.put('/pattern', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  await ensureTimeBlocks(db, user);
   const body = await bodyOf(c);
   const weekdays = Array.isArray(body.weekdays) ? [...new Set(body.weekdays)] : [];
   if (weekdays.length === 0 || weekdays.some((w) => typeof w !== 'number' || !Number.isInteger(w) || w < 1 || w > 7)) return c.json({ error: 'Pick the weekdays, 1 for Monday to 7 for Sunday.' }, 400);
@@ -318,7 +334,6 @@ timeBlocks.put('/pattern', async (c) => {
 timeBlocks.put('/days', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  await ensureTimeBlocks(db, user);
   const body = await bodyOf(c);
   const dates = Array.isArray(body.dates) ? [...new Set(body.dates)] : [];
   if (dates.length === 0 || dates.length > MAX_APPLY_DATES || dates.some((d) => typeof d !== 'string' || !DATE_RE.test(d))) return c.json({ error: `Pick 1 to ${MAX_APPLY_DATES} real days, like 2026-11-02.` }, 400);
@@ -344,6 +359,5 @@ timeBlocks.put('/days', async (c) => {
 timeBlocks.post('/restore', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  await ensureTimeBlocks(db, user);
   return c.json({ added: await restoreStartingSet(db, user.id) });
 });

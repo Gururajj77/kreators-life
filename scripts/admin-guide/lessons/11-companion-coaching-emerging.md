@@ -10,7 +10,7 @@ In this lesson you'll learn:
 
 ## The Companion
 
-The Companion is a chat that knows how her day is going. It is not a therapist, and not for emergencies. It starts off, so Riya turns it on under **Apps**, in the **Reflection** group.
+The Companion is a chat that knows how her day is going. It is not a therapist, and not for emergencies. It starts hidden, so Riya unhides it under **Apps**, in the **Reflection** group.
 
 1. Riya opens **Companion**. The hero shows her check-in streak.
 2. With no lines yet, she can tap a starter, such as "I feel tired today" or "I am stressed about work".
@@ -24,17 +24,17 @@ If her words show she may be in danger, it tells her to call the local emergency
 
 ## Coaching: finding a life coach
 
-Coaching starts off too. Riya turns it on in the **Reflection** group.
+Coaching starts hidden too. Riya unhides it in the **Reflection** group.
 
 1. Riya opens **Coaching** and scrolls to **Find a life coach**. It lists coaches the team chose who are taking new students.
 2. She taps **Ask to be coached** on one. The coach says yes or no.
 3. Once the coach says yes, her coach shows under **Your life coach**, here and on her **Profile** tab.
-4. Under **What they see**, she picks from five switches: Daily and streaks, Pillars and pyramids, Routine and contract, Life map answers, and Reflection. All five start on.
+4. Under **What they see**, she picks from six switches: Daily and streaks, Pillars and pyramids, Routine and contract, Life map answers, Reflection and Patterns. Patterns is on for a link she says yes to, and off on older links.
 5. She can tap **End coaching** at any time. A sheet asks first.
 
 A coach can also ask her, by email, @username or friend code. She then taps **Say yes** or **Say no**. She can have up to three coaches. After a no, the same coach can ask again in thirty days.
 
-A coach never sees her journal, a tracker's note, her money, the Companion or a review's snapshot. With Pillars and pyramids on, a coach can add and edit tasks under her projects. Those tasks wear the tag From your coach. A coach never ticks or removes them.
+A coach never sees her journal, gratitude, a tracker's note, her money, water, supplements, the Companion or a review's snapshot. With Pillars and pyramids on, a coach can add and edit tasks under her projects. Those tasks wear the tag From your coach. A coach never ticks or removes them.
 
 **Notes from your coach** lists every note, and each one lands in her inbox. The **Change log** shows every ask, yes, note and task change, with the time.
 
@@ -42,25 +42,29 @@ A coach never sees her journal, a tracker's note, her money, the Companion or a 
 
 If Riya coaches other editors, she can ask under **Are you a life coach?** She writes who she coaches and taps **Ask the team**. She can also say "I'm a life coach" in the setup chat.
 
+Once she is one, she adds a student by @username, friend code or email, or shares her invite link, and each one must say yes. Each student has a report by day, week, month or quarter. **Show on this page** folds away what she does not need. Suggestions fill a note or a task, and nothing goes until she sends it.
+
 ## Emerging: patterns in her own logs
 
 Emerging reads across the apps Riya uses and finds things that happen together. It never says one thing causes another. There is nothing to switch on.
 
-1. On Home, under **Emerging**, Riya sees her top patterns. She taps **See all**.
-2. The **Emerging** page shows two counts, Patterns found and Still watching.
-3. **What stands out** lists patterns, strongest first.
-4. **Good and bad habits** compares the days she ticked a task with the days she did not, using mood, sleep, stress, tasks and focus.
-5. **Still watching** says what each pattern still needs.
+1. On Home, under **Emerging**, Riya sees her top patterns, or one quiet line while nothing is ready. She taps **See all**.
+2. At the top of the **Emerging** page she can pick a day, a week, a month, a quarter, a half year or a year. With none picked, it stays on the last 8 weeks.
+3. **Your life** shows that period: the five areas of life, then the seven pillars, each next to the period before.
+4. Two counts follow, Patterns found and Still watching.
+5. **What stands out** lists patterns by area of life, strongest first.
+6. **Good and bad habits** compares the days she ticked a task with the days she did not, using mood, sleep, stress, tasks and focus.
+7. **Still watching** says what each pattern still needs.
 
 Each card has a number, a tag, one sentence, a small chart and one action:
 
 - **Good habit:** her "Evening walk" goes with better mood. She taps **Make it a habit**, checks the repeat, the first day and the time, then taps **Keep**.
 - **Bad habit:** a habit that goes with worse days. She taps **Add to not to do** to put it on her not to do list.
-- **More:** **Not now** hides a card on this device.
+- **More:** **Not now** hides a card on this device. **Show again** brings it back.
 
 On Daily, a **Habits** section sits under Not to do with her good and bad habits.
 
-> **Pro tip:** a habit needs a task ticked on at least three days in eight weeks, and at least five days with it and five without, before it can be called good or bad. Tell people to keep logging mood and sleep. Emerging can only compare what they log.
+> **Pro tip:** a habit needs a task ticked on at least three days in eight weeks, and at least five days with it and seven without, before it can be called good or bad. Tell people to keep logging mood and sleep. Emerging can only compare what they log.
 
 > **Result:** Riya talks her day through, has a coach who sees only what she allows, and knows which habits lift her days.
 
@@ -70,7 +74,7 @@ On Daily, a **Habits** section sits under Not to do with her good and bad habits
 - **Life coaches:** in Admin, **Life coaches**, the table **Asked to be a life coach** lists asks. Tick rows and tap **Make life coach**, or **Say no**. The person is told.
 - **Taking the badge:** in the **Life coaches** table, **Take the badge** ends every link that coach has, and their students are told. It asks first.
 - **Linking:** under **Link a coach and a student**, pick a coach, enter the student and choose **Ask the student** or **Link now**. Use Link now only if the student already agreed.
-- **Emerging:** it is computed when read and stored nowhere. No staff screen shows it, and it never reaches a coach, the assistant or the leaderboard.
+- **Emerging:** it is computed when read and stored nowhere. No staff screen shows it. It reaches a coach only through the student's own Patterns switch, and never the assistant or the leaderboard.
 - **Switches:** in Admin, **Flags**, the Companion and Coaching rows set On, Minimum role, Rollout % and Overrides.
 
 ## The bottom line

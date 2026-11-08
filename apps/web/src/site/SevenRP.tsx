@@ -3,7 +3,7 @@ import gsap from 'gsap';
 import type { CSSProperties } from 'react';
 import { BOOK_BY_SLUG, LIFE_AREA_ORDER, LIFE_AREAS, RELATIONSHIPS, type AppModule } from '@kreators/shared';
 import { m as motion, useReducedMotion } from 'motion/react';
-import { useEffect, useRef } from 'react';
+import { Suspense, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Fold } from '../components/Fold';
@@ -22,6 +22,8 @@ import { BookCover } from './Books';
 import { SITE_PRIMARY_ON_GLASS } from './buttons';
 import { FractalGlass } from '../components/fx/FractalGlass';
 import { PeekGuides } from './PeekGuides';
+import { evenGrid, evenTile } from '../lib/bento';
+import { lazyNamed } from '../lib/lazy';
 
 /** A gentle lift into place the first time a section scrolls into view. The content is always visible (opacity
  * never hides it); only the small upward delta animates, so a full-page shot taken before the observer fires never
@@ -98,9 +100,9 @@ interface Choice {
 /** How many apps show before "Show all". A wall of buttons was the clutter; six fit two calm rows. */
 const SHOWN = 6;
 
-function AppTile({ m }: { m: AppModule }) {
+export function AppTile({ m, className }: { m: AppModule; className: string }) {
   return (
-    <li>
+    <li className={className}>
       {/* The mark at the left, the name, and from the tablet width an arrow at the right end that nudges on hover (a phone tile has no room
           for it beside "Leaderboard"): every tile has the same things in the same places. */}
       <Link to={`/features/${m.key}`} className="group toy toy-soft flex min-h-[56px] items-center gap-xs rounded-inner-sm bg-card-strong px-sm text-subhead font-semibold">
@@ -112,16 +114,21 @@ function AppTile({ m }: { m: AppModule }) {
   );
 }
 
+// Two across on a phone and beside the tablet's list (three cut "Leaderboard" there), three where the panel has the room, in even rows
+// (lib/bento.ts), so "Show all" never leaves a lone tile.
+export const TILE_COLS = { base: 2, sm: 3, md: 2, lg: 3 } as const;
+
 function AppGrid({ items }: { items: AppModule[] }) {
   return (
-    // Two across on a phone and beside the tablet's list (three cut "Leaderboard" there), three where the panel has the room.
-    <ul className="m-0 grid list-none grid-cols-2 gap-xs p-0 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3">
-      {items.map((m) => (
-        <AppTile key={m.key} m={m} />
+    <ul className={`m-0 grid list-none gap-xs p-0 ${evenGrid(items.length, TILE_COLS)}`}>
+      {items.map((m, i) => (
+        <AppTile key={m.key} m={m} className={evenTile(i, items.length, TILE_COLS)} />
       ))}
     </ul>
   );
 }
+
+const MoreApps = lazyNamed(() => import('./SevenRPMore'), 'MoreApps');
 
 /**
  * One pillar (or area) at a time: a list on the left, a calm panel on the right. The old page stacked all seven in full, each with a wall
@@ -225,7 +232,9 @@ function Explorer({ picks, value, onPick, label }: { picks: Choice[]; value: str
             </div>
             {more.length > 0 && (
               <Fold className="mt-xs" title={`Show all ${current.features.length} apps`}>
-                <AppGrid items={more} />
+                <Suspense fallback={<AppGrid items={more} />}>
+                  <MoreApps items={more} />
+                </Suspense>
               </Fold>
             )}
           </div>
@@ -355,7 +364,9 @@ export function SevenRP() {
           <FractalGlass hue="wine" />
           <div className="relative z-10">
             <h2 className="type-hook text-display-2">
-              Find out where <em>yours stand</em>
+              {/* On a phone the two lines would shrink going down, so the break comes early and they grow. */}
+              Find out <br className="sm:hidden" />
+              where <em>yours stand</em>
             </h2>
             <p className="type-measure m-0 mt-sm text-callout text-on-fill">A short chat maps all seven, then builds a plan for the ones that need you most.</p>
             <Link to={entry === '/home' ? '/home' : '/start'} className={`${SITE_PRIMARY_ON_GLASS} mt-md`}>

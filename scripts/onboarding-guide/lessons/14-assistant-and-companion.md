@@ -26,7 +26,7 @@ Flows are short taps that cost nothing. Each one says where its answer lands. A 
 - **Write in my journal**, which only you can see.
 - **Add money in or out** and **Set a money goal**, when Finance is on.
 
-A flow for an app that is off stays hidden. Flows use the same steps as your own taps, so the same rules apply.
+A flow for an app you have hidden does not show. Flows use the same steps as your own taps, so the same rules apply.
 
 ## The paid half: typing
 
@@ -37,6 +37,8 @@ Typing a line, like "move my edit task to Friday", needs a plan.
 3. Each change comes back as a row with **Undo**.
 4. Removing something, or settling money owed, waits for you to tap **Confirm**.
 5. While it works, the send arrow turns into a **Stop** square. What was already done stays, each with its Undo.
+
+It can also log movement, your eating check-in and the day's gratitude. It never reads your supplements.
 
 Each typed reply says **Answered by** and the model's name, so you always know it came from a model and not a built-in line.
 
@@ -60,7 +62,7 @@ The page shows your plan, what you used today and every credit in and out. Some 
 
 ## Meet the Companion
 
-The Companion is a chat that knows how you are doing. It is not a therapist. It lives in the **Reflection** group and starts off, so turn it on under **Apps**.
+The Companion is a chat that knows how you are doing. It is not a therapist. It lives in the **Reflection** group and starts hidden, so show it under **Apps**.
 
 1. Open **Companion**.
 2. Tap a starter, like "I feel tired today", or type in **Say what is on your mind**.

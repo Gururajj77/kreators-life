@@ -1,12 +1,13 @@
-import { docDate, MAX_TEMPLATES, TEMPLATE_NAME_MAX, type AgencySettings, type DocType } from '@kreators/shared';
-import { EMAIL_NOTE_MAX, EMAIL_SUBJECT_MAX, EMAIL_TEMPLATES, emailTemplate, emailVarsFor, fillEmail, suggestEmailTemplate, type EmailGap, type EmailVars } from '@kreators/shared/agencyEmail';
+import { docDate, MAX_TEMPLATES, money, phoneDisplay, retainerMonthlyCents, TEMPLATE_NAME_MAX, type AgencySettings, type DocType } from '@kreators/shared';
+import { EMAIL_NOTE_MAX, EMAIL_SUBJECT_MAX, EMAIL_TEMPLATES, emailTemplate, emailVarsFor, fillEmail, paperGapLine, suggestEmailTemplate, withoutPaperLinks, type EmailGap, type EmailVars, type PaperGap } from '@kreators/shared/agencyEmail';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useId, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
+import { Link } from 'react-router';
 import { api, ApiError } from '../lib/api';
 import { copyPlain } from '../lib/clipboard';
 import { printAs } from '../lib/printDoc';
 import { useAuthed } from '../lib/queries';
-import { FIELD, LABEL } from '../lib/ui';
+import { FIELD, LABEL, RED_YES } from '../lib/ui';
 import { AnimatedIcon } from './AnimatedIcon';
 import { Button } from './Button';
 import { Field } from './InvoiceView';
@@ -88,8 +89,7 @@ export function ConfirmSheet({ open, onClose, title, body, action, onConfirm, bu
               onClose();
             }}
             disabled={busy}
-            className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill disabled:opacity-50"
-            style={{ '--toy-color': 'var(--deep-servant_leader)' } as CSSProperties}
+            className={RED_YES}
           >
             {action}
           </button>
@@ -128,16 +128,31 @@ export interface EmailContext {
 /** A saved note is picked by its id, kept apart from the built-in keys. */
 const OWN = 'own:';
 
-/** The records a note is written from: the client's page (their contact, stage and month, and the settings) or, with no client, the settings alone. */
-function useEmailFacts(ctx: EmailContext) {
+/**
+ * The records a note is written from: the client's page (their contact, stage and month, and the settings) and their papers, or, with no
+ * client, the settings alone. A team member is refused the papers (a member is never given a client's link), so their note names only
+ * the paper it was opened from, and the server adds that paper's link under the words.
+ */
+function useEmailFacts(ctx: EmailContext, paperId: string) {
   const page = useAuthed(['agency', 'client', ctx.clientId ?? ''], () => api.agencyClient(ctx.clientId ?? ''), Boolean(ctx.clientId));
   const overview = useAuthed(['agency', 'settings'], () => api.agency(), !ctx.clientId);
+  const listed = useAuthed(['agency', 'papers', ctx.clientId ?? ''], () => api.agencyClientPapers(ctx.clientId ?? ''), Boolean(ctx.clientId));
   const settings = page.data?.settings ?? overview.data?.settings;
   const client = page.data?.client;
+  const profile = settings?.profile ?? null;
+  // The site's address when the server has one set, which is what the server's own emails use; else this page's, as Copy link does.
+  const base = listed.data?.base || window.location.origin;
+  const papers = listed.data?.papers.map((p) => ({ ...p, link: p.path ? `${base}${p.path}` : '' }));
+  const currency = settings?.currency ?? 'INR';
+  const retainer = page.data?.lifecycle.retainer;
+  const live = retainer && (retainer.status === 'offered' || retainer.status === 'chosen' || retainer.status === 'active') ? retainer : null;
+  const longest = live ? [...live.options].sort((a, b) => b.months - a.months)[0] : undefined;
+  const longerMonths = live ? (live.months ?? longest?.months ?? null) : null;
+  const longerFee = live ? (live.monthlyCents ?? retainerMonthlyCents(live.feeCents, longest?.discountBps ?? 0)) : (client?.retainerCents ?? 0);
   const facts = emailVarsFor({
     kind: ctx.kind,
-    client: client ? { name: client.name, contactName: client.contactName, month: client.month } : null,
-    profile: settings ? settings.profile : null,
+    client: client ? { name: client.name, contactName: client.contactName, legalName: client.billing.line, month: client.month } : null,
+    profile: profile ? { ...profile, from: { ...profile.from, phone: phoneDisplay(profile.from.phone) }, phones: profile.phones.map(phoneDisplay) } : null,
     title: ctx.title,
     number: ctx.number,
     amount: ctx.amount,
@@ -145,10 +160,34 @@ function useEmailFacts(ctx: EmailContext) {
     period: ctx.period,
     docKind: ctx.docKind,
     advance: ctx.advance,
+    papers,
+    paperId,
+    locked: page.data?.lifecycle.password.set,
+    unit: profile?.packages.unit,
+    plans: profile?.packages.rows.map((r) => ({ units: r.units, feeCents: r.feeCents, price: money(r.feeCents, currency) })),
+    longer: longerFee > 0 ? { months: longerMonths, monthly: money(longerFee, currency), pieces: live?.piecesPerMonth ?? client?.piecesPerMonth ?? 0 } : null,
   });
-  const suggested = suggestEmailTemplate(ctx.kind, { stage: client?.stage, retainerMonth: ctx.retainerMonth, signed: ctx.signed, overdue: ctx.overdue, paid: ctx.paid, docKind: ctx.docKind });
-  return { ...facts, suggested, ready: Boolean(settings) && (!ctx.clientId || Boolean(client)), client, settings };
+  const self = papers?.find((p) => p.id === paperId);
+  const suggested = suggestEmailTemplate(ctx.kind, { stage: client?.stage, retainerMonth: ctx.retainerMonth, signed: ctx.signed, overdue: ctx.overdue, paid: ctx.paid, docKind: ctx.docKind, revised: self?.revised, priceRose: facts.priceRose });
+  return { ...facts, suggested, ready: Boolean(settings) && (!ctx.clientId || Boolean(client)), client, settings, papersRead: Boolean(papers) };
 }
+
+/** One quiet line and its way forward, for what a note cannot name yet. The link opens the paper, or the place to make it. */
+function NoteGapLine({ text, link, to }: { text: string; link: string; to: string }) {
+  return (
+    <p className="m-0 mt-xs text-subhead text-ink-soft">
+      {text}{' '}
+      <Link to={to} className="relative font-semibold underline underline-offset-4 before:absolute before:-inset-x-[4px] before:-inset-y-[13px] before:content-['']">
+        {link}
+      </Link>
+    </p>
+  );
+}
+
+const gapLink = (g: PaperGap, clientId?: string | null) => {
+  if (g.state === 'draft' && g.id) return { to: `/agency/${g.word === 'invoice' ? 'invoices' : 'contracts'}/${g.id}`, link: 'Open it' };
+  return { to: clientId ? `/agency/${clientId}?cseg=${g.word === 'invoice' ? 'money' : 'paper'}` : '/agency', link: g.word === 'invoice' ? 'Make the invoice' : 'Make the agreement' };
+};
 
 /**
  * A value a note needs that no record holds: one line, typed once, saved where it belongs (the client's record or the business profile),
@@ -213,9 +252,9 @@ function AddOnceLines({ missing, clientId, settings }: { missing: EmailGap[]; cl
  * another can be picked, the words changed, and any note kept as your own ("Save this note"), renamed or removed. What no record holds is
  * asked once and saved where it belongs. Nothing is sent until you tap.
  */
-function EmailNote({ ctx, onChange }: { ctx: EmailContext; onChange: (n: { subject: string; body: string }) => void }) {
+function EmailNote({ ctx, paperId, onChange }: { ctx: EmailContext; paperId: string; onChange: (n: { subject: string; body: string }) => void }) {
   const qc = useQueryClient();
-  const f = useEmailFacts(ctx);
+  const f = useEmailFacts(ctx, paperId);
   const mine = useAuthed(['agency', 'templates', 'email'], () => api.agencyTemplates('email'));
   const own = (mine.data?.templates ?? []).filter((t) => t.scope === 'own' && t.kind === 'email' && t.email);
   const [chosenKey, setKey] = useState<string | null>(null);
@@ -265,8 +304,8 @@ function EmailNote({ ctx, onChange }: { ctx: EmailContext; onChange: (n: { subje
         await api.agencyTemplateUpdate(picked.id, change);
         return { id: picked.id, note: 'Renamed.' };
       }
-      // A note with the same name is replaced, so saving again after a change keeps one copy.
-      const words = { name: name.trim(), subject, message: body };
+      // A note with the same name is replaced, so saving again after a change keeps one copy. A kept note never holds this client's links.
+      const words = { name: name.trim(), subject, message: withoutPaperLinks(body, [f.vars.amount, f.vars.firstRate]) };
       if (sameName) {
         await api.agencyTemplateUpdate(sameName.id, words);
         return { id: sameName.id, note: `Saved over "${sameName.name}".` };
@@ -333,6 +372,8 @@ function EmailNote({ ctx, onChange }: { ctx: EmailContext; onChange: (n: { subje
           )}
         </select>
         {t && <p className="mt-xs m-0 text-caption text-ink-soft">{t.when}</p>}
+        {t?.namesPair && f.gaps.map((g) => <NoteGapLine key={g.word} text={paperGapLine(g, f.client?.name ?? '')} {...gapLink(g, ctx.clientId)} />)}
+        {t?.namesPlans && f.papersRead && f.vars.plans.length === 0 && <NoteGapLine text="Your plans are not set, so the note leaves out the P.S." link="Add them in Agency settings" to="/agency?tab=settings" />}
         {picked && <p className="mt-xs m-0 text-caption text-ink-soft">Your own note, as you saved it.</p>}
         {picked && (
           <div className="mt-xs flex flex-wrap gap-xs">
@@ -342,7 +383,7 @@ function EmailNote({ ctx, onChange }: { ctx: EmailContext; onChange: (n: { subje
             <Button
               size="sm"
               variant="ghost"
-              className="!text-r1"
+              className={armed ? 'red-armed' : '!text-r1'}
               disabled={remove.isPending}
               onClick={() => {
                 if (armed) remove.mutate(picked.id);
@@ -367,12 +408,13 @@ function EmailNote({ ctx, onChange }: { ctx: EmailContext; onChange: (n: { subje
           The email
         </label>
         <textarea id="en-body" rows={14} value={body} maxLength={EMAIL_NOTE_MAX} onChange={(e) => { setBody(e.target.value); setTyped(true); }} className={`${FIELD} leading-snug [text-wrap:wrap]`} />
-        <p className="mt-xs m-0 text-caption text-ink-soft">Send it from here and the link to the page goes under your words.</p>
+        <p className="mt-xs m-0 text-caption text-ink-soft">{body.includes('://') ? 'The links are in the words, and they stay there when you copy it.' : 'Send it from here and the link to the page goes under your words.'}</p>
         <div className="mt-xs flex flex-wrap gap-xs">
           {typed && (
             <Button
               size="sm"
               variant="ghost"
+              className={resetting ? 'red-armed' : ''}
               onClick={() => {
                 if (resetting) {
                   setResetting(false);
@@ -455,24 +497,24 @@ export function EmailCopySheet({ open, onClose, route, id, defaultTo, context, n
   return (
     <Sheet open={open} onClose={onClose} title="Email a copy">
       <div className="grid gap-sm pb-xl">
-        <p className="m-0 text-subhead text-ink-soft">Pick a note, check the words, then send it from here with a link to the page, or copy it and send it from your own email with the PDF attached.</p>
+        <p className="m-0 text-subhead text-ink-soft">Pick a note and check the words. Send it from here, or copy it into your own email.</p>
         {noLinkYet && <p className="m-0 rounded-tile p-sm text-subhead" style={{ background: 'var(--tint-yellow)' }}>It has not been sent yet, so there is no link. Send it first.</p>}
         <div>
           <Field id="email-copy-to" label="Send to" type="email" value={to} onChange={setTo} max={120} placeholder="the client's email" />
           <p className="mt-xs m-0 text-caption text-ink-soft">Left empty, it goes to the client's email on record.</p>
         </div>
-        {open && <EmailNote ctx={context} onChange={onNote} />}
+        {open && <EmailNote ctx={context} paperId={id} onChange={onNote} />}
         {msg && (
           <p role="status" className="m-0 text-subhead">
             {msg}
           </p>
         )}
         <div className="flex flex-wrap gap-xs">
-          <Button className="flex-1" onClick={() => send.mutate()} disabled={send.isPending || noLinkYet || !note.body.trim()}>
+          <Button className="flex-1 whitespace-nowrap" onClick={() => send.mutate()} disabled={send.isPending || noLinkYet || !note.body.trim()}>
             <AnimatedIcon name={send.isPending ? 'loading' : 'mail'} size={18} />
             {send.isPending ? 'Sending' : 'Send the email'}
           </Button>
-          <Button variant="outline" onClick={copyNote}>
+          <Button variant="outline" className="whitespace-nowrap" onClick={copyNote}>
             Copy the email
           </Button>
         </div>

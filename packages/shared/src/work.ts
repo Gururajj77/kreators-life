@@ -2,6 +2,7 @@ import type { MediaItem } from './community.ts';
 import type { Unlock } from './badges.ts';
 import type { IconName } from './roles.ts';
 import type { TagTone } from './agency.ts';
+import type { LessonResource } from './lessonResources.ts';
 
 // ---------------------------------------------------------------------------
 // Organizations (brands and agencies)
@@ -167,12 +168,6 @@ export const ADMIN_GUIDE_PROGRAM = 'prog-admin-guide';
 export const ADMIN_GUIDE_COHORT = 'coh-admin-guide';
 /** Up to this many people can be invited to one private program. */
 export const MAX_PROGRAM_INVITES = 500;
-/**
- * Onboarding into kreators.app (scripts/onboarding-guide, migration 0096): a public, free School program for everyone, first in School's
- * order (`sort_position` 0, migration 0095), with one cohort open all year.
- */
-export const ONBOARDING_PROGRAM = 'prog-onboarding';
-export const ONBOARDING_COHORT = 'coh-onboarding';
 /** A lesson's title and its words (the small markdown, no links), the same lengths on add and on edit. */
 export const LESSON_TITLE_MAX = 140;
 export const LESSON_BODY_MAX = 20000;
@@ -250,7 +245,10 @@ export interface LearningItem {
   programId: string;
   moduleTitle: string;
   contentType: 'lesson' | 'video' | 'reading';
+  /** The first link in `resources`, for a tab of the app from before a lesson held several. */
   contentRef: string | null;
+  /** The lesson's ways in, in order (migration 0113). */
+  resources: LessonResource[];
   body: string;
   sequence: number;
   published: boolean;

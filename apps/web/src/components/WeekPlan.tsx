@@ -121,21 +121,24 @@ export function WeekPlanButton({ openOn = 0 }: { /** Opens the sheet each time t
           {said}
         </p>
       )}
-      <Sheet open={open} onClose={() => setOpen(false)} title={COPY.title}>
+      <Sheet
+        open={open}
+        onClose={() => setOpen(false)}
+        title={COPY.title}
+        rail={
+          // The blocks and templates the plan leans on are set on their own page: the gear goes there.
+          <IconButton
+            icon={Settings}
+            label={COPY.blocksLink}
+            onClick={() => {
+              setOpen(false);
+              navigate('/time-blocks');
+            }}
+          />
+        }
+      >
         <div className="pb-md">
-          {/* The blocks and templates the plan leans on are set on their own page: the gear goes there. */}
-          <div className="flex items-start justify-between gap-sm">
-            <p className="m-0 min-w-0 flex-1 text-subhead text-ink-soft">{COPY.lede}</p>
-            <IconButton
-              icon={Settings}
-              label={COPY.blocksLink}
-              tip="br"
-              onClick={() => {
-                setOpen(false);
-                navigate('/time-blocks');
-              }}
-            />
-          </div>
+          <p className="m-0 text-subhead text-ink-soft">{COPY.lede}</p>
           <div className="mt-sm rounded-tile bg-paper p-sm">
             <div className="flex items-baseline justify-between gap-sm">
               <span className="text-subhead">{COPY.hours}</span>

@@ -19,6 +19,7 @@ import { Button } from './Button';
 import { chip } from './Chat';
 import { Icon } from './Icon';
 import { Pencil, X } from 'lucide-react';
+import { clockOf } from '../lib/date';
 
 
 /**
@@ -85,7 +86,7 @@ export function RoutinePanel({ general, exceptional, date }: { general: RoutineB
                 <p className="m-0 flex items-baseline justify-between gap-sm text-subhead font-semibold">
                   <span>{b.name}</span>
                   <span className="shrink-0 text-caption text-ink-soft">
-                    {b.start} to {b.end} · {minutesLabel(blockMinutes(b))}
+                    {clockOf(b.start)} to {clockOf(b.end)} · {minutesLabel(blockMinutes(b))}
                   </span>
                 </p>
                 {b.steps.length > 0 && (

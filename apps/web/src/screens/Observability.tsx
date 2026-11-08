@@ -10,7 +10,7 @@ import { Screen } from '../components/Screen';
 import { Section } from '../components/Section';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
-import { bento } from '../lib/bento';
+import { evenGrid, evenTile } from '../lib/bento';
 import { useAuthed, useMe } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { BuildMap } from '../components/BuildMap';
@@ -27,6 +27,18 @@ import { FIELD_FILTER } from '../lib/ui';
  * page, Logs, for super admins.
  * Staff can look; only an admin changes a role. Journal and wellbeing never appear here.
  */
+
+/** Number tiles two to a row on a phone and three from the tablet, in even rows (lib/bento.ts), so no row is left part full. */
+const TILE_COLS = { base: 2, md: 3 } as const;
+function TileRows({ tiles }: { tiles: { label: string; value: number; hint: string }[] }) {
+  return (
+    <div className={`grid gap-xs ${evenGrid(tiles.length, TILE_COLS)}`}>
+      {tiles.map((t, i) => (
+        <StatTile key={t.label} label={t.label} value={t.value} hint={t.hint} className={evenTile(i, tiles.length, TILE_COLS)} />
+      ))}
+    </div>
+  );
+}
 export function Observability() {
   const me = useMe();
   const isAdmin = me.data?.user.role === 'admin';
@@ -67,7 +79,7 @@ export function Observability() {
 
   return (
     <Screen>
-      <PageHeader back={{ to: '/apps', label: 'Apps' }} eyebrow={MODULE_GROUPS.manage} aside={isAdmin ? <Link to="/internal/logs" className="toy toy-soft inline-flex min-h-[44px] items-center rounded-pill border border-line bg-card-strong px-md text-subhead font-semibold">Logs</Link> : undefined} title="Observability" lede="Who is here, which apps they have on, and who holds which role. Only the team sees this. Journals and wellbeing never appear." />
+      <PageHeader back={{ to: '/apps', label: 'Apps' }} eyebrow={MODULE_GROUPS.manage} aside={isAdmin ? <Link to="/internal/logs" className="toy toy-soft inline-flex min-h-[44px] items-center rounded-pill border border-line bg-card-strong px-md text-subhead font-semibold">Logs</Link> : undefined} title="Dev Tools" lede="Who is here, which apps they have on, and who holds which role. Only the team sees this. Journals and wellbeing never appear." />
 
       {d.isPending && (
         <p className="mt-md m-0 text-subhead text-ink-soft" role="status">
@@ -83,7 +95,7 @@ export function Observability() {
       {data && (
         <>
           <Section id="obs-numbers" title="People in numbers" lede="Every account that is not deleted.">
-            <div className="grid grid-cols-2 gap-xs md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-xs lg:grid-cols-4">
               <StatTile label="People" value={data.totals.users} hint={`${data.totals.newThisWeek} new this week`} />
               <StatTile label="Set up" value={data.totals.onboarded} hint="finished the vibe check" />
               <StatTile label="Staff" value={data.totals.staff} hint={ROLE_META.sub_admin.blurb} />
@@ -107,8 +119,8 @@ export function Observability() {
           </Section>
 
           <Section id="obs-discover" title="Discover" lede="Quizzes taken and what people allowed. Counts only: no answers, no results, no names.">
-            <div className="grid grid-cols-2 gap-xs md:grid-cols-3">
-              {[
+            <TileRows
+              tiles={[
                 { label: "Quizzes", value: data.additions.discover.results, hint: `${formatCount(data.additions.discover.people)} ${data.additions.discover.people === 1 ? 'person' : 'people'}` },
                 { label: "With EQ", value: data.additions.discover.withEq, hint: "emotional intelligence added" },
                 { label: "Assistant on", value: data.additions.discover.assistantOn, hint: "allowed a short summary" },
@@ -118,25 +130,21 @@ export function Observability() {
                 { label: "Human design", value: data.additions.discover.addons.design, hint: "charts worked out" },
                 { label: "How the mind works", value: data.additions.discover.addons.mind, hint: `${data.additions.discover.mindOn} switched it on for next steps` },
                 { label: "Given by hand", value: data.additions.grants.xp + data.additions.grants.badges + data.additions.grants.points + data.additions.grants.honors, hint: `last 30 days: ${data.additions.grants.xp} xp, ${data.additions.grants.points} points, ${data.additions.grants.badges} badges, ${data.additions.grants.honors} honors` },
-              ].map((t, i, all) => (
-                <StatTile key={t.label} label={t.label} value={t.value} hint={t.hint} className={bento(i, all.length, 2, 3)} />
-              ))}
-            </div>
+              ]}
+            />
           </Section>
 
           <Section id="obs-agency" title="Agency" lede="How much it is used. Counts only: no client names, no amounts, no notes.">
-            <div className="grid grid-cols-2 gap-xs md:grid-cols-3">
-              {[
+            <TileRows
+              tiles={[
                 { label: "People", value: data.additions.agency.people, hint: "have a client" },
                 { label: "Clients", value: data.additions.agency.clients, hint: `${data.additions.agency.clientLinksOn} with a client link on` },
                 { label: "Deliverables", value: data.additions.agency.deliverables, hint: `${data.additions.agency.published} published` },
                 { label: "Invoices", value: data.additions.agency.invoices, hint: "made in Agency" },
                 { label: "Agreements signed", value: data.additions.agency.agreementsSigned, hint: "accepted by a client" },
                 { label: "Business metrics on", value: data.additions.agency.metricsOn, hint: "switched on in Reviews" },
-              ].map((t, i, all) => (
-                <StatTile key={t.label} label={t.label} value={t.value} hint={t.hint} className={bento(i, all.length, 2, 3)} />
-              ))}
-            </div>
+              ]}
+            />
           </Section>
 
           <Section

@@ -8,6 +8,7 @@ import { Link } from 'react-router';
 import type { LucideIcon } from 'lucide-react';
 import { ArrowDownLeft, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, CalendarClock, CalendarDays, Check, Clock, Coins, Compass, EyeOff, FaceSlightlySmiling, Flame, Footprints, HandCoins, HeartPulse, MessageCircle, MessageCirclePlus, NotebookPen, PartyPopper, Pencil, Receipt, Sparkles, Star, UserRound, Users, UsersRound } from 'lucide-react';
 import { AppIcon } from '../components/AppIcon';
+import { AppTile } from '../components/AppTile';
 import { Icon } from '../components/Icon';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { Nudge } from '../components/Nudge';
@@ -30,11 +31,11 @@ import { Section, SeeAll } from '../components/Section';
 import { Segmented } from '../components/fx/Segmented';
 import { useParamState } from '../lib/useParamState';
 import { api } from '../lib/api';
-import { BENTO_SIZE, bento } from '../lib/bento';
+import { BENTO_SIZE, evenGrid, evenTile } from '../lib/bento';
 import { tie } from '../lib/text';
 import { useWide } from '../lib/useWide';
 import { prettyDate, todayLocal, weekday, eventTime } from '../lib/date';
-import { useFits, useGroupOrder, useHiddenApps, useModules } from '../lib/modules';
+import { keepForApps, useFits, useGroupOrder, useHiddenApps, useModules } from '../lib/modules';
 import { useAuthed, useMe } from '../lib/queries';
 import { SkeletonList } from '../components/Skeleton';
 import { StatusTag } from '../components/StatusTag';
@@ -49,6 +50,10 @@ import { useFocusPortal } from '../lib/focusPortal';
 const HiddenAppsPanel = lazyNamed(() => import('../components/AppGroups'), 'HiddenAppsPanel');
 const SHORTCUT_ORDER: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'manage'];
 const when = eventTime;
+// Even rows (lib/bento.ts): the reads four to a row across the whole width (one on a phone and a tablet). The Go to tiles are one sideways row on a phone
+// (the columns below only start from the tablet, `md:grid`), then three, four and five to a row, so a tile keeps about 145px or more.
+const READ_COLS = { base: 1, lg: 4 } as const;
+const GO_COLS = { base: 3, lg: 4, xl: 5 } as const;
 /** What is coming up wears its app's icon: a Party event, a run, a circle, or a calendar for a session or booking. */
 const upIcon = (kind: string): LucideIcon => (kind === 'event' ? PartyPopper : kind === 'run' ? Footprints : kind === 'circle' ? UsersRound : CalendarDays);
 /** A reading's tag is free text; a pillar key among them reads as that pillar's name, never a raw snake_case key. */
@@ -163,7 +168,7 @@ export function Home() {
   const trendWords = trendNames.charAt(0).toUpperCase() + trendNames.slice(1);
   const trendLog = trendKeys.map((k) => TREND_WORDS[k]![1]).reduce((a, b, i, xs) => (i === 0 ? b : `${a}${i === xs.length - 1 ? ' or ' : ', '}${b}`), '');
   // A period tile that opens an app shows only while that app is on (Daily's and the pillars' tiles always show).
-  const keepTile = (to: string | undefined) => !to || modules.every((m) => m.path !== to || m.on);
+  const keepTile = keepForApps(modules);
   const user = me.data?.user;
   const firstName = user?.displayName?.split(' ')[0] ?? '';
   // The bell swings once when the unread count goes up while Home is open (never on the first load); still under reduced motion.
@@ -339,7 +344,7 @@ export function Home() {
                       <Nudge className="mt-sm" text={`${d.xp.span - d.xp.into} xp to level ${d.xp.level + 1}. A ticked task is 20, a check-in 10.`} />
           </Section>
 
-          <PeriodPanel id="home-period" parts={['daily', 'wellbeing', 'finance', 'shop']} keep={keepTile} span />
+          <PeriodPanel id="home-period" parts={['daily', 'wellbeing', 'water', 'finance', 'shop']} keep={keepTile} whole="Home's By period: one small even block, no headings (the founder, 2026-11-07)" span />
           {trendKeys.length > 0 && (
           <Section id="home-trends" title="This week" lede={`${trendWords} as ${trendKeys.length === 1 ? 'a score' : 'scores'} out of a hundred, day by day. Where ${trendKeys.length === 1 ? 'the line dips' : 'the lines dip'} is where to look.`} action={isOn('wellbeing') ? <SeeAll to="/wellbeing">Wellbeing</SeeAll> : undefined} span>
             <div className="rounded-card bg-card p-md shadow-toy-soft">
@@ -686,10 +691,11 @@ export function Home() {
           {d.resources.length > 0 && readsOn && (
             <Section id="home-reads" title="Knowledge" lede="Reads and guides from the library." action={<SeeAll to="/knowledge">See all</SeeAll>} span={lastOptional === 'reads'}>
               {/* Beside another half (Life or Money) the reads stack one to a row, so a title keeps the card's width and the card is not a
-                  tall empty box; across the whole width they sit four to a row. A phone stacks them too. */}
-              <ul className={`grid h-full list-none grid-cols-1 gap-xs p-0 m-0 ${lastOptional === 'reads' ? 'md:grid-cols-4' : 'md:auto-rows-fr'}`}>
+                  tall empty box; across the whole width they sit four to a row. A phone stacks them too. Every row takes the tallest card's
+                  height (auto-rows-fr), so a three-line title or wrapped tags never leave one card taller (the founder, 2026-11-07). */}
+              <ul className={`grid h-full auto-rows-fr list-none gap-xs p-0 m-0 ${lastOptional === 'reads' ? evenGrid(d.resources.length, READ_COLS) : 'grid-cols-1'}`}>
                 {d.resources.map((r, i) => (
-                  <Reveal as="li" key={r.id} index={i} className={`flex ${lastOptional === 'reads' ? bento(i, d.resources.length, 1, 4) : ''}`}>
+                  <Reveal as="li" key={r.id} index={i} className={`flex ${lastOptional === 'reads' ? evenTile(i, d.resources.length, READ_COLS) : ''}`}>
                     {/* A read, placed like Explore's cards: the title at the top left, the kind's icon at the top right, the topic and the kind
                         as tags lined up at the foot on the left, and an arrow at the bottom right that nudges on hover. */}
                     <Link to={`/knowledge/${r.id}`} className="fx-spot toy toy-soft group flex min-h-[120px] w-full flex-col rounded-card bg-card p-sm text-ink">
@@ -799,18 +805,18 @@ export function Home() {
               const list = modules.filter((m) => m.on && m.group === g);
               if (list.length === 0) return null;
               return (
-                <div key={g} data-pillar={MODULE_GROUP_ACCENT[g]} className="mt-sm first:mt-0">
+                <div key={g} data-pillar={MODULE_GROUP_ACCENT[g]} className="mt-md first:mt-0">
                   <p className="m-0 text-eyebrow uppercase text-ink-soft">{MODULE_GROUPS[g]}</p>
-                  <ul className="mt-xs grid list-none grid-cols-3 gap-xs p-0 m-0 md:grid-cols-6">
-                    {list.map((m, i) => (
-                      <li key={m.key} className={bento(i, list.length, 3, 6)}>
-                        <Link to={m.path} className="toy toy-soft flex min-h-[72px] flex-col items-center justify-center gap-xs rounded-tile bg-card p-xs text-center text-ink">
-                          <AppIcon name={m.icon} size={24} />
-                          <span className="block w-full text-balance break-words text-caption">{m.name}</span>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
+                  {/* The top margin sits on a wrapper: a scroll-row bleeds into the gutters with margins of its own. */}
+                  <div className="mt-xs">
+                    <ul className={`scroll-row list-none snap-x snap-proximity scroll-px-md gap-sm md:m-0 md:grid md:snap-none md:overflow-visible md:p-0 ${evenGrid(list.length, GO_COLS)}`}>
+                      {list.map((m, i) => (
+                        <li key={m.key} className={`flex flex-[1_0_145px] snap-start ${evenTile(i, list.length, GO_COLS)}`}>
+                          <AppTile app={m} />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               );
             })}

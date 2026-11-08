@@ -147,7 +147,7 @@ export const REWARDS: readonly Reward[] = [
 
   { key: 'usb_drive', name: 'USB flash drive', kind: 'merch', emoji: '💾', group: 'tech', cost: 1500, blurb: 'Carry your files anywhere.' },
   { key: 'power_bank', name: 'Power bank', kind: 'merch', emoji: '🔋', group: 'tech', cost: 3000, blurb: 'Charge your phone on the go.' },
-  { key: 'phone_grip', name: 'Phone grip and stand', kind: 'merch', emoji: '📲', group: 'tech', cost: 600, blurb: 'Sticks to your phone and holds it up.' },
+  { key: 'phone_grip', name: 'Phone grip and stand', kind: 'merch', emoji: '📲', group: 'tech', cost: 600, blurb: 'Sticks on and holds your phone up.' },
   { key: 'laptop_stickers', name: 'Laptop stickers', kind: 'merch', emoji: '💻', group: 'tech', cost: 400, blurb: 'A few small stickers for your laptop.' },
 
   { key: 'water_bottle', name: 'Water bottle', kind: 'merch', emoji: '💧', group: 'drinkware', cost: 1800, blurb: 'A steel bottle for your daily water goal.' },

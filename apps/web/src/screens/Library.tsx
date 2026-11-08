@@ -36,7 +36,8 @@ export function Library() {
 
 function Mine() {
   const pg = usePage();
-  const q = useLibrary(pg.query);
+  const bk = usePage('bk');
+  const q = useLibrary(`${pg.query}&${bk.query}`);
   const certs = useAuthed(['certificates'], api.certificates);
   const dms = useAuthed(['my-dm'], api.myDmRequests);
   const refresh = useRefreshAll();
@@ -89,7 +90,7 @@ function Mine() {
         ))}
       </ul>
       <Pager page={d?.page} label="purchases" />
-      {d && d.bookings.length > 0 && (
+      {d && (d.bookings.length > 0 || d.bookingsPage.page > 1) && (
         <section className="mt-lg" aria-labelledby="bk-heading">
           <h2 id="bk-heading" className="text-title2">
             My sessions
@@ -123,6 +124,7 @@ function Mine() {
               </li>
             ))}
           </ul>
+          <Pager page={d.bookingsPage} prefix="bk" label="sessions" />
           <RescheduleSheet booking={moving} onClose={() => setMoving(null)} onDone={() => refresh()} />
           <ConfirmDelete
             open={askingCancel !== null}

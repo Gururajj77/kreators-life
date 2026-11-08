@@ -1,10 +1,10 @@
-# Switching apps on and off
-kreators.app holds about forty apps. Nobody needs them all. A student needs different ones from a video editor. So every app has a switch, and the app works best when you keep only the ones you use.
+# Hiding and unhiding your apps
+kreators.app holds about forty apps. Nobody needs them all. A student needs different ones from a video editor. So every app can be hidden, and the app works best when you keep showing only the ones you use.
 
 In this lesson you'll learn:
 
 - How the apps are grouped, and which ones are always there.
-- How to switch an app on or off, and what happens to your data.
+- How to hide and unhide an app, and what happens to your data.
 - How to choose which groups start open, and put apps in your own order.
 - Why fewer apps often means more grows.
 
@@ -13,16 +13,16 @@ In this lesson you'll learn:
 Every app lives in one group. The groups always come in the same order, on every screen.
 
 - **Contribution:** work for others and for pay, like School, Work, Army, Win and Agency.
-- **Reflection:** looking inward, like Journal, Life, Mood, Sleep, Stress, Mindfulness, Reviews, Discover and the Companion.
+- **Reflection:** looking inward, like Journal, Life, Mood, Sleep, Stress, Fitness, Mindfulness, Reviews, Discover, the Companion and Coaching.
 - **Connection:** people, like Community, Bond, Party, Kreators Run, Circles, Club and Games.
 - **Creation:** making and selling, like your Public page, Shop, Store, Finance, Knowledge and Tools.
 - **Essentials:** the Leaderboard, Inbox and Help.
 
-A few parts have no switch at all, because the app is built on them. Home, Daily, Pillars, Search and the assistant are always on, so they do not show in the lists.
+A few parts cannot be hidden, because the app is built on them. Home, Daily, Pillars, Search and the assistant are always there, so they do not show in the lists.
 
 ## Where your first apps came from
 
-You did not start with a blank list. A new account comes with a few apps on, like School, Work, Journal, Life and Shop. Then the setup chat read your answers and switched on the apps that fit you, up to five. It switched off the other apps it can switch, so your screen starts calm.
+You did not start with a blank list. A new account comes with a few apps showing, like School, Work, Journal, Life and Shop. Then the setup chat read your answers and showed the apps that fit you, up to five. It hid the other apps it can, so your screen starts calm.
 
 That was a first guess, not a rule. You can change it at any time, in two places.
 
@@ -30,11 +30,15 @@ That was a first guess, not a rule. You can change it at any time, in two places
 
 The **Apps** tab is the quick way.
 
-1. Open **Apps**. The line at the top says how many apps are on.
-2. Each group is one big card that says something like "3 of 7 on". Tap it to open it.
-3. Each app shows its icon, its name and one line on what it does.
-4. Tap the switch at the right to turn the app on or off.
-5. When an app is on, tap its name to open it.
+1. Open **Apps**. The line at the top counts them, like "3 shown, 20 hidden".
+2. Each group is one big card that says something like "3 of 7 shown". Tap it to open it.
+3. Each app shows its icon, its name and one line on what it does. Tap its name to open it.
+4. Tap the round eye at its right to hide it.
+5. **Hidden apps**, at the end of the group, holds the rest. Open it and tap the eye beside an app to show it again.
+
+While an app is hidden, a round **Hidden apps** button sits beside the count. It opens every hidden app in one place, so you can bring one back without opening its group. Home's **Go to** has the same button.
+
+To change several at once, tap **Select** beside the count. Each eye becomes a tick box. Tick the apps you want, or tap **Select all** for every app on the page. **Hide** and **Show** come up beside it, each with how many it will change. Tap one, and tap **Done** when you finish.
 
 ## Profile, Features
 
@@ -44,38 +48,41 @@ The **Features** part of the Profile tab shows the same groups, all open. It add
 - **Starts open on Apps and in the menu:** each group has this switch. Turn it on for the groups you use most. By default, Contribution and Essentials start open, and the rest start closed.
 - **Arrange apps:** tap it and each app gets a drag handle, plus **Move up** and **Move down** buttons. Put the app you use most at the top. Apps move only inside their own group. Tap **Done** when you are happy.
 
-A group you arranged also gets a **Reset order** button, in case you want the old order back.
+A group you arranged also gets **Reset order** in its More menu, in case you want the old order back.
 
 > **Pro tip:** your order and your open groups are saved on your account, not on one phone. Sign in on a laptop and the sidebar is already set up your way.
 
-## What happens when you switch an app off
+## What happens when you hide an app
 
-Off hides an app. Nothing is deleted.
+Hiding deletes nothing.
 
-- Your pages, logs and tasks stay put. Turn the app back on and they are there.
-- Some things still need an app to be on. A pattern on Emerging, for example, only runs while every app it reads is on. Switch Sleep off and the app stops looking for links with your sleep.
+- Your pages, logs and tasks stay put. Show the app again and they are there.
+- A hidden app leaves the sidebar, the phone menu and Home.
+- Emerging stops reading it. A pattern only runs while every app it reads is showing, so hide Sleep and the app stops looking for links with your sleep.
 
 If you want your data gone, that is a different step: **Erase everything** or **Delete my account** under Your data on the Profile tab. The privacy lesson covers both.
 
 ## Where your apps show up
 
-Once an app is on, it appears in a few places at once.
+Once an app is showing, it appears in a few places at once.
 
 - **On a laptop:** the sidebar lists your apps under their groups. The round button on its edge folds it to a slim row of icons, and opens it again.
 - **On a phone:** the button at the top right opens **Your apps**, the same groups in a menu.
-- **On Home:** the **Go to** section lists every app you have switched on, with **All apps** to open the Apps page.
+- **On Home:** the **Go to** section shows every app you have not hidden, as picture tiles: a sideways row on a phone. **All apps** opens the Apps page.
 
-Inside a group, the order follows you. Your own order comes first. After that come the apps that are on, then the ones that fit your answers, then the ones you open most on this device.
+Inside a group, every app keeps its place, so you find it where you last saw it. If you arranged the group, your own order comes first. The rest keep the app's own order, with the ones that are showing on top.
 
 Every app's main screen ends with a **How it works** card. Tap it to read the steps and the words the app uses. **Help** has every word in one place, under **Words we use**.
 
 ## Run the setup chat again
 
-Life changes. Maybe you started freelancing, or you joined a run club. On the Profile tab, under **Who you are**, tap **Change my tags and apps**. The setup chat opens with your last answers filled in. Change what is different, and it suggests a fresh set of apps.
+Life changes. Maybe you started freelancing, or you joined a run club. On the Profile tab, under **Who you are**, tap **Match my apps again**. The setup chat opens with your last answers filled in. Change what is different, and it suggests a fresh set of apps.
 
-Read its list before you say yes. Like the first time, it switches off the other apps it can switch. Your data in them stays safe.
+Read its list before you say yes. Like the first time, it hides the other apps it can. Your data in them stays safe.
 
-Some apps also turn on by themselves when you earn them. Unlock a card game in Rewards, for example, and **Games** switches on.
+The tag tiles under **Who you are** never change your apps. They only mark the apps that fit you, and only the chat shows and hides apps for you.
+
+Some apps also show by themselves when you earn them. Unlock a card game in Rewards, for example, and **Games** appears.
 
 ## Why fewer is better
 
@@ -85,4 +92,4 @@ Each app you add asks for some of your time. Three to five apps you open every w
 
 ## The bottom line
 
-Every app has a switch, and off never deletes. Use the Apps page to switch fast, and Profile, Features to set which groups open and in what order. Keep the list short, and let it grow with you.
+Every app can be hidden, and hiding never deletes. Use the Apps page to hide and unhide fast, and Profile, Features to set which groups open and in what order. Keep the list short, and let it grow with you.

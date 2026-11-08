@@ -31,6 +31,8 @@ export const MODULE_FOR_PREFIX: Record<string, readonly string[]> = {
   circles: ['circles'],
   life: ['life'],
   wellbeing: ['wellbeing', 'mood', 'sleep', 'stress', 'mindful', 'life'],
+  // Movement and the daily eating check-in (2026-11-07). Kreators Run's own tool writes the same movement log through /run/move, gated by Run.
+  fitness: ['fitness'],
   journal: ['journal'],
   reviews: ['reviews'],
   companion: ['companion'],

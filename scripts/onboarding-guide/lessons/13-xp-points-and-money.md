@@ -60,7 +60,7 @@ Honors are different. They come from time in the app, like One week in and One y
 The Leaderboard is on for everyone, but you are not on it until you say so.
 
 1. On the **Profile** tab, tick **Show me on the leaderboard**.
-2. Tap **Save profile**.
+2. Tap **Save profile**, or use **Show me on the boards** on the Leaderboard itself.
 3. Tap **Rank** under Points to open it.
 
 Pick a **Board**: Everyone, By goal, By pillar, By city, By who they are or By experience. Then pick **Rank by**: All time, This month, Streak or Badges. Each month is a season, and its top three get the Season top three honor.
@@ -73,7 +73,7 @@ Your trust score is one number out of a hundred. It reads New here, Getting know
 
 ## Finance: your real money
 
-Points are the app's. Finance is for your own money. It is off on a new account, in the **Creation** group. Only you can see it.
+Points are the app's. Finance is for your own money. It starts hidden on a new account, in the **Creation** group. Only you can see it.
 
 1. First, pick your currency. Open the **Public page** app, find **Currency** and save. It is rupees unless you change it.
 2. Open **Finance**. Tap **Money in** or **Money out**, type the amount and who it was with, and save.

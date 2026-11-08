@@ -7,6 +7,8 @@ import { LEGAL_VERSION } from '../../packages/shared/src/index.ts';
 import { CONTRACT_VARS, contractAsText, contractVarsUsed, invoiceAsText, money } from '../../packages/shared/src/index.ts';
 import { ATTENDEE_CLAIMS_PER_DAY, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, PLANS } from '../../packages/shared/src/index.ts';
 import { cohortTalkPrivateLabel } from '../../packages/shared/src/index.ts';
+import { MAX_DAY_TEMPLATES, MAX_TIME_BLOCKS } from '../../packages/shared/src/index.ts';
+import { gratitudePromptsForDay } from '../../packages/shared/src/gratitude.ts';
 import http from 'node:http';
 
 const ORIGIN = process.env.SMOKE_ORIGIN ?? 'http://127.0.0.1:8788';
@@ -15,6 +17,34 @@ const API = `${ORIGIN}/api`;
 const stamp = Date.now().toString(36);
 // The app's default zone is Asia/Kolkata, so "today" is that zone's date; the UTC date is a day behind for the first five and a half hours of an Indian morning.
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+// The guard on Workers Free (apps/api/src/d1Guard.ts): the test server says what each answer cost in D1 round trips, and the highest per route is kept here for the last check.
+const TRIP_CEILING = 45;
+const d1Routes = new Map();
+const d1Keep = (name, trips, read, written) => {
+  const was = d1Routes.get(name) ?? { trips: 0, read: 0, written: 0, n: 0 };
+  d1Routes.set(name, { trips: Math.max(was.trips, trips), read: Math.max(was.read, read), written: Math.max(was.written, written), n: was.n + 1 });
+};
+const plainFetch = globalThis.fetch;
+const d1RouteOf = (method, url) => {
+  const { pathname } = new URL(url);
+  const path = pathname.replace(/^\/api/, '').split('/').map((seg) => (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(seg) || /^[0-9a-f]{16,}$/i.test(seg) || /^\d{4}-\d{2}-\d{2}$/.test(seg) || /^\d+$/.test(seg) || /^[A-Z0-9]{8,}$/.test(seg) ? ':id' : seg)).join('/');
+  return `${method} ${path}`;
+};
+globalThis.fetch = async (input, init) => {
+  const res = await plainFetch(input, init);
+  const url = String(input?.url ?? input);
+  if (url.startsWith(ORIGIN)) {
+    if (new URL(url).pathname === '/__scheduled') {
+      const health = await plainFetch(`${ORIGIN}/api/health`);
+      const tick = JSON.parse(health.headers.get('x-d1-last-tick') ?? 'null');
+      if (tick) d1Keep('cron tick', tick.trips, tick.rowsRead, tick.rowsWritten);
+    } else if (res.headers.has('x-d1-round-trips')) {
+      d1Keep(d1RouteOf(init?.method ?? input?.method ?? 'GET', url), Number(res.headers.get('x-d1-round-trips')), Number(res.headers.get('x-d1-rows-read')), Number(res.headers.get('x-d1-rows-written')));
+    }
+  }
+  return res;
+};
 
 let passed = 0;
 let failed = 0;
@@ -159,7 +189,7 @@ section('Health');
 section('Auth');
 const founderEmail = 'founder@smoke.test';
 const founderPass = process.env.SMOKE_FOUNDER_PASS ?? 'Mountain-smoke-ok';
-let A; // founder, becomes admin
+let A; // the founder address, then this run's own admin
 let B; // a buyer and runner
 let C; // a seller and a run host
 {
@@ -193,6 +223,13 @@ let C; // a seller and a run host
   check('founder email becomes admin on sign-up', A.user.role === 'admin', A.user.role);
   const dup = await api('POST', '/auth/signup', { email: founderEmail, password: founderPass, phone: PHONE, birthDate: GROWN });
   check('a second sign-up with the same email is refused', dup.status === 409, dup.json);
+
+  // The founder address is checked above. The rest of the run acts through its own admin: the smoke database is kept between runs,
+  // so a rerun within the hour on the one founder account spends its hourly limits (create 30, post 10) and fails on 429s. Made a user again at the end.
+  const runAdmin = await signup(`admin-${stamp}@smoke.test`, `Anchor-${stamp}-pass`, 'Smoke admin');
+  await admin('POST', `/admin/users/${runAdmin.user.id}/role`, { role: 'admin' });
+  A = { token: runAdmin.token, user: (await api('GET', '/me', undefined, runAdmin.token)).json.user };
+  check('the run has its own admin', A.user?.role === 'admin', A.user?.role);
 
   B = await signup(`buyer-${stamp}@smoke.test`, `Lantern-${stamp}-pass`, 'Smoke buyer');
   C = await signup(`seller-${stamp}@smoke.test`, `Harbour-${stamp}-pass`, 'Smoke seller');
@@ -289,10 +326,17 @@ section('Setup');
   const on = again.json.on ?? [];
   check('a second run without a list switches on its own match', again.status === 200 && on.length >= 3 && on.every((k) => again.json.user?.modules?.[k] === true) && again.json.user?.modules?.work === false, on);
   check('a second run keeps the first onboarding date', again.json.user?.onboardedAt === u.onboardedAt, [again.json.user?.onboardedAt, u.onboardedAt]);
+  // Someone who moves is led to Fitness: a swimmer's tag and the Eat well goal are real answers, and the reason says why this app.
+  const mover = (await api('POST', '/auth/anon', {})).json.token;
+  const moved = await api('POST', '/onboarding/setup', { identities: ['swimmer'], goals: ['eat'], blockers: ['energy'] }, mover);
+  check('a swimmer who wants to eat well gets Fitness, with Swimming among their interests', moved.status === 200 && moved.json.on?.includes('fitness') && moved.json.user?.modules?.fitness === true && moved.json.user?.interests?.includes('Swimming') && JSON.stringify(moved.json.user?.intake?.goals) === '["eat"]', [moved.status, moved.json.on, moved.json.user?.intake]);
+  check('the setup says why Fitness, in words that name the swim', /every swim/.test(moved.json.match?.apps?.find((a) => a.key === 'fitness')?.why ?? ''), moved.json.match?.apps);
   const edited = await api('PATCH', '/me', { identities: ['runner', 'Chef', 'Baker', 'Potter', 'Weaver', 'runner'] }, D);
   check('tags changed under Profile go through the same cleaner', JSON.stringify(edited.json.user?.identities) === JSON.stringify(['runner', 'Chef', 'Baker', 'Potter']), edited.json.user?.identities);
+  await api('PATCH', '/me', { datePrefs: { date: 'dd_mm_yy' } }, D);
   const erased = await api('POST', '/me/reset', {}, D);
   const after = await me(D);
+  check('erase leaves the date format alone', after.datePrefs?.date === 'dd_mm_yy', after.datePrefs);
   check('erase forgets the tags and sends the person back to the setup', erased.status === 200 && after.identities?.length === 0 && after.intake?.goals?.length === 0 && after.onboardedAt === null, { identities: after.identities, onboardedAt: after.onboardedAt });
 }
 
@@ -559,6 +603,35 @@ section('Wellbeing');
   check('journal lists entries', list.status === 200 && JSON.stringify(list.json).includes('Smoke entry'), list.status);
   const otherList = await api('GET', '/journal', undefined, C.token);
   check('journal entries stay with their owner', otherList.status === 200 && !JSON.stringify(otherList.json).includes('Smoke entry'), otherList.status);
+  // Gratitude for the day (migration 0102): three lines under the day's prompts, one row per person per day, today or yesterday only.
+  // The prompts are the person's own since migration 0106: a day's three come with the read that carries the device's day.
+  const gKeys = (await api('GET', `/journal/gratitude?day=${today}&today=${today}`, undefined, B.token)).json.prompts ?? gratitudePromptsForDay(today).map((p) => p.key);
+  const gLines = (texts, keys = gKeys) => keys.map((prompt, i) => ({ prompt, text: texts[i] ?? '' }));
+  const gYday = new Date(Date.parse(`${today}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+  const gYKeys = (await api('GET', `/journal/gratitude?day=${gYday}&today=${today}`, undefined, B.token)).json.prompts ?? gKeys;
+  const gSaved = await api('PUT', `/journal/gratitude/${today}`, { lines: gLines(['Smoke gratitude line', '', '']), today, ifUpdatedAt: '' }, B.token);
+  check('gratitude for the day saves under the day’s prompts', gSaved.status === 200 && gSaved.json.gratitude?.lines?.[0]?.text === 'Smoke gratitude line' && gSaved.json.gratitude.lines[0].prompt === gKeys[0], gSaved.json);
+  const gAgain = await api('PUT', `/journal/gratitude/${today}`, { lines: gLines(['Smoke gratitude line', 'Smoke second line', '']), today, ifUpdatedAt: gSaved.json.gratitude?.updatedAt }, B.token);
+  const gStale = await api('PUT', `/journal/gratitude/${today}`, { lines: gLines(['Old tab', '', '']), today, ifUpdatedAt: gSaved.json.gratitude?.updatedAt }, B.token);
+  const gDays = await api('GET', `/journal/days?month=${today.slice(0, 7)}`, undefined, B.token);
+  check('a second save changes the same day, one per day, and an older version is refused', gAgain.status === 200 && gStale.status === 409 && gDays.json.gratitude?.filter((d) => d === today).length === 1, { again: gAgain.status, stale: gStale.status, days: gDays.json.gratitude });
+  const gStaleClear = await api('PUT', `/journal/gratitude/${today}`, { lines: gLines(['', '', '']), today, ifUpdatedAt: gSaved.json.gratitude?.updatedAt }, B.token);
+  const gStill = await api('GET', `/journal/gratitude?day=${today}`, undefined, B.token);
+  check('emptying the day with an older version is refused too, so an Undo never wipes words written since', gStaleClear.status === 409 && gStill.json.gratitude?.lines?.[1]?.text === 'Smoke second line', { status: gStaleClear.status, lines: gStill.json.gratitude?.lines });
+  const gYes = await api('PUT', `/journal/gratitude/${gYday}`, { lines: gLines(['Yesterday counts', '', ''], gYKeys), today }, B.token);
+  const gOld = await api('PUT', `/journal/gratitude/${new Date(Date.parse(`${today}T00:00:00Z`) - 3 * 86_400_000).toISOString().slice(0, 10)}`, { lines: gLines(['Too late', '', '']), today }, B.token);
+  const gFuture = await api('PUT', `/journal/gratitude/2999-01-01`, { lines: gLines(['Too soon', '', '']), today: '2999-01-01' }, B.token);
+  check('gratitude can change today and yesterday only', gYes.status === 200 && gOld.status === 400 && gFuture.status === 400, { yesterday: gYes.status, old: gOld.status, future: gFuture.status });
+  const gBadPrompt = await api('PUT', `/journal/gratitude/${today}`, { lines: [{ prompt: 'constructor', text: 'x' }, ...gLines([]).slice(1)], today }, B.token);
+  check('a prompt that does not exist is refused', gBadPrompt.status === 400, gBadPrompt.json);
+  const gOther = await api('GET', `/journal/gratitude?day=${today}`, undefined, C.token);
+  const gOtherDays = await api('GET', `/journal/days?month=${today.slice(0, 7)}`, undefined, C.token);
+  check('gratitude stays with its owner', gOther.status === 200 && gOther.json.gratitude === null && gOtherDays.status === 200 && !(gOtherDays.json.gratitude ?? []).includes(today), { other: gOther.json, days: gOtherDays.json.gratitude });
+  const gExport = await api('GET', '/me/export', undefined, B.token);
+  check('gratitude is in the export', JSON.stringify(gExport.json?.gratitude ?? []).includes('Smoke second line'), Object.keys(gExport.json ?? {}).length);
+  const gCleared = await api('PUT', `/journal/gratitude/${gYday}`, { lines: gLines(['', '', ''], gYKeys), today }, B.token);
+  const gGone = await api('GET', `/journal/gratitude?day=${gYday}`, undefined, B.token);
+  check('emptying every line removes the day', gCleared.json.gratitude === null && gGone.json.gratitude === null, gGone.json);
   const life = await api('GET', '/life', undefined, B.token);
   check('life counts the movement minutes', life.status === 200 && /30 min this week/.test(JSON.stringify(life.json)), life.status);
   check('the five areas come in their one order: physical, financial, mental, emotional, spiritual', (life.json?.areas ?? []).map((a) => a.key).join() === 'physical,financial,mental,emotional,spiritual', (life.json?.areas ?? []).map((a) => a.key));
@@ -612,6 +685,26 @@ section('Finance');
   check('app prefs belong to their owner', JSON.stringify((await me(C.token))?.appPrefs) === JSON.stringify({ open: {}, order: {} }), (await me(C.token))?.appPrefs);
   const exported = await api('GET', '/me/export', undefined, A.token);
   check('app prefs are in the export', JSON.stringify(exported.json?.user?.appPrefs) === JSON.stringify(arranged), exported.json?.user?.appPrefs);
+  // Dates and times (2026-11-07): how a person's dates and times read is on the account, beside the zone, and changed under Profile.
+  const founderFormat = JSON.stringify({ date: 'd_mon_yy', time: '12h' });
+  check('a new account reads dates the founder\'s way', JSON.stringify((await me(C.token))?.datePrefs) === founderFormat, (await me(C.token))?.datePrefs);
+  const badDate = await api('PATCH', '/me', { datePrefs: { date: 'mm/dd/yy' } }, C.token);
+  check('a date format that is not one of the choices is refused', badDate.status === 400 && /date format/.test(badDate.json.error ?? ''), badDate.json);
+  const badTime = await api('PATCH', '/me', { datePrefs: { time: 'constructor' } }, C.token);
+  check('a time format that is not one of the choices is refused', badTime.status === 400 && /time format/.test(badTime.json.error ?? ''), badTime.json);
+  const badShape = await api('PATCH', '/me', { datePrefs: '24h' }, C.token);
+  check('a format that is not an object is refused', badShape.status === 400, badShape.json);
+  check('a refused format leaves the account as it was', JSON.stringify((await me(C.token))?.datePrefs) === founderFormat, (await me(C.token))?.datePrefs);
+  const setDates = await api('PATCH', '/me', { datePrefs: { date: 'yyyy_mm_dd', time: '24h' } }, C.token);
+  check('a date and time format are saved', setDates.status === 200 && userOf(setDates)?.datePrefs?.date === 'yyyy_mm_dd' && userOf(setDates)?.datePrefs?.time === '24h', userOf(setDates)?.datePrefs);
+  const oneDatePart = await api('PATCH', '/me', { datePrefs: { time: '12h' } }, C.token);
+  check('saving one part keeps the other', userOf(oneDatePart)?.datePrefs?.date === 'yyyy_mm_dd' && userOf(oneDatePart)?.datePrefs?.time === '12h', userOf(oneDatePart)?.datePrefs);
+  const otherDateSave = await api('PATCH', '/me', { bio: 'Smoke date format' }, C.token);
+  check('a profile save without a format leaves it alone', userOf(otherDateSave)?.datePrefs?.date === 'yyyy_mm_dd', userOf(otherDateSave)?.datePrefs);
+  check('a format belongs to its owner', JSON.stringify((await me(B.token))?.datePrefs) === founderFormat, (await me(B.token))?.datePrefs);
+  const datesOut = await api('GET', '/me/export', undefined, C.token);
+  check('the format is in the export', datesOut.json?.user?.datePrefs?.date === 'yyyy_mm_dd', datesOut.json?.user?.datePrefs);
+  await api('PATCH', '/me', { datePrefs: { date: 'd_mon_yy', time: '12h' }, bio: '' }, C.token);
   const list = await api('GET', '/finance', undefined, B.token);
   check('finance answers with the month', list.status === 200, list.status);
   const other = await api('GET', '/finance', undefined, C.token);
@@ -659,6 +752,11 @@ section('Shop');
   check('bought things appear in the library', library.status === 200 && JSON.stringify(library.json).includes(`Smoke free download ${stamp}`), library.status);
   const orders = await api('GET', '/studio/orders', undefined, C.token);
   check('the seller sees the orders', orders.status === 200 && JSON.stringify(orders.json).includes(priced.json.product.id), orders.status);
+  // Every note has a tab (2026-11-07): a sale lands under Shop and money, and not under Following.
+  const shopTab = await api('GET', '/inbox?tab=shop&size=50', undefined, C.token);
+  const followTab = await api('GET', '/inbox?tab=following&size=50', undefined, C.token);
+  const soldNote = (list) => (list.json.notifications ?? []).some((n) => n.kind === 'order' && n.title.includes(`Smoke priced ${stamp}`));
+  check('a sale lands in the Shop and money tab, not elsewhere', shopTab.json.tab === 'shop' && soldNote(shopTab) && !soldNote(followTab) && (shopTab.json.tabs ?? []).find((t) => t.tab === 'shop')?.unread >= 1, [shopTab.json.tab, shopTab.json.tabs]);
   const draftOnly = await api('POST', '/studio/products', { kind: 'digital', title: `Smoke draft ${stamp}` }, C.token);
   const notLive = await api('POST', `/store/${draftOnly.json.product.id}/checkout`, {}, B.token);
   check('a draft cannot be bought', notLive.status === 404, notLive.status);
@@ -767,8 +865,11 @@ section('Community');
   check('the feed filters to people you follow', following.status === 200 && following.json.posts.length > 0 && following.json.posts.every((p) => p.authorId === P.user.id), following.json?.posts?.length);
   const mine = await api('GET', '/community?filter=mine', undefined, B.token);
   check('the feed filters to your own posts', mine.status === 200 && mine.json.posts.length === 0, mine.json?.posts?.length);
+  // This author's posts alone, so an earlier run's posts on a kept database cannot outrank the liked one; the fillers are newer, so only the sort puts it first.
+  check('popular sorts the liked post first', following.json?.posts?.[0]?.id === post.json.post.id, following.json?.posts?.[0]?.id);
   const popular = await api('GET', '/community?sort=popular', undefined, B.token);
-  check('popular sorts the liked post first', popular.status === 200 && popular.json.posts[0]?.id === post.json.post.id, popular.json?.posts?.[0]?.id);
+  const byLikesThenReplies = (popular.json?.posts ?? []).every((p, i, all) => i === 0 || all[i - 1].likes > p.likes || (all[i - 1].likes === p.likes && all[i - 1].replies >= p.replies));
+  check('the whole feed goes by likes, then replies', popular.status === 200 && popular.json.posts.length > 0 && byLikesThenReplies, popular.json?.posts?.map((p) => [p.likes, p.replies]));
   const afterB = await me(B.token);
   check('the liker and replier gained only xp', afterB.xp > beforeB.xp && afterB.points === beforeB.points, { xp: afterB.xp - beforeB.xp, points: afterB.points - beforeB.points });
   const hide = await api('POST', `/manage/community/posts/${post.json.post.id}`, { hidden: true }, B.token);
@@ -799,7 +900,7 @@ section('Reviews');
   const summary = await api('GET', `/reviews/summary?kind=week&date=${today}`, undefined, B.token);
   check('a week summary answers with the period before', summary.status === 200 && summary.json.period && summary.json.before, Object.keys(summary.json ?? {}));
   const badKind = await api('PUT', '/reviews', { kind: 'sprint', date: today }, B.token);
-  check('only week, month, quarter or half', badKind.status === 400, badKind.json);
+  check('only day, week, month, quarter, half or year', badKind.status === 400, badKind.json);
   const future = await api('PUT', '/reviews', { kind: 'month', date: `${Number(today.slice(0, 4)) + 1}-06-15`, answers: [] }, B.token);
   check('a period that has not started is refused', future.status === 400, future.json);
   const saved = await api('PUT', '/reviews', { kind: 'week', date: today, answers: ['Smoke went well'], rating: 4, highlight: 'One line to remember' }, B.token);
@@ -810,6 +911,133 @@ section('Reviews');
   check('reviews lists the built-in template and recent reviews', list.status === 200 && list.json.templates?.some((t) => t.builtIn) && list.json.recent?.length >= 1, list.status);
   const tpl = await api('POST', '/reviews/templates', { kind: 'month', name: 'Smoke template', prompts: ['What moved?', 'What next?'] }, B.token);
   check('a person can add a recurring template', tpl.status === 201 || tpl.status === 200, tpl.json);
+
+  // reviews by layer (2026-11-07): each review walks one layer of the person's own pyramids, pillar by pillar, and the year is a period
+  const year = today.slice(0, 4);
+  check('a weekly review asks about the projects first, and keeps its questions when saved again', /projects, pillar by pillar/.test(saved.json.review?.prompts?.[0] ?? '') && JSON.stringify(again.json.review?.prompts) === JSON.stringify(saved.json.review?.prompts), saved.json.review?.prompts?.[0]);
+  const weekLayer = list.json.summary?.layer;
+  const selfGroup = weekLayer?.pillars?.find((g) => g.relationship === 'self');
+  check('the week lists the projects, all seven pillars in their order', weekLayer?.kind === 'project' && JSON.stringify(weekLayer.pillars.map((g) => g.relationship)) === JSON.stringify(RELATIONSHIPS.map((r) => r.key)), weekLayer?.pillars?.map((g) => g.relationship));
+  check('each project with its ticked and open tasks', selfGroup?.items?.some((i) => i.title === 'Smoke project of my own' && typeof i.done === 'number' && typeof i.open === 'number' && i.under), selfGroup?.items);
+  check('the week keeps them in its snapshot', saved.json.review?.snapshot?.layer?.kind === 'project', saved.json.review?.snapshot?.layer?.kind);
+  const plain = await api('GET', `/reviews/summary?kind=week&date=${today}`, undefined, B.token);
+  const withLayer = await api('GET', `/reviews/summary?kind=month&date=${today}&layer=1`, undefined, B.token);
+  check('the dashboards\' summary leaves the layer out unless asked, and a month walks the goal outcomes', !('layer' in (plain.json ?? {})) && withLayer.json.layer?.kind === 'outcome', [Object.keys(plain.json ?? {}).includes('layer'), withLayer.json?.layer?.kind]);
+  const yearView = await api('GET', `/reviews?kind=year&date=${today}`, undefined, B.token);
+  check('a year is the calendar year, with the foundations by pillar', yearView.status === 200 && yearView.json.period?.start === `${year}-01-01` && yearView.json.period?.end === `${year}-12-31` && yearView.json.summary?.layer?.kind === 'pillar' && yearView.json.summary.layer.pillars.find((g) => g.relationship === 'friendship')?.items?.some((i) => i.title === 'A friend call every Sunday'), yearView.json?.period);
+  check('the yearly review has its own built-in questions', yearView.json.templates?.[0]?.id === 'builtin:year' && yearView.json.templates[0].name === 'Yearly review' && yearView.json.templates[0].prompts.length >= 4, yearView.json.templates?.[0]?.name);
+  const otherYear = await api('GET', `/reviews?kind=year&date=${today}`, undefined, C.token);
+  check('the layer is the owner\'s own: another person never sees it', otherYear.status === 200 && !JSON.stringify(otherYear.json.summary?.layer ?? {}).includes('A friend call every Sunday') && !JSON.stringify(otherYear.json.summary?.layer ?? {}).includes('Smoke project of my own'), otherYear.status);
+  const yearSaved = await api('PUT', '/reviews', { kind: 'year', date: today, answers: ['The Sunday call held'], rating: 4 }, B.token);
+  const yearAgain = await api('PUT', '/reviews', { kind: 'year', date: `${year}-03-03`, answers: ['Still held'] }, B.token);
+  check('a yearly review is saved once a year, with its foundations kept', yearSaved.status === 200 && yearSaved.json.review?.kind === 'year' && yearSaved.json.review?.snapshot?.layer?.kind === 'pillar' && yearAgain.json.review?.id === yearSaved.json.review?.id, [yearSaved.status, yearSaved.json?.error]);
+  check('next year has not started, so it is refused', (await api('PUT', '/reviews', { kind: 'year', date: `${Number(year) + 1}-02-01`, answers: [] }, B.token)).status === 400);
+  const checkin = await api('PUT', '/reviews', { kind: 'half', date: `${year}-03-01`, answers: ['Lived by most of them'] }, B.token);
+  const setting = await api('PUT', '/reviews', { kind: 'half', date: `${Number(year) - 1}-09-01`, answers: ['A new line for the year'] }, B.token);
+  check('the half has two parts: January to June is the mid-year check-in, July to December the start-of-year setting', checkin.json.review?.templateName === 'Mid-year check-in' && setting.json.review?.templateName === 'Start-of-year setting' && JSON.stringify(checkin.json.review?.prompts) !== JSON.stringify(setting.json.review?.prompts) && checkin.json.review?.snapshot?.layer?.kind === 'principle', [checkin.json.review?.templateName, setting.json.review?.templateName]);
+  const june = await api('GET', `/reviews/schedule?month=${year}-06`, undefined, B.token);
+  check('the review calendar names the half by its part', (june.json.days?.[`${year}-06-30`]?.written ?? []).some((w) => w.kind === 'half' && w.name === 'Mid-year check-in'), june.json.days?.[`${year}-06-30`]);
+  const yearly = await api('POST', `/reviews/schedule?day=${today}`, { kind: 'year', anchor: `${Number(year) + 1}-01-01`, time: '10:00', repeat: { kind: 'yearly', every: 1, days: [], until: null } }, B.token);
+  check('a yearly review can be scheduled for 1 January', yearly.status === 201, yearly.json);
+  if (yearly.json?.id) await api('DELETE', `/reviews/schedule/${yearly.json.id}`, undefined, B.token);
+}
+
+// ---------------------------------------------------------------- the daily review, and fuller period numbers (2026-11-07)
+section('Daily review and fuller numbers');
+{
+  const DR = await signup(`dailyreview-${stamp}@smoke.test`, `Lantern-${stamp}-pass`, 'Smoke daily review');
+  const answers = QUESTIONS.filter((q) => q.relationship === 'self').map((q) => ({ questionId: q.id, value: 1 }));
+  await api('POST', '/onboarding', { answers, displayName: 'Smoke daily review' }, DR.token);
+  const built = await api('POST', '/onboarding/build', { relationships: ['self'], date: today, picks: { self: {} } }, DR.token);
+  const proj = (built.json.nodes ?? []).find((n) => n.kind === 'project');
+  const day = (n) => new Date(Date.parse(`${today}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+  const yesterday = day(-1);
+  const tOpen = await api('POST', '/nodes', { kind: 'task', parentId: proj?.id, relationship: 'self', title: 'Smoke day task', doDate: today }, DR.token);
+  const tLate = await api('POST', '/nodes', { kind: 'task', parentId: proj?.id, relationship: 'self', title: 'Smoke late task', dueDate: yesterday }, DR.token);
+  check('a test account with a task for today and one late', tOpen.status === 201 && tLate.status === 201, [tOpen.status, tLate.status]);
+
+  // A day is a period: today by default, one day long, the day before beside it, walking the day's tasks pillar by pillar.
+  const dv = await api('GET', `/reviews?kind=day&date=${today}`, undefined, DR.token);
+  check('a day is a period of one day, with the day before beside it', dv.status === 200 && dv.json.period?.kind === 'day' && dv.json.period.start === today && dv.json.period.end === today && dv.json.summary?.previous?.start === yesterday && dv.json.summary?.now?.days === 1, dv.json.period);
+  const tpl = dv.json.templates?.[0];
+  check('the daily review has one built-in set of about five questions, each with a line naming its method', tpl?.id === 'builtin:day' && tpl.name === 'Daily review' && tpl.prompts.length >= 4 && tpl.prompts.length <= 6 && tpl.why?.length === tpl.prompts.length && tpl.why.every((w) => /^(From |The app's own way:)/.test(w)) && /tasks, pillar by pillar/.test(tpl.prompts[0]), tpl?.name);
+  const selfGroup = dv.json.summary?.layer?.pillars?.find((g) => g.relationship === 'self');
+  check('a day walks its tasks: the one planned for it open, the one past its day late', dv.json.summary?.layer?.kind === 'task' && selfGroup?.items?.some((i) => i.title === 'Smoke day task' && i.status === 'active' && !i.late && i.under) && selfGroup?.items?.some((i) => i.title === 'Smoke late task' && i.late === true), selfGroup?.items);
+  check('and the numbers count what was overdue as the day ended', dv.json.summary?.now?.overdueAtEnd === 1, dv.json.summary?.now?.overdueAtEnd);
+  const dSaved = await api('PUT', `/reviews?day=${today}`, { kind: 'day', date: today, answers: ['Ticked the walk', 'A slow morning'], rating: 4, highlight: 'Smoke day line' }, DR.token);
+  check('a daily review is saved with its snapshot and its questions', dSaved.status === 200 && dSaved.json.review?.kind === 'day' && dSaved.json.review?.start === today && dSaved.json.review?.templateName === 'Daily review' && dSaved.json.review?.snapshot?.layer?.kind === 'task' && dSaved.json.review?.answers?.[0] === 'Ticked the walk', dSaved.json?.error ?? dSaved.json?.review?.templateName);
+  const dRead = await api('GET', `/reviews?kind=day&date=${today}`, undefined, DR.token);
+  check('it reads back, and sits in the daily list, never among the longer reviews', dRead.json.review?.id === dSaved.json.review?.id && (dRead.json.recentDays ?? []).some((r) => r.id === dSaved.json.review?.id) && !(dRead.json.recent ?? []).some((r) => r.kind === 'day') && dRead.json.recentDaysPage?.page === 1, [dRead.json.recentDays?.length, dRead.json.recent?.length]);
+  const dYest = await api('PUT', `/reviews?day=${today}`, { kind: 'day', date: yesterday, answers: ['Looked back'] }, DR.token);
+  check('yesterday can be reviewed too', dYest.status === 200 && dYest.json.review?.start === yesterday, dYest.json?.error);
+  const dFuture = await api('PUT', `/reviews?day=${today}`, { kind: 'day', date: day(1), answers: ['Too soon'] }, DR.token);
+  const dFar = await api('PUT', '/reviews', { kind: 'day', date: day(3), answers: ['Too soon'] }, DR.token);
+  check('a day that has not started is refused, from the device or not', dFuture.status === 400 && dFar.status === 400, [dFuture.status, dFar.status]);
+  const dOther = await api('GET', `/reviews?kind=day&date=${today}`, undefined, B.token);
+  check('a daily review is the owner\'s own', !JSON.stringify(dOther.json ?? {}).includes('Smoke day line') && !JSON.stringify(dOther.json?.summary?.layer ?? {}).includes('Smoke day task'), dOther.status);
+  const dCal = await api('GET', `/reviews/schedule?month=${today.slice(0, 7)}&day=${today}`, undefined, DR.token);
+  check('the calendar lists the daily review on its day', (dCal.json.days?.[today]?.written ?? []).some((w) => w.kind === 'day' && w.name === 'Daily review'), dCal.json.days?.[today]);
+  const dSch = await api('POST', `/reviews/schedule?day=${today}`, { kind: 'day', anchor: today, time: '21:30', repeat: { kind: 'daily', every: 1, days: [], until: null } }, DR.token);
+  const dSch2 = await api('GET', `/reviews/schedule?month=${today.slice(0, 7)}&day=${today}`, undefined, DR.token);
+  check('a daily review can be scheduled every day at a time', dSch.status === 201 && (dSch2.json.schedules ?? []).some((x) => x.id === dSch.json.id && x.kind === 'day' && x.time === '21:30' && x.nextOn === today), dSch2.json.schedules);
+  // The reminder: one note on the day, at its time, opening that day's review (a time before noon opens the day before).
+  const hhmmK = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
+  const dDue = await api('POST', `/reviews/schedule?day=${today}`, { kind: 'day', anchor: today, time: hhmmK, name: 'Smoke evening look back', repeat: { kind: 'daily', every: 1, days: [], until: null } }, DR.token);
+  await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
+  await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
+  const dInbox = JSON.stringify((await api('GET', '/inbox', undefined, DR.token)).json);
+  const opens = hhmmK < '12:00' ? yesterday : today;
+  check('a daily review reminder arrives once and opens the right day', (dInbox.match(/Smoke evening look back is due/g) ?? []).length === 1 && dInbox.includes(`/reviews?kind=day&date=${opens}#review-heading`), dInbox.slice(0, 240));
+  for (const id of [dSch.json?.id, dDue.json?.id]) if (id) await api('DELETE', `/reviews/schedule/${id}`, undefined, DR.token);
+
+  // One built-in template for every period, each with its why lines, listed for the Templates area, and a copy made through the template route.
+  const tAll = await api('GET', '/reviews/templates', undefined, DR.token);
+  const kinds = (tAll.json.builtIn ?? []).map((t) => `${t.kind}${t.part ? `:${t.part}` : ''}`).join();
+  check('every period has one built-in template, the half in its two parts, each question with its why', tAll.status === 200 && kinds === 'day,week,month,quarter,half:checkin,half:setting,year' && tAll.json.builtIn.every((t) => t.builtIn && t.why?.length === t.prompts.length && t.prompts.length >= 4 && /pillar/.test(t.prompts[0])), kinds);
+  for (const k of ['week', 'month', 'quarter', 'half', 'year']) {
+    const v = await api('GET', `/reviews?kind=${k}&date=${today}`, undefined, DR.token);
+    const b = (v.json.templates ?? []).filter((t) => t.builtIn);
+    if (b.length !== 1 || b[0].id !== `builtin:${k}` || b[0].why?.length !== b[0].prompts.length) check(`the ${k} review offers its one built-in template`, false, b.map((t) => t.id));
+  }
+  check('each longer review offers its own one built-in template too', true);
+  const copied = await api('POST', '/reviews/templates', { kind: 'day', name: 'Daily review (my copy)', prompts: tAll.json.builtIn[0].prompts }, DR.token);
+  const tAll2 = await api('GET', '/reviews/templates', undefined, DR.token);
+  check('a built-in set can be copied as your own, and it is listed there', copied.status === 201 && (tAll2.json.mine ?? []).some((t) => t.id === copied.json.template?.id && t.kind === 'day' && !t.builtIn) && !(await api('GET', '/reviews/templates', undefined, B.token)).json.mine?.some((t) => t.id === copied.json.template?.id), copied.json);
+
+  // Fuller numbers on a fresh account: water, focus with its quality, the money extras, and supplements only on Reviews' own read.
+  for (const key of ['mindful', 'finance', 'fitness']) await api('PATCH', '/me/modules', { key, on: true }, DR.token);
+  await api('PUT', '/reminders/water/settings', { day: today, goalMl: 500 }, DR.token);
+  await api('POST', '/reminders/water', { day: today, ml: 400 }, DR.token);
+  await api('POST', '/reminders/water', { day: today, ml: 300 }, DR.token);
+  const fa = await api('POST', '/wellbeing/focus', { minutes: 25, date: today }, DR.token);
+  await api('POST', '/wellbeing/focus', { minutes: 20, date: today }, DR.token);
+  if (fa.json?.id) await api('PATCH', `/wellbeing/focus/${fa.json.id}`, { quality: 4 }, DR.token);
+  await api('POST', '/finance/dues', { direction: 'owed', counterparty: 'Smoke client', amountCents: 150000 }, DR.token);
+  await api('POST', '/finance/dues', { direction: 'owe', counterparty: 'Smoke friend', amountCents: 20000 }, DR.token);
+  await api('PUT', '/finance/budgets', { budgets: [{ category: 'Software', monthlyCents: 10000 }, { category: 'Travel', monthlyCents: 50000 }] }, DR.token);
+  await api('POST', '/finance/transactions', { kind: 'expense', amountCents: 25000, category: 'Software', date: today }, DR.token);
+  const goal = await api('POST', `/finance/goals?day=${today}`, { title: 'Smoke camera', targetCents: 200000 }, DR.token);
+  if (goal.json?.id) await api('POST', `/finance/goals/${goal.json.id}/add`, { cents: 50000 }, DR.token);
+  await api('PUT', '/fitness/supplements/settings', { on: true }, DR.token);
+  const sup = await api('POST', '/fitness/supplements', { name: 'Smoke B12', kind: 'vitamin', time: 'morning' }, DR.token);
+  if (sup.json?.supplement?.id) await api('PUT', `/fitness/supplements/${sup.json.supplement.id}/day`, { date: today, taken: true }, DR.token);
+  const full = await api('GET', `/reviews?kind=day&date=${today}`, undefined, DR.token);
+  const n = full.json.summary?.now ?? {};
+  check('water: the day\'s amount, and the goal met', n.waterDays === 1 && n.waterAvgMl === 700 && n.waterGoalDays === 1, { waterDays: n.waterDays, waterAvgMl: n.waterAvgMl, waterGoalDays: n.waterGoalDays });
+  check('focus: minutes, sessions, and the quality of the rated one only', n.focusMin === 45 && n.focusSessions === 2 && n.focusQualityAvg === 4, { focusMin: n.focusMin, focusSessions: n.focusSessions, focusQualityAvg: n.focusQualityAvg });
+  check('money: dues open at the day\'s end, budgets over this month, savings goals as they stand', n.owedToYouCents === 150000 && n.youOweCents === 20000 && n.budgetChecks === 2 && n.budgetsOver === 1 && n.goalSavedCents === 50000 && n.goalTargetCents === 200000 && n.goalsReached === 0 && n.goalsCount === 1, { owed: n.owedToYouCents, owe: n.youOweCents, checks: n.budgetChecks, over: n.budgetsOver, saved: n.goalSavedCents });
+  check('supplements: a count of ticks against what was due, on Reviews only', n.suppTaken === 1 && n.suppDue === 1, { suppTaken: n.suppTaken, suppDue: n.suppDue });
+  const dash = await api('GET', `/reviews/summary?kind=day&date=${today}`, undefined, DR.token);
+  check('the dashboards\' numbers carry water and focus by day, never the supplement count', dash.status === 200 && dash.json.now?.waterAvgMl === 700 && dash.json.now?.focusMin === 45 && dash.json.now?.suppDue === undefined && dash.json.now?.suppTaken === undefined, dash.json.now && { suppDue: dash.json.now.suppDue });
+  const dIns = JSON.stringify((await api('GET', `/insights?day=${today}`, undefined, DR.token)).json).toLowerCase();
+  check('supplements never reach Emerging from the review numbers', !dIns.includes('supptaken') && !dIns.includes('smoke b12'), null);
+  await api('PATCH', '/me/modules', { key: 'finance', on: false }, DR.token);
+  await api('PATCH', '/me/modules', { key: 'mindful', on: false }, DR.token);
+  const off = (await api('GET', `/reviews/summary?kind=week&date=${today}`, undefined, DR.token)).json.now ?? {};
+  check('with Finance and Mindfulness off, their parts are not read', off.owedToYouCents === undefined && off.budgetChecks === undefined && off.focusMin === undefined && off.waterDays === 1, { owed: off.owedToYouCents, focus: off.focusMin, water: off.waterDays });
+  const wk = (await api('GET', `/reviews/summary?kind=week&date=${today}`, undefined, DR.token)).json;
+  check('a week counts the same water and the late task', wk.now?.waterDays === 1 && wk.now?.overdueAtEnd >= 1 && typeof wk.now?.habitTicks === 'number' && typeof wk.now?.topPriorityDone === 'number', wk.now && { water: wk.now.waterDays, overdue: wk.now.overdueAtEnd });
+  await api('DELETE', '/me', { confirm: 'DELETE' }, DR.token);
 }
 
 // ---------------------------------------------------------------- store: pre-owned, offers, partner links
@@ -1033,9 +1261,376 @@ section('Run discussions');
   check('deleting the account deletes the lines', zdel.status === 200 && !(afterZ.json.lines ?? []).some((l) => l.body.includes('leaver run line')), afterZ.json);
 }
 
+// ---------------------------------------------------------------- fitness: movement, eating, and Kreators Run's own tool (2026-11-07)
+section('Fitness');
+{
+  const FT = await signup(`fitness-${stamp}@smoke.test`, `Meadow-${stamp}-pass`, 'Smoke fitness');
+  const FO = await signup(`fitness2-${stamp}@smoke.test`, `Meadow-${stamp}-pass`, 'Smoke fitness other');
+  const shiftD = (d, n) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+  const yday = shiftD(today, -1);
+  const old = shiftD(today, -3);
+  const before = await me(FT.token);
+  const m1 = await api('POST', '/fitness/move', { date: today, kind: 'walk', minutes: 30, metres: 2500, effort: 2, note: 'smoke park' }, FT.token);
+  check('a walk can be logged with its distance and effort', m1.status === 201 && m1.json.move?.kind === 'walk' && m1.json.move?.metres === 2500 && m1.json.move?.effort === 2 && m1.json.move?.source === 'self', m1.json);
+  const yoga = await api('POST', '/fitness/move', { date: yday, kind: 'yoga', minutes: 20, metres: 3000 }, FT.token);
+  check('yesterday works, and a kind with no distance drops it', yoga.status === 201 && yoga.json.move?.metres === null && yoga.json.move?.date === yday, yoga.json);
+  const oldMove = await api('POST', '/fitness/move', { date: old, kind: 'run', minutes: 20 }, FT.token);
+  check('movement is for today or yesterday only', oldMove.status === 400, oldMove.json);
+  const badKind = await api('POST', '/fitness/move', { date: today, kind: 'constructor', minutes: 20 }, FT.token);
+  const badMinutes = await api('POST', '/fitness/move', { date: today, kind: 'run', minutes: 0 }, FT.token);
+  check('an unknown kind and zero minutes are refused', badKind.status === 400 && badMinutes.status === 400, [badKind.json, badMinutes.json]);
+  // The holistic check-in (2026-11-07): meals, each Good fuel, Tasty or both, fruit and vegetables apart, and More. A protein mark from an older tab is dropped.
+  const e1 = await api('PUT', '/fitness/eat', { date: today, meals: [{ moment: 'lunch', protein: true, tasty: true }], fruit: 1, veg: 2, packaged: 0, screenFree: 1, note: 'smoke lunch' }, FT.token);
+  check('the eating check-in saves its meals and its day score (40 fruit and veg, 20 packaged, 15 no screen, and protein out of it)', e1.status === 200 && e1.json.eat?.meals?.length === 1 && !('protein' in (e1.json.eat?.meals?.[0] ?? {})) && e1.json.eat?.fruit === 1 && e1.json.eat?.veg === 2 && e1.json.eat?.dayScore === 79 && e1.json.eat?.howWell === 4, e1.json);
+  const tastyOnly = await api('PUT', '/fitness/eat', { date: today, meals: [{ moment: 'lunch', protein: true, tasty: false, fuel: true }], fruit: 1, veg: 2, packaged: 0, screenFree: 1, fullness: 2, note: 'smoke lunch' }, FT.token);
+  check('Good fuel, Tasty and how full you felt never move the score', tastyOnly.status === 200 && tastyOnly.json.eat?.dayScore === 79, tastyOnly.json.eat?.dayScore);
+  const e2 = await api('PUT', '/fitness/eat', { date: today, meals: [{ moment: 'dinner' }, { moment: 'lunch', protein: true }, { moment: 'dinner' }], veg: 1, screenFree: 5, note: 'smoke dinner' }, FT.token);
+  const f = await api('GET', `/fitness?day=${today}`, undefined, FT.token);
+  const todays = (f.json.eats ?? []).filter((x) => x.date === today);
+  check('one eating check-in a day: saving again replaces it, each meal once, screen-free meals capped', e2.status === 200 && todays.length === 1 && todays[0]?.note === 'smoke dinner' && todays[0]?.meals?.map((m) => m.moment).join() === 'lunch,dinner' && todays[0]?.screenFree === 2, f.json.eats);
+  // Not said is not 0 (the founder, 2026-11-07): what was left alone is left out of the score, the rest share its weight, and one part alone gets no score.
+  const eNoMore = await api('PUT', '/fitness/eat', { date: yday, meals: [{ moment: 'lunch', protein: true }], fruit: 2, veg: 3 }, FT.token);
+  check('a day with More left closed can reach 5 of 5', eNoMore.status === 200 && eNoMore.json.eat?.dayScore === 100 && eNoMore.json.eat?.howWell === 5 && eNoMore.json.eat?.screenFree === null && eNoMore.json.eat?.packaged === null, eNoMore.json.eat);
+  const eZero = await api('PUT', '/fitness/eat', { date: yday, meals: [{ moment: 'lunch', protein: true }], fruit: 0 }, FT.token);
+  check('a stepper brought back to 0 is a said 0, and one left alone is not said', eZero.status === 200 && eZero.json.eat?.fruit === 0 && eZero.json.eat?.veg === null && eZero.json.eat?.dayScore === 0 && eZero.json.eat?.howWell === 1, eZero.json.eat);
+  const eOne = await api('PUT', '/fitness/eat', { date: yday, meals: [{ moment: 'lunch', protein: true }] }, FT.token);
+  check('a lunch alone has no score, so it is neither 1 of 5 nor 5 of 5', eOne.status === 200 && eOne.json.eat?.dayScore === null && eOne.json.eat?.howWell === null && eOne.json.eat?.fasting === false && eOne.json.eat?.fruit === null && eOne.json.eat?.veg === null && eOne.json.eat?.screenFree === null, eOne.json.eat);
+  const fOne = await api('GET', `/fitness?day=${today}`, undefined, FT.token);
+  check('and it reads back the same', (fOne.json.eats ?? []).some((x) => x.date === yday && x.dayScore === null && x.fruit === null && x.meals?.length === 1), fOne.json.eats);
+  const eatDay = await api('GET', `/reviews/summary?kind=day&date=${yday}`, undefined, FT.token);
+  const eatNext = await api('GET', `/reviews/summary?kind=day&date=${today}`, undefined, FT.token);
+  check('a day with no score is left out of the review number, and a scored day beside it still counts', eatDay.status === 200 && (eatDay.json.now?.eatAvg ?? null) === null && eatNext.json.now?.eatAvg === 3, [eatDay.json.now?.eatAvg, eatNext.json.now?.eatAvg]);
+  // A score needs fruit or veg answered (the founder, 2026-11-07): lunch, None and a screen-free meal were 5 of 5 before; a said 0 is an answer.
+  const eThree = await api('PUT', '/fitness/eat', { date: yday, meals: [{ moment: 'lunch' }], packaged: 0, screenFree: 1 }, FT.token);
+  const eThreeDay = await api('GET', `/reviews/summary?kind=day&date=${yday}`, undefined, FT.token);
+  check('a meal, no packaged food and a screen-free meal with no fruit or veg said have no score, and the review number leaves the day out', eThree.status === 200 && eThree.json.eat?.dayScore === null && eThree.json.eat?.howWell === null && eThree.json.eat?.packaged === 0 && (eThreeDay.json.now?.eatAvg ?? null) === null, [eThree.json.eat, eThreeDay.json.now?.eatAvg]);
+  const eSaid0 = await api('PUT', '/fitness/eat', { date: yday, meals: [{ moment: 'lunch' }], veg: 0, packaged: 0, screenFree: 1 }, FT.token);
+  check('with a said 0 for vegetables the same day has a score', eSaid0.status === 200 && eSaid0.json.eat?.veg === 0 && eSaid0.json.eat?.dayScore === 47 && eSaid0.json.eat?.howWell === 3, eSaid0.json.eat);
+  const eFast = await api('PUT', '/fitness/eat', { date: yday, fasting: true, meals: [{ moment: 'lunch' }] }, FT.token);
+  check('a fasting day keeps no meals and has no score, so it is never a poor day', eFast.status === 200 && eFast.json.eat?.fasting === true && eFast.json.eat?.meals?.length === 0 && eFast.json.eat?.dayScore === null && eFast.json.eat?.howWell === null, eFast.json);
+  const eOld = await api('PUT', '/fitness/eat', { date: old, veg: 3 }, FT.token);
+  const eBad = await api('PUT', '/fitness/eat', { date: today, fruit: 6 }, FT.token);
+  const eEmpty = await api('PUT', '/fitness/eat', { date: today }, FT.token);
+  const eMoment = await api('PUT', '/fitness/eat', { date: today, meals: [{ moment: 'constructor' }] }, FT.token);
+  check('eating is for today or yesterday only, in range, never empty and only known meals', eOld.status === 400 && eBad.status === 400 && eEmpty.status === 400 && eMoment.status === 400, [eOld.json, eBad.json, eEmpty.json, eMoment.json]);
+  check('the week adds up the active minutes', f.json.weekMinutes === 50, f.json.weekMinutes);
+  // Protein (2026-11-07, the founder): its own number, added up by the serving, on its own account so the checks above keep their days.
+  const FP = await signup(`fitness3-${stamp}@smoke.test`, `Meadow-${stamp}-pass`, 'Smoke meals');
+  const pOnly = await api('PUT', '/fitness/eat', { date: today, protein: { foods: [{ food: 'egg', n: 1 }, { food: 'dal', n: 2 }] } }, FP.token);
+  check('protein alone can be saved, added up from the foods, in the list order, and it has no eating score', pOnly.status === 200 && pOnly.json.eat?.proteinG === 21 && pOnly.json.eat?.protein?.foods?.[0]?.food === 'dal' && pOnly.json.eat?.dayScore === null && pOnly.json.eat?.howWell === null, pOnly.json.eat);
+  const pAll = await api('PUT', '/fitness/eat', { date: today, meals: [{ moment: 'lunch' }], fruit: 2, veg: 3, protein: { foods: [{ food: 'scoop', n: 2 }], scoopG: 30, typedG: 5 } }, FP.token);
+  check('a changed scoop and grams from a label add up, and the score takes a meal with fruit and veg without them', pAll.status === 200 && pAll.json.eat?.proteinG === 65 && pAll.json.eat?.dayScore === 100 && pAll.json.eat?.howWell === 5, pAll.json.eat);
+  const pKeep = await api('PUT', '/fitness/eat', { date: today, meals: [{ moment: 'dinner' }], veg: 1 }, FP.token);
+  check('a save that does not mention protein (the assistant, an older tab) keeps the day’s protein', pKeep.status === 200 && pKeep.json.eat?.proteinG === 65 && pKeep.json.eat?.protein?.scoopG === 30 && pKeep.json.eat?.meals?.[0]?.moment === 'dinner', pKeep.json.eat);
+  const pClear = await api('PUT', '/fitness/eat', { date: today, meals: [{ moment: 'dinner' }], veg: 1, protein: null }, FP.token);
+  check('and the form taking it all off clears it', pClear.status === 200 && pClear.json.eat?.proteinG === null && pClear.json.eat?.protein === null, pClear.json.eat);
+  // A tab left open must not write over what another saved since (2026-11-07): the form says which row it read.
+  const pGuard0 = await api('PUT', '/fitness/eat', { date: today, ifId: null, meals: [{ moment: 'lunch' }], protein: { typedG: 9 } }, FP.token);
+  check('a form that read no row is refused once the day has one, and the row stays', pGuard0.status === 409 && pGuard0.json.error === 'changed', pGuard0.json);
+  const pGuard1 = await api('PUT', '/fitness/eat', { date: today, ifId: pClear.json.eat?.id, meals: [{ moment: 'lunch' }], protein: { typedG: 9 } }, FP.token);
+  const pGuard2 = await api('PUT', '/fitness/eat', { date: today, ifId: pClear.json.eat?.id, meals: [{ moment: 'dinner' }], protein: { typedG: 8 } }, FP.token);
+  const pGuardRead = await api('GET', `/fitness?day=${today}`, undefined, FP.token);
+  check('a save from the row it read goes through, and the next from that same stale read is refused', pGuard1.status === 200 && pGuard1.json.eat?.proteinG === 9 && pGuard2.status === 409 && pGuardRead.json.eats?.filter((x) => x.date === today).length === 1 && pGuardRead.json.eats?.find((x) => x.date === today)?.proteinG === 9, [pGuard1.status, pGuard2.status]);
+  const pAtOnce = await Promise.all([1, 2].map((typedG) => api('PUT', '/fitness/eat', { date: today, ifId: pGuard1.json.eat?.id, meals: [{ moment: 'lunch' }], protein: { typedG } }, FP.token)));
+  check('two saves at once from one read: one goes through', pAtOnce.map((r) => r.status).sort().join() === '200,409', pAtOnce.map((r) => r.status));
+  const pNull = await Promise.all(['/fitness/eat', '/fitness/protein-goal', '/fitness/move'].map(async (path) => (await fetch(`${API}${path}`, { method: path.endsWith('move') ? 'POST' : 'PUT', headers: { 'content-type': 'application/json', 'CF-Connecting-IP': ADDRESS, authorization: `Bearer ${FP.token}` }, body: 'null' })).status));
+  check('a body of null is a 400 on the eating, goal and movement routes, never a 500', pNull.every((s) => s === 400), pNull);
+  const pFoods = await Promise.all([{ foods: [{ food: 'constructor', n: 1 }] }, { foods: [{ food: '__proto__', n: 1 }] }, { foods: [{ food: 'dal', n: 21 }] }, { typedG: 12.5 }, { typedG: 401 }, { foods: [{ food: 'scoop', n: 1 }], scoopG: 500 }, 'lots'].map((protein) => api('PUT', '/fitness/eat', { date: today, meals: [{ moment: 'lunch' }], protein }, FP.token)));
+  check('an unknown food, too many servings and odd grams are refused out loud', pFoods.every((r) => r.status === 400 && typeof r.json.error === 'string'), pFoods.map((r) => r.json));
+  const pOver = await api('PUT', '/fitness/eat', { date: today, meals: [{ moment: 'lunch' }], protein: { foods: [{ food: 'chicken', n: 20 }, { food: 'fish', n: 1 }] } }, FP.token);
+  check('a day over the most says so', pOver.status === 400 && /400 g/.test(pOver.json.error ?? ''), pOver.json);
+  const pSaved = await api('PUT', '/fitness/eat', { date: today, meals: [{ moment: 'lunch' }], veg: 2, protein: { foods: [{ food: 'paneer', n: 1 }], typedG: 33 } }, FP.token);
+  const pGoal0 = await api('GET', `/fitness?day=${today}`, undefined, FP.token);
+  check('there is no goal until one is set', pSaved.status === 200 && pGoal0.json.proteinGoal === null, pGoal0.json.proteinGoal);
+  const pGoal = await api('PUT', '/fitness/protein-goal', { goal: 60, weightKg: 71 }, FP.token);
+  const pGoal1 = await api('GET', `/fitness?day=${today}`, undefined, FP.token);
+  check('the goal is set in whole grams and reads back with the week', pGoal.status === 200 && pGoal.json.goal === 60 && pGoal1.json.proteinGoal === 60 && pGoal1.json.eats?.[0]?.proteinG === 42, pGoal1.json.proteinGoal);
+  const pBadGoals = await Promise.all([5, 301, 60.5, 'lots', -1].map((goal) => api('PUT', '/fitness/protein-goal', { goal }, FP.token)));
+  check('a goal out of range or not whole is refused', pBadGoals.every((r) => r.status === 400 && typeof r.json.error === 'string'), pBadGoals.map((r) => r.json));
+  const pNoGoal = await api('PUT', '/fitness/protein-goal', {}, FP.token);
+  const pNoGoalRead = await api('GET', `/fitness?day=${today}`, undefined, FP.token);
+  check('a body that does not say the goal is refused and never clears it', pNoGoal.status === 400 && pNoGoalRead.json.proteinGoal === 60, [pNoGoal.status, pNoGoalRead.json.proteinGoal]);
+  const pNoSession = await api('PUT', '/fitness/protein-goal', { goal: 60 });
+  check('the goal needs a session', pNoSession.status === 401, pNoSession.status);
+  const pOther = await api('GET', `/fitness?day=${today}`, undefined, FO.token);
+  check('another person’s goal and grams are not there', pOther.json.proteinGoal === null && !JSON.stringify(pOther.json.eats).includes('paneer'), pOther.json.proteinGoal);
+  const pSupp = await api('PUT', '/fitness/supplements/settings', { on: true }, FP.token);
+  const pGoal2 = await api('GET', `/fitness?day=${today}`, undefined, FP.token);
+  await api('PUT', '/fitness/protein-goal', { goal: 61 }, FP.token);
+  const pSupp2 = await api('GET', `/fitness/supplements?day=${today}`, undefined, FP.token);
+  check('the goal and the supplement switches share a row and never move each other', pSupp.status === 200 && pGoal2.json.proteinGoal === 60 && pSupp2.json.settings?.on === true, [pGoal2.json.proteinGoal, pSupp2.json.settings]);
+  await api('PUT', '/fitness/protein-goal', { goal: 60 }, FP.token);
+  const pReads = await Promise.all([`/reviews/summary?kind=day&date=${today}`, `/reviews?kind=week&date=${today}`, '/insights', `/insights/dashboard?day=${today}`, `/home/brief?day=${today}`, '/life', '/leaderboard?scope=everyone', '/search?q=paneer', `/public/${FP.user.handle}`].map((path) => api('GET', path, undefined, FP.token)));
+  check('protein reaches no review, Emerging, the brief, Life, the leaderboard, search or the public page', pReads.every((r) => !/protein|paneer/i.test(JSON.stringify(r.json))), pReads.filter((r) => /protein|paneer/i.test(JSON.stringify(r.json))).map((r) => JSON.stringify(r.json).slice(0, 300)));
+  const pExport = await api('GET', '/me/export', undefined, FP.token);
+  const pExportText = JSON.stringify(pExport.json);
+  check('the goal and the foods are in the person’s export, and no weight is anywhere', pExport.json.fitnessPrefs?.[0]?.protein_goal_g === 60 && pExportText.includes('paneer') && !/weightKg|"weight"/.test(pExportText), pExport.json.fitnessPrefs);
+  await api('POST', '/me/reset', {}, FP.token);
+  const pKept = await api('GET', `/fitness?day=${today}`, undefined, FP.token);
+  check('an erase of progress keeps the grams and the goal, like every tracker', pKept.json.proteinGoal === 60 && pKept.json.eats?.[0]?.proteinG === 42, [pKept.json.proteinGoal, pKept.json.eats?.[0]?.proteinG]);
+  const pGone = await api('DELETE', '/me', { confirm: 'DELETE' }, FP.token);
+  check('the goal and the grams go with the account', pGone.status === 200 && (await api('GET', `/fitness?day=${today}`, undefined, FP.token)).status === 401, pGone.status);
+  const after = await me(FT.token);
+  check('movement and eating pay nothing', after.xp === before.xp && after.points === before.points, { xp: after.xp - before.xp, points: after.points - before.points });
+  const theirs = await api('GET', `/fitness?day=${today}`, undefined, FO.token);
+  check('another person sees none of it', theirs.status === 200 && theirs.json.moves?.length === 0 && theirs.json.eats?.length === 0, theirs.json);
+  const stealMove = await api('DELETE', `/fitness/move/${m1.json.move.id}`, undefined, FO.token);
+  const stealEat = await api('DELETE', `/fitness/eat/${e2.json.eat.id}`, undefined, FO.token);
+  const stealEdit = await api('PATCH', `/fitness/move/${m1.json.move.id}`, { minutes: 5 }, FO.token);
+  check('another person cannot change or remove them', stealMove.status === 404 && stealEat.status === 404 && stealEdit.status === 404, [stealMove.status, stealEat.status, stealEdit.status]);
+  const edit = await api('PATCH', `/fitness/move/${m1.json.move.id}`, { minutes: 35, kind: 'cycle' }, FT.token);
+  check('a movement log can be changed, keeping what was not sent', edit.status === 200 && edit.json.move?.minutes === 35 && edit.json.move?.kind === 'cycle' && edit.json.move?.metres === 2500 && edit.json.move?.note === 'smoke park', edit.json);
+  const month = await api('GET', `/fitness/month?month=${today.slice(0, 7)}`, undefined, FT.token);
+  const badMonth = await api('GET', '/fitness/month?month=2026-13', undefined, FT.token);
+  check('the month answers, and a month that is not real is refused', month.status === 200 && (month.json.moves ?? []).some((m) => m.id === m1.json.move.id) && badMonth.status === 400, [month.status, badMonth.status]);
+  const list = await api('GET', '/fitness/moves?msize=10', undefined, FT.token);
+  check('the movement list is served a page at a time', list.status === 200 && list.json.page?.size === 10 && list.json.moves?.length === 2, list.json.page);
+  const life = await api('GET', '/life', undefined, FT.token);
+  const physical = life.json.areas?.find((a) => a.key === 'physical');
+  check('Life counts the movement and adds eating to the physical area', /55 min this week/.test(JSON.stringify(physical)) && (physical?.parts ?? []).some((p) => p.label === 'Eating' && typeof p.score === 'number'), physical?.parts);
+  const otherLife = await api('GET', '/life', undefined, FO.token);
+  check('nobody who never logged eating gets an Eating part', !(otherLife.json.areas?.find((a) => a.key === 'physical')?.parts ?? []).some((p) => p.label === 'Eating'), otherLife.json.areas?.[0]?.parts);
+  // A check-in with no fruit or veg said was logged, so Life says it has no score, not that it was not logged.
+  const noScore = await api('PUT', '/fitness/eat', { date: today, meals: [{ moment: 'lunch' }] }, FO.token);
+  const noScoreLife = await api('GET', '/life', undefined, FO.token);
+  const noScorePart = (noScoreLife.json.areas?.find((a) => a.key === 'physical')?.parts ?? []).find((p) => p.label === 'Eating');
+  check('a day with no score reads as no score on Life, never as not logged', noScore.status === 200 && noScorePart?.value === 'no score yet', noScorePart);
+  if (noScore.json.eat?.id) await api('DELETE', `/fitness/eat/${noScore.json.eat.id}`, undefined, FO.token);
+  const runBefore = await me(FT.token);
+  const rw = await api('POST', '/run/move', { date: today, kind: 'walk', minutes: 25, metres: 2000 }, FT.token);
+  check('Kreators Run logs a walk on its own, with no club or code', rw.status === 201 && rw.json.move?.source === 'self' && rw.json.move?.kind === 'walk', rw.json);
+  const rGym = await api('POST', '/run/move', { date: today, kind: 'gym', minutes: 25 }, FT.token);
+  check('the run tool takes a run or a walk only', rGym.status === 400, rGym.json);
+  const same = await api('GET', `/fitness?day=${today}`, undefined, FT.token);
+  check('the run tool writes the same log Fitness reads', (same.json.moves ?? []).some((m) => m.id === rw.json.move?.id), same.json.moves?.map((m) => m.kind));
+  const rMoves = await api('GET', `/run/move?day=${today}`, undefined, FT.token);
+  check('the run tool lists the week’s own runs and walks only', rMoves.status === 200 && rMoves.json.moves?.length === 1 && rMoves.json.minutes === 25, rMoves.json);
+  const runAfter = await me(FT.token);
+  const tracking = (await api('GET', '/run', undefined, FT.token)).json.tracking;
+  check('the run tool pays nothing and is never a club run', runAfter.xp === runBefore.xp && runAfter.points === runBefore.points && tracking?.runs === 0 && tracking?.metres === 0, { xp: runAfter.xp - runBefore.xp, runs: tracking?.runs });
+  const rDelYoga = await api('DELETE', `/run/move/${yoga.json.move.id}`, undefined, FT.token);
+  check('the run tool removes only its own runs and walks', rDelYoga.status === 404, rDelYoga.status);
+  const rDel = await api('DELETE', `/run/move/${rw.json.move.id}`, undefined, FT.token);
+  check('a run or walk logged there is removed there', rDel.status === 200, rDel.json);
+  const genericEat = await api('POST', '/wellbeing/eat', { date: today, value: 3 }, FT.token);
+  check('eating is written only through Fitness', genericEat.status === 404, genericEat.status);
+  const oldGeneric = await api('POST', '/wellbeing/move', { date: old, value: 20 }, FT.token);
+  check('movement from Life or the assistant keeps the same day rule', oldGeneric.status === 400, oldGeneric.json);
+  const badDay = await api('POST', '/fitness/move', { date: '2026-11-31', kind: 'walk', minutes: 10 }, FT.token);
+  check('a day that is not on the calendar is refused, never moved to today', badDay.status === 400, badDay.json);
+  const fitLogs = await api('GET', `/internal/logs?actor=${FT.user.id}`, undefined, A.token);
+  check('movement and eating leave no line in the logs, from Fitness or Kreators Run’s tool', fitLogs.status === 200 && !(fitLogs.json.logs ?? []).some((l) => l.area === 'fitness' || /^\/run\/move/.test(l.path ?? '')), (fitLogs.json.logs ?? []).map((l) => l.path).slice(0, 5));
+
+  // Supplements (2026-11-07): the person's own list, off until Track supplements is on, on Daily only with Show on Daily, paying nothing.
+  for (const key of ['fitness', 'journal', 'mood']) await api('PATCH', '/me/modules', { key, on: true }, FT.token);
+  const sBefore = await me(FT.token);
+  const s0 = await api('GET', `/fitness/supplements?day=${today}`, undefined, FT.token);
+  const t0 = await api('GET', `/fitness/supplements/today?date=${today}`, undefined, FT.token);
+  check('supplements start off: no list, and nothing on Daily', s0.status === 200 && s0.json.settings?.on === false && s0.json.settings?.daily === false && s0.json.items?.length === 0 && t0.status === 200 && t0.json.show === false, [s0.json, t0.json]);
+  const sd3 = await api('POST', '/fitness/supplements', { name: '  Smoke   D3 ', kind: 'vitamin', amount: '60,000 IU weekly', time: 'morning' }, FT.token);
+  const sMag = await api('POST', '/fitness/supplements', { name: 'Smoke magnesium', kind: 'mineral', time: 'morning', days: [1, 2, 3, 4, 5, 6, 7] }, FT.token);
+  const sNight = await api('POST', '/fitness/supplements', { name: 'Smoke ashwagandha', kind: 'herbal', time: 'night', amount: '1 capsule' }, FT.token);
+  check('a supplement is added with its name, kind, amount as typed and when', sd3.status === 201 && sd3.json.supplement?.name === 'Smoke D3' && sd3.json.supplement?.amount === '60,000 IU weekly' && sd3.json.supplement?.days?.length === 7 && sMag.status === 201 && sNight.status === 201, sd3.json);
+  const sBadKind = await api('POST', '/fitness/supplements', { name: 'X', kind: 'constructor' }, FT.token);
+  const sBadTime = await api('POST', '/fitness/supplements', { name: 'X', time: 'toString' }, FT.token);
+  const sNoName = await api('POST', '/fitness/supplements', { name: '   ' }, FT.token);
+  const sLong = await api('POST', '/fitness/supplements', { name: 'x'.repeat(41) }, FT.token);
+  check('an unknown kind or time, an empty name and a long one are refused', [sBadKind, sBadTime, sNoName, sLong].every((r) => r.status === 400), [sBadKind.status, sBadTime.status, sNoName.status, sLong.status]);
+  const sOn = await api('PUT', '/fitness/supplements/settings', { on: true }, FT.token);
+  const tStill = await api('GET', `/fitness/supplements/today?date=${today}`, undefined, FT.token);
+  check('Track supplements alone keeps Daily quiet until Show on Daily is on', sOn.status === 200 && sOn.json.settings?.on === true && tStill.json.show === false, [sOn.json, tStill.json]);
+  const sBadSet = await api('PUT', '/fitness/supplements/settings', { remind: { morning: '8am' } }, FT.token);
+  check('a reminder time that is not HH:MM is refused', sBadSet.status === 400, sBadSet.json);
+  await api('PUT', '/fitness/supplements/settings', { daily: true }, FT.token);
+  const t1 = await api('GET', `/fitness/supplements/today?date=${today}`, undefined, FT.token);
+  check('with both switches on, Daily lists today’s supplements by part of the day', t1.json.show === true && t1.json.total === 3 && t1.json.taken === 0 && t1.json.groups?.map((g) => g.time).join() === 'morning,night', t1.json);
+  const d3 = sd3.json.supplement.id;
+  const k1 = await api('PUT', `/fitness/supplements/${d3}/day`, { date: today, taken: true }, FT.token);
+  const k2 = await api('PUT', `/fitness/supplements/${d3}/day`, { date: today, taken: true }, FT.token);
+  const s1 = await api('GET', `/fitness/supplements?day=${today}`, undefined, FT.token);
+  const d3Row = s1.json.items?.find((x) => x.id === d3);
+  check('ticking taken twice makes one tick, and Fitness shows the last seven days', k1.status === 200 && k2.status === 200 && d3Row?.takenToday === true && d3Row?.takenDays === 1 && d3Row?.week?.length === 7 && d3Row?.week?.[6] === true, d3Row);
+  const kOld = await api('PUT', `/fitness/supplements/${d3}/day`, { date: old, taken: true }, FT.token);
+  const kBad = await api('PUT', `/fitness/supplements/${d3}/day`, { date: '2026-11-31', taken: true }, FT.token);
+  check('a tick is for today or yesterday only, on a real day', kOld.status === 400 && kBad.status === 400, [kOld.json, kBad.json]);
+  // The reminder: one inbox note for the morning, while one of the two is not marked; never twice.
+  const sParts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
+  const sNow = Number(sParts.find((x) => x.type === 'hour')?.value ?? 0) * 60 + Number(sParts.find((x) => x.type === 'minute')?.value ?? 0);
+  const sDue = Math.max(0, Math.min(sNow, 23 * 60 + 45) - 10);
+  const sAt = `${String(Math.floor(sDue / 60)).padStart(2, '0')}:${String(sDue % 60).padStart(2, '0')}`;
+  await api('PUT', '/fitness/supplements/settings', { remind: { morning: sAt } }, FT.token);
+  await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
+  await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
+  const sInbox = JSON.stringify((await api('GET', '/inbox?tab=reminders', undefined, FT.token)).json);
+  const sNotes = (sInbox.match(/Morning supplements/g) ?? []).length;
+  check('a supplement reminder is one inbox note for its part of the day, never twice, and names a count only', sNotes === 1 && sInbox.includes('2 on your list') && !sInbox.includes('Smoke magnesium'), sInbox.slice(0, 300));
+  const all = await api('POST', '/fitness/supplements/day', { date: today, time: 'morning' }, FT.token);
+  const t2 = await api('GET', `/fitness/supplements/today?date=${today}`, undefined, FT.token);
+  check('Mark all taken ticks a whole part of the day', all.status === 200 && t2.json.taken === 2 && t2.json.total === 3, t2.json);
+  const pause = await api('PATCH', `/fitness/supplements/${sNight.json.supplement.id}`, { paused: true }, FT.token);
+  const t3 = await api('GET', `/fitness/supplements/today?date=${today}`, undefined, FT.token);
+  check('a paused one leaves Daily and keeps its place on the list', pause.status === 200 && pause.json.supplement?.paused === true && t3.json.total === 2 && !(t3.json.groups ?? []).some((g) => g.time === 'night'), t3.json);
+  const ren = await api('PATCH', `/fitness/supplements/${d3}`, { amount: '1 tablet' }, FT.token);
+  check('a change keeps what was not sent', ren.status === 200 && ren.json.supplement?.name === 'Smoke D3' && ren.json.supplement?.amount === '1 tablet' && ren.json.supplement?.kind === 'vitamin', ren.json);
+  const mv = await api('POST', `/fitness/supplements/${sMag.json.supplement.id}/move`, { dir: 'up' }, FT.token);
+  const s2 = await api('GET', `/fitness/supplements?day=${today}`, undefined, FT.token);
+  check('one can move up the list', mv.status === 200 && s2.json.items?.[0]?.id === sMag.json.supplement.id, s2.json.items?.map((x) => x.name));
+  const theirSupp = await api('GET', `/fitness/supplements?day=${today}`, undefined, FO.token);
+  const stealTick = await api('PUT', `/fitness/supplements/${d3}/day`, { date: today, taken: false }, FO.token);
+  const stealPatch = await api('PATCH', `/fitness/supplements/${d3}`, { name: 'mine now' }, FO.token);
+  const stealDel = await api('DELETE', `/fitness/supplements/${d3}`, undefined, FO.token);
+  check('another person sees none of the list and can change none of it', theirSupp.json.items?.length === 0 && stealTick.status === 404 && stealPatch.status === 404 && stealDel.status === 404, [stealTick.status, stealPatch.status, stealDel.status]);
+  const extra = [];
+  for (let i = 0; i < 9; i += 1) extra.push(await api('POST', '/fitness/supplements', { name: `Smoke extra ${i}`, kind: 'other' }, FT.token));
+  const over = await api('POST', '/fitness/supplements', { name: 'Smoke one too many' }, FT.token);
+  check(`the list holds up to twelve`, extra.every((r) => r.status === 201) && over.status === 409, [extra.map((r) => r.status).join(), over.status]);
+  for (const r of extra) await api('DELETE', `/fitness/supplements/${r.json.supplement.id}`, undefined, FT.token);
+  const sAfter = await me(FT.token);
+  check('supplements pay nothing', sAfter.xp === sBefore.xp && sAfter.points === sBefore.points, { xp: sAfter.xp - sBefore.xp, points: sAfter.points - sBefore.points });
+  const sIns = JSON.stringify((await api('GET', `/insights?day=${today}`, undefined, FT.token)).json).toLowerCase();
+  const sBrief = JSON.stringify((await api('GET', `/home/brief?date=${today}&hour=20`, undefined, FT.token)).json).toLowerCase();
+  const sBadges = JSON.stringify((await api('GET', '/me/badges', undefined, FT.token)).json).toLowerCase();
+  check('supplements never reach Emerging, the brief or badges', !sIns.includes('supplement') && !sIns.includes('smoke d3') && !sBrief.includes('supplement') && !sBadges.includes('supplement'), null);
+  const suppLogs = await api('GET', `/internal/logs?actor=${FT.user.id}`, undefined, A.token);
+  check('supplements leave no line in the logs', suppLogs.status === 200 && !(suppLogs.json.logs ?? []).some((l) => l.area === 'fitness' || /supplement/.test(l.path ?? '')), (suppLogs.json.logs ?? []).map((l) => l.path).slice(0, 5));
+  const sGone = await api('DELETE', `/fitness/supplements/${sNight.json.supplement.id}`, undefined, FT.token);
+  check('one is removed with its ticks', sGone.status === 200 && !(await api('GET', `/fitness/supplements?day=${today}`, undefined, FT.token)).json.items?.some((x) => x.id === sNight.json.supplement.id), sGone.json);
+  const exp = await api('GET', '/me/export', undefined, FT.token);
+  const expText = JSON.stringify(exp.json);
+  check('the export carries movement, eating and the supplement list with its ticks and switches', exp.status === 200 && expText.includes('smoke park') && expText.includes('smoke dinner') && (exp.json.supplements ?? []).some((x) => x.name === 'Smoke D3') && (exp.json.supplementDays ?? []).length >= 2 && (exp.json.fitnessPrefs ?? []).length === 1, exp.status);
+  await api('POST', '/me/reset', {}, FT.token);
+  const kept = await api('GET', `/fitness?day=${today}`, undefined, FT.token);
+  const keptSupp = await api('GET', `/fitness/supplements?day=${today}`, undefined, FT.token);
+  check('an erase of progress keeps them, like every tracker', kept.json.moves?.length === 2 && kept.json.eats?.length === 2 && keptSupp.json.items?.length === 2, { moves: kept.json.moves?.length, eats: kept.json.eats?.length, supplements: keptSupp.json.items?.length });
+  const off = await admin('POST', '/admin/flags/fitness', { enabled: false });
+  const gated = await api('GET', `/fitness?day=${today}`, undefined, FT.token);
+  const gatedWrite = await api('POST', '/fitness/move', { date: today, kind: 'run', minutes: 10 }, FT.token);
+  const gatedSupp = await api('GET', `/fitness/supplements/today?date=${today}`, undefined, FT.token);
+  const gatedGoal = await api('PUT', '/fitness/protein-goal', { goal: 60 }, FT.token);
+  check('with Fitness switched off the protein goal is refused too', gatedGoal.status === 403, gatedGoal.status);
+  const gatedTick = await api('PUT', `/fitness/supplements/${d3}/day`, { date: today, taken: false }, FT.token);
+  const runStill = await api('GET', `/run/move?day=${today}`, undefined, FT.token);
+  await admin('POST', '/admin/flags/fitness', { enabled: true });
+  check('with Fitness switched off its API refuses, supplements too, and Kreators Run’s tool still answers', off.status === 200 && gated.status === 403 && gatedWrite.status === 403 && gatedSupp.status === 403 && gatedTick.status === 403 && runStill.status === 200, [off.status, gated.status, gatedWrite.status, gatedSupp.status, gatedTick.status, runStill.status]);
+  const clear = await api('DELETE', '/fitness/supplements', undefined, FO.token);
+  check('removing the whole list answers for an empty one too', clear.status === 200, clear.json);
+  const del = await api('DELETE', '/me', { confirm: 'DELETE' }, FT.token);
+  check('deleting the account deletes them', del.status === 200 && (await api('GET', `/fitness?day=${today}`, undefined, FT.token)).status === 401, del.status);
+}
+
+// ---------------------------------------------------------------- Emerging, the brief and the review numbers across Fitness and gratitude (2026-11-07)
+section('Fitness and gratitude across the app');
+{
+  const FE = await signup(`fitemerge-${stamp}@smoke.test`, `Meadow-${stamp}-pass`, 'Smoke fit emerge');
+  for (const key of ['fitness', 'journal', 'mood']) await api('PATCH', '/me/modules', { key, on: true }, FE.token);
+  await api('POST', '/fitness/move', { date: today, kind: 'walk', minutes: 30 }, FE.token);
+  // A check-in whose day score is 84 keeps 4 of 5 (eatHowWell), the number Reviews average.
+  await api('PUT', '/fitness/eat', { date: today, meals: [{ moment: 'lunch', protein: true }], fruit: 1, veg: 2, packaged: 0, screenFree: 1 }, FE.token);
+  const gk = gratitudePromptsForDay(today).map((p) => p.key);
+  await api('PUT', `/journal/gratitude/${today}`, { lines: gk.map((prompt, i) => ({ prompt, text: i === 0 ? 'Smoke fit thanks' : '' })), today, ifUpdatedAt: '' }, FE.token);
+  const ins = await api('GET', `/insights?day=${today}`, undefined, FE.token);
+  const ids = (ins.json.insights ?? []).map((i) => i.id);
+  const mw = (ins.json.insights ?? []).find((i) => i.id === 'move-weekday');
+  check('emerging reads movement, eating and gratitude days while their apps are on', ins.status === 200 && mw?.state === 'watching' && /Log movement on \d+ more days/.test(mw?.need ?? '') && ids.includes('eat-days') && ids.includes('gratitude-mood'), ids);
+  check('emerging never carries a gratitude line or a note', !JSON.stringify(ins.json).includes('Smoke fit thanks'), null);
+  await api('PATCH', '/me/modules', { key: 'fitness', on: false }, FE.token);
+  const offIds = ((await api('GET', `/insights?day=${today}`, undefined, FE.token)).json.insights ?? []).map((i) => i.id);
+  check('with Fitness and Kreators Run off, no movement or eating line runs', !offIds.includes('move-weekday') && !offIds.includes('eat-days') && !offIds.includes('habit-tie:move'), offIds);
+  const briefJournal = await api('GET', `/home/brief?date=${today}&hour=20`, undefined, FE.token);
+  await api('PATCH', '/me/modules', { key: 'fitness', on: true }, FE.token);
+  const briefAll = await api('GET', `/home/brief?date=${today}&hour=20`, undefined, FE.token);
+  check('the brief reads Fitness and gratitude only for the apps on, and answers either way', briefJournal.status === 200 && briefAll.status === 200, [briefJournal.status, briefAll.status]);
+  const nums = await api('GET', `/reviews/summary?kind=week&date=${today}`, undefined, FE.token);
+  check('the review numbers count active minutes, days moved, eating and gratitude days', nums.status === 200 && nums.json.now?.moveMin === 30 && nums.json.now?.moveDays === 1 && nums.json.now?.eatAvg === 4 && nums.json.now?.gratitudeDays === 1, nums.json.now && { moveMin: nums.json.now.moveMin, moveDays: nums.json.now.moveDays, eatAvg: nums.json.now.eatAvg, gratitudeDays: nums.json.now.gratitudeDays });
+  const year = await api('GET', `/reviews/summary?kind=year&date=${today}`, undefined, FE.token);
+  check('the yearly numbers count them too', year.status === 200 && year.json.now?.moveDays === 1 && year.json.now?.gratitudeDays === 1, year.json.period);
+  await api('DELETE', '/me', { confirm: 'DELETE' }, FE.token);
+}
+
+// ---------------------------------------------------------------- Gratitude prompts per person (migration 0106, 2026-11-07)
+section('Gratitude prompts per person');
+{
+  const GR = await signup(`gratitude-${stamp}@smoke.test`, `Meadow-${stamp}-pass`, 'Smoke gratitude');
+  await api('PATCH', '/me/modules', { key: 'journal', on: true }, GR.token);
+  const groupOf = (k) => (typeof k === 'string' ? k.slice(0, -3) : '');
+  const yday = new Date(Date.parse(`${today}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+  const open = (day) => api('GET', `/journal/gratitude?day=${day}&today=${today}`, undefined, GR.token);
+  const first = await open(today);
+  const p0 = first.json.prompts ?? [];
+  check('a day’s three prompts are the person’s own, from three different groups', first.status === 200 && p0.length === 3 && new Set(p0.map(groupOf)).size === 3 && first.json.usual === null && first.json.gratitude === null, first.json);
+  const reload = await open(today);
+  check('a reload shows the same three prompts', JSON.stringify(reload.json.prompts) === JSON.stringify(p0), [p0, reload.json.prompts]);
+  const noOffer = await api('GET', `/journal/gratitude?day=${today}`, undefined, GR.token);
+  check('without the device’s day a read carries no prompts and makes none', noOffer.status === 200 && noOffer.json.prompts === undefined, noOffer.json);
+  // Another prompt: the one shown counts as seen, the line takes another of the same group; the same tap twice skips once.
+  const skip = await api('POST', `/journal/gratitude/${today}/another`, { index: 1, prompt: p0[1], today }, GR.token);
+  const p1 = skip.json.prompts ?? [];
+  check('Another prompt gives another prompt of the same group on that line only', skip.status === 200 && p1[1] !== p0[1] && groupOf(p1[1]) === groupOf(p0[1]) && p1[0] === p0[0] && p1[2] === p0[2], skip.json);
+  const skipTwice = await api('POST', `/journal/gratitude/${today}/another`, { index: 1, prompt: p0[1], today }, GR.token);
+  check('the same tap sent twice skips once and answers the day’s prompts', skipTwice.status === 409 && JSON.stringify(skipTwice.json.prompts) === JSON.stringify(p1), skipTwice.json);
+  check('a reload after a skip keeps the new prompt', JSON.stringify((await open(today)).json.prompts) === JSON.stringify(p1), p1);
+  // Words go under the day's own prompts; words under another prompt are refused.
+  const wrote = await api('PUT', `/journal/gratitude/${today}`, { lines: p1.map((prompt, i) => ({ prompt, text: i === 0 ? 'Smoke per-person thanks' : '' })), today, ifUpdatedAt: '' }, GR.token);
+  check('a line saves under the day’s prompt for its place', wrote.status === 200 && wrote.json.gratitude?.lines?.[0]?.prompt === p1[0] && JSON.stringify(wrote.json.prompts) === JSON.stringify(p1), wrote.json);
+  const other = p0[1];
+  const wrongPrompt = await api('PUT', `/journal/gratitude/${today}`, { lines: [{ prompt: p1[0], text: 'Smoke per-person thanks' }, { prompt: other, text: 'Under the skipped one' }, { prompt: p1[2], text: '' }], today, ifUpdatedAt: wrote.json.gratitude?.updatedAt }, GR.token);
+  check('words under a prompt that is not the day’s are refused', wrongPrompt.status === 409 && wrongPrompt.json.error === 'changed', wrongPrompt.json);
+  const stale = await api('PUT', `/journal/gratitude/${today}`, { lines: [{ prompt: p1[0], text: 'Smoke per-person thanks' }, { prompt: other, text: '' }, { prompt: p1[2], text: '' }], today, ifUpdatedAt: wrote.json.gratitude?.updatedAt }, GR.token);
+  check('an empty line sent under an old prompt takes the day’s own', stale.status === 200 && stale.json.gratitude?.lines?.[1]?.prompt === p1[1], stale.json);
+  // A written line keeps its prompt: no pick and no skip there.
+  const free = ['servant_leader', 'friendship', 'parent_child', 'lover_partner', 'self', 'guru', 'divine', 'day'].find((g) => !p1.map(groupOf).includes(g));
+  const pickWritten = await api('POST', `/journal/gratitude/${today}/pick`, { index: 0, group: free, prompt: p1[0], today }, GR.token);
+  const skipWritten = await api('POST', `/journal/gratitude/${today}/another`, { index: 0, prompt: p1[0], today }, GR.token);
+  check('a written line keeps its pillar and its prompt', pickWritten.status === 409 && skipWritten.status === 409 && JSON.stringify(pickWritten.json.prompts) === JSON.stringify(p1), [pickWritten.json, skipWritten.status]);
+  // The pillar picker on an empty line: a free group gives its next prompt, a group on another empty line swaps, a written one is refused.
+  const pick = await api('POST', `/journal/gratitude/${today}/pick`, { index: 2, group: free, prompt: p1[2], today }, GR.token);
+  const p2 = pick.json.prompts ?? [];
+  check('the pillar picker gives an empty line a prompt from the pillar picked', pick.status === 200 && groupOf(p2[2]) === free && p2[0] === p1[0] && p2[1] === p1[1], pick.json);
+  const swap = await api('POST', `/journal/gratitude/${today}/pick`, { index: 2, group: groupOf(p2[1]), prompt: p2[2], today }, GR.token);
+  const p3 = swap.json.prompts ?? [];
+  check('picking the pillar of another empty line swaps the two', swap.status === 200 && p3[2] === p2[1] && p3[1] === p2[2] && p3[0] === p2[0], swap.json);
+  const onWritten = await api('POST', `/journal/gratitude/${today}/pick`, { index: 2, group: groupOf(p3[0]), prompt: p3[2], today }, GR.token);
+  const badGroup = await api('POST', `/journal/gratitude/${today}/pick`, { index: 2, group: 'constructor', prompt: p3[2], today }, GR.token);
+  const oldDay = await api('POST', `/journal/gratitude/2026-01-01/pick`, { index: 2, group: free, prompt: p3[2], today }, GR.token);
+  check('the pillar of a written line, an unknown pillar and an older day are refused', onWritten.status === 409 && /line you wrote/.test(onWritten.json.error ?? '') && badGroup.status === 400 && oldDay.status === 400, [onWritten.json, badGroup.status, oldDay.status]);
+  // The usual three shape a day opened after they were set; nothing written under or skipped comes back.
+  const usual = [groupOf(p1[0]), groupOf(p0[1]), free];
+  const pin = await api('PUT', '/journal/gratitude-settings', { usual }, GR.token);
+  const badPin = await api('PUT', '/journal/gratitude-settings', { usual: ['self', 'self', 'day'] }, GR.token);
+  check('the usual three save, and two of the same are refused', pin.status === 200 && JSON.stringify(pin.json.usual) === JSON.stringify(usual) && badPin.status === 400, [pin.json, badPin.json]);
+  const yOpen = await open(yday);
+  const py = yOpen.json.prompts ?? [];
+  check('a day opened after pinning starts with the usual three', yOpen.status === 200 && JSON.stringify(py.map(groupOf)) === JSON.stringify(usual) && JSON.stringify(yOpen.json.usual) === JSON.stringify(usual), yOpen.json);
+  check('the prompt written under and the one skipped do not come back, and the two open days share none', py[0] !== p1[0] && py[1] !== p0[1] && py.every((k) => !p3.includes(k)), { today: p3, yesterday: py, wrote: p1[0], skipped: p0[1] });
+  check('the day already open keeps its own prompts', JSON.stringify((await open(today)).json.prompts) === JSON.stringify(p3), p3);
+  const unpin = await api('PUT', '/journal/gratitude-settings', { usual: null }, GR.token);
+  check('the usual three can be cleared', unpin.status === 200 && unpin.json.usual === null && (await open(today)).json.usual === null, unpin.json);
+  // Journal data: in the export, and no one else reads it.
+  const ex = await api('GET', '/me/export', undefined, GR.token);
+  const seen = ex.json?.gratitudeSeen ?? [];
+  check('the prompts seen and the prompts kept are in the export', seen.some((m) => m.prompt === p0[1] && m.how === 'skipped') && seen.some((m) => m.prompt === p1[0] && m.how === 'wrote') && (ex.json?.gratitudeOffers ?? []).length === 2 && Array.isArray(ex.json?.gratitudePrefs), { seen, offers: ex.json?.gratitudeOffers });
+  const GO = await signup(`gratitude-other-${stamp}@smoke.test`, `Meadow-${stamp}-pass`, 'Smoke gratitude other');
+  const theirs = await api('GET', `/journal/gratitude?day=${today}&today=${today}`, undefined, GO.token);
+  const theirSkip = await api('POST', `/journal/gratitude/${today}/another`, { index: 0, prompt: p3[0], today }, GO.token);
+  const theirEx = await api('GET', '/me/export', undefined, GO.token);
+  const mineAfter = await open(today);
+  check('another person has their own prompts and marks, and never moves these', theirs.status === 200 && theirs.json.gratitude === null && theirSkip.status === 200 && JSON.stringify(mineAfter.json.prompts) === JSON.stringify(p3) && mineAfter.json.gratitude?.lines?.[0]?.text === 'Smoke per-person thanks' && !(theirEx.json?.gratitudeSeen ?? []).some((m) => m.how === 'wrote'), [theirs.json, theirSkip.status, mineAfter.json.prompts]);
+  await api('DELETE', '/me', { confirm: 'DELETE' }, GO.token);
+  await api('DELETE', '/me', { confirm: 'DELETE' }, GR.token);
+}
+
 // ---------------------------------------------------------------- school and staff powers
 section('School and staff');
 {
+  // The smoke database keeps earlier runs' programs, and the public ones come first in every list, so they would push this run's off the first page. They close first.
+  for (let page = 1; page <= 50; page++) {
+    const every = (await api('GET', `/school?view=every&size=100&page=${page}`, undefined, A.token)).json;
+    for (const p of every.programs ?? []) {
+      if (/^(Smoke test program|Privacy program)/.test(p.name) && p.visibility !== 'archived') await api('PATCH', `/school/programs/${p.id}`, { visibility: 'archived' }, A.token);
+    }
+    if (!every.page?.more) break;
+  }
+
   const byUser = await api('POST', '/school/programs', { name: 'Not allowed' }, B.token);
   check('only cohort managers publish programs', byUser.status === 403, byUser.status);
   const prog = await api('POST', '/school/programs', { name: 'Smoke test program', description: 'Made by the smoke test.' }, A.token);
@@ -1043,7 +1638,8 @@ section('School and staff');
   const asStaff = await api('GET', '/school', undefined, A.token);
   check('staff see unpublished programs', asStaff.status === 200 && JSON.stringify(asStaff.json).includes('Smoke test program'), asStaff.status);
   const asUser = await api('GET', '/school', undefined, B.token);
-  check('members see only published programs', asUser.status === 200 && !JSON.stringify(asUser.json).includes('Smoke test program'), asUser.status);
+  // By this run's id: the smoke database keeps earlier runs' public programs, and some carry this name.
+  check('members see only published programs', asUser.status === 200 && !JSON.stringify(asUser.json).includes(prog.json.id), asUser.status);
   check('the two real programs are seeded', /Editing fundamentals/.test(JSON.stringify(asUser.json)) && /ChatCut/.test(JSON.stringify(asUser.json)), '');
   const perms = await admin('POST', `/admin/users/${C.user.id}/permissions`, { permissions: ['cohorts'] });
   check('a permission can be granted', perms.status === 200 && perms.json.user?.permissions?.includes('cohorts'), perms.json);
@@ -1164,7 +1760,15 @@ section('School visibility');
     await admin('POST', `/admin/users/${s.user.id}/permissions`, { permissions: ['cohorts'] });
   }
   const name = `Smoke test program private ${stamp}`;
-  const listed = async (who, q = '') => JSON.stringify((await api('GET', `/school${q}`, undefined, who.token)).json.programs ?? []).includes(name);
+  // Every page: the smoke database keeps earlier runs' programs, so this one can sit past the first page.
+  const listed = async (who, q = '') => {
+    for (let page = 1; page <= 50; page++) {
+      const j = (await api('GET', `/school${q || '?'}${q ? '&' : ''}size=100&page=${page}`, undefined, who.token)).json;
+      if (JSON.stringify(j.programs ?? []).includes(name)) return true;
+      if (!j.page?.more) return false;
+    }
+    return false;
+  };
   const prog = await api('POST', '/school/programs', { name, visibility: 'private' }, W.token);
   const pid = prog.json.id;
   const k = await api('POST', `/school/programs/${pid}/cohorts`, { name: `Private cohort ${stamp}`, startAt: new Date().toISOString(), endAt: new Date(Date.now() + 30 * 86_400_000).toISOString() }, W.token);
@@ -1194,6 +1798,8 @@ section('School visibility');
   check('the same person is not invited twice', again.status === 409, again.json);
   const iInbox = JSON.stringify((await api('GET', '/inbox?size=50', undefined, I.token)).json);
   check('the invitee is told in the inbox', iInbox.includes(`invited you to ${name}`), '');
+  const iLearning = await api('GET', '/inbox?tab=learning&size=50', undefined, I.token);
+  check('a School invite lands in the School and coaching tab', iLearning.json.tab === 'learning' && (iLearning.json.notifications ?? []).some((n) => n.kind === 'school' && n.title.includes(`invited you to ${name}`)), iLearning.json.notifications?.map((n) => n.kind));
   check('the invitee now sees it', await listed(I), '');
   const iEnrol = await api('POST', `/school/cohorts/${kid}/enroll`, {}, I.token);
   check('and can enrol', iEnrol.status === 201, iEnrol.json);
@@ -1306,6 +1912,89 @@ section('School editing');
   check('its maker removes a lesson, and it leaves the cohort', gone.status === 200 && JSON.stringify(await titles()) === JSON.stringify(['First lesson, changed']), [gone.json, await titles()]);
   check('a lesson already removed is not found', (await api('DELETE', `/school/items/${two.json.id}`, undefined, W.token)).status === 404, '');
 
+  // A lesson's resources (migration 0113): up to six, in an order, for whoever may edit its program; a learner reads them.
+  const lessonId = one.json.id;
+  const lessonOf = async (who = L) => ((await api('GET', `/school/cohorts/${kid}`, undefined, who.token)).json.items ?? []).find((i) => i.id === lessonId);
+  const kinds = async () => ((await lessonOf()).resources ?? []).map((r) => r.kind);
+  const addRes = (body, who = W) => api('POST', `/school/items/${lessonId}/resources`, body, who.token);
+  check('a lesson starts with no resources', (await kinds()).length === 0 && (await lessonOf()).contentRef === null, await lessonOf());
+  const vid = await addRes({ kind: 'video', ref: 'https://youtu.be/abc123XYZ' });
+  const bk = await addRes({ kind: 'book', ref: 'dictionary-of-mistakes-for-creators', label: 'The creators book' });
+  const fl = await addRes({ kind: 'file', ref: '/resources/Shubham%20Editor%20Skill.md' });
+  const ln = await addRes({ kind: 'link', ref: 'https://example.com/page', label: '  A  page\n' });
+  check('its maker adds a video, a book, a file and a link', [vid, bk, fl, ln].every((r) => r.status === 201 && r.json.id), [vid.json, bk.json, fl.json, ln.json]);
+  const added = await lessonOf();
+  check('a learner reads them in the order they were added', JSON.stringify(added.resources.map((r) => r.kind)) === JSON.stringify(['video', 'book', 'file', 'link']) && added.resources[1].label === 'The creators book' && added.resources[3].label === 'A page', added.resources);
+  check('the lesson’s single link stays its first link', added.contentRef === 'https://youtu.be/abc123XYZ', added.contentRef);
+  // Refused: a bad link, a link of the wrong kind, a book that is not one, a key off a prototype, a repeat, a body that is not an object.
+  for (const [what, body] of [
+    ['a link that is not https', { kind: 'link', ref: 'http://example.com/a' }],
+    ['a script link', { kind: 'file', ref: 'javascript:alert(1)' }],
+    ['a path that climbs out of /resources/', { kind: 'file', ref: '/resources/%2e%2e/secret' }],
+    ['a page as a video', { kind: 'video', ref: 'https://example.com/page' }],
+    ['an unknown book', { kind: 'book', ref: 'no-such-book' }],
+    ['a book by a prototype key', { kind: 'book', ref: 'constructor' }],
+    ['an unknown kind', { kind: 'podcast', ref: 'https://example.com/a' }],
+    ['a kind by a prototype key', { kind: '__proto__', ref: 'https://example.com/a' }],
+    ['the same link twice', { kind: 'video', ref: 'https://youtu.be/abc123XYZ' }],
+  ]) check(`a resource is refused: ${what}`, (await addRes(body)).status === 400, what);
+  check('a body that is not an object is a 400', (await api('POST', `/school/items/${lessonId}/resources`, [1, 2], W.token)).status === 400, '');
+  // Nobody but whoever may edit changes them, and a resource of another lesson is not found through this one.
+  const firstRes = vid.json.id;
+  check('a learner cannot add a resource', (await addRes({ kind: 'link', ref: 'https://example.com/mine' }, L)).status === 403, '');
+  check('nor change one', (await api('PATCH', `/school/items/${lessonId}/resources/${firstRes}`, { label: 'Mine now' }, L.token)).status === 403, '');
+  check('nor move one', (await api('POST', `/school/items/${lessonId}/resources/${firstRes}/move`, { to: 'down' }, L.token)).status === 403, '');
+  check('nor remove one', (await api('DELETE', `/school/items/${lessonId}/resources/${firstRes}`, undefined, L.token)).status === 403, '');
+  const otherLesson = await api('POST', `/school/programs/${pid}/items`, { moduleTitle: 'Another lesson', contentRef: 'https://cdn.example.com/guide.pdf' }, W.token);
+  check('a lesson’s id does not open another lesson’s resource', (await api('DELETE', `/school/items/${otherLesson.json.id}/resources/${firstRes}`, undefined, W.token)).status === 404, '');
+  const otherRows = ((await api('GET', `/school/cohorts/${kid}`, undefined, L.token)).json.items ?? []).find((i) => i.id === otherLesson.json.id)?.resources;
+  check('a link given with a new lesson is its first resource, of the kind it reads as', otherRows?.length === 1 && otherRows[0].kind === 'file' && otherRows[0].ref === 'https://cdn.example.com/guide.pdf', otherRows);
+  // Change in place, keeping what is not sent; a bad change is refused and changes nothing.
+  const relabel = await api('PATCH', `/school/items/${lessonId}/resources/${firstRes}`, { label: 'The full talk' }, W.token);
+  check('its maker changes a label and the link stays', relabel.status === 200 && (await lessonOf()).resources[0].label === 'The full talk' && (await lessonOf()).resources[0].ref === 'https://youtu.be/abc123XYZ', [relabel.json, (await lessonOf()).resources[0]]);
+  check('a change to a bad link is refused', (await api('PATCH', `/school/items/${lessonId}/resources/${firstRes}`, { ref: 'ftp://example.com/a' }, W.token)).status === 400 && (await lessonOf()).resources[0].ref === 'https://youtu.be/abc123XYZ', '');
+  check('a change to what the lesson already has is refused', (await api('PATCH', `/school/items/${lessonId}/resources/${firstRes}`, { kind: 'link', ref: 'https://example.com/page' }, W.token)).status === 400, '');
+  const rekind = await api('PATCH', `/school/items/${lessonId}/resources/${fl.json.id}`, { kind: 'link' }, W.token);
+  check('a change of kind keeps the link', rekind.status === 200 && (await lessonOf()).resources[2].kind === 'link' && (await lessonOf()).resources[2].ref === '/resources/Shubham%20Editor%20Skill.md', (await lessonOf()).resources[2]);
+  // Order: up and down, never past the ends; the single link follows the first link, and a book is never it.
+  const moved = await api('POST', `/school/items/${lessonId}/resources/${bk.json.id}/move`, { to: 'up' }, W.token);
+  check('moving the book up puts it first', moved.status === 200 && (await kinds())[0] === 'book', [moved.json, await kinds()]);
+  check('the single link skips a book to the first link', (await lessonOf()).contentRef === 'https://youtu.be/abc123XYZ', (await lessonOf()).contentRef);
+  check('the first cannot move further up', (await api('POST', `/school/items/${lessonId}/resources/${bk.json.id}/move`, { to: 'up' }, W.token)).status === 400, '');
+  check('the last cannot move further down', (await api('POST', `/school/items/${lessonId}/resources/${ln.json.id}/move`, { to: 'down' }, W.token)).status === 400, '');
+  check('a move that is not up or down is refused', (await api('POST', `/school/items/${lessonId}/resources/${bk.json.id}/move`, { to: 'sideways' }, W.token)).status === 400, '');
+  await api('POST', `/school/items/${lessonId}/resources/${firstRes}/move`, { to: 'down' }, W.token);
+  check('moving the video down makes the next link the single link', (await lessonOf()).contentRef === '/resources/Shubham%20Editor%20Skill.md', (await lessonOf()).contentRef);
+  // The most a lesson holds, then removing; the last removal empties the single link too.
+  const fifth = await addRes({ kind: 'video', ref: 'https://vimeo.com/123456' });
+  const sixth = await addRes({ kind: 'link', ref: 'https://example.com/six' });
+  const seventh = await addRes({ kind: 'link', ref: 'https://example.com/seven' });
+  check('a lesson holds six resources and refuses a seventh', fifth.status === 201 && sixth.status === 201 && seventh.status === 400 && (await kinds()).length === 6, [fifth.json, sixth.json, seventh.json]);
+  const auditLines = JSON.stringify((await admin('GET', '/admin/audit?size=100')).json);
+  check('the audit log names the resource changes', auditLines.includes('lesson.resource') && auditLines.includes('https://example.com/six'), auditLines.slice(0, 300));
+  for (const r of (await lessonOf()).resources) check(`its maker removes ${r.kind}`, (await api('DELETE', `/school/items/${lessonId}/resources/${r.id}`, undefined, W.token)).status === 200, r);
+  check('with none left the lesson has no link', (await kinds()).length === 0 && (await lessonOf()).contentRef === null, await lessonOf());
+  check('a resource already removed is not found', (await api('DELETE', `/school/items/${lessonId}/resources/${firstRes}`, undefined, W.token)).status === 404, '');
+  // The older single-link change from a tab that has not updated still lands: on the first link, or as a new first resource.
+  const oldTab = await api('PATCH', `/school/items/${lessonId}`, { contentRef: 'https://youtu.be/def456XYZ' }, W.token);
+  check('the older single-link change adds the first resource, as a video', oldTab.status === 200 && (await lessonOf()).resources[0]?.kind === 'video' && (await lessonOf()).contentRef === 'https://youtu.be/def456XYZ', [oldTab.json, (await lessonOf()).resources]);
+  const oldTabAgain = await api('PATCH', `/school/items/${lessonId}`, { contentRef: 'https://example.com/guide' }, W.token);
+  check('and changes it, kind and all, with no second row', oldTabAgain.status === 200 && (await kinds()).length === 1 && (await kinds())[0] === 'link', await kinds());
+  check('the older change still refuses a bad link', (await api('PATCH', `/school/items/${lessonId}`, { contentRef: 'javascript:alert(1)' }, W.token)).status === 400, '');
+  // Every program: a seeded lesson's link came across as its first resource, and an admin edits the courses nobody owns.
+  const seeded = ((await api('GET', '/school/cohorts/coh-editing-open', undefined, A.token)).json.items ?? [])[0];
+  check('a seeded lesson’s link is its first resource, a file', seeded?.resources?.[0]?.kind === 'file' && seeded?.resources?.[0]?.ref === seeded?.contentRef && seeded?.resources?.[0]?.ref?.startsWith('/resources/'), seeded?.resources);
+  const bookCohort = 'coh-book-dom-creators-open';
+  const bookLesson = () => api('GET', `/school/cohorts/${bookCohort}`, undefined, A.token).then((r) => (r.json.items ?? [])[0]);
+  const bl = await bookLesson();
+  if (bl) {
+    const blAdd = await api('POST', `/school/items/${bl.id}/resources`, { kind: 'book', ref: 'dictionary-of-mistakes-for-creators' }, A.token);
+    check('an admin adds a resource to a book’s lesson', blAdd.status === 201 && (await bookLesson()).resources.some((r) => r.id === blAdd.json.id), blAdd.json);
+    check('a learner cannot', (await api('POST', `/school/items/${bl.id}/resources`, { kind: 'link', ref: 'https://example.com/a' }, L.token)).status === 403, '');
+    check('and an admin removes it', (await api('DELETE', `/school/items/${bl.id}/resources/${blAdd.json.id}`, undefined, A.token)).status === 200, '');
+  }
+  check('every resource write is rate limited under prefs', [['POST', '/school/items/:id/resources'], ['PATCH', '/school/items/:id/resources/:resourceId'], ['DELETE', '/school/items/:id/resources/:resourceId'], ['POST', '/school/items/:id/resources/:resourceId/move']].every(([method, path]) => ROUTE_LIMITS.some((r) => r.method === method && r.path === path && r.limit === 'prefs')), '');
+
   // School's order: an admin moves a program first, up or down among programs in the same state; nobody else can.
   const asW = (await api('GET', '/school', undefined, W.token)).json.programs?.find((p) => p.id === pid);
   check('only an admin is offered the order', asW?.canOrder === false, asW);
@@ -1330,9 +2019,17 @@ section('School editing');
   if ((await api('GET', '/school/cohorts/coh-onboarding', undefined, A.token)).status === 200) {
     await api('POST', '/school/programs/prog-onboarding/move', { to: 'first' }, A.token);
     check('Onboarding is first in School again', (await firstIs()) === 'prog-onboarding', await firstIs());
+    // The course as of 2026-11-07 (migration 0110): 20 lessons, Fitness read right after the trackers and coaching right after Connection, and no lesson still teaches a switch for an app.
+    const taught = (await api('GET', '/school/cohorts/coh-onboarding', undefined, A.token)).json?.items ?? [];
+    const place = (n) => taught.findIndex((i) => i.id === `prog-onboarding-l${n}`);
+    check('Onboarding reads Fitness after the trackers and coaching after Connection', taught.length >= 20 && place('19') === place('07') + 1 && place('20') === place('11') + 1, taught.map((i) => i.id));
+    check('and no lesson names the button that is gone', !taught.some((i) => /Change my tags and apps|Remind me to drink/.test(i.body ?? '')), '');
   }
   // The Admin guide stays for admins only (migration 0088): never public, never invites.
   if ((await api('GET', '/school/cohorts/coh-admin-guide', undefined, A.token)).status === 200) {
+    const guide = (await api('GET', '/school/cohorts/coh-admin-guide', undefined, A.token)).json?.items ?? [];
+    const spot = (n) => guide.findIndex((i) => i.id === `prog-admin-guide-l${n}`);
+    check('the Admin guide reads Fitness and supplements after the trackers (migration 0111)', guide.length >= 25 && spot('25') === spot('07') + 1, guide.map((i) => i.id));
     check('the Admin guide cannot be made public', (await api('PATCH', '/school/programs/prog-admin-guide', { visibility: 'public' }, A.token)).status === 400, '');
     check('nor take invites', (await api('POST', '/school/programs/prog-admin-guide/invites', { who: L.user.friendCode }, A.token)).status === 400, '');
     // With School switched off for the admin, the guide still opens and its lessons can still be added, changed, moved and removed.
@@ -1468,6 +2165,7 @@ section('Strategy session');
   check('a morning with some steps ticked is not done', part.status === 200 && part.json.today?.done === false && part.json.today?.steps?.length === 2, part.json?.today);
   const full = await api('POST', '/session/day', { date: today, dayType: 'general', steps }, B.token);
   check('every step ticked is a done morning, and the week counts it', full.json.today?.done === true && full.json.week?.done === 1, full.json?.week);
+  check('a routine day with every step ticked counts in the review numbers', (await api('GET', `/reviews/summary?kind=day&date=${today}`, undefined, B.token)).json.now?.routineDays === 1);
   const junk = await api('POST', '/session/day', { date: today, dayType: 'general', steps: ['Skip it all'] }, B.token);
   check('a step that is not in the routine is ignored', junk.json.today?.steps?.length === 0, junk.json?.today);
   const edited = await api('PATCH', '/session/routine', { date: today, general: [{ key: 'morning', start: '08:45', end: '09:30', steps: ['Water', 'Stretch'], minutes: [2, 10] }, { key: 'work', start: '09:30', end: '17:00', note: 'Deep work first' }] }, B.token);
@@ -1572,6 +2270,37 @@ section('Admin');
   check('the admin key lists people', users.status === 200 && Array.isArray(users.json.users), users.status);
   const asAdmin = await api('GET', '/admin/users', undefined, A.token);
   check('an admin session works too', asAdmin.status === 200, asAdmin.status);
+  // The admin key's door (limit `adminKey`, `adminKeyDoor` in ops.ts): only a wrong key spends a try, per address, and an admin's session is never slowed.
+  // Addresses of their own, so this never locks the key the rest of the run uses.
+  const keyFrom = `172.16.${seed & 255}.${(seed >> 8) & 255}`;
+  const keyElsewhere = `172.17.${seed & 255}.${(seed >> 8) & 255}`;
+  const keyBurst = `172.18.${seed & 255}.${(seed >> 8) & 255}`;
+  const tryKey = (key, { token = null, from = keyFrom, method = 'GET' } = {}) => api(method, '/admin/users?size=10', undefined, token, { ...(key ? { 'X-Admin-Key': key } : {}), 'CF-Connecting-IP': from });
+  check('the key has a door on every method, wired before the admin routes', ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'].every((m) => ROUTE_LIMITS.some((r) => r.method === m && r.path === '/admin/*' && r.limit === 'adminKey' && r.by === 'address' && r.when === 'adminKey')), '');
+  const rightKey = [];
+  for (let i = 0; i < LIMITS.adminKey.max + 2; i += 1) rightKey.push((await tryKey(ADMIN_KEY)).status);
+  check('the right key spends no try, however often it is used', rightKey.every((s) => s === 200), rightKey);
+  const atOnce = await Promise.all(Array.from({ length: 5 }, () => tryKey(ADMIN_KEY)));
+  check('five calls at once with the right key all pass, as the Admin screen opens', atOnce.every((r) => r.status === 200), atOnce.map((r) => r.status));
+  const wrongKey = [];
+  // A window can turn halfway, so a few more tries are allowed before this gives up.
+  for (let i = 0; i < LIMITS.adminKey.max * 2 + 1 && wrongKey.at(-1) !== 429; i += 1) wrongKey.push((await tryKey(`wrong-key-${i}`)).status);
+  check(`wrong keys are refused, then told to wait after ${LIMITS.adminKey.max} tries from one address`, wrongKey.at(-1) === 429 && wrongKey.slice(0, -1).every((s) => s === 403) && wrongKey.length > LIMITS.adminKey.max, wrongKey);
+  const lockedRight = await tryKey(ADMIN_KEY);
+  check('once an address has spent its tries even the right key waits, so a good guess cannot show', lockedRight.status === 429 && !lockedRight.json.users, lockedRight.status);
+  const sessionOnly = await tryKey('', { token: A.token });
+  check('an admin signed in on that address is not slowed', sessionOnly.status === 200, sessionOnly.status);
+  const sessionOldKey = await tryKey('an-old-key-left-on-the-device', { token: A.token });
+  check('nor by an old key left on the device beside the session', sessionOldKey.status === 200, sessionOldKey.status);
+  const memberWrong = await tryKey('wrong-key-again', { token: B.token });
+  check('a member\'s session does not get past the wait', memberWrong.status === 429, memberWrong.status);
+  check('and no key at all reads as before', (await tryKey('')).status === 403, '');
+  check('another address still has its tries', (await tryKey(ADMIN_KEY, { from: keyElsewhere })).status === 200, '');
+  const optionsRight = await tryKey(ADMIN_KEY, { from: keyElsewhere, method: 'OPTIONS' });
+  const optionsWrong = await tryKey('wrong-key', { from: keyElsewhere, method: 'OPTIONS' });
+  check('a method with no door opens nothing, so it cannot test a guess', optionsRight.status === 403 && optionsWrong.status === 403, [optionsRight.status, optionsWrong.status]);
+  const burst = await Promise.all(Array.from({ length: LIMITS.adminKey.max * 3 }, (_, i) => tryKey(`burst-${i}`, { from: keyBurst })));
+  check('many guesses at once get no more than the limit compared', burst.filter((r) => r.status === 403).length <= LIMITS.adminKey.max && burst.some((r) => r.status === 429) && burst.every((r) => r.status === 403 || r.status === 429), burst.map((r) => r.status).join());
   const flagOff = await admin('POST', '/admin/flags/store', { enabled: false });
   check('a flag can be switched off', flagOff.status === 200 && flagOff.json.setting?.enabled === false, flagOff.json);
   const meOff = await api('GET', '/me', undefined, B.token);
@@ -1622,6 +2351,42 @@ section('Admin');
   check('a person can switch an app off', modOff.status === 200 && modOff.json.modules?.run === false, modOff.json);
   const lockedMod = await api('PATCH', '/me/modules', { key: 'today', on: false }, B.token);
   check('the core tabs stay on', lockedMod.status === 400, lockedMod.json);
+  // Select on Apps: several apps in one write, the whole list or none of it. A fresh account, so no run's leftovers are read.
+  {
+    const SA = await signup(`select-apps-${stamp}@smoke.test`, `Lantern-${stamp}-pass`, 'Smoke select');
+    const mine = async () => (await api('GET', '/me', undefined, SA.token)).json;
+    const several = await api('PATCH', '/me/modules', { changes: [{ key: 'school', on: false }, { key: 'work', on: false }, { key: 'party', on: true }] }, SA.token);
+    check('one call hides two apps and shows one', several.status === 200 && several.json.modules?.school === false && several.json.modules?.work === false && several.json.modules?.party === true, several.json);
+    const read = await mine();
+    check('and GET /me says so', read.user?.modules?.school === false && read.user?.modules?.work === false && read.user?.modules?.party === true && read.access?.school?.on === false && read.access?.party?.on === true, read.user?.modules);
+    check('and leaves the other apps as they were', read.user?.modules?.journal !== false && read.access?.journal?.on === true, read.user?.modules);
+    const before = JSON.stringify(read.user?.modules);
+    const refused = [
+      ['a locked app in the list', [{ key: 'journal', on: false }, { key: 'today', on: false }]],
+      ['a repeated app', [{ key: 'journal', on: false }, { key: 'journal', on: true }]],
+      ['"constructor"', [{ key: 'journal', on: false }, { key: 'constructor', on: true }]],
+      ['an empty list', []],
+      ['an on that is not true or false', [{ key: 'journal', on: 'no' }]],
+      ['a missing on', [{ key: 'journal' }]],
+      ['a list longer than there are apps', Array.from({ length: MODULES.length + 1 }, () => ({ key: 'journal', on: false }))],
+      ['something that is not a list', 'journal'],
+      ['a line that is not an app', [null]],
+    ];
+    for (const [what, changes] of refused) {
+      const r = await api('PATCH', '/me/modules', { changes }, SA.token);
+      check(`the list form refuses ${what}`, r.status === 400, `${r.status} ${JSON.stringify(r.json)}`);
+      check(`and writes nothing for ${what}`, JSON.stringify((await mine()).user?.modules) === before);
+    }
+    const oldForm = await api('PATCH', '/me/modules', { key: 'journal', on: false }, SA.token);
+    check('the one-app form still works beside it', oldForm.status === 200 && oldForm.json.modules?.journal === false && oldForm.json.modules?.party === true, oldForm.json);
+    const oldUnknown = await api('PATCH', '/me/modules', { key: 'constructor', on: true }, SA.token);
+    check('the one-app form still answers 404 for no such app', oldUnknown.status === 404, oldUnknown.status);
+    const oldLocked = await api('PATCH', '/me/modules', { key: 'today', on: false }, SA.token);
+    check('the one-app form still refuses a locked app', oldLocked.status === 400, oldLocked.status);
+    const notAnObject = await api('PATCH', '/me/modules', null, SA.token);
+    check('a body that is not an object is no 500', notAnObject.status === 404, notAnObject.status);
+    check('hiding and showing apps is under the prefs limit', ROUTE_LIMITS.some((x) => x.method === 'PATCH' && x.path === '/me/modules' && x.limit === 'prefs' && !x.when));
+  }
 }
 
 // ---------------------------------------------------------------- the assistant and credits
@@ -1932,8 +2697,15 @@ section('Attendee codes');
   const weeklyCircle = (await api('POST', '/circles/events', { title: `Weekly code ${stamp}`, city: `Code town ${stamp}`, startsAt: soon(60 * 24 * 3), repeat: 'weekly', attendeeXp: 15, attendeeCode: 'WEEKONE' }, A.token)).json.event;
   await api('POST', `/circles/events/${weeklyCircle.id}/match`, {}, A.token);
   await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
-  const running = await api('GET', '/circles?hostsize=100', undefined, A.token);
-  check('the team sees every circle they run, with its code, in any city', running.status === 200 && running.json.hosting?.some((e) => e.id === weeklyCircle.id && e.hostCode?.code === 'WEEKONE'), running.json.hosting?.length);
+  // Every page: the smoke database keeps earlier runs' circles, and this one can sit past the first hundred.
+  let running = null;
+  let hostRow = null;
+  for (let page = 1; page <= 50 && !hostRow; page++) {
+    running = await api('GET', `/circles?hostsize=100&hostpage=${page}`, undefined, A.token);
+    hostRow = running.json.hosting?.find((e) => e.id === weeklyCircle.id) ?? null;
+    if (!running.json.hostingPage?.more) break;
+  }
+  check('the team sees every circle they run, with its code, in any city', running.status === 200 && hostRow?.hostCode?.code === 'WEEKONE', running.json.hosting?.length);
   const series = (await admin('GET', `/admin/attendee-codes?app=circles&q=${encodeURIComponent(`Weekly code ${stamp}`)}`)).json.codes ?? [];
   const nextWeek = series.find((r) => r.thingId !== weeklyCircle.id);
   check('next week’s circle keeps the xp with a new random code', series.length === 2 && nextWeek?.xp === 15 && nextWeek.code && nextWeek.code !== 'WEEKONE', series);
@@ -2148,7 +2920,7 @@ section('Attendee codes');
 
   // Water and reminders.
   const w0 = await api('GET', `/reminders?day=${today}`, undefined, G.token);
-  check('water starts at zero with a goal and a glass of the person’s own', w0.status === 200 && w0.json.water?.ml === 0 && w0.json.water.goalMl === 2000 && w0.json.water.glassMl === 250 && w0.json.water.on === true && w0.json.water.week?.length === 7, w0.json.water);
+  check('water starts at zero with a goal and a glass of the person’s own', w0.status === 200 && w0.json.water?.ml === 0 && w0.json.water.goalMl === 2000 && w0.json.water.glassMl === 250 && w0.json.water.week?.length === 7, w0.json.water);
   await api('POST', '/reminders/water', { day: today }, G.token);
   const w2 = await api('POST', '/reminders/water', { day: today }, G.token);
   check('a tap adds a glass', w2.status === 201 && w2.json.water?.ml === 500 && w2.json.water.glasses === 2, w2.json.water);
@@ -2160,16 +2932,46 @@ section('Attendee codes');
   check('a slip of the thumb cannot add a huge amount', wBig.status === 400, wBig.json);
   const wOld = await api('GET', '/reminders?day=2020-01-01', undefined, G.token);
   check('only today or yesterday can be logged or read', wOld.status === 400, wOld.status);
-  const wSet = await api('PUT', '/reminders/water/settings', { day: today, goalMl: 2500, everyMin: 240, from: '08:00', to: '20:00' }, G.token);
-  check('the goal, the gap and the hours can be changed', wSet.json.water?.goalMl === 2500 && wSet.json.water.everyMin === 240 && wSet.json.water.from === '08:00', wSet.json.water);
-  const wShort = await api('PUT', '/reminders/water/settings', { day: today, everyMin: 60 }, G.token);
-  check('water goes out every two hours at most, so one hour is not offered', wShort.status === 400, wShort.json);
-  const waterTick = await fetch(`${ORIGIN}/__scheduled?cron=0+*%2F2+*+*+*`);
-  check('the two-hour water trigger runs', waterTick.status === 200, waterTick.status);
-  const wBad = await api('PUT', '/reminders/water/settings', { day: today, from: '21:00', to: '09:00' }, G.token);
-  check('a day must start before it ends', wBad.status === 400, wBad.json);
-  const wOff = await api('PUT', '/reminders/water/settings', { day: today, on: false }, G.token);
-  check('water reminders can be switched off', wOff.json.water?.on === false, wOff.json.water);
+  const wSet = await api('PUT', '/reminders/water/settings', { day: today, goalMl: 2500, glassMl: 300 }, G.token);
+  check('the goal and the glass can be changed', wSet.status === 200 && wSet.json.water?.goalMl === 2500 && wSet.json.water.glassMl === 300, wSet.json.water);
+  const wBadGoal = await api('PUT', '/reminders/water/settings', { day: today, goalMl: 1 }, G.token);
+  check('a goal outside the range is refused', wBadGoal.status === 400, wBadGoal.json);
+  // A tab left open across the deploy still sends the old reminder fields, even values the old rules refused, and still draws them.
+  const wOldTab = await api('PUT', '/reminders/water/settings', { day: today, on: false, everyMin: 60, from: '21:00', to: '09:00' }, G.token);
+  check('an old tab’s reminder fields are ignored, never refused', wOldTab.status === 200 && wOldTab.json.water?.goalMl === 2500 && wOldTab.json.water.glassMl === 300 && wOldTab.json.water.on === false && typeof wOldTab.json.water.from === 'string', wOldTab.json);
+  // Water sends no note (the founder, 2026-11-07: "remove notifications for water from inbox"). This person is under their goal; their own reminder still goes.
+  const wZone = (await api('GET', '/me', undefined, G.token)).json.user?.timezone;
+  const wNow = new Intl.DateTimeFormat('en-GB', { timeZone: wZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
+  const wOwn = await api('POST', '/reminders/custom', { title: 'Stand up and stretch', time: wNow }, G.token);
+  const isOwn = (n) => n.kind === 'reminder' && n.title === 'Stand up and stretch';
+  const isWater = (n) => n.id.startsWith('water-') || n.title === 'Time for some water';
+  const gNotes = async () => (await api('GET', '/inbox?size=50', undefined, G.token)).json.notifications ?? [];
+  // The old two-hour trigger can fire once around a deploy, on the same minute as the fifteen-minute one: it does nothing at all.
+  const oldTick = await fetch(`${ORIGIN}/__scheduled?cron=0+*%2F2+*+*+*`);
+  const afterOld = await gNotes();
+  check('the old two-hour trigger does nothing if it fires', oldTick.status === 200 && wOwn.status === 201 && !afterOld.some(isOwn) && !afterOld.some(isWater), afterOld.map((n) => n.title));
+  await fetch(`${ORIGIN}/__scheduled?cron=*%2F15+*+*+*+*`);
+  await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
+  const afterTicks = await gNotes();
+  check('a person under their water goal gets no water note, from the trigger or a run by hand', !afterTicks.some(isWater), afterTicks.map((n) => n.id));
+  check('their own reminder is still written, once, and opens Water and reminders', afterTicks.filter(isOwn).length === 1 && afterTicks.find(isOwn)?.link === '/home#reminders', afterTicks.map((n) => n.title));
+  // Every note has a tab (the founder, 2026-11-07: "inbox items are not going in right place"): a person's own reminder is a Reminder.
+  const wRem = await api('GET', '/inbox?tab=reminders&size=50', undefined, G.token);
+  const wOther = await api('GET', '/inbox?tab=following&size=50', undefined, G.token);
+  check('a reminder lands in the Reminders tab as well as Everything, and in no other', wRem.json.tab === 'reminders' && (wRem.json.notifications ?? []).some(isOwn) && !(wOther.json.notifications ?? []).some(isOwn) && (wRem.json.tabs ?? []).find((t) => t.tab === 'reminders')?.unread >= 1, [wRem.json.tab, wRem.json.notifications?.map((n) => n.title)]);
+  // A tab not offered is Everything for the actions too: a member's Mark all read on Team reads the notes on screen, the reminder with them.
+  const wReadTeam = await api('POST', '/inbox/read-all', { tab: 'team' }, G.token);
+  const wAfter = await api('GET', '/inbox?tab=reminders&size=50', undefined, G.token);
+  check('a tab not offered is read as Everything by Mark all read too', wReadTeam.status === 200 && (wAfter.json.notifications ?? []).filter(isOwn).every((n) => n.readAt) && (wAfter.json.tabs ?? []).find((t) => t.tab === 'all')?.unread === 0, wAfter.json.tabs);
+  // Your own reminder is a reminder too, but never counts as the day's check-in nudge: that one is found by its own id.
+  const gCheck = await api('PATCH', '/me', { reminderTime: '00:00' }, G.token);
+  const gDaily = await api('GET', `/today?date=${today}`, undefined, G.token);
+  const gNudge = (await api('GET', '/inbox?tab=reminders&size=50', undefined, G.token)).json.notifications ?? [];
+  check('another reminder does not stand in for the daily nudge', gCheck.status === 200 && gDaily.status === 200 && gNudge.filter((n) => n.title === 'Your daily three are waiting').length === 1, gNudge.map((n) => n.title));
+  await api('GET', `/today?date=${today}`, undefined, G.token);
+  check('and the nudge is still sent once a day', ((await api('GET', '/inbox?tab=reminders&size=50', undefined, G.token)).json.notifications ?? []).filter((n) => n.title === 'Your daily three are waiting').length === 1);
+  await api('PATCH', '/me', { reminderTime: null }, G.token);
+  await api('DELETE', `/reminders/custom/${wOwn.json.reminder.id}`, undefined, G.token);
   const mk = await api('POST', '/reminders/custom', { title: 'Stretch', time: '17:30', days: [1, 2, 3, 4, 5] }, G.token);
   check('a person adds their own reminder', mk.status === 201 && mk.json.reminder?.time === '17:30' && mk.json.reminder.days.length === 5 && mk.json.reminder.enabled, mk.json);
   const mkBad = await api('POST', '/reminders/custom', { title: 'x', time: '25:99' }, G.token);
@@ -2299,6 +3101,265 @@ section('Life coaches');
   check('taking the badge away ends the coaching and tells the student', taken.status === 200 && !after.json.links?.some((l) => l.coach.id === K.user.id) && JSON.stringify(sInbox.json).includes('has ended'), after.json.links?.length);
   const exp = await api('GET', '/me/export', undefined, S.token);
   check('coaching is in the student’s export', exp.json.coachLinks?.length >= 2 && exp.json.coachNotes?.length >= 1 && exp.json.coachLog?.length >= 6, { links: exp.json.coachLinks?.length, notes: exp.json.coachNotes?.length });
+}
+
+// ---------------------------------------------------------------- the coach's report, patterns, section switches and invite link
+section('Coaching report');
+{
+  const CA = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 44) & 255}`;
+  const joinUp = async (who) => {
+    const email = `${who}-${stamp}@smoke.test`;
+    const r = await api('POST', '/auth/signup', { email, password: `Harbour-${stamp}-pass`, displayName: `Smoke ${who}`, phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': CA });
+    return { token: r.json.token, user: r.json.user, email };
+  };
+  const shiftDay = (d, n) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+  const K = await joinUp('rcoach');
+  const S = await joinUp('rstudent');
+  const N = await joinUp('rnewbie');
+  const handle = `rs${stamp}`.slice(0, 20);
+  await api('PATCH', '/me', { handle }, S.token);
+  const friendCode = (await me(S.token)).friendCode;
+  await admin('POST', `/admin/users/${K.user.id}/permissions`, { permissions: ['coach'] });
+  for (const key of ['fitness', 'reviews', 'journal', 'finance', 'mood', 'sleep', 'stress', 'mindful']) await api('PATCH', '/me/modules', { key, on: true }, S.token);
+
+  // Everything a coach must never read: a movement note, an eating note, a gratitude line, a supplement, money and a journal entry.
+  const moveNote = `Secret move note ${stamp}`;
+  const eatNote = `Secret eat note ${stamp}`;
+  const gratLine = `Secret gratitude ${stamp}`;
+  const suppName = `Secretvit${stamp}`;
+  const moneyWord = `Secretbrand${stamp}`;
+  const journalWord = `Secret journal ${stamp}`;
+  const moved = await api('POST', '/fitness/move', { date: today, kind: 'swim', minutes: 35, metres: 1200, effort: 4, note: moveNote }, S.token);
+  check('the student logs a swim with a note', moved.status === 201 || moved.status === 200, moved.json);
+  await api('PUT', '/fitness/eat', { date: today, meals: [{ moment: 'breakfast', goodFuel: true }], fruit: 2, veg: 3, note: eatNote, protein: { foods: [{ food: 'paneer', n: 1 }], typedG: 338 } }, S.token);
+  await api('PUT', '/fitness/protein-goal', { goal: 277 }, S.token);
+  const grat = await api('GET', `/journal/gratitude?day=${today}&today=${today}`, undefined, S.token);
+  const gKeys = grat.json.prompts ?? [];
+  await api('PUT', `/journal/gratitude/${today}`, { lines: gKeys.map((k, i) => ({ prompt: k, text: i === 0 ? gratLine : '' })), today, ifUpdatedAt: '' }, S.token);
+  await api('PUT', '/fitness/supplements/settings', { on: true }, S.token);
+  await api('POST', '/fitness/supplements', { name: suppName, kind: 'vitamin', amount: '1 tablet', time: 'morning' }, S.token);
+  await api('POST', '/finance/transactions', { kind: 'income', amountCents: 987654, category: moneyWord, counterparty: moneyWord, date: today }, S.token);
+  await api('POST', '/journal', { title: journalWord, body: journalWord, emotion: 3, date: today }, S.token);
+  await api('POST', '/wellbeing/mood', { value: 2, date: today }, S.token);
+  await api('POST', '/onboarding/build', { relationships: ['self'], date: today, picks: { self: { project: 'Report project' } } }, S.token);
+  const dayReview = await api('PUT', '/reviews', { kind: 'day', date: today, answers: ['Daily words'], rating: 4 }, S.token);
+  const weekReview = await api('PUT', '/reviews', { kind: 'week', date: today, answers: ['Weekly words'], rating: 3 }, S.token);
+  check('the student saves a daily and a weekly review', dayReview.status === 200 && weekReview.status === 200, { day: dayReview.json, week: weekReview.status });
+
+  // Adding a student: the box says what it read, with a small preview on an exact match and never a private field.
+  const noWho = await api('GET', '/coach/lookup?who=', undefined, K.token);
+  const byHandleNow = await api('GET', `/coach/lookup?who=${encodeURIComponent(`@${handle}`)}`, undefined, K.token);
+  check('the box reads an @username and shows name and handle, nothing private', noWho.json.read === 'none' && byHandleNow.json.read === 'username' && byHandleNow.json.person?.handle === handle && !JSON.stringify(byHandleNow.json).includes(S.email) && !JSON.stringify(byHandleNow.json).includes('98765'), byHandleNow.json);
+  const byCodeNow = await api('GET', `/coach/lookup?who=${friendCode}`, undefined, K.token);
+  check('the box reads a friend code', byCodeNow.json.read === 'code' && byCodeNow.json.person?.name === 'Smoke rstudent', byCodeNow.json);
+  const byEmailNow = await api('GET', `/coach/lookup?who=${encodeURIComponent(S.email)}`, undefined, K.token);
+  check('an email is never looked up until it is sent', byEmailNow.json.read === 'email' && byEmailNow.json.person === null, byEmailNow.json);
+  const nobody = await api('GET', `/coach/lookup?who=${encodeURIComponent(`@nobody${stamp}`)}`, undefined, K.token);
+  await api('POST', '/bond/block', { userId: K.user.id }, N.token);
+  const nHandle = `rn${stamp}`.slice(0, 20);
+  await api('PATCH', '/me', { handle: nHandle }, N.token);
+  const blockedLook = await api('GET', `/coach/lookup?who=${encodeURIComponent(`@${nHandle}`)}`, undefined, K.token);
+  check('a blocked person reads like nobody', nobody.json.person === null && blockedLook.json.person === null && nobody.json.read === blockedLook.json.read, { nobody: nobody.json, blockedLook: blockedLook.json });
+  const blockedAsk = await api('POST', '/coach/requests', { who: `@${nHandle}` }, K.token);
+  const nobodyAsk = await api('POST', '/coach/requests', { who: `@nobody${stamp}` }, K.token);
+  check('asking a blocked person answers the same words as nobody', blockedAsk.status === 404 && nobodyAsk.status === 404 && blockedAsk.json.error === nobodyAsk.json.error, { blockedAsk: blockedAsk.json, nobodyAsk: nobodyAsk.json });
+  await api('DELETE', `/bond/block/${K.user.id}`, undefined, N.token);
+  const notCoachLook = await api('GET', `/coach/lookup?who=@${handle}`, undefined, N.token);
+  check('only a coach looks people up', notCoachLook.status === 403, notCoachLook.status);
+
+  // An existing link: made before Patterns, so it reads off, whatever else is on.
+  const asked = await api('POST', '/coach/requests', { who: `@${handle}` }, K.token);
+  check('a coach asks by @username; a new link starts with Patterns on', asked.status === 201 && asked.json.link?.share?.patterns === true, asked.json);
+  const linkId = asked.json.link?.id;
+  await api('POST', `/me/coach/links/${linkId}/answer`, { yes: true }, S.token);
+  const viewAll = await api('GET', `/coach/students/${S.user.id}`, undefined, K.token);
+  const repAll = await api('GET', `/coach/students/${S.user.id}/report?kind=week&date=${today}`, undefined, K.token);
+  const patAll = await api('GET', `/coach/students/${S.user.id}/patterns`, undefined, K.token);
+  const everything = JSON.stringify([viewAll.json, repAll.json, patAll.json]);
+  check('under Reflection the coach sees movement minutes and kinds', viewAll.status === 200 && viewAll.json.reflection?.days?.some((d) => d.move === 35) && viewAll.json.reflection?.moveKinds?.some((k) => k.kind === 'swim' && k.minutes === 35 && k.days === 1), viewAll.json.reflection?.moveKinds);
+  check('and the eating number, a mood and the wellbeing', viewAll.json.reflection?.days?.some((d) => d.eat >= 1) && viewAll.json.reflection?.days?.some((d) => d.mood === 2) && typeof viewAll.json.reflection?.wellbeing?.score === 'number', viewAll.json.reflection?.days?.at(-1));
+  for (const [what, secret] of [['a movement note', moveNote], ['an eating note', eatNote], ['a gratitude line', gratLine], ['a supplement', suppName], ['money', moneyWord], ['the amount', '987654'], ['the journal', journalWord], ['a protein food', 'paneer']]) check(`${what} never reaches a coach`, !everything.includes(secret), secret);
+  check('nor do protein grams or the protein goal, even under Reflection', !/protein/i.test(everything) && !/"(proteinG|proteinGoal)"/.test(everything), everything.match(/.{40}protein.{40}/i)?.[0]);
+  for (const field of ['metres', 'effort', 'journalEntries', 'gratitudeDays', 'incomeCents', 'expenseCents', 'waterDays', 'suppTaken', 'suppDue', 'focusMin', 'owedToYouCents']) check(`the report never carries ${field}`, !everything.includes(`"${field}"`), field);
+  check('the report names its period and the numbers each part lets through', repAll.status === 200 && repAll.json.period?.kind === 'week' && typeof repAll.json.now?.tasksDone === 'number' && typeof repAll.json.now?.xp === 'number' && 'moodAvg' in repAll.json.now && repAll.json.now?.moveMin === 35 && repAll.json.now?.moveDays === 1 && repAll.json.streak !== null && Array.isArray(repAll.json.series) && Array.isArray(repAll.json.xpByPillar) && repAll.json.pillars?.some((p) => p.projects?.some((x) => x.title === 'Report project')), repAll.json.now);
+  for (const kind of ['day', 'month', 'quarter']) {
+    const r = await api('GET', `/coach/students/${S.user.id}/report?kind=${kind}`, undefined, K.token);
+    check(`a coach can pick a ${kind}`, r.status === 200 && r.json.period?.kind === kind, r.status);
+  }
+  const yearAsk = await api('GET', `/coach/students/${S.user.id}/report?kind=year`, undefined, K.token);
+  const badDay = await api('GET', `/coach/students/${S.user.id}/report?date=2026-11-31`, undefined, K.token);
+  check('other periods and days that are not real are refused', yearAsk.status === 400 && badDay.status === 400, { yearAsk: yearAsk.status, badDay: badDay.status });
+
+  // Saved reviews are named, the daily ones apart, never with the snapshot, and the layer only while Pillars is shared too.
+  const rv = viewAll.json.reflection;
+  check('daily reviews sit apart from the weekly and longer ones, each named', rv?.reviews?.every((r) => r.kind !== 'day') && rv?.reviews?.[0]?.name === 'Weekly review' && rv?.dayReviews?.length === 1 && rv.dayReviews[0].name === 'Daily review', { reviews: rv?.reviews?.map((r) => r.name), days: rv?.dayReviews?.map((r) => r.name) });
+  check('a saved review reaches a coach with its answers and never its snapshot', rv?.reviews?.[0]?.answers?.[0] === 'Weekly words' && rv.reviews[0].snapshot === null && rv.dayReviews[0].snapshot === null, rv?.reviews?.[0]?.snapshot);
+  check('with Pillars on, a review carries the layer it walks', rv?.reviews?.[0]?.layer?.kind === 'project', rv?.reviews?.[0]?.layer?.kind);
+
+  // Each switch honoured at once, on the view and the report.
+  const setShare = (patch) => api('PATCH', `/me/coach/links/${linkId}/share`, patch, S.token);
+  await setShare({ pillars: false });
+  const noPillars = await api('GET', `/coach/students/${S.user.id}/report?kind=week`, undefined, K.token);
+  const noPillarsView = await api('GET', `/coach/students/${S.user.id}`, undefined, K.token);
+  check('Pillars off: no xp by pillar, no pace, no layer on a review', noPillars.json.xpByPillar === null && noPillars.json.pillars === null && noPillarsView.json.reflection?.reviews?.[0]?.layer === null, { x: noPillars.json.xpByPillar });
+  await setShare({ pillars: true, daily: false });
+  const noDaily = await api('GET', `/coach/students/${S.user.id}/report?kind=week`, undefined, K.token);
+  check('Daily off: no tasks, check-ins, streak or series', noDaily.json.now?.tasksDone === undefined && noDaily.json.now?.checkins === undefined && noDaily.json.now?.habitTicks === undefined && noDaily.json.streak === null && noDaily.json.series === null, noDaily.json.now);
+  await setShare({ daily: true, routine: false });
+  const noRoutine = await api('GET', `/coach/students/${S.user.id}/report?kind=week`, undefined, K.token);
+  check('Routine off: no routine days or contract', noRoutine.json.now?.routineDays === undefined && noRoutine.json.routine === null, noRoutine.json.routine);
+  await setShare({ routine: true, reflection: false });
+  const noRefl = await api('GET', `/coach/students/${S.user.id}/report?kind=week`, undefined, K.token);
+  const noReflView = await api('GET', `/coach/students/${S.user.id}`, undefined, K.token);
+  check('Reflection off: no movement, mood, sleep, stress or eating anywhere', noRefl.json.now?.moveMin === undefined && noRefl.json.now?.moodAvg === undefined && noRefl.json.now?.eatAvg === undefined && noReflView.json.reflection === null, noRefl.json.now);
+  await setShare({ daily: false, pillars: false, routine: false, lifeMap: false, patterns: false });
+  const none = await api('GET', `/coach/students/${S.user.id}/report?kind=week`, undefined, K.token);
+  const nonePat = await api('GET', `/coach/students/${S.user.id}/patterns`, undefined, K.token);
+  check('with everything off the report holds only the period', Object.keys(none.json.now ?? {}).join() === 'days' && none.json.series === null && none.json.streak === null && nonePat.json.patterns?.length === 0 && nonePat.json.suggestions?.length === 0, { now: none.json.now, s: nonePat.json.suggestions });
+  await setShare({ daily: true, pillars: true, routine: true, lifeMap: true, reflection: true, patterns: true });
+
+  // A coach's task: what the student's form sets, the habit flag among them, never a time block, a status or a tick.
+  const sNodes = await api('GET', '/nodes?relationship=self', undefined, S.token);
+  const sProject = sNodes.json.nodes?.find((n) => n.kind === 'project');
+  const taskDay = shiftDay(today, 2);
+  const made = await api('POST', `/coach/students/${S.user.id}/tasks`, { parentId: sProject?.id, title: 'Evening stretch', doDate: taskDay, dueDate: shiftDay(today, 3), priority: 1, repeat: { kind: 'daily', every: 1 }, habit: true, estimateMin: 15, dueTime: '18:30', note: 'Slowly', timeBlockId: 'none', status: 'archived' }, K.token);
+  const node = made.json.node;
+  check('a coach’s task takes the plan and the habit flag, and lands as From your coach', made.status === 201 && node?.fromCoach === true && node.habit === true && node.doDate === taskDay && node.priority === 1 && node.repeat?.kind === 'daily' && node.estimateMin === 15 && node.dueTime === '18:30' && node.status === 'active', node);
+  const seen = await api('GET', '/nodes?relationship=self', undefined, S.token);
+  check('the student sees it, From your coach, with the Habit flag', seen.json.nodes?.some((n) => n.id === node?.id && n.fromCoach && n.habit === true), '');
+  const backwards = await api('PATCH', `/coach/students/${S.user.id}/tasks/${node?.id}`, { doDate: shiftDay(today, 9) }, K.token);
+  check('a do date past the due date is refused', backwards.status === 400, backwards.json);
+  const edited = await api('PATCH', `/coach/students/${S.user.id}/tasks/${node?.id}`, { priority: 0, habit: false, timeBlockId: 'none' }, K.token);
+  check('a coach changes the priority and the habit flag, and nothing else', edited.status === 200 && edited.json.node?.priority === 0 && edited.json.node?.habit === false && edited.json.node?.repeat?.kind === 'daily' && edited.json.node?.title === 'Evening stretch', edited.json.node);
+  const noTick = await api('POST', `/coach/students/${S.user.id}/tasks/${node?.id}/complete`, {}, K.token);
+  check('a coach still never ticks', noTick.status === 404, noTick.status);
+  const pairLog = await api('GET', '/me/coach/log', undefined, S.token);
+  check('each task change is a line in the change log', pairLog.json.log?.some((l) => l.action === 'task.add' && l.label.includes('Evening stretch')) && pairLog.json.log?.some((l) => l.action === 'task.edit' && l.label.includes('priority') && l.label.includes('habit')), pairLog.json.log?.map((l) => l.action));
+  const viewTasks = await api('GET', `/coach/students/${S.user.id}`, undefined, K.token);
+  check('the coach reads the tasks they added, with their state and no time block', viewTasks.json.coachTasks?.tasks?.some((t) => t.id === node?.id && t.status === 'active' && t.timeBlockId === null), viewTasks.json.coachTasks?.tasks?.length);
+
+  // Patterns: off on a link made before it, the ask works once a week, on for a new link, and only over what is shared.
+  const oldLink = await admin('POST', '/admin/coaching/links', { coachId: K.user.id, student: N.email, mode: 'link' });
+  check('a link the team makes at once starts with Patterns off', oldLink.status === 201, oldLink.json);
+  const nView = await api('GET', `/coach/students/${N.user.id}/patterns`, undefined, K.token);
+  check('Patterns off gives no pattern', nView.status === 200 && nView.json.on === false && nView.json.patterns?.length === 0 && nView.json.askAgainFrom === null, nView.json);
+  const askOnce = await api('POST', `/coach/students/${N.user.id}/patterns/ask`, {}, K.token);
+  const askTwice = await api('POST', `/coach/students/${N.user.id}/patterns/ask`, {}, K.token);
+  check('the coach asks once, and a second ask that week is refused', askOnce.status === 200 && askTwice.status === 409 && typeof askTwice.json.askAgainFrom === 'string', { once: askOnce.status, twice: askTwice.json });
+  const nInbox = await api('GET', '/inbox?tab=learning', undefined, N.token);
+  const askNote = nInbox.json.notifications?.find((x) => x.title.includes('asked to see your patterns'));
+  check('the student is told, with the way to turn it on', askNote?.link === '/you#coach', askNote);
+  const nLog = await api('GET', '/me/coach/log', undefined, N.token);
+  check('the ask is in the change log', nLog.json.log?.some((l) => l.action === 'patterns.ask'), nLog.json.log?.map((l) => l.action));
+  const nLinks = await api('GET', '/me/coach', undefined, N.token);
+  const nLink = nLinks.json.links?.find((l) => l.coach.id === K.user.id);
+  check('the student’s link says the coach asked', nLink?.share?.patterns === false && typeof nLink?.patternsAskedAt === 'string', nLink);
+  await api('PATCH', `/me/coach/links/${nLink?.id}/share`, { patterns: true }, N.token);
+  const nOn = await api('GET', `/coach/students/${N.user.id}/patterns`, undefined, K.token);
+  const askOn = await api('POST', `/coach/students/${N.user.id}/patterns/ask`, {}, K.token);
+  check('switched on, it reads on, and there is nothing more to ask', nOn.json.on === true && askOn.status === 409, { on: nOn.json.on, ask: askOn.status });
+  await api('DELETE', `/me/coach/links/${nLink?.id}`, undefined, N.token);
+  const patOn = await api('GET', `/coach/students/${S.user.id}/patterns`, undefined, K.token);
+  check('a pattern or suggestion never carries an action the student’s screen would act on', patOn.status === 200 && !JSON.stringify(patOn.json).includes('"action"') && !JSON.stringify(patOn.json).includes('"tie"'), patOn.json.patterns?.length);
+
+  // The section switches save on the account and read back, owner only, in the export; a key nobody knows is dropped.
+  const prefsNone = await api('GET', '/me/coach/prefs', undefined, K.token);
+  check('with nothing saved the page starts from the defaults', prefsNone.status === 200 && Object.keys(prefsNone.json.sections).length === 0 && prefsNone.json.readSharing === false, prefsNone.json);
+  const prefsPut = await api('PUT', '/me/coach/prefs', { sections: { log: 'open', charts: 'hidden', notes: 'closed', nope: 'open', constructor: 'open' } }, K.token);
+  const prefsBack = await api('GET', '/me/coach/prefs', undefined, K.token);
+  check('the section switches save and read back, and an unknown key is dropped', prefsPut.status === 200 && prefsBack.json.sections.log === 'open' && prefsBack.json.sections.charts === 'hidden' && prefsBack.json.sections.notes === 'closed' && !('nope' in prefsBack.json.sections) && !Object.hasOwn(prefsBack.json.sections, 'constructor'), prefsBack.json);
+  const prefsOther = await api('GET', '/me/coach/prefs', undefined, S.token);
+  check('they are the person’s own', Object.keys(prefsOther.json.sections).length === 0, prefsOther.json);
+
+  // A new coach's first steps tick themselves by doing them.
+  const hub0 = await api('GET', '/coach', undefined, K.token);
+  check('the first steps read what was done', hub0.json.steps?.invited === true && hub0.json.steps?.line === false && hub0.json.steps?.sharing === false, hub0.json.steps);
+  await api('PUT', '/coach/profile', { about: 'I help people keep a steady routine.' }, K.token);
+  await api('PUT', '/me/coach/prefs', { readSharing: true }, K.token);
+  const hub1 = await api('GET', '/coach', undefined, K.token);
+  check('and tick as each is done', hub1.json.steps?.line === true && hub1.json.steps?.sharing === true, hub1.json.steps);
+  const prefsKept = await api('GET', '/me/coach/prefs', undefined, K.token);
+  check('reading how sharing works leaves the sections alone', prefsKept.json.readSharing === true && prefsKept.json.sections.log === 'open', prefsKept.json);
+
+  // The invite link: open, a signed-in person joins with their own switches, renewed and closed links refuse.
+  const notCoachInvite = await api('POST', '/coach/invite', { action: 'on' }, N.token);
+  check('only a coach has an invite link', notCoachInvite.status === 403, notCoachInvite.status);
+  const opened = await api('POST', '/coach/invite', { action: 'on' }, K.token);
+  const token1 = opened.json.invite;
+  check('a coach opens an invite link', opened.status === 200 && /^[A-Z0-9]{16}$/.test(token1 ?? ''), opened.json);
+  const again = await api('POST', '/coach/invite', { action: 'on' }, K.token);
+  check('asking again gives the same link', again.json.invite === token1, again.json);
+  const card = await api('GET', `/public/coach-join/${token1}`);
+  check('the public card shows who the coach is and nothing else', card.status === 200 && card.json.coach?.name === 'Smoke rcoach' && card.json.about === 'I help people keep a steady routine.' && !JSON.stringify(card.json).includes(K.email), card.json);
+  const unknownCard = await api('GET', '/public/coach-join/AAAAAAAAAAAAAAAA');
+  check('an unknown link answers 404', unknownCard.status === 404, unknownCard.status);
+  const J = await joinUp('rjoiner');
+  const state = await api('GET', `/me/coach/join/${token1}`, undefined, J.token);
+  check('the signed-in card says they can join', state.status === 200 && state.json.state === 'new', state.json);
+  const selfState = await api('GET', `/me/coach/join/${token1}`, undefined, K.token);
+  check('the coach sees it is their own link', selfState.json.state === 'self', selfState.json);
+  const joined = await api('POST', `/me/coach/join/${token1}`, { share: { routine: false, journal: true } }, J.token);
+  check('a signed-in person joins with their own switches', joined.status === 201 && joined.json.link?.status === 'active' && joined.json.link.share.routine === false && joined.json.link.share.patterns === true && joined.json.link.share.daily === true && !('journal' in joined.json.link.share), joined.json);
+  const joinedTwice = await api('POST', `/me/coach/join/${token1}`, {}, J.token);
+  check('joining twice is refused through the one rule', joinedTwice.status === 409, joinedTwice.status);
+  const linkedState = await api('GET', `/me/coach/join/${token1}`, undefined, J.token);
+  check('the card then says they already work together', linkedState.json.state === 'linked', linkedState.json);
+  const kInbox = await api('GET', '/inbox?tab=learning', undefined, K.token);
+  check('the coach is told', kInbox.json.notifications?.some((x) => x.title.includes('joined through your invite link') && x.link === '/coaching#students-heading'), '');
+  const joinLog = await api('GET', '/me/coach/log', undefined, J.token);
+  check('the join is in the change log', joinLog.json.log?.some((l) => l.action === 'link.join'), joinLog.json.log?.map((l) => l.action));
+  const fresh = await api('POST', '/coach/invite', { action: 'fresh' }, K.token);
+  const token2 = fresh.json.invite;
+  const oldCard = await api('GET', `/public/coach-join/${token1}`);
+  const oldState = await api('GET', `/me/coach/join/${token1}`, undefined, N.token);
+  const oldJoin = await api('POST', `/me/coach/join/${token1}`, {}, N.token);
+  check('a renewed link’s old token answers 410', token2 && token2 !== token1 && oldCard.status === 410 && oldState.status === 410 && oldJoin.status === 410, { oldCard: oldCard.status, oldState: oldState.status, oldJoin: oldJoin.status });
+  const closed = await api('POST', '/coach/invite', { action: 'off' }, K.token);
+  const closedCard = await api('GET', `/public/coach-join/${token2}`);
+  const closedJoin = await api('POST', `/me/coach/join/${token2}`, {}, N.token);
+  check('a closed link refuses', closed.json.invite === null && closedCard.status === 410 && closedJoin.status === 410, { card: closedCard.status, join: closedJoin.status });
+  const hub2 = await api('GET', '/coach', undefined, K.token);
+  check('the hub says the link is closed', hub2.json.invite === null, hub2.json.invite);
+
+  // An email with no account gets the invite; the coach hears the same words for someone who blocked them, who gets nothing.
+  const noAccount = await api('POST', '/coach/requests', { who: `nobody-${stamp}@example.test` }, K.token);
+  check('an email with no account is invited, the address masked', noAccount.status === 201 && noAccount.json.invited?.to?.includes('***@') && !JSON.stringify(noAccount.json).includes(`nobody-${stamp}`), noAccount.json);
+  const logK = await api('GET', '/me/coach/log', undefined, K.token);
+  const emailLine = logK.json.log?.find((l) => l.action === 'invite.email');
+  check('the invite is in the coach’s log with the address masked', emailLine && !emailLine.label.includes(`nobody-${stamp}`), emailLine);
+  const reopened = await api('GET', '/coach', undefined, K.token);
+  check('sending one opens the link', /^[A-Z0-9]{16}$/.test(reopened.json.invite ?? ''), reopened.json.invite);
+  await api('POST', '/bond/block', { userId: K.user.id }, J.token);
+  const blockedEmail = await api('POST', '/coach/requests', { who: J.email }, K.token);
+  check('an email of someone who blocked the coach reads the same', blockedEmail.status === 201 && blockedEmail.json.invited?.to?.includes('***@') && !blockedEmail.json.link, blockedEmail.json);
+  const blockedOutbox = await admin('GET', '/admin/outbox?size=100').catch(() => null);
+  if (blockedOutbox?.status === 200) check('and nothing is sent to them', !JSON.stringify(blockedOutbox.json).includes(J.email), '');
+  const blockedJoin = await api('GET', `/me/coach/join/${reopened.json.invite}`, undefined, J.token);
+  check('and the card reads closed for them', blockedJoin.status === 410, blockedJoin.status);
+  const badEmail = await api('POST', '/coach/requests', { who: 'not an@email' }, K.token);
+  check('an address that does not look like one is refused', badEmail.status === 400, badEmail.json);
+
+  // Given the permission, Coaching comes on for them; taken away, their link closes.
+  const L = await joinUp('rlapsed');
+  await api('PATCH', '/me/modules', { key: 'coaching', on: false }, L.token);
+  await admin('POST', `/admin/users/${L.user.id}/permissions`, { permissions: ['coach'] });
+  check('a new coach lands on Coaching with it on', (await me(L.token)).modules?.coaching === true, (await me(L.token)).modules);
+  const lInvite = (await api('POST', '/coach/invite', { action: 'on' }, L.token)).json.invite;
+  await admin('POST', `/admin/users/${L.user.id}/permissions`, { permissions: [] });
+  const lapsed = await api('GET', `/public/coach-join/${lInvite}`);
+  check('taking the badge away closes their invite link', lapsed.status === 410, lapsed.status);
+
+  // In the export, and gone with the account. No live token in it.
+  const expK = await api('GET', '/me/export', undefined, K.token);
+  check('the section switches and the invite are in the export, never the token', expK.json.coachPrefs?.length === 1 && expK.json.coachInvite?.length === 1 && !JSON.stringify(expK.json).includes(reopened.json.invite), { prefs: expK.json.coachPrefs?.length, inv: expK.json.coachInvite?.length });
+  const closedByLog = await api('GET', '/internal/logs?size=5', undefined, A.token);
+  check('a link’s token never reaches the app log', !JSON.stringify(closedByLog.json).includes(token1), '');
+  const liveToken = reopened.json.invite;
+  const gone = await admin('DELETE', `/admin/users/${K.user.id}`);
+  if (gone.status === 200) {
+    const goneCard = await api('GET', `/public/coach-join/${liveToken}`);
+    check('the invite link goes with the account', goneCard.status === 404, goneCard.status);
+  }
 }
 
 // ---------------------------------------------------------------- engagement: reactions, threads, pins, inbox, reminders, seasons, brief
@@ -2566,7 +3627,7 @@ section('Engagement');
   const logsAdmin = await api('GET', `/internal/logs?q=${mark}`, undefined, A.token);
   check('a super admin reads the logs, and a browser error is in them without a query string', logsAdmin.status === 200 && logsAdmin.json.logs?.some((l) => l.area === 'client' && l.level === 'error' && l.path === '/home' && l.message.includes(mark)), logsAdmin.json.logs?.slice(0, 2));
   const byWho = await api('GET', `/internal/logs?actor=${A.user.id}`, undefined, A.token);
-  check('the logs filter by person, and list the people seen', byWho.status === 200 && byWho.json.logs?.length > 0 && byWho.json.logs.every((l) => l.actorId === A.user.id) && byWho.json.actors?.some((x) => x.id === A.user.id && x.count > 0), [byWho.json.logs?.length, byWho.json.actors?.length]);
+  check('the logs filter by person, and list the people seen', byWho.status === 200 && byWho.json.logs?.length > 0 && byWho.json.logs.every((l) => l.actorId === A.user.id) && byWho.json.actors?.length > 0 && byWho.json.actors.every((x) => x.count > 0) && (byWho.json.actors.length === 60 || byWho.json.actors.some((x) => x.id === A.user.id)), [byWho.json.logs?.length, byWho.json.actors?.length]);
   const logsNo = await api('GET', '/internal/logs', undefined, R.token);
   check('nobody else reads the logs', logsNo.status === 403, logsNo.status);
   const changes = await api('GET', '/internal/logs?area=community', undefined, A.token);
@@ -2600,6 +3661,9 @@ section('Engagement');
   check('the tasks to pick from come with the answer', frTasks.status === 200 && Array.isArray(frTasks.json.tasks), frTasks.status);
   const team = await api('GET', '/inbox?tab=team', undefined, W.token);
   check('the Team tab is only for the team', team.json.tab === 'all' && !team.json.tabs?.some((t) => t.tab === 'team'), team.json.tab);
+  check('a member sees Everything, Replies and mentions, Following first, then Reminders and the other tabs', (team.json.tabs ?? []).map((t) => t.tab).slice(0, 4).join() === 'all,replies,following,reminders' && ['events', 'friends', 'work', 'shop', 'learning'].every((k) => team.json.tabs.some((t) => t.tab === k)), team.json.tabs?.map((t) => t.tab));
+  const teamAsAdmin = await api('GET', '/inbox?tab=team', undefined, A.token);
+  check('staff get the Team tab', teamAsAdmin.json.tab === 'team' && teamAsAdmin.json.tabs?.some((t) => t.tab === 'team'), teamAsAdmin.json.tab);
 
   // Pins: three per category, and only guides pin.
   const feed = await api('GET', '/community?category=Learning&size=100', undefined, A.token);
@@ -2804,7 +3868,7 @@ section('Agency');
   check('another person has none of it', (await api('GET', '/agency', undefined, X.token)).json.settings.profile.bank.account === '');
 
   // invoices
-  const mkInv = await api('POST', `/agency/invoices?day=${today}`, { clientId: cid, items: [{ description: 'Voxpop videos package', quantity: 5, unitCents: 700000 }] }, O.token);
+  const mkInv = await api('POST', `/agency/invoices?day=${today}`, { clientId: cid, items: [{ description: 'Sample videos package', quantity: 5, unitCents: 700000 }] }, O.token);
   check('an invoice is made from the profile and the client', mkInv.status === 201 && mkInv.json.invoice.number === 'TST-001' && mkInv.json.invoice.doc.bank.account === '99887766' && mkInv.json.invoice.doc.to.name === 'Acme Foods', mkInv.json.invoice);
   const inv = mkInv.json.invoice;
   const t = (items, doc) => ({ items, doc });
@@ -2854,7 +3918,7 @@ section('Agency');
   await api('PATCH', `/agency/invoices/${inv.id}`, { doc: { show: { comments: false } } }, O.token);
   const muted = await pub('POST', `/invoices/${inv.token}/comments`, { body: 'Another' });
   check('comments can be switched off on one invoice', muted.status === 403, muted.json);
-  const edited = await api('PATCH', `/agency/invoices/${inv.id}`, { items: [{ description: 'Voxpop videos package, September', quantity: 6, unitCents: 700000 }] }, O.token);
+  const edited = await api('PATCH', `/agency/invoices/${inv.id}`, { items: [{ description: 'Sample videos package, September', quantity: 6, unitCents: 700000 }] }, O.token);
   check('a sent invoice can still be edited', edited.status === 200 && edited.json.invoice.totalCents === 4200000, edited.json);
   await api('PATCH', `/agency/invoices/${inv.id}`, { status: 'paid' }, O.token);
   const frozen = await api('PATCH', `/agency/invoices/${inv.id}`, { note: 'late edit' }, O.token);
@@ -3065,6 +4129,8 @@ section('Agency');
   const versions = (await api('GET', `/army/campaigns/${campId}`, undefined, A.token)).json;
   const ver = JSON.stringify(versions).includes('hero-v1');
   check('the brand sees that version in Army', ver);
+  const armyBadLink = await api('POST', `/army/deliverables/${armyItem.armyDeliverableId}/versions`, { url: 'javascript:alert(1)' }, O.token);
+  check('Army refuses work whose link is not http or https', armyBadLink.status === 400 && !JSON.stringify((await api('GET', `/army/campaigns/${campId}`, undefined, A.token)).json).includes('javascript:'), armyBadLink.json);
   const vid = (versions.deliverables ?? versions.campaign?.deliverables ?? []).flatMap((d) => d.versions ?? []).find((v) => /hero-v1/.test(v.url))?.id;
   if (vid) await api('POST', `/army/versions/${vid}/review`, { status: 'changes', comment: 'Open stronger' }, A.token);
   const sync = await api('POST', `/agency/items/${armyItem.id}/army/sync?day=${today}`, undefined, O.token);
@@ -3382,7 +4448,7 @@ section('Security: headers, origin, exposed files, errors, addresses, alerts');
 {
   const { publicHttpsUrl } = await import('../../apps/api/src/safeurl.ts');
   const { CSP, PAGE_HEADERS, blockedPath, originAllowed } = await import('../../apps/api/src/headers.ts');
-  const { alertsFor } = await import('../../apps/api/src/alerts.ts');
+  const { ALERT_NO_MAIL, alertMail, alertsFor, securityAlerts } = await import('../../apps/api/src/alerts.ts');
   const { readFileSync } = await import('node:fs');
   const lower = (h) => Object.fromEntries([...h.entries()].map(([k, v]) => [k.toLowerCase(), v]));
 
@@ -3438,6 +4504,10 @@ section('Security: headers, origin, exposed files, errors, addresses, alerts');
   const shipped = ['/sw.js', '/manifest.webmanifest', '/licences.json', '/icon.svg', '/og.png', '/registerSW.js'];
   const shippedCodes = await Promise.all(shipped.map(async (p) => [p, (await fetch(`${ORIGIN}${p}`)).status]));
   check('the files the site ships still answer 200', shippedCodes.every(([, s]) => s === 200), shippedCodes);
+  // Home's tile pictures are in /app-art, never a folder named like a route, so the picture is a picture and /apps is still the app shell.
+  const tilePic = await fetch(`${ORIGIN}/app-art/school.webp`);
+  const appsPage = await fetch(`${ORIGIN}/apps`);
+  check('a tile picture answers as an image, and /apps stays the app shell', tilePic.status === 200 && (tilePic.headers.get('content-type') ?? '').startsWith('image/webp') && appsPage.status === 200 && (appsPage.headers.get('content-type') ?? '').startsWith('text/html'), [tilePic.status, tilePic.headers.get('content-type'), appsPage.status, appsPage.headers.get('content-type')]);
   const wrangler = readFileSync(new URL('../../apps/api/wrangler.jsonc', import.meta.url), 'utf8');
   const { BLOCKED_PATTERNS } = await import('../../apps/api/src/headers.ts');
   check('wrangler sends every blocked pattern to the Worker and leaves /.well-known alone', BLOCKED_PATTERNS.every((x) => wrangler.includes(`"${x}"`)) && wrangler.includes('"!/.well-known/*"'), BLOCKED_PATTERNS.filter((x) => !wrangler.includes(`"${x}"`)));
@@ -3474,6 +4544,69 @@ section('Security: headers, origin, exposed files, errors, addresses, alerts');
   await fetch(`${ORIGIN}/__scheduled?cron=*%2F15+*+*+*+*`);
   const roleAfter = await roleNotesNow();
   check('after a role change the admins are told in the inbox, and two cron runs in an hour tell them once', roleAfter >= 1 && roleAfter - roleBefore <= 1, [roleBefore, roleAfter]);
+
+  // Alerts by mail (2026-11-07). The words first, then the rule on a stand-in database, then the real thing with a new admin, who is told for the first time this hour.
+  const alertMails = loud.map((a) => alertMail(a, 'https://kreators.app/'));
+  check('an alert mail holds counts only: no email address, IP address, token or secret', alertMails.every((m) => !/@|Bearer|token|secret|\d+\.\d+\.\d+\.\d+/i.test(`${m.subject} ${m.body}`)), alertMails);
+  check('its link to the log comes from the site\'s own address, and with none set it has no link', alertMails[0].body.includes('https://kreators.app/internal/logs') && !/https?:/.test(alertMail(loud[0]).body), alertMails[0]);
+  const standInDb = (changes) => ({
+    prepare: (sql) => ({
+      bind: () => ({ first: async () => (sql.includes('app_logs') ? { failed: 0, refused: 0, many: 0, errors: 0 } : { n: 1 }) }),
+      all: async () => ({ results: [{ id: 'a1', email: 'one@smoke.test' }, { id: 'a2', email: null }, { id: 'a3', email: 'three@smoke.test' }] }),
+    }),
+    batch: async (list) => list.map(() => ({ meta: { changes } })),
+  });
+  const triedMail = [];
+  const notesOut = await securityAlerts(standInDb(1), {
+    ready: true,
+    send: async (m) => {
+      triedMail.push(m);
+      if (triedMail.length === 1) throw new Error('the mail provider is down');
+    },
+  }).catch(() => 'threw');
+  check('a mail that fails never stops the run or the next admin\'s mail, and an admin with no address gets the note alone', notesOut === 3 && triedMail.map((m) => m.to).join() === 'one@smoke.test,three@smoke.test', [notesOut, triedMail.map((m) => m.to)]);
+  check('every alert mail is private and never marketing', triedMail.every((m) => m.private === true && m.marketing === undefined), '');
+  const toldBefore = [];
+  await securityAlerts(standInDb(0), { ready: true, send: async (m) => void toldBefore.push(m) });
+  check('someone already told this hour gets no second mail', toldBefore.length === 0, toldBefore);
+
+  const mailAdmin = await signup(`alert-mail-${stamp}@smoke.test`, `Fine-${stamp}-pass`, 'Alert Mail');
+  await admin('POST', `/admin/users/${mailAdmin.user.id}/role`, { role: 'admin' });
+  const alertSubject = 'kreators.app security alert: A role or a permission changed';
+  const mailsToNew = async () => ((await admin('GET', '/admin/outbox?size=100')).json.outbox ?? []).filter((m) => m.to === `alert-mail-${stamp}@smoke.test` && m.subject === alertSubject);
+  await fetch(`${ORIGIN}/__scheduled?cron=*%2F15+*+*+*+*`);
+  const firstMails = await mailsToNew();
+  check('a role change goes out as one email to a new admin, kept in the outbox while mail is not set up', firstMails.length === 1 && firstMails[0].status === 'skipped' && /RESEND_API_KEY/.test(firstMails[0].error ?? ''), firstMails);
+  const newAdminNote = ((await api('GET', '/inbox?tab=team', undefined, mailAdmin.token)).json.notifications ?? []).find((n) => n.title === 'A role or a permission changed');
+  check('the inbox note says plainly that mail is not set up', newAdminNote?.body?.includes(ALERT_NO_MAIL) && newAdminNote?.link === '/internal/logs', newAdminNote);
+  await fetch(`${ORIGIN}/__scheduled?cron=*%2F15+*+*+*+*`);
+  check('and a second cron run in the hour sends no second email', (await mailsToNew()).length === 1, '');
+  await admin('POST', `/admin/users/${mailAdmin.user.id}/role`, { role: 'user' });
+
+  // A link typed for other people to open is http or https only, and is refused out loud (2026-11-07, the last of the report's link fields).
+  const linker = await signup(`links-${stamp}@smoke.test`, `Fine-${stamp}-pass`, 'Link Typer');
+  const scriptLink = 'javascript:alert(1)';
+  const badProductLink = await api('POST', '/studio/products', { kind: 'digital', title: `Smoke bad link ${stamp}`, url: scriptLink }, linker.token);
+  check('a product\'s link must be http or https', badProductLink.status === 400, badProductLink.json);
+  const linked = await api('POST', '/studio/products', { kind: 'digital', title: `Smoke good link ${stamp}`, url: 'https://example.com/file' }, linker.token);
+  check('a good link is kept', linked.status === 201 && linked.json.product?.url === 'https://example.com/file', linked.json);
+  const badProductEdit = await api('PATCH', `/studio/products/${linked.json.product?.id}`, { url: 'data:text/html,hi' }, linker.token);
+  check('an edit cannot put a bad link in', badProductEdit.status === 400, badProductEdit.json);
+  const clearedLink = await api('PATCH', `/studio/products/${linked.json.product?.id}`, { url: null }, linker.token);
+  check('and clearing the link still works', clearedLink.status === 200 && clearedLink.json.product?.url === null, clearedLink.json);
+  check('a portfolio piece\'s link must be http or https', (await api('POST', '/me/portfolio', { title: 'Piece', url: scriptLink }, linker.token)).status === 400 && (await api('POST', '/me/portfolio', { title: 'Piece', url: 'https://example.com/piece' }, linker.token)).status < 300, '');
+  const handInBad = await api('POST', '/school/assignments/no-such-one/submit', { cohortId: 'no-such-one', url: scriptLink }, linker.token);
+  const handInGood = await api('POST', '/school/assignments/no-such-one/submit', { cohortId: 'no-such-one', url: 'https://example.com/work' }, linker.token);
+  check('a hand-in\'s link must be http or https', handInBad.status === 400 && handInGood.status === 404, [handInBad.status, handInGood.status]);
+
+  // The reset mail's live link is never kept (`private` on sendEmail). Read straight from the smoke database, so only against the smoke server on 8788; this run's mails only.
+  const outboxState = new URL('./state', import.meta.url).pathname;
+  if (ORIGIN === 'http://127.0.0.1:8788' && deleteStateExists(outboxState)) {
+    const since = new Date(Number.parseInt(stamp, 36)).toISOString();
+    const out = deleteExec('npx', ['--no-install', 'wrangler', 'd1', 'execute', 'kreators-life', '--local', '--persist-to', outboxState, '--json', '--command', `SELECT COUNT(*) AS kept, COALESCE(SUM(body LIKE '%token=%'), 0) AS links FROM email_outbox WHERE subject = 'Reset your kreators.app password' AND created_at >= '${since}'`], { cwd: new URL('../../apps/api', import.meta.url).pathname, stdio: 'pipe' }).toString();
+    const kept = JSON.parse(out)[0]?.results?.[0] ?? {};
+    check('the reset mail\'s link is not kept in the outbox', kept.kept >= 1 && kept.links === 0, kept);
+  }
 }
 
 import { execFileSync as deleteExec } from 'node:child_process';
@@ -3580,6 +4713,36 @@ section('Limits');
   check('support tickets are limited per person from the one limits file', ticket === 429, ticket);
 }
 
+// Counts of tries hold no email and no address (the founder, 2026-11-07): the keys hold a salted hash, a limit still counts, and the delete finds them.
+{
+  const limitState = new URL('./state', import.meta.url).pathname;
+  if (ORIGIN === 'http://127.0.0.1:8788' && deleteStateExists(limitState)) {
+    const { DatabaseSync } = await import('node:sqlite');
+    const dir = `${limitState}/v3/d1/miniflare-D1DatabaseObject`;
+    const limitDb = new DatabaseSync(privacyDirList(dir).filter((x) => x.endsWith('.sqlite') && x !== 'metadata.sqlite').map((x) => `${dir}/${x}`)[0], { readOnly: true });
+    const keys = () => limitDb.prepare('SELECT key, count FROM rate_limits').all();
+    const email = `counted-${stamp}@smoke.test`;
+    const from = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 9) & 255}`;
+    const counted = await api('POST', '/auth/signup', { email, password: `Willow-${stamp}-pass`, displayName: 'Smoke counted', phone: PHONE, birthDate: GROWN, acceptTerms: true }, null, { 'CF-Connecting-IP': from });
+    const before = new Set(keys().map((r) => r.key));
+    await api('POST', '/auth/signin', { email, password: 'not-the-password-1' }, null, { 'CF-Connecting-IP': from });
+    const signedIn = await api('POST', '/auth/signin', { email, password: `Willow-${stamp}-pass` }, null, { 'CF-Connecting-IP': from });
+    await api('POST', '/auth/forgot', { email }, null, { 'CF-Connecting-IP': from });
+    const now = keys();
+    const hex = /^[0-9a-f]{32}$/;
+    const fresh = now.filter((r) => !before.has(r.key));
+    check('sign-in still works with the keys hashed', counted.status === 201 && signedIn.status === 200, signedIn.status);
+    check('after a sign-in the counts hold no raw email and no raw address', !now.some((r) => r.key.includes(email) || r.key.includes(from)), now.filter((r) => r.key.includes(email) || r.key.includes(from)));
+    check('the counts are there, each under a hash', fresh.some((r) => r.key.startsWith('signin-email:') && hex.test(r.key.split(':').pop())) && fresh.some((r) => r.key.startsWith('forgot-email:') && hex.test(r.key.split(':').pop())) && now.some((r) => r.key.startsWith('signin:') && hex.test(r.key.split(':').pop())), fresh);
+    const emailRow = fresh.find((r) => r.key.startsWith('signin-email:'));
+    check('the same email counts under the same key', emailRow?.count === 2, emailRow);
+    const delCounted = await api('DELETE', '/me', { confirm: 'DELETE' }, counted.json.token);
+    const left = new Set(keys().map((r) => r.key));
+    check('the delete finds the counts under the hash of their email', delCounted.status === 200 && !fresh.some((r) => /^(signin|forgot)-email:/.test(r.key) && left.has(r.key)), [...left].filter((k) => fresh.some((r) => r.key === k)));
+    limitDb.close();
+  }
+}
+
 // ---------------------------------------------------------------- chat channels
 section('Channels');
 {
@@ -3595,6 +4758,11 @@ section('Channels');
   const Z = await joiner('gone', 'Chan leaver');
   const lines = async (scope, id, token, query = '') => (await api('GET', `/${scope}/channels/${id}/messages${query}`, undefined, token)).json;
   const say = (scope, id, token, body, extra = {}) => api('POST', `/${scope}/channels/${id}/messages`, { body, ...extra }, token);
+
+  // The smoke database is kept between runs and Community holds so many open channels, so earlier runs' rooms close first.
+  for (const c of (await api('GET', '/community/channels?size=100', undefined, A.token)).json.channels ?? []) {
+    if (c.slug?.startsWith('smoke-room-')) await api('POST', `/community/channels/${c.id}/archive`, {}, A.token);
+  }
 
   // Community: guides open the channels, anyone joins.
   const notGuide = await api('POST', '/community/channels', { name: `Smoke room ${stamp}`, topic: 'Smoke' }, M1.token);
@@ -3674,7 +4842,8 @@ section('Channels');
   await api('POST', '/bond/block', { userId: M1.user.id }, M2.token);
   const hidden2 = (await lines('community', room.id, M2.token)).lines ?? [];
   const hidden1 = (await lines('community', room.id, M1.token)).lines ?? [];
-  check('after a block the blocker no longer sees the other’s lines', hidden2.length > 0 && !hidden2.some((l) => l.body.startsWith('hello one') || l.body.startsWith('hello three') || l.body.startsWith('anon a')), hidden2.map((l) => l.body));
+  check('after a block the blocker no longer sees the other’s named lines', hidden2.length > 0 && !hidden2.some((l) => l.body.startsWith('hello one') || l.body.startsWith('hello three')), hidden2.map((l) => l.body));
+  check('and their anonymous one stays, or the block would say who wrote it', hidden2.some((l) => l.body.startsWith('anon a')), hidden2.map((l) => l.body));
   check('and the blocked person no longer sees the blocker’s', hidden1.length > 0 && !hidden1.some((l) => l.body.startsWith('hello two') || l.body.startsWith('a reply')), hidden1.map((l) => l.body));
   await api('DELETE', `/bond/block/${M1.user.id}`, undefined, M2.token);
   check('lifting the block brings the lines back', (await lines('community', room.id, M2.token)).lines?.some((l) => l.body.startsWith('hello one')) === true, '');
@@ -4409,7 +5578,7 @@ section('Agency team link');
   const ex = (await api('GET', '/me/export', undefined, O.token)).json;
   const row = (ex.agencyClients ?? []).find((r) => r.id === cid);
   const exText = JSON.stringify(ex);
-  check('team link: the export has the settings and never a hash, a salt, a session or the password', row?.team_link_token === tTok2 && row.team_link_has_password === 1 && typeof row.team_link_json === 'string' && !/team_link_pass_hash|team_link_pass_salt|team_link_sessions/.test(exText) && ![tPw, tPw2, tS, tS2].some((x) => exText.includes(x)), row);
+  check('team link: the export has the settings and never its key, a hash, a salt, a session or the password', row?.has_team_link === 1 && !exText.includes(tTok2) && row.team_link_has_password === 1 && typeof row.team_link_json === 'string' && !/team_link_pass_hash|team_link_pass_salt|team_link_sessions/.test(exText) && ![tPw, tPw2, tS, tS2].some((x) => exText.includes(x)), row);
   const off = await api('POST', `/agency/clients/${cid}/team-link`, { on: false }, O.token);
   check('team link: switching it off closes it (410) and leaves the client link on', off.json.token === null && (await P('GET', `/team-link/${tTok2}`)).status === 410 && (await page(cid)).client.portalToken === mainTok2);
   await api('POST', `/agency/clients/${cid}/team-link`, { on: true }, O.token);
@@ -4525,7 +5694,7 @@ section('Agency documents');
   check('only a draft can be removed', (await api('DELETE', `/agency/docs/${did}`, undefined, O.token)).status === 400 && (await api('DELETE', `/agency/docs/${revise.json.id}`, undefined, O.token)).status === 200);
 
   // the text of an invoice matches the calculator, in whole cents
-  const inv = await api('POST', `/agency/invoices?day=${today}`, { clientId: cid, items: [{ description: 'Voxpop videos', quantity: 5, unitCents: 700000 }, { description: 'Extra edit', quantity: 1, unitCents: 150050 }], doc: { gstBps: 1800, gstSplit: true, tdsBps: 1000, tdsMode: 'show' } }, O.token);
+  const inv = await api('POST', `/agency/invoices?day=${today}`, { clientId: cid, items: [{ description: 'Sample videos', quantity: 5, unitCents: 700000 }, { description: 'Extra edit', quantity: 1, unitCents: 150050 }], doc: { gstBps: 1800, gstSplit: true, tdsBps: 1000, tdsMode: 'show' } }, O.token);
   const iv = inv.json.invoice;
   const itext = invoiceAsText(iv);
   check('the invoice text has the CGST and SGST and the total the calculator made', clean(itext) && itext.includes(`Total: ${money(iv.totalCents)}`) && itext.includes('CGST (9%)') && itext.includes('SGST (9%)') && itext.includes(`TDS to deduct (10%): -${money(Math.round((3650050 * 1000) / 10000))}`), itext.slice(0, 200));
@@ -4533,6 +5702,44 @@ section('Agency documents');
   check('an invoice keeps a style of keys too', iStyle.json.invoice?.doc.style.font === 'sans' && iStyle.json.invoice.doc.style.margin === 'wide' && iStyle.json.invoice.doc.style.logo === '', iStyle.json.invoice?.doc.style);
   const iMailDraft = await api('POST', `/agency/invoices/${iv.id}/email`, {}, O.token);
   check('a draft invoice is not emailed', iMailDraft.status === 400, iMailDraft.json);
+
+  // What an email note can name (2026-11-07): the client's own papers, each with where the client opens it. Its own person, so the email limit never trips it.
+  const PP = await join('docpapers');
+  // Locked, so its onboarding form is not sent: sending it makes the Trial agreement, and these checks start from a client with no paper.
+  const ppc = (await addClient({ name: 'Docs Co', contactName: 'Dana', contactEmail: 'dana@docs.test', retainerCents: 4500000 }, PP.token, { locked: true })).json.id;
+  const papersOf = () => api('GET', `/agency/clients/${ppc}/papers`, undefined, PP.token);
+  const noPapers = await papersOf();
+  check('papers: a new client has none, and the site address comes with the answer', noPapers.status === 200 && noPapers.json.papers.length === 0 && typeof noPapers.json.base === 'string', noPapers.json);
+  check('papers: another person gets 404', (await api('GET', `/agency/clients/${ppc}/papers`, undefined, X.token)).status === 404);
+  const ppk = await api('POST', '/agency/contracts', { templateKey: 'trial', clientId: ppc }, PP.token);
+  const ppi = await api('POST', `/agency/invoices?day=${today}`, { clientId: ppc, items: [{ description: 'Five videos', quantity: 5, unitCents: 700000 }] }, PP.token);
+  const ppDrafts = (await papersOf()).json.papers;
+  check('papers: a draft is listed with no link to give', ppDrafts.length === 2 && ppDrafts.every((x) => x.path === '' && x.status === 'draft'), ppDrafts);
+  await api('PATCH', `/agency/contracts/${ppk.json.id}`, { status: 'sent' }, PP.token);
+  await api('PATCH', `/agency/invoices/${ppi.json.invoice.id}`, { status: 'sent' }, PP.token);
+  const ppOut = (await papersOf()).json.papers;
+  const ppK = ppOut.find((x) => x.kind === 'contract');
+  const ppI = ppOut.find((x) => x.kind === 'invoice');
+  check('papers: once sent, each has its own link, its name, and the invoice its amount', /^\/k\/[A-Z0-9]{16}$/.test(ppK?.path ?? '') && /^\/i\/[A-Za-z0-9]+$/.test(ppI?.path ?? '') && ppK.docKind === 'trial' && ppK.title.length > 3 && ppI.number.length > 0 && ppI.totalCents > 0 && ppI.amount.includes('₹'), ppOut);
+  const papersLog = async (type, id) => (await api('GET', `/agency/doc-log/${type}/${id}`, undefined, PP.token)).json.log ?? [];
+  // A note that holds both links is a line in both logs; a note that holds one is a line only on the paper it was sent from.
+  await api('POST', `/agency/contracts/${ppk.json.id}/email`, { message: 'Hi,\n\nHere is the agreement.', subject: 'Agreement' }, PP.token);
+  check('papers: a note that names only its own paper leaves the other log empty', (await papersLog('contract', ppK.id)).length === 1 && (await papersLog('invoice', ppI.id)).length === 0);
+  const both = await api('POST', `/agency/contracts/${ppk.json.id}/email`, { message: `Hi,\n\nHere are both:\n\nhttps://kreators.test${ppK.path}\nhttps://kreators.test${ppI.path}`, subject: 'Agreement and invoice' }, PP.token);
+  const bothLog = await papersLog('invoice', ppI.id);
+  check('papers: a note that names both is a line in both logs, with no words in it', both.status === 200 && both.json.linkIncluded === true && (await papersLog('contract', ppK.id)).length === 2 && bothLog.length === 1 && bothLog[0].detail === 'd***@docs.test' && !JSON.stringify(bothLog).includes('Here are both'), [both.json, bothLog]);
+  const ppBefore = (await papersOf()).json.papers.find((x) => x.kind === 'contract');
+  await api('PATCH', `/agency/contracts/${ppk.json.id}`, { doc: { ...(await api('GET', `/agency/contracts/${ppk.json.id}`, undefined, PP.token)).json.contract.doc, title: 'Trial engagement agreement, changed' } }, PP.token);
+  const ppAfter = (await papersOf()).json.papers.find((x) => x.kind === 'contract');
+  check('papers: a paper changed after it was emailed reads as revised', ppBefore?.revised === false && ppAfter?.revised === true && ppAfter.title.includes('changed'), [ppBefore, ppAfter]);
+  // Someone else's paper in the words writes nothing on theirs.
+  const xc = await mkClient(X);
+  const xi = await api('POST', `/agency/invoices?day=${today}`, { clientId: xc, items: [{ description: 'Stranger line', quantity: 1, unitCents: 1000 }] }, X.token);
+  await api('PATCH', `/agency/invoices/${xi.json.invoice.id}`, { status: 'sent' }, X.token);
+  await api('POST', `/agency/contracts/${ppk.json.id}/email`, { message: `Hi,\n\nhttps://kreators.test/i/${xi.json.invoice.token}`, subject: 'Wrong link' }, PP.token);
+  check('papers: a link to someone else\'s paper writes nothing in their log', ((await api('GET', `/agency/doc-log/invoice/${xi.json.invoice.id}`, undefined, X.token)).json.log ?? []).length === 0);
+  await api('PATCH', `/agency/invoices/${ppi.json.invoice.id}`, { status: 'void' }, PP.token);
+  check('papers: a void one is not offered', !(await papersOf()).json.papers.some((x) => x.kind === 'invoice'));
   const kc = await api('POST', '/agency/contracts', { templateKey: 'trial', clientId: cid }, O.token);
   // The Trial and pilot agreement is drawn in the typed layout, like the founder's own; the others start with numbered headings.
   const kcRet = await api('POST', '/agency/contracts', { templateKey: 'retainer', clientId: cid }, O.token);
@@ -5095,6 +6302,9 @@ section('Agency team');
 
   // Answering: core, so it works with Agency off.
   const eTeams = await api('GET', '/me/teams', undefined, E.token);
+  // The invite is an Agency note, and the editor has Agency off: the Agency tab is offered while they hold one, so the note has a tab.
+  const eAgencyTab = await api('GET', '/inbox?tab=agency&size=50', undefined, E.token);
+  check('team: with Agency off, the invite still has the Agency tab of the inbox', eAgencyTab.json.tab === 'agency' && (eAgencyTab.json.tabs ?? []).some((t) => t.tab === 'agency') && (eAgencyTab.json.notifications ?? []).some((n) => n.kind === 'agency' && n.title.includes('asked you to join')), [eAgencyTab.json.tab, eAgencyTab.json.notifications?.map((n) => n.title)]);
   check('team: the invite shows under /me/teams with Agency off', eTeams.status === 200 && eTeams.json.teams?.some((t) => t.id === iE.json.id && t.status === 'invited' && t.role === 'editor'), eTeams.json);
   const no = await api('POST', `/me/teams/${iE.json.id}/answer`, { yes: false }, E.token);
   check('team: the editor can say no', no.status === 200 && no.json.status === 'removed', no.json);
@@ -5180,6 +6390,7 @@ section('Agency team');
   const eMailOk = await api('POST', `/agency/invoices/${invId}/email`, {}, E.token, eh);
   const mailLog = JSON.stringify((await api('GET', `/agency/doc-log/invoice/${invId}`, undefined, T.token)).json);
   check('team: but sends to the client\'s address on record', eMailOk.status === 200 && !mailLog.includes('team-editor'), [eMailOk.status, eMailOk.json]);
+  check('team: a member is never given the list of a client\'s paper links', (await api('GET', `/agency/clients/${cid}/papers`, undefined, E.token, eh)).status === 403);
   await api('PATCH', `/agency/team/${eId}`, { access: { overview: 'off', pipeline: 'edit', clients: 'off', paperwork: 'off' } }, T.token);
 
   // Notes: a member writes team notes, never sees the owner's private ones, and removes only their own.
@@ -5384,6 +6595,104 @@ section('Emerging');
   check('emerging: answers in under 200 ms', best < 200, `${Math.round(best)} ms`);
 }
 
+// ---------------------------------------------------------------- Emerging by period and the life dashboard (2026-11-07)
+section('Emerging by period and the life dashboard');
+{
+  // Each person here is new, so the hourly limits of the founder's smoke account are never touched.
+  const LD = await signup(`lifedash-${stamp}@smoke.test`, `Meadow-${stamp}-dash`, 'Smoke life dash');
+  const LO = await signup(`lifedash-other-${stamp}@smoke.test`, `Meadow-${stamp}-dash2`, 'Smoke life other');
+  const dash = (q = '', token = LD.token) => api('GET', `/insights/dashboard?day=${today}${q}`, undefined, token);
+  const cards = (d) => (d.areas ?? []).flatMap((a) => a.cards.map((c) => c.key));
+  for (const key of ['mood', 'sleep', 'stress', 'mindful', 'journal', 'finance', 'fitness', 'reviews']) await api('PATCH', '/me/modules', { key, on: true }, LD.token);
+
+  check('life dashboard: needs a session', (await api('GET', `/insights/dashboard?day=${today}`)).status === 401);
+  // No period: the last eight weeks beside the eight before, and a new account has a number or a dash on every card, never an invented one.
+  const rolling = await dash();
+  check('life dashboard: with no period it is the last eight weeks', rolling.status === 200 && rolling.json.period === null && rolling.json.heading === 'the last 8 weeks', rolling.json.heading);
+  check('life dashboard: the five areas in their one order, then the seven pillars in theirs', rolling.json.areas?.map((a) => a.key).join() === 'physical,financial,mental,emotional,spiritual' && rolling.json.pillars?.map((p) => p.relationship).join() === RELATIONSHIPS.map((r) => r.key).join(), rolling.json.areas?.map((a) => a.key));
+  check('life dashboard: every card has a number, words and a link to where its data lives', (rolling.json.areas ?? []).flatMap((a) => a.cards).concat(rolling.json.pillars ?? []).every((c) => c.label && c.value && c.to?.startsWith('/')), null);
+
+  // Real data through the ordinary routes.
+  await api('PUT', '/reminders/water/settings', { day: today, goalMl: 500 }, LD.token);
+  await api('POST', '/reminders/water', { day: today, ml: 600 }, LD.token);
+  await api('POST', '/fitness/move', { date: today, kind: 'walk', minutes: 30 }, LD.token);
+  await api('POST', '/wellbeing/mood', { date: today, value: 4 }, LD.token);
+  await api('POST', '/wellbeing/stress', { date: today, value: 2 }, LD.token);
+  await api('POST', '/finance/transactions', { kind: 'expense', amountCents: 25000, category: 'Software', date: today }, LD.token);
+  await api('POST', '/finance/transactions', { kind: 'income', amountCents: 500000, category: 'Brand deal', date: today }, LD.token);
+  await api('PUT', '/finance/budgets', { budgets: [{ category: 'Software', monthlyCents: 10000 }, { category: 'Travel', monthlyCents: 50000 }] }, LD.token);
+
+  for (const kind of ['day', 'week', 'month', 'quarter', 'half', 'year']) {
+    const d = await dash(`&kind=${kind}&start=${today}`);
+    const p = d.json.period;
+    const c = (key) => (d.json.areas ?? []).flatMap((a) => a.cards).find((x) => x.key === key);
+    check(`life dashboard (${kind}): answers for the period that holds today`, d.status === 200 && p?.kind === kind && p.start <= today && today <= p.end, d.status);
+    check(`life dashboard (${kind}): counts what was logged today`, c('move')?.value === '30 min' && c('water')?.value === '600 ml' && c('mood')?.value === '4.0 of 5' && c('stress')?.value === '2.0 of 5', [c('move')?.value, c('water')?.value, c('mood')?.value, c('stress')?.value]);
+    check(`life dashboard (${kind}): a small chart on every card`, (d.json.areas ?? []).flatMap((a) => a.cards).every((x) => x.chart && x.chart.values.length > 0 && x.chart.label), null);
+    check(`life dashboard (${kind}): money is the person's own, whole`, c('income')?.value === '₹5,000' && c('expense')?.value === '₹250' && c('budgets')?.value === '1', [c('income')?.value, c('expense')?.value, c('budgets')?.value]);
+  }
+  const day = (await dash(`&kind=day&start=${today}`)).json;
+  check('life dashboard: a day is the daily report: the week up to it in the charts', day.heading === 'today' && day.areas?.[0]?.cards?.find((c) => c.key === 'water')?.chart?.values?.length === 7, day.heading);
+  const week = (await dash(`&kind=week&start=${today}`)).json;
+  check('life dashboard: lower stress and the same days of the week before are said in words', week.heading === 'this week' && week.compare === 'Each one next to the same days of the week before.', week.compare);
+
+  // A period still to come, and what is not a period, are refused, never a 500.
+  const future = emergeAddDays(today, 400);
+  for (const kind of ['day', 'week', 'month', 'quarter', 'half', 'year']) {
+    check(`life dashboard (${kind}): a period still to come is refused`, (await dash(`&kind=${kind}&start=${future}`)).status === 400);
+    check(`emerging (${kind}): a period still to come is refused`, (await api('GET', `/insights?day=${today}&kind=${kind}&start=${future}`, undefined, LD.token)).status === 400);
+  }
+  check('life dashboard: an unknown kind, a kind with no day and a day that is not on the calendar are refused', (await dash('&kind=decade&start=2026-01-01')).status === 400 && (await dash('&kind=week')).status === 400 && (await dash('&kind=week&start=2026-02-31')).status === 400 && (await dash('&start=2026-01-01')).status === 400, null);
+  check('life dashboard: a bad day is refused', (await api('GET', `/insights/dashboard?day=2026-11-31`, undefined, LD.token)).status === 400);
+  const before = await dash(`&kind=week&start=${emergeAddDays(today, -7)}`);
+  check('life dashboard: an earlier period reads as that one, with nothing from this week', before.status === 200 && before.json.heading === 'that week' && (before.json.areas ?? []).flatMap((a) => a.cards).find((c) => c.key === 'move')?.value === '0 min', before.json.heading);
+
+  // An app that is off leaves its part out, and the numbers with it.
+  await api('PATCH', '/me/modules', { key: 'finance', on: false }, LD.token);
+  await api('PATCH', '/me/modules', { key: 'mood', on: false }, LD.token);
+  const off = await dash(`&kind=week&start=${today}`);
+  check('life dashboard: with Finance off its whole area goes', off.status === 200 && !off.json.areas?.some((a) => a.key === 'financial') && !JSON.stringify(off.json).includes('₹'), off.json.areas?.map((a) => a.key));
+  check('life dashboard: with Mood off its card goes, and the rest stay', !cards(off.json).includes('mood') && cards(off.json).includes('stress') && cards(off.json).includes('journal'), cards(off.json));
+  await api('PATCH', '/me/modules', { key: 'fitness', on: false }, LD.token);
+  const noFit = await dash(`&kind=week&start=${today}`);
+  check('life dashboard: with Fitness off, movement and eating go; water, which is core, stays', !cards(noFit.json).includes('move') && !cards(noFit.json).includes('eat') && cards(noFit.json).includes('water'), cards(noFit.json));
+  for (const key of ['fitness', 'mood', 'finance']) await api('PATCH', '/me/modules', { key, on: true }, LD.token);
+
+  // Supplements never appear, not even as a count, and the words a person wrote never leave.
+  await api('PUT', '/fitness/supplements/settings', { on: true }, LD.token);
+  await api('POST', '/fitness/supplements', { name: 'Smoke dash B12', kind: 'vitamin', amount: '1 tablet', time: 'morning', days: [1, 2, 3, 4, 5, 6, 7] }, LD.token);
+  await api('POST', '/wellbeing/mood', { date: today, value: 4, note: 'Smoke dash private note' }, LD.token);
+  const raw = JSON.stringify((await dash(`&kind=year&start=${today}`)).json).toLowerCase();
+  check('life dashboard: no supplement, no count of one, and no note', !raw.includes('supp') && !raw.includes('b12') && !raw.includes('smoke dash private note'), null);
+
+  // Another person sees their own zeros.
+  const other = await dash(`&kind=week&start=${today}`, LO.token);
+  check('life dashboard: another account reads only its own', other.status === 200 && (other.json.areas ?? []).flatMap((a) => a.cards).find((c) => c.key === 'water')?.value === '–', null);
+
+  // The patterns over a period: each one's period named, the short period said once on the screen, and the rolling answer untouched.
+  const rollingIds = ((await api('GET', `/insights?day=${today}`, undefined, LD.token)).json.insights ?? []).map((i) => i.id);
+  const wk = await api('GET', `/insights?day=${today}&kind=week&start=${today}`, undefined, LD.token);
+  check('emerging: a period is read back with its answer', wk.status === 200 && wk.json.window?.kind === 'week' && wk.json.window.start <= today, wk.json.window);
+  check('emerging: since your last review stays with the rolling view', !(wk.json.insights ?? []).some((i) => i.key === 'review-since') && rollingIds.includes('review-since'), rollingIds);
+  check('emerging: every ready card of a period names it', (wk.json.insights ?? []).filter((i) => i.state === 'ready').every((i) => /\bin \d|\bin [A-Z]|\bon \d/.test(i.basis)), (wk.json.insights ?? []).filter((i) => i.state === 'ready').map((i) => i.basis));
+  const sm = (wk.json.insights ?? []).find((i) => i.key === 'sleep-mood');
+  check('emerging: a week cannot hold a same-days card, and says so', sm?.state === 'watching' && sm?.need === 'Not enough days in this week for this one.', sm?.need);
+
+  // Water and budgets as patterns.
+  const ins = (await api('GET', `/insights?day=${today}`, undefined, LD.token)).json.insights ?? [];
+  check('emerging: water waits for its days', ins.find((i) => i.key === 'water-days')?.state === 'watching' && ins.find((i) => i.key === 'water-weekday')?.state === 'watching', ins.filter((i) => i.key.startsWith('water')).map((i) => i.need));
+  const dayNo = Number(today.slice(8, 10));
+  const pace = ins.find((i) => i.key === 'budget-pace');
+  check('emerging: a budget ahead of its pace is said plainly, once a week of the month has gone', dayNo < 7 ? pace?.state === 'watching' : pace?.state === 'ready' && /^Software /.test(pace?.text ?? '') && !/fail/i.test(pace?.text ?? ''), pace);
+  check('emerging: budgets reach Finance', dayNo < 7 || (await api('GET', `/insights?day=${today}&app=finance`, undefined, LD.token)).json.insights?.some((i) => i.key === 'budget-pace'));
+  await api('PATCH', '/me/modules', { key: 'finance', on: false }, LD.token);
+  const noMoney = (await api('GET', `/insights?day=${today}`, undefined, LD.token)).json.insights ?? [];
+  check('emerging: with Finance off, no budget line runs', !noMoney.some((i) => i.key.startsWith('budget')), noMoney.map((i) => i.key));
+  check('emerging: nothing here is ever a cause', !JSON.stringify(ins.map((i) => [i.text, i.need])).match(/because|caused|leads to|due to|makes you/i), null);
+  await api('DELETE', '/me', { confirm: 'DELETE' }, LO.token);
+  await api('DELETE', '/me', { confirm: 'DELETE' }, LD.token);
+}
+
 section('Good and bad habits');
 {
   // The 2026-11-04 ask: a task done again and again, or a slip on the not to do list, tied to how the days went and sorted into good
@@ -5557,7 +6866,7 @@ section('Time blocks');
   const weekday = ((new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
 
   const first = await api('GET', `/time-blocks?day=${today}`, undefined, T.token);
-  check('blocks: the first read adds the starting set, 14 blocks and 14 day templates', first.status === 200 && first.json.blocks?.length === 14 && first.json.templates?.length === 14, [first.status, first.json.blocks?.length, first.json.templates?.length]);
+  check('blocks: the first read shows the starting set, 14 blocks and 14 day templates', first.status === 200 && first.json.blocks?.length === 14 && first.json.templates?.length === 14, [first.status, first.json.blocks?.length, first.json.templates?.length]);
   const second = await api('GET', `/time-blocks?day=${today}`, undefined, T.token);
   check('blocks: a second read adds nothing', second.json.blocks?.length === 14 && second.json.templates?.length === 14 && JSON.stringify(second.json.blocks?.map((b) => b.id)) === JSON.stringify(first.json.blocks?.map((b) => b.id)), second.json.blocks?.length);
   check('blocks: the week is seven days from its Monday', second.json.days?.length === 7 && second.json.days?.[0]?.weekday === 1 && second.json.week === second.json.days?.[0]?.date, second.json.days?.map((d) => d.date));
@@ -5703,6 +7012,39 @@ section('Time blocks');
   const sug = wp.json.plan?.suggestions?.find((x) => x.id === undatedTask.json.node?.id);
   check('blocks: the week plan names each day’s template and suggests a block', wp.status === 200 && wp.json.plan?.days?.every((d) => typeof d.templateName === 'string') && Array.isArray(wp.json.blocks) && sug?.blockId === blockOf('busy')?.id, [wp.json.plan?.days?.map((d) => d.templateName), sug]);
 
+  // Daily's block hints (2026-11-07, @kreators/shared/blockHints): nothing is written until a tap, and each tap is the ordinary PATCH.
+  {
+    const { groupWithSuggestions, blockMismatch, blockUsedMin } = await import('../../packages/shared/src/blockHints.ts');
+    const { blockOfTask } = await import('../../packages/shared/src/index.ts');
+    await api('PUT', '/time-blocks/days', { dates: [today], templateId: everyday?.id }, T.token);
+    const readDay = async () => (await api('GET', `/today?date=${today}&group=1`, undefined, T.token)).json;
+    const suggestedIn = (j, id) => groupWithSuggestions(j.tasks ?? [], { slots: j.day?.slots ?? [], blocks: j.day?.blocks ?? [], used: blockUsedMin(j.day?.slots ?? [], j.day?.slotPlannedMin) }).find((g) => g.suggested.some((n) => n.id === id));
+    const stretch = await add({ title: 'Stretch for ten minutes', doDate: today, lifeArea: 'physical', priority: 'P2' });
+    const sid = stretch.json.node?.id;
+    const before = await readDay();
+    const sg = suggestedIn(before, sid);
+    check('blocks: a task with no block and no time is suggested into a block of the day, and nothing is saved', Boolean(sg && sg.kind === 'block' && sg.inDay) && before.tasks?.find((n) => n.id === sid)?.timeBlockId === null, [sg?.key, before.tasks?.find((n) => n.id === sid)?.timeBlockId]);
+    const keptSug = await api('PATCH', `/nodes/${sid}`, { timeBlockId: sg?.key }, T.token);
+    const afterSug = await readDay();
+    check('blocks: Keep here on a suggestion saves its block, and it is placed, not suggested', keptSug.status === 200 && keptSug.json.node?.timeBlockId === sg?.key && !suggestedIn(afterSug, sid), keptSug.json.node?.timeBlockId);
+    const mis = (j, id) => {
+      const n = j.tasks?.find((x) => x.id === id);
+      return n ? blockMismatch(n, j.day?.slots ?? [], j.day?.blocks ?? [], { used: blockUsedMin(j.day?.slots ?? [], j.day?.slotPlannedMin), taken: (j.tasks ?? []).filter((x) => x.id !== id && x.dueTime && (x.doDate ?? x.dueDate) === today) }) : null;
+    };
+    // A Yourself task about money at 17:30 sits in Fun/social (Friends, emotional) by its time; a money block fits it better.
+    const keepIt = await add({ title: 'Check the budget', doDate: today, lifeArea: 'financial', priority: 'P2', dueTime: '17:30' });
+    const moveIt = await add({ title: 'Pay the bills', doDate: today, lifeArea: 'financial', priority: 'P2', dueTime: '17:45' });
+    const misDay = await readDay();
+    const mk = mis(misDay, keepIt.json.node?.id);
+    const mm = mis(misDay, moveIt.json.node?.id);
+    check('blocks: a task its time put in a block meant for others is asked about, with a better block', Boolean(mk && mm && mk.better.id !== mk.block.id && mk.block.id === blockOf('social')?.id), [mk?.block?.name, mk?.better?.name, mk?.start]);
+    const pinned = await api('PATCH', `/nodes/${keepIt.json.node?.id}`, { timeBlockId: mk?.block?.id }, T.token);
+    check('blocks: Keep here on a mismatch picks the block, so it never asks again', pinned.status === 200 && pinned.json.node?.timeBlockId === mk?.block?.id && pinned.json.node?.dueTime === '17:30' && mis(await readDay(), keepIt.json.node?.id) === null, pinned.json.node);
+    const movedTo = await api('PATCH', `/nodes/${moveIt.json.node?.id}`, { dueTime: mm?.start }, T.token);
+    const placedNow = movedTo.json.node ? blockOfTask(movedTo.json.node, misDay.day?.slots ?? []) : null;
+    check('blocks: Move it sets a time inside the better block', movedTo.status === 200 && movedTo.json.node?.dueTime === mm?.start && placedNow?.blockId === mm?.better?.id && placedNow?.how === 'time' && mis(await readDay(), moveIt.json.node?.id) === null, [movedTo.json.node?.dueTime, placedNow]);
+  }
+
   check('blocks: every write is rate limited under prefs', ['/time-blocks/blocks', '/time-blocks/blocks/:id', '/time-blocks/templates', '/time-blocks/templates/:id', '/time-blocks/pattern', '/time-blocks/days', '/time-blocks/restore', '/time-blocks/blocks/order'].every((path) => ROUTE_LIMITS.some((r) => r.path === path && r.limit === 'prefs')));
   const exported = await api('GET', '/me/export', undefined, T.token);
   const ex = JSON.stringify(exported.json);
@@ -5712,6 +7054,133 @@ section('Time blocks');
   await api('PUT', '/time-blocks/pattern', { weekdays: [1], template: 'Family day' }, D.token);
   const dDel = await api('DELETE', '/me', { confirm: 'DELETE' }, D.token);
   check('blocks: an account with blocks, templates and a pattern can be deleted', dDel.status === 200 && (await api('GET', `/time-blocks?day=${today}`, undefined, D.token)).status === 401, dDel.json);
+}
+
+section('Starting blocks from code');
+{
+  // 2026-11-07, the founder: a new account writes no time blocks until its first change, and nothing a person sees changes.
+  const rowsOf = async (token) => {
+    const e = await api('GET', '/me/export', undefined, token);
+    return { blocks: e.json.timeBlocks?.length, templates: e.json.dayTemplates?.length, slots: e.json.dayTemplateSlots?.length, week: e.json.weekPattern?.length, at: e.json.accountDetails?.[0]?.time_blocks_seeded_at ?? null, note: e.json.timeBlocksNote ?? null };
+  };
+  const wrote = (r) => Number(r.headers.get('x-d1-rows-written') ?? -1);
+  const L = await signup(`lazyblocks-${stamp}@smoke.test`, 'Lazyblocks-smoke-ok-1', 'Lazy Blocks');
+  const uid = L.user.id;
+  const built = await api('POST', '/onboarding/build', { relationships: ['self'], date: today, picks: { self: { project: 'Lazy project' } } }, L.token);
+  const proj = (built.json.nodes ?? []).find((n) => n.kind === 'project');
+  const open = await api('GET', `/time-blocks?day=${today}`, undefined, L.token);
+  const daily = await api('GET', `/today?date=${today}`, undefined, L.token);
+  check('lazy blocks: the first reads show the whole set and write nothing', open.status === 200 && open.json.blocks?.length === 14 && open.json.templates?.length === 14 && wrote(open) === 0 && daily.status === 200 && wrote(daily) === 0 && daily.json.day?.template?.name === 'Everyday' && daily.json.day?.slots?.length === 10, [wrote(open), wrote(daily)]);
+  check('lazy blocks: the ids are the fixed ones', open.json.blocks?.every((b) => b.id === `b-${b.seed}-${uid}`) && open.json.templates?.every((t) => t.id === `t-${t.seed}-${uid}`), open.json.blocks?.[0]);
+  const none = await rowsOf(L.token);
+  check('lazy blocks: no rows yet, and the export says so plainly', none.blocks === 0 && none.templates === 0 && none.slots === 0 && none.at === null && /starting set/.test(none.note ?? ''), none);
+  const add = (b) => api('POST', '/nodes', { kind: 'task', parentId: proj?.id, relationship: 'self', ...b }, L.token);
+  const deepId = `b-deep-${uid}`;
+  const byId = await add({ title: 'In Deep work', doDate: today, timeBlockId: deepId });
+  const byName = await add({ title: 'In Sleep by name', doDate: today, timeBlock: ' sleep ' });
+  const notMine = await add({ title: 'Not mine', doDate: today, timeBlockId: `b-deep-${A.user?.id ?? 'someone'}` });
+  check('lazy blocks: a task goes in a starting block by id or by name, and never in someone else’s', byId.status === 201 && byId.json.node?.timeBlockId === deepId && byName.json.node?.timeBlockId === `b-sleep-${uid}` && notMine.status === 400, [byId.json.node?.timeBlockId, byName.json.node?.timeBlockId, notMine.status]);
+  const weekday = ((new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
+  const dated = await api('PUT', '/time-blocks/days', { dates: [today], templateId: `t-deep-${uid}` }, L.token);
+  const usual = await api('PUT', '/time-blocks/pattern', { weekdays: [weekday === 7 ? 1 : weekday + 1], template: 'family DAY' }, L.token);
+  const onDaily = await api('GET', `/today?date=${today}`, undefined, L.token);
+  check('lazy blocks: a date and a weekday take a starting template, and Daily follows', dated.status === 200 && usual.status === 200 && onDaily.json.day?.from === 'date' && onDaily.json.day?.template?.id === `t-deep-${uid}`, [dated.status, usual.status, onDaily.json.day?.template]);
+  const kinded = await api('PUT', '/today/day-type', { date: today, today, kind: 'create' }, L.token);
+  check('lazy blocks: the old kind of day finds its starting template', kinded.status === 200 && kinded.json.templateId === `t-create-${uid}`, kinded.json);
+  await api('PUT', '/time-blocks/days', { dates: [today], templateId: `t-deep-${uid}` }, L.token);
+  const refused = [
+    await api('POST', '/time-blocks/blocks', { name: '  ', color: 'red' }, L.token),
+    await api('PATCH', `/time-blocks/blocks/${deepId}`, { color: 'not-a-colour' }, L.token),
+    await api('PATCH', `/time-blocks/templates/t-deep-${uid}`, { color: 'not-a-colour' }, L.token),
+    await api('DELETE', `/time-blocks/templates/t-everyday-${uid}`, undefined, L.token),
+    await api('POST', '/time-blocks/templates', { name: 'Theirs', lead: 'self', slots: [{ blockId: 'b-deep-nobody', start: '10:00', end: '11:00' }] }, L.token),
+    await api('PUT', '/time-blocks/blocks/order', { ids: [deepId] }, L.token),
+    await api('PATCH', '/time-blocks/blocks/b-deep-nobody', { name: 'Mine now' }, L.token),
+    await api('DELETE', '/time-blocks/templates/t-deep-nobody', undefined, L.token),
+  ];
+  const restoreNothing = await api('POST', '/time-blocks/restore', {}, L.token);
+  const still = await rowsOf(L.token);
+  check('lazy blocks: a refusal and an empty restore write no rows', refused.map((r) => r.status).join() === '400,400,400,409,400,400,404,404' && restoreNothing.json.added?.blocks === 0 && restoreNothing.json.added?.templates === 0 && still.blocks === 0 && still.templates === 0 && still.at === null, [refused.map((r) => r.status), restoreNothing.json, still]);
+
+  // The first change: one batch, the same ids, and everything that pointed at a block or template still does.
+  const beforeChange = await api('GET', `/time-blocks?day=${today}`, undefined, L.token);
+  const renamed = await api('PATCH', `/time-blocks/blocks/${deepId}`, { name: 'Deep focus' }, L.token);
+  const afterChange = await api('GET', `/time-blocks?day=${today}`, undefined, L.token);
+  const asThen = JSON.parse(JSON.stringify(afterChange.json));
+  for (const b of asThen.blocks) if (b.id === deepId) b.name = 'Deep work';
+  check('lazy blocks: after the first change every read says the same, but for the change', renamed.status === 200 && renamed.json.block?.id === deepId && renamed.json.block?.name === 'Deep focus' && JSON.stringify(asThen) === JSON.stringify(beforeChange.json), renamed.json);
+  check('lazy blocks: a real first change takes under 45 round trips', Number(renamed.headers.get('x-d1-round-trips') ?? 0) <= 45, renamed.headers.get('x-d1-round-trips'));
+  const written = await rowsOf(L.token);
+  check('lazy blocks: the rows are written then, all of them, and the note goes', written.blocks === 14 && written.templates === 14 && written.slots > 100 && written.at && !written.note, written);
+  const dailyAfter = await api('GET', `/today?date=${today}`, undefined, L.token);
+  check('lazy blocks: the task and the date still point at the same block and template', dailyAfter.json.day?.template?.id === `t-deep-${uid}` && dailyAfter.json.tasks?.some((t) => t.id === byId.json.node?.id && t.timeBlockId === deepId) && dailyAfter.json.day?.blocks?.find((b) => b.id === deepId)?.name === 'Deep focus', dailyAfter.json.day?.template);
+
+  // A starting template deleted stays deleted, whatever reads or changes come after; only Bring back the starting set returns it.
+  const gone = await api('DELETE', `/time-blocks/templates/t-travel-${uid}`, undefined, L.token);
+  await api('PATCH', `/time-blocks/blocks/${deepId}`, { name: 'Deep work' }, L.token);
+  await api('GET', `/today?date=${today}`, undefined, L.token);
+  const afterGone = await api('GET', `/time-blocks?day=${today}`, undefined, L.token);
+  const erased = await api('POST', '/me/reset', {}, L.token);
+  const afterErase = await api('GET', `/time-blocks?day=${today}`, undefined, L.token);
+  check('lazy blocks: a deleted starting template does not come back, even after an erase of progress', gone.status === 200 && afterGone.json.templates?.length === 13 && !afterGone.json.templates?.some((t) => t.seed === 'travel') && erased.status === 200 && afterErase.json.templates?.length === 13, [afterGone.json.templates?.length, erased.status, afterErase.json.templates?.length]);
+  const back = await api('POST', '/time-blocks/restore', {}, L.token);
+  check('lazy blocks: bringing back the starting set returns it', back.json.added?.templates === 1 && (await api('GET', `/time-blocks?day=${today}`, undefined, L.token)).json.templates?.some((t) => t.seed === 'travel'), back.json);
+
+  // Two tabs make their first changes at once: every one lands, once, and what one deleted stays deleted.
+  const P = await signup(`lazytabs-${stamp}@smoke.test`, 'Lazyblocks-smoke-ok-2', 'Lazy Tabs');
+  const pid = P.user.id;
+  const atOnce = await Promise.all([
+    api('PATCH', `/time-blocks/blocks/b-deep-${pid}`, { name: 'Tab one' }, P.token),
+    api('PATCH', `/time-blocks/blocks/b-busy-${pid}`, { name: 'Tab two' }, P.token),
+    api('DELETE', `/time-blocks/templates/t-travel-${pid}`, undefined, P.token),
+    api('DELETE', `/time-blocks/templates/t-date-${pid}`, undefined, P.token),
+    api('POST', '/time-blocks/blocks', { name: 'Tab three', color: 'teal' }, P.token),
+  ]);
+  const tabs = await api('GET', `/time-blocks?day=${today}`, undefined, P.token);
+  await api('PATCH', `/time-blocks/blocks/b-fun-${pid}`, { name: 'Later' }, P.token);
+  const tabsLater = await api('GET', `/time-blocks?day=${today}`, undefined, P.token);
+  check('lazy blocks: first changes at once all land, nothing doubled or brought back', atOnce.every((r) => r.status < 300) && tabs.json.blocks?.length === 15 && tabs.json.templates?.length === 12 && tabs.json.blocks?.find((b) => b.id === `b-deep-${pid}`)?.name === 'Tab one' && tabs.json.blocks?.find((b) => b.id === `b-busy-${pid}`)?.name === 'Tab two' && !tabsLater.json.templates?.some((t) => ['travel', 'date'].includes(t.seed)) && tabsLater.json.templates?.filter((t) => t.isDefault).length === 1, [atOnce.map((r) => r.status), tabs.json.blocks?.length, tabs.json.templates?.length]);
+
+  // The most a person may keep counts the starting ones, rows or not.
+  const M = await signup(`lazymost-${stamp}@smoke.test`, 'Lazyblocks-smoke-ok-3', 'Lazy Most');
+  const madeAll = [];
+  for (let i = 0; i < MAX_DAY_TEMPLATES - 14; i++) madeAll.push(await api('POST', '/time-blocks/templates', { name: `Mine ${i}`, ...(i === 0 ? { fromId: `t-everyday-${M.user.id}` } : { lead: 'self' }) }, M.token));
+  const oneTooMany = await api('POST', '/time-blocks/templates', { name: 'One too many', lead: 'self' }, M.token);
+  const blocksMade = [];
+  for (let i = 0; i < MAX_TIME_BLOCKS - 14; i++) blocksMade.push(await api('POST', '/time-blocks/blocks', { name: `Mine ${i}`, color: 'teal' }, M.token));
+  const blockTooMany = await api('POST', '/time-blocks/blocks', { name: 'One too many', color: 'teal' }, M.token);
+  check('lazy blocks: the most templates and blocks still count the starting ones', madeAll.every((r) => r.status === 201) && oneTooMany.status === 409 && blocksMade.every((r) => r.status === 201) && blockTooMany.status === 409, [madeAll.map((r) => r.status), oneTooMany.status, blockTooMany.status]);
+  const F = await signup(`lazyfirst-${stamp}@smoke.test`, 'Lazyblocks-smoke-ok-4', 'Lazy First');
+  const firstCopy = await api('POST', '/time-blocks/templates', { name: 'My copy', fromId: `t-deep-${F.user.id}` }, F.token);
+  const deepSlots = open.json.templates?.find((t) => t.seed === 'deep')?.slots;
+  check('lazy blocks: copying a starting template as the first change keeps its slots and takes the next colour', firstCopy.status === 201 && firstCopy.json.template?.slots?.length === deepSlots?.length && firstCopy.json.template?.sort === 14 && firstCopy.json.template?.lead === 'servant_leader' && firstCopy.json.template?.slots?.every((s) => s.blockId.endsWith(F.user.id)), firstCopy.json);
+
+  // An erase and the account's delete, with no rows.
+  const E = await signup(`lazyerase-${stamp}@smoke.test`, 'Lazyblocks-smoke-ok-5', 'Lazy Erase');
+  const eErased = await api('POST', '/me/reset', {}, E.token);
+  const eAfter = await api('GET', `/time-blocks?day=${today}`, undefined, E.token);
+  const eDel = await api('DELETE', '/me', { confirm: 'DELETE' }, E.token);
+  check('lazy blocks: an erase leaves the starting set, and an account with no rows can be deleted', eErased.status === 200 && eAfter.json.templates?.length === 14 && eDel.status === 200, [eErased.status, eAfter.json.templates?.length, eDel.status]);
+
+  // Two tabs, one moment (2026-11-07): a copy, a slot change and a task against a delete of the block they use. Before, the foreign key made some of these a 500.
+  const raced = [];
+  let slotOnGone = false;
+  for (let i = 0; i < 3; i += 1) {
+    const R = await signup(`lazyrace${i}-${stamp}@smoke.test`, 'Lazyblocks-smoke-ok-6', 'Lazy Race');
+    const fun = `b-fun-${R.user.id}`;
+    const answers = await Promise.all([
+      api('DELETE', `/time-blocks/blocks/${fun}`, undefined, R.token),
+      api('POST', '/time-blocks/templates', { name: 'Raced copy', fromId: `t-create-${R.user.id}` }, R.token),
+      api('PATCH', `/time-blocks/templates/t-money-${R.user.id}`, { slots: [{ blockId: fun, start: '09:00', end: '10:00' }] }, R.token),
+      api('PATCH', `/time-blocks/blocks/${fun}`, { name: 'Raced' }, R.token),
+      api('DELETE', `/time-blocks/templates/t-travel-${R.user.id}`, undefined, R.token),
+      api('PATCH', `/time-blocks/templates/t-travel-${R.user.id}`, { name: 'Raced too' }, R.token),
+    ]);
+    raced.push(...answers.map((r) => r.status));
+    const after = await api('GET', `/time-blocks?day=${today}`, undefined, R.token);
+    slotOnGone ||= (after.json.templates ?? []).some((t) => t.slots.some((s) => s.blockId === fun)) || (after.json.blocks ?? []).some((b) => b.id === fun) || (after.json.templates ?? []).some((t) => t.seed === 'travel');
+  }
+  check('lazy blocks: a change racing a delete is never a 500, and what was deleted stays deleted', raced.every((s) => s < 500) && !slotOnGone, raced);
 }
 
 section('Kinds of day progress');
@@ -5782,6 +7251,669 @@ section('Kinds of day progress');
   const kindsCard = ins.json.insights?.find((i) => i.key === 'daytype-done');
   check('kinds: Your kinds of day watches while no past day has a kind', ins.status === 200 && kindsCard?.state === 'watching' && kindsCard?.text === 'Your kinds of day' && /Give a day a kind/.test(kindsCard?.need ?? ''), kindsCard);
   check('kinds: the card shows on Daily, Reviews and Emerging, and says nothing of causes', ['today', 'reviews', 'insights'].every((a) => kindsCard?.apps?.includes(a)) && !/because|caused|leads to|due to|makes you/i.test(`${kindsCard?.text} ${kindsCard?.need}`), kindsCard?.apps);
+}
+
+// ---------------------------------------------------------------- the export and the delete cover what a person wrote (2026-11-07)
+import { readdirSync as privacyDirList } from 'node:fs';
+section('Export and delete cover what a person wrote');
+{
+  const PV = { 'CF-Connecting-IP': `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 223) & 255}` };
+  // Every word the two people who leave type carries one of these, so the database can be searched for it afterwards.
+  const W = `Zephyrine${stamp}`;
+  const WT = `Quillon${stamp}`;
+  const soon = (min) => new Date(Date.now() + min * 60_000).toISOString();
+  const pvEmail = (who) => `privacy-${who}-${stamp}@smoke.test`;
+  const join = async (who, displayName) => {
+    const r = await api('POST', '/auth/signup', { email: pvEmail(who), password: `Harbour-${stamp}-pass`, displayName, phone: PHONE, birthDate: GROWN }, null, PV);
+    if (r.status !== 201) throw new Error(`privacy signup ${who}: ${r.status} ${JSON.stringify(r.json)}`);
+    return { token: r.json.token, user: await me(r.json.token) };
+  };
+  const P = await join('person', `${W} Person`); // an ordinary member, and they leave
+  const L = await join('team', `${WT} Team`); // a member of the team, and they leave
+  const O = await join('other', `Privacy other ${stamp}`); // stays: sells, hosts, follows, and is told when something stops
+  const T = await join('staff', `Privacy staff ${stamp}`); // stays: the team
+  const G = await join('guest', `Privacy guest ${stamp}`); // stays: rates and buys beside the person
+  for (const s of [L, T]) await admin('POST', `/admin/users/${s.user.id}/role`, { role: 'admin' });
+  for (const s of [P, O, G]) await admin('POST', `/admin/users/${s.user.id}/points`, { amount: 5000, note: 'privacy check' });
+  // Each row is written through the real route. A setup that fails says which, so a later "not in the export" is not a mystery.
+  const made = (label, r) => {
+    if (r.status >= 300) check(`privacy setup: ${label}`, false, [r.status, r.json]);
+    return r.json ?? {};
+  };
+
+  // ---- the person's profile and progress
+  made('profile', await api('PATCH', '/me', { bio: W, focus: W, experienceLevel: W, availability: W, location: W, city: W, area: W, skills: [W], goals: [W], categories: [W], interests: ['Running', 'Cooking'], openToIntros: true, handle: `pv${stamp}`.slice(0, 20).toLowerCase().replace(/[^a-z0-9_]/g, '_'), socials: { instagram: W }, links: [{ type: 'link', title: W, url: `https://example.test/${W}` }] }, P.token));
+  await api('PATCH', '/me', { openToIntros: true, city: 'Bengaluru', interests: ['Running', 'Cooking'] }, O.token);
+  const answers = QUESTIONS.filter((q) => q.relationship === 'self').map((q) => ({ questionId: q.id, value: 1 }));
+  made('onboarding answers', await api('POST', '/onboarding', { answers, displayName: `${W} Person` }, P.token));
+  const built = made('pillars', await api('POST', '/onboarding/build', { relationships: ['self'], date: today, picks: { self: {} } }, P.token));
+  const project = (built.nodes ?? []).find((n) => n.kind === 'project');
+  made('small act', await api('POST', '/today/spark', { date: today }, P.token));
+  made('an honor', await admin('POST', `/admin/users/${P.user.id}/honors`, { key: 'founder', note: W }));
+  made('an app switched for them', await admin('POST', '/admin/flags/journal/overrides', { subjectType: 'user', subjectId: P.user.id, enabled: true, reason: W }));
+  made('a reservation', await api('POST', '/rewards/tee/redeem', undefined, P.token));
+
+  // ---- as a seller: a product nobody bought, one somebody did, and the people gathered
+  const unsold = made('a product never sold', await api('POST', '/studio/products', { kind: 'digital', title: `Unsold ${W}`, description: W, pricePoints: 0, status: 'live', url: 'https://example.com/unsold' }, P.token)).product;
+  const sold = made('a product someone bought', await api('POST', '/studio/products', { kind: 'digital', title: `Privacy sold ${stamp}`, pricePoints: 10, status: 'live', url: 'https://example.com/sold' }, P.token)).product;
+  made('someone buys it', await api('POST', `/store/${sold?.id}/checkout`, { pay: 'points' }, O.token));
+  made('a lead on their page', await api('POST', `/public/${(await me(P.token)).handle}/lead`, { name: `Lead visitor ${stamp}`, email: `lead-${stamp}@example.test`, message: W }, null, PV));
+  made('a broadcast', await api('POST', '/studio/broadcasts', { title: W, body: W, audience: 'followers' }, P.token));
+  made('a sequence', await api('POST', '/studio/sequences', { title: W, body: W, delayDays: 30 }, P.token));
+  const content = made('a post tracked', await api('POST', '/studio/content', { url: `https://example.test/post/${W}`, caption: W }, P.token));
+  made('an automation', await api('POST', '/studio/automations', { keywords: [W], dmMessage: W, publicReplies: [W], contentItemId: content.item?.id }, P.token));
+  const tracked = made('a tracked link', await api('POST', '/studio/links', { label: W }, P.token)).link;
+  if (tracked?.code) await fetch(`${ORIGIN}/go/${tracked.code}`, { redirect: 'manual', headers: PV });
+  made('a funnel', await api('POST', '/studio/funnels', { name: W, steps: [{ kind: 'link', ref: tracked?.id ?? 'x' }, { kind: 'leads', ref: '' }] }, P.token));
+  made('a coupon', await api('POST', '/studio/coupons', { code: `PV${stamp}`, percentOff: 10 }, P.token));
+  made('a free hour', await api('POST', '/studio/availability', { weekday: 1, startMin: 540, endMin: 600 }, P.token));
+  made('a day off', await api('PUT', `/studio/availability/overrides/${today}`, { ranges: [] }, P.token));
+  const hostSession = made('a session they sell', await api('POST', '/studio/products', { kind: 'session', title: `Privacy host session ${stamp}`, pricePoints: 0, status: 'live', durationMin: 30, noticeHours: 0 }, P.token)).product;
+
+  // ---- as a buyer: from someone who stays
+  const review = made('a product to review', await api('POST', '/studio/products', { kind: 'digital', title: `Privacy reviewed ${stamp}`, pricePoints: 0, status: 'live', url: 'https://example.com/r' }, O.token)).product;
+  const magnet = made('a lead magnet', await api('POST', '/studio/products', { kind: 'digital', title: `Privacy magnet ${stamp}`, pricePoints: 0, status: 'live', url: 'https://example.com/m', leadMagnet: true }, O.token)).product;
+  await api('PATCH', `/studio/products/${magnet?.id}`, { leadMagnet: true }, O.token);
+  const dm = made('a paid question', await api('POST', '/studio/products', { kind: 'dm', title: `Privacy dm ${stamp}`, pricePoints: 0, status: 'live', responseDays: 3 }, O.token)).product;
+  const course = made('a course', await api('POST', '/studio/products', { kind: 'course', title: `Privacy course ${stamp}`, pricePoints: 0, status: 'live' }, O.token)).product;
+  await api('PATCH', `/studio/products/${course?.id}`, { certificate: true }, O.token);
+  const lesson = made('a lesson', await api('POST', `/studio/products/${course?.id}/lessons`, { title: 'One', body: 'Words', quiz: [{ q: 'Yes?', question: 'Yes?', options: ['Yes', 'No'], answer: 0 }], passScore: 50 }, O.token)).lesson;
+  const intake = made('a product that asks a question', await api('POST', '/studio/products', { kind: 'digital', title: `Privacy intake ${stamp}`, pricePoints: 0, status: 'live', url: 'https://example.com/i', intake: ['What do you hope for?'] }, O.token)).product;
+  const session = made('a session', await api('POST', '/studio/products', { kind: 'session', title: `Privacy session ${stamp}`, pricePoints: 0, status: 'live', durationMin: 30, noticeHours: 0, maxDaysAhead: 30 }, O.token)).product;
+  for (let w = 0; w < 7; w += 1) await api('POST', '/studio/availability', { weekday: w, startMin: 60, endMin: 1380 }, O.token);
+  await api('POST', '/studio/availability', { weekday: 0, startMin: 60, endMin: 1380 }, P.token);
+  for (const [id, body] of [[review?.id, {}], [magnet?.id, {}], [dm?.id, { question: W }], [course?.id, {}], [session?.id, {}], [intake?.id, { intake: [W] }]]) made('a purchase', await api('POST', `/store/${id}/checkout`, body, P.token));
+  made('the other buyer', await api('POST', `/store/${review?.id}/checkout`, {}, G.token));
+  made('their review', await api('POST', `/store/${review?.id}/review`, { rating: 1, body: W }, P.token));
+  made('another review', await api('POST', `/store/${review?.id}/review`, { rating: 5, body: `A kind word ${stamp}` }, G.token));
+  const reviews = made('reviews to approve', await api('GET', '/studio/testimonials', undefined, O.token)).testimonials ?? [];
+  for (const t of reviews) await api('POST', `/studio/testimonials/${t.id}`, { approved: true }, O.token);
+  if (lesson?.id) {
+    made('a finished lesson', await api('POST', `/store/lessons/${lesson.id}/complete`, {}, P.token));
+    made('a quiz', await api('POST', `/store/lessons/${lesson.id}/quiz`, { answers: [0] }, P.token));
+    made('a certificate', await api('POST', `/store/products/${course?.id}/certificate`, {}, P.token));
+  }
+  const dayAhead = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
+  const slots = (await api('GET', `/store/${session?.id}/slots?date=${dayAhead}`, undefined, P.token)).json.slots ?? [];
+  const booking = made('a booking', await api('POST', `/store/${session?.id}/book`, { startsAt: slots[0], note: W }, P.token)).booking;
+  await api('POST', `/store/${hostSession?.id}/checkout`, {}, O.token);
+  const hostSlots = (await api('GET', `/store/${hostSession?.id}/slots?date=${dayAhead}`, undefined, O.token)).json.slots ?? [];
+
+  // ---- people
+  made('a follow', await api('POST', `/community/follow/${O.user.id}`, {}, P.token));
+  made('a follower', await api('POST', `/community/follow/${P.user.id}`, {}, O.token));
+  made('a friend', await api('POST', '/bond/friends', { code: O.user.friendCode }, P.token));
+  made('an introduction', await api('POST', '/bond/intros', { recipientId: O.user.id, context: W }, P.token));
+  const oPost = made('a post to react to', await api('POST', '/community', { body: `Privacy other post ${stamp}`, category: 'Stories' }, O.token));
+  made('a reaction', await api('POST', `/community/${oPost.post?.id ?? oPost.id}/like`, { kind: 'love' }, P.token));
+  made('a Club application', await api('POST', '/club/apply', { note: W }, P.token));
+
+  // ---- events: as a guest, as a host with a paying guest, as a host of an empty one
+  const ev = made('someone else’s event', await api('POST', '/party/events', { title: `Privacy event ${stamp}`, startsAt: soon(-30), minutes: 600 }, O.token)).event;
+  made('a seat', await api('POST', `/party/events/${ev?.id}/rsvp`, { networking: true }, P.token));
+  made('a rating', await api('POST', `/party/events/${ev?.id}/feedback`, { rating: 1, comment: W }, P.token));
+  made('another rating', await api('POST', `/party/events/${ev?.id}/rsvp`, {}, G.token));
+  made('another rating', await api('POST', `/party/events/${ev?.id}/feedback`, { rating: 5, comment: 'Lovely' }, G.token));
+  const hosted = made('an event they host', await api('POST', '/party/events', { title: `Privacy hosted ${stamp}`, description: W, venue: W, onlineUrl: `https://example.test/${W}`, startsAt: soon(60 * 24 * 3), minutes: 60, pricePoints: 100 }, P.token)).event;
+  made('a paying guest', await api('POST', `/party/events/${hosted?.id}/rsvp`, {}, O.token));
+  made('a photo folder', await api('PUT', `/connect/party/${hosted?.id}/photos`, { url: `https://drive.google.com/drive/folders/${W}`, note: W }, P.token));
+  made('an empty event', await api('POST', '/party/events', { title: `Empty ${W}`, startsAt: soon(60 * 24 * 4), minutes: 60 }, P.token));
+
+  // ---- circles and run clubs
+  const circle = made('a circle', await api('POST', '/circles/events', { title: `Privacy circle ${stamp}`, city: 'Bengaluru', startsAt: soon(60 * 24 * 5), groupSize: 3 }, T.token)).event;
+  await api('PATCH', '/me', { city: 'Bengaluru', interests: ['Running', 'Cooking'] }, P.token);
+  await api('PATCH', '/me', { city: 'Bengaluru', interests: ['Running', 'Cooking'] }, G.token);
+  await api('PATCH', '/me', { city: 'Bengaluru', interests: ['Running', 'Cooking'] }, T.token);
+  for (const [who, note] of [[P, W], [O, ''], [G, ''], [T, '']]) made('a circle sign-up', await api('POST', `/circles/events/${circle?.id}/join`, { note, status: 'private' }, who.token));
+  made('a table', await api('POST', `/circles/events/${circle?.id}/match`, {}, T.token));
+  const club = made('a run club', await api('POST', '/run/clubs', { name: `Privacy club ${stamp}`, city: 'Bengaluru', description: W, meets: W }, P.token)).club;
+  made('someone joins it', await api('POST', `/run/clubs/${club?.id}/join`, {}, O.token));
+  made('a run', await api('POST', `/run/clubs/${club?.id}/runs`, { title: `Privacy run ${stamp}`, meetingPoint: W, startsAt: soon(60 * 24 * 3), minutes: 30 }, P.token));
+  const collab = made('a brand collab', await api('POST', '/run/collabs', { title: `Privacy collab ${stamp}`, brandName: 'Privacy shoes', giveaway: 'One pair', startsAt: soon(0), endsAt: soon(60 * 24 * 30) }, T.token)).collab;
+  made('a collab application', await api('POST', `/run/collabs/${collab?.id}/apply`, { clubId: club?.id, note: W }, P.token));
+
+  // ---- work, rewards, TV and Fund, Army
+  const opp = made('a listing', await api('POST', '/work/opportunities', { title: `Privacy gig ${stamp}`, status: 'published' }, T.token));
+  await api('PATCH', `/work/opportunities/${opp.id}`, { status: 'published' }, T.token);
+  made('an application', await api('POST', `/work/opportunities/${opp.id}/apply`, { coverNote: W }, P.token));
+  const paidReward = made('a reward', await api('POST', '/win', { title: `Privacy reward ${stamp}`, brandName: 'Privacy brand', budgetPoints: 1000, ratePerThousand: 10, minViews: 1 }, T.token));
+  const openReward = made('another reward', await api('POST', '/win', { title: `Privacy open ${stamp}`, brandName: 'Privacy brand', budgetPoints: 1000, ratePerThousand: 10, minViews: 1 }, T.token));
+  made('an entry', await api('POST', `/win/${paidReward.id}/submit`, { url: `https://example.test/paid/${W}` }, P.token));
+  made('an entry that waits', await api('POST', `/win/${openReward.id}/submit`, { url: `https://example.test/open/${W}` }, P.token));
+  const myEntries = made('their entries', await api('GET', '/win', undefined, P.token));
+  const entry = (myEntries.mine ?? myEntries.submissions ?? []).find((s) => s.bountyId === paidReward.id);
+  made('numbers on it', await api('POST', `/win/submissions/${entry?.id}/metrics`, { views: 5000, note: W }, T.token));
+  made('verified', await api('POST', `/win/submissions/${entry?.id}/review`, { status: 'verified', views: 5000, note: W }, T.token));
+  made('paid', await api('POST', `/win/submissions/${entry?.id}/review`, { status: 'paid', payoutPoints: 50 }, T.token));
+  made('a pitch still waiting', await api('POST', '/proposals', { kind: 'tv', title: `Waiting ${W}`, pitch: W, budgetAmount: 1000 }, P.token));
+  const yesPitch = made('a pitch the team said yes to', await api('POST', '/proposals', { kind: 'fund', title: `Approved ${W}`, pitch: W, budgetAmount: 2000 }, P.token));
+  made('the team says yes', await api('POST', `/proposals/${yesPitch.id}/stage`, { stage: 'approved', note: `Team note ${stamp}` }, T.token));
+  const org = made('a brand', await api('POST', '/orgs', { name: `Empty ${W}`, type: 'brand' }, P.token));
+  const brand = made('a brand with a campaign', await api('POST', '/orgs', { name: `Privacy brand ${stamp}`, type: 'brand' }, T.token));
+  const brandId = brand.organization?.id ?? brand.id;
+  const camp = made('a campaign', await api('POST', '/army/campaigns', { organizationId: brandId, name: `Privacy campaign ${stamp}`, brief: 'x' }, T.token));
+  const campId = camp.campaign?.id ?? camp.id;
+  const deliverable = made('a deliverable', await api('POST', `/army/campaigns/${campId}/deliverables`, { title: `Privacy piece ${stamp}` }, T.token));
+  const role = made('a role on it', await api('POST', `/army/campaigns/${campId}/assignments`, { creator: P.user.id }, T.token));
+  made('they accept', await api('POST', `/army/assignments/${role.id}`, { status: 'accepted' }, P.token));
+  const version = made('a version', await api('POST', `/army/deliverables/${deliverable.id}/versions`, { url: 'https://example.test/cut', note: W }, P.token));
+  made('feedback on it', await api('POST', `/army/versions/${version.id}/review`, { status: 'changes', comment: `Open stronger ${stamp}` }, T.token));
+
+  // ---- School
+  const prog = made('a program', await api('POST', '/school/programs', { name: `Privacy program ${stamp}`, visibility: 'public' }, L.token));
+  made('an assignment', await api('POST', `/school/programs/${prog.id}/assignments`, { title: 'Hand this in' }, L.token));
+  const cohort = made('a cohort', await api('POST', `/school/programs/${prog.id}/cohorts`, { name: `Privacy cohort ${stamp}`, startAt: soon(-60), endAt: soon(60 * 24 * 30), managerUserId: L.user.id }, L.token));
+  made('a session', await api('POST', `/school/cohorts/${cohort.id}/sessions`, { title: 'Live', startsAt: soon(-5) }, L.token));
+  made('they enrol', await api('POST', `/school/cohorts/${cohort.id}/enroll`, {}, P.token));
+  const room = made('the cohort', await api('GET', `/school/cohorts/${cohort.id}`, undefined, P.token));
+  const assignment = room.assignments?.[0];
+  const liveSession = room.sessions?.[0];
+  made('a hand-in', await api('POST', `/school/assignments/${assignment?.id}/submit`, { cohortId: cohort.id, text: W }, P.token));
+  made('a check-in', await api('POST', `/school/sessions/${liveSession?.id}/attendance`, {}, P.token));
+  const roomL = made('the cohort as its manager', await api('GET', `/school/cohorts/${cohort.id}`, undefined, L.token));
+  made('feedback', await api('POST', `/school/submissions/${(roomL.submissions ?? [])[0]?.id}/feedback`, { comment: `Feedback ${stamp}`, status: 'changes' }, L.token));
+
+  // ---- money: an invoice from Finance's own route, a typed entry, and research
+  const invoice = made('an invoice', await api('POST', '/finance/invoices', { clientName: `Client ${W}`, clientEmail: `client-${stamp}@example.test`, items: [{ description: W, quantity: 1, unitCents: 100000 }], note: W }, P.token)).invoice;
+  made('it is paid', await api('PATCH', `/finance/invoices/${invoice?.id}`, { status: 'paid' }, P.token));
+  made('a typed entry', await api('POST', '/finance/transactions', { kind: 'expense', amountCents: 500, category: 'Other', counterparty: W, note: W, date: today }, P.token));
+  const folder = made('a brand folder', await api('POST', '/studio/brands', { name: W, niche: W, description: W, voice: W }, P.token));
+  made('research', await api('POST', `/studio/brands/${folder.brand?.id ?? folder.id}/research`, { kind: 'x_search', query: W }, P.token));
+
+  // ---- what only a team member makes, and things that hold a typed address
+  const guideDraft = made('a draft guide', await api('POST', '/manage/resources', { title: `Draft ${WT}`, body: WT, published: false }, L.token));
+  made('a published guide', await api('POST', '/manage/resources', { title: `Privacy guide ${stamp}`, body: 'For everyone', published: true }, L.token));
+  made('an item', await api('POST', '/market/items', { title: `Privacy light ${stamp}`, url: 'https://example.com/light', category: 'Lighting' }, L.token));
+  made('a suggested tool', await api('POST', '/tools', { name: W, url: `https://example.test/${W}`, description: W }, P.token));
+  await api('POST', '/auth/signin', { email: pvEmail('person'), password: 'wrong' }, null, PV);
+  await api('POST', '/auth/forgot', { email: pvEmail('person') }, null, PV);
+
+  // ---- the export holds all of it, as they would download it
+  const out = (await api('GET', '/me/export', undefined, P.token)).json ?? {};
+  const has = (key, test = () => true) => (out[key] ?? []).some(test);
+  const says = (key) => JSON.stringify(out[key] ?? []).includes(W);
+  for (const [name, ok] of [
+    ['TV and Fund pitches', says('pitches') && (out.pitches ?? []).length === 2],
+    ['the log of a pitch, with what the team said', JSON.stringify(out.pitchLog ?? []).includes(`Team note ${stamp}`)],
+    ['reviews they wrote', says('reviewsWritten')],
+    ['leads on their page', JSON.stringify(out.leads ?? []).includes(`lead-${stamp}@example.test`)],
+    ['a list that holds their own address', has('listsYouAreOn', (l) => l.source === 'lead_magnet')],
+    ['broadcasts', says('broadcasts')],
+    ['event ratings', says('eventFeedback')],
+    ['paid questions', says('dmQuestions')],
+    ['email sequences', says('sequences')],
+    ['DM automations', says('dmAutomations')],
+    ['tracked links', says('trackedLinks')],
+    ['link clicks, as counts', has('linkClicks', (l) => l.clicks >= 1)],
+    ['posts tracked', says('contentItems')],
+    ['funnels', says('funnels')],
+    ['coupons', has('coupons')],
+    ['free hours and days off', has('availability') && has('availabilityOverrides')],
+    ['what they sell', says('products')],
+    ['reward entries', says('rewardEntries')],
+    ['collab applications', says('collabApplications')],
+    ['circle sign-up notes', says('circleSignups')],
+    ['a circle seat', has('circleSeats')],
+    ['Work applications', says('applications')],
+    ['enrolments, hand-ins, feedback and check-ins', has('enrollments') && says('handIns') && JSON.stringify(out.handInFeedback ?? []).includes(`Feedback ${stamp}`) && has('attendance')],
+    ['certificates, lessons and quizzes', has('certificates') && has('lessonProgress') && has('quizAttempts')],
+    ['honors', says('honors')],
+    ['follows on both sides', has('following') && has('followers')],
+    ['friends', has('friends')],
+    ['introductions', says('introductions')],
+    ['reactions', has('postReactions')],
+    ['Club', says('clubMembership')],
+    ['seats', has('eventSeats')],
+    ['what they host', says('eventsHosted') && says('runClubsHosted') && says('runsHosted')],
+    ['photo folders', says('eventPhotoLinks')],
+    ['reservations', has('rewardReservations')],
+    ['small acts and onboarding answers', has('smallActs') && has('onboardingAnswers')],
+    ['a brand they belong to', has('organizations')],
+    ['campaign roles and versions', has('campaignRoles') && says('deliverableVersions') && JSON.stringify(out.deliverableFeedback ?? []).includes(`Open stronger ${stamp}`)],
+    ['research', says('researchRuns')],
+    ['the app log and the audit trail', has('auditTrail')],
+    ['what the team set for them', says('appOverrides')],
+    ['tool suggestions', says('toolsSuggested')],
+  ]) check(`the export holds ${name}`, ok, out[name]);
+  const whole = JSON.stringify(out);
+  check('the export holds no hash, salt, session, live code or browser', !/password_hash|password_salt|pan_hash|token_hash|ip_hash|user_agent|"code":"[A-Z0-9]{6}"/.test(JSON.stringify({ ...out, certificates: [], trackedLinks: [], coupons: [], discountRedemptions: [], attendeeCodesSet: [] })) && !whole.includes(P.token), '');
+  check('a Bond chat in the export never names the other person', (out.bondChats ?? []).every((c) => !('a_user_id' in c) && !('b_user_id' in c)), out.bondChats);
+  const outL = (await api('GET', '/me/export', undefined, L.token)).json ?? {};
+  check('the export holds what a team member made', (outL.programsMade ?? []).length === 1 && (outL.cohortsManaged ?? []).length === 1 && JSON.stringify(outL.knowledgeWritten ?? []).includes(WT) && (outL.storeItemsMade ?? []).length === 1 && JSON.stringify(outL.handInFeedback ?? []).includes(`Feedback ${stamp}`), Object.keys(outL).length);
+
+  // ---- the database itself, read straight from the smoke database, so only against the smoke server on 8788
+  const state = new URL('./state', import.meta.url).pathname;
+  const ownDb = ORIGIN === 'http://127.0.0.1:8788' && deleteStateExists(state);
+  let smokeDb = null;
+  let sql = () => [];
+  let find = () => ({});
+  if (ownDb) {
+    const { DatabaseSync } = await import('node:sqlite');
+    const dir = `${state}/v3/d1/miniflare-D1DatabaseObject`;
+    smokeDb = new DatabaseSync(privacyDirList(dir).filter((x) => x.endsWith('.sqlite') && x !== 'metadata.sqlite').map((x) => `${dir}/${x}`)[0], { readOnly: true });
+    sql = (command) => smokeDb.prepare(command).all();
+    const cols = sql("SELECT m.name AS t, p.name AS c FROM sqlite_master m JOIN pragma_table_info(m.name) p WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' AND m.name NOT LIKE '_cf_%' AND m.name != 'd1_migrations' AND upper(p.type) NOT IN ('INTEGER', 'REAL', 'BLOB') AND NOT (m.name = 'media_files' AND p.name = 'data')");
+    find = (terms) => {
+      const hits = {};
+      for (const { t, c } of cols) {
+        const row = smokeDb.prepare(`SELECT ${terms.map((x, j) => `COALESCE(SUM("${c}" LIKE '%${x}%'), 0) AS n${j}`).join(', ')} FROM "${t}"`).get();
+        terms.forEach((x, j) => {
+          if (row[`n${j}`] > 0) (hits[x] ??= []).push(`${t}.${c}`);
+        });
+      }
+      return hits;
+    };
+    // First: their words really are in each of these tables, so the search afterwards means something.
+    const before = find([W, WT]);
+    const holding = new Set([...(before[W] ?? []), ...(before[WT] ?? [])].map((x) => x.split('.')[0]));
+    const expected = ['users', 'proposals', 'testimonials', 'leads', 'broadcasts', 'event_feedback', 'dm_requests', 'sequences', 'dm_automations', 'bounty_submissions', 'run_collab_applications', 'circle_signups', 'applications', 'submissions', 'honors', 'introductions', 'funnels', 'tracked_links', 'content_items', 'memberships', 'orders', 'bookings', 'invoices', 'finance_transactions', 'events', 'event_photos', 'run_clubs', 'runs', 'products', 'organizations', 'deliverable_versions', 'flag_overrides', 'brands', 'research_runs', 'resources', 'tools', 'audit_logs', 'social_metrics'];
+    const missing = expected.filter((t) => !holding.has(t));
+    check(`before the delete their words sit in every table the delete must clear (${holding.size} tables in all)`, missing.length === 0, missing);
+  } else console.log('  (skipped the search of every table: it reads the smoke database, and this is not the smoke server on 8788)');
+
+  // ---- a product's rating before they go
+  const ratingOf = async () => {
+    const page = (await api('GET', `/public/products/${review?.id}`, undefined, G.token)).json;
+    const list = page.testimonials ?? [];
+    return { average: page.product?.rating ?? null, shown: list.length };
+  };
+  const ratingBefore = await ratingOf();
+  const handleBefore = (await me(P.token)).handle;
+
+  // ---- they leave
+  const del = await api('DELETE', '/me', { confirm: 'DELETE' }, P.token);
+  check('the account is deleted', del.status === 200, del.json);
+  const delL = await api('DELETE', '/me', { confirm: 'DELETE' }, L.token);
+  check('the team member’s account is deleted', delL.status === 200, delL.json);
+  check('a delete that is asked for again changes nothing and fails nowhere: every statement can run twice', (await admin('DELETE', `/admin/users/${P.user.id}`)).status === 200, '');
+
+  // ---- what others see afterwards
+  const ratingAfter = await ratingOf();
+  check('a product’s rating stays true: it is the average of the reviews still there, and it shows no name or word of theirs', ratingBefore.shown === 2 && ratingBefore.average === 3 && ratingAfter.shown === 1 && ratingAfter.average === 5, [ratingBefore, ratingAfter]);
+  check('their public page is gone, and nobody can ask them to be friends', (await api('GET', `/public/${handleBefore}`, undefined, G.token)).status === 404 && (await api('POST', '/bond/friends', { userId: P.user.id }, G.token)).status === 403);
+  const oLedger = (await api('GET', '/me/export', undefined, O.token)).json.points ?? [];
+  check('a guest of an event still to come is paid back what they paid', oLedger.some((l) => l.reason === 'refund' && l.amount === 100), oLedger.slice(-3));
+  const hostedAfter = await api('GET', `/party/events/${hosted?.id}`, undefined, O.token);
+  check('the event is cancelled, and its words, place and link are gone', hostedAfter.json.event?.status === 'cancelled' && hostedAfter.json.event?.description === '' && hostedAfter.json.event?.venue === '' && !hostedAfter.json.event?.onlineUrl, hostedAfter.json.event);
+  const oInbox = JSON.stringify((await api('GET', '/inbox?size=100', undefined, O.token)).json);
+  check('the guest’s inbox says so', oInbox.includes(`Cancelled: Privacy hosted ${stamp}`), '');
+  check('a member of their run club is told it closed', oInbox.includes(`Closed: Privacy club ${stamp}`), '');
+  check('a seller is told a session was cancelled, and the time is free again', oInbox.includes('A session was cancelled') && (await api('GET', `/store/${session?.id}/slots?date=${dayAhead}`, undefined, G.token)).json.slots?.includes(slots[0]), '');
+  const invoicePage = await api('GET', `/public/invoices/${invoice?.token}`, undefined, null, PV);
+  check('an invoice from Finance’s own route stops answering at its link', invoicePage.status === 404, invoicePage.status);
+  check('a certificate no longer checks under them', (await api('GET', `/public/certificates/${(out.certificates ?? [])[0]?.code}`, undefined, null, PV)).status === 404);
+  if (tracked?.code) check('a tracked link now leads nowhere of theirs', ((await fetch(`${ORIGIN}/go/${tracked.code}`, { redirect: 'manual', headers: PV })).headers.get('location') ?? '').endsWith('/explore'), '');
+  const pitchesNow = (await api('GET', '/proposals?kind=fund', undefined, T.token)).json.proposals ?? [];
+  const keptPitch = pitchesNow.find((p) => p.id === yesPitch.id);
+  check('a pitch the team said yes to stays for the record, without its title or words; one still waiting goes', keptPitch?.stage === 'approved' && keptPitch.pitch === '' && !JSON.stringify(keptPitch).includes(W) && keptPitch.budgetAmount === 2000 && keptPitch.log.some((l) => l.note === `Team note ${stamp}`), keptPitch);
+  const rewardNow = (await api('GET', `/win/${paidReward.id}`, undefined, T.token)).json;
+  check('a paid entry still counts in its reward’s pool, without its link', rewardNow.bounty?.paidPoints === 50 && !JSON.stringify(rewardNow).includes(W), rewardNow.bounty);
+  const cohortNow = (await api('GET', `/school/cohorts/${cohort.id}`, undefined, T.token)).json;
+  check('a cohort lists no one who left, and has no manager who left', !JSON.stringify(cohortNow).includes(W) && !JSON.stringify(cohortNow).includes(WT) && (cohortNow.enrollments ?? []).length === 0 && !cohortNow.cohort?.managerId, cohortNow.cohort);
+  check('a published guide stays, a draft goes', (await api('GET', '/manage/resources', undefined, T.token)).json.resources?.some((r) => r.title === `Privacy guide ${stamp}` && !JSON.stringify(r).includes(WT)) && !(await api('GET', '/manage/resources', undefined, T.token)).json.resources?.some((r) => r.id === (guideDraft.resource?.id)), '');
+  const campNow = JSON.stringify((await api('GET', `/army/campaigns/${campId}`, undefined, T.token)).json);
+  check('a campaign keeps the role and the brand’s comment, without their name or note', campNow.includes(`Open stronger ${stamp}`) && !campNow.includes(W), '');
+  check('a brand of theirs with nothing else in it goes, and one with a campaign stays', (await api('GET', `/orgs/${org.organization?.id ?? org.id}/members`, undefined, T.token)).status === 404 || !(await api('GET', '/orgs', undefined, T.token)).json.organizations?.some((x) => x.id === (org.organization?.id ?? org.id)), '');
+
+  if (smokeDb) {
+    // Their words and their addresses. A note already in someone else's inbox keeps what it said: it names no sender, so it cannot be found (see scripts/data-coverage.mjs).
+    const words = find([W, WT, pvEmail('person'), pvEmail('team'), `lead-${stamp}@example.test`, `client-${stamp}@example.test`]);
+    const left = Object.entries(words).flatMap(([term, at]) => at.filter((x) => !['notifications.title', 'notifications.body'].includes(x)).map((x) => `${term}: ${x}`));
+    check('the search finds what it should: their name in another person’s inbox note, which keeps what it said', (words[W] ?? []).includes('notifications.title'), words);
+    check('none of their words, names or addresses are left in any table but other people’s inbox notes', left.length === 0, left);
+    // Their ids, in every column of every table. Each place that still holds one is on this list for a reason: it is a record, and the
+    // id points at an account with no name. A new table that keeps someone's id after a delete fails here until someone decides.
+    const allowed = new Set([
+      'users.id', 'audit_logs.actor_user_id', 'audit_logs.resource_id', 'audit_logs.before_summary', 'audit_logs.after_summary', 'points_ledger.ref', 'redemptions.user_id', 'timeline_events.entity_id', 'orders.buyer_id', 'orders.owner_id', 'bookings.buyer_id', 'bookings.owner_id', 'points_ledger.user_id', 'credit_accounts.user_id', 'credit_ledger.user_id', 'invoices.user_id', 'finance_transactions.user_id',
+      'products.owner_id', 'testimonials.owner_id', 'dm_requests.owner_id', 'events.host_user_id', 'event_registrations.user_id', 'run_clubs.host_user_id', 'proposals.user_id', 'bounty_submissions.user_id', 'campaign_assignments.creator_user_id', 'deliverable_versions.submitted_by',
+      'feedback_items.author_user_id', 'submission_feedback.reviewer_user_id', 'bond_chats.a_user_id', 'bond_chats.b_user_id', 'coach_links.coach_id', 'coach_links.student_id', 'coach_links.created_by', 'coach_links.asked_by', 'coach_links.ended_by', 'bounties.created_by', 'opportunities.created_by', 'run_collabs.created_by', 'circle_events.created_by',
+      'flag_overrides.created_by', 'community_settings.updated_by', 'discount_codes.created_by', 'nodes.added_by', 'social_metrics.recorded_by', 'bounty_submissions.reviewer_id', 'kyc_profiles.decided_by', 'support_tickets.replied_by', 'community_mutes.muted_by', 'community_posts.hidden_by', 'community_posts.pinned_by', 'channels.created_by', 'channel_messages.deleted_by', 'event_messages.removed_by', 'run_messages.deleted_by', 'cohort_talk.deleted_by', 'cohort_talk.user_id', 'attendee_codes.created_by', 'agency_team.ended_by',
+    ]);
+    const ids = find([P.user.id, L.user.id]);
+    const kept = [...new Set(Object.values(ids).flat())];
+    const strays = kept.filter((x) => !allowed.has(x));
+    check('their id stays only in records that need it, and points at an account with no name', strays.length === 0 && kept.includes('users.id'), strays);
+    const row = sql(`SELECT display_name, email, phone, birth_date, handle, bio, links_json, creator_type, experience_level, availability, role, friend_code, referral_code, password_hash, xp, modules FROM users WHERE id = '${P.user.id}'`)[0] ?? {};
+    check('the account row keeps nothing about them', row.display_name === 'Deleted member' && row.email === null && row.phone === '' && row.birth_date === '' && row.handle === null && row.bio === '' && row.links_json === '[]' && row.creator_type === '' && row.experience_level === '' && row.availability === '' && row.friend_code === null && row.referral_code === null && row.password_hash === null && row.xp === 0, row);
+    const teamRow = sql(`SELECT role, permissions FROM users WHERE id = '${L.user.id}'`)[0] ?? {};
+    check('a team member who left holds no role, so no admin note reaches a deleted account', teamRow.role === 'user' && teamRow.permissions === '[]', teamRow);
+    const money = sql(`SELECT (SELECT COUNT(*) FROM orders WHERE buyer_id = '${P.user.id}') AS bought, (SELECT COUNT(*) FROM orders WHERE owner_id = '${P.user.id}') AS sold, (SELECT COUNT(*) FROM points_ledger WHERE user_id = '${P.user.id}') AS ledger, (SELECT COUNT(*) FROM invoices WHERE user_id = '${P.user.id}' AND client_name = 'Deleted client' AND total_cents > 0 AND token LIKE 'GONE%') AS invoices, (SELECT COUNT(*) FROM finance_transactions WHERE user_id = '${P.user.id}' AND source = 'manual') AS typed, (SELECT COUNT(*) FROM finance_transactions WHERE user_id = '${P.user.id}' AND source = 'invoice' AND note = '') AS booked, (SELECT COUNT(*) FROM products WHERE owner_id = '${P.user.id}' AND status = 'archived') AS archived, (SELECT COUNT(*) FROM products WHERE owner_id = '${P.user.id}' AND status != 'archived') AS live, (SELECT COUNT(*) FROM rate_limits WHERE key LIKE '%${pvEmail('person')}') AS counts, (SELECT COUNT(*) FROM password_resets WHERE user_id = '${P.user.id}') AS resets, (SELECT COUNT(*) FROM not_to_do_days WHERE user_id = '${P.user.id}') AS kept_days`)[0] ?? {};
+    check('the books stay: orders, the ledger and the invoice, without who or what; their typed entries, a never-sold product, address counts and reset links go', money.bought >= 5 && money.sold >= 1 && money.ledger >= 1 && money.invoices === 1 && money.typed === 0 && money.booked === 1 && money.archived >= 1 && money.live === 0 && money.counts === 0 && money.resets === 0, money);
+    smokeDb.close();
+  }
+  for (const s of [T]) await admin('POST', `/admin/users/${s.user.id}/role`, { role: 'user' });
+}
+
+section('What a block does, and the review of 2026-11-07');
+{
+  const RV = (n) => ({ 'CF-Connecting-IP': `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 150 + n) & 255}` });
+  let joined = 0;
+  const join = async (who) => {
+    const n = joined++;
+    const r = await api('POST', '/auth/signup', { email: `rv-${who}-${stamp}@smoke.test`, password: `Harbour-${stamp}-pass`, displayName: `Rv ${who}`, phone: PHONE, birthDate: GROWN }, null, RV(Math.floor(n / 6)));
+    if (r.status !== 201) throw new Error(`signup ${who}: ${r.status} ${JSON.stringify(r.json)}`);
+    return { token: r.json.token, user: r.json.user, email: `rv-${who}-${stamp}@smoke.test` };
+  };
+  const inboxOf = async (t) => JSON.stringify((await api('GET', '/inbox?size=100', undefined, t)).json);
+
+  // ---- a block keeps a named reply out of the inbox, and the like and the follow away
+  const X = await join('x');
+  const F = await join('f');
+  const V = await join('v');
+  const Y = await join('y');
+  const postX = (await api('POST', '/community', { body: `Rv x post ${stamp}` }, X.token)).json.post;
+  const postY = (await api('POST', '/community', { body: `Rv y post ${stamp}` }, Y.token)).json.post;
+  await api('POST', `/community/${postX.id}/follow-post`, {}, F.token);
+  await api('POST', `/community/${postY.id}/follow-post`, {}, F.token);
+  const WORDS = `Pestwords${stamp}`;
+  const before = await api('POST', `/community/${postX.id}/replies`, { body: `Before ${WORDS}` }, V.token);
+  check('before a block a reply lands', before.status === 201, before.status);
+  check('the post’s author and a follower are told of it', (await inboxOf(X.token)).includes(`Before ${WORDS}`) && (await inboxOf(F.token)).includes(`Before ${WORDS}`));
+  for (const u of [X, F]) check('a block answers 201', (await api('POST', '/bond/block', { userId: V.user.id }, u.token)).status === 201);
+  const after = await api('POST', `/community/${postX.id}/replies`, { body: `Blocked ${WORDS}` }, V.token);
+  check('someone blocked cannot reply to the blocker’s post, in the same words as no post', after.status === 404, after.status);
+  check('nor react to it', (await api('POST', `/community/${postX.id}/like`, { kind: 'like' }, V.token)).status === 404);
+  check('nor follow it', (await api('POST', `/community/${postX.id}/follow-post`, {}, V.token)).status === 404);
+  check('nor open it', (await api('GET', `/community/posts/${postX.id}`, undefined, V.token)).status === 404);
+  const elsewhere = await api('POST', `/community/${postY.id}/replies`, { body: `Elsewhere ${WORDS}` }, V.token);
+  check('a reply on someone else’s post still lands for them', elsewhere.status === 201 && (await inboxOf(Y.token)).includes(`Elsewhere ${WORDS}`), elsewhere.status);
+  check('and the follower who blocked the writer hears nothing of it', !(await inboxOf(F.token)).includes(`Elsewhere ${WORDS}`));
+  const answered = await api('POST', `/community/${postY.id}/replies`, { body: `Answer ${stamp}`, parentId: elsewhere.json.reply?.id }, X.token);
+  check('the blocker cannot answer a line they cannot see', answered.status === 404, answered.status);
+  check('a new follow does not reach someone who blocked them', (await api('POST', `/community/follow/${X.user.id}`, {}, V.token)).status === 404 && !(await inboxOf(X.token)).includes(`Rv v followed you`));
+  const fo = await api('POST', `/community/follow/${Y.user.id}`, {}, F.token);
+  const yNotes = (await api('GET', '/inbox?size=100', undefined, Y.token)).json.notifications ?? [];
+  check('a follow note opens the follower’s page by id, which nobody can take over', fo.status === 200 && JSON.stringify(yNotes).includes(`/people/${F.user.id}`), JSON.stringify(yNotes).slice(0, 200));
+
+  // ---- a block by name never says who wrote something anonymously, and a block behind a made-up name never says who it was
+  const W = await join('writer');
+  const R = await join('reader');
+  const R2 = await join('second-reader');
+  const wrong = await join('wrong');
+  const anonPost = (await api('POST', '/community', { body: `Rv anon ${stamp}`, anonymous: true }, W.token)).json.post;
+  const namedPost = (await api('POST', '/community', { body: `Rv named ${stamp}` }, W.token)).json.post;
+  const readAnon = (t) => api('GET', `/community/posts/${anonPost.id}`, undefined, t);
+  check('an anonymous post reads', (await readAnon(R.token)).status === 200);
+  await api('POST', '/bond/block', { userId: wrong.user.id }, R.token);
+  const wrongSuspect = await readAnon(R.token);
+  await api('POST', '/bond/block', { userId: W.user.id }, R.token);
+  const rightSuspect = await readAnon(R.token);
+  check('blocking the real author by name answers the same as blocking a wrong suspect', wrongSuspect.status === 200 && rightSuspect.status === 200 && JSON.stringify(wrongSuspect.json.post?.authorName) === JSON.stringify(rightSuspect.json.post?.authorName), [wrongSuspect.status, rightSuspect.status]);
+  const feed = JSON.stringify((await api('GET', '/community?size=50', undefined, R.token)).json);
+  check('the anonymous post stays in their feed too', feed.includes(anonPost.id));
+  check('the same person’s named post is hidden by that block', !feed.includes(namedPost.id) && (await api('GET', `/community/posts/${namedPost.id}`, undefined, R.token)).status === 404);
+  const anonReply = await api('POST', `/community/${postY.id}/replies`, { body: `Rv anon reply ${stamp}`, anonymous: true }, W.token);
+  const listed = JSON.stringify((await api('GET', `/community/${postY.id}/replies?size=100`, undefined, R.token)).json);
+  check('an anonymous reply shows through a block by name as well', anonReply.status === 201 && listed.includes(`Rv anon reply ${stamp}`));
+  const byAlias = await api('POST', `/community/posts/${anonPost.id}/block-author`, {}, R2.token);
+  check('a block behind a made-up name hides that writer’s anonymous lines', byAlias.status === 201 && (await readAnon(R2.token)).status === 404);
+  check('and never their named ones, or it would say whose name it was', (await api('GET', `/community/posts/${namedPost.id}`, undefined, R2.token)).status === 200);
+  const reqByAlias = await api('POST', '/bond/friends', { userId: W.user.id }, R2.token);
+  check('nor refuse a friend request, for the same reason', reqByAlias.status === 201, reqByAlias.status);
+
+  // ---- a block ends coaching, and every door a coach or a student comes through
+  const K = await join('coach');
+  const St = await join('student');
+  const Pest = await join('pest');
+  await admin('POST', `/admin/users/${K.user.id}/permissions`, { permissions: ['coach'] });
+  for (const u of [K, St, Pest]) await api('PATCH', '/me/modules', { key: 'coaching', on: true }, u.token);
+  const asked = await api('POST', '/coach/requests', { who: St.email }, K.token);
+  await api('POST', `/me/coach/links/${asked.json.link?.id}/answer`, { yes: true }, St.token);
+  await api('POST', '/wellbeing/mood', { value: 4, date: today }, St.token);
+  check('a coach reads a student on a link', (await api('GET', `/coach/students/${St.user.id}`, undefined, K.token)).status === 200);
+  await api('POST', '/bond/block', { userId: K.user.id }, St.token);
+  const after2 = await api('GET', `/coach/students/${St.user.id}`, undefined, K.token);
+  check('a student’s block ends the link: the coach reads nothing from then on', after2.status === 404, after2.status);
+  check('and writes nothing', (await api('POST', `/coach/students/${St.user.id}/notes`, { body: 'Rv note' }, K.token)).status === 404);
+  const ended = (await api('GET', '/me/coach', undefined, St.token)).json;
+  check('the student sees the link has ended', !JSON.stringify(ended.active ?? ended.links ?? []).includes('"status":"active"'), JSON.stringify(ended).slice(0, 200));
+  check('the coach is told in the same words as an ending, with no word of a block', (await inboxOf(K.token)).includes('has ended') && !/block/i.test(await inboxOf(K.token)));
+  const fresh = await api('POST', '/coach/requests', { who: `@${St.user.handle}` }, K.token);
+  check('the coach cannot ask again', fresh.status === 404, fresh.status);
+  await api('POST', '/bond/block', { userId: Pest.user.id }, K.token);
+  const ask = await api('POST', `/coach/ask/${K.user.id}`, {}, Pest.token);
+  check('someone a coach blocked cannot ask them, in the words for no such coach', ask.status === 404 && /no life coach/i.test(ask.json.error ?? ''), ask.status);
+  check('and no note about it reaches the coach', !(await inboxOf(K.token)).includes('Rv pest'));
+  check('the directory does not list them to each other', !JSON.stringify((await api('GET', '/coach/directory?dirsize=100', undefined, Pest.token)).json).includes(K.user.id));
+  const pestCode = (await api('GET', '/me', undefined, Pest.token)).json.user?.friendCode;
+  const lookBlocked = await api('GET', `/coach/lookup?who=${encodeURIComponent(pestCode)}`, undefined, K.token);
+  const lookNobody = await api('GET', `/coach/lookup?who=ZZZZ9999`, undefined, K.token);
+  check('a blocked person’s friend code reads exactly like a code nobody holds', pestCode && JSON.stringify(lookBlocked.json) === JSON.stringify(lookNobody.json), [lookBlocked.json, lookNobody.json]);
+
+  // ---- Store: a block closes offers and the chat
+  const Seller = await join('seller');
+  const Buyer = await join('buyer');
+  await api('PATCH', '/me/modules', { key: 'store', on: true }, Seller.token);
+  await api('PATCH', '/me/modules', { key: 'store', on: true }, Buyer.token);
+  const listing = await api('POST', '/market/listings', { title: `Rv camera ${stamp}`, priceCents: 500000, condition: 'lightly_used', category: 'Camera', images: ['https://example.com/cam.jpg'] }, Seller.token);
+  const lid = listing.json.listing?.id ?? listing.json.id;
+  check('an offer lands before a block', (await api('POST', `/market/listings/${lid}/offers`, { cents: 100000 }, Buyer.token)).status === 201);
+  await api('POST', '/bond/block', { userId: Buyer.user.id }, Seller.token);
+  const offerAfter = await api('POST', `/market/listings/${lid}/offers`, { cents: 200000 }, Buyer.token);
+  const chatAfter = await api('POST', `/market/listings/${lid}/messages`, { body: `Rv chat ${stamp}` }, Buyer.token);
+  check('a block stops a new offer and a chat line', offerAfter.status === 404 && chatAfter.status === 404, [offerAfter.status, chatAfter.status]);
+  check('and neither reaches the seller’s inbox', !(await inboxOf(Seller.token)).includes(`Rv chat ${stamp}`) && !(await inboxOf(Seller.token)).includes('offers ₹2,000'));
+
+  // ---- a live person cannot take the deleted name
+  const Named = await join('named');
+  for (const name of ['Deleted member', '  deleted   MEMBER ']) check(`a live person cannot be called "${name}"`, (await api('PATCH', '/me', { displayName: name }, Named.token)).status === 400);
+  const named = await api('POST', '/auth/signup', { email: `rv-del-${stamp}@smoke.test`, password: `Harbour-${stamp}-pass`, displayName: 'Deleted Member', phone: PHONE, birthDate: GROWN }, null, RV(40));
+  check('nor sign up as it', named.status === 400, named.status);
+  check('an ordinary name still saves', (await api('PATCH', '/me', { displayName: 'Rv named' }, Named.token)).status === 200);
+
+  // ---- the export holds no live key to a client's paper
+  const Ow = await join('owner');
+  await api('PATCH', '/me/modules', { key: 'agency', on: true }, Ow.token);
+  const cl = await addClient({ name: `Rv client ${stamp}` }, Ow.token);
+  const cid = cl.json.id;
+  const team = await api('POST', `/agency/clients/${cid}/team-link`, { on: true, password: 'Copper-lantern-river-77' }, Ow.token);
+  const inv = await api('POST', `/agency/invoices?day=${today}`, { clientId: cid, items: [{ description: 'One video', quantity: 1, unitCents: 100000 }] }, Ow.token);
+  const iid = inv.json.invoice?.id;
+  const sentInv = await api('PATCH', `/agency/invoices/${iid}`, { status: 'sent' }, Ow.token);
+  const kon = await api('POST', '/agency/contracts', { templateKey: 'trial', clientId: cid }, Ow.token);
+  const kid = kon.json.id;
+  const sentK = await api('PATCH', `/agency/contracts/${kid}`, { status: 'sent' }, Ow.token);
+  const tokens = [cl.json.portalToken, team.json.token, sentInv.json.invoice?.token, sentK.json.contract?.token].filter(Boolean);
+  const exported = JSON.stringify((await api('GET', '/me/export', undefined, Ow.token)).json);
+  check('the export has the client, the invoice and the agreement', exported.includes(`Rv client ${stamp}`) && exported.includes(iid) && exported.includes(kid));
+  check('and none of their link keys', tokens.length === 4 && tokens.every((t) => !exported.includes(t)), { found: tokens.length });
+  const pub = await api('GET', `/public/invoices/${sentInv.json.invoice?.token}`, undefined, null, RV(41));
+  check('a client’s paper is never kept by a browser', pub.status === 200 && pub.headers.get('cache-control') === 'no-store', [pub.status, pub.headers.get('cache-control')]);
+  const { cleanPath } = await import('../../apps/api/src/logs.ts');
+  check('a team link never reaches the log by its key', cleanPath('/api/public/team-link/S6EF3S7X2Z265JRX/unlock') === '/public/team-link/:token/unlock' && cleanPath('/t/S6EF3S7X2Z265JRX') === '/t/:token', cleanPath('/t/S6EF3S7X2Z265JRX'));
+
+  // An emailed paper's words hold its link, so the outbox keeps the fact of the mail and not the words.
+  const mailed = await api('POST', `/agency/invoices/${iid}/email`, { to: `rv-mail-${stamp}@example.test`, subject: `Rv mail ${stamp}`, message: `Please open https://example.test/i/${sentInv.json.invoice?.token} today.` }, Ow.token);
+  check('a paper can be emailed', mailed.status === 200 || mailed.status === 201, mailed.status);
+  const rvState = new URL('./state/v3/d1/miniflare-D1DatabaseObject', import.meta.url).pathname;
+  if (ORIGIN === 'http://127.0.0.1:8788' && deleteStateExists(rvState)) {
+    const { DatabaseSync } = await import('node:sqlite');
+    const { readdirSync } = await import('node:fs');
+    const rvDb = new DatabaseSync(`${rvState}/${readdirSync(rvState).filter((x) => x.endsWith('.sqlite') && x !== 'metadata.sqlite')[0]}`, { readOnly: true });
+    const kept = rvDb.prepare('SELECT body FROM email_outbox WHERE to_email = ?').get(`rv-mail-${stamp}@example.test`);
+    rvDb.close();
+    check('and the outbox keeps no link to it', Boolean(kept) && !kept.body.includes(sentInv.json.invoice?.token ?? '-'), kept);
+  }
+
+  // ---- a closed month sits beside the whole month before it
+  const Fin = await join('money');
+  await api('PATCH', '/me/modules', { key: 'finance', on: true }, Fin.token);
+  const yr = Number(today.slice(0, 4)) - 1;
+  for (const date of [`${yr}-08-31`, `${yr}-09-15`]) await api('POST', '/finance/transactions', { kind: 'expense', amountCents: 1000000, category: 'Other expense', date }, Fin.token);
+  const dash = await api('GET', `/insights/dashboard?kind=month&start=${yr}-09-01&day=${today}`, undefined, Fin.token);
+  const moneyOut = (dash.json.areas ?? []).flatMap((a) => a.cards ?? []).find((t) => /money out/i.test(t.title ?? t.label ?? t.name ?? ''));
+  check('money out in September against all of August has not moved', dash.status === 200 && moneyOut && !/(up|down)/i.test(moneyOut.change?.word ?? moneyOut.change?.text ?? ''), moneyOut ?? dash.json);
+
+  // ---- a long search answers
+  for (const [path, name] of [[`/search?q=${'a'.repeat(49)}`, 'search at 49 letters'], [`/search?q=${encodeURIComponent('क'.repeat(17))}`, 'search in Hindi at 17 letters'], [`/wellbeing/focus/tasks?q=${'a'.repeat(60)}`, 'the focus task search'], [`/resources?tag=${'a'.repeat(60)}`, 'a long tag']]) check(`${name} answers, never a 500`, (await api('GET', path, undefined, Fin.token)).status === 200, path);
+  for (const path of [`/admin/users?q=${'a'.repeat(60)}`, `/admin/orders?q=${'a'.repeat(60)}`]) check(`${path.slice(0, 12)} answers a long search`, (await admin('GET', path)).status === 200, path);
+
+  // ---- a person's own day
+  const Far = await join('far');
+  await api('PATCH', '/me/modules', { key: 'fitness', on: true }, Far.token);
+  await api('PATCH', '/me', { timezone: 'Etc/GMT+12' }, Far.token);
+  const ownDay = new Date().toLocaleDateString('en-CA', { timeZone: 'Etc/GMT+12' });
+  const dayBack = (d, n) => new Date(Date.parse(`${d}T00:00:00Z`) - n * 86_400_000).toISOString().slice(0, 10);
+  check('Yesterday holds behind UTC in the evening: movement', (await api('POST', '/fitness/move', { kind: 'walk', minutes: 20, date: dayBack(ownDay, 1) }, Far.token)).status === 201);
+  check('and eating', (await api('PUT', '/fitness/eat', { date: dayBack(ownDay, 1), fasting: true }, Far.token)).status < 300);
+  const twoBack = dayBack(new Date().toISOString().slice(0, 10), 3);
+  check('three days back is still refused', (await api('POST', '/fitness/move', { kind: 'walk', minutes: 20, date: twoBack }, Far.token)).status === 400);
+  const East = await join('east');
+  await api('PATCH', '/me', { timezone: 'Pacific/Kiritimati' }, East.token);
+  await api('PATCH', '/me/modules', { key: 'fitness', on: true }, East.token);
+  await api('PATCH', '/me/modules', { key: 'journal', on: true }, East.token);
+  const eastDay = new Date().toLocaleDateString('en-CA', { timeZone: 'Pacific/Kiritimati' });
+  await api('PUT', '/fitness/supplements/settings', { on: true }, East.token);
+  const supp = await api('POST', '/fitness/supplements', { name: 'Rv D3', kind: 'vitamin', time: 'morning', days: [1, 2, 3, 4, 5, 6, 7] }, East.token);
+  await api('PUT', `/fitness/supplements/${supp.json.supplement?.id}/day`, { date: eastDay, taken: true }, East.token);
+  const week = (await api('GET', `/fitness/supplements?day=${eastDay}`, undefined, East.token)).json.items?.[0];
+  check('a supplement added and ticked on the first day is 1 of 1, whatever UTC says', week?.takenDays === 1 && week?.dueDays === 1, week);
+  await api('POST', '/journal', { title: `Rv entry ${stamp}`, body: 'Words' }, East.token);
+  const j = (await api('GET', '/journal?size=5', undefined, East.token)).json.entries?.[0];
+  check('a journal entry says the person’s own day', j?.day === eastDay, j?.day);
+
+  // ---- the rest
+  const Sub = await join('staffer');
+  await admin('POST', `/admin/users/${Sub.user.id}/role`, { role: 'sub_admin' });
+  const js = await api('POST', '/manage/resources', { title: `Rv guide ${stamp}`, body: 'x', url: 'javascript:alert(document.domain)', published: false }, Sub.token);
+  check('a Knowledge piece refuses a link that is not one', js.status === 400, js.status);
+  const okLink = await api('POST', '/manage/resources', { title: `Rv guide ${stamp}`, body: 'x', url: 'https://example.com/a', published: false }, Sub.token);
+  check('and keeps one that is', okLink.status === 201 && okLink.json.resource?.url === 'https://example.com/a', okLink.status);
+  await admin('POST', `/admin/users/${Sub.user.id}/role`, { role: 'user' });
+  const lib = await api('GET', '/store/library?bkpage=1&bksize=10', undefined, Fin.token);
+  check('sessions in Library come a page at a time', lib.status === 200 && lib.json.bookingsPage?.size === 10, lib.json.bookingsPage);
+  const frs = await api('GET', '/bond/friends?oppage=1&opsize=10', undefined, Fin.token);
+  check('open friend requests come a page at a time', frs.status === 200 && frs.json.openPage?.size === 10, frs.json.openPage);
+
+  // ---- a refund's reason names people: it stays on the order only while both sides do
+  const Sh = await join('shop');
+  const Bu = await join('shopper');
+  const prod = (await api('POST', '/studio/products', { kind: 'digital', title: `Rv free ${stamp}`, pricePoints: 0, status: 'live', url: 'https://example.com/rv' }, Sh.token)).json.product;
+  const bought = await api('POST', `/store/${prod?.id}/checkout`, { pay: 'points' }, Bu.token);
+  const oid = bought.json.order?.id;
+  await api('POST', `/studio/orders/${oid}/refund`, { reason: `Refundwords${stamp}` }, Sh.token);
+  const tl = (await admin('GET', `/admin/orders/${oid}`)).json.timeline ?? [];
+  check('the team reads a refund reason while both are here', tl.some((e) => e.type === 'order.refunded' && String(e.data).includes(`Refundwords${stamp}`)), tl);
+  await api('DELETE', '/me', { confirm: 'DELETE' }, Bu.token);
+  const tl2 = (await admin('GET', `/admin/orders/${oid}`)).json.timeline ?? [];
+  check('and it comes off the order when one of them leaves', tl2.some((e) => e.type === 'order.refunded') && !JSON.stringify(tl2).includes(`Refundwords${stamp}`), tl2);
+
+  // ---- a cancelled event: each guest paid back and told once, and asking again does no more
+  const Ho = await join('host');
+  const G1 = await join('guest');
+  for (const u of [Ho, G1]) await api('PATCH', '/me/modules', { key: 'party', on: true }, u.token);
+  const ev = await api('POST', '/party/events', { title: `Rv event ${stamp}`, startsAt: new Date(Date.now() + 3 * 86_400_000).toISOString(), minutes: 60, pricePoints: 0 }, Ho.token);
+  const evId = ev.json.event?.id ?? ev.json.id;
+  await api('POST', `/party/events/${evId}/rsvp`, {}, G1.token);
+  const once = await api('PATCH', `/party/events/${evId}`, { status: 'cancelled' }, Ho.token);
+  const twice = await api('PATCH', `/party/events/${evId}`, { status: 'cancelled' }, Ho.token);
+  const told = ((await api('GET', '/inbox?size=100', undefined, G1.token)).json.notifications ?? []).filter((n) => n.title === `Cancelled: Rv event ${stamp}`);
+  check('cancelling an event twice answers twice and tells the guest once', once.status === 200 && twice.status === 200 && told.length === 1, told.length);
+}
+
+await admin('POST', `/admin/users/${A.user.id}/role`, { role: 'user' });
+
+section('Workers Free');
+{
+  const Fp = await signup(`free-${stamp}@smoke.test`, `Harbour-${stamp}-pass`, 'Smoke free plan');
+  const answers = QUESTIONS.filter((q) => q.relationship === 'self').map((q) => ({ questionId: q.id, value: 1 }));
+  await api('POST', '/onboarding', { answers, displayName: 'Smoke free plan' }, Fp.token);
+  const built = await api('POST', '/onboarding/build', { relationships: ['self'], date: today }, Fp.token);
+  const project = (built.json.nodes ?? []).find((n) => n.kind === 'project');
+  const made = await api('POST', '/nodes', { kind: 'task', parentId: project?.id, relationship: 'self', title: `Free ${stamp}`, doDate: today }, Fp.token);
+  const counts = (await api('GET', '/me/pillar-tasks', undefined, Fp.token)).json.pillars ?? [];
+  const self = counts.find((p) => p.relationship === 'self');
+  check('Pillars asks for its own task counts, open and ticked', made.status === 201 && self?.activeTasks >= 1 && typeof self?.doneTasks === 'number', counts);
+  const meNow = await api('GET', '/me', undefined, Fp.token);
+  check('and /me no longer walks every task for them', meNow.status === 200 && meNow.json.relationships?.[0]?.activeTasks === undefined && typeof meNow.json.stats?.tasksDone === 'number', meNow.json.relationships?.[0]);
+  const again = await api('GET', '/me', undefined, Fp.token);
+  if (again.headers.has('x-d1-rows-written')) check('the counts behind the badges are kept for an hour: a second read writes nothing', again.headers.get('x-d1-rows-written') === '0', again.headers.get('x-d1-rows-written'));
+  const ticked = await api('POST', `/nodes/${made.json.node?.id ?? made.json.id}/complete`, { date: today }, Fp.token);
+  const afterTick = (await api('GET', '/me', undefined, Fp.token)).json;
+  check('a tick brings the kept counts up to date at once', ticked.status === 200 && afterTick.stats?.tasksDone === 1, [ticked.status, afterTick.stats]);
+  const back = await api('POST', `/nodes/${made.json.node?.id ?? made.json.id}/uncomplete`, {}, Fp.token);
+  const afterUntick = (await api('GET', '/me', undefined, Fp.token)).json;
+  check('and an untick takes it back', back.status === 200 && afterUntick.stats?.tasksDone === 0, afterUntick.stats);
+
+  // The overview and its filters are kept for a few hours, and who shows on them is read fresh.
+  await api('GET', '/leaderboard/blocks', undefined, Fp.token);
+  const keptBoard = await api('GET', '/leaderboard/blocks', undefined, Fp.token);
+  check('the board overview is read from what is kept', keptBoard.status === 200 && keptBoard.json.blocks?.length >= 17 && (!keptBoard.headers.has('x-d1-rows-written') || keptBoard.headers.get('x-d1-rows-written') === '0'), keptBoard.headers.get('x-d1-rows-written'));
+
+  // The one read-only way to settle how many queries an invocation may make on the live plan (docs/performance.md).
+  const asked = await api('GET', '/internal/platform-limit', undefined, Fp.token);
+  await admin('POST', `/admin/users/${Fp.user.id}/role`, { role: 'admin' });
+  const askedAdmin = await api('GET', '/internal/platform-limit', undefined, Fp.token);
+  await admin('POST', `/admin/users/${Fp.user.id}/role`, { role: 'user' });
+  check('only a super admin asks the platform its limit, and it answers how many queries it made', asked.status === 403 && askedAdmin.status === 200 && askedAdmin.json.queries >= 2 && askedAdmin.json.refused === '', [asked.status, askedAdmin.json]);
+
+  // A tick with many people due: everyone gets theirs, once. cron-stress.mjs does this at a thousand people.
+  const people = [];
+  for (let i = 0; i < 16; i++) people.push(await signup(`free-${i}-${stamp}@smoke.test`, `Harbour-${stamp}-pass`, `Smoke due ${i}`));
+  const nowIn = (zone) => new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
+  for (const p of people) {
+    const zone = (await api('GET', '/me', undefined, p.token)).json.user?.timezone;
+    await api('POST', '/reminders/custom', { title: `Free due ${stamp}`, time: nowIn(zone) }, p.token);
+    await api('PATCH', '/me', { reminderTime: nowIn(zone) }, p.token);
+  }
+  await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
+  await fetch(`${ORIGIN}/__scheduled?cron=*%2F15+*+*+*+*`);
+  await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
+  const told = await Promise.all(people.map(async (p) => {
+    const notes = (await api('GET', '/inbox?tab=reminders&size=50', undefined, p.token)).json.notifications ?? [];
+    return [notes.filter((n) => n.title === `Free due ${stamp}`).length, notes.filter((n) => n.title === 'Time to check in').length];
+  }));
+  check('a tick with many people due reaches every one of them, once over three ticks', told.every(([own, checkin]) => own === 1 && checkin === 1), told);
+  // What grows with a list, on this server's own database (2026-11-07, found by hand: a copy of an old invoice asked one number at a time, and a paid seat freed with a waitlist of people short of points asked two trips each).
+  const freeState = new URL('./state', import.meta.url).pathname;
+  if (ORIGIN === 'http://127.0.0.1:8788' && deleteStateExists(freeState)) {
+    const { DatabaseSync } = await import('node:sqlite');
+    const dir = `${freeState}/v3/d1/miniflare-D1DatabaseObject`;
+    const seed = new DatabaseSync(privacyDirList(dir).filter((x) => x.endsWith('.sqlite') && x !== 'metadata.sqlite').map((x) => `${dir}/${x}`)[0], { timeout: 15000 });
+    seed.exec('PRAGMA foreign_keys = OFF');
+    const at = new Date().toISOString();
+    const trips = (r) => Number(r.headers.get('x-d1-round-trips') ?? 0);
+    await api('PATCH', '/me/modules', { key: 'agency', on: true }, Fp.token);
+    seed.prepare("INSERT INTO agency_clients (id, user_id, name, created_at, updated_at) VALUES (?, ?, 'Copy client', ?, ?)").run(`free-c-${stamp}`, Fp.user.id, at, at);
+    const invoice = seed.prepare("INSERT INTO invoices (id, user_id, number, client_name, status, issue_date, token, created_at, agency_client_id, items_json, total_cents, currency) VALUES (?, ?, ?, 'Copy client', 'draft', ?, ?, ?, ?, '[]', 0, 'INR')");
+    for (let i = 1; i <= 70; i++) invoice.run(`free-i-${stamp}-${i}`, Fp.user.id, `F-${String(i).padStart(4, '0')}`, today, `free-t-${stamp}-${i}`, at, `free-c-${stamp}`);
+    const copied = await api('POST', `/agency/invoices/free-i-${stamp}-1/duplicate`, {}, Fp.token);
+    check('a copy of the first of seventy invoices takes the next free number in one read', copied.status === 201 && copied.json.invoice?.number === 'F-0071' && trips(copied) <= 15, [copied.status, copied.json.invoice?.number, trips(copied)]);
+
+    const seat = await signup(`free-seat-${stamp}@smoke.test`, `Harbour-${stamp}-pass`, 'Smoke seat');
+    await api('PATCH', '/me/modules', { key: 'party', on: true }, seat.token);
+    const startsAt = new Date(Date.now() + 5 * 86_400_000).toISOString();
+    seed.prepare("INSERT INTO events (id, host_user_id, title, starts_at, ends_at, status, created_at, price_points, capacity) VALUES (?, ?, 'Full and paid', ?, ?, 'published', ?, 100, 1)").run(`free-e-${stamp}`, Fp.user.id, startsAt, startsAt, at);
+    seed.prepare("INSERT INTO event_registrations (id, event_id, user_id, status, registered_at, paid_points) VALUES (?, ?, ?, 'registered', ?, 100)").run(`free-r-${stamp}`, `free-e-${stamp}`, seat.user.id, at);
+    people.forEach((p, i) => {
+      seed.prepare('UPDATE users SET points = ? WHERE id = ?').run(i === people.length - 1 ? 100 : 0, p.user.id);
+      seed.prepare("INSERT INTO event_registrations (id, event_id, user_id, status, registered_at) VALUES (?, ?, ?, 'waitlisted', ?)").run(`free-w-${stamp}-${i}`, `free-e-${stamp}`, p.user.id, new Date(Date.now() + i).toISOString());
+    });
+    seed.close();
+    const freed = await api('POST', `/party/events/free-e-${stamp}/cancel-rsvp`, {}, seat.token);
+    check('a paid seat freed with fifteen on the waitlist short of points is a few trips', freed.status === 200 && trips(freed) <= 15, [freed.status, trips(freed)]);
+    const lastIn = await api('GET', `/party/events/free-e-${stamp}`, undefined, people[people.length - 1].token);
+    const shortNotes = (await api('GET', '/inbox?size=50', undefined, people[0].token)).json.notifications ?? [];
+    const payerNotes = (await api('GET', '/inbox?size=50', undefined, people[people.length - 1].token)).json.notifications ?? [];
+    check('those short of points are told and stay in line, and the first who can pay takes the seat', shortNotes.some((n) => /need 100 points/.test(n.body)) && payerNotes.some((n) => /off the waitlist. 100 points/.test(n.body)), [lastIn.status, shortNotes.length, payerNotes.length]);
+    const firstBooks = await plainFetch(`${ORIGIN}/api/public/books`);
+    check('the books answer is a shared copy: a script cannot spend the day\'s rows through it', /s-maxage/.test(firstBooks.headers.get('cache-control') ?? ''), firstBooks.headers.get('cache-control'));
+  }
+  const health = await plainFetch(`${ORIGIN}/api/health`);
+  if (health.headers.has('x-d1-last-tick')) check('the tick stayed inside its budget', JSON.parse(health.headers.get('x-d1-last-tick')).trips <= TRIP_CEILING, health.headers.get('x-d1-last-tick'));
+  check('a read that needs no database says so', health.headers.get('x-d1-round-trips') === null || health.headers.get('x-d1-round-trips') === '0', health.headers.get('x-d1-round-trips'));
+}
+
+// The guard: every route and tick this suite reached stays under the ceiling. On Workers Free the 51st D1 query of an invocation fails.
+section('D1 round trips');
+if (d1Routes.size === 0) console.log('  (this server has no D1_GUARD set, so nothing was counted)');
+else {
+  const ranked = [...d1Routes.entries()].sort((a, b) => b[1].trips - a[1].trips);
+  for (const [name, r] of ranked.slice(0, 20)) console.log(`  ${String(r.trips).padStart(3)} trips  ${String(r.read).padStart(7)} rows read  ${String(r.written).padStart(5)} written  ${name}`);
+  console.log(`  ${ranked.length} routes counted`);
+  if (process.env.SMOKE_D1_REPORT) (await import('node:fs')).writeFileSync(process.env.SMOKE_D1_REPORT, JSON.stringify(ranked, null, 1));
+  const over = ranked.filter(([, r]) => r.trips > TRIP_CEILING);
+  check(`no route or cron tick passes ${TRIP_CEILING} D1 round trips`, over.length === 0, over.map(([name, r]) => `${name}: ${r.trips}`).join(', '));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -3,17 +3,17 @@ Riya can tell when a deadline week hits her. She sleeps late, her mood dips and 
 
 In this lesson you'll learn:
 
-- How Riya switches on the trackers and logs her first day.
+- How Riya finds the trackers and logs her first day.
 - How Wellbeing turns four trackers and a streak into one score.
 - How Life scores the five areas of life, in their fixed order.
 - What an admin can see and switch for these apps.
 
-## Switch them on
+## Find them
 
-Life is on for every new account. Wellbeing, Mood, Sleep and Stress start off, unless the setup chat switched one on for her.
+Life shows on every new account. Wellbeing, Mood, Sleep and Stress start hidden on a new account, unless the setup chat showed one for her.
 
-1. Riya opens **Apps** and taps the **Reflection** group. It says how many of its apps are on.
-2. She turns on the switch beside **Wellbeing**, **Mood**, **Sleep** and **Stress**.
+1. Riya opens **Apps** and opens the **Reflection** group. It says how many of its apps it shows.
+2. She opens **Hidden apps** at its end and taps the eye beside **Wellbeing**, **Mood**, **Sleep** and **Stress**.
 3. She can do the same under the **Profile** tab, in Features.
 
 ## Mood: one face a day
@@ -67,7 +67,7 @@ Life scores the five areas of life, always in this order: physical, financial, m
 
 The parts come from what she already logs:
 
-- **Physical:** Sleep, Movement and Breath.
+- **Physical:** Sleep, Movement and Breath, and Eating once she logs it.
 - **Financial:** This month, Budgets, Invoices and Goals, from Finance.
 - **Mental:** Stress, Focus from ticked tasks, and Learning from School.
 - **Emotional:** Mood, Journal and People pillars.
@@ -77,7 +77,7 @@ Each part is a link to the place she acts on it. A part with no data says "no da
 
 ## Log movement
 
-Movement only lives in Life.
+Life has a quick way to log minutes. Fitness has the full one.
 
 1. Riya scrolls to **Log movement**.
 2. She types 40 in the minutes box for her evening walk.

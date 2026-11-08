@@ -5,6 +5,7 @@ import { tie } from '../lib/text';
 import { Section } from './Section';
 import { Icon } from './Icon';
 import { AppIcon } from './AppIcon';
+import { evenGrid, evenTile } from '../lib/bento';
 import { ArrowRight, Check, CircleAlert, FlaskConical, type LucideIcon } from 'lucide-react';
 
 const STATE: Record<BuildState, { name: string; glyph: LucideIcon | null; bg: string; edge: string }> = {
@@ -29,12 +30,15 @@ function Ring({ value, color }: { value: number; color: string }) {
   );
 }
 
-function Block({ item }: { item: BuildItem }) {
+/** A card's items: one column on a phone, two on a wide phone, one on a tablet (beside the sidebar) and inside a half-width card from the laptop width. */
+const itemCols = (wide?: boolean) => ({ base: 1, sm: 2, md: 1, lg: wide ? 2 : 1 });
+
+function Block({ item, className = '' }: { item: BuildItem; className?: string }) {
   const [label, state, note] = item;
   const s = STATE[state];
   const mod = note ? MODULES.find((m) => m.path === note) : undefined;
   return (
-    <li className="flex items-start gap-xs rounded-tile border px-xs py-xs text-subhead" style={{ background: s.bg, borderColor: s.edge, borderStyle: state === 'off' ? 'dashed' : 'solid' }}>
+    <li className={`flex items-start gap-xs rounded-tile border px-xs py-xs text-subhead ${className}`} style={{ background: s.bg, borderColor: s.edge, borderStyle: state === 'off' ? 'dashed' : 'solid' }}>
       <span className="mt-[2px] flex w-[14px] shrink-0 justify-center" aria-hidden="true">
         {s.glyph && <Icon icon={s.glyph} size={14} strokeWidth={3} />}
       </span>
@@ -62,7 +66,7 @@ function Card({ card, color }: { card: BuildCard; color: string }) {
   const all = itemsOf(card);
   const pipe = card.visual === 'pipe';
   return (
-    <article className={`mb-sm break-inside-avoid rounded-card bg-card p-md shadow-toy-soft ${card.wide ? 'md:[column-span:all]' : ''}`}>
+    <article className={`mb-sm break-inside-avoid rounded-card bg-card p-md shadow-toy-soft ${card.wide ? 'lg:[column-span:all]' : ''}`}>
       <div className="flex items-center gap-sm">
         <Ring value={percentOf(all)} color={color} />
         <div className="min-w-0">
@@ -89,17 +93,17 @@ function Card({ card, color }: { card: BuildCard; color: string }) {
         </ol>
       ) : (
         // Two columns of items on a tablet; inside a half-width card (the masonry from md) one, so each item's words have the room to make
-        // a rectangle.
-        <ul className={`mt-sm grid list-none grid-cols-1 gap-xs p-0 m-0 sm:grid-cols-2 ${card.wide ? '' : 'md:grid-cols-1'}`}>
+        // a rectangle. Even rows (lib/bento.ts), so an odd last item never sits alone in half a row.
+        <ul data-tile-list="a checklist in its card" className={`mt-sm grid list-none gap-xs p-0 m-0 ${evenGrid(card.items.length, itemCols(card.wide))}`}>
           {card.items.map((it, i) => (
-            <Block key={`${it[0]}${i}`} item={it} />
+            <Block key={`${it[0]}${i}`} item={it} className={evenTile(i, card.items.length, itemCols(card.wide))} />
           ))}
         </ul>
       )}
       {card.extra && (
-        <ul className={`mt-xs grid list-none grid-cols-1 gap-xs p-0 m-0 sm:grid-cols-2 ${card.wide ? '' : 'md:grid-cols-1'}`}>
-          {card.extra.map((it, i) => (
-            <Block key={`${it[0]}${i}`} item={it} />
+        <ul className={`mt-xs grid list-none gap-xs p-0 m-0 ${evenGrid(card.extra.length, itemCols(card.wide))}`}>
+          {card.extra.map((it, i, all) => (
+            <Block key={`${it[0]}${i}`} item={it} className={evenTile(i, all.length, itemCols(card.wide))} />
           ))}
         </ul>
       )}
@@ -121,7 +125,7 @@ export function BuildMap() {
   return (
     <>
       <Section id="obs-map" title="Build map" lede="What is built, what waits on a key, what runs in test mode and what is not built. Green is built and checked, yellow needs a key, orange is test mode or not tried live, dashed is not built.">
-        <div className="grid grid-cols-2 gap-xs md:grid-cols-6">
+        <div className="grid grid-cols-2 gap-xs lg:grid-cols-6">
           {[
             [`${percentOf(everything)}%`, 'of everything listed, weighted'],
             [count('ok'), 'built and checked'],
@@ -165,7 +169,7 @@ export function BuildMap() {
           </h2>
           <p className="mt-xs m-0 text-subhead text-ink-soft">{s.blurb}</p>
           {/* Two columns that fill top down (masonry), so a short card is never paired beside a long one with a gap under it. */}
-          <div className="mt-sm md:columns-2 md:gap-sm">
+          <div className="mt-sm lg:columns-2 lg:gap-sm">
             {s.cards.map((c) => (
               <Card key={c.title} card={c} color={colorOf(s.floor)} />
             ))}

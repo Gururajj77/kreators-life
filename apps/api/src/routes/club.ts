@@ -47,7 +47,7 @@ club.post('/memberships/:id', async (c) => {
   await db.prepare('UPDATE memberships SET status = ?, decision_note = ?, approved_by = ?, starts_at = COALESCE(starts_at, ?), ends_at = ? WHERE id = ?').bind(status, str(body.note, 1000, prev.decision_note), user.id, status === 'approved' ? now.toISOString() : null, endsAt, prev.id).run();
   if (status === 'approved') await db.prepare("INSERT OR IGNORE INTO honors (user_id, honor_key, note, awarded_at) VALUES (?, 'community_star', 'Club member', ?)").bind(prev.user_id, nowIso()).run();
   await audit(db, user.id, 'membership.status', 'membership', prev.id, prev.status, status);
-  await notify(db, prev.user_id, 'club', `Club: ${status}`, str(body.note, 160), '/club');
+  await notify(db, prev.user_id, 'club', `Club: ${status}`, str(body.note, 160), '/club#mine-heading');
   return c.json({ ok: true });
 });
 
@@ -69,6 +69,6 @@ club.post('/memberships/:id/manager', async (c) => {
   }
   await db.prepare('UPDATE memberships SET manager_user_id = ? WHERE id = ?').bind(managerId, prev.id).run();
   await audit(db, user.id, 'membership.manager', 'membership', prev.id, prev.manager_user_id ?? '', managerId ?? '');
-  if (managerId) await notify(db, prev.user_id, 'club', `Your Club manager is ${managerName}`, 'Someone on staff who knows your work. Write to the team under Help to reach them.', '/club');
+  if (managerId) await notify(db, prev.user_id, 'club', `Your Club manager is ${managerName}`, 'Someone on staff who knows your work. Write to the team under Help to reach them.', '/club#mine-heading');
   return c.json({ ok: true });
 });

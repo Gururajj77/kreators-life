@@ -3,7 +3,7 @@ import type { Context, Next } from 'hono';
 import { DOC_LOGO_RE, makePortalPassword, parseProfile, portalPasswordProblem, invoiceFromProfile } from '@kreators/shared';
 import type { AppEnv } from './env';
 import { LIMITS } from './limits';
-import { limited, sha } from './ops';
+import { limited, limitKey, sha } from './ops';
 import { hashPassword, randomHex, safeEqual } from './routes/auth';
 import { nameOf, nowIso } from './db';
 
@@ -115,16 +115,6 @@ export async function closedLinkAnswer(c: Context<AppEnv>, token: string): Promi
   return c.json({ error: 'closed' as const, agencyName: face.agencyName, agencyLogo: face.agencyLogo, agencyEmail: face.agencyEmail }, 410);
 }
 
-/** A year after a link was closed, the note that it was is dropped too. */
-export async function pruneRetiredPortalLinks(db: D1Database): Promise<void> {
-  await db.prepare('DELETE FROM retired_portal_links WHERE retired_at < ?').bind(new Date(Date.now() - 365 * 86_400_000).toISOString()).run();
-}
-
-/** The cron's tidy-up: sessions past their twelve hours. */
-export async function pruneExpiredPortalSessions(db: D1Database): Promise<void> {
-  await db.prepare('DELETE FROM portal_sessions WHERE expires_at <= ?').bind(nowIso()).run();
-}
-
 /** A whole number from 0 to n - 1, without the bias of a remainder. */
 export function randomInt(n: number): number {
   const limit = Math.floor(0x1_0000_0000 / n) * n;
@@ -167,7 +157,7 @@ export async function unlockPortal(c: Context<AppEnv>, client: LockRow | null, l
   const db = c.env.DB;
   const body = await c.req.json<{ password?: unknown }>().catch(() => ({}) as { password?: unknown });
   const password = typeof body.password === 'string' ? body.password.slice(0, 200) : '';
-  if (await limited(db, `portal-link:${linkKey.slice(0, 64)}`, LIMITS.portalLoginLink.max, LIMITS.portalLoginLink.windowSec)) {
+  if (await limited(db, `portal-link:${await limitKey(c.env, linkKey)}`, LIMITS.portalLoginLink.max, LIMITS.portalLoginLink.windowSec)) {
     c.set('logNote', 'portal unlock: too many tries on one link');
     return c.json({ error: 'too many tries, wait a minute' }, 429);
   }

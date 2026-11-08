@@ -1,8 +1,9 @@
-import { BOOKS, cohortAlwaysOpen, LESSON_BODY_MAX, LESSON_TITLE_MAX, videoEmbed, type CohortSession, type CourseAssignment, type Enrollment, type LearningItem, type Submission } from '@kreators/shared';
+import { BOOKS, cohortAlwaysOpen, LESSON_BODY_MAX, LESSON_TITLE_MAX, type CohortSession, type CourseAssignment, type Enrollment, type LearningItem, type Submission } from '@kreators/shared';
+import { LESSON_RESOURCE_KIND_META, LESSON_RESOURCE_KINDS, LESSON_RESOURCE_LABEL_MAX, LESSON_RESOURCE_LINK_MAX, LESSON_RESOURCES_FULL, MAX_LESSON_RESOURCES, lessonResourceLabel, type LessonResource, type LessonResourceKind } from '@kreators/shared/lessonResources';
 import { Phrases } from '../components/Phrases';
 import type { TagTone } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Button } from '../components/Button';
 import { AppCover } from '../components/AppCover';
@@ -17,13 +18,14 @@ import { MediaSection, useMediaMenuItem } from '../components/MediaSection';
 import { IconButton } from '../components/IconButton';
 import { IconTag } from '../components/FactTag';
 import { Icon } from '../components/Icon';
-import { ArrowUpRight, Check, Download, ImagePlus } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpRight, BookOpen, Download, ImagePlus, Link2, Video, type LucideIcon } from 'lucide-react';
 import { MediaTile } from '../components/Media';
 import { api, errorText } from '../lib/api';
 import { useAuthed, useMe } from '../lib/queries';
-import { FIELD, FIELD_LINE, LABEL } from '../lib/ui';
+import { FIELD } from '../lib/ui';
 import { Fold } from '../components/Fold';
 import { clockTime, dateTime, shortDate } from '../lib/date';
+import { focusHeadingAfter } from '../lib/focusHeading';
 import { ErrorLine } from '../components/ErrorLine';
 import { StatusTag } from '../components/StatusTag';
 import { Section } from '../components/Section';
@@ -34,7 +36,6 @@ import { CohortDiscussion } from '../components/CohortDiscussion';
 import { MoreMenu } from '../components/MoreMenu';
 import { ConfirmDelete } from '../components/ConfirmDelete';
 import { Segmented } from '../components/fx/Segmented';
-import { CloseButton } from '../components/CloseButton';
 
 const fmtDate = shortDate;
 /** A cohort's state, an enrolment's state and a payment's state in plain words, never the stored key. */
@@ -321,30 +322,56 @@ function ProgramMediaButton({ onOpen, programId }: { onOpen: () => void; program
  * markdown is drawn (Markdown.tsx is left alone), so the number never starts a line on a phone. */
 const tieChapters = (text: string) => text.replace(/\b(Chapter)\s+(\d+)/gi, '$1\u00a0$2');
 
-/** What a lesson's resource is: a video that plays in the lesson, a file to download (the app's own skill files and any link to a
- * file), or a page that opens in a new tab. */
-const FILE_EXT = /\.(md|txt|pdf|zip|docx?|pptx?|xlsx?|csv|json|png|jpe?g|webp|gif|psd|ai|fig|prproj|drp|aep|cube|mp3|wav)$/i;
-function resourceKind(ref: string): 'video' | 'file' | 'page' {
-  if (videoEmbed(ref)) return 'video';
-  if (ref.startsWith('/')) return 'file';
-  try {
-    return FILE_EXT.test(new URL(ref).pathname) ? 'file' : 'page';
-  } catch {
-    return 'page';
-  }
-}
-const RESOURCE_CAPTION: Record<'video' | 'file' | 'page', string> = {
+/** What a lesson's one way in opens, as its caption. Several share one line. */
+const RESOURCE_CAPTION: Record<LessonResourceKind, string> = {
   video: 'Watch it here, then try what it shows.',
+  book: 'Read it here, then try it. The book goes deeper.',
   file: 'Read it here, then try it. The resource opens or downloads in full.',
-  page: 'Read it here, then try it. The resource opens in a new tab.',
+  link: 'Read it here, then try it. The resource opens in a new tab.',
 };
+const RESOURCES_CAPTION = 'Read it here, then try it. Each one opens on its own.';
+const RESOURCE_ICON: Record<LessonResourceKind, LucideIcon> = { video: Video, book: BookOpen, file: Download, link: Link2 };
+const WAY_IN = 'toy toy-soft inline-flex min-h-[44px] w-full items-center justify-center gap-xs rounded-pill border border-line bg-card-strong px-md text-center text-subhead font-semibold';
+
+/**
+ * One way into a lesson, full width. A file shows its download mark and every other way its arrow; beside others, each also leads with
+ * its kind's icon, so a list reads at a glance. The app's own files download from here; a file on another site opens in a new tab, where
+ * the browser saves it. A book opens its place on the Book page.
+ */
+function WayIn({ r, all }: { r: LessonResource; all: readonly LessonResource[] }) {
+  const label = lessonResourceLabel(r, all);
+  const lead = all.length > 1 && r.kind !== 'file' ? <Icon icon={RESOURCE_ICON[r.kind]} size={16} /> : null;
+  if (r.kind === 'file')
+    return (
+      <a href={r.ref} {...(r.ref.startsWith('/') ? { download: '' } : { target: '_blank', rel: 'noreferrer' })} className={WAY_IN}>
+        <Icon icon={Download} size={16} />
+        {label}
+      </a>
+    );
+  if (r.kind === 'book')
+    return (
+      <Link to={`/book#${r.ref}`} className={WAY_IN}>
+        {lead}
+        {label}
+        <Icon icon={ArrowUpRight} size={16} />
+      </Link>
+    );
+  return (
+    <a href={r.ref} target="_blank" rel="noreferrer" className={WAY_IN}>
+      {lead}
+      {label}
+      <Icon icon={ArrowUpRight} size={16} />
+    </a>
+  );
+}
 
 /**
  * One lesson: a number, the title in full and its kind as a tag in the top right corner; tapping opens it. Open, it reads like a page:
- * a video resource plays first, the words straight on the card, no box inside a box, then at the foot the way into the resource
- * (Download resource, Watch video, Open resource, or The book) with its caption and a round button for pictures. Whoever runs the
- * cohort attaches or changes the resource in place, under it (the founder, 2026-11-06: "skill files where needed, other link to a
- * youtube video, or give option, call it download resource").
+ * its videos play first, each behind its own gate, the words straight on the card, no box inside a box, then at the foot its ways in
+ * (Download resource, Watch video, Open resource, a book, or The book on a book's lesson with none), the first with a round button for
+ * pictures at its right, the rest full width under it, and their caption. Whoever runs the cohort adds and changes resources in place,
+ * under it (the founder, 2026-11-06: "skill files where needed, other link to a youtube video, or give option, call it download
+ * resource"; 2026-11-07: "add ability to select multiple resources like youtube or book or others").
  */
 function LessonCard({ item, n, last, open, onToggle, canEdit, onChange }: { item: LearningItem; n: number; last: boolean; open: boolean; onToggle: () => void; canEdit: boolean; onChange: () => void }) {
   const [editing, setEditing] = useState(false);
@@ -353,16 +380,15 @@ function LessonCard({ item, n, last, open, onToggle, canEdit, onChange }: { item
   const move = useMutation({ mutationFn: (to: 'up' | 'down') => api.moveSchoolLesson(item.id, to), onSuccess: () => onChange() });
   const remove = useMutation({ mutationFn: () => api.deleteSchoolLesson(item.id), onSuccess: () => onChange() });
   const media = useMediaMenuItem('lesson', item.id, () => setEditing(true));
-  const ref = item.contentRef || null;
-  const kind = ref ? resourceKind(ref) : null;
-  // A lesson or reading whose resource is now a video plays it, so its corner tag says Video too.
-  const tag = (kind === 'video' ? KIND_TAG.video : KIND_TAG[item.contentType]) ?? { icon: 'FileText' as const, word: item.contentType };
-  const embedded = kind === 'video';
-  // A lesson from one of the founder's books has no resource: its way in is the book's own page in the app (the founder, 2026-11-06:
-  // "the school module is very missing the button").
-  const book = !ref ? BOOKS.find((b) => b.courseId === item.programId) : undefined;
-  const wayIn = 'toy toy-soft inline-flex min-h-[44px] w-full items-center justify-center gap-xs rounded-pill border border-line bg-card-strong px-md text-subhead font-semibold';
-  const caption = kind ? RESOURCE_CAPTION[kind] : book ? 'Read it here, then try it. The book goes deeper.' : (KIND_TIP[item.contentType] ?? 'A step in this program.');
+  const resources = item.resources;
+  const videos = resources.filter((r) => r.kind === 'video');
+  // A lesson or reading that plays a video says so in its corner too.
+  const tag = (videos.length > 0 ? KIND_TAG.video : KIND_TAG[item.contentType]) ?? { icon: 'FileText' as const, word: item.contentType };
+  // A lesson from one of the founder's books with no resource of its own: its way in is the book's own page in the app (the founder,
+  // 2026-11-06: "the school module is very missing the button").
+  const book = resources.length === 0 ? BOOKS.find((b) => b.courseId === item.programId) : undefined;
+  const ways: LessonResource[] = book ? [{ id: `book-${book.slug}`, kind: 'book', ref: book.slug, label: LESSON_RESOURCE_KIND_META.book.label }] : resources;
+  const caption = ways.length > 1 ? RESOURCES_CAPTION : ways[0] ? RESOURCE_CAPTION[ways[0].kind] : (KIND_TIP[item.contentType] ?? 'A step in this program.');
   return (
     <li className="rounded-tile bg-card shadow-toy-soft">
       <button type="button" aria-expanded={open} onClick={onToggle} className="toy toy-flat flex min-h-[56px] w-full items-start gap-sm rounded-tile p-sm text-left focus-visible:outline-offset-0">
@@ -379,38 +405,30 @@ function LessonCard({ item, n, last, open, onToggle, canEdit, onChange }: { item
       </button>
       {open && (
         <div className="border-t border-line px-sm pt-sm pb-md">
-          {embedded && ref && (
-            <div className="mt-sm">
-              <MediaTile item={{ id: item.id, kind: 'video', url: ref, caption: item.moduleTitle }} />
+          {videos.map((v, i) => (
+            <div key={v.id} className="mt-sm">
+              {/* Each video waits behind its own gate; only the first gate's Play is solid, so the lesson keeps one solid button. */}
+              <MediaTile quiet={i > 0} item={{ id: v.id, kind: 'video', url: v.ref, caption: v.label || (videos.length > 1 ? `${item.moduleTitle}, video ${i + 1}` : item.moduleTitle) }} />
             </div>
-          )}
+          ))}
           <MediaSection type="lesson" id={item.id} title="Lesson pictures and videos" trigger={null} open={editing} onOpenChange={setEditing} />
-          {item.body ? <Markdown text={tieChapters(item.body)} className="prose-long" /> : !ref && <p className="mt-sm m-0 text-subhead text-ink-soft">Nothing written here yet.</p>}
-          {/* The ways in, at the foot of the open lesson once it is read (the link takes the width on every screen and the round button sits at its right). The
-              helper line belongs to the link (it says what that link opens), so it sits centred under that link as its caption. */}
-          {ref || book ? (
-            <div className="mt-md flex items-start justify-end gap-xs">
-              <div className="flex min-w-0 flex-1 flex-col items-center">
-                {ref && kind === 'file' ? (
-                  // The app's own files download from here; a file on another site opens in a new tab, where the browser saves it.
-                  <a href={ref} {...(ref.startsWith('/') ? { download: '' } : { target: '_blank', rel: 'noreferrer' })} className={wayIn}>
-                    <Icon icon={Download} size={16} />
-                    Download resource
-                  </a>
-                ) : ref ? (
-                  <a href={ref} target="_blank" rel="noreferrer" className={wayIn}>
-                    {kind === 'video' ? 'Watch video' : 'Open resource'}
-                    <Icon icon={ArrowUpRight} size={16} />
-                  </a>
-                ) : (
-                  <Link to={`/book#${book!.slug}`} className={wayIn}>
-                    The book
-                    <Icon icon={ArrowUpRight} size={16} />
-                  </Link>
-                )}
-                <p className="mt-xs m-0 text-center text-caption text-balance text-ink-soft">{caption}</p>
-              </div>
-              {media && <IconButton icon={ImagePlus} label={media.label} onClick={media.onSelect} opens />}
+          {item.body ? <Markdown text={tieChapters(item.body)} className="prose-long" /> : resources.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">Nothing written here yet.</p>}
+          {/* The ways in, at the foot of the open lesson once it is read: each takes the width, and the round button sits at the first one's right. The helper line says
+              what the link opens, so it sits centred under it as its caption; several share one line under the last. */}
+          {ways.length > 0 ? (
+            <div className="mt-md">
+              <ul className="m-0 flex list-none flex-col gap-xs p-0">
+                {ways.map((r, i) => (
+                  <li key={r.id} className="flex items-start justify-end gap-xs">
+                    <div className="flex min-w-0 flex-1 flex-col items-center">
+                      <WayIn r={r} all={ways} />
+                      {ways.length === 1 && <p className="mt-xs m-0 text-center text-caption text-balance text-ink-soft">{caption}</p>}
+                    </div>
+                    {i === 0 && media && <IconButton icon={ImagePlus} label={media.label} onClick={media.onSelect} opens />}
+                  </li>
+                ))}
+              </ul>
+              {ways.length > 1 && <p className="mt-xs m-0 text-center text-caption text-balance text-ink-soft">{caption}</p>}
             </div>
           ) : (
             <div className="mt-md flex items-start justify-between gap-sm">
@@ -419,35 +437,48 @@ function LessonCard({ item, n, last, open, onToggle, canEdit, onChange }: { item
             </div>
           )}
           {canEdit && (
-            // The people who run it change the lesson in place, under it: its words, its resource, and from the menu its place in the
-            // program or removing it (which asks first).
-            <div className="mt-sm flex items-start gap-xs">
-              <div className="flex min-w-0 flex-1 flex-col">
-                <LessonEditor item={item} open={changing} onOpenChange={setChanging} onSaved={onChange} />
-                <ResourceEditor itemId={item.id} current={ref} onSaved={onChange} />
-                <ErrorLine e={move.error} />
+            // The people who run it change the lesson in place, under it: its words, from the menu its place in the program or removing
+            // it (which asks first), and under that its resources, across the card's whole width.
+            <>
+              <div className="mt-sm flex items-start gap-xs">
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <LessonEditor item={item} open={changing} onOpenChange={setChanging} onSaved={onChange} />
+                  <ErrorLine e={move.error} />
+                </div>
+                <MoreMenu
+                  label={`Manage ${item.moduleTitle}`}
+                  items={[
+                    { key: 'up', label: 'Move up', onSelect: () => move.mutate('up'), disabled: move.isPending || n === 1 },
+                    { key: 'down', label: 'Move down', onSelect: () => move.mutate('down'), disabled: move.isPending || last },
+                    { key: 'remove', label: 'Remove lesson', destructive: true, onSelect: () => setRemoving(true), disabled: remove.isPending },
+                  ]}
+                />
+                <ConfirmDelete
+                  open={removing}
+                  title={`Remove ${item.moduleTitle}?`}
+                  body="It leaves the program for everyone, with its pictures and videos. Assignments and hand-ins stay."
+                  yes="Yes, remove the lesson"
+                  keep="Keep it"
+                  pending={remove.isPending}
+                  failed={remove.isError}
+                  error={remove.error ? errorText(remove.error, '') : undefined}
+                  onYes={() =>
+                    remove.mutate(undefined, {
+                      onSuccess: () => {
+                        setRemoving(false);
+                        // The lesson's card goes with it, so the keyboard's place moves to the list's heading.
+                        focusHeadingAfter('lessons-heading');
+                      },
+                    })
+                  }
+                  onClose={() => {
+                    setRemoving(false);
+                    remove.reset();
+                  }}
+                />
               </div>
-              <MoreMenu
-                label={`Manage ${item.moduleTitle}`}
-                items={[
-                  { key: 'up', label: 'Move up', onSelect: () => move.mutate('up'), disabled: move.isPending || n === 1 },
-                  { key: 'down', label: 'Move down', onSelect: () => move.mutate('down'), disabled: move.isPending || last },
-                  { key: 'remove', label: 'Remove lesson', destructive: true, onSelect: () => setRemoving(true), disabled: remove.isPending },
-                ]}
-              />
-              <ConfirmDelete
-                open={removing}
-                title={`Remove ${item.moduleTitle}?`}
-                body="It leaves the program for everyone, with its pictures and videos. Assignments and hand-ins stay."
-                yes="Yes, remove the lesson"
-                keep="Keep it"
-                pending={remove.isPending}
-                failed={remove.isError}
-                error={remove.error ? errorText(remove.error, '') : undefined}
-                onYes={() => remove.mutate(undefined, { onSuccess: () => setRemoving(false) })}
-                onClose={() => setRemoving(false)}
-              />
-            </div>
+              <ResourcesEditor item={item} onSaved={onChange} />
+            </>
           )}
         </div>
       )}
@@ -588,69 +619,241 @@ function AddLesson({ programId, onAdded }: { programId: string; onAdded: () => v
   );
 }
 
-/** Attach or change a lesson's resource in place, at the lesson's foot: one field and Save or Cancel, never a popup. */
-function ResourceEditor({ itemId, current, onSaved }: { itemId: string; current: string | null; onSaved: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [value, setValue] = useState(current ?? '');
+/** What the link field asks for, by kind. */
+const LINK_HINT: Record<Exclude<LessonResourceKind, 'book'>, string> = {
+  video: 'It plays in the lesson, like https://youtu.be/abc123.',
+  file: 'It opens or downloads. Use https, or a /resources/ file.',
+  link: 'It opens in a new tab. Use https, or a /resources/ file.',
+};
+
+/** Add or change one resource in place (never a popup): what kind it is, the link or the book that kind needs, its label, then Save or Cancel. */
+function ResourceForm({ itemId, resource, programBook, note, onSaved, onCancel }: { itemId: string; resource?: LessonResource; programBook?: string; note?: string; onSaved: (label: string) => void; onCancel: () => void }) {
+  const [kind, setKind] = useState<LessonResourceKind>(resource?.kind ?? 'video');
+  const [link, setLink] = useState(resource && resource.kind !== 'book' ? resource.ref : '');
+  const [bookKey, setBookKey] = useState(resource?.kind === 'book' ? resource.ref : (programBook ?? BOOKS[0]?.slug ?? ''));
+  const [label, setLabel] = useState(resource?.label ?? '');
+  const ref = kind === 'book' ? bookKey : link.trim();
+  const body = { kind, ref, label: label.trim() };
   const save = useMutation({
-    mutationFn: () => api.updateLessonResource(itemId, value.trim()),
-    onSuccess: () => {
-      setOpen(false);
-      onSaved();
-    },
+    mutationFn: () => (resource ? api.changeLessonResource(itemId, resource.id, body) : api.addLessonResource(itemId, body)),
+    onSuccess: () => onSaved(lessonResourceLabel({ id: '', ...body })),
   });
-  const shut = () => {
-    setOpen(false);
-    setValue(current ?? '');
-    save.reset();
-  };
+  const same = Boolean(resource) && kind === resource?.kind && ref === resource.ref && label.trim() === resource.label;
   return (
-    <Fold
-      className="mt-sm"
-      adds={!current}
-      title={current ? 'Change resource' : 'Add a resource'}
-      open={open}
-      onOpenChange={(o) => {
-        if (!o) return shut();
-        setValue(current ?? '');
-        setOpen(true);
+    <form
+      className="flex flex-col gap-xs"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (ref && !same && !save.isPending) save.mutate();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          onCancel();
+        }
       }}
     >
-      {/* The small-input card of the design rules: the label, a quiet example, then the field with a tick to save and a cross to close. */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (value.trim() && value.trim() !== current) save.mutate();
-        }}
-      >
-        <label htmlFor={`resource-${itemId}`} className={LABEL}>
-          Link
-        </label>
-        <p className="m-0 text-caption text-ink-soft">A YouTube or Vimeo video, a file or a page, like https://youtu.be/abc123.</p>
-        <div className="mt-xs flex items-center gap-xs">
-          <input
-            id={`resource-${itemId}`}
-            autoFocus
-            type="text"
-            inputMode="url"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.preventDefault();
-                shut();
-              }
+      {note && <p className="m-0 text-caption text-ink-soft">{note}</p>}
+      <FieldLabel label="Kind" hint="What people get when they tap it.">
+        <select autoFocus value={kind} onChange={(e) => setKind(e.target.value as LessonResourceKind)} className={FIELD}>
+          {LESSON_RESOURCE_KINDS.map((k) => (
+            <option key={k} value={k}>
+              {LESSON_RESOURCE_KIND_META[k].name}
+            </option>
+          ))}
+        </select>
+      </FieldLabel>
+      {kind === 'book' ? (
+        <FieldLabel label="Which book" hint="It opens the book’s place in the app.">
+          <select value={bookKey} onChange={(e) => setBookKey(e.target.value)} className={FIELD}>
+            {BOOKS.map((b) => (
+              <option key={b.slug} value={b.slug}>
+                {b.title}
+              </option>
+            ))}
+          </select>
+        </FieldLabel>
+      ) : (
+        <FieldLabel label="Link" hint={LINK_HINT[kind]}>
+          <input type="text" inputMode="url" value={link} onChange={(e) => setLink(e.target.value)} maxLength={LESSON_RESOURCE_LINK_MAX} placeholder="https://" className={FIELD} />
+        </FieldLabel>
+      )}
+      <FieldLabel label="Label" hint="Optional. The words on the button.">
+        <input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={LESSON_RESOURCE_LABEL_MAX} placeholder={lessonResourceLabel({ id: '', kind, ref: bookKey, label: '' })} className={FIELD} />
+      </FieldLabel>
+      <ErrorLine e={save.error} />
+      {/* Save takes the free width; Cancel sits at its right on the same line. */}
+      <div className="flex items-center gap-xs">
+        <Button type="submit" variant="outline" className="flex-1" disabled={save.isPending || !ref || same}>
+          Save
+        </Button>
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** A resource's row in the editor: its words, the arrows that move it, then at its foot Remove (a second tap) and Change (the form, in place). */
+function ResourceRow({ itemId, r, all, index, programBook, onSaved, onSay, onRemoved }: { itemId: string; r: LessonResource; all: readonly LessonResource[]; index: number; programBook?: string; onSaved: () => void; onSay: (line: string) => void; onRemoved: (line: string) => void }) {
+  const [changing, setChanging] = useState(false);
+  const [armed, setArmed] = useState(false);
+  const up = useRef<HTMLButtonElement>(null);
+  const down = useRef<HTMLButtonElement>(null);
+  const changeId = useId();
+  // Cancel, Escape or a save hand the keyboard's place back to the button that opened the form.
+  const shut = () => {
+    setChanging(false);
+    document.getElementById(changeId)?.focus();
+  };
+  const move = useMutation({ mutationFn: (to: 'up' | 'down') => api.moveLessonResource(itemId, r.id, to), onSuccess: () => onSaved() });
+  const label = lessonResourceLabel(r, all);
+  const remove = useMutation({
+    mutationFn: () => api.removeLessonResource(itemId, r.id),
+    onSuccess: () => onRemoved(`Removed “${label}”.`),
+  });
+  useEffect(() => {
+    if (!armed) return;
+    const t = window.setTimeout(() => setArmed(false), 4000);
+    return () => window.clearTimeout(t);
+  }, [armed]);
+  // An arrow that reached the end of the list turns off, so the keyboard's place moves to the other arrow.
+  const first = index === 0;
+  const last = index === all.length - 1;
+  useEffect(() => {
+    if (first && document.activeElement === up.current) down.current?.focus();
+    else if (last && document.activeElement === down.current) up.current?.focus();
+  }, [first, last]);
+  const arrow = 'toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-ink disabled:pointer-events-none disabled:opacity-40';
+  return (
+    <li className="rounded-tile bg-paper p-sm">
+      <p className="m-0 text-headline [overflow-wrap:anywhere]">{label}</p>
+      <p className="m-0 truncate text-caption text-ink-soft" title={r.ref}>
+        {r.kind === 'book' ? LESSON_RESOURCE_KIND_META.book.name : r.ref}
+      </p>
+      <div className="mt-xs flex flex-wrap items-center justify-between gap-xs">
+        <span className="flex gap-xs">
+          <button ref={up} type="button" aria-label={`Move ${label} up`} disabled={first} onClick={() => !move.isPending && move.mutate('up')} className={arrow}>
+            <Icon icon={ArrowUp} size={18} />
+          </button>
+          <button ref={down} type="button" aria-label={`Move ${label} down`} disabled={last} onClick={() => !move.isPending && move.mutate('down')} className={arrow}>
+            <Icon icon={ArrowDown} size={18} />
+          </button>
+        </span>
+        <span className="ml-auto flex flex-wrap items-center justify-end gap-xs">
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={remove.isPending}
+            className={armed ? 'red-armed' : ''}
+            aria-label={armed ? `Tap again to remove ${label}` : `Remove ${label}`}
+            onClick={() => {
+              if (armed) remove.mutate();
+              else setArmed(true);
             }}
-            maxLength={500}
-            placeholder="https://"
-            className={`${FIELD_LINE} min-w-0 flex-1`}
+          >
+            <span aria-live="polite">{armed ? 'Tap again to remove' : 'Remove'}</span>
+          </Button>
+          <Button id={changeId} size="sm" variant="outline" aria-expanded={changing} aria-label={`Change ${label}`} onClick={() => setChanging((c) => !c)}>
+            Change
+            <ToggleChevron open={changing} size={16} />
+          </Button>
+        </span>
+      </div>
+      <ErrorLine e={move.error ?? remove.error} />
+      {changing && (
+        <div className="mt-sm">
+          <ResourceForm
+            itemId={itemId}
+            resource={r}
+            programBook={programBook}
+            onSaved={(words) => {
+              shut();
+              onSay(`Saved “${words}”.`);
+              onSaved();
+            }}
+            onCancel={shut}
           />
-          <IconButton icon={Check} label="Save the resource" tip="br" onClick={() => save.mutate()} disabled={save.isPending || !value.trim() || value.trim() === current} />
-          <CloseButton onClick={shut} label="Cancel" />
         </div>
-        <ErrorLine className="mt-xs" e={save.error} />
-      </form>
-    </Fold>
+      )}
+    </li>
+  );
+}
+
+/** A lesson's resources for whoever runs it, in place at the lesson's foot: the rows to change, move and remove, and Add a resource. */
+function ResourcesEditor({ item, onSaved }: { item: LearningItem; onSaved: () => void }) {
+  const [changing, setChanging] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [said, setSaid] = useState('');
+  const all = item.resources;
+  const programBook = BOOKS.find((b) => b.courseId === item.programId)?.slug;
+  // A removed row takes the keyboard's place with it, so once the list has come back it goes to the first fold here.
+  const wrap = useRef<HTMLDivElement>(null);
+  const refocus = useRef(false);
+  useEffect(() => {
+    if (!refocus.current) return;
+    refocus.current = false;
+    wrap.current?.querySelector('button')?.focus();
+  }, [all.length]);
+  return (
+    <div ref={wrap}>
+      {all.length > 0 && (
+        <Fold className="mt-sm" title={all.length === 1 ? 'Change resource' : 'Change resources'} hint={`${all.length} of ${MAX_LESSON_RESOURCES}`} open={changing} onOpenChange={setChanging}>
+          <ul className="m-0 flex list-none flex-col gap-xs p-0">
+            {all.map((r, i) => (
+              <ResourceRow
+                key={r.id}
+                itemId={item.id}
+                r={r}
+                all={all}
+                index={i}
+                programBook={programBook}
+                onSaved={onSaved}
+                onSay={setSaid}
+                onRemoved={(line) => {
+                  refocus.current = true;
+                  setSaid(line);
+                  onSaved();
+                }}
+              />
+            ))}
+          </ul>
+        </Fold>
+      )}
+      {all.length < MAX_LESSON_RESOURCES ? (
+        <Fold
+          className="mt-sm"
+          adds
+          title="Add a resource"
+          open={adding}
+          onOpenChange={(o) => {
+            setAdding(o);
+            if (o) setSaid('');
+          }}
+        >
+          {/* The form starts fresh each time it opens, since a closed fold holds nothing. */}
+          <ResourceForm
+            itemId={item.id}
+            programBook={programBook}
+            note={programBook && all.length === 0 ? 'This lesson shows The book until it has a resource. Add the book too if you want to keep it.' : undefined}
+            onSaved={(words) => {
+              setAdding(false);
+              setSaid(`Added “${words}”.`);
+              onSaved();
+            }}
+            onCancel={() => setAdding(false)}
+          />
+        </Fold>
+      ) : (
+        <p className="mt-sm m-0 text-caption text-ink-soft">{LESSON_RESOURCES_FULL}</p>
+      )}
+      {said && (
+        <p role="status" className="mt-xs m-0 text-footnote text-ink-soft">
+          {said}
+        </p>
+      )}
+    </div>
   );
 }
 

@@ -62,17 +62,47 @@ export function coverFrom(body: Record<string, unknown>): { message: string; sub
   return parseEmailNote(body);
 }
 
+/** Where a client opens each kind of paper. */
+const PAPER_PATH = { invoice: 'i', contract: 'k', doc: 'd' } as const;
+export const paperPath = (kind: keyof typeof PAPER_PATH, token: string | null | undefined): string => (token ? `/${PAPER_PATH[kind]}/${token}` : '');
+
+/**
+ * A note can name more than the paper it was sent from (the first send names the agreement and the invoice), so every other paper of
+ * this client whose link is in the words gets the same line in its own log. Read from the owner's own rows: only a paper's real token
+ * counts, and a line never holds the words.
+ */
+export async function logOtherPapers(db: D1Database, userId: string, clientId: string | null | undefined, words: string | undefined, self: string, event: string, detail: string): Promise<void> {
+  if (!clientId || !words || !/\/[ikd]\/[A-Za-z0-9]/.test(words)) return;
+  const rows = await db
+    .prepare(
+      `SELECT 'invoice' AS kind, id, token FROM invoices WHERE user_id = ?1 AND agency_client_id = ?2 AND status != 'draft' AND token IS NOT NULL
+       UNION ALL SELECT 'contract', id, token FROM agency_contracts WHERE user_id = ?1 AND client_id = ?2 AND status != 'draft' AND token IS NOT NULL
+       UNION ALL SELECT 'doc', id, token FROM agency_docs WHERE user_id = ?1 AND client_id = ?2 AND status != 'draft' AND token IS NOT NULL`,
+    )
+    .bind(userId, clientId)
+    .all<{ kind: keyof typeof PAPER_PATH; id: string; token: string }>();
+  const others = rows.results.filter((r) => r.id !== self && words.includes(paperPath(r.kind, r.token))).slice(0, 48);
+  if (others.length === 0) return;
+  const now = nowIso();
+  await db.batch(others.map((r) => db.prepare('INSERT INTO agency_doc_log (id, user_id, doc_type, doc_id, event, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(newId(), userId, r.kind, r.id, event, detail.slice(0, 200), now)));
+}
+
 export async function emailCopy(db: D1Database, env: Env, userId: string, msg: { to: string; subject: string; intro: string; text: string; link: string; replyTo?: string }): Promise<EmailedCopy> {
-  const body = [msg.intro, '', msg.text, '', msg.link ? `Read it online: ${msg.link}` : '', msg.replyTo ? `Questions? Write to ${msg.replyTo}.` : ''].filter((l, i, all) => l !== '' || all[i - 1] !== '').join('\n').trim();
+  // A note that already holds the paper's link (and the sender's address, in its sign-off) is not told them twice.
+  const linkLines = msg.link && !msg.intro.includes(msg.link) ? `You can open and download it here:\n${msg.link}` : '';
+  const askLine = msg.replyTo && !msg.intro.includes(msg.replyTo) ? `Questions? Write to ${msg.replyTo}.` : '';
+  const body = [msg.intro, '', msg.text, '', linkLines, askLine].filter((l, i, all) => l !== '' || all[i - 1] !== '').join('\n').trim();
   const subject = msg.subject.slice(0, 200);
-  await sendEmail(db, env, { userId, to: msg.to, subject, body });
+  // A paper's link opens that paper, so the outbox keeps the fact of the mail and not its words.
+  await sendEmail(db, env, { userId, to: msg.to, subject, body, private: Boolean(msg.link) || /https?:\/\//.test(body) });
   const row = await db.prepare('SELECT status FROM email_outbox WHERE user_id = ? AND to_email = ? AND subject = ? ORDER BY created_at DESC LIMIT 1').bind(userId, msg.to, subject).first<{ status: string }>();
   const sent = row?.status === 'sent';
+  const hasLink = Boolean(msg.link) || /https?:\/\//.test(msg.intro);
   return {
     sent,
-    linkIncluded: Boolean(msg.link),
+    linkIncluded: hasLink,
     note: sent
-      ? msg.link
+      ? hasLink
         ? 'Sent. The text and the link are in their inbox.'
         : 'Sent without a link, because the site address is not set on this server.'
       : 'Email is not set up on this server, or the provider did not take it, so nothing went out. Copy the text and paste it into your own email.',

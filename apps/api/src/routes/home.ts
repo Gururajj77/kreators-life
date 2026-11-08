@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { latestExtras, latestProfile, settingsOf } from './discover';
 import { briefFor, briefPath, formatCount, LOCALE, gettingStarted, isAutoHandle, levelProgress, nudgeFor, parseCoachShare, periodFor, RELATIONSHIPS, type BriefLine, type DailyBrief, type HomeFloor, type HomeResponse, type HomeUpNext, type RelationshipKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { can, liveUser, nameOf, nowIso, parseList, shiftDate } from '../db';
+import { can, hiddenByBlock, liveUser, nameOf, nowIso, parseList, personDay, shiftDate, streakNow } from '../db';
 import { resolveAccess } from '../access';
 import { isCoach, LINK, type LinkRow } from '../coaching';
 import { lifeSummary } from './life';
@@ -34,7 +34,7 @@ home.get('/', async (c) => {
     db.prepare('SELECT substr(created_at, 1, 10) AS d, SUM(amount) AS xp FROM xp_events WHERE user_id = ? AND created_at >= ? GROUP BY d').bind(user.id, since).all<{ d: string; xp: number }>(),
     db.prepare("SELECT substr(completed_at, 1, 10) AS d, COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? GROUP BY d").bind(user.id, since).all<{ d: string; n: number }>(),
     db.prepare('SELECT relationship, xp FROM relationship_scores WHERE user_id = ?').bind(user.id).all<{ relationship: RelationshipKey; xp: number }>(),
-    db.prepare("SELECT relationship, COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'pillar' AND status = 'active' GROUP BY relationship").bind(user.id).all<{ relationship: RelationshipKey; n: number }>(),
+    db.prepare("SELECT relationship, COUNT(*) AS n FROM nodes INDEXED BY idx_nodes_user_done WHERE user_id = ? AND kind = 'pillar' AND status = 'active' GROUP BY relationship").bind(user.id).all<{ relationship: RelationshipKey; n: number }>(),
     db.prepare('SELECT relationship FROM spark_completions WHERE user_id = ? AND date = ?').bind(user.id, date).first<{ relationship: RelationshipKey }>(),
     db.prepare("SELECT COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND (do_date IS NULL OR do_date <= ?)").bind(user.id, date).first<{ n: number }>(),
     db.prepare("SELECT COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ?").bind(user.id, new Date(Date.now() - 86_400_000).toISOString()).first<{ n: number }>(),
@@ -69,8 +69,8 @@ home.get('/', async (c) => {
       .prepare('SELECT g.id, g.name, g.chat_opens_at, e.title, e.starts_at FROM circle_members m JOIN circle_groups g ON g.id = m.group_id JOIN circle_events e ON e.id = g.event_id WHERE m.user_id = ? AND e.starts_at >= ? ORDER BY e.starts_at ASC LIMIT 2')
       .bind(user.id, nowIso)
       .all<{ id: string; name: string; chat_opens_at: string; title: string; starts_at: string }>(),
-    lifeSummary(db, user.id),
-    summaryFor(db, user.id, date, user.streak),
+    lifeSummary(db, user.id, personDay(c.req.query('date'), user.timezone)),
+    summaryFor(db, user.id, date, streakNow(user.streak, user.last_checkin, date)),
     db.prepare('SELECT substr(created_at, 1, 10) AS d, COUNT(*) AS n FROM journal_entries WHERE user_id = ? AND created_at >= ? GROUP BY d').bind(user.id, `${new Date(new Date(`${date}T00:00:00Z`).getTime() - 60 * 86_400_000).toISOString().slice(0, 10)}T00:00:00`).all<{ d: string; n: number }>(),
     db.prepare("SELECT COUNT(*) AS n FROM chat_messages WHERE user_id = ? AND role = 'user'").bind(user.id).first<{ n: number }>(),
     db.prepare('SELECT source, SUM(amount) AS xp FROM xp_events WHERE user_id = ? AND created_at >= ? GROUP BY source').bind(user.id, since).all<{ source: string; xp: number }>(),
@@ -103,7 +103,7 @@ home.get('/', async (c) => {
     sparkRelationship,
     taskDone,
     tasksWaiting,
-    streak: user.streak,
+    streak: streakNow(user.streak, user.last_checkin, date),
     doneCount: Number(checkedIn) + Number(Boolean(sparkDone)) + Number(taskDone),
   };
 
@@ -187,7 +187,7 @@ home.get('/', async (c) => {
     shop,
     upNext,
     unread: unread?.n ?? 0,
-    nudge: nudgeFor({ checkedIn, sparkDone: Boolean(sparkDone), taskDone, tasksWaiting, hasFloor, xpToday, streak: user.streak, hour }),
+    nudge: nudgeFor({ checkedIn, sparkDone: Boolean(sparkDone), taskDone, tasksWaiting, hasFloor, xpToday, streak: streakNow(user.streak, user.last_checkin, date), hour }),
   };
   return c.json(res);
 });
@@ -246,7 +246,7 @@ home.get('/brief', async (c) => {
     db
       .prepare(
         `SELECT
-          (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'done') AS tasks,
+          (SELECT COUNT(*) FROM (SELECT 1 FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'done' LIMIT 1)) AS tasks,
           (SELECT COUNT(*) FROM spark_completions WHERE user_id = ?1) AS acts,
           (SELECT COUNT(*) FROM assessments WHERE user_id = ?1) AS sessions,
           (SELECT COUNT(*) FROM event_registrations WHERE user_id = ?1) + (SELECT COUNT(*) FROM circle_signups WHERE user_id = ?1) + (SELECT COUNT(*) FROM run_members WHERE user_id = ?1 AND status = 'member') AS people`,
@@ -264,7 +264,20 @@ home.get('/brief', async (c) => {
   const agencyOn = apps.includes('agency');
   const scopes = [apps.includes('community') ? 'community' : null, apps.includes('bond') ? 'bond' : null].filter((x): x is string => x !== null);
   const fortnight = new Date(Date.now() - 14 * 86_400_000).toISOString();
-  const [changes, monthMade, unread, waitingAgency] = await Promise.all([
+  // Fitness, Kreators Run and Journal (2026-11-07): one statement holding only the parts whose app is on, counts only (never a note, an
+  // extra or a line of gratitude), the person's own rows by the session's id.
+  const moveOn = apps.includes('fitness') || apps.includes('run');
+  const bodyParts = [
+    ...(moveOn
+      ? [
+          "(SELECT COUNT(*) FROM wellbeing_logs WHERE user_id = ?1 AND kind = 'move' AND date = ?2) AS moved",
+          "(SELECT COALESCE(SUM(value), 0) FROM wellbeing_logs WHERE user_id = ?1 AND kind = 'move' AND date >= ?3 AND date <= ?2) AS move_week",
+        ]
+      : []),
+    ...(apps.includes('fitness') ? ["(SELECT COUNT(*) FROM wellbeing_logs WHERE user_id = ?1 AND kind = 'eat' AND date = ?2) AS ate"] : []),
+    ...(apps.includes('journal') ? ['(SELECT COUNT(*) FROM gratitude_days WHERE user_id = ?1 AND day = ?2) AS grat'] : []),
+  ];
+  const [changes, monthMade, unread, waitingAgency, bodyDay] = await Promise.all([
     agencyOn
       ? db
           .prepare(
@@ -283,7 +296,7 @@ home.get('/brief', async (c) => {
              FROM channel_members m JOIN channels ch ON ch.id = m.channel_id AND ch.archived_at IS NULL
              JOIN channel_messages x ON x.channel_id = m.channel_id AND x.created_at > m.last_read_at AND x.user_id != m.user_id AND x.deleted_at IS NULL
              WHERE m.user_id = ?1 AND m.status = 'member' AND ch.scope IN (SELECT value FROM json_each(?2))
-               AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ?1 AND b.blocked_id = x.user_id) OR (b.blocker_id = x.user_id AND b.blocked_id = ?1))`,
+               AND NOT ${hiddenByBlock('?1', 'x.user_id', 'x.anonymous')}`,
           )
           .bind(user.id, JSON.stringify(scopes))
           .first<{ n: number; channels: number; channel_id: string | null; scope: string | null }>()
@@ -305,6 +318,13 @@ home.get('/brief', async (c) => {
           .bind(user.id, date)
           .first<{ due: number; due_clients: number; due_client: string | null; overdue: number; chosen: number; chosen_client: string | null; chosen_name: string | null; unsigned: number }>()
       : Promise.resolve(null),
+    bodyParts.length
+      ? db
+          .prepare(`SELECT ${bodyParts.join(', ')}`)
+          // ?3 (the week's first day) only when the movement parts are in, so the count of bindings matches the statement.
+          .bind(...(moveOn ? [user.id, date, week] : [user.id, date]))
+          .first<{ moved?: number; move_week?: number; ate?: number; grat?: number }>()
+      : Promise.resolve(null),
   ]);
   const lp = levelProgress(user.xp);
   const when = next ? new Date(next.starts_at) : null;
@@ -313,8 +333,11 @@ home.get('/brief', async (c) => {
   const base = briefFor({
     discover: { taken: Boolean(dProfile), profile: dSet.steps ? dProfile : null, extras: dSet.steps ? await latestExtras(db, user.id, dSet.mind) : null },
     hour,
+    ...(moveOn ? { move: { today: (bodyDay?.moved ?? 0) > 0, week: Math.round(bodyDay?.move_week ?? 0) } } : {}),
+    ...(apps.includes('fitness') ? { eatToday: (bodyDay?.ate ?? 0) > 0 } : {}),
+    ...(apps.includes('journal') ? { gratitudeToday: (bodyDay?.grat ?? 0) > 0 } : {}),
     checkedIn: user.last_checkin === date,
-    streak: user.streak,
+    streak: streakNow(user.streak, user.last_checkin, date),
     bestStreak: user.best_streak,
     level: lp.level,
     xpToNext: Math.max(0, lp.span - lp.into),

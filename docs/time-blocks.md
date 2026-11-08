@@ -101,7 +101,7 @@ ALTER TABLE nodes ADD COLUMN time_block_id TEXT;
 -- Clearing a deleted block from tasks, and the `?block=` cut on GET /today.
 CREATE INDEX IF NOT EXISTS idx_nodes_user_block ON nodes(user_id, time_block_id) WHERE time_block_id IS NOT NULL;
 
--- When the starting blocks and templates were added for this person (once; NULL until the first read).
+-- When the starting blocks and templates were added for this person (once; NULL until the first read; since 2026-11-07, until the first change).
 ALTER TABLE users ADD COLUMN time_blocks_seeded_at TEXT;
 ```
 
@@ -222,26 +222,28 @@ The migration gives every existing starting template its colour by `seed`, then 
 
 ### How the starting set is created
 
-`ensureTimeBlocks(db, user)` lives in `apps/api/src/timeBlocks.ts`.
-- If `user.time_blocks_seeded_at` is set, it does nothing. The session's user row is already loaded, so this costs no read.
-- Otherwise it runs one batch:
-  - every starting block, with `INSERT OR IGNORE`;
-  - every starting template;
-  - every slot;
-  - then `UPDATE users SET time_blocks_seeded_at = ? WHERE id = ? AND time_blocks_seeded_at IS NULL`.
-- The seeded ids are fixed, so two first reads at once insert the same rows and the second is ignored:
-  - a block is `b-<seed>-<userId>`;
-  - a template is `t-<seed>-<userId>`;
-  - a slot is `<templateId>-<index>`.
-- Ids that a person makes are `crypto.randomUUID()`.
-- It is called by:
-  - `GET /time-blocks`;
-  - `GET /today`;
-  - `GET /today/week-plan`;
-  - `PUT /today/day-type`;
-  - a node create or edit that names a block.
+The starting set lives in code (`STARTING_BLOCKS`, `STARTING_TEMPLATES`) until the person's first change to a block or a template (2026-11-07, the founder's yes: 769 of the 1,076 rows a sign-up wrote were these). The fixed ids are the same in code and in rows:
+- a block is `b-<seed>-<userId>`;
+- a template is `t-<seed>-<userId>`;
+- a slot is `<templateId>-<index>`, and exists only as a row.
 
-`POST /time-blocks/restore` adds back any starting block or template whose seed the person no longer has. It reads which seeds exist, then inserts only the missing ones and their slots. It never touches a template that still exists, and it adds no week pattern rows.
+Ids that a person makes are `crypto.randomUUID()`.
+
+**Reading.** `users.time_blocks_seeded_at` empty means code, set means rows. `loadBlocking` reads it in its own batch and answers from `startingSet(userId)` when it is empty, through the same `toTimeBlock` and `toDayTemplate`, so the answer is the same byte for byte. `blockIdByName`, `templateIdByName`, `ownBlockId`, `ownTemplateId` and the route file's `ownBlock`, `ownTemplate` and `blockNames` do the same. A new read of these tables must too. `GET /insights` takes it from the session's row.
+
+**A seed stays.** Everyone with no rows reads the starting set from code, so a change to `STARTING_BLOCKS` or `STARTING_TEMPLATES` changes their days the moment it deploys, and a person with rows keeps what they have. Never take a seed away or give it another meaning: tasks, dates and weekdays of people with no rows name it by id, and the row would be gone with no delete to clear them (a shared test holds the keys). A change of words or slots is a choice to make on purpose.
+
+**What needs no rows.** A task's `time_block_id`, a `day_types` row and a `week_patterns` row each hold only an id, so `POST` and `PATCH /nodes`, `PUT /time-blocks/days`, `PUT /time-blocks/pattern` and `PUT /today/day-type` write only their own row.
+
+**The first change.** `ensureTimeBlocks(db, user)` in `apps/api/src/timeBlocks.ts` is called just before the write, after every check, by the seven routes that change a block or a template (`POST`, `PATCH` and `DELETE` of each, and `PUT /blocks/order`). A refused request writes nothing.
+- If `user.time_blocks_seeded_at` is set, it does nothing. The session's user row is already loaded, so this costs no read.
+- Otherwise it runs one batch: `UPDATE users SET time_blocks_seeded_at = <a stamp no other batch holds> WHERE id = ? AND time_blocks_seeded_at IS NULL`, then every block, every template and every slot, each `INSERT OR IGNORE` and each only `WHERE` that stamp is the one on the account.
+- So a tab that read the account before another tab's first change adds nothing, and a template deleted in between stays deleted.
+- A slot written after that (`slotInsert` outside a claim) is left out when another tab deleted its block or template since the check, so a copy racing a delete keeps the slots it can and never answers 500. A `PATCH` of something deleted in that moment answers 404.
+
+The most a person may keep counts the starting ones, rows or not. An erase of progress touches neither. With no rows the export has empty lists and `timeBlocksNote` saying why, since a day or a task can name a starting id.
+
+`POST /time-blocks/restore` adds nothing for someone with no rows, since nothing can be missing. Otherwise it adds back any starting block or template whose seed the person no longer has. It reads which seeds exist, then inserts only the missing ones and their slots. It never touches a template that still exists, and it adds no week pattern rows.
 
 ---
 
@@ -345,9 +347,34 @@ export function suggestBlock(
 //   1. Matches: blocks whose area = the task's area (when it has one); if none match, blocks whose pillar = its pillar.
 //   2. Among matches, P0, P1 or no priority take the first Focus-tagged match; P2 and P3 the first match that is not Focus;
 //      either way, the first such match that still has room (usedMin[block] + estimate <= its minutes that day) wins, else
-//      the first such match, else the first match.
+//      the first such match, else the first match with room, else the first match (2026-11-07).
 //   3. No match: P0 and P1 go to the first Focus-tagged block of the day; anything else gets null.
+//   A block whose every slot that day runs past midnight (slotCrossesMidnight: the night's sleep) is never a candidate (2026-11-07).
 //   It writes nothing; a suggestion becomes the task's block only when the person keeps it.
+
+// Block hints (packages/shared/src/blockHints.ts, the subpath export @kreators/shared/blockHints, chunk `block-hints`; 2026-11-07)
+export function slotsLeft(slots, after?: number | null): TemplateSlot[];
+//   For today only (`after` the device's minute now): the slots still to come; one that has ended is left out, one under way starts at
+//   `after` rounded up to 15 minutes, one past midnight stays whole. Used for room and targets, never for which block a time falls in.
+export function groupWithSuggestions<T extends GroupableTask>(list: T[], ctx: { slots; blocks; lead?; second?; used?: Record<string, number>; after?: number | null }): SuggestedGroup<T>[];
+//   groupTasks(list, 'block', ctx), then every task in 'none' with no timeBlockId and no dueTime goes, as a suggestion, into the in-day
+//   block suggestBlock picks for it over slotsLeft (in list order, so P0 claims room first; each suggestion adds its estimate to `used`
+//   for the next), but only when that block still has room for it: a suggestion into a full or finished block would only be noise.
+//   Suggestions sit after the block's placed tasks (in `tasks` and in `suggested`); plannedMin stays the placed tasks only, so a
+//   suggestion never makes a block "over". A task with no suggestion stays in No block yet, which goes once empty.
+//   `used` is blockUsedMin(slots, day.slotPlannedMin) (the server's per-slot sums, by block); without it, the placed tasks.
+export function blockMismatch(task, slots, blocks, opts?: { used?; taken?; after? }): { block; better; start: 'HH:MM'; slot } | null;
+//   Only a task in a block by its TIME (blockOfTask how 'time', never 'picked'), in a block with an area and/or a pillar, sharing
+//   neither (blockFits: block.area === task.lifeArea, or block.pillar === task.relationship; a block with neither, like Travel, never
+//   asks), when suggestBlock (over slotsLeft) picks a DIFFERENT block of the day that does fit (a Focus fallback is not enough), that
+//   block still has room for the task's estimate, and moveStartIn finds a free start in it. Otherwise nothing is said.
+//   start (Move it's time, moveStartIn(blockId, slots, taken, need, after)): the first start in the block's slots, in 15-minute steps
+//   from the slot's start (from `after` today, so never a time gone), where the task fits whole before the slot ends (a task longer
+//   than the slot takes it from its start) and overlaps none of the day's other timed tasks (`taken`: open that day, each from its time
+//   for its estimate, 30 when none). No such start: null, and no prompt.
+//   Daily and the task form pass the same opts (the form reads Daily's cached answer for that day when there is one), so both name the
+//   same block and time.
+//   blockMismatchLine: "Fun/social is for Friends. This fits Busy work, 3:00 pm to 5:00 pm." (the pillar's name, else "the <area> area").
 
 // Grouping (Daily's boxes)
 export const TASK_GROUP_NONE = 'none';
@@ -622,6 +649,11 @@ A name instead of an id (`template` on pattern and days, `timeBlock` on nodes) i
   - An empty box of the day says "Nothing here yet." in `ink-soft`.
   - Open state is kept with `useKept`, scope `taskgroups:<user>`, by group key. Everything starts open.
   - `tasksMore` shows "Showing the first 60." under the boxes.
+  - The body's contents sit on an inner `pt-xs` wrapper (never padding on the element GSAP takes to height 0), so the header's hover tint never meets the first row (2026-11-07).
+  - **Suggested into a block** (2026-11-07, the founder: "put tasks inside of a time block as a suggestion even if it does not have a time"): By time block draws `groupWithSuggestions`. A suggested task is the ordinary row with one quiet line under it: a calm `StatusTag` "Suggested", why ("It fits here by its pillar, Friends.", "…by its area, Physical.", or "A top task with no match goes to a Focus block."), and an outline "Keep here" that saves `PATCH /nodes/:id { timeBlockId }`. On a phone the why is left out (`hidden sm:inline`), so a suggestion is one line: the tag and Keep here. Only a block with room that is not over today gets a suggestion, and never the night's sleep. The count pill counts the placed tasks ("1 task · 15 min of 2 h"), or "2 suggested" when a box holds only suggestions. Nothing is written until Keep here. By area is unchanged.
+  - **A task in a block meant for others**: a task whose time put it there (`blockMismatch`) gets one quiet line under it, `blockMismatchLine`, with two outline actions: "Move it" (`PATCH { dueTime: start }`) and "Keep here" (`PATCH { timeBlockId: <this block> }`, so it is picked and never asked again; no new table). Words left, actions right, the actions wrapping under the words at the right (not full width: on a phone a list of full-width buttons swamped the tasks).
+  - After a hint's tap the line goes (and Move it takes the row to another box), so focus moves to the task's Plan button where it now sits (`li[data-task-id]`), else to its box's header; never back to the page top.
+  - `TaskGroups` is lazy (its own chunk with `block-hints`), and reads the tasks and the day itself.
 - **`DayBlocks`** (rename its `COPY` title to "Your day" so it does not clash):
   - It draws the day's slots in clock order as bands with the block's colour.
   - Inside each band go the tasks that fall in it, by `blockOfTask`, with their times and a "Focused" bar as now.
@@ -633,6 +665,7 @@ A name instead of an id (`template` on pattern and days, `timeBlock` on nodes) i
   - `Plan` gains `timeBlockId: string | null`; `planOf`, `planBody` and `planProblem` carry it.
   - A "Time block" select sits beside Area. The first option is "By its time", which is null. Then come the blocks of the task's do day (or Daily's day), under the optgroup "In the day", then "Other blocks".
   - The blocks come from `useTimeBlocks` for the week of that day.
+  - Under the time (2026-11-07): with no block picked and a time set, when `blockMismatch` finds that time in a block meant for another area or pillar and a better block that day, one quiet line (`blockMismatchLine`) and a "Use <block>'s time" link that sets the time to the free start Daily's Move it would pick. It sits right under the time and minutes fields on a phone and under that whole row from the tablet width (`sm:order-last`), and reads Daily's cached answer for the day (load, timed tasks) and the time now, so it names the same block as Daily. Words only, never a popup, never stops a save. It needs the task's pillar (`pillar` on `TaskPlanFields`: Daily's panel, the pillar page's sheets, the month calendar's add form and Plan my week's own form pass it).
 
 ### Plan my week (`WeekPlanBody.tsx`)
 
@@ -696,7 +729,7 @@ One signal, kept cheap and honest. The rest is left for later.
 | D: web Daily | `screens/Today.tsx`, `TaskGroups.tsx`, `DayBlocks.tsx`, `TaskPlan.tsx` (`TaskPlanFields`, `TaskTags`), `WeekPlan.tsx` and `WeekPlanBody.tsx` |
 
 C and D build against the signatures in this doc. D imports `BlockTag`, `DayTemplateSelect` and `useTimeBlocks` from C by the paths named here. B's smoke checks:
-- the first `GET /time-blocks` seeds 14 blocks and 14 templates, and a second read adds nothing;
+- the first `GET /time-blocks` shows 14 blocks and 14 templates from code and writes nothing, and the first change writes them with the same ids;
 - Everyday's slots;
 - an overlap answers 400;
 - deleting a block clears it from a task;

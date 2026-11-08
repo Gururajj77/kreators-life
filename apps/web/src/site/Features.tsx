@@ -12,22 +12,15 @@ import { CardHead } from '../components/CardHead';
 import { Icon } from '../components/Icon';
 import { ArrowUpRight } from 'lucide-react';
 import { BookShelf } from '../components/BookShelf';
-import { bentoSpans } from '../lib/bento';
+import { evenGrid, evenTile } from '../lib/bento';
 import { SITE_LINK_INLINE, SITE_PRIMARY_ON_GLASS } from './buttons';
 
-const SM = ['', '', 'sm:col-span-2'];
-const LG = ['', 'lg:col-span-1', 'lg:col-span-2', 'lg:col-span-3', 'lg:col-span-4'];
-
 /**
- * Two columns on a tablet and four on a laptop, the first cards wide until the last row is full (lib/bento.ts), so a group never ends with
- * a hole. A tablet keeps two columns because a card's name shares its first row with the app's mark: in a quarter of a tablet's width
- * "Mindfulness" or "Leaderboard" would not fit beside it.
+ * One column on a phone, two on a tablet and four on a laptop, in even rows (lib/bento.ts), so a group never ends with a hole or a lone card.
+ * A tablet keeps two columns because a card's name shares its first row with the app's mark: in a quarter of a tablet's width "Mindfulness"
+ * or "Leaderboard" would not fit beside it.
  */
-function span(i: number, n: number): string {
-  const a = bentoSpans(n, 2)[i] ?? 1;
-  const b = bentoSpans(n, 4)[i] ?? 1;
-  return `${SM[a] ?? ''} ${LG[b] ?? ''}`;
-}
+const CARD_COLS = { base: 1, sm: 2, lg: 4 } as const;
 
 /** Everything a creator needs, by group: every app, each opening into its own page. */
 export function Features() {
@@ -51,7 +44,7 @@ export function Features() {
         </div>
         {/* Bumling, the app's own guide, keeps the header from sitting all on the left. */}
         <GuideLine host={BUMLING.key} side="right" mood="excited" size={96} hang className="justify-self-stretch">
-          Tell me what you want, and I’ll switch on just those apps.
+          Tell me what you want, and I’ll show just those apps.
         </GuideLine>
       </header>
       {groups.map((g) => {
@@ -62,9 +55,9 @@ export function Features() {
             <h2 id={`group-${g}`} className="type-hook text-display-3">
               {MODULE_GROUPS[g]}
             </h2>
-            <ul className="mt-sm grid list-none gap-sm p-0 m-0 sm:grid-cols-2 lg:grid-cols-4">
+            <ul className={`mt-sm grid list-none gap-sm p-0 m-0 ${evenGrid(list.length, CARD_COLS)}`}>
               {list.map((m, i) => (
-                <Reveal as="li" index={i % 4} key={m.key} className={span(i, list.length)}>
+                <Reveal as="li" index={i % 4} key={m.key} className={evenTile(i, list.length, CARD_COLS)}>
                   {/* The card rule: the name and its line at the top left, the app's mark in the top right corner, and an arrow at the
                       bottom right that nudges on hover, so every card in a row has the same things in the same places. */}
                   <Link to={`/features/${m.key}`} className="group toy toy-soft fx-spot flex h-full flex-col rounded-tile bg-card p-md sm:min-h-[120px]">

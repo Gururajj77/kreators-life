@@ -16,6 +16,8 @@ export interface JournalEntry {
   stressors: string[];
   createdAt: string;
   updatedAt: string;
+  /** The day it is filed on, in the person's own zone (the list sends it). */
+  day?: string;
 }
 
 export const POST_CATEGORIES = ['Self care', 'Mindfulness', 'Stories', 'Support', 'Creative', 'Learning', 'Stress', 'Affirmation', 'Awareness'] as const;
@@ -250,22 +252,71 @@ export interface Notification {
 }
 
 /**
- * Inbox tabs, by what a note is about. All holds everything; Team is only offered to staff and admins. A kind that is
- * in no tab shows under All only.
+ * Inbox tabs, by what a note is about (the founder, 2026-11-07: "inbox items are not going in right place"). Everything
+ * holds every note; each kind sits in exactly one other tab, so nothing shows under Everything alone. The first three stay
+ * Everything, Replies and mentions, Following; the rest follow by how often a person needs them: Reminders (they
+ * come every day), Events, Friends, Work, Shop and money, School and coaching. Agency is offered only while Agency is
+ * on for the person (its notes still show under Everything when it is off), and Team only to staff and admins.
  */
-export const INBOX_TABS = ['all', 'replies', 'following', 'events', 'coaching', 'agency', 'team'] as const;
+export const INBOX_TABS = ['all', 'replies', 'following', 'reminders', 'events', 'friends', 'work', 'shop', 'learning', 'agency', 'team'] as const;
 export type InboxTab = (typeof INBOX_TABS)[number];
-export const INBOX_TAB_META: Record<InboxTab, { name: string; kinds: readonly string[] }> = {
+
+/**
+ * Every kind of note the server writes into the inbox (`notifications.kind`), filed under its tab: this map is the one
+ * place a kind is named, so a kind cannot be left out of a tab (and the shared test refuses one named in two). The stored
+ * strings never change, so old rows land in their tab. `notify`, `notifyMany` and every raw insert take an `InboxKind`.
+ */
+const TAB_KINDS = {
+  // Someone answered or named you, or the team wrote back: replies (posts, channels, cohort and run talk), @mentions, a
+  // creator answering a paid question (dm), the team's reply to a help ticket (support), and what a guide did with
+  // something you wrote (moderation: hidden, taken down, muted, your first post is up). These go to the writer, not staff.
+  replies: ['reply', 'mention', 'dm', 'support', 'moderation'],
+  // People and posts you follow: a new reply on a followed post, a new follower, a creator's broadcast and email sequence,
+  // and the monthly leaderboard season's top three (the community's board).
+  following: ['thread', 'follow', 'broadcast', 'sequence', 'season'],
+  // Your own reminders, the daily check-in, Remember tasks, the focus nudge and scheduled reviews.
+  reminders: ['reminder'],
+  // Events you signed up for or host: Party, circles and runs, their reminders a day and an hour before, photos, seats.
+  // `event` is kept for older rows.
+  events: ['party', 'circle', 'run', 'event'],
+  // Friend requests and yeses, introductions, an anonymous chat opened with you, private channels.
+  friends: ['bond'],
+  // Applications in Work, Army campaigns and brands (org), a run club's brand collab (collab), Rewards for views (win), Club
+  // membership, a TV or Fund pitch.
+  work: ['work', 'campaign', 'org', 'collab', 'win', 'club', 'tv', 'fund'],
+  // Orders and sales, bookings, refunds, leads, an affiliate sale, a review or a completion of your product (certificate),
+  // pre-owned offers and chats (store), payout details (kyc) and a Finance invoice falling due.
+  shop: ['order', 'booking', 'refund', 'lead', 'affiliate', 'review', 'certificate', 'store', 'kyc', 'invoice'],
+  // Programs, hand-ins and invites to a private program or course, and your life coach.
+  learning: ['school', 'invite', 'coach'],
+  // Client answers, months made, invoices due and past due, team asks, password asks.
+  agency: ['agency'],
+  // The team's own work, sent only to staff and admins: security alerts, coach asks, live-call asks, copyright notices.
+  team: ['team'],
+} as const satisfies Record<Exclude<InboxTab, 'all'>, readonly string[]>;
+export type InboxKind = (typeof TAB_KINDS)[keyof typeof TAB_KINDS][number];
+export const INBOX_KINDS: readonly InboxKind[] = Object.values(TAB_KINDS).flat();
+export const isInboxKind = (v: unknown): v is InboxKind => typeof v === 'string' && (INBOX_KINDS as readonly string[]).includes(v);
+/** The kinds only staff and admins are ever sent; they sit in Team and nowhere else. */
+export const STAFF_INBOX_KINDS: readonly InboxKind[] = TAB_KINDS.team;
+
+export const INBOX_TAB_META: Record<InboxTab, { name: string; kinds: readonly InboxKind[] }> = {
   all: { name: 'Everything', kinds: [] },
-  replies: { name: 'Replies and mentions', kinds: ['reply', 'mention'] },
-  following: { name: 'Following', kinds: ['thread', 'follow', 'broadcast'] },
-  events: { name: 'Events', kinds: ['party', 'circle', 'run', 'event'] },
-  coaching: { name: 'Coaching', kinds: ['coach'] },
-  // Client answers, months made, invoices due and past due. Offered only while Agency is on for the person.
-  agency: { name: 'Agency', kinds: ['agency'] },
-  // Notes about work waiting for the team, such as an ask to be made a life coach.
-  team: { name: 'Team', kinds: ['team'] },
+  replies: { name: 'Replies and mentions', kinds: TAB_KINDS.replies },
+  following: { name: 'Following', kinds: TAB_KINDS.following },
+  reminders: { name: 'Reminders', kinds: TAB_KINDS.reminders },
+  events: { name: 'Events', kinds: TAB_KINDS.events },
+  friends: { name: 'Friends', kinds: TAB_KINDS.friends },
+  work: { name: 'Work', kinds: TAB_KINDS.work },
+  shop: { name: 'Shop and money', kinds: TAB_KINDS.shop },
+  learning: { name: 'School and coaching', kinds: TAB_KINDS.learning },
+  agency: { name: 'Agency', kinds: TAB_KINDS.agency },
+  team: { name: 'Team', kinds: TAB_KINDS.team },
 };
+/** The one tab (besides Everything) a kind of note sits in. */
+export function inboxTabOf(kind: InboxKind): InboxTab {
+  return INBOX_TABS.find((t) => t !== 'all' && INBOX_TAB_META[t].kinds.includes(kind)) ?? 'all';
+}
 export const isInboxTab = (v: unknown): v is InboxTab => typeof v === 'string' && (INBOX_TABS as readonly string[]).includes(v);
 export type InboxShow = 'inbox' | 'unread' | 'archived';
 

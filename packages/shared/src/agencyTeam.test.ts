@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_TEAM, MAX_TEAM_INVITES, TEAM_ROLES, TEAM_TABS, TERMS, HOW_TO, parseTeamAccess, teamAllows, teamDefaults, type TeamAccess } from './index';
+import { MAX_TEAM, MAX_TEAM_INVITES, TEAM_ROLES, TEAM_TABS, TERMS, parseTeamAccess, teamAllows, teamDefaults, type TeamAccess } from './index';
+import { HOW_TO } from './help';
 
 describe('agency team access', () => {
   it('starts each role where the spec says', () => {

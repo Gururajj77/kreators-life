@@ -5,7 +5,7 @@ In this lesson you'll learn:
 
 - How to make a task repeat, and when it counts as a habit.
 - How the not to do list and its streaks work.
-- How Remember, water and your own reminders reach you.
+- How Remember and your own reminders reach you, and how your Inbox works.
 - How your morning routine fits under Show up.
 
 ## Making a task repeat
@@ -38,7 +38,7 @@ The **Not to do** list holds the things you are staying away from, like "No phon
 2. Each day, tick each one you kept. A kept day pays 5 xp and grows its streak.
 3. The three-dot button opens the row in place. It shows your best run, **I slipped today** and **Remove from the list**.
 
-A slip or a missed day starts the streak over. Removing an item asks first. The xp you earned stays. The same list shows on the Pillars tab, under your seven pillars.
+A slip or a missed day starts the streak over. Forgot to mark yesterday? A quiet line under the list, **Yesterday: 2 not marked**, opens those items in place, each with **Kept** and **Slipped**. It works for yesterday only, never earlier. Removing an item asks first. The xp you earned stays. The same list shows on the Pillars tab, under your seven pillars.
 
 ## Remember
 
@@ -47,17 +47,27 @@ In a task's plan, **Remember** is a tag for things you want to keep in mind.
 - **With a day:** one note lands in your inbox on that day, at the task's time, or at 9:00 when it has none.
 - **With no day:** the task waits in **To remember** on Daily, always in sight. Pick a day to move it into Tasks, with its inbox note.
 
+## Your Inbox
+
+Every note the app sends you lands in one place. Tap the bell on Home to open it. On a tablet or a laptop, the bell at the top of the sidebar opens it too and shows your unread count. On a phone, that count sits on the **Apps** tab.
+
+- **The tabs:** **Everything** holds it all. Each note also sits in one tab of its own: **Replies and mentions**, **Following**, **Reminders**, **Events**, **Friends**, **Work**, **Shop and money** or **School and coaching**. **Agency** shows while you use it.
+- **Tap a note:** it opens the page and the section it is about.
+- **Mark all read:** it marks every note in the tab you are on.
+- **Archive read items:** it puts away what you have read. After you archive one note, **Undo** stays for a few seconds.
+- **The date and time:** they sit at the bottom right of each card.
+
 ## Water and your reminders
 
-On a phone, Daily has a **Water and reminders** section. Tap **+ Glass** each time you drink. On a laptop, the same panel opens from a small bubble at the left of the screen.
+On a phone or a tablet, Daily has a **Water and reminders** section. Tap **+ Glass** each time you drink. On a laptop, the same panel opens from a small bubble at the left of the screen.
 
 Open it and you get one card with three round buttons: Water, Reminders and Settings.
 
 - **Water:** a glass fills toward your daily goal. Pick an amount and add it, or undo the last one. Below it, the last seven days show which days met the goal.
-- **Settings:** **Remind me to drink** sends a note to your inbox until the goal is met, every two or four hours, between the times you pick. You also set your daily goal and the size of your glass.
+- **Settings:** your daily goal and the size of your glass.
 - **Reminders:** your own reminders, like "Stretch for five minutes". Each has a time and the days it repeats. You can keep up to twelve.
 
-Water pays no xp. It is there to help you keep one simple goal.
+Water pays no xp. It is there to help you keep one simple goal. The app does not remind you to drink. If you want a nudge, add your own reminder.
 
 ## Your routine under Show up
 

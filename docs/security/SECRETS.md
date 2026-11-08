@@ -7,7 +7,7 @@ Where a secret lives: **Cloudflare secret** (`pnpm cf:secret NAME` sets it on th
 | Name | What it does | Who owns it | Where it is stored | Last rotated | How to rotate |
 |---|---|---|---|---|---|
 | `ADMIN_KEY` | opens `/api/admin/*` without a session | founder | Cloudflare secret; local `.dev.vars` (dev value only) | | make a new 32+ character random value, `pnpm cf:secret ADMIN_KEY`, update your password manager |
-| `CLICK_SALT` | hashes click addresses and anonymous aliases | founder | Cloudflare secret | | changing it changes anonymous names in old threads and breaks click de-duplication; rotate only if leaked |
+| `CLICK_SALT` | hashes click addresses, anonymous aliases, and the addresses and typed emails in `rate_limits` keys | founder | Cloudflare secret | | changing it changes anonymous names in old threads, breaks click de-duplication and starts the counts of tries again; rotate only if leaked |
 | `RAZORPAY_KEY_ID` | public checkout id | founder | Cloudflare variable | | Razorpay dashboard, then update |
 | `RAZORPAY_KEY_SECRET` | creates orders and refunds | founder | Cloudflare secret | | Razorpay dashboard, regenerate key, update, test a payment in test mode |
 | `RAZORPAY_WEBHOOK_SECRET` | verifies webhook signatures | founder | Cloudflare secret + Razorpay webhook settings | | set a new secret in Razorpay's webhook, then `pnpm cf:secret RAZORPAY_WEBHOOK_SECRET` at once |

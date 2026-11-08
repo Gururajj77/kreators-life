@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { EVENT_APPS, MAX_EVENT_MESSAGE, MAX_REPLY_DEPTH, photoLinkProblem, threadOrder, type EventApp, type EventExtras, type EventMessage, type EventPerson } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { anonAlias, can, liveUser, nameOf, newId, notifyMany, nowIso, publicOf, str } from '../db';
+import { anonAlias, blockedByName, can, hiddenByBlock, liveUser, nameOf, newId, notifyMany, nowIso, publicOf, str } from '../db';
 import { requestFriend } from './bond';
 
 /**
@@ -43,7 +43,8 @@ async function eventFor(db: D1Database, user: UserRow, appName: string, id: stri
   const member = await db.prepare("SELECT 1 FROM run_members WHERE club_id = ? AND user_id = ? AND status = 'member'").bind(r.club_id, user.id).first();
   const role = r.host_user_id === user.id || can(user, 'events') ? 'host' : member ? 'guest' : null;
   return {
-    app, id, title: r.title, startsAt: r.starts_at, endsAt: r.ends_at, status: r.status, role, path: '/run',
+    // The folder sits under the run on its club's page, folded in "Photos and people"; the hash opens it (lib/useLandOnHash.ts).
+    app, id, title: r.title, startsAt: r.starts_at, endsAt: r.ends_at, status: r.status, role, path: `/run/clubs/${r.club_id}#run-photos-${id}`,
     guestIds: async () => (await db.prepare("SELECT user_id FROM run_members WHERE club_id = ? AND status = 'member' LIMIT 500").bind(r.club_id).all<{ user_id: string }>()).results.map((x) => x.user_id),
   };
 }
@@ -60,7 +61,7 @@ async function extrasFor(env: { CLICK_SALT?: string }, db: D1Database, user: Use
     .prepare(
       `SELECT m.id, m.user_id, m.body, m.created_at, m.anonymous, m.parent_id, m.depth, u.display_name, u.handle FROM event_messages m JOIN users u ON u.id = m.user_id
        WHERE m.app = ?1 AND m.event_id = ?2 AND m.removed_by IS NULL AND m.app != 'run'
-         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ?3 AND b.blocked_id = m.user_id) OR (b.blocker_id = m.user_id AND b.blocked_id = ?3))
+         AND NOT ${hiddenByBlock('?3', 'm.user_id', 'm.anonymous')}
        ORDER BY m.created_at DESC LIMIT 200`,
     )
     .bind(ev.app, ev.id, user.id)
@@ -103,7 +104,7 @@ async function extrasFor(env: { CLICK_SALT?: string }, db: D1Database, user: Use
        WHERE u.id != ?3 AND ${liveUser()}
          AND (EXISTS (SELECT 1 FROM event_networking n WHERE n.app = ?1 AND n.event_id = ?2 AND n.user_id = u.id)
               OR (?1 = 'party' AND EXISTS (SELECT 1 FROM event_registrations r WHERE r.event_id = ?2 AND r.user_id = u.id AND r.networking_opt_in = 1 AND r.status IN ('registered','attended'))))
-         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ?3 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = ?3))
+         AND NOT ${blockedByName('?3', 'u.id')}
        ORDER BY u.display_name LIMIT 100`,
     )
     .bind(ev.app, ev.id, user.id)
@@ -154,7 +155,7 @@ connect.post('/:app/:id/messages', async (c) => {
   let parentId: string | null = null;
   let depth = 0;
   if (typeof body.parentId === 'string' && body.parentId) {
-    const parent = await db.prepare('SELECT id, parent_id, depth FROM event_messages WHERE id = ? AND app = ? AND event_id = ? AND removed_by IS NULL').bind(body.parentId, g.ev.app, g.ev.id).first<{ id: string; parent_id: string | null; depth: number }>();
+    const parent = await db.prepare(`SELECT m.id, m.parent_id, m.depth FROM event_messages m WHERE m.id = ?2 AND m.app = ?3 AND m.event_id = ?4 AND m.removed_by IS NULL AND NOT ${hiddenByBlock('?1', 'm.user_id', 'm.anonymous')}`).bind(user.id, body.parentId, g.ev.app, g.ev.id).first<{ id: string; parent_id: string | null; depth: number }>();
     if (!parent) return c.json({ error: 'That line is gone.' }, 404);
     parentId = parent.depth >= MAX_REPLY_DEPTH ? parent.parent_id : parent.id;
     depth = Math.min(parent.depth + 1, MAX_REPLY_DEPTH);
@@ -193,6 +194,7 @@ connect.put('/:app/:id/photos', async (c) => {
     .bind(g.ev.app, g.ev.id, url, str(body.note, 200), user.id, nowIso())
     .run();
   // Everyone on the list hears once when the folder first appears, and again if the link changes.
+  // The event's own place (eventFor). note-link: /party/:id, /run/clubs/:id#run-photos-:id
   if (!prev || prev.url !== url) await notifyMany(db, (await g.ev.guestIds()).filter((x) => x !== user.id), g.ev.app, `Photos from ${g.ev.title}`, 'The host shared a folder. Open the event to get yours.', g.ev.path);
   return c.json({ ok: true });
 });

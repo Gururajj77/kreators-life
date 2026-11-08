@@ -17,7 +17,9 @@ for (const [w, h] of [[1280, 900], [390, 844]]) {
       const r = await page.evaluate(() => [...document.querySelectorAll('main section > div.flex.items-start.justify-between')].map((row) => {
         const h2 = row.querySelector('h2'); const act = row.children[1]; if (!h2 || !act) return null;
         const inner = act.querySelector('a,button'); if (!inner) return null;
-        const tr = h2.getBoundingClientRect();
+        // An action drawn only from the tablet up (Bond's New channel, which a phone shows under the heading) has no box here. A title on two lines is judged by its first: the action sits level with that.
+        if (!inner.getClientRects().length) return null;
+        const titleRange = document.createRange(); titleRange.selectNodeContents(h2); const tr = titleRange.getClientRects()[0] ?? h2.getBoundingClientRect();
         const range = document.createRange(); range.selectNodeContents(inner); const lr = range.getBoundingClientRect();
         return { link: inner.tagName === 'A', chevron: Boolean(inner.querySelector('svg')), title: h2.textContent.trim().slice(0, 24), titleMid: Math.round((tr.top + tr.bottom) / 2), actionMid: Math.round((lr.top + lr.bottom) / 2) };
       }).filter(Boolean));

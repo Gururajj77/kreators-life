@@ -1,10 +1,10 @@
-import { PLAN_DEFAULT_MINUTES, RELATIONSHIP_BY_KEY, dayBlocks, minuteOf, slotIndexOfTask, slotLength, slotOrder, slotRangeLabel, spanLabel, minuteLabel, type DayPlan, type FocusRoundRow, type Node, type TimeBlock } from '@kreators/shared';
+import { PLAN_DEFAULT_MINUTES, RELATIONSHIP_BY_KEY, dayBlocks, minuteOf, slotIndexOfTask, slotLength, slotOrder, spanLabel, type DayPlan, type FocusRoundRow, type Node, type TimeBlock } from '@kreators/shared';
 import { tbClass, tbStyle } from '../lib/blockColor';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { Link } from 'react-router';
 import { api } from '../lib/api';
-import { todayLocal } from '../lib/date';
+import { todayLocal, clockAt, slotRange } from '../lib/date';
 import { useRefreshAll } from '../lib/queries';
 import { useSession } from '../lib/store';
 import { SELECT_SM } from '../lib/ui';
@@ -147,7 +147,7 @@ export function DayBlocks({
   for (const s of slots) {
     if (choices.some((c) => c.id === s.blockId)) continue;
     const b = blockById.get(s.blockId);
-    if (b) choices.push({ id: b.id, label: `${b.name}, ${slotRangeLabel(s)}` });
+    if (b) choices.push({ id: b.id, label: `${b.name}, ${slotRange(s)}` });
   }
 
   const line = (p: Placed) => {
@@ -157,7 +157,7 @@ export function DayBlocks({
       <li key={p.t.id} className="list-none">
         <div className="flex items-start justify-between gap-sm">
           <p className="m-0 min-w-0 text-subhead">
-            {p.start !== null && <span className="whitespace-nowrap text-ink-soft">{minuteLabel(p.start)} </span>}
+            {p.start !== null && <span className="whitespace-nowrap text-ink-soft">{clockAt(p.start)} </span>}
             <Inert text={p.t.title} />
           </p>
           {p.overlaps && <StatusTag tone="warn">{COPY.overlaps}</StatusTag>}
@@ -200,7 +200,7 @@ export function DayBlocks({
                   <div className="flex items-start justify-between gap-sm">
                     <div className="min-w-0">
                       <p className="m-0 text-eyebrow uppercase text-ink-soft">
-                        {slotRangeLabel(s)}, {spanLabel(len)}
+                        {slotRange(s)}, {spanLabel(len)}
                       </p>
                       <p className="m-0 text-headline">{b?.name ?? 'A block'}</p>
                     </div>

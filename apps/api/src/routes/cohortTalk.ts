@@ -17,7 +17,7 @@ import {
   type CohortTalkVisibility,
 } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { audit, nameOf, newId, notify, nowIso, pageOf, paged, str } from '../db';
+import { audit, hiddenByBlock, nameOf, newId, notify, nowIso, pageOf, paged, seenBy, str } from '../db';
 import { blockBehind } from './community';
 import { cohortRole } from './school';
 
@@ -64,11 +64,11 @@ async function roomFor(db: D1Database, user: UserRow, cohortId: string): Promise
   return enrolled ? { cohort, moderator: false } : null;
 }
 
-/** Whether ?1 (the reader) and `col` have blocked each other either way. */
-const BLOCKED = (col: string) => `EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ?1 AND b.blocked_id = ${col}) OR (b.blocker_id = ${col} AND b.blocked_id = ?1))`;
+/** Whether a block keeps line `t` from ?1 (the reader). A private member counts as anonymous here, or blocking a suspect by name would say whose masked name it is. */
+const BLOCKED = `${hiddenByBlock('?1', 't.user_id', `(COALESCE((SELECT v.visibility FROM cohort_talk_prefs v WHERE v.cohort_id = t.cohort_id AND v.user_id = t.user_id), '${COHORT_TALK_DEFAULT_VISIBILITY}') != 'public')`)}`;
 // ?1 reader, ?2 cohort.
 const LINE_SQL = `SELECT t.id, t.thread_id, t.parent_id, t.reply_to_id, t.depth, t.user_id, t.body, t.created_at, t.deleted_at,
-  u.display_name, u.handle, u.friend_code, p.visibility, CASE WHEN ${BLOCKED('t.user_id')} THEN 1 ELSE 0 END AS blocked
+  u.display_name, u.handle, u.friend_code, p.visibility, CASE WHEN ${BLOCKED} THEN 1 ELSE 0 END AS blocked
   FROM cohort_talk t JOIN users u ON u.id = t.user_id
   LEFT JOIN cohort_talk_prefs p ON p.cohort_id = t.cohort_id AND p.user_id = t.user_id`;
 
@@ -194,7 +194,7 @@ cohortTalk.post('/:id/talk', async (c) => {
   let answered: { user_id: string } | null = null;
   if (typeof body.parentId === 'string' && body.parentId) {
     const parent = await db
-      .prepare(`SELECT t.id, t.user_id, t.thread_id, t.parent_id, t.depth FROM cohort_talk t WHERE t.id = ?2 AND t.cohort_id = ?3 AND t.deleted_at IS NULL AND NOT ${BLOCKED('t.user_id')}`)
+      .prepare(`SELECT t.id, t.user_id, t.thread_id, t.parent_id, t.depth FROM cohort_talk t WHERE t.id = ?2 AND t.cohort_id = ?3 AND t.deleted_at IS NULL AND NOT ${BLOCKED}`)
       .bind(user.id, body.parentId, room.cohort.id)
       .first<{ id: string; user_id: string; thread_id: string; parent_id: string | null; depth: number }>();
     if (!parent) return c.json({ error: 'That line is gone.' }, 404);
@@ -208,8 +208,8 @@ cohortTalk.post('/:id/talk', async (c) => {
     .bind(id, room.cohort.id, user.id, place.threadId, place.parentId, place.replyToId, place.depth, text, now)
     .run();
   // The one they answered hears about it, by the name the writer shows in this cohort, never their real one when they are private.
-  if (answered && answered.user_id !== user.id) {
-    const me = await meFor(db, user, room.cohort.id);
+  const me = answered ? await meFor(db, user, room.cohort.id) : null;
+  if (answered && me && (await seenBy(db, user.id, me.handle === null || me.visibility !== 'public', [answered.user_id])).has(answered.user_id)) {
     await notify(db, answered.user_id, 'reply', `${me.label} replied to you in ${room.cohort.name}`, text.slice(0, 120), talkLink(room.cohort.id));
   }
   // A reply kept beside the line it answers names that line, so the answered row goes to present() with it.
@@ -247,7 +247,7 @@ cohortTalk.post('/:id/talk/:lineId/report', async (c) => {
   const room = await withRoom(c);
   if (!room) return c.json({ error: 'not found' }, 404);
   const line = await db
-    .prepare(`SELECT t.id, t.user_id, t.body FROM cohort_talk t WHERE t.id = ?2 AND t.cohort_id = ?3 AND t.deleted_at IS NULL AND NOT ${BLOCKED('t.user_id')}`)
+    .prepare(`SELECT t.id, t.user_id, t.body FROM cohort_talk t WHERE t.id = ?2 AND t.cohort_id = ?3 AND t.deleted_at IS NULL AND NOT ${BLOCKED}`)
     .bind(user.id, c.req.param('lineId'), room.cohort.id)
     .first<{ id: string; user_id: string; body: string }>();
   if (!line) return c.json({ error: 'not found' }, 404);

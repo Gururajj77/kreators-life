@@ -1,16 +1,17 @@
-import { BADGE_FAMILIES, BADGE_FAMILY_META, BADGE_TIER_LABEL, BADGE_TIERS, BADGES, badgeProgress, type Badge, type BadgeTier, type HeldBadge, LOCALE } from '@kreators/shared';
+import { BADGE_FAMILIES, BADGE_FAMILY_META, BADGE_TIER_LABEL, BADGE_TIERS, BADGES, badgeProgress, type Badge, type BadgeTier, type HeldBadge } from '@kreators/shared';
 import { keepTail } from '../lib/textNodes';
 import { useWide } from '../lib/useWide';
 import { Fold } from './Fold';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
-import { bento } from '../lib/bento';
+import { evenGrid, evenTile } from '../lib/bento';
 import { useAuthed } from '../lib/queries';
 import { useParamState } from '../lib/useParamState';
 import { BadgeArt } from './BadgeArt';
 import { Sheet } from './Sheet';
 import { Busy, Skeleton } from './Skeleton';
 import { TabRow } from './TabRow';
+import { longDate } from '../lib/date';
 
 const TIER_ITEMS: { key: BadgeTier | 'all'; label: string }[] = [{ key: 'all', label: 'Every tier' }, ...BADGE_TIERS.map((t) => ({ key: t, label: BADGE_TIER_LABEL[t] }))];
 
@@ -19,6 +20,8 @@ const TIER_ITEMS: { key: BadgeTier | 'all'; label: string }[] = [{ key: 'all', l
  * where it can be counted, how far along you are. Tap one for the big medal and its details. Counts come from `GET /me/badges`; nothing here
  * reads what you wrote. Badges from the journal, money and focus time are marked private and stay on your own screens.
  */
+/** Badge tiles: two to a row on a phone and a tablet (a column of 464px beside the sidebar), four from the laptop width, in even rows (lib/bento.ts). */
+const BADGE_COLS = { base: 2, lg: 4 } as const;
 const SEEN = 'kreators.badgesSeen';
 const FRESH_MS = 10 * 60_000;
 
@@ -37,7 +40,7 @@ function writeSeen(keys: Set<string>) {
   }
 }
 
-const day = (iso: string) => new Date(iso).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
+const day = longDate;
 
 function Bar({ pct, label }: { pct: number; label: string }) {
   return (
@@ -149,7 +152,7 @@ export function BadgeGallery() {
 
       {q.isLoading && (
         <Busy label="Loading your badges" className="mt-md">
-          <div className="grid grid-cols-2 gap-sm md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-sm lg:grid-cols-4">
             {Array.from({ length: 8 }, (_, i) => (
               <Skeleton key={i} className="h-[176px]" />
             ))}
@@ -169,9 +172,9 @@ export function BadgeGallery() {
           const body = (
             <>
               <p className="mt-xs m-0 text-caption text-ink-soft">{BADGE_FAMILY_META[f].blurb}</p>
-              <ul className="mt-sm grid list-none grid-cols-2 gap-sm p-0 m-0 md:grid-cols-4">
+              <ul className={`mt-sm grid list-none gap-sm p-0 m-0 ${evenGrid(ordered.length, BADGE_COLS)}`}>
                 {ordered.map((b, i) => (
-                  <li key={b.key} className={bento(i, ordered.length, 2, 4)}>
+                  <li key={b.key} className={evenTile(i, ordered.length, BADGE_COLS)}>
                     <Tile b={b} held={held.get(b.key)} count={q.data.progress[b.stat] ?? 0} fresh={fresh.has(b.key)} onOpen={() => setOpen(b.key)} />
                   </li>
                 ))}

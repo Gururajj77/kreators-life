@@ -2,10 +2,10 @@ import { Hono, type Context } from 'hono';
 import { rewardSocial, trustFor } from '../rewards';
 import { money, percentOff, productPayWays, unlockFor } from '@kreators/shared';
 import { haveFor } from '../unlocks';
-import { pageOf, paged } from '../db';
+import { pageOf, paged, streakNow } from '../db';
 import { AFFILIATE_SHARE, levelFromXp, type Lesson, type PublicPage } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { DATE_RE, nameOf, newId, notify, nowIso, parseList, parseSocials, sessionUser, publicOf, getStats, badgeState, publicBadgeKeys, honorKeys, linksOf } from '../db';
+import { blockedEither, DATE_RE, dayInZone, nameOf, newId, notify, nowIso, parseList, parseSocials, sessionUser, publicOf, getStats, badgeState, publicBadgeKeys, honorKeys, linksOf } from '../db';
 import { slotsFor, type AvailabilityOverride } from '@kreators/shared';
 import { paymentsConfig, providerFor } from '../payments';
 import { logEvent, sendEmail, track } from '../ops';
@@ -106,7 +106,7 @@ async function pageFor(c: Context<AppEnv>, owner: UserRow): Promise<PublicPage> 
     allowFriendRequests: open && ps.allowFriendRequests,
     allowChats: open && ps.allowChats,
     posts: posts.results.map((p) => ({ id: p.id, category: p.category, body: p.body, likes: p.likes, replies: p.replies, createdAt: p.created_at })),
-    activity: stats && shows.activity ? { level: levelFromXp(owner.xp), streak: owner.streak, areasSetUp: stats.relationshipsWithPillars, memberSince: owner.created_at } : null,
+    activity: stats && shows.activity ? { level: levelFromXp(owner.xp), streak: streakNow(owner.streak, owner.last_checkin, dayInZone(owner.timezone)), areasSetUp: stats.relationshipsWithPillars, memberSince: owner.created_at } : null,
     badges: shownBadges,
     honors,
     links: shows.blocks ? linksOf(owner).filter((b) => b.on) : [],
@@ -137,7 +137,7 @@ publicPage.post('/:handle/lead', async (c) => {
   if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return c.json({ error: 'a name and a real email, please' }, 400);
   const message = typeof body.message === 'string' ? body.message.trim().slice(0, 1000) : '';
   await db.prepare('INSERT INTO leads (id, owner_id, name, email, message, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(newId(), owner.id, name, email, message, 'page', nowIso()).run();
-  await notify(db, owner.id, 'lead', `New lead: ${name}`, message || email, '/shop/audience');
+  await notify(db, owner.id, 'lead', `New lead: ${name}`, message || email, '/shop/audience#leads-heading');
   return c.json({ ok: true }, 201);
 });
 
@@ -375,7 +375,7 @@ store.post('/:productId/checkout', async (c) => {
   if (!live) {
     await track(db, user.id, 'payment_succeeded', { productId: product.id, method: pay });
     await notify(db, product.owner_id, 'order', `${nameOf(user)} got ${product.title}${replay ? ' (replay)' : ''}`, pay === 'points' ? `${paidPoints} points${src.linkId ? ', via a tracked link' : ''}` : `${money(cents, product.currency)}, test mode`, product.kind === 'dm' ? '/shop/dm' : `/shop/products/${product.id}`);
-    if (affiliate) await notify(db, affiliate.id, 'affiliate', 'Your link made a sale', `${product.title}, ${share} points to you`, '/shop/audience');
+    if (affiliate) await notify(db, affiliate.id, 'affiliate', 'Your link made a sale', `${product.title}, ${share} points to you`, '/shop/audience#aff-heading');
     await sendEmail(db, c.env, { userId: user.id, to: user.email, subject: `Your receipt: ${product.title}`, body: `You got ${product.title}${pay === 'points' && paidPoints > 0 ? ` for ${paidPoints} points` : ''}${discount ? ` with the code ${discount.row.code}` : ''}. Find it under My purchases.` });
   }
   const row = await db.prepare(`${ORDER_SELECT} WHERE o.id = ?`).bind(id).first<OrderRow>();
@@ -404,15 +404,17 @@ store.get('/library', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const ask = pageOf(c);
-  const [ordersAll, bookings] = await Promise.all([
+  const bkAsk = pageOf(c, 'bk');
+  const [ordersAll, bookingRows] = await Promise.all([
     db.prepare(`${ORDER_SELECT} WHERE o.buyer_id = ? AND o.status IN ('paid','test') ORDER BY o.created_at DESC LIMIT ? OFFSET ?`).bind(user.id, ask.limit, ask.offset).all<OrderRow>(),
-    db.prepare(`${BOOKING_SELECT} WHERE k.buyer_id = ? ORDER BY k.starts_at DESC LIMIT 100`).bind(user.id).all<BookingRow>(),
+    db.prepare(`${BOOKING_SELECT} WHERE k.buyer_id = ? ORDER BY k.starts_at DESC LIMIT ? OFFSET ?`).bind(user.id, bkAsk.limit, bkAsk.offset).all<BookingRow>(),
   ]);
   const pg = paged(ordersAll.results, ask);
+  const bookings = paged(bookingRows.results, bkAsk);
   const orders = { results: pg.items };
   const ids = orders.results.map((o) => o.product_id);
   const products = ids.length ? await db.prepare(`${PRODUCT_SELECT} WHERE p.id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all<ProductRow>() : { results: [] as ProductRow[] };
-  return c.json({ page: pg.page, orders: orders.results.map(toOrder), products: products.results.map((r) => toProduct(r)), bookings: bookings.results.map(toBooking) });
+  return c.json({ page: pg.page, orders: orders.results.map(toOrder), products: products.results.map((r) => toProduct(r)), bookings: bookings.items.map(toBooking), bookingsPage: bookings.page });
 });
 
 store.get('/products/:id', async (c) => {
@@ -605,11 +607,14 @@ store.post('/follow/:handle', async (c) => {
   if (!owner) return c.json({ error: 'not found' }, 404);
   if (owner.id === user.id) return c.json({ error: 'that is you' }, 400);
   const had = await db.prepare('SELECT 1 FROM follows WHERE follower_id = ? AND owner_id = ?').bind(user.id, owner.id).first();
+  // A block reads like nobody, so a new follow never reaches the inbox of someone who blocked them. An old follow can still be undone.
+  if (!had && (await blockedEither(db, user.id, owner.id))) return c.json({ error: 'not found' }, 404);
   if (had) await db.prepare('DELETE FROM follows WHERE follower_id = ? AND owner_id = ?').bind(user.id, owner.id).run();
   else {
     await db.prepare('INSERT INTO follows (follower_id, owner_id, created_at) VALUES (?, ?, ?)').bind(user.id, owner.id, nowIso()).run();
     await rewardSocial(db, owner.id, 'follower', user.id);
-    await notify(db, owner.id, 'follow', `${nameOf(user)} followed you`, '', '/shop/audience');
+    // The note is about the follower, so it opens their page (as a follow from a Community post does), by id: a handle can pass to someone else once they leave.
+    await notify(db, owner.id, 'follow', `${nameOf(user)} followed you`, '', `/people/${user.id}`);
   }
   return c.json({ following: !had });
 });

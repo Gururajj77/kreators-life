@@ -14,7 +14,7 @@ import {
   type TeamStatus,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { DELETED_NAME, liveUser, nameOf, notify, nowIso, newId, pageOf, paged, personBy, publicOf, str } from '../db';
+import { blockedEither, DELETED_NAME, liveUser, nameOf, noteStmt, notify, nowIso, newId, pageOf, paged, personBy, publicOf, str } from '../db';
 import { agencyFace } from '../portalAccess';
 import { requestFriend } from './bond';
 import { portalClientById, portalViewFor, type PortalPending } from './agency';
@@ -56,10 +56,7 @@ const accessOf = (r: Pick<TeamRow, 'access_json' | 'role'>) => {
 
 /** One inbox line with a fixed id: written once, and rewritten in place (back to unread, newest) when it is sent again. */
 async function teamNote(db: D1Database, userId: string, id: string, title: string, body: string, link: string): Promise<void> {
-  await db
-    .prepare("INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, 'agency', ?, ?, ?, NULL, ?) ON CONFLICT(id) DO UPDATE SET title = excluded.title, body = excluded.body, link = excluded.link, created_at = excluded.created_at, read_at = NULL, archived_at = NULL")
-    .bind(id, userId, title.slice(0, 200), body.slice(0, 300), link, nowIso())
-    .run();
+  await noteStmt(db, { id, userId, kind: 'agency', title: title.slice(0, 200), body: body.slice(0, 300), link }, 'renew').run();
 }
 
 async function agencyNameOf(db: D1Database, ownerId: string): Promise<string> {
@@ -111,7 +108,7 @@ agencyTeam.post('/', async (c) => {
   if (!who) return c.json({ error: 'type their email, @username or friend code' }, 400);
   const target = await personBy(db, who);
   if (target && target.id === user.id) return c.json({ error: 'That is you. Ask someone else.' }, 400);
-  const blocked = target ? await db.prepare('SELECT 1 AS x FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)').bind(user.id, target.id, target.id, user.id).first() : null;
+  const blocked = target ? await blockedEither(db, user.id, target.id) : false;
   if (!target || target.display_name === DELETED_NAME || blocked) return c.json({ error: NOT_FOUND_PERSON }, 404);
   let clientId: string | null = null;
   if (role === 'client') {

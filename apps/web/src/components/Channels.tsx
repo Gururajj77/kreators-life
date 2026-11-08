@@ -32,7 +32,7 @@ import { Sheet } from './Sheet';
 import { SkeletonList } from './Skeleton';
 import { Icon } from './Icon';
 import { X } from 'lucide-react';
-import { FIELD } from '../lib/ui';
+import { FIELD, RED_YES } from '../lib/ui';
 import { dateTime } from '../lib/date';
 import { ErrorLine } from './ErrorLine';
 import { IconTag } from './FactTag';
@@ -67,7 +67,7 @@ export function AskSheet({ ask, onClose }: { ask: Ask | null; onClose: () => voi
               ask?.run();
               onClose();
             }}
-            className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill"
+            className={RED_YES}
           >
             {ask?.action}
           </button>

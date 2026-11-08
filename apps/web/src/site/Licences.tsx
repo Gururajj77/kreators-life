@@ -70,6 +70,8 @@ export function Licences() {
       </P>
       <H>Animation</H>
       <P>The animation library GSAP is used under its free standard licence (gsap.com/standard-license), which lets anyone use it at no cost.</P>
+      <H>Pictures</H>
+      <P>The pictures on Home’s app tiles are Fluent Emoji by Microsoft, under the MIT licence. The full text is in the list above, under fluentui-emoji.</P>
       <H>Our own work</H>
       <P>The icons, the illustrations and the seven characters are our own. The sounds are made in your browser as you listen, from no audio files.</P>
     </LegalPage>

@@ -1,4 +1,4 @@
-import { CAMPAIGN_STATUSES, CAMPAIGN_STATUS_META, type Campaign as CampaignT, type CampaignAssignment, type CampaignStatus, type Deliverable, type Organization, LOCALE } from '@kreators/shared';
+import { CAMPAIGN_STATUSES, CAMPAIGN_STATUS_META, type Campaign as CampaignT, type CampaignAssignment, type CampaignStatus, type Deliverable, type Organization } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
@@ -18,12 +18,12 @@ import { MediaSection } from '../components/MediaSection';
 import { FIELD } from '../lib/ui';
 import { StatusTag } from '../components/StatusTag';
 import type { TagTone } from '@kreators/shared';
-import { shortDate } from '../lib/date';
+import { shortDate, dateTime } from '../lib/date';
 import { ErrorLine } from '../components/ErrorLine';
 import { ToggleChevron } from '../components/ToggleMark';
 
 const fmtDate = (d: string | null) => (d ? shortDate(d) : 'no date');
-const fmtWhen = (d: string) => new Date(d).toLocaleString(LOCALE, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+const fmtWhen = dateTime;
 
 
 const STATUS_TONE: Record<CampaignStatus, TagTone> = {

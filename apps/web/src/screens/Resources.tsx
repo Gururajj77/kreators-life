@@ -19,10 +19,15 @@ import { Reveal } from '../components/fx/Reveal';
 import { StatusTag } from '../components/StatusTag';
 import { IconTag } from '../components/FactTag';
 import { tie } from '../lib/text';
+import { Phrases } from '../components/Phrases';
+import { evenGrid, evenTile } from '../lib/bento';
 
 
 /** A resource's tags are free text; a pillar key among them (parent_child, guru, self...) reads as that pillar's name, and
  * anything else reads as plain words instead of a raw snake_case key. */
+// Even rows on every page of the list (lib/bento.ts): an odd page leads with a read that takes the row, rather than ending on half a row.
+const READ_COLS = { base: 1, md: 2 } as const;
+
 function tagLabel(t: string): string {
   return RELATIONSHIP_BY_KEY[t as keyof typeof RELATIONSHIP_BY_KEY]?.name ?? t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -84,11 +89,11 @@ function List() {
       {/* Placed like Home's Knowledge cards (2026-11-05): the title at the top left, the kind's icon on a neutral tile at the top right,
           the summary under the title, the topic and the kind as tags at the foot and an arrow at the bottom right. Two to a row from the
           tablet width, one on a phone; the cards of a row are one height and rise in one after another once. */}
-      <ul className="mt-md grid list-none grid-cols-1 gap-xs p-0 m-0 md:grid-cols-2">
-        {q.data?.resources.map((r, i) => {
+      <ul data-tile-list="paged" className={`mt-md grid list-none gap-xs p-0 m-0 ${evenGrid(q.data?.resources.length ?? 0, READ_COLS)}`}>
+        {q.data?.resources.map((r, i, all) => {
           const kindName = r.kind === 'exercise' ? 'Exercise' : r.kind === 'video' ? 'Video' : 'Article';
           return (
-            <Reveal as="li" key={r.id} index={i} className="flex">
+            <Reveal as="li" key={r.id} index={i} className={`flex ${evenTile(i, all.length, READ_COLS)}`}>
               <RowCard
                 to={`/knowledge/${r.id}`}
                 title={tie(r.title)}
@@ -109,7 +114,7 @@ function List() {
                   !r.published ? <StatusTag key="draft" tone="neutral">Draft</StatusTag> : null,
                 ]}
               >
-                <span className="mt-xs block text-card-note text-ink-soft">{r.summary}</span>
+                <span className="mt-xs block text-card-note text-ink-soft"><Phrases text={r.summary} at={/(?<=\.) /} /></span>
               </RowCard>
             </Reveal>
           );

@@ -3,340 +3,51 @@
 // Rules only, no model and no credits, like the daily brief. Computed on read from the person's own rows (GET /insights),
 // owner only, nothing stored. A pairing says what happened on the same days, with how many days on each side, and never
 // what caused what. A signal with too little data is "watching": it says what it still needs and shows no number.
+// The rules (2026-11-07) are this file, the subpath export `@kreators/shared/insights`, read only by the API and the tests; the types, the small
+// helpers and each place's share of the list are insightPlaces.ts, in the barrel.
 // ---------------------------------------------------------------------------
 
 import { formatCount, RELATIONSHIP_BY_KEY, RELATIONSHIPS } from './core.ts';
 import type { RelationshipKey } from './core.ts';
-import { addDays, daysBetween, isoWeekday, zoneOffsetMinutes } from './dates.ts';
+import { addDays, daysBetween, isoWeekday } from './dates.ts';
 import type { Repeat } from './tasks.ts';
 import { slotContains } from './timeBlocks.ts';
-import type { BlockColor, DayTemplate, TimeBlock } from './timeBlocks.ts';
+import {
+  BUDGET_OVER_MIN_MONTHS,
+  BUDGET_OVER_MONTHS,
+  BUDGET_PACE_MIN_DAYS,
+  EAT_MIN_DAYS,
+  HABIT_MIN_TICKS,
+  HABIT_TIE_MIN_DAYS,
+  HABIT_TIE_STRICT_DAYS,
+  HABIT_TIE_STRICT_NORM,
+  HABIT_WINDOW_DAYS,
+  INSIGHT_BASIS_TAIL,
+  INSIGHT_WINDOW_DAYS,
+  localStamp,
+  MAX_HABIT_TIES,
+  MAX_HABIT_TIES_WATCHING,
+  MAX_HABITS,
+  MOVE_WEEKDAY_MIN_DAYS,
+  PAIR_MIN_DAYS,
+  PAIR_WINDOW_DAYS,
+  splitCompare,
+  taskKey,
+  WATER_WEEKDAY_MIN_DAYS,
+  WATER_WEEKDAY_MIN_GAP_ML,
+} from './insightPlaces.ts';
+import type { HabitSuggestion, HabitTie, Insight, InsightAction, InsightApp, InsightFacts, InsightKey, InsightOpenTaskFact, InsightPairRow, InsightPart, InsightTaskFact, KindRow, SplitResult } from './insightPlaces.ts';
 import { KIND_MIN_DAYS, KINDS_WINDOW_DAYS, kindBeside, kindsOfDays, templateColor, templateForDate } from './dayKinds.ts';
 import { money } from './money.ts';
 import { MAX_NOT_TO_DO } from './api.ts';
 import { DISCOVER_STRENGTHS } from './discover.ts';
 import { PERIOD_META, periodLabel } from './periods.ts';
-import type { PeriodKind, PeriodNumbers } from './periods.ts';
+import type { Period } from './periods.ts';
+import { monthShift } from './tasks.ts';
 
-export type InsightApp =
-  | 'home'
-  | 'today'
-  | 'tower'
-  | 'pillar'
-  | 'mood'
-  | 'sleep'
-  | 'stress'
-  | 'mindful'
-  | 'wellbeing'
-  | 'life'
-  | 'journal'
-  | 'finance'
-  | 'reviews'
-  | 'discover'
-  | 'agency'
-  | 'insights';
-export const INSIGHT_APPS: readonly InsightApp[] = ['home', 'today', 'tower', 'pillar', 'mood', 'sleep', 'stress', 'mindful', 'wellbeing', 'life', 'journal', 'finance', 'reviews', 'discover', 'agency', 'insights'];
-export const isInsightApp = (v: unknown): v is InsightApp => typeof v === 'string' && (INSIGHT_APPS as readonly string[]).includes(v);
-
-export type InsightKey =
-  | 'habit'
-  | 'habit-tie'
-  | 'pillar-balance'
-  | 'best-hours'
-  | 'streak-weekday'
-  | 'sleep-mood'
-  | 'focus-tasks'
-  | 'stress-calm'
-  | 'daytype-done'
-  | 'money-stress'
-  | 'slips-sleep'
-  | 'routine-tasks'
-  | 'journal-mood'
-  | 'review-since'
-  | 'discover-strength'
-  | 'agency-load'
-  | 'block-kept';
-export type InsightPart = 'tasks' | 'xp' | 'checkins' | 'wellbeing' | 'focus' | 'water' | 'journal' | 'money' | 'notToDo' | 'routine' | 'dayTypes' | 'reviews' | 'discover' | 'agency' | 'timeBlocks';
-
-export interface InsightPairRow {
-  label: string;
-  value: number;
-  /** How many days stand behind the value. */
-  n: number;
-  unit: string;
-}
-export type InsightChart =
-  | { kind: 'pair'; rows: InsightPairRow[] }
-  | { kind: 'week'; labels: string[]; values: number[] }
-  | { kind: 'hours'; labels: string[]; values: number[] }
-  | { kind: 'share'; parts: { relationship: RelationshipKey; value: number }[]; mark?: RelationshipKey }
-  | { kind: 'dots'; days: { date: string; on: boolean }[] }
-  /** Your kinds of day: the window's days by kind, each in its template's colour (`templateColor`), and how each group of days went. */
-  | { kind: 'kinds'; parts: { templateId: string; name: string; days: number; color: BlockColor | null }[]; none: number; noneName: string; rows: KindRow[] };
-/** One group of days in "Your kinds of day": a kind (or the days with none, `templateId` null), over the days the app was used. */
-export interface KindRow {
-  templateId: string | null;
-  name: string;
-  /** Days the app was used (0: the kind had days, but no app use on any of them). */
-  n: number;
-  /** Tasks ticked a day. */
-  tasks: number;
-  /** Focus minutes a day, while Mindfulness is on. */
-  focus: number | null;
-  /** The average mood logged on those days, while Mood is on; null with none logged. */
-  mood: number | null;
-}
-export interface InsightAction {
-  label: string;
-  to: string;
-  /** `habit` opens the Make it a habit sheet, `notToDo` the Add to not to do sheet, `link` goes to `to`. */
-  kind: 'link' | 'habit' | 'notToDo';
-}
-export interface HabitSuggestion {
-  title: string;
-  relationship: RelationshipKey;
-  /** The active project a new repeating task goes under; null when the one it came from is done or gone. */
-  projectId: string | null;
-  /** An open task in the same group that does not repeat yet: "Keep" sets its repeat instead of making a new one. */
-  openTaskId: string | null;
-  repeat: Repeat;
-  /** HH:MM in the person's zone, or null when the ticks are spread over the day. */
-  time: string | null;
-  firstDay: string;
-  ticks: number;
-  /** The local days it was ticked, oldest first. */
-  days: string[];
-}
-/**
- * A good or bad habit (the 2026-11-04 ask): a task done again and again, or a slip on the not to do list, set against how the
- * person's own days went (mood, sleep that night, stress, other tasks, focus). Only on a ready `habit-tie`.
- */
-export interface HabitTie {
-  verdict: 'good' | 'bad';
-  /** A task (by its words) or one item of the not to do list. */
-  kind: 'task' | 'notToDo';
-  title: string;
-  /** The task's `taskKey`, or the not to do item's id. */
-  key: string;
-  relationship: RelationshipKey | null;
-  /** Where the thing lives: the open task on Daily, its pillar page, or the not to do list. */
-  to: string;
-  toLabel: string;
-  /** It repeats already (or a tick came from a repeat). */
-  repeats: boolean;
-  /** A task that can go on the not to do list: not on it by name yet, and the list has room. */
-  canAddNotToDo: boolean;
-}
-export interface Insight {
-  key: InsightKey;
-  /** The key, or `habit:<pillar>:<taskKey>` for each habit, or `pillar-balance:<pillar>` for a pillar page. */
-  id: string;
-  state: 'ready' | 'watching';
-  apps: InsightApp[];
-  reads: InsightPart[];
-  /** Reads wellbeing, journal days or money. */
-  private: boolean;
-  relationship: RelationshipKey | null;
-  /** The number first ("5 times", "3.9 vs 2.8"); empty while watching. */
-  headline: string;
-  text: string;
-  basis: string;
-  chart: InsightChart | null;
-  action: InsightAction | null;
-  need: string | null;
-  /** 0 to 100, for ranking. 0 means "about the same either way": listed on /insights only. */
-  strength: number;
-  habit?: HabitSuggestion;
-  tie?: HabitTie;
-}
-
-export interface InsightTaskFact {
-  id: string;
-  title: string;
-  relationship: RelationshipKey;
-  parentId: string | null;
-  /** UTC ISO. */
-  completedAt: string;
-  /** It repeats, or it was made by a repeat. */
-  repeats: boolean;
-  /** "Count it as a habit": the person's pick, or null when they made none. */
-  habit?: boolean | null;
-  /** The time block the person put it in, or null (docs/time-blocks.md). */
-  timeBlockId?: string | null;
-}
-export interface InsightOpenTaskFact {
-  id: string;
-  title: string;
-  relationship: RelationshipKey;
-  parentId: string | null;
-  repeats: boolean;
-  habit?: boolean | null;
-  /** The day it opens on Daily (do date, else due date); null when it has neither. */
-  openDay?: string | null;
-}
-export interface InsightReviewFact {
-  kind: PeriodKind;
-  start: string;
-  end: string;
-  /** The numbers the review was saved with. */
-  then: PeriodNumbers;
-  /** The same numbers for the period after it, so far. */
-  since: PeriodNumbers;
-  sinceStart: string;
-  sinceEnd: string;
-  /** The period after it is over. */
-  ended: boolean;
-}
-export interface InsightFacts {
-  /** The person's own day (from the device). */
-  today: string;
-  zone: string;
-  currency: string;
-  /** The app keys that are on for this person. */
-  apps: readonly string[];
-  /** Asked for by a pillar page: adds that pillar's own line. */
-  rel?: RelationshipKey | null;
-  /** Ticked tasks in the window. */
-  done: InsightTaskFact[];
-  open: InsightOpenTaskFact[];
-  /** Active projects. */
-  projects: { id: string; relationship: RelationshipKey }[];
-  /** The last 30 days of xp and task ticks by pillar. */
-  xp30: { relationship: RelationshipKey; xp: number; ticks: number }[];
-  focusPillars: RelationshipKey[];
-  /** Local days with a check-in in the window, and the first one ever. */
-  checkins: string[];
-  firstCheckin: string | null;
-  /** Never a note or an extra: the kind, the day and the number. */
-  wellbeing: { kind: string; date: string; value: number }[];
-  focus: { day: string; minutes: number }[];
-  notToDo: { day: string; slipped: number; kept: number }[];
-  /** The not to do list itself, for a bad habit's "Add to not to do". */
-  notToDoItems: { id: string; title: string; relationship: RelationshipKey | null }[];
-  /** One row per item per marked day in the window. */
-  notToDoMarks: { itemId: string; day: string; status: 'kept' | 'slipped' }[];
-  water: { day: string; ml: number }[];
-  waterGoal: number | null;
-  /** Dates the person set a kind of day for (a sign they used the app that day). Which template a day uses comes from `timeBlocks`. */
-  dayTypes: { day: string; kind: string }[];
-  routine: { day: string; done: boolean }[];
-  /** When journal entries were written (UTC ISO). Never a word of them. */
-  journalAt: string[];
-  /** Spending per day in the person's own currency, integer cents. */
-  expenses: { date: string; cents: number }[];
-  review: InsightReviewFact | null;
-  discover: { growth: RelationshipKey; steps: boolean } | null;
-  /** Days with an Agency piece due. */
-  agencyDue: string[];
-  /** Time blocks (docs/time-blocks.md): the blocks, the day templates with their slots, the default, the weekly pattern and the date changes in the window. Absent: no block line. */
-  timeBlocks?: { blocks: TimeBlock[]; templates: DayTemplate[]; defaultId: string; pattern: (string | null)[]; overrides: Record<string, string>; /** The account's first day in the person's zone: a day before it has no kind. */ since?: string | null };
-}
-export interface InsightsResponse {
-  day: string;
-  insights: Insight[];
-}
-
-export const INSIGHT_WINDOW_DAYS = 84;
-export const PAIR_WINDOW_DAYS = 56;
-export const HABIT_WINDOW_DAYS = 28;
-export const HABIT_MIN_TICKS = 3;
-export const PAIR_MIN_DAYS = 7;
-export const HOME_INSIGHTS = 3;
-export const MAX_HABITS = 3;
-/** A good or bad habit needs this many days with it (or slip days) and `PAIR_MIN_DAYS` without (or kept days). */
-export const HABIT_TIE_MIN_DAYS = 5;
-/** At most this many good and bad habits, and this many still watching. */
-export const MAX_HABIT_TIES = 6;
-export const MAX_HABIT_TIES_WATCHING = 2;
-/** A task the person said is not a habit ("Count it as a habit" off) shows only on a strong pattern: this many days each side… */
-export const HABIT_TIE_STRICT_DAYS = 10;
-/** …and a gap of at least half the scale (1 point of mood or stress, 1 hour of sleep). */
-export const HABIT_TIE_STRICT_NORM = 0.5;
-/** How many cards each place shows. */
-/** Daily's Habits section: the good and bad habits it lists, apart from its two other patterns. */
-export const DAILY_HABITS_MAX = 5;
-export const INSIGHT_APP_MAX: Partial<Record<InsightApp, number>> = { home: HOME_INSIGHTS, tower: 3, pillar: 2, today: 2 };
-/** Words that claim a cause. No sentence here may use one. */
-export const CAUSE_WORDS = ['because', 'causes', 'caused', 'makes you', 'leads to', 'due to', 'so you'] as const;
-export const INSIGHT_BASIS_TAIL = 'Things that happen together, not causes.';
+export * from './insightPlaces.ts';
 
 // ---- helpers --------------------------------------------------------------
-
-/** A UTC time read in the person's zone: their day, the minute of that day and the weekday (1 Monday to 7 Sunday). */
-export function localStamp(iso: string, zone: string): { day: string; minutes: number; weekday: number } | null {
-  const at = new Date(iso);
-  if (Number.isNaN(at.getTime())) return null;
-  const local = new Date(at.getTime() + zoneOffsetMinutes(zone, at) * 60_000);
-  const day = local.toISOString().slice(0, 10);
-  return { day, minutes: local.getUTCHours() * 60 + local.getUTCMinutes(), weekday: isoWeekday(day) };
-}
-
-export interface SplitSide {
-  n: number;
-  avg: number | null;
-}
-export interface SplitResult {
-  on: SplitSide;
-  off: SplitSide;
-  /** on minus off, or 0 when a side is empty. */
-  gap: number;
-  /** Both sides have enough days. */
-  enough: boolean;
-  /** Enough days, and the gap is at least the smallest worth saying. */
-  ready: boolean;
-}
-
-/** The one comparator for every "on days when X" line. A day with `on` or `y` null is left out. */
-export function splitCompare(days: readonly { on: boolean | null; y: number | null }[], minOn: number, minGap: number, minOff = minOn): SplitResult {
-  let onN = 0;
-  let onSum = 0;
-  let offN = 0;
-  let offSum = 0;
-  for (const d of days) {
-    if (d.on === null || d.y === null || !Number.isFinite(d.y)) continue;
-    if (d.on) {
-      onN += 1;
-      onSum += d.y;
-    } else {
-      offN += 1;
-      offSum += d.y;
-    }
-  }
-  const on = { n: onN, avg: onN ? onSum / onN : null };
-  const off = { n: offN, avg: offN ? offSum / offN : null };
-  const gap = on.avg !== null && off.avg !== null ? on.avg - off.avg : 0;
-  const enough = onN >= minOn && offN >= minOff;
-  return { on, off, gap, enough, ready: enough && Math.abs(gap) >= minGap };
-}
-
-const STOP_WORDS = new Set(['a', 'an', 'the', 'to', 'for', 'my', 'of', 'on', 'in', 'at', 'with', 'and', 'do', 'go', 'get', 'some']);
-
-function keyWords(title: string): string[] {
-  const plain = title
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/\d{4}-\d{2}-\d{2}/g, ' ')
-    .replace(/\d{1,2}\/\d{1,2}(\/\d{2,4})?/g, ' ')
-    .replace(/[^\p{L}\p{M}\s]/gu, ' ');
-  const words = new Set<string>();
-  for (const raw of plain.split(/\s+/)) {
-    if (raw.length < 2 || STOP_WORDS.has(raw)) continue;
-    let w = raw;
-    if (w.length > 4) {
-      if (w.endsWith('ing')) w = w.slice(0, -3);
-      else if (w.endsWith('es')) w = w.slice(0, -2);
-      else if (w.endsWith('s')) w = w.slice(0, -1);
-    }
-    if (w.length >= 2) words.add(w);
-  }
-  return [...words].sort().slice(0, 4);
-}
-
-/** The words that name a task, so "Gym session", "gym sessions" and "Gym session 3" are one: `gym|session`. Empty when none is left. */
-export function taskKey(title: string): string {
-  return keyWords(title).join('|');
-}
 
 /** Two keys name the same thing: they share two thirds of their words, one of them four letters or longer. */
 export function sameTask(a: string, b: string): boolean {
@@ -420,7 +131,33 @@ function dayRange(from: string, to: string): string[] {
   for (let d = from; d <= to; d = addDays(d, 1)) out.push(d);
   return out;
 }
-const basisOf = (a: number, b: number) => `From ${plural(a, 'day')} and ${plural(b, 'day')}. ${INSIGHT_BASIS_TAIL}`;
+const basisOf = (a: number, b: number, span = '') => `From ${plural(a, 'day')} and ${plural(b, 'day')}${span}. ${INSIGHT_BASIS_TAIL}`;
+
+/**
+ * What a card says of the time it covers. With no period picked: the rolling windows, in the words they always had. With one (2026-11-07):
+ * its name everywhere, so every card says which period it is about.
+ */
+interface Span {
+  eight: string;
+  four: string;
+  thirty: string;
+  /** Added to a same-days card's basis line, after its days. */
+  tail: string;
+  /** Whole days still to come in a picked period, today among them (0 once it is over); null with no period. */
+  left: number | null;
+  /** What a card says when the period cannot hold the days it needs. */
+  short: string;
+}
+const ROLLING: Span = { eight: 'in 8 weeks', four: 'in 4 weeks', thirty: 'in 30 days', tail: '', left: null, short: '' };
+function spanOf(win: Period | null | undefined, today: string): Span {
+  if (!win) return ROLLING;
+  const words = `${win.kind === 'day' ? 'on' : 'in'} ${periodLabel(win)}`;
+  const over = win.end < today;
+  const word = PERIOD_META[win.kind].short.toLowerCase();
+  return { eight: words, four: words, thirty: words, tail: ` ${words}`, left: over ? 0 : daysBetween(today, win.end) + 1, short: win.kind === 'day' ? 'One day is not enough for this one.' : `Not enough days in ${over ? 'that' : 'this'} ${word} for this one.` };
+}
+/** The line that says what a card still needs, unless the picked period has too few days left to get there. */
+const needOr = (c: Pick<Ctx, 'span'>, more: number, line: string): string => (c.span.left !== null && more > c.span.left ? c.span.short : line);
 
 function watching(key: InsightKey, apps: InsightApp[], reads: InsightPart[], priv: boolean, text: string, need: string, relationship: RelationshipKey | null = null): Insight {
   return { key, id: key, state: 'watching', apps, reads, private: priv, relationship, headline: '', text, basis: '', chart: null, action: null, need, strength: 0 };
@@ -450,12 +187,12 @@ interface PairSpec {
   action: InsightAction | null;
 }
 
-function pairInsight(p: PairSpec): Insight {
+function pairInsight(c: Pick<Ctx, 'span'>, p: PairSpec): Insight {
   const minOff = p.minOff ?? p.minOn;
   const s = splitCompare(p.days, p.minOn, 0, minOff);
   if (!s.enough || s.on.avg === null || s.off.avg === null) {
     const more = Math.max(0, p.minOn - s.on.n) + Math.max(0, minOff - s.off.n);
-    return watching(p.key, p.apps, p.reads, p.priv, p.title, p.needLine(Math.max(1, more)));
+    return watching(p.key, p.apps, p.reads, p.priv, p.title, needOr(c, Math.max(1, more), p.needLine(Math.max(1, more))));
   }
   const onV = s.on.avg;
   const offV = s.off.avg;
@@ -475,7 +212,7 @@ function pairInsight(p: PairSpec): Insight {
     relationship: null,
     headline: `${a} vs ${b}`,
     text: big ? p.sentence(a, b) : p.same(a, b),
-    basis: basisOf(s.on.n, s.off.n),
+    basis: basisOf(s.on.n, s.off.n, c.span.tail),
     chart: {
       kind: 'pair',
       rows: [
@@ -494,8 +231,12 @@ function pairInsight(p: PairSpec): Insight {
 interface Ctx {
   f: InsightFacts;
   on: (k: string) => boolean;
+  /** The last day a same-days card counts: yesterday, or the picked period's end when that came first. */
   yesterday: string;
+  /** The last day a tick counts: today, or the picked period's end when that came first. */
+  last: string;
   pairFrom: string;
+  span: Span;
   /** Local day of each tick, and its minute. */
   ticks: { day: string; minutes: number; relationship: RelationshipKey }[];
   ticksByDay: Map<string, number>;
@@ -547,13 +288,13 @@ function clusterTicks(stamped: readonly StampedTick[], from: string, to: string,
 }
 
 /** What "Make it a habit" fills in for a group of ticks: the open task or the project, the repeat, the time and the first day. */
-function suggestionFor(f: InsightFacts, cl: TickCluster, mates: readonly InsightOpenTaskFact[]): HabitSuggestion {
+function suggestionFor(f: InsightFacts, cl: TickCluster, mates: readonly InsightOpenTaskFact[], anchor = f.today): HabitSuggestion {
   const activeProjects = new Set(f.projects.map((p) => p.id));
   const days = [...new Set(cl.ticks.map((t) => t.day))].sort();
   const last = cl.ticks[cl.ticks.length - 1]!;
   const openTask = mates[0] ?? null;
   const projectId = openTask?.parentId && activeProjects.has(openTask.parentId) ? openTask.parentId : last.parentId && activeProjects.has(last.parentId) ? last.parentId : null;
-  let repeat = suggestRepeat(days, f.today);
+  let repeat = suggestRepeat(days, anchor);
   // Ticks older than four weeks leave no weekday to go on: the day of the last one.
   if (repeat.kind === 'weekly' && !repeat.days.length) repeat = { ...repeat, days: [isoWeekday(last.day)] };
   const time = suggestTime(cl.ticks.map((t) => t.minutes));
@@ -563,14 +304,14 @@ function suggestionFor(f: InsightFacts, cl: TickCluster, mates: readonly Insight
     if (repeat.kind === 'daily' || (repeat.kind === 'weekdays' && w <= 5) || (repeat.kind === 'weekly' && repeat.days.includes(w))) break;
     firstDay = addDays(firstDay, 1);
   }
-  return { title: last.title, relationship: cl.rel, projectId, openTaskId: openTask?.id ?? null, repeat, time, firstDay, ticks: cl.ticks.length, days };
+  return { title: last.title, relationship: cl.rel, projectId, openTaskId: openTask?.id ?? null, repeat, time, firstDay, ticks: cl.ticks.length, days, ...(f.window ? { within: spanOf(f.window, f.today).four } : {}) };
 }
 
 function habits(c: Ctx): Insight[] {
   const { f } = c;
   const apps: InsightApp[] = ['today', 'tower', 'pillar', 'home', 'insights'];
-  const from = addDays(f.today, -(HABIT_WINDOW_DAYS - 1));
-  const clusters = clusterTicks(c.stamped, from, f.today, false);
+  const from = f.window ? f.window.start : addDays(f.today, -(HABIT_WINDOW_DAYS - 1));
+  const clusters = clusterTicks(c.stamped, from, c.last, false);
   const found: Insight[] = [];
   for (const cl of clusters) {
     const days = [...new Set(cl.ticks.map((t) => t.day))].sort();
@@ -578,7 +319,7 @@ function habits(c: Ctx): Insight[] {
     const words = keyWordsOf(cl.key);
     const mates = c.openByRel(cl.rel).filter((x) => sameKey(words, x.k)).map((x) => x.o);
     if (mates.some((o) => o.repeats)) continue;
-    const habit = suggestionFor(f, cl, mates);
+    const habit = suggestionFor(f, cl, mates, c.last);
     const { repeat, time } = habit;
     const n = cl.ticks.length;
     // "Mostly on" only when those weekdays hold at least 60% of the days; a spread is said as a spread.
@@ -592,8 +333,11 @@ function habits(c: Ctx): Insight[] {
             ? `, mostly on ${listWords(repeat.days.map((w) => `${WEEKDAY_NAMES[w - 1]}s`))}`
             : ', on different days of the week';
     const at = time ? ` around ${clockWord(time)}` : '';
-    const dotFrom = addDays(f.today, -(HABIT_WINDOW_DAYS - 1));
     const daySet = new Set(days);
+    // Up to five weeks as rows of dots; a longer period by weekday, so a card never holds a year of rows.
+    const span = dayRange(from, c.last);
+    const weekdays = [0, 0, 0, 0, 0, 0, 0];
+    for (const d of days) weekdays[isoWeekday(d) - 1] = (weekdays[isoWeekday(d) - 1] ?? 0) + 1;
     found.push({
       key: 'habit',
       id: `habit:${cl.rel}:${cl.key}`,
@@ -603,9 +347,9 @@ function habits(c: Ctx): Insight[] {
       private: false,
       relationship: cl.rel,
       headline: `${formatCount(n)} times`,
-      text: `You ticked “${habit.title}” ${formatCount(n)} times in 4 weeks${when}${at}. It does not repeat yet.`,
-      basis: `From ${plural(n, 'tick')} on ${plural(days.length, 'day')} in 4 weeks.`,
-      chart: { kind: 'dots', days: dayRange(dotFrom, f.today).map((d) => ({ date: d, on: daySet.has(d) })) },
+      text: `You ticked “${habit.title}” ${formatCount(n)} times ${c.span.four}${when}${at}. It does not repeat yet.`,
+      basis: `From ${plural(n, 'tick')} on ${plural(days.length, 'day')} ${c.span.four}.`,
+      chart: span.length <= 35 ? { kind: 'dots', days: span.map((d) => ({ date: d, on: daySet.has(d) })) } : { kind: 'week', labels: WEEKDAY_SHORT, values: weekdays },
       action: habit.projectId || habit.openTaskId ? { label: 'Make it a habit', to: `/realm/${cl.rel}`, kind: 'habit' } : { label: 'Open the pillar', to: `/realm/${cl.rel}`, kind: 'link' },
       need: null,
       strength: Math.min(90, 70 + 5 * Math.max(0, n - HABIT_MIN_TICKS)),
@@ -613,7 +357,7 @@ function habits(c: Ctx): Insight[] {
     });
   }
   found.sort((a, b) => (b.habit!.ticks - a.habit!.ticks) || (a.id < b.id ? -1 : 1));
-  if (!found.length) return [watching('habit', apps, ['tasks'], false, 'Tasks you keep doing', 'Tick the same task on 3 different days in 4 weeks and it shows here.')];
+  if (!found.length) return [watching('habit', apps, ['tasks'], false, 'Tasks you keep doing', needOr(c, HABIT_MIN_TICKS, `Tick the same task on 3 different days ${c.span.four} and it shows here.`))];
   return found.slice(0, MAX_HABITS);
 }
 
@@ -626,7 +370,7 @@ function pillarBalance(c: Ctx, pillarRels: readonly RelationshipKey[]): Insight[
   const totalXp = f.xp30.reduce((s, r) => s + Math.max(0, r.xp), 0);
   const totalTicks = f.xp30.reduce((s, r) => s + Math.max(0, r.ticks), 0);
   if (totalTicks < 10 && totalXp < 100) {
-    return [watching('pillar-balance', apps, reads, false, 'Where your xp goes', `Tick a few more tasks: ${formatCount(totalTicks)} of 10 so far in 30 days.`)];
+    return [watching('pillar-balance', apps, reads, false, 'Where your xp goes', needOr(c, 10 - totalTicks, `Tick a few more tasks: ${formatCount(totalTicks)} of 10 so far ${c.span.thirty}.`))];
   }
   const parts = RELATIONSHIPS.map((r) => ({ relationship: r.key, value: Math.max(0, byRel.get(r.key)?.xp ?? 0) }));
   const share = (k: RelationshipKey) => pct(Math.max(0, byRel.get(k)?.xp ?? 0), totalXp);
@@ -641,7 +385,7 @@ function pillarBalance(c: Ctx, pillarRels: readonly RelationshipKey[]): Insight[
     const low = [...focus].sort((a, b) => share(a) - share(b) || (a < b ? -1 : 1))[0]!;
     mark = low;
     headline = `${share(low)}%`;
-    text = `${pillarName(low)} got ${share(low)}% of your xp in 30 days. It is one of your focus pillars.`;
+    text = `${pillarName(low)} got ${share(low)}% of your xp ${c.span.thirty}. It is one of your focus pillars.`;
     if (share(low) < 10) strength = 60;
     action = { label: `Add a task to ${pillarName(low)}`, to: `/realm/${low}?add=1`, kind: 'link' };
   } else {
@@ -650,7 +394,7 @@ function pillarBalance(c: Ctx, pillarRels: readonly RelationshipKey[]): Insight[
     mark = top.relationship;
     headline = `${share(top.relationship)}%`;
     const noneLine = none.length === 1 ? ` ${pillarName(none[0]!)} got none.` : none.length > 1 ? ` ${formatCount(none.length)} pillars got none.` : '';
-    text = `${pillarName(top.relationship)} got ${share(top.relationship)}% of your xp in 30 days.${noneLine}`;
+    text = `${pillarName(top.relationship)} got ${share(top.relationship)}% of your xp ${c.span.thirty}.${noneLine}`;
     if (none.length) action = { label: `Add a task to ${pillarName(none[0]!)}`, to: `/realm/${none[0]}?add=1`, kind: 'link' };
   }
   out.push({
@@ -663,7 +407,7 @@ function pillarBalance(c: Ctx, pillarRels: readonly RelationshipKey[]): Insight[
     relationship: null,
     headline,
     text,
-    basis: `From ${plural(totalTicks, 'tick')} and ${formatCount(totalXp)} xp in 30 days.`,
+    basis: `From ${plural(totalTicks, 'tick')} and ${formatCount(totalXp)} xp ${c.span.thirty}.`,
     chart: { kind: 'share', parts, ...(mark ? { mark } : {}) },
     action,
     need: null,
@@ -681,8 +425,8 @@ function pillarBalance(c: Ctx, pillarRels: readonly RelationshipKey[]): Insight[
       private: false,
       relationship: rel,
       headline: `${share(rel)}%`,
-      text: `${pillarName(rel)}: ${plural(Math.max(0, r?.ticks ?? 0), 'tick')} and ${formatCount(Math.max(0, r?.xp ?? 0))} xp in 30 days, ${share(rel)}% of the total.`,
-      basis: `From ${plural(totalTicks, 'tick')} and ${formatCount(totalXp)} xp in 30 days.`,
+      text: `${pillarName(rel)}: ${plural(Math.max(0, r?.ticks ?? 0), 'tick')} and ${formatCount(Math.max(0, r?.xp ?? 0))} xp ${c.span.thirty}, ${share(rel)}% of the total.`,
+      basis: `From ${plural(totalTicks, 'tick')} and ${formatCount(totalXp)} xp ${c.span.thirty}.`,
       chart: { kind: 'share', parts, mark: rel },
       action: null,
       need: null,
@@ -702,10 +446,10 @@ const partOf = (hour: number) => PARTS_OF_DAY.findIndex((p) => (hour < 5 ? hour 
 
 function bestHours(c: Ctx): Insight {
   const apps: InsightApp[] = ['today', 'mindful', 'insights'];
-  const ticks = c.ticks.filter((t) => t.day >= c.pairFrom && t.day <= c.f.today);
+  const ticks = c.ticks.filter((t) => t.day >= c.pairFrom && t.day <= c.last);
   const days = new Set(ticks.map((t) => t.day)).size;
   if (ticks.length < 15 || days < 7) {
-    return watching('best-hours', apps, ['tasks'], false, 'When your ticks land', `Tick a few more tasks: ${formatCount(ticks.length)} of 15 so far, on ${formatCount(days)} of 7 days.`);
+    return watching('best-hours', apps, ['tasks'], false, 'When your ticks land', needOr(c, Math.max(15 - ticks.length, 7 - days), `Tick a few more tasks: ${formatCount(ticks.length)} of 15 so far, on ${formatCount(days)} of 7 days.`));
   }
   const values = [0, 0, 0, 0];
   const byHour = new Array<number>(24).fill(0);
@@ -738,7 +482,7 @@ function bestHours(c: Ctx): Insight {
     relationship: null,
     headline: `${share}%`,
     text: `${lead}: ${share}% of ${formatCount(ticks.length)}, most between ${hourWord(bestH)} and ${hourWord(bestH + 2)}.`,
-    basis: `From ${plural(ticks.length, 'tick')} on ${plural(days, 'day')} in 8 weeks.`,
+    basis: `From ${plural(ticks.length, 'tick')} on ${plural(days, 'day')} ${c.span.eight}.`,
     chart: { kind: 'hours', labels: PARTS_OF_DAY.map((p) => p.name[0]!.toUpperCase() + p.name.slice(1)), values },
     action: { label: 'Plan my week', to: '/today?plan=week', kind: 'link' },
     need: null,
@@ -752,13 +496,15 @@ function streakWeekday(c: Ctx): Insight | null {
   const first = f.firstCheckin;
   if (!first || daysBetween(first, f.today) < 28) {
     const have = first ? Math.max(0, daysBetween(first, f.today)) : 0;
-    return watching('streak-weekday', apps, ['checkins'], false, 'The days you miss', `Check in on Daily for ${formatCount(28 - have)} more days.`);
+    return watching('streak-weekday', apps, ['checkins'], false, 'The days you miss', needOr(c, 28 - have, `Check in on Daily for ${formatCount(28 - have)} more days.`));
   }
   // The same first day the route reads check-ins from (today less 83), so a day it never read is never counted as missed.
-  const windowStart = addDays(f.today, -(INSIGHT_WINDOW_DAYS - 1));
+  const windowStart = f.window ? f.window.start : addDays(f.today, -(INSIGHT_WINDOW_DAYS - 1));
   const from = first > windowStart ? first : windowStart;
   const have = new Set(f.checkins);
   const span = dayRange(from, c.yesterday);
+  // The same four weeks a picked period must hold before it can say which days are missed.
+  if (f.window && span.length < 28) return watching('streak-weekday', apps, ['checkins'], false, 'The days you miss', needOr(c, 28 - span.length, `Check in on Daily for ${formatCount(28 - span.length)} more days.`));
   const missed = span.filter((d) => !have.has(d));
   if (missed.length < 4) return null;
   const values = [0, 0, 0, 0, 0, 0, 0];
@@ -788,7 +534,7 @@ function streakWeekday(c: Ctx): Insight | null {
     text: even
       ? `You missed ${plural(missed.length, 'day')} in ${plural(weeks, 'week')}, with no one day standing out.`
       : topLine,
-    basis: `From ${plural(span.length, 'day')} since your first check-in, up to 12 weeks.`,
+    basis: f.window ? `From ${plural(span.length, 'day')} ${c.span.eight}.` : `From ${plural(span.length, 'day')} since your first check-in, up to 12 weeks.`,
     chart: { kind: 'week', labels: WEEKDAY_SHORT, values },
     action: even ? null : { label: `Remind me on ${WEEKDAY_NAMES[top]}s`, to: `/today?remind=${top + 1}#reminders`, kind: 'link' },
     need: null,
@@ -810,7 +556,7 @@ function sleepMood(c: Ctx): Insight {
   const median = both.length ? (both.length % 2 ? both[(both.length - 1) / 2]! : (both[both.length / 2 - 1]! + both[both.length / 2]!) / 2) : 7;
   const cut = Math.round(median * 2) / 2;
   const cutWord = Number.isInteger(cut) ? String(cut) : cut.toFixed(1);
-  return pairInsight({
+  return pairInsight(c, {
     key: 'sleep-mood',
     apps: ['sleep', 'mood', 'wellbeing', 'insights'],
     reads: ['wellbeing'],
@@ -834,7 +580,7 @@ function sleepMood(c: Ctx): Insight {
 function focusTasks(c: Ctx): Insight {
   const focus = new Map<string, number>();
   for (const r of c.f.focus) focus.set(r.day, (focus.get(r.day) ?? 0) + Math.max(0, r.minutes));
-  return pairInsight({
+  return pairInsight(c, {
     key: 'focus-tasks',
     apps: ['mindful', 'today', 'insights'],
     reads: ['focus', 'tasks'],
@@ -869,7 +615,7 @@ function stressCalm(c: Ctx): Insight | null {
   const reads: InsightPart[] = ['wellbeing', 'water'];
   const stress = c.wb('stress');
   const logged = [...stress.keys()].filter((d) => d >= c.pairFrom && d <= c.yesterday).length;
-  if (logged < 10) return watching('stress-calm', apps, reads, true, 'Stress and calm', `Log stress on ${plural(10 - logged, 'more day')}.`);
+  if (logged < 10) return watching('stress-calm', apps, reads, true, 'Stress and calm', needOr(c, 10 - logged, `Log stress on ${plural(10 - logged, 'more day')}.`));
   const mindful = c.wb('mindful');
   const water = new Map<string, number>();
   for (const w of f.water) water.set(w.day, (water.get(w.day) ?? 0) + Math.max(0, w.ml));
@@ -878,7 +624,7 @@ function stressCalm(c: Ctx): Insight | null {
   if (c.on('mindful')) {
     splits.push({
       name: 'mindful',
-      r: pairInsight({
+      r: pairInsight(c, {
         ...common,
         key: 'stress-calm',
         apps,
@@ -896,7 +642,7 @@ function stressCalm(c: Ctx): Insight | null {
     const goal = f.waterGoal;
     splits.push({
       name: 'water',
-      r: pairInsight({
+      r: pairInsight(c, {
         ...common,
         key: 'stress-calm',
         apps,
@@ -939,14 +685,18 @@ function daytypeDone(c: Ctx): Insight | null {
   const { f } = c;
   const tb = f.timeBlocks;
   const apps: InsightApp[] = ['today', 'reviews', 'insights'];
-  // No time blocks yet (the rows are made the first time Daily, the month calendar or Time blocks opens): still say how to start.
+  // Every block deleted (a new account has the starting set from code, never nothing): still say how to start.
   if (!tb) return watching('daytype-done', apps, ['dayTypes', 'timeBlocks'], false, 'Your kinds of day', 'Give a day a kind on Daily, or set your usual week in Time blocks.');
   const focusOn = c.on('mindful');
   const moodOn = c.on('mood');
   const reads: InsightPart[] = ['dayTypes', 'tasks', 'timeBlocks', ...(focusOn ? (['focus'] as const) : []), ...(moodOn ? (['wellbeing'] as const) : [])];
-  const from = addDays(f.today, -KINDS_WINDOW_DAYS);
+  const from = f.window ? f.window.start : addDays(f.today, -KINDS_WINDOW_DAYS);
   const k = kindsOfDays({ templates: tb.templates, defaultId: tb.defaultId, pattern: tb.pattern, overrides: tb.overrides, since: tb.since ?? null }, from, c.yesterday);
-  if (!k.tally.length) return watching('daytype-done', apps, reads, false, 'Your kinds of day', 'Give a day a kind on Daily, or set your usual week in Time blocks.');
+  if (!k.tally.length) {
+    // Someone who already gives their days a kind, on a period too short to hold one, is told that, not told to start.
+    const usesKinds = f.window && kindsOfDays({ templates: tb.templates, defaultId: tb.defaultId, pattern: tb.pattern, overrides: tb.overrides, since: tb.since ?? null }, addDays(f.today, -KINDS_WINDOW_DAYS), c.yesterday).tally.length > 0;
+    return watching('daytype-done', apps, reads, false, 'Your kinds of day', usesKinds ? needOr(c, KIND_MIN_DAYS, 'Not enough days have gone by in this period yet.') : 'Give a day a kind on Daily, or set your usual week in Time blocks.');
+  }
   const byId = new Map(tb.templates.map((t) => [t.id, t]));
   const noneName = byId.get(tb.defaultId)?.name ?? 'Everyday';
   const focusBy = new Map<string, number>();
@@ -987,7 +737,7 @@ function daytypeDone(c: Ctx): Insight | null {
   const kindTotal = k.tally.reduce((s, t) => s + t.days, 0);
   const total = kindTotal + k.none;
   const mix = listWords([...k.tally.slice(0, 3).map((t) => `${formatCount(t.days)} ${kindDays(t.name, t.days)}`), ...(k.tally.length > 3 ? [otherKinds(k.tally.slice(3).reduce((s, t) => s + t.days, 0))] : []), ...(k.none ? [`${formatCount(k.none)} on ${noneName}`] : [])]);
-  let text = `Your last four weeks: ${mix}.`;
+  let text = f.window ? `${c.span.four[0]!.toUpperCase()}${c.span.four.slice(1)}: ${mix}.` : `Your last four weeks: ${mix}.`;
   if (best) {
     const up = best.on > best.off;
     const who = kindDays(best.name);
@@ -1009,7 +759,13 @@ function daytypeDone(c: Ctx): Insight | null {
     relationship: null,
     headline: `${formatCount(kindTotal)} of ${plural(total, 'day')}`,
     text,
-    basis: best ? `The last four weeks: ${plural(best.onN, 'day')} beside ${plural(best.offN, 'other day')}. ${INSIGHT_BASIS_TAIL}` : `The last four weeks, set on Daily or by your usual week. ${INSIGHT_BASIS_TAIL}`,
+    basis: f.window
+      ? best
+        ? `From ${plural(best.onN, 'day')} beside ${plural(best.offN, 'other day')} ${c.span.four}. ${INSIGHT_BASIS_TAIL}`
+        : `Your days ${c.span.four}, set on Daily or by your usual week. ${INSIGHT_BASIS_TAIL}`
+      : best
+        ? `The last four weeks: ${plural(best.onN, 'day')} beside ${plural(best.offN, 'other day')}. ${INSIGHT_BASIS_TAIL}`
+        : `The last four weeks, set on Daily or by your usual week. ${INSIGHT_BASIS_TAIL}`,
     chart: { kind: 'kinds', parts: k.tally.map((t) => ({ templateId: t.templateId, name: t.name, days: t.days, color: templateColor(byId.get(t.templateId) ?? { slots: [] }, tb.blocks) })), none: k.none, noneName, rows },
     action: { label: 'Open time blocks', to: '/time-blocks', kind: 'link' },
     need: null,
@@ -1024,10 +780,10 @@ function moneyStress(c: Ctx): Insight {
   for (const e of f.expenses) spent.set(e.date, (spent.get(e.date) ?? 0) + Math.max(0, Math.round(e.cents)));
   const spendDays = [...spent.entries()].filter(([d, v]) => d >= c.pairFrom && d <= c.yesterday && v > 0).length;
   const apps: InsightApp[] = ['finance', 'stress', 'insights'];
-  if (spendDays < 10) return watching('money-stress', apps, ['money', 'wellbeing'], true, 'Spending and stress', `Log spending on ${plural(10 - spendDays, 'more day')}.`);
+  if (spendDays < 10) return watching('money-stress', apps, ['money', 'wellbeing'], true, 'Spending and stress', needOr(c, 10 - spendDays, `Log spending on ${plural(10 - spendDays, 'more day')}.`));
   // Whole rupees (or the person's whole unit) for the line, kept as integer cents.
   const whole = (v: number) => Math.round(v / 100) * 100;
-  return pairInsight({
+  return pairInsight(c, {
     key: 'money-stress',
     apps,
     reads: ['money', 'wellbeing'],
@@ -1052,7 +808,7 @@ function moneyStress(c: Ctx): Insight {
 function slipsSleep(c: Ctx): Insight {
   const sleep = c.wb('sleep');
   const byDay = new Map(c.f.notToDo.map((r) => [r.day, r]));
-  return pairInsight({
+  return pairInsight(c, {
     key: 'slips-sleep',
     apps: ['today', 'sleep', 'insights'],
     reads: ['notToDo', 'wellbeing'],
@@ -1086,7 +842,7 @@ function slipsSleep(c: Ctx): Insight {
 function routineTasks(c: Ctx): Insight | null {
   if (!c.f.routine.length) return null;
   const byDay = new Map(c.f.routine.map((r) => [r.day, r.done]));
-  return pairInsight({
+  return pairInsight(c, {
     key: 'routine-tasks',
     apps: ['today', 'tower', 'insights'],
     reads: ['routine', 'tasks'],
@@ -1110,7 +866,7 @@ function routineTasks(c: Ctx): Insight | null {
 function journalMood(c: Ctx): Insight {
   const mood = c.wb('mood');
   const wrote = new Set(c.f.journalAt.map((iso) => localStamp(iso, c.f.zone)?.day).filter((d): d is string => Boolean(d)));
-  return pairInsight({
+  return pairInsight(c, {
     key: 'journal-mood',
     apps: ['journal', 'mood', 'insights'],
     reads: ['journal', 'wellbeing'],
@@ -1129,6 +885,161 @@ function journalMood(c: Ctx): Insight {
     needLine: (k) => `Log your mood on ${plural(k, 'more day')}, some with a journal entry and some without.`,
     action: { label: 'Write today', to: '/journal?new=1', kind: 'link' },
   });
+}
+
+// ---- Fitness and gratitude (2026-11-07) -------------------------------------
+// Movement (minutes, from Fitness and Kreators Run's own tool and club runs), the daily eating check-in (how well the person ate, 1 to
+// 5) and the days with gratitude written, set against the person's own days. The value only: never a note, an extra or a line written.
+
+/** Movement is read while Fitness or Kreators Run is on (both write it). */
+const moveOn = (c: Pick<Ctx, 'on'>): boolean => c.on('fitness') || c.on('run');
+/** Where movement is logged: Fitness, else Kreators Run's own tool. */
+const moveTo = (c: Pick<Ctx, 'on'>): string => (c.on('fitness') ? '/fitness#move-heading' : '/run?tab=tracking');
+
+/** Gratitude and mood: days with gratitude written (only that a day has it) against days without, on the mood logged. */
+function gratitudeMood(c: Ctx): Insight {
+  const mood = c.wb('mood');
+  const wrote = new Set(c.f.gratitudeDays ?? []);
+  return pairInsight(c, {
+    key: 'gratitude-mood',
+    apps: ['journal', 'mood', 'insights'],
+    reads: ['gratitude', 'wellbeing'],
+    priv: true,
+    title: 'Gratitude and mood',
+    days: pairDays(c, c.pairFrom, (d) => (mood.has(d) ? wrote.has(d) : null), (d) => mood.get(d) ?? null),
+    minOn: 5,
+    minGap: 0.5,
+    scale: 2,
+    fmt: one,
+    unit: '',
+    onLabel: 'Mood on gratitude days',
+    offLabel: 'Mood on other days',
+    sentence: (a, b) => `On days you wrote your gratitude, your mood was ${a} on average. On other days, ${b}.`,
+    same: (a, b) => `Your mood was about the same either way: ${a} on gratitude days, ${b} on others.`,
+    needLine: (k) => `Log your mood on ${plural(k, 'more day')}, some with gratitude written and some without.`,
+    action: { label: 'Write today’s gratitude', to: '/journal#gratitude-heading', kind: 'link' },
+  });
+}
+
+/**
+ * When you move: the average active minutes on each weekday over eight weeks (every day counted, a day with none as 0), and the weekday
+ * that stands out. A spread with no day holding a quarter of the minutes says so and ranks 0 (listed on /insights only).
+ */
+function moveWeekday(c: Ctx): Insight {
+  const apps: InsightApp[] = ['fitness', 'life', 'pillar', 'insights'];
+  const reads: InsightPart[] = ['move'];
+  const move = c.wb('move');
+  const span = dayRange(c.pairFrom, c.yesterday);
+  const moved = span.filter((d) => (move.get(d) ?? 0) > 0).length;
+  if (moved < MOVE_WEEKDAY_MIN_DAYS) return watching('move-weekday', apps, reads, true, 'When you move', needOr(c, MOVE_WEEKDAY_MIN_DAYS - moved, `Log movement on ${plural(MOVE_WEEKDAY_MIN_DAYS - moved, 'more day')}.`), 'self');
+  const totals = [0, 0, 0, 0, 0, 0, 0];
+  const counts = [0, 0, 0, 0, 0, 0, 0];
+  for (const d of span) {
+    const w = isoWeekday(d) - 1;
+    counts[w] = (counts[w] ?? 0) + 1;
+    totals[w] = (totals[w] ?? 0) + Math.max(0, move.get(d) ?? 0);
+  }
+  const values = totals.map((t, i) => ((counts[i] ?? 0) > 0 ? Math.round(t / counts[i]!) : 0));
+  const total = totals.reduce((s, v) => s + v, 0);
+  const max = Math.max(...values);
+  const top = values.indexOf(max);
+  const tied = values.filter((v) => v === max).length > 1;
+  const share = total > 0 ? (totals[top] ?? 0) / total : 0;
+  const even = tied || share < 0.25;
+  const otherDays = span.length - (counts[top] ?? 0);
+  const others = otherDays > 0 ? Math.round((total - (totals[top] ?? 0)) / otherDays) : 0;
+  const weekAvg = Math.round((total / Math.max(1, span.length)) * 7);
+  return {
+    key: 'move-weekday',
+    id: 'move-weekday',
+    state: 'ready',
+    apps,
+    reads,
+    private: true,
+    relationship: 'self',
+    headline: even ? `${formatCount(weekAvg)} min a week` : `${WEEKDAY_SHORT[top]}s`,
+    text: even
+      ? `Your movement is spread across the week: ${formatCount(weekAvg)} active minutes a week on average.`
+      : `You move most on ${WEEKDAY_NAMES[top]}s: ${formatCount(max)} minutes on average, against ${formatCount(others)} on other days.`,
+    basis: `From ${plural(moved, 'day')} with movement ${c.span.eight}.`,
+    chart: { kind: 'week', labels: WEEKDAY_SHORT, values },
+    action: { label: 'Log movement', to: moveTo(c), kind: 'link' },
+    need: null,
+    strength: even ? 0 : Math.min(70, 30 + Math.round(share * 60)),
+  };
+}
+
+/**
+ * How you eat and how you feel: days the person said they ate well or very well (4 or 5 of 5 on the eating check-in) against the other
+ * days they checked in, on the mood that day, the stress that day and the sleep that night, each only while its app is on; the card
+ * says the clearest one.
+ */
+function eatDays(c: Ctx): Insight | null {
+  const apps: InsightApp[] = ['fitness', 'life', 'pillar', 'insights'];
+  const reads: InsightPart[] = ['eat', 'wellbeing'];
+  const eat = c.wb('eat');
+  const logged = [...eat.keys()].filter((d) => d >= c.pairFrom && d <= c.yesterday).length;
+  if (logged < EAT_MIN_DAYS) return { ...watching('eat-days', apps, reads, true, 'How you eat and how you feel', needOr(c, EAT_MIN_DAYS - logged, `Do the eating check-in on ${plural(EAT_MIN_DAYS - logged, 'more day')}.`)), relationship: 'self' };
+  const well = (d: string): boolean | null => (eat.has(d) ? (eat.get(d) ?? 0) >= 4 : null);
+  const common = { key: 'eat-days' as const, reads, priv: true, title: 'How you eat and how you feel', minOn: 5, minGap: 0.5, scale: 2, fmt: one, offLabel: '', action: { label: 'Open the eating check-in', to: '/fitness#eat-heading', kind: 'link' as const } };
+  const splits: { name: string; r: Insight }[] = [];
+  if (c.on('mood')) {
+    const mood = c.wb('mood');
+    splits.push({
+      name: 'mood',
+      r: pairInsight(c, {
+        ...common,
+        apps: [...apps, 'mood'],
+        days: pairDays(c, c.pairFrom, (d) => (mood.has(d) ? well(d) : null), (d) => mood.get(d) ?? null),
+        unit: '',
+        onLabel: 'Mood on days you ate well',
+        offLabel: 'Mood on other days',
+        sentence: (a, b) => `On days you said you ate well, your mood was ${a} on average. On other days, ${b}.`,
+        same: (a, b) => `Your mood was about the same either way: ${a} on days you ate well, ${b} on others.`,
+        needLine: (k) => `Do the eating check-in and log your mood on ${plural(k, 'more day')}.`,
+      }),
+    });
+  }
+  if (c.on('stress')) {
+    const stress = c.wb('stress');
+    splits.push({
+      name: 'stress',
+      r: pairInsight(c, {
+        ...common,
+        apps: [...apps, 'stress'],
+        days: pairDays(c, c.pairFrom, (d) => (stress.has(d) ? well(d) : null), (d) => stress.get(d) ?? null),
+        unit: '',
+        onLabel: 'Stress on days you ate well',
+        offLabel: 'Stress on other days',
+        sentence: (a, b) => `On days you said you ate well, your stress was ${a} on average. On other days, ${b}.`,
+        same: (a, b) => `Your stress was about the same either way: ${a} on days you ate well, ${b} on others.`,
+        needLine: (k) => `Do the eating check-in and log your stress on ${plural(k, 'more day')}.`,
+      }),
+    });
+  }
+  if (c.on('sleep')) {
+    // Sleep is logged the morning after, so the night after a day is the next day's log.
+    const sleep = c.wb('sleep');
+    const night = (d: string) => sleep.get(addDays(d, 1)) ?? null;
+    splits.push({
+      name: 'sleep',
+      r: pairInsight(c, {
+        ...common,
+        apps: [...apps, 'sleep'],
+        days: pairDays(c, c.pairFrom, (d) => (night(d) !== null ? well(d) : null), night),
+        unit: 'h',
+        onLabel: 'Sleep after you ate well',
+        offLabel: 'Sleep after other days',
+        sentence: (a, b) => `On days you said you ate well, you slept ${a} hours that night on average. On other days, ${b}.`,
+        same: (a, b) => `You slept about the same either way: ${a} hours after days you ate well, ${b} after others.`,
+        needLine: (k) => `Do the eating check-in and log your sleep on ${plural(k, 'more day')}.`,
+      }),
+    });
+  }
+  if (!splits.length) return null;
+  const ready = splits.filter((s) => s.r.state === 'ready').sort((a, b) => b.r.strength - a.r.strength || (a.name < b.name ? -1 : 1));
+  // The card shows the split its sentence talks about, and only that one.
+  return { ...(ready[0] ?? splits[0]!).r, relationship: 'self' };
 }
 
 interface Mover {
@@ -1175,11 +1086,16 @@ function reviewSince(c: Ctx): Insight | null {
     cand.push({ key: 'mindful', then: r.then.mindfulMin, now: r.since.mindfulMin, line: (n, t, up) => `${n} mindful minutes, ${up ? 'up' : 'down'} from ${t}`, delta: (d) => `${sign(d, formatCount)} minutes`, fmt: formatCount, label: 'Mindful minutes', unit: 'min' });
   else if (priv.mindful)
     cand.push({ key: 'mindful', then: r.then.mindfulMin / thenDays, now: r.since.mindfulMin / daysSoFar, line: (n, t, up) => `${n} mindful minutes a day, ${up ? 'up' : 'down'} from ${t}`, delta: (d) => `${sign(d, formatCount)} min a day`, fmt: (v) => formatCount(Math.round(v)), label: 'Mindful a day', unit: 'min' });
+  // Active minutes (Fitness and Kreators Run's logs), private like the trackers.
+  if (moveOn(c) && whole)
+    cand.push({ key: 'move', then: r.then.moveMin, now: r.since.moveMin, line: (n, t, up) => `${n} active minutes, ${up ? 'up' : 'down'} from ${t}`, delta: (d) => `${sign(d, formatCount)} active minutes`, fmt: formatCount, label: 'Active minutes', unit: 'min' });
+  else if (moveOn(c))
+    cand.push({ key: 'move', then: r.then.moveMin / thenDays, now: r.since.moveMin / daysSoFar, line: (n, t, up) => `${n} active minutes a day, ${up ? 'up' : 'down'} from ${t}`, delta: (d) => `${sign(d, formatCount)} active min a day`, fmt: (v) => formatCount(Math.round(v)), label: 'Active a day', unit: 'min' });
   const movers = cand
     .filter((m) => m.fmt(m.now) !== m.fmt(m.then))
     .sort((a, b) => Math.abs(b.now - b.then) / Math.max(Math.abs(b.then), 1) - Math.abs(a.now - a.then) / Math.max(Math.abs(a.then), 1) || (a.key < b.key ? -1 : 1))
     .slice(0, 2);
-  const isPriv = movers.some((m) => m.key === 'sleep' || m.key === 'mood' || m.key === 'mindful');
+  const isPriv = movers.some((m) => m.key === 'sleep' || m.key === 'mood' || m.key === 'mindful' || m.key === 'move');
   const kindWord = PERIOD_META[r.kind].short.toLowerCase();
   const label = periodLabel({ kind: r.kind, start: r.start, end: r.end } as Parameters<typeof periodLabel>[0]);
   const lead = `Since your ${kindWord} review of ${label}${r.ended ? '' : ', so far'}`;
@@ -1236,7 +1152,7 @@ function discoverStrength(c: Ctx): Insight | null {
   if (!d || !d.steps || !RELATIONSHIP_BY_KEY[d.growth]) return null;
   const apps: InsightApp[] = ['discover', 'pillar', 'insights'];
   const ticks = c.f.xp30.reduce((s, r) => s + Math.max(0, r.ticks), 0);
-  if (ticks < 10) return watching('discover-strength', apps, ['discover', 'tasks'], false, 'Your quietest strength', `Tick a few more tasks: ${formatCount(ticks)} of 10 so far in 30 days.`, d.growth);
+  if (ticks < 10) return watching('discover-strength', apps, ['discover', 'tasks'], false, 'Your quietest strength', needOr(c, 10 - ticks, `Tick a few more tasks: ${formatCount(ticks)} of 10 so far ${c.span.thirty}.`), d.growth);
   const by = new Map(c.f.xp30.map((r) => [r.relationship, Math.max(0, r.ticks)]));
   const mine = by.get(d.growth) ?? 0;
   const share = pct(mine, ticks);
@@ -1246,7 +1162,7 @@ function discoverStrength(c: Ctx): Insight | null {
   const lead = `Your quietest strength is ${strength}, the ${pillar} pillar.`;
   const quiet = share < 10;
   const text = quiet
-    ? `${lead} ${pillar} got ${share}% of your ticks in 30 days${mine === min ? ', the fewest of any pillar' : ''}.`
+    ? `${lead} ${pillar} got ${share}% of your ticks ${c.span.thirty}${mine === min ? ', the fewest of any pillar' : ''}.`
     : `${lead} You already give ${pillar} ${share}% of your ticks.`;
   return {
     key: 'discover-strength',
@@ -1258,7 +1174,7 @@ function discoverStrength(c: Ctx): Insight | null {
     relationship: d.growth,
     headline: `${share}%`,
     text,
-    basis: `From your Discover result and ${plural(ticks, 'tick')} in 30 days.`,
+    basis: `From your Discover result and ${plural(ticks, 'tick')} ${c.span.thirty}.`,
     chart: { kind: 'share', parts: RELATIONSHIPS.map((r) => ({ relationship: r.key, value: by.get(r.key) ?? 0 })), mark: d.growth },
     action: { label: `Add a task to ${pillar}`, to: `/realm/${d.growth}?add=1`, kind: 'link' },
     need: null,
@@ -1268,7 +1184,7 @@ function discoverStrength(c: Ctx): Insight | null {
 
 function agencyLoad(c: Ctx): Insight {
   const due = new Set(c.f.agencyDue);
-  return pairInsight({
+  return pairInsight(c, {
     key: 'agency-load',
     apps: ['agency', 'today', 'insights'],
     reads: ['agency', 'tasks'],
@@ -1317,7 +1233,7 @@ export interface TieSignal {
   said: (gap: number, up: boolean) => string;
 }
 
-function tieSignals(c: Ctx, kind: 'task' | 'notToDo'): TieSignal[] {
+function tieSignals(c: Ctx, kind: TieCandidate['kind']): TieSignal[] {
   const out: TieSignal[] = [];
   const twoScale = () => 2;
   if (c.on('mood')) {
@@ -1376,7 +1292,7 @@ function listOr(items: string[]): string {
 const FEEL_WORDS: Record<TieSignalName, string> = { mood: 'mood', sleep: 'sleep', calm: 'stress', tasks: 'tasks', focus: 'focus' };
 
 interface TieCandidate {
-  kind: 'task' | 'notToDo';
+  kind: 'task' | 'notToDo' | 'move';
   id: string;
   key: string;
   title: string;
@@ -1394,9 +1310,10 @@ interface TieCandidate {
 
 /**
  * The one classifier: a clear lift on how the days went is a good habit, a clear dip a bad one, and too few days, no gap or a
- * mix is still watching. A slip on the not to do list is the bad side, so it can only be a bad habit. Pure.
+ * mix is still watching. A slip on the not to do list is the bad side, so it can only be a bad habit; moving (`goodOnly`) can only be a
+ * good one. Pure.
  */
-export function classifyHabitTie(days: readonly { on: boolean | null; ys: Partial<Record<TieSignalName, number | null>> }[], signals: readonly Pick<TieSignal, 'name' | 'feel' | 'better' | 'minGap' | 'scale' | 'fmt'>[], slip: boolean, minOn = HABIT_TIE_MIN_DAYS, minOff = PAIR_MIN_DAYS, minNorm = 0): {
+export function classifyHabitTie(days: readonly { on: boolean | null; ys: Partial<Record<TieSignalName, number | null>> }[], signals: readonly Pick<TieSignal, 'name' | 'feel' | 'better' | 'minGap' | 'scale' | 'fmt'>[], slip: boolean, minOn = HABIT_TIE_MIN_DAYS, minOff = PAIR_MIN_DAYS, minNorm = 0, goodOnly = false): {
   verdict: 'good' | 'bad' | 'watching';
   /** Why it is still watching. */
   reason: 'days' | 'same' | 'mixed' | null;
@@ -1420,6 +1337,8 @@ export function classifyHabitTie(days: readonly { on: boolean | null; ys: Partia
   if (ups.length && downs.length) return { verdict: 'watching', reason: 'mixed', shown: [], more: 0 };
   // A better day after a slip is no verdict: the not to do list only ever names a bad habit.
   if (slip && ups.length) return { verdict: 'watching', reason: 'same', shown: [], more: 0 };
+  // Moving (2026-11-07) is only ever named a good habit: a worse day after moving is no verdict.
+  if (goodOnly && downs.length) return { verdict: 'watching', reason: 'same', shown: [], more: 0 };
   const verdict: 'good' | 'bad' = ups.length ? 'good' : 'bad';
   const dir = verdict === 'good' ? 1 : -1;
   const agree = clear.filter((x) => x.dir === dir).sort((a, b) => Number(b.s.feel) - Number(a.s.feel) || b.norm - a.norm || TIE_ORDER.indexOf(a.s.name) - TIE_ORDER.indexOf(b.s.name));
@@ -1430,13 +1349,14 @@ export function classifyHabitTie(days: readonly { on: boolean | null; ys: Partia
 
 function tieInsight(c: Ctx, cand: TieCandidate, signals: TieSignal[]): Insight | null {
   const slip = cand.kind === 'notToDo';
+  const move = cand.kind === 'move';
   const days = cand.days.map((d) => ({ on: d.on, ys: Object.fromEntries(signals.map((s) => [s.name, d.on === null ? null : s.y(d.d, d.own)])) as Partial<Record<TieSignalName, number | null>> }));
   const strict = cand.habit === false;
-  const r = strict ? classifyHabitTie(days, signals, slip, HABIT_TIE_STRICT_DAYS, HABIT_TIE_STRICT_DAYS, HABIT_TIE_STRICT_NORM) : classifyHabitTie(days, signals, slip);
+  const r = strict ? classifyHabitTie(days, signals, slip, HABIT_TIE_STRICT_DAYS, HABIT_TIE_STRICT_DAYS, HABIT_TIE_STRICT_NORM) : classifyHabitTie(days, signals, slip, HABIT_TIE_MIN_DAYS, PAIR_MIN_DAYS, 0, move);
   // Not a habit by the person's own word: only a strong pattern is said, and nothing waits under Still watching.
   if (strict && r.verdict === 'watching') return null;
-  const baseApps: InsightApp[] = cand.kind === 'task' ? ['home', 'today', 'tower', 'pillar', 'insights'] : ['home', 'today', 'pillar', 'insights'];
-  const baseReads: InsightPart[] = [cand.kind === 'task' ? 'tasks' : 'notToDo'];
+  const baseApps: InsightApp[] = cand.kind === 'task' ? ['home', 'today', 'tower', 'pillar', 'insights'] : move ? ['home', 'today', 'fitness', 'life', 'pillar', 'insights'] : ['home', 'today', 'pillar', 'insights'];
+  const baseReads: InsightPart[] = [cand.kind === 'task' ? 'tasks' : move ? 'move' : 'notToDo'];
   const quoted = `“${cand.title}”`;
   if (r.verdict === 'watching') {
     const feelOn = signals.filter((s) => s.feel).map((s) => FEEL_WORDS[s.name]);
@@ -1444,14 +1364,18 @@ function tieInsight(c: Ctx, cand: TieCandidate, signals: TieSignal[]): Insight |
     const need =
       r.reason === 'days'
         ? slip
-          ? `Mark it kept or slipped on ${plural(r.more, 'more day')}${logged}.`
-          : `Have ${plural(r.more, 'more day')} with it and without${logged}.`
+          ? needOr(c, r.more, `Mark it kept or slipped on ${plural(r.more, 'more day')}${logged}.`)
+          : move
+            ? needOr(c, r.more, `Have ${plural(r.more, 'more day')} with movement and without${logged}.`)
+            : needOr(c, r.more, `Have ${plural(r.more, 'more day')} with it and without${logged}.`)
         : r.reason === 'mixed'
           ? 'Mixed so far: some days went better with it, some worse.'
           : slip
             ? 'Nothing clear yet between slip days and kept days.'
-            : 'About the same so far on days with it and without.';
-    const w = watching('habit-tie', ['insights'], baseReads, false, slip ? `Slips on ${quoted} and how your days go` : `${quoted} and how your days go`, need, cand.rel);
+            : move
+              ? 'Nothing clear yet between days you moved and days you did not.'
+              : 'About the same so far on days with it and without.';
+    const w = watching('habit-tie', move ? ['fitness', 'insights'] : ['insights'], baseReads, move, slip ? `Slips on ${quoted} and how your days go` : move ? 'Moving and how your days go' : `${quoted} and how your days go`, need, cand.rel);
     return { ...w, id: `habit-tie:${cand.id}` };
   }
   const byName = new Map(signals.map((s) => [s.name, s]));
@@ -1460,17 +1384,20 @@ function tieInsight(c: Ctx, cand: TieCandidate, signals: TieSignal[]): Insight |
   const a = lead.s.fmt(lead.split.on.avg!);
   const b = lead.s.fmt(lead.split.off.avg!);
   const clauses = shown.map((x) => x.s.said(Math.abs(x.split.gap), x.split.gap > 0));
-  const text = `On days you ${slip ? 'slipped on' : 'ticked'} ${quoted}, ${clauses.join(' and ')}, on average.`;
+  const text = move ? `On days you moved, ${clauses.join(' and ')}, on average.` : `On days you ${slip ? 'slipped on' : 'ticked'} ${quoted}, ${clauses.join(' and ')}, on average.`;
   const onN = Math.min(...shown.map((x) => x.split.on.n));
   const offN = Math.min(...shown.map((x) => x.split.off.n));
   const basis = slip
-    ? `From ${plural(lead.split.on.n, 'slip day')} and ${plural(lead.split.off.n, 'kept day')} in 8 weeks. ${INSIGHT_BASIS_TAIL}`
-    : `From ${plural(lead.split.on.n, 'day')} with it and ${plural(lead.split.off.n, 'day')} without, in 8 weeks. ${INSIGHT_BASIS_TAIL}`;
+    ? `From ${plural(lead.split.on.n, 'slip day')} and ${plural(lead.split.off.n, 'kept day')} ${c.span.eight}. ${INSIGHT_BASIS_TAIL}`
+    : move
+      ? `From ${plural(lead.split.on.n, 'day')} you moved and ${plural(lead.split.off.n, 'day')} you did not, ${c.span.eight}. ${INSIGHT_BASIS_TAIL}`
+      : `From ${plural(lead.split.on.n, 'day')} with it and ${plural(lead.split.off.n, 'day')} without, ${c.span.eight}. ${INSIGHT_BASIS_TAIL}`;
   const rows: InsightPairRow[] = shown.flatMap((x) => [
-    { label: slip ? `${x.s.label} on slip days` : `${x.s.label} with it`, value: Math.round(x.split.on.avg! * 10) / 10, n: x.split.on.n, unit: x.s.unit },
-    { label: slip ? `${x.s.label} on kept days` : `${x.s.label} without`, value: Math.round(x.split.off.avg! * 10) / 10, n: x.split.off.n, unit: x.s.unit },
+    { label: slip ? `${x.s.label} on slip days` : move ? `${x.s.label}, days you moved` : `${x.s.label} with it`, value: Math.round(x.split.on.avg! * 10) / 10, n: x.split.on.n, unit: x.s.unit },
+    { label: slip ? `${x.s.label} on kept days` : move ? `${x.s.label}, other days` : `${x.s.label} without`, value: Math.round(x.split.off.avg! * 10) / 10, n: x.split.off.n, unit: x.s.unit },
   ]);
-  const priv = shown.some((x) => x.s.feel);
+  // Movement is a tracker's number, so a card about it is private like the trackers.
+  const priv = move || shown.some((x) => x.s.feel);
   const apps = [...new Set<InsightApp>([...baseApps, ...shown.flatMap((x) => x.s.apps)])];
   const reads = [...new Set<InsightPart>([...baseReads, ...shown.flatMap((x) => x.s.reads)])];
   const verdict = r.verdict;
@@ -1541,7 +1468,7 @@ function habitTies(c: Ctx): Insight[] {
     const own = new Map<string, number>();
     for (const t of cl.ticks) own.set(t.day, (own.get(t.day) ?? 0) + 1);
     const span = dayRange(days[0]!, to);
-    const suggestion = suggestionFor(f, cl, mates.filter((o) => !o.repeats));
+    const suggestion = suggestionFor(f, cl, mates.filter((o) => !o.repeats), c.last);
     candidates.push({
       kind: 'task',
       id: `task:${cl.rel}:${cl.key}`,
@@ -1577,19 +1504,283 @@ function habitTies(c: Ctx): Insight[] {
       habit: null,
     });
   }
-  const signals = { task: tieSignals(c, 'task'), notToDo: tieSignals(c, 'notToDo') };
+  // Moving at all (2026-11-07; Fitness, Kreators Run's tool and club runs): a day with movement logged against a day the person used the
+  // app and logged none, from the first day moved in eight weeks. Only ever a good habit; never a not to do item.
+  if (moveOn(c)) {
+    const mv = c.wb('move');
+    const moved = [...mv.entries()].filter(([d, v]) => d >= c.pairFrom && d <= to && v > 0).map(([d]) => d).sort();
+    if (moved.length) {
+      candidates.push({
+        kind: 'move',
+        id: 'move',
+        key: 'move',
+        title: 'Moving',
+        rel: 'self',
+        days: dayRange(moved[0]!, to).map((d) => ({ d, on: (mv.get(d) ?? 0) > 0 ? true : c.activeDays.has(d) ? false : null, own: 0 })),
+        repeats: false,
+        to: moveTo(c),
+        // The link goes to the movement form (Fitness's, or Kreators Run's own tool), so it reads the same on Fitness itself.
+        toLabel: 'Log movement',
+        canAddNotToDo: false,
+        suggestion: null,
+        habit: null,
+      });
+    }
+  }
+  const signals = { task: tieSignals(c, 'task'), notToDo: tieSignals(c, 'notToDo'), move: tieSignals(c, 'move') };
   const all = candidates.map((cand) => tieInsight(c, cand, signals[cand.kind])).filter((x): x is Insight => x !== null);
   const ready = all.filter((i) => i.state === 'ready').sort((a, b) => b.strength - a.strength || (a.id < b.id ? -1 : 1)).slice(0, MAX_HABIT_TIES);
   const wait = all.filter((i) => i.state === 'watching').slice(0, MAX_HABIT_TIES_WATCHING);
   if (!ready.length && !wait.length) {
     const feelOn = (['mood', 'sleep', 'stress'] as const).filter((k) => c.on(k));
     const log = feelOn.length ? ` and log your ${listOr([...feelOn])}` : '';
-    return [watching('habit-tie', ['insights'], ['tasks', 'notToDo'], false, 'Good and bad habits', `Tick the same task on ${HABIT_TIE_MIN_DAYS} days or mark your not to do list${log}.`)];
+    return [watching('habit-tie', ['insights'], ['tasks', 'notToDo'], false, 'Good and bad habits', needOr(c, HABIT_TIE_MIN_DAYS, `Tick the same task on ${HABIT_TIE_MIN_DAYS} days or mark your not to do list${log}.`))];
   }
   return [...ready, ...wait];
 }
 
-const KEY_ORDER: InsightKey[] = ['habit', 'habit-tie', 'pillar-balance', 'best-hours', 'streak-weekday', 'sleep-mood', 'focus-tasks', 'stress-calm', 'daytype-done', 'block-kept', 'money-stress', 'slips-sleep', 'routine-tasks', 'journal-mood', 'review-since', 'discover-strength', 'agency-load'];
+const KEY_ORDER: InsightKey[] = ['habit', 'habit-tie', 'pillar-balance', 'best-hours', 'streak-weekday', 'sleep-mood', 'focus-tasks', 'stress-calm', 'daytype-done', 'block-kept', 'money-stress', 'slips-sleep', 'routine-tasks', 'journal-mood', 'review-since', 'discover-strength', 'agency-load', 'gratitude-mood', 'move-weekday', 'eat-days', 'water-days', 'water-weekday', 'budget-over', 'budget-pace'];
+
+// ---- water and budgets (2026-11-07, the founder: "Water and budgets in Emerging patterns") ----------------------------------------------
+// Water is core: a day counts only with water logged, and a day under the goal is set beside a day at it (an unlogged day is not known).
+// It is only ever a good habit. Budgets are Finance's: spending in the person's own currency against each monthly budget as it is now,
+// since the app keeps no history of a budget. A budget that runs over is said in plain words, never as a failure.
+
+/** Each day's water in the person's own days, only the days with some. */
+function waterByDay(c: Ctx): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const w of c.f.water) out.set(w.day, (out.get(w.day) ?? 0) + Math.max(0, w.ml));
+  for (const [d, ml] of out) if (ml <= 0) out.delete(d);
+  return out;
+}
+
+/**
+ * Days you met your water goal against days you logged water and did not, on mood, sleep that night, stress, tasks and focus, through the
+ * one classifier the good and bad habits use. Only a lift is said; anything else waits under Still watching.
+ */
+function waterDays(c: Ctx, skipCalm: boolean): Insight {
+  const apps: InsightApp[] = ['home', 'today', 'life', 'insights'];
+  const title = 'Your water goal and how your days go';
+  const wait = (need: string): Insight => watching('water-days', ['insights'], ['water'], true, title, need, 'self');
+  const ml = waterByDay(c);
+  const goal = c.f.waterGoal ?? 0;
+  const logged = [...ml.keys()].filter((d) => d >= c.pairFrom && d <= c.yesterday).sort();
+  const firstTime = HABIT_TIE_MIN_DAYS + PAIR_MIN_DAYS;
+  if (goal <= 0 || !logged.length) return wait(needOr(c, firstTime, `Log water on ${plural(firstTime, 'more day')}, some at your goal and some under it.`));
+  const signals = tieSignals(c, 'move').filter((s) => !(skipCalm && s.name === 'calm'));
+  const days = logged.map((d) => ({ on: (ml.get(d) ?? 0) >= goal, ys: Object.fromEntries(signals.map((s) => [s.name, s.y(d, 0)])) as Partial<Record<TieSignalName, number | null>> }));
+  const r = classifyHabitTie(days, signals, false, HABIT_TIE_MIN_DAYS, PAIR_MIN_DAYS, 0, true);
+  if (r.verdict !== 'good') {
+    if (r.reason === 'days') return wait(needOr(c, r.more, `Log water on ${plural(r.more, 'more day')}, some at your goal and some under it.`));
+    return wait(r.reason === 'mixed' ? 'Mixed so far: some days went better at your goal, some worse.' : 'About the same so far on days you met your goal and days you did not.');
+  }
+  const byName = new Map(signals.map((s) => [s.name, s]));
+  const shown = r.shown.map((x) => ({ ...x, s: byName.get(x.name)! }));
+  const lead = shown[0]!;
+  const onN = Math.min(...shown.map((x) => x.split.on.n));
+  const offN = Math.min(...shown.map((x) => x.split.off.n));
+  return {
+    key: 'water-days',
+    id: 'water-days',
+    state: 'ready',
+    apps: [...new Set<InsightApp>([...apps, ...shown.flatMap((x) => x.s.apps)])],
+    reads: [...new Set<InsightPart>(['water', ...shown.flatMap((x) => x.s.reads)])],
+    private: true,
+    relationship: 'self',
+    headline: `${lead.s.fmt(lead.split.on.avg!)} vs ${lead.s.fmt(lead.split.off.avg!)}`,
+    text: `On days you met your water goal, ${shown.map((x) => x.s.said(Math.abs(x.split.gap), x.split.gap > 0)).join(' and ')}, on average.`,
+    basis: `From ${plural(lead.split.on.n, 'day')} you met it and ${plural(lead.split.off.n, 'day')} you did not, ${c.span.eight}. ${INSIGHT_BASIS_TAIL}`,
+    chart: {
+      kind: 'pair',
+      rows: shown.flatMap((x) => [
+        { label: `${x.s.label}, goal met`, value: Math.round(x.split.on.avg! * 10) / 10, n: x.split.on.n, unit: x.s.unit },
+        { label: `${x.s.label}, other days`, value: Math.round(x.split.off.avg! * 10) / 10, n: x.split.off.n, unit: x.s.unit },
+      ]),
+    },
+    action: { label: 'Add a glass', to: '/home#water', kind: 'link' },
+    need: null,
+    strength: Math.max(1, Math.min(90, Math.round(40 + 40 * Math.min(1, lead.norm)) - (onN < 10 || offN < 10 ? 10 : 0) + (shown.length > 1 ? 5 : 0))),
+  };
+}
+
+/** The weekday you drink least, on the days you logged water; a weekday needs two such days to stand out, and a spread says so and ranks 0. */
+function waterWeekday(c: Ctx): Insight {
+  const apps: InsightApp[] = ['today', 'life', 'insights'];
+  const ml = waterByDay(c);
+  const logged = [...ml.keys()].filter((d) => d >= c.pairFrom && d <= c.yesterday);
+  if (logged.length < WATER_WEEKDAY_MIN_DAYS) return watching('water-weekday', apps, ['water'], true, 'The day you drink least', needOr(c, WATER_WEEKDAY_MIN_DAYS - logged.length, `Log water on ${plural(WATER_WEEKDAY_MIN_DAYS - logged.length, 'more day')}.`), 'self');
+  const totals = [0, 0, 0, 0, 0, 0, 0];
+  const counts = [0, 0, 0, 0, 0, 0, 0];
+  let total = 0;
+  for (const d of logged) {
+    const w = isoWeekday(d) - 1;
+    const v = ml.get(d) ?? 0;
+    totals[w] = (totals[w] ?? 0) + v;
+    counts[w] = (counts[w] ?? 0) + 1;
+    total += v;
+  }
+  const values = totals.map((t, i) => ((counts[i] ?? 0) > 0 ? Math.round(t / counts[i]!) : 0));
+  const seen = values.map((v, i) => ({ v, i })).filter((x) => (counts[x.i] ?? 0) >= 2);
+  const least = seen.length ? Math.min(...seen.map((x) => x.v)) : 0;
+  const low = seen.find((x) => x.v === least)?.i ?? 0;
+  const tied = seen.filter((x) => x.v === least).length > 1;
+  const otherDays = logged.length - (counts[low] ?? 0);
+  const others = otherDays > 0 ? Math.round((total - (totals[low] ?? 0)) / otherDays) : 0;
+  const gap = others - least;
+  const even = seen.length < 2 || tied || gap < WATER_WEEKDAY_MIN_GAP_ML || gap / Math.max(1, others) < 0.15;
+  const avg = Math.round(total / logged.length);
+  return {
+    key: 'water-weekday',
+    id: 'water-weekday',
+    state: 'ready',
+    apps,
+    reads: ['water'],
+    private: true,
+    relationship: 'self',
+    headline: even ? `${formatCount(avg)} ml a day` : `${WEEKDAY_SHORT[low]}s`,
+    text: even
+      ? `Your water is about even across the week: ${formatCount(avg)} ml a day on the days you logged it.`
+      : `You drink least on ${WEEKDAY_NAMES[low]}s: ${formatCount(least)} ml on average, against ${formatCount(others)} ml on other days.`,
+    basis: `From ${plural(logged.length, 'day')} with water logged ${c.span.eight}.`,
+    chart: { kind: 'week', labels: WEEKDAY_SHORT, values },
+    action: { label: 'Add a glass', to: '/home#water', kind: 'link' },
+    need: null,
+    strength: even ? 0 : Math.min(65, 30 + Math.round((60 * gap) / Math.max(1, others))),
+  };
+}
+
+const budgetAction: InsightAction = { label: 'See your budgets', to: '/finance#budgets-heading', kind: 'link' };
+/** A month's spending by category, and all of it, from the rows the route read. */
+function spendIndex(f: InsightFacts): { of: (month: string, category: string) => number; all: (month: string) => number } {
+  const by = new Map<string, number>();
+  const whole = new Map<string, number>();
+  for (const r of f.budgetSpend ?? []) {
+    by.set(`${r.month}|${r.category}`, (by.get(`${r.month}|${r.category}`) ?? 0) + Math.max(0, r.cents));
+    whole.set(r.month, (whole.get(r.month) ?? 0) + Math.max(0, r.cents));
+  }
+  return { of: (m, cat) => by.get(`${m}|${cat}`) ?? 0, all: (m) => whole.get(m) ?? 0 };
+}
+/** Whole rupees (or the person's whole unit) for a line, from integer cents. */
+const wholeMoney = (cents: number, currency: string) => money(Math.round(cents / 100) * 100, currency);
+
+/**
+ * Which budget keeps running over: over its monthly budget in at least two finished months and at least half of them, among the months with
+ * any spending logged. A quarter or longer when a period is picked, else the last six finished months. "Ran over", never "failed".
+ */
+function budgetOver(c: Ctx): Insight | null {
+  const { f } = c;
+  const budgets = f.budgets ?? [];
+  const win = f.window;
+  if (!budgets.length || (win && (win.kind === 'day' || win.kind === 'week' || win.kind === 'month'))) return null;
+  const apps: InsightApp[] = ['finance', 'home', 'life', 'insights'];
+  const thisMonth = f.today.slice(0, 7);
+  const months: string[] = [];
+  if (win) for (let m = win.start.slice(0, 7); m <= win.end.slice(0, 7) && m < thisMonth; m = monthShift(m, 1)) months.push(m);
+  else for (let i = BUDGET_OVER_MONTHS; i >= 1; i -= 1) months.push(monthShift(thisMonth, -i));
+  const spend = spendIndex(f);
+  const logged = months.filter((m) => spend.all(m) > 0);
+  if (logged.length < BUDGET_OVER_MIN_MONTHS) {
+    const more = BUDGET_OVER_MIN_MONTHS - logged.length;
+    return watching('budget-over', apps, ['money'], true, 'Budgets that keep running over', needOr(c, more * 28, `Log your spending for ${plural(more, 'more month')}.`));
+  }
+  const n = logged.length;
+  const rows = budgets
+    .map((b) => {
+      const over = logged.filter((m) => spend.of(m, b.category) > b.monthlyCents);
+      const spent = logged.reduce((s, m) => s + spend.of(m, b.category), 0);
+      return { b, over: over.length, by: over.length ? over.reduce((s, m) => s + spend.of(m, b.category) - b.monthlyCents, 0) / over.length : 0, avg: spent / n };
+    })
+    .filter((r) => r.over >= 2 && r.over * 2 >= n)
+    .sort((a, b) => b.over - a.over || b.by - a.by || (a.b.category < b.b.category ? -1 : 1));
+  const during = win ? c.span.eight : `in the last ${formatCount(n)} months`;
+  const basis = `From ${plural(n, 'month')} of your spending${c.span.tail}, in ${f.currency}, against your budgets as they are now.`;
+  const top = rows[0];
+  if (!top) return { key: 'budget-over', id: 'budget-over', state: 'ready', apps, reads: ['money'], private: true, relationship: null, headline: 'Held', text: `No budget kept running over ${during}.`, basis, chart: null, action: budgetAction, need: null, strength: 20 };
+  return {
+    key: 'budget-over',
+    id: 'budget-over',
+    state: 'ready',
+    apps,
+    reads: ['money'],
+    private: true,
+    relationship: null,
+    headline: `${formatCount(top.over)} of ${formatCount(n)} months`,
+    text: `${top.b.category} ran over its budget in ${formatCount(top.over)} of ${formatCount(n)} months, by ${wholeMoney(top.by, f.currency)} on average.`,
+    basis,
+    chart: {
+      kind: 'pair',
+      rows: [
+        { label: 'Spent in a month, on average', value: Math.round(top.avg), n: n, unit: f.currency },
+        { label: 'Its budget', value: top.b.monthlyCents, n: n, unit: f.currency },
+      ],
+    },
+    action: budgetAction,
+    need: null,
+    strength: Math.max(1, Math.min(80, 40 + Math.round((40 * top.over) / n)) - (n < 4 ? 10 : 0)),
+  };
+}
+
+/**
+ * How the month's pace compares with its budgets: the share of each budget used against the share of the month gone, as of the period's end.
+ * Only a month or shorter, or no period picked; a longer one is the card above. Ahead by ten points or more is worth saying.
+ */
+function budgetPace(c: Ctx): Insight | null {
+  const { f } = c;
+  const win = f.window;
+  if (win && win.kind !== 'day' && win.kind !== 'week' && win.kind !== 'month') return null;
+  const apps: InsightApp[] = ['finance', 'home', 'life', 'insights'];
+  const budgets = f.budgets ?? [];
+  if (!budgets.length) return watching('budget-pace', apps, ['money'], true, 'Your budgets', 'Set a monthly budget in Finance and it shows here.');
+  const month = c.last.slice(0, 7);
+  const dayNo = Number(c.last.slice(8, 10));
+  const daysIn = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+  if (dayNo < BUDGET_PACE_MIN_DAYS) return watching('budget-pace', apps, ['money'], true, 'Your budgets', needOr(c, BUDGET_PACE_MIN_DAYS - dayNo, `Give the month ${plural(BUDGET_PACE_MIN_DAYS - dayNo, 'more day')}.`));
+  const spend = spendIndex(f);
+  const gone = pct(dayNo, daysIn);
+  // Over is the money itself, not the pace: a rupee past the budget is over, at any day of the month, and never reads as 100%.
+  const rows = budgets
+    .map((b) => {
+      const spent = spend.of(month, b.category);
+      const over = spent > b.monthlyCents;
+      return { b, over, used: over ? Math.max(101, pct(spent, b.monthlyCents)) : pct(spent, b.monthlyCents) };
+    })
+    .sort((a, b) => b.used - a.used || (a.b.category < b.b.category ? -1 : 1));
+  const top = rows[0]!;
+  const ahead = top.used - gone;
+  const whole = dayNo === daysIn;
+  const words = win ? ` ${c.span.eight}` : '';
+  const text = top.over
+    ? whole
+      ? `${top.b.category} ran over its budget, at ${top.used}%${words}.`
+      : `${top.b.category} has run over its budget, at ${top.used}%, with ${gone}% of the month gone.`
+    : ahead >= 10
+      ? `${top.b.category} is at ${top.used}% of its budget with ${gone}% of the month gone.`
+      : whole
+        ? `Your budgets held${words}: the fullest was ${top.b.category} at ${top.used}%.`
+        : `Your budgets are on pace: the fullest is ${top.b.category} at ${top.used}%, with ${gone}% of the month gone.`;
+  return {
+    key: 'budget-pace',
+    id: 'budget-pace',
+    state: 'ready',
+    apps,
+    reads: ['money'],
+    private: true,
+    relationship: null,
+    headline: `${top.used}% vs ${gone}%`,
+    text,
+    basis: win ? `From the month's spending so far${words}, in ${f.currency}.` : `From this month's spending so far, in ${f.currency}.`,
+    chart: {
+      kind: 'pair',
+      rows: [
+        { label: `${top.b.category} budget used`, value: top.used, n: dayNo, unit: '%' },
+        { label: 'The month gone', value: gone, n: dayNo, unit: '%' },
+      ],
+    },
+    action: budgetAction,
+    need: null,
+    strength: top.over || ahead >= 10 ? Math.min(80, 45 + Math.round(Math.max(0, ahead - 10) / 2)) : 20,
+  };
+}
 
 /** The fewest ticked tasks put in one block, over BLOCK_KEPT_DAYS, before the block line says anything. */
 export const BLOCK_KEPT_MIN = 10;
@@ -1604,13 +1795,13 @@ function blockKept(c: Ctx): Insight | null {
   const tb = c.f.timeBlocks;
   if (!tb) return null;
   const apps: InsightApp[] = ['today', 'insights'];
-  const from = addDays(c.f.today, -(BLOCK_KEPT_DAYS - 1));
+  const from = c.f.window ? c.f.window.start : addDays(c.f.today, -(BLOCK_KEPT_DAYS - 1));
   const ids = new Set(tb.templates.map((t) => t.id));
   const known = new Map(tb.blocks.map((b) => [b.id, b]));
   const counts = new Map<string, { total: number; inside: number }>();
   for (const x of c.stamped) {
     const blockId = x.t.timeBlockId;
-    if (!blockId || !x.at || x.at.day < from || x.at.day > c.f.today || !known.has(blockId)) continue;
+    if (!blockId || !x.at || x.at.day < from || x.at.day > c.last || !known.has(blockId)) continue;
     const { templateId } = templateForDate(x.at.day, { overrides: tb.overrides, pattern: tb.pattern, defaultId: tb.defaultId, exists: (id) => ids.has(id) });
     const slots = tb.templates.find((t) => t.id === templateId)?.slots ?? [];
     const minute = x.at.minutes;
@@ -1624,7 +1815,7 @@ function blockKept(c: Ctx): Insight | null {
   const ranked = [...counts.entries()].sort((a, b) => b[1].total - a[1].total || (known.get(a[0])!.name < known.get(b[0])!.name ? -1 : 1));
   const [blockId, n] = ranked[0]!;
   const name = known.get(blockId)!.name;
-  if (n.total < BLOCK_KEPT_MIN) return watching('block-kept', apps, ['tasks', 'timeBlocks'], false, 'Time blocks', `Tick ${plural(BLOCK_KEPT_MIN - n.total, 'more task')} you put in ${name}.`);
+  if (n.total < BLOCK_KEPT_MIN) return watching('block-kept', apps, ['tasks', 'timeBlocks'], false, 'Time blocks', needOr(c, BLOCK_KEPT_MIN - n.total, `Tick ${plural(BLOCK_KEPT_MIN - n.total, 'more task')} you put in ${name}.`));
   const share = pct(n.inside, n.total);
   return {
     key: 'block-kept',
@@ -1636,7 +1827,7 @@ function blockKept(c: Ctx): Insight | null {
     relationship: known.get(blockId)!.pillar,
     headline: `${formatCount(n.inside)} of ${formatCount(n.total)}`,
     text: `You ticked ${formatCount(n.inside)} of ${formatCount(n.total)} ${name} tasks inside the block.`,
-    basis: `Tasks you put in ${name}, ticked in the last 8 weeks. ${INSIGHT_BASIS_TAIL}`,
+    basis: `Tasks you put in ${name}, ticked ${c.f.window ? c.span.eight : 'in the last 8 weeks'}. ${INSIGHT_BASIS_TAIL}`,
     chart: { kind: 'pair', rows: [{ label: 'Inside the block', value: n.inside, n: n.inside, unit: 'tasks' }, { label: 'At other times', value: n.total - n.inside, n: n.total - n.inside, unit: 'tasks' }] },
     action: { label: 'Open time blocks', to: '/time-blocks', kind: 'link' },
     need: null,
@@ -1660,23 +1851,16 @@ export function insightsForEvery(f: InsightFacts): Insight[] {
   return computeInsights({ ...f, rel: null }, RELATIONSHIPS.map((r) => r.key));
 }
 
-/** A pillar page's own balance line (`pillar-balance:<pillar>`), which only that pillar page shows. */
-export const isPillarLine = (i: Pick<Insight, 'id'>): boolean => i.id.startsWith('pillar-balance:');
-
-/**
- * What one place shows from `insightsForEvery`'s list: the same as `insightsForApp` on a list made for that place alone. /insights
- * (or none) is everything but the pillar pages' own lines.
- */
-export function insightsForPlace(list: readonly Insight[], app: InsightApp | null, rel: RelationshipKey | null = null): Insight[] {
-  if (!app || app === 'insights') return list.filter((i) => !isPillarLine(i));
-  return insightsForApp(list, app, rel);
-}
-
 function computeInsights(f: InsightFacts, pillarRels: readonly RelationshipKey[]): Insight[] {
   const apps = new Set(f.apps);
   const on = (k: string) => apps.has(k);
-  const yesterday = addDays(f.today, -1);
-  const pairFrom = addDays(f.today, -PAIR_WINDOW_DAYS);
+  const win = f.window ?? null;
+  const dayBefore = addDays(f.today, -1);
+  // With a period picked (2026-11-07) every signal reads its days; the minimum days each one needs stay as they are.
+  const yesterday = win && win.end < dayBefore ? win.end : dayBefore;
+  const last = win && win.end < f.today ? win.end : f.today;
+  const pairFrom = win ? win.start : addDays(f.today, -PAIR_WINDOW_DAYS);
+  const span = spanOf(win, f.today);
   // Each tick is read in the person's zone and keyed once, here, for every signal below.
   const stamped: StampedTick[] = f.done.map((t) => ({ t, at: localStamp(t.completedAt, f.zone), key: taskKey(t.title) }));
   const ticks = stamped.flatMap((x) => (x.at ? [{ day: x.at.day, minutes: x.at.minutes, relationship: x.t.relationship }] : []));
@@ -1718,11 +1902,12 @@ function computeInsights(f: InsightFacts, pillarRels: readonly RelationshipKey[]
     ...f.routine.map((r) => r.day),
     ...f.dayTypes.map((r) => r.day),
   ]);
-  const c: Ctx = { f, on, yesterday, pairFrom, ticks, ticksByDay, activeDays, wb, stamped, openByRel };
+  const c: Ctx = { f, on, yesterday, last, pairFrom, span, ticks, ticksByDay, activeDays, wb, stamped, openByRel };
   // A task that is a good or bad habit is said once, on that card (which offers Make it a habit when it fits).
   const ties = habitTies(c);
   const tiedTasks = ties.filter((t) => t.state === 'ready' && t.tie?.kind === 'task');
   const plainHabits = habits(c).filter((h) => !(h.state === 'ready' && h.habit && tiedTasks.some((t) => t.relationship === h.relationship && sameTask(t.tie!.key, h.id.split(':').slice(2).join(':')))));
+  const stress = on('stress') ? stressCalm(c) : null;
   const all: (Insight | null)[] = [
     ...plainHabits,
     ...ties,
@@ -1731,53 +1916,28 @@ function computeInsights(f: InsightFacts, pillarRels: readonly RelationshipKey[]
     streakWeekday(c),
     on('sleep') && on('mood') ? sleepMood(c) : null,
     on('mindful') ? focusTasks(c) : null,
-    on('stress') ? stressCalm(c) : null,
+    stress,
     daytypeDone(c),
     blockKept(c),
     on('finance') && on('stress') ? moneyStress(c) : null,
     on('sleep') ? slipsSleep(c) : null,
     routineTasks(c),
     on('journal') && on('mood') ? journalMood(c) : null,
-    on('reviews') ? reviewSince(c) : null,
+    on('journal') && on('mood') ? gratitudeMood(c) : null,
+    moveOn(c) ? moveWeekday(c) : null,
+    on('fitness') && (on('mood') || on('stress') || on('sleep')) ? eatDays(c) : null,
+    // Since your last review is about the days after that review, so it shows only with no period picked.
+    on('reviews') && !win ? reviewSince(c) : null,
     on('discover') ? discoverStrength(c) : null,
     on('agency') ? agencyLoad(c) : null,
+    // A stress card already about water days keeps stress out of the water card, so one fact is never said twice.
+    waterDays(c, stress?.action?.to === '/today#water'),
+    waterWeekday(c),
+    on('finance') ? budgetOver(c) : null,
+    on('finance') ? budgetPace(c) : null,
   ];
   const list = all.filter((x): x is Insight => x !== null);
   const ready = list.filter((i) => i.state === 'ready').sort((a, b) => b.strength - a.strength || (a.id < b.id ? -1 : 1));
   const wait = list.filter((i) => i.state === 'watching').sort((a, b) => KEY_ORDER.indexOf(a.key) - KEY_ORDER.indexOf(b.key));
   return [...ready, ...wait];
-}
-
-/**
- * What one place shows: for `insights` (or none) everything; for an app only the ready lines that touch it and are worth
- * saying, the pillar page only its own pillar's. Home never shows two of one key (good and bad habits up to two) nor more than one
- * private pairing besides them.
- */
-export function insightsForApp(list: readonly Insight[], app: InsightApp | null, rel: RelationshipKey | null = null): Insight[] {
-  if (!app || app === 'insights') return [...list];
-  const out: Insight[] = [];
-  const keys = new Set<InsightKey>();
-  let privatePairs = 0;
-  for (const i of list) {
-    if (i.state !== 'ready' || i.strength <= 0 || !i.apps.includes(app)) continue;
-    if (app === 'pillar' && (!rel || i.relationship !== rel)) continue;
-    if (app === 'home') {
-      // One of each key, except good and bad habits, which take up to two.
-      const tie = i.key === 'habit-tie';
-      if (keys.has(i.key) && !(tie && out.filter((x) => x.key === 'habit-tie').length < 2)) continue;
-      if (i.private && i.chart?.kind === 'pair') {
-        // Good and bad habits (up to two) may read how the day felt; any other private pairing still needs the one place free.
-        if (privatePairs >= 1 && !tie) continue;
-        privatePairs += 1;
-      }
-    }
-    keys.add(i.key);
-    out.push(i);
-  }
-  if (app === 'today') {
-    // Daily lists good and bad habits in a section of their own (2026-11-05), so they take their own room beside the two patterns.
-    const ties = out.filter((i) => i.key === 'habit-tie').slice(0, DAILY_HABITS_MAX);
-    return [...ties, ...out.filter((i) => i.key !== 'habit-tie').slice(0, INSIGHT_APP_MAX.today ?? 2)];
-  }
-  return out.slice(0, INSIGHT_APP_MAX[app] ?? 2);
 }

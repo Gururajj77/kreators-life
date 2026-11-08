@@ -671,6 +671,48 @@
    "action": null,
    "need": "Mark your not to do list and log sleep on 11 more days.",
    "strength": 0
+  },
+  {
+   "key": "water-days",
+   "id": "water-days",
+   "state": "watching",
+   "apps": [
+    "insights"
+   ],
+   "reads": [
+    "water"
+   ],
+   "private": true,
+   "relationship": "self",
+   "headline": "",
+   "text": "Your water goal and how your days go",
+   "basis": "",
+   "chart": null,
+   "action": null,
+   "need": "Log water on 12 more days, some at your goal and some under it.",
+   "strength": 0
+  },
+  {
+   "key": "water-weekday",
+   "id": "water-weekday",
+   "state": "watching",
+   "apps": [
+    "today",
+    "life",
+    "insights"
+   ],
+   "reads": [
+    "water"
+   ],
+   "private": true,
+   "relationship": "self",
+   "headline": "",
+   "text": "The day you drink least",
+   "basis": "",
+   "chart": null,
+   "action": null,
+   "need": "Log water on 14 more days.",
+   "strength": 0
   }
  ],
  "places": {
@@ -717,6 +759,7 @@
   ],
   "discover": [],
   "agency": [],
+  "fitness": [],
   "insights": [
    "sleep-mood",
    "habit-tie:task:self:even|walk",
@@ -731,7 +774,9 @@
    "habit-tie:task:guru:plan|week",
    "habit-tie:task:self:script|write",
    "daytype-done",
-   "slips-sleep"
+   "slips-sleep",
+   "water-days",
+   "water-weekday"
   ],
   "pillar:servant_leader": [
    {
@@ -859,7 +904,9 @@
    "habit-tie:task:guru:plan|week",
    "habit-tie:task:self:script|write",
    "daytype-done",
-   "slips-sleep"
+   "slips-sleep",
+   "water-days",
+   "water-weekday"
   ],
   "pillar:friendship": [
    {
@@ -1006,7 +1053,9 @@
    "habit-tie:task:guru:plan|week",
    "habit-tie:task:self:script|write",
    "daytype-done",
-   "slips-sleep"
+   "slips-sleep",
+   "water-days",
+   "water-weekday"
   ],
   "pillar:parent_child": [
    {
@@ -1134,7 +1183,9 @@
    "habit-tie:task:guru:plan|week",
    "habit-tie:task:self:script|write",
    "daytype-done",
-   "slips-sleep"
+   "slips-sleep",
+   "water-days",
+   "water-weekday"
   ],
   "pillar:lover_partner": [
    {
@@ -1262,7 +1313,9 @@
    "habit-tie:task:guru:plan|week",
    "habit-tie:task:self:script|write",
    "daytype-done",
-   "slips-sleep"
+   "slips-sleep",
+   "water-days",
+   "water-weekday"
   ],
   "pillar:self": [
    {
@@ -1439,7 +1492,9 @@
    "habit-tie:task:guru:plan|week",
    "habit-tie:task:self:script|write",
    "daytype-done",
-   "slips-sleep"
+   "slips-sleep",
+   "water-days",
+   "water-weekday"
   ],
   "pillar:guru": [
    {
@@ -1512,7 +1567,9 @@
    "habit-tie:task:guru:plan|week",
    "habit-tie:task:self:script|write",
    "daytype-done",
-   "slips-sleep"
+   "slips-sleep",
+   "water-days",
+   "water-weekday"
   ],
   "pillar:divine": [
    {
@@ -1585,7 +1642,9 @@
    "habit-tie:task:guru:plan|week",
    "habit-tie:task:self:script|write",
    "daytype-done",
-   "slips-sleep"
+   "slips-sleep",
+   "water-days",
+   "water-weekday"
   ]
  }
 }

@@ -42,6 +42,7 @@ import { copyPlain } from '../lib/clipboard';
 import { todayLocal } from '../lib/date';
 import { fileTitle, printAs, useAutoPrint } from '../lib/printDoc';
 import { useAuthed } from '../lib/queries';
+import { evenGrid, evenTile } from '../lib/bento';
 
 /** The invoice as the owner is changing it: what the PATCH sends. */
 interface Draft {
@@ -56,6 +57,8 @@ const draftOf = (inv: Invoice): Draft => ({ doc: { ...inv.doc, style: parseDocSt
 const itemsToSave = (d: Draft): InvoiceItem[] => d.items.filter((i) => i.description.trim()).map((i) => ({ ...i, description: i.description.trim() }));
 /** How long the page waits after the last keystroke before it saves. */
 const SAVE_AFTER_MS = 900;
+// The five looks: the first takes the row over two pairs (lib/bento.ts).
+const DESIGN_COLS = { base: 1, md: 2 } as const;
 
 /** The number that follows this one in its own series, as a hint: SSBB-001 gives SSBB-002. The server picks the real one. */
 function nextHint(number: string): string {
@@ -411,9 +414,9 @@ export function AgencyInvoice() {
         before={
           <div>
             <span className={LABEL}>Design</span>
-            <div role="group" aria-label="Design" className="mt-xs grid gap-xs md:grid-cols-2">
-              {INVOICE_DESIGNS.map((d) => (
-                <button key={d} type="button" aria-pressed={draft.doc.design === d} onClick={() => setDoc({ design: d })} className={`toy rounded-tile border-2 p-sm text-left ${draft.doc.design === d ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
+            <div role="group" aria-label="Design" className={`mt-xs grid gap-xs ${evenGrid(INVOICE_DESIGNS.length, DESIGN_COLS)}`}>
+              {INVOICE_DESIGNS.map((d, i) => (
+                <button key={d} type="button" aria-pressed={draft.doc.design === d} onClick={() => setDoc({ design: d })} className={`toy rounded-tile border-2 p-sm text-left ${evenTile(i, INVOICE_DESIGNS.length, DESIGN_COLS)} ${draft.doc.design === d ? 'border-ink bg-card-strong' : 'toy-soft border-line bg-card'}`}>
                   <span className="block text-card-title">{INVOICE_DESIGN_META[d].name}</span>
                   <span className="mt-xs block text-card-note text-ink-soft">{INVOICE_DESIGN_META[d].blurb}</span>
                 </button>

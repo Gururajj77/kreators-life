@@ -1,8 +1,9 @@
-import { anonAliasFrom, normalizeCode, DEFAULT_ZONE, isCurrency, parseAppPrefs, isRealDay, pageSizeOf, parseIdentities, parseRepeat, parsePriority, parseIntake, parseLifeArea, parseLinkBlocks, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
+import { anonAliasFrom, normalizeCode, DEFAULT_ZONE, isCurrency, parseAppPrefs, parseDatePrefs, isRealDay, pageSizeOf, parseIdentities, parseRepeat, parsePriority, parseIntake, parseLifeArea, parseLinkBlocks, type InboxKind, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
 import { BADGE_STATS, BADGES, badgesFrom, communityRankOf, type CommunityRank, EMPTY_SOCIALS, isPrivateBadge, parsePublicSettings, HONORS, isStaffFor, levelFromXp, PERMISSIONS, roleRank, taskReadyAt, timeHonors, type BadgeFacts, type BadgesResponse, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
 import type { Context, Next } from 'hono';
 import type { AppEnv } from './env';
 import type { UserRow } from './env';
+import { noteStmt } from './notes.ts';
 
 export interface NodeRow {
   id: string;
@@ -78,11 +79,22 @@ export function dayFromDevice(v: string | undefined | null): string {
 
 /** Today in an IANA zone, as YYYY-MM-DD (India's when the zone is missing or not one). */
 export function dayInZone(zone: string | null | undefined, at = new Date()): string {
-  try {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: zone || DEFAULT_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(at);
-  } catch {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: DEFAULT_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(at);
+  return dayFormat(zone || DEFAULT_ZONE).format(at);
+}
+const DAY_FORMATS = new Map<string, Intl.DateTimeFormat>();
+/** One formatter per zone, for the isolate's life: building one is the slow part (about 30 µs on a Mac, against 1 µs to use it), and a zone the runtime does not know reads as the default. */
+function dayFormat(zone: string): Intl.DateTimeFormat {
+  let fmt = DAY_FORMATS.get(zone);
+  if (!fmt) {
+    const opts = { year: 'numeric', month: '2-digit', day: '2-digit' } as const;
+    try {
+      fmt = new Intl.DateTimeFormat('en-CA', { ...opts, timeZone: zone });
+    } catch {
+      fmt = new Intl.DateTimeFormat('en-CA', { ...opts, timeZone: DEFAULT_ZONE });
+    }
+    DAY_FORMATS.set(zone, fmt);
   }
+  return fmt;
 }
 
 /**
@@ -110,6 +122,17 @@ export function shiftDate(date: string, days: number): string {
   const d = new Date(`${date}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
+}
+
+/** The streak as it stands on a person's own day. `users.streak` only moves at a check-in, so one that lapsed still holds its old number until the next one: it counts while the last check-in was today or yesterday. */
+export const streakNow = (streak: number, lastCheckin: string | null | undefined, day: string): number => (lastCheckin && lastCheckin >= shiftDate(day, -1) ? streak : 0);
+
+/** A day someone may log for: `dateNearToday`, or their own today or yesterday in their zone. Someone behind UTC in their evening is a day behind the UTC date, and their yesterday is still theirs. */
+export function dateNearOwnDay(date: string, zone: string | null | undefined, now: Date = new Date()): boolean {
+  if (!DATE_RE.test(date)) return false;
+  if (dateNearToday(date, now)) return true;
+  const own = dayInZone(zone, now);
+  return date <= own && date >= shiftDate(own, -1);
 }
 
 /** True when a client-supplied calendar date is today, give or take the allowed window. Stops future check-ins. */
@@ -156,6 +179,7 @@ export function toUser(r: UserRow): User {
     timezone: r.timezone || DEFAULT_ZONE,
     currency: currencyOf(r),
     appPrefs: parseAppPrefs(r.app_prefs_json ?? null),
+    datePrefs: parseDatePrefs(r.date_prefs_json ?? null),
     avatarUrl: r.avatar_url ?? '',
     socials: parseSocials(r.socials_json),
     links: linksOf(r),
@@ -212,12 +236,14 @@ export const rankOf = (user: Pick<UserRow, 'role' | 'permissions'>): CommunityRa
 /** The signed-in person behind an admin request, or null when the admin key made it. */
 export const actorOf = (c: { get: (k: 'user') => UserRow | undefined }): string | null => c.get('user')?.id ?? null;
 
-export async function audit(db: D1Database, actorId: string | null, action: string, resourceType: string, resourceId: string | null, before: unknown = '', after: unknown = ''): Promise<void> {
+export function auditStmt(db: D1Database, actorId: string | null, action: string, resourceType: string, resourceId: string | null, before: unknown = '', after: unknown = ''): D1PreparedStatement {
   const str = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v ?? '')).slice(0, 2000);
-  await db
+  return db
     .prepare('INSERT INTO audit_logs (id, actor_user_id, action, resource_type, resource_id, before_summary, after_summary, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(newId(), actorId, action, resourceType, resourceId, str(before), str(after), nowIso())
-    .run();
+    .bind(newId(), actorId, action, resourceType, resourceId, str(before), str(after), nowIso());
+}
+export async function audit(db: D1Database, actorId: string | null, action: string, resourceType: string, resourceId: string | null, before: unknown = '', after: unknown = ''): Promise<void> {
+  await auditStmt(db, actorId, action, resourceType, resourceId, before, after).run();
 }
 
 export async function orgRole(db: D1Database, orgId: string, userId: string): Promise<'owner' | 'member' | null> {
@@ -271,11 +297,11 @@ export async function personBy(db: D1Database, who: string): Promise<UserRow | n
   return code.length >= 8 ? db.prepare('SELECT * FROM users WHERE friend_code = ?').bind(code).first<UserRow>() : null;
 }
 
-export async function notify(db: D1Database, userId: string, kind: string, title: string, body = '', link: string | null = null): Promise<void> {
-  await db
-    .prepare('INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)')
-    .bind(newId(), userId, kind, title, body, link, nowIso())
-    .run();
+/** The one statement that writes an inbox note, its kind an `InboxKind` (notes.ts); every other write goes through it. */
+export { noteStmt, type Note, type NoteMode } from './notes.ts';
+
+export async function notify(db: D1Database, userId: string, kind: InboxKind, title: string, body = '', link: string | null = null): Promise<void> {
+  await noteStmt(db, { userId, kind, title, body, link }).run();
 }
 
 /**
@@ -289,13 +315,47 @@ export async function inBatches<T = unknown>(db: D1Database, stmts: readonly D1P
   return out;
 }
 
+/** Every super admin, however many: the people a note to the team goes to. A note to them goes through `notifyMany`, fifty to a round trip. */
+export async function adminIds(db: D1Database): Promise<string[]> {
+  const admins = await db.prepare("SELECT id FROM users WHERE role = 'admin'").all<{ id: string }>();
+  return admins.results.map((a) => a.id);
+}
+
 /** The same note for many people: one round trip per fifty, not one per person. Same rows `notify` would write. */
-export async function notifyMany(db: D1Database, userIds: readonly string[], kind: string, title: string, body = '', link: string | null = null): Promise<void> {
+export async function notifyMany(db: D1Database, userIds: readonly string[], kind: InboxKind, title: string, body = '', link: string | null = null): Promise<void> {
   const now = nowIso();
   await inBatches(
     db,
-    [...new Set(userIds)].map((uid) => db.prepare('INSERT INTO notifications (id, user_id, kind, title, body, link, read_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)').bind(newId(), uid, kind, title, body, link, now)),
+    [...new Set(userIds)].map((uid) => noteStmt(db, { userId: uid, kind, title, body, link, at: now })),
   );
+}
+
+/**
+ * What a block does, the one rule (2026-11-07). A block by name (Bond's Block, or from a named line; `blocks.by_name = 1`) works both ways on everything
+ * with a name on it. A block behind a made-up name (`block_aliases`) touches only anonymous writing. Neither crosses over, because each crossing tells who
+ * an anonymous writer is: block a suspect by name and see an anonymous post vanish, or block a made-up name and see a named post vanish.
+ * `blockedByName` is the check for anything named (a friend request, a chat, an ask, a row on a board), `hiddenByBlock` for a line that may be anonymous
+ * (`anon` is an SQL expression that is 1 for an anonymous line). All arguments are SQL: a column or a numbered parameter.
+ */
+export const blockedByName = (a: string, b: string): string =>
+  `EXISTS (SELECT 1 FROM blocks bn WHERE bn.by_name = 1 AND ((bn.blocker_id = ${a} AND bn.blocked_id = ${b}) OR (bn.blocker_id = ${b} AND bn.blocked_id = ${a})))`;
+/**
+ * Whether a block keeps a line from a viewer. The writer's own block, of any kind, always does: nobody reads someone who blocked them, and the viewer can test no suspect with it.
+ * The viewer's own block reaches only its kind: a block by name their named lines, a block behind a made-up name their anonymous ones.
+ */
+export const hiddenByBlock = (viewer: string, writer: string, anon: string): string =>
+  `(EXISTS (SELECT 1 FROM blocks bw WHERE bw.blocker_id = ${writer} AND bw.blocked_id = ${viewer}) OR CASE WHEN ${anon} = 1 THEN EXISTS (SELECT 1 FROM block_aliases ba WHERE ba.blocker_id = ${viewer} AND ba.blocked_id = ${writer}) ELSE EXISTS (SELECT 1 FROM blocks bv WHERE bv.by_name = 1 AND bv.blocker_id = ${viewer} AND bv.blocked_id = ${writer}) END)`;
+/** Whether either of two people has blocked the other by name. A block reads like nobody, so callers answer as they would for no such person. */
+export async function blockedEither(db: D1Database, a: string, b: string): Promise<boolean> {
+  const row = await db.prepare(`SELECT ${blockedByName('?1', '?2')} AS x`).bind(a, b).first<{ x: number }>();
+  return row?.x === 1;
+}
+/** Of these people, the ones who would see this writer's line, so a note about it goes only to them: a note never says more than the line does. */
+export async function seenBy(db: D1Database, writerId: string, anonymous: boolean, ids: readonly (string | null | undefined)[]): Promise<Set<string>> {
+  const asked = [...new Set(ids.filter((id): id is string => Boolean(id) && id !== writerId))];
+  if (asked.length === 0) return new Set();
+  const rows = await db.prepare(`SELECT j.value AS id FROM json_each(?1) j WHERE NOT ${hiddenByBlock('j.value', '?2', '?3')}`).bind(JSON.stringify(asked), writerId, anonymous ? 1 : 0).all<{ id: string }>();
+  return new Set(rows.results.map((r) => r.id));
 }
 
 /** The made-up name someone writes under in one conversation (`scope`): the same all through it, different in the next, and not reversible without the salt. */
@@ -411,9 +471,13 @@ export interface TaskGate {
 }
 
 export async function taskGate(db: D1Database, userId: string): Promise<TaskGate> {
+  // Only "under the free first few" is ever asked of the count, and the last tick is the end of an index, so a person with a thousand ticks reads a few rows, not a thousand.
   const row = await db
-    .prepare("SELECT COUNT(*) AS n, MAX(completed_at) AS last FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done'")
-    .bind(userId)
+    .prepare(
+      `SELECT (SELECT COUNT(*) FROM (SELECT 1 FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'done' LIMIT ?2)) AS n,
+        (SELECT completed_at FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'done' ORDER BY completed_at DESC LIMIT 1) AS last`,
+    )
+    .bind(userId, WAIT.freeFirstTasks)
     .first<{ n: number; last: string | null }>();
   return { doneCount: row?.n ?? 0, lastDoneAt: row?.last ?? null };
 }
@@ -482,6 +546,43 @@ export async function getStats(db: D1Database, userId: string): Promise<Stats> {
   };
 }
 
+/** How long the counts behind the badges stay on the person's row (`users.stats_json`). A tick and the badge gallery always bring them up to date. */
+const STATS_KEEP_MS = 3_600_000;
+
+function statsFromFacts(facts: Stats['facts']): Stats {
+  return { tasksDone: facts.tasks_done, sparksDone: facts.sparks_done, projectsCleared: facts.projects_cleared, relationshipsWithPillars: facts.pillars_set, clubMember: facts.club > 0, runsLogged: facts.runs_logged, runMetres: facts.run_metres, facts };
+}
+
+/** Keeps the counts on the person's row. One row written, no index touched. */
+export async function storeStats(db: D1Database, userId: string, stats: Stats): Promise<void> {
+  await db.prepare('UPDATE users SET stats_json = ?, stats_at = ? WHERE id = ?').bind(JSON.stringify(stats.facts), nowIso(), userId).run();
+}
+
+/**
+ * The counts behind the badges, from the person's row when they are under an hour old. `getStats` visits every row it counts, about 2,400 for three months of use, and
+ * /me is read after every write, which on the free plan's 5 million rows a day was a third of what an active person cost (2026-11-07). So a badge from something other than
+ * a tick can show up to an hour late on Profile; the gallery reads fresh, and so does an unlock.
+ */
+export async function keptStats(db: D1Database, user: { id: string; stats_json?: string | null; stats_at?: string | null }): Promise<Stats> {
+  if (user.stats_json && user.stats_at && Date.now() - Date.parse(user.stats_at) < STATS_KEEP_MS) {
+    try {
+      return statsFromFacts(JSON.parse(user.stats_json) as Stats['facts']);
+    } catch {
+      // read them again
+    }
+  }
+  const stats = await getStats(db, user.id);
+  await storeStats(db, user.id, stats);
+  return stats;
+}
+
+/** The counts one tick moves, from the kept ones: a task done, maybe a project cleared, maybe a pillar's first tick. The rest of the counts did not change. */
+export async function statsAfterTick(db: D1Database, kept: Stats, tick: { userId: string; taskId: string; relationship: string; projectCleared: boolean }): Promise<Stats> {
+  const another = await db.prepare("SELECT 1 AS x FROM nodes WHERE user_id = ? AND relationship = ? AND kind = 'task' AND status = 'done' AND id != ? LIMIT 1").bind(tick.userId, tick.relationship, tick.taskId).first();
+  const facts = { ...kept.facts, tasks_done: kept.facts.tasks_done + 1, projects_cleared: kept.facts.projects_cleared + (tick.projectCleared ? 1 : 0), tasks_pillars: kept.facts.tasks_pillars + (another ? 0 : 1) };
+  return statsFromFacts(facts);
+}
+
 /** Every count at zero, for a place that knows only some of them (the leaderboard's pool). */
 export const emptyFacts = (): Stats['facts'] => Object.fromEntries(BADGE_STATS.filter((k) => k !== 'best_streak' && k !== 'level').map((k) => [k, 0])) as Stats['facts'];
 
@@ -541,7 +642,9 @@ export async function badgesNow(db: D1Database, userId: string): Promise<string[
 
 /** What the badge gallery reads: what is held, when it was earned, and the counts behind every rule. Owner only. */
 export async function badgesFor(db: D1Database, user: UserRow): Promise<BadgesResponse> {
-  const s = await badgeState(db, user);
+  const stats = await getStats(db, user.id);
+  await storeStats(db, user.id, stats);
+  const s = await badgeState(db, user, { stats });
   return { held: s.keys.map((key) => ({ key, at: s.at.get(key) ?? null, given: s.given.has(key) && !s.at.has(key) })), progress: s.facts };
 }
 
@@ -578,13 +681,35 @@ export function publicOf(r: { public_json?: string | null }): ReturnType<typeof 
   }
 }
 
-/** A link a person types for a meeting, a replay, a video or an event: http or https only, up to `max` characters, else empty. javascript: and data: never get stored. */
+/** A link a person types that other people then open (a meeting, a replay, a video, an event, a product's file, a portfolio piece, a hand-in, Army work): http or https only, up to `max` characters, else empty. javascript: and data: never get stored. */
 export function httpUrl(v: unknown, max = 500): string {
   const t = typeof v === 'string' ? v.trim().slice(0, max) : '';
   return /^https?:\/\/\S+$/i.test(t) ? t : '';
+}
+/** What an optional link field answers when something other than a link was typed, so a typed link is refused out loud and never quietly lost. */
+export const LINK_PROBLEM = 'a link that starts with https://';
+export const badLink = (v: unknown, max = 500): boolean => str(v, max) !== '' && !httpUrl(v, max);
+
+/**
+ * D1 refuses a LIKE or GLOB pattern over 50 bytes (a 500), and a Hindi letter takes three. Typed words go through this before they go into a pattern: cut on a whole
+ * letter to what fits, which leaves room for a `%` at each end, so a long search still answers.
+ */
+export function likeFit(typed: string, room = 48): string {
+  let bytes = 0;
+  let out = '';
+  for (const ch of typed) {
+    const cp = ch.codePointAt(0) ?? 0;
+    bytes += cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
+    if (bytes > room) break;
+    out += ch;
+  }
+  return out;
 }
 
 /** A deleted account keeps its row (orders and invoices stay true for the books) under this name, and appears in no list of people
  * and in no count of members. `liveUser('u')` is the condition for a query over users aliased `u`. */
 export const DELETED_NAME = 'Deleted member';
 export const liveUser = (alias = 'u'): string => `${alias}.display_name != '${DELETED_NAME}'`;
+/** Nobody alive may take that name, in any spelling of its case or spaces, or they would vanish from every list `liveUser` guards. Every door that sets a name asks this. */
+export const isDeletedName = (v: unknown): boolean => typeof v === 'string' && v.trim().replace(/\s+/g, ' ').toLowerCase() === DELETED_NAME.toLowerCase();
+export const DELETED_NAME_PROBLEM = 'that name is kept for closed accounts. Pick another one.';

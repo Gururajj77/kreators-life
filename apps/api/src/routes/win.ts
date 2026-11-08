@@ -236,7 +236,7 @@ win.post('/submissions/:id/review', async (c) => {
     ]);
     if (b.budget_points > 0 && b.paid_points + points >= b.budget_points) await db.prepare("UPDATE bounties SET status = 'paid' WHERE id = ?").bind(b.id).run();
     await audit(db, user.id, 'bounty.payout', 'bounty_submission', s.id, s.payout_points, points);
-    await notify(db, s.user_id, 'win', `Paid: ${s.bounty_title}`, `${points} points for ${s.evidence_views ?? s.latest_views} verified views`, '/win');
+    await notify(db, s.user_id, 'win', `Paid: ${s.bounty_title}`, `${points} points for ${s.evidence_views ?? s.latest_views} verified views`, '/win#mine-heading');
     return c.json({ ok: true, points });
   }
   if (!can(user, 'review')) return c.json({ error: 'reviewers verify submissions' }, 403);
@@ -247,7 +247,7 @@ win.post('/submissions/:id/review', async (c) => {
     .run();
   if (evidenceViews !== null && evidenceViews !== s.latest_views) await record(db, s.id, { views: evidenceViews, likes: 0, comments: 0, shares: 0 }, 'staff', 'confirmed during review', user.id);
   await audit(db, user.id, 'bounty.review', 'bounty_submission', s.id, s.status, status);
-  await notify(db, s.user_id, 'win', `${s.bounty_title}: ${status}`, status === 'verified' ? `${payout} points queued for payout` : str(body.evidenceNote, 160), '/win');
+  await notify(db, s.user_id, 'win', `${s.bounty_title}: ${status}`, status === 'verified' ? `${payout} points queued for payout` : str(body.evidenceNote, 160), '/win#mine-heading');
   return c.json({ ok: true });
 });
 

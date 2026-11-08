@@ -58,11 +58,6 @@ function subscribe(onChange: () => void) {
   };
 }
 
-/** The ids set aside for this person, read once (no subscription); empty when storage is blocked or holds no list. */
-export function hiddenInsightIds(userId: string | undefined | null): Set<string> {
-  return new Set(parse(raw(keyFor(userId))));
-}
-
 /** The set-aside ids for this person, kept in step across every block, with `hide` (Not now) and `show` (Show again). */
 export function useHiddenInsightIds(userId: string | undefined | null): [Set<string>, (id: string) => void, (id: string) => void] {
   const key = keyFor(userId);

@@ -38,7 +38,7 @@ function EntryRow({ e }: { e: CreditEntry }) {
           {e.agent ? ` by the ${AGENT_META[e.agent].name.toLowerCase()}` : ''}
         </span>
         <span className="block text-caption text-ink-soft">
-          {prettyDate(e.createdAt.slice(0, 10))}
+          {prettyDate(e.createdAt)}
           {e.note ? ` · ${e.note}` : ''}
           {e.tokens ? ` · ${n(e.tokens.input)} tokens in, ${n(e.tokens.output)} out` : ''}
         </span>
@@ -97,9 +97,9 @@ export function Plans() {
 
       {d && a && (
         <>
-          <div className="mt-md grid grid-cols-2 gap-xs md:grid-cols-4">
+          <div className="mt-md grid grid-cols-2 gap-xs lg:grid-cols-4">
             <StatTile label="Credits left" value={n(a.total)} hint={`About ${n(messagesFor(a.total))} messages`} />
-            <StatTile label="Plan" value={a.planName} hint={a.planUntil ? `Until ${prettyDate(a.planUntil.slice(0, 10))}` : 'Typing needs one'} />
+            <StatTile label="Plan" value={a.planName} hint={a.planUntil ? `Until ${prettyDate(a.planUntil)}` : 'Typing needs one'} />
             <StatTile label="Used today" value={n(a.usedToday.assistant)} hint={a.limits ? `Of ${n(a.limits.assistant.perDay)} a day` : 'No plan yet'} />
             <StatTile label="Last 30 days" value={n(used30)} hint="Credits used" />
           </div>
@@ -163,7 +163,8 @@ export function Plans() {
           </Section>
 
           <Section id="plans-pick" title="Plans" lede={`Each gives a fixed worth of model use for ${PLAN_DAYS} days. What is left at the end does not carry over.`}>
-            <ul className="m-0 grid list-none grid-cols-1 gap-sm p-0 md:grid-cols-3">
+            {/* Three from the `xl` width: at 1024 a card holds 198px, and "₹49,999 a month" needs 200. */}
+            <ul className="m-0 grid list-none grid-cols-1 gap-sm p-0 xl:grid-cols-3">
               {d.plans.map((p) => {
                 const mine = a.plan === p.key;
                 const id = `plan:${p.key}`;
@@ -200,7 +201,7 @@ export function Plans() {
           </Section>
 
           <Section id="plans-topup" title="Top up" lede="Extra credits on top of a plan. They are used after the plan's own, and stay until you use them.">
-            <ul className="m-0 grid list-none grid-cols-1 gap-sm p-0 md:grid-cols-3">
+            <ul className="m-0 grid list-none grid-cols-1 gap-sm p-0 lg:grid-cols-3">
               {d.topUps.map((t) => {
                 const id = `topup:${t.key}`;
                 return (

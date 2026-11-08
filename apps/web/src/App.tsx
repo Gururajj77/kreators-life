@@ -12,12 +12,14 @@ import { Assistant } from './components/AssistantButton';
 import { ReminderBubble } from './components/Reminders';
 import { RouteFallback } from './components/RouteFallback';
 import { lazyNamed } from './lib/lazy';
+import { coachJoinKept } from './lib/coachJoin';
 import { useMe } from './lib/queries';
 import { useApplyTheme } from './lib/theme';
 import { useFocus, useSession } from './lib/store';
 import { useFocusSession } from './lib/focusSession';
 import { FocusPill } from './components/FocusPill';
-import { noteVisit } from './lib/context';
+import { useLandOnHash } from './lib/useLandOnHash';
+import { useWide } from './lib/useWide';
 import { Auth } from './screens/Auth';
 import { Home as Dashboard } from './screens/Home';
 import { Today } from './screens/Today';
@@ -31,6 +33,8 @@ import { SevenRP } from './site/SevenRP';
 const FocusRoundsHost = lazyNamed(() => import('./components/FocusRoundsHost'), 'FocusRoundsHost');
 // The privacy card asks once and then stays away, so it comes in its own chunk right after the first paint (keeps the entry under budget).
 const ConsentPopup = lazyNamed(() => import('./components/ConsentPopup'), 'ConsentPopup');
+// "On this page", the dashes at the top right of a long page: its own chunk after the first paint, and a phone never downloads it.
+const PageContents = lazyNamed(() => import('./components/PageContents'), 'PageContents');
 const Forgot = lazyNamed(() => import('./screens/PasswordReset'), 'Forgot');
 const ResetPassword = lazyNamed(() => import('./screens/PasswordReset'), 'ResetPassword');
 const Admin = lazyNamed(() => import('./screens/Admin'), 'Admin');
@@ -98,10 +102,12 @@ const CardTable = lazyNamed(() => import('./screens/CardTable'), 'CardTable');
 const Plans = lazyNamed(() => import('./screens/Plans'), 'Plans');
 const Coaching = lazyNamed(() => import('./screens/Coaching'), 'Coaching');
 const CoachStudent = lazyNamed(() => import('./screens/CoachStudent'), 'CoachStudent');
+const CoachJoin = lazyNamed(() => import('./screens/CoachJoin'), 'CoachJoin');
 const School = lazyNamed(() => import('./screens/School'), 'School');
 const Search = lazyNamed(() => import('./screens/Search'), 'Search');
 const Sessions = lazyNamed(() => import('./screens/Sessions'), 'Sessions');
 const Sleep = lazyNamed(() => import('./screens/Sleep'), 'Sleep');
+const Fitness = lazyNamed(() => import('./screens/Fitness'), 'Fitness');
 const Stress = lazyNamed(() => import('./screens/Stress'), 'Stress');
 const Studio = lazyNamed(() => import('./screens/Studio'), 'Studio');
 const StudioAudience = lazyNamed(() => import('./screens/StudioAudience'), 'StudioAudience');
@@ -166,9 +172,14 @@ function RequireSession() {
 
 function Shell() {
   const focus = useFocus((s) => s.on);
-  const where = useLocation().pathname;
-  // Remember which apps get opened, on this device only, so the lists can put them nearer the top next time.
-  useEffect(() => noteVisit(where), [where]);
+  // The lists no longer follow what gets opened (2026-11-07), so the visit times a device kept go.
+  useEffect(() => {
+    try {
+      localStorage.removeItem('kreators.appUse');
+    } catch {
+      // private window: nothing was kept
+    }
+  }, []);
   const token = useSession((s) => s.token);
   const me = useMe();
   const loc = useLocation();
@@ -186,6 +197,9 @@ function Shell() {
     );
   }
   if (!me.data.user.onboardedAt) return <Navigate to="/onboarding" replace />;
+  // Someone who opened a coach's invite link signed out comes back to its card once they are in (the token is kept for the tab only).
+  const joining = coachJoinKept();
+  if (joining) return <Navigate to={`/coach/join/${joining}`} replace />;
   return (
     <>
       <Page tabs />
@@ -212,6 +226,9 @@ const explained = (key: string, el: ReactNode) => (
 /** A new page starts at the top and a hash lands on its element; Back and Forward return to where you were. */
 function Root() {
   const token = useSession((s) => s.token);
+  const wide = useWide();
+  // A hash lands on its section once it is in the page, opening it when it is folded (an inbox note's link, a jump from another screen).
+  useLandOnHash();
   // Every block of text reads as a rectangle: the fixer for blocks CSS cannot balance, downloaded after the first paint.
   useEffect(() => {
     let stop: (() => void) | undefined;
@@ -231,6 +248,11 @@ function Root() {
       <Suspense fallback={null}>
         <ConsentPopup />
       </Suspense>
+      {wide && (
+        <Suspense fallback={null}>
+          <PageContents />
+        </Suspense>
+      )}
       {/* The focus clock, for anyone signed in, at the root so no page change ever unmounts it: the app, the two chats, the vibe check,
           the public site and the card table's focus mode alike. Signing out (no token) takes it away. */}
       {token && (
@@ -318,6 +340,7 @@ const router = createBrowserRouter([
       { path: '/forgot', element: <Forgot /> },
       { path: '/signin/reset', element: <ResetPassword /> },
       { path: '/signup', element: <Auth mode="signup" /> },
+      { path: '/coach/join/:token', element: <CoachJoin /> },
       { path: '/u/:handle', element: <Public /> },
       { path: '/people/:id', element: <Public /> },
       { path: '/p/:id', element: <ProductPage /> },
@@ -397,6 +420,7 @@ const router = createBrowserRouter([
       { path: '/wellbeing', element: gated('wellbeing', <Wellbeing />) },
       { path: '/mood', element: gated('mood', <Mood />) },
       { path: '/sleep', element: gated('sleep', <Sleep />) },
+      { path: '/fitness', element: gated('fitness', <Fitness />) },
       { path: '/stress', element: gated('stress', <Stress />) },
       { path: '/mindful', element: gated('mindful', <Mindful />) },
       { path: '/journal', element: gated('journal', <Journal />) },

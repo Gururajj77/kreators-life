@@ -1,4 +1,4 @@
-import { AFFILIATE_SHARE, CONSENT_PURPOSES, LEGAL_VERSION, MIN_AGE, PAID_PLANS, PAYMENTS_LIVE, PLAN_CURRENCY, PLAN_DAYS, PLANS, RETENTION, money } from '@kreators/shared';
+import { AFFILIATE_SHARE, CONSENT_PURPOSES, LEGAL_VERSION, LIVE_CALL_CENTS, MIN_AGE, PAID_PLANS, PAYMENTS_LIVE, PLAN_CURRENCY, PLAN_DAYS, PLANS, RETENTION, money } from '@kreators/shared';
 import { A, ActionLink, StartLink, Bullets, Fact, Grid, Grievance, H, LegalPage, Mail, NOT_SET, P, Strong, contactEmail, useBusiness, versionDate } from './legalBits';
 
 type Kind = 'terms' | 'privacy' | 'refunds' | 'contact' | 'pricing';
@@ -31,6 +31,7 @@ const BASES: [string, string, string, string][] = [
   ['The assistant and the writing in Content, when you use them', 'To do the job you typed. Only what the job needs is sent.', 'A use you asked for', 'Contract'],
   ['Click counts on tracked links (an address hash, never the address)', 'So a creator can see which link worked.', 'Consent', 'Legitimate interests'],
   ['The tracked-link cookie, videos from YouTube and Vimeo, and news and offers by email', 'These are your choices, and none is needed to use the app.', 'Consent', 'Consent'],
+  ['Supplements you list (Fitness)', 'To keep your own list and the days you took each one. Nobody else sees it.', 'Your consent, given when you switch it on', 'Explicit consent for health data (GDPR Art. 9(2)(a))'],
   ['Your public page, leaderboard place and coach sharing', 'Only what you switch on is shown.', 'Consent, which you can take back', 'Your choice, which you can withdraw'],
 ];
 
@@ -55,9 +56,9 @@ export function Policy({ kind }: { kind: Kind }) {
           <H>Who may use it</H>
           <P>You need to be {MIN_AGE} or older. Sign-up asks for your date of birth and a phone number, and an account for anyone younger is refused. If we learn that an account belongs to someone under {MIN_AGE}, we close it.</P>
           <H>Your account</H>
-          <P>You start with a session on your device and may add an email. Keep your password private. You are responsible for what happens under your account, and one person has one account. You can end your account at any time from Profile, Account: it deletes your personal details and your logs at once, and money records stay without your name, as the law asks.</P>
+          <P>You start with a session on your device and may add an email. Keep your password private. You are responsible for what happens under your account, and one person has one account. You can end your account at any time from Profile, Account: it deletes your personal details and your logs at once. Money records stay without your name, as the law asks, and so does what other people rely on, such as a product they bought.</P>
           <H>Your content and the licence you give us</H>
-          <P>What you write, upload or post stays yours. To run the service, you give us a licence to store it, show it to the people you chose, copy it as the system needs and, where you put it on a public page, display it there. The licence is only for running kreators.app, it is not exclusive, and it ends when you delete the content or your account, except for copies that other people already made by sharing it. We do not use what you write to train AI models.</P>
+          <P>What you write, upload or post stays yours. To run the service, you give us a licence to store it, show it to the people you chose, copy it as the system needs and, where you put it on a public page, display it there. The licence is only for running kreators.app, it is not exclusive, and it ends when you delete the content or your account, except for copies that other people already made by sharing it, and what stays for the people who rely on it, such as a product they bought. We do not use what you write to train AI models.</P>
           <H>Who owns what the app helps you make</H>
           <P>You do. That includes text that the assistant or the writing tool drafts for you. In some countries a text made by a machine may not be protected by copyright, so check before you rely on that. You are responsible for checking a draft before you use it.</P>
           <H>Points, rewards and money</H>
@@ -73,7 +74,7 @@ export function Policy({ kind }: { kind: Kind }) {
           <H>What you make and sell</H>
           <P>You keep the rights to what you make. By selling through the shop you promise it is yours to sell, is not unlawful or hateful, and does not promise financial returns. Brands and creators agree usage rights on each campaign in writing before anything is produced.</P>
           <H>Wellbeing, not medical care</H>
-          <P>Mood, sleep, stress, breathing, the Companion, journal prompts and Discover help you look at your days and how you feel. They are not medical care, a diagnosis or a treatment. If you are worried about your health, talk to a doctor or another trained person. Do not wait to get help because of something you read here.</P>
+          <P>Mood, sleep, stress, breathing, movement, the eating check-in, the supplement list, the Companion, journal prompts and Discover help you look at your days and how you feel. They are not medical care, a diagnosis or a treatment. The supplement list keeps only what you type. It does not check amounts or mixes, so ask a doctor or pharmacist. If you are worried about your health, talk to a doctor or another trained person. Do not wait to get help because of something you read here.</P>
           <H>Money tools, not advice</H>
           <P>Finance, the tax sums in Agency and the money numbers in reviews help you keep track. They are not financial, tax or investment advice. Check with an accountant or another adviser before you rely on them.</P>
           <H>Invoices and agreements</H>
@@ -116,12 +117,12 @@ export function Policy({ kind }: { kind: Kind }) {
             </P>
           )}
           <H>What we keep</H>
-          <P>Your profile (name, page name, bio, skills, interests, city), your date of birth and phone number, your pillars and daily logs, wellbeing and journal entries, orders, bookings, finance entries, the clients, deliverables, time, invoices and agreements you keep in Agency, the reviews you write and plan, messages in circles, and the events your device sends while you use the app.</P>
+          <P>Your profile (name, page name, bio, skills, interests, city), your date of birth and phone number, your pillars and daily logs, wellbeing and journal entries, your gratitude lines, the movement, eating check-ins and supplements you log in Fitness, orders, bookings, finance entries, what you sell, the names and emails of leads you gather, the events and clubs you host, the clients, deliverables, time, invoices and agreements you keep in Agency, the reviews you write and plan, messages in circles, and the events your device sends while you use the app.</P>
           <H>Why we use it, and on what ground</H>
           <P>The law asks us to name a ground for each use. In India, under the Digital Personal Data Protection Act 2023, a use rests on your consent or on a use the Act allows, such as one you asked for or a legal duty.</P>
           <Grid label="Why we use your data" head={['What', 'Why', 'Ground in India', 'Ground in the EU and UK']} rows={BASES.map(([a, b, c, d]) => [a, b, c, d])} />
           <H>Who sees what</H>
-          <P>Your journal and wellbeing numbers are never shown to brands, staff, the leaderboard or Club selection. Your public page shows only what you put on it. Staff see what their permission covers. A circle sees your alias until you choose to reveal.</P>
+          <P>Your journal, gratitude lines and wellbeing numbers are never shown to brands, staff, the leaderboard or Club selection. The supplements you list in Fitness are seen by you alone: never by a coach, the assistant or anyone else. Your public page shows only what you put on it. Staff see what their permission covers. A circle sees only your alias.</P>
           <P>Your Discover answers and results are private to you. They never reach brands, staff, the leaderboard or a life coach. You choose whether they shape your next steps on Home (plain rules, no AI, on until you switch it off), and whether the assistant may read a short summary of them (off until you switch it on, and only a model that keeps no data can read it). You can delete a result at any time.</P>
           <H>Who gets it</H>
           <P>
@@ -143,7 +144,7 @@ export function Policy({ kind }: { kind: Kind }) {
                 <Strong>Fix it.</Strong> Correct, complete or update what we hold. Most of it you can change yourself under Profile.
               </>,
               <>
-                <Strong>Erase it.</Strong> Delete your account from Profile, Account. Money records stay without your name, as the table shows.
+                <Strong>Erase it.</Strong> Delete your account from Profile, Account. Money records and what other people rely on stay without your name, as the table shows.
               </>,
               <>
                 <Strong>Take back a consent.</Strong> It is as easy as giving it: Profile, Privacy choices, one tap each.
@@ -166,7 +167,7 @@ export function Policy({ kind }: { kind: Kind }) {
               <>Anything else: the <A to="/contact">contact page</A>, or Help inside the app. We reply within the time the law sets.</>,
             ]}
           />
-          <P>Deleting removes your personal details and your logs. Money records stay without your name for the years the law asks, as the table shows.</P>
+          <P>Deleting removes your personal details and your logs. Money records stay without your name for the years the law asks. What other people rely on stays without your name too. The table shows both.</P>
           <H>Your three choices</H>
           <P>The app asks you once, and you can change each answer at any time under Profile, Privacy choices. Nothing here is needed to use the app, and the answer starts as no.</P>
           <Bullets
@@ -184,7 +185,7 @@ export function Policy({ kind }: { kind: Kind }) {
           <H>Selling and sharing</H>
           <P>We do not sell your personal information, and we do not share it for advertising on other sites.</P>
           <H>Automated decisions</H>
-          <P>We make no decision about you by machine that has a legal effect or a similar big one. The assistant, Discover and the daily brief only give suggestions. Some rules run by themselves, such as points limits and sign-in limits. If one gets something wrong, write to us and a person will look again.</P>
+          <P>We make no decision about you by machine that has a legal effect or a similar big one. The assistant, Discover, Emerging, a coach's tips and the daily brief only give suggestions. Some rules run by themselves, such as points limits and sign-in limits. If one gets something wrong, write to us and a person will look again.</P>
           <H>Children</H>
           <P>kreators.app is for people aged {MIN_AGE} and over. If we learn that an account belongs to someone under {MIN_AGE}, we delete it.</P>
           <H>AI</H>
@@ -196,7 +197,8 @@ export function Policy({ kind }: { kind: Kind }) {
           <H>The calendar link</H>
           <P>If you switch on the private calendar link, anyone with that address can read the title, pillar and priority of your open tasks that have a day, and the reviews you planned, with their times. It never carries notes, your journal, your mood or anything from a tracker. It only shows your tasks; nothing changes them from a calendar. Make a fresh link or switch it off and the old address stops at once.</P>
           <H>Life coaches</H>
-          <P>A life coach is someone our team chose. A coach sees nothing of yours until you say yes, and then only the parts you switch on: daily check-ins and tasks, your pillars, your routine and contract, your life map answers, and your wellbeing numbers and saved reviews. A coach never sees your journal, the notes you add to your trackers, your money or your Companion chats. You can switch a part off or end the coaching at any time, from your Profile tab, and the coach loses sight of it at once. Every ask, note and task a coach adds is kept in a change log you can read. It all comes with your export and goes with your account.</P>
+          <P>A life coach is someone our team chose. A coach sees nothing of yours until you say yes, and then only the parts you switch on: daily check-ins and tasks, your pillars, your routine and contract, your life map answers, your wellbeing numbers (mood, sleep, stress, mindful minutes, movement and the number for how you ate) with your saved reviews, and patterns. Patterns are worked out by plain rules from those same parts when your coach opens your page, and kept nowhere. A coach also gets plain tips from the numbers you share. A coach never sees your journal, gratitude, the notes you add to your trackers, your supplements, your water, your money, your Discover results or your Companion chats. You can switch a part off or end the coaching at any time, from your Profile tab, and the coach loses sight of it at once. Every ask, note and task a coach adds is kept in a change log you can read. It all comes with your export and goes with your account.</P>
+          <P>If a coach types an email that has no account, we send that address one email with the coach’s invite link, and keep only a masked address in the coach’s log. Nothing is shared unless the person says yes.</P>
           <H>Position</H>
           <P>If you share your position for nearby matching it is rounded, stored on the server only, used to keep tables within twenty kilometres, and never shown to anyone.</P>
           <H>Payments and KYC</H>
@@ -284,15 +286,15 @@ export function Policy({ kind }: { kind: Kind }) {
       {kind === 'pricing' && (
         <>
           {/* Two across on a tablet (three narrow cells broke "5% of each sale" and left Free a half-empty box beside the long Assistant
-              cell), with the Assistant and Brands each across the row; three across on a laptop. */}
-          <div className="mt-lg grid gap-sm md:grid-cols-2 lg:grid-cols-3">
+              cell), with the Assistant and Brands each across the row; two by two on a laptop, so no price sits alone on a row of its own. */}
+          <div className="mt-lg grid gap-sm md:grid-cols-2">
             {[
               ['Play', 'Free', 'The daily game, your seven pillars and every app you switch on, Agency included.'],
               ['Sell', '5% of each sale', `In the shop, with nothing up front. Refer a creator and earn ${Math.round(AFFILIATE_SHARE * 100)}% of their referred sales.`],
               ['Assistant', `From ${money(PLANS.pro.priceCents, PLAN_CURRENCY)}`, `Typing to it needs a plan: ${PLAN_PRICES}, each for ${PLAN_DAYS} days. Tapping its ready-made choices stays free.${PAYMENTS_LIVE ? '' : ' Plans are not on sale yet.'}`],
               ['Brands', 'Per campaign', `Campaigns and content-reward pools are priced per brief. Write to ${email}.`],
             ].map(([name, price, blurb], i) => (
-              <div key={name} className={`rounded-card bg-card p-md shadow-toy-soft ${['', '', 'md:col-span-2 lg:col-span-1', 'md:col-span-2 lg:col-span-3'][i]}`}>
+              <div key={name} className={`rounded-card bg-card p-md shadow-toy-soft ${['', '', 'md:col-span-2 lg:col-span-1', 'md:col-span-2 lg:col-span-1'][i]}`}>
                 <p className="m-0 type-eyebrow text-ink-mute">{name}</p>
                 <p className="mt-xs m-0 type-hook text-display-3">{price}</p>
                 <p className="mt-sm m-0 text-subhead text-ink-soft">{blurb}</p>
@@ -308,6 +310,7 @@ export function Policy({ kind }: { kind: Kind }) {
               'Money checkout runs in test mode until payments are switched on; points work today.',
               'Taxes on our fee are shown on every creator invoice.',
               'We take nothing from the invoices you make in Agency.',
+              `An optional live call with a coach costs ${money(LIVE_CALL_CENTS, PLAN_CURRENCY)}${PAYMENTS_LIVE ? '' : '. It is not on sale yet, so nothing is charged'}.`,
               <>
                 See also <A to="/refunds" hit>Refunds</A>.
               </>,

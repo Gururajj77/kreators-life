@@ -7,7 +7,7 @@ import { cleanPath } from '../logs';
  *
  * `POST /api/public/vitals` takes one note a page view: `{ route, lcp, inp, cls, ttfb, device, conn }`. We keep the route pattern (ids
  * removed), the kind of screen, a short connection label and the numbers. We never keep a user id, an address, a user agent or a
- * cookie: the table has no column for them. Rows go after VITALS_KEEP_DAYS (pruneVitals, run by the cron). `vitalsSummary` gives
+ * cookie: the table has no column for them. Rows go after VITALS_KEEP_DAYS (`tidyOld` in cron.ts). `vitalsSummary` gives
  * Observability the 75th percentile per route and device, which is the number Google judges a page by.
  */
 export const vitalsPublic = new Hono<{ Bindings: Env }>();
@@ -88,11 +88,6 @@ vitalsPublic.post('/vitals', async (c) => {
 });
 
 /** Delete notes older than VITALS_KEEP_DAYS. Run by the cron. Returns how many went. */
-export async function pruneVitals(db: D1Database): Promise<number> {
-  const done = await db.prepare('DELETE FROM web_vitals WHERE created_at < ?').bind(new Date(Date.now() - VITALS_KEEP_DAYS * 86_400_000).toISOString()).run();
-  return done.meta.changes ?? 0;
-}
-
 interface VitalsRow {
   route: string;
   device: string;

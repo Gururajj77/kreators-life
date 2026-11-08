@@ -99,6 +99,8 @@ export function SiteLayout({ children, wide = true, minimal = false }: { childre
       </header>
       {/* On a phone the privacy card, while it asks, sits here in the page's flow (ConsentPopup portals into it), so it covers nothing. */}
       <div ref={setConsentSlot} className="mx-auto max-w-[720px] px-md empty:hidden md:hidden" />
+      {/* On this page (PageContents.tsx) draws here, so the keyboard meets it before the page and not after every control in it. */}
+      <div data-contents-slot="" className="contents" />
       <main className={`mx-auto ${wide ? 'max-w-[1080px]' : 'max-w-[720px]'} px-md md:px-lg lg:px-xl pb-xl`}>{children}</main>
       {/* The footer (2026-11-05, laid out after the founder's FyndFlow footer): the brand and a glass card on the left, the links in three
           headed columns on the right, a hairline, then a bottom bar (who built it on the left, the main policies on the right), the

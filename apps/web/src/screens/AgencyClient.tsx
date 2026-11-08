@@ -1,8 +1,8 @@
 import { AGENCY_HEALTH_NAME, AGENCY_STATUS_NAME, CLIENT_HEALTH_TONE, CLIENT_STATUS_TONE, minutesLabel2, money, parseOnboarding, stageIndex, type AgencyClient as ClientData, type AgencyClientPage, type ClientOnboarding as OnboardingAnswers } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Clock, ArrowUpRight, FilePlus, Pencil, ReceiptText } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router';
+import { useState, type FormEvent, type MouseEvent } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { AgencyContracts } from '../components/AgencyContracts';
 import { ClientDocs } from '../components/AgencyDocs';
 import { LifecycleCard, RetainerCard } from '../components/AgencyLifecycle';
@@ -30,12 +30,17 @@ import { Busy, Skeleton, SkeletonCard } from '../components/Skeleton';
 import { StatusTag } from '../components/StatusTag';
 import { Toggle } from '../components/Toggle';
 import { api } from '../lib/api';
-import { bento } from '../lib/bento';
+import { evenGrid, evenTile } from '../lib/bento';
 import { prettyDate, todayLocal } from '../lib/date';
 import { useAuthed } from '../lib/queries';
-import { useParamState, writeParams } from '../lib/useParamState';
+import { useParamState } from '../lib/useParamState';
 import { useCopy } from '../lib/clipboard';
 import { FIELD } from '../lib/ui';
+
+/** The client's tiles: two to a row on a phone and a tablet, three from the laptop width, in even rows (lib/bento.ts). */
+const TILE_COLS = { base: 2, lg: 3 } as const;
+/** A number on a tile as a link: no look of its own at rest, a line under it for a pointer or the keyboard, and a hit area 44px tall. */
+const PIECES_LINK = "relative inline-block hover:underline focus-visible:underline before:absolute before:inset-x-0 before:content-['']";
 
 const COPY = {
   loading: 'Loading this client.',
@@ -83,7 +88,7 @@ export function AgencyClient() {
   const today = todayLocal();
   const q = useAuthed(['agency', 'client', id], () => api.agencyClient(id));
   const [segRaw, setSeg] = useParamState('cseg', 'work');
-  const [, setParams] = useSearchParams();
+  const [params] = useSearchParams();
   const seg: Segment = isSegment(segRaw) ? segRaw : 'work';
   const [editing, setEditing] = useState(false);
   const [timing, setTiming] = useState(false);
@@ -129,9 +134,9 @@ export function AgencyClient() {
           <Skeleton className="mt-sm h-[36px] w-2/3" />
           <Skeleton className="mt-sm h-[16px] w-1/2" />
           <SkeletonCard lines={3} className="mt-md" />
-          <div className="mt-md grid grid-cols-2 gap-sm md:grid-cols-3">
+          <div className={`mt-md grid gap-sm ${evenGrid(3, TILE_COLS)}`}>
             {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className={`h-[96px] rounded-card ${bento(i, 3, 2, 3)}`} />
+              <Skeleton key={i} className={`h-[96px] rounded-card ${evenTile(i, 3, TILE_COLS)}`} />
             ))}
           </div>
         </Busy>
@@ -161,6 +166,23 @@ export function AgencyClient() {
   const planned = c.piecesPerMonth;
   const included = c.hoursPerMonth * 60;
   const retainerReady = stageIndex(life.stage) >= stageIndex('pilot') || life.retainer !== null;
+  /** The address of Work, this client's pipeline as a list with only this filter on. */
+  const piecesAt = (f: { pstage?: string; pdue?: string }) => {
+    const next = new URLSearchParams(params);
+    for (const k of ['pchannel', 'ppage', 'pstage', 'pdue']) next.delete(k);
+    next.set('cseg', 'work');
+    next.set('pview', 'list');
+    if (f.pstage) next.set('pstage', f.pstage);
+    if (f.pdue) next.set('pdue', f.pdue);
+    return { search: `?${next.toString()}` };
+  };
+  /** A number's link changes the address itself; this brings the list into view, unless the link is opening in another tab. */
+  const toPipeline = (e: MouseEvent) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => document.getElementById('pipeline-heading')?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })),
+    );
+  };
   const tiles = [
     {
       label: 'Published this month',
@@ -174,18 +196,23 @@ export function AgencyClient() {
       hint: `${included > 0 ? `of ${minutesLabel2(included)} included, ` : ''}${minutesLabel2(m.billableMinutes)} billable${included > 0 && m.billableMinutes > included ? ', over the hours' : ''}`,
       ring: null,
     },
-    // Two halves kept whole, so a narrow tile breaks at the comma (a rectangle, CLAUDE.md) and never leaves "late" short under it.
+    // Two halves kept whole, so a narrow tile breaks at the comma (a rectangle, CLAUDE.md) and never leaves "late" short under it. Each
+    // number is a real link to its own list (the founder, 2026-11-07, "add both"). The tile looks as it did: only a hit area grows, 44px
+    // tall, up from the first and down from the second, so the two never overlap when they wrap.
     {
       label: 'For them to look at',
       value: (
         <>
-          <span className="inline-block">{m.inReview} waiting,</span> <span className="inline-block">{m.overdue} late</span>
+          <Link to={piecesAt({ pstage: 'review' })} replace preventScrollReset onClick={toPipeline} aria-label={`${m.inReview} waiting: show what is in review`} className={`${PIECES_LINK} before:-top-md before:bottom-0`}>
+            {m.inReview} waiting,
+          </Link>{' '}
+          <Link to={piecesAt({ pdue: 'late' })} replace preventScrollReset onClick={toPipeline} aria-label={`${m.overdue} late: show the late pieces`} className={`${PIECES_LINK} before:top-0 before:-bottom-md`}>
+            {m.overdue} late
+          </Link>
         </>
       ),
       hint: m.overdue > 0 ? 'Late means past their day' : 'In review now',
       ring: null,
-      // Opens this client's pipeline as a list of what the hint names: the late pieces while there are any, else the ones in review.
-      go: () => showPieces(m.overdue > 0 ? { pdue: 'late' } : { pstage: 'review' }),
     },
   ];
   const facts = [
@@ -201,14 +228,6 @@ export function AgencyClient() {
   const minutes = parseDuration(minutesText);
   const field = 'mt-xs w-full rounded-tile border-2 border-line bg-paper px-sm py-sm text-callout';
   const portalUrl = c.portalToken ? `${window.location.origin}/a/${c.portalToken}` : '';
-  /** Work, this client's pipeline as a list with only this filter on, scrolled into view (one change of the URL). */
-  const showPieces = (f: { pstage?: string; pdue?: string }) => {
-    setSeg('work');
-    writeParams(setParams, { pview: 'list', pchannel: null, ppage: null, pstage: f.pstage ?? null, pdue: f.pdue ?? null });
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => document.getElementById('pipeline-heading')?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })),
-    );
-  };
   const openTime = () => {
     setSeg('work');
     setTiming(true);
@@ -266,14 +285,14 @@ export function AgencyClient() {
       </div>
 
       {d.onboarding.answers && d.onboarding.done && (
-        <Fold className="mt-md" title="What they told you" hint={d.onboarding.at ? `sent ${prettyDate(d.onboarding.at.slice(0, 10))}` : undefined} open={answersOpen} onOpenChange={setAnswersOpen}>
+        <Fold className="mt-md" title="What they told you" hint={d.onboarding.at ? `sent ${prettyDate(d.onboarding.at)}` : undefined} open={answersOpen} onOpenChange={setAnswersOpen}>
           <TheirAnswers clientId={c.id} answers={d.onboarding.answers} />
         </Fold>
       )}
 
-      <div className="mt-md grid grid-cols-2 gap-sm md:grid-cols-3">
+      <div className={`mt-md grid gap-sm ${evenGrid(tiles.length, TILE_COLS)}`}>
         {tiles.map((t, i) => (
-          <StatTile key={t.label} label={t.label} value={t.value} hint={t.hint} className={bento(i, tiles.length, 2, 3)} onClick={'go' in t ? t.go : undefined}>
+          <StatTile key={t.label} label={t.label} value={t.value} hint={t.hint} className={evenTile(i, tiles.length, TILE_COLS)}>
             {t.ring !== null && (
               <span className="mt-xs block">
                 <Ring value={t.ring} size={40} stroke={5} color="var(--color-r4)" label={`${m.published} of ${planned} published`} />
@@ -508,7 +527,7 @@ function ClientNotice({ page, portalUrl, passwordFirst, onAnswers }: { page: Age
   if (recent && ob.at) {
     return (
       <div role="status" className={box} style={{ background: 'var(--tint-green)' }}>
-        <p className="m-0 min-w-0 flex-1 basis-[220px] text-subhead font-semibold">{`${name} finished onboarding on ${prettyDate(ob.at.slice(0, 10))}`}</p>
+        <p className="m-0 min-w-0 flex-1 basis-[220px] text-subhead font-semibold">{`${name} finished onboarding on ${prettyDate(ob.at)}`}</p>
         <Button size="sm" variant="outline" onClick={onAnswers}>
           See answers
         </Button>

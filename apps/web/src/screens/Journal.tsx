@@ -1,4 +1,4 @@
-import { MODULE_BY_KEY, MOODS, STRESSORS, type JournalEntry, LOCALE } from '@kreators/shared';
+import { addDays, MODULE_BY_KEY, MOODS, STRESSORS, type JournalEntry } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
@@ -15,13 +15,14 @@ import { Screen } from '../components/Screen';
 import { SkeletonList } from '../components/Skeleton';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
-import { FIELD } from '../lib/ui';
-import { todayLocal } from '../lib/date';
+import { FIELD, RED_YES } from '../lib/ui';
+import { todayLocal, dateTime, fullDay, inZone } from '../lib/date';
 import { lazyNamed } from '../lib/lazy';
 import { useJournal, useRefreshAll } from '../lib/queries';
 import { Pager, usePage } from '../components/Pager';
 import { AppIcon } from '../components/AppIcon';
 import { EmergenceSlot } from '../components/EmergenceSlot';
+import { GratitudeCard, GratitudeLines } from '../components/GratitudeCard';
 
 // The prompt list is a large block of text, so it downloads only when the Journal opens.
 const JournalPrompt = lazyNamed(() => import('../components/JournalPrompt'), 'JournalPrompt');
@@ -37,7 +38,18 @@ export function Journal() {
   const [newFor, setNewFor] = useState<string | undefined>(undefined);
   // A prompt the person chose to write about: it sets the new entry's title and its first line. It lives only in this screen, never on the server.
   const [start, setStart] = useState<{ title: string; body: string } | null>(null);
+  // Gratitude for the day: the day on show in its card (today, or a day opened from the calendar) and its heading, for focus.
+  const [gratDay, setGratDay] = useState(todayLocal());
+  const gratHead = useRef<HTMLHeadingElement>(null);
+  const openGratitude = (date: string) => {
+    setGratDay(date);
+    window.requestAnimationFrame(() => {
+      gratHead.current?.focus({ preventScroll: true });
+      gratHead.current?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    });
+  };
   const monthQ = useQuery({ queryKey: ['journal-days', month], queryFn: () => api.journalDays(month) });
+  const gratitudeDots = Object.fromEntries((monthQ.data?.gratitude ?? []).map((d) => [d, true]));
   const marks = Object.fromEntries(
     (monthQ.data?.days ?? []).map((d) => {
       const m = d.emotion ? MOODS.find((x) => x.value === d.emotion) : null;
@@ -81,7 +93,7 @@ export function Journal() {
             {/* Under 380px the tile gives its sides to the calendar, so each day stays a 44px target; the eyebrow keeps its inset. */}
             <p className="m-0 text-eyebrow uppercase opacity-90 max-[380px]:px-sm">This month</p>
             <div className="mt-xs">
-              <CalendarGrid onFill month={month} today={todayLocal()} maxDate={todayLocal()} selected={day} onMonth={setMonth} onPick={setDay} marks={marks} label="Journal calendar. Tap a day to read, add or change its entries." />
+              <CalendarGrid onFill month={month} today={todayLocal()} maxDate={todayLocal()} selected={day} onMonth={setMonth} onPick={setDay} marks={marks} dots={gratitudeDots} dotLabel="gratitude written" label="Journal calendar. A dot under a day means gratitude was written. Tap a day to read, add or change what it holds." />
             </div>
           </div>
         </Hero>
@@ -98,10 +110,13 @@ export function Journal() {
           setNewFor(date);
           setEditing('new');
         }}
+        onGratitude={openGratitude}
       />
       <Button full size="lg" className="mt-md" onClick={() => setEditing('new')}>
         New entry
       </Button>
+
+      <GratitudeCard ref={gratHead} day={gratDay} onDay={openGratitude} />
 
       <Suspense fallback={null}>
         <JournalPrompt
@@ -139,7 +154,7 @@ export function Journal() {
                       {e.title}
                     </span>
                     <span className="block text-card-note text-ink-soft">
-                      {new Date(e.createdAt).toLocaleString(LOCALE, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                      {dateTime(e.createdAt)}
                       {e.stressors.length ? `. ${e.stressors.join(', ')}` : ''}
                     </span>
                     <span className="mt-xs block text-card-prose">{e.body.slice(0, 140)}{e.body.length > 140 ? '…' : ''}</span>
@@ -175,10 +190,15 @@ export function Journal() {
  * open each entry, and a way to add another. Focus moves to its heading when a day is picked; Escape or the close button folds it and
  * hands focus back to the day that opened it. New entry stays the screen's one solid button, so the panel's button is an outline.
  */
-function DayPanel({ date, onClose, onOpen, onNew }: { date: string | null; onClose: () => void; onOpen: (e: JournalEntry) => void; onNew: (date: string) => void }) {
+function DayPanel({ date, onClose, onOpen, onNew, onGratitude }: { date: string | null; onClose: () => void; onOpen: (e: JournalEntry) => void; onNew: (date: string) => void; onGratitude: (date: string) => void }) {
   const q = useQuery({ queryKey: ['journal-day', date], queryFn: () => api.journalDay(date!), enabled: Boolean(date) });
   const entries = q.data?.entries ?? [];
-  const pretty = date ? new Date(`${date}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long' }) : '';
+  // The day's gratitude, read only here; today and yesterday open in the gratitude card to change.
+  const g = useQuery({ queryKey: ['gratitude', date], queryFn: () => api.gratitude(date!), enabled: Boolean(date) });
+  const thankful = (g.data?.gratitude?.lines ?? []).filter((l) => l.text.trim());
+  const today = todayLocal();
+  const canChange = date === today || date === addDays(today, -1);
+  const pretty = date ? fullDay(date) : '';
   const box = useRef<HTMLElement>(null);
   const head = useRef<HTMLHeadingElement>(null);
   const back = useRef<HTMLElement | null>(null);
@@ -250,6 +270,17 @@ function DayPanel({ date, onClose, onOpen, onNew }: { date: string | null; onClo
         <Button variant="outline" full onClick={() => onNew(date)}>
           {entries.length > 0 ? 'Add another entry for this day' : 'Write an entry for this day'}
         </Button>
+        {g.data && (thankful.length > 0 || canChange) && (
+          <div className="mt-xs flex flex-col gap-sm rounded-tile bg-paper p-sm">
+            <h3 className="m-0 text-headline">Gratitude</h3>
+            {thankful.length > 0 ? <GratitudeLines lines={thankful} /> : <p className="m-0 text-subhead text-ink-soft">No gratitude written on this day yet.</p>}
+            {canChange && (
+              <Button variant="outline" full onClick={() => onGratitude(date)}>
+                {thankful.length > 0 ? 'Change this day’s gratitude' : 'Write gratitude for this day'}
+              </Button>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );
@@ -293,7 +324,7 @@ function EntrySheet({ entry, date, start, onClose, onSaved }: { entry: JournalEn
   const words = body.trim() ? body.trim().split(/\s+/).length : 0;
 
   return (
-    <Sheet open={entry !== null} onClose={onClose} title={existing ? 'Edit entry' : date ? `New entry for ${new Date(`${date}T00:00:00`).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long' })}` : 'New entry'}>
+    <Sheet open={entry !== null} onClose={onClose} title={existing ? 'Edit entry' : date ? `New entry for ${inZone(date, { day: 'numeric', month: 'long' })}` : 'New entry'}>
       <form
         className="flex flex-col gap-md"
         onSubmit={(e) => {
@@ -369,7 +400,7 @@ function EntrySheet({ entry, date, start, onClose, onSaved }: { entry: JournalEn
                 type="button"
                 disabled={remove.isPending}
                 onClick={() => remove.mutate()}
-                className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-r1 px-md text-callout text-on-fill disabled:opacity-50"
+                className={RED_YES}
               >
                 Yes, delete it
               </button>

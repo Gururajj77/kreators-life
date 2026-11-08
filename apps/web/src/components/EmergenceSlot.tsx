@@ -14,17 +14,22 @@ import { useHiddenInsightIds } from '../lib/insightsHidden';
  * share one answer, the person's whole list, and each picks its own share with `insightsForPlace` (the same rule the server used per
  * place). An ordinary write marks it stale without refetching it (`useRefreshAll`); the Make it a habit and not to do sheets refetch it.
  */
-export function useInsights(app: InsightApp, rel?: RelationshipKey | null) {
+export function useInsights(app: InsightApp, rel?: RelationshipKey | null, on = true) {
   const token = useSession((s) => s.token);
   const day = todayLocal();
   return useQuery({
     queryKey: ['insights', day],
     queryFn: () => api.insights(day),
-    enabled: Boolean(token),
+    enabled: Boolean(token) && on,
     staleTime: 5 * 60 * 1000,
+    // A write marks it stale, and reading it again visits two months of the person's rows (about 2,400 for three months of use), so after a write it waits a quarter of an hour.
+    refetchOnMount: (q) => Date.now() - q.state.dataUpdatedAt > INSIGHTS_REST_MS,
+    refetchOnWindowFocus: (q) => Date.now() - q.state.dataUpdatedAt > INSIGHTS_REST_MS,
     select: (d: InsightsResponse): InsightsResponse => ({ day: d.day, insights: insightsForPlace(d.insights, app, rel ?? null) }),
   });
 }
+
+const INSIGHTS_REST_MS = 15 * 60 * 1000;
 
 const Block = lazyNamed(() => import('./Emergence'), 'EmergenceBlock');
 const Habits = lazyNamed(() => import('./Emergence'), 'HabitsBlock');

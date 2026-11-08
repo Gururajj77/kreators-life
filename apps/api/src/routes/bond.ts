@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { ALIAS_WORDS, normalizeCode, type BlockedPerson, RELATIONSHIPS, type BondChat, type BondMessage, type Friend, type Introduction } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { liveUser, nameOf, newId, notify, nowIso, oneOf, pageOf, paged, parseList, publicOf, str } from '../db';
+import { blockedByName, blockedEither, liveUser, nameOf, newId, notify, nowIso, oneOf, pageOf, paged, parseList, publicOf, str } from '../db';
+import { endLinksOnBlock } from '../coaching';
 import { memberBehindAlias } from './circles';
 
 export const bond = new Hono<AppEnv>();
@@ -20,7 +21,7 @@ bond.get('/', async (c) => {
     db
       .prepare(
         `${SELECT} WHERE (i.requester_user_id = ?1 OR i.recipient_user_id = ?1)
-           AND NOT EXISTS (SELECT 1 FROM blocks k WHERE (k.blocker_id = ?1 AND k.blocked_id IN (i.requester_user_id, i.recipient_user_id)))
+           AND NOT EXISTS (SELECT 1 FROM blocks k WHERE k.by_name = 1 AND (k.blocker_id = ?1 AND k.blocked_id IN (i.requester_user_id, i.recipient_user_id)))
          ORDER BY i.created_at DESC LIMIT ?2 OFFSET ?3`,
       )
       .bind(user.id, inAsk.limit, inAsk.offset)
@@ -35,7 +36,7 @@ bond.get('/', async (c) => {
           .bind(user.id)
           .all<{ id: string; display_name: string; handle: string | null; skills: string; event_title: string }>()
       : Promise.resolve({ results: [] }),
-    db.prepare('SELECT blocked_id FROM blocks WHERE blocker_id = ?').bind(user.id).all<{ blocked_id: string }>(),
+    db.prepare('SELECT blocked_id FROM blocks WHERE blocker_id = ? AND by_name = 1').bind(user.id).all<{ blocked_id: string }>(),
   ]);
   const blocked = new Set(blocks.results.map((b) => b.blocked_id));
   const introPage = paged(intros.results, inAsk);
@@ -56,12 +57,11 @@ bond.post('/intros', async (c) => {
   if (!recipientId || recipientId === user.id) return c.json({ error: 'who do you want to meet?' }, 400);
   const target = await db.prepare('SELECT id, open_to_intros FROM users WHERE id = ?').bind(recipientId).first<{ id: string; open_to_intros: number }>();
   if (!target || target.open_to_intros !== 1) return c.json({ error: 'that person is not open to introductions' }, 400);
-  const blocked = await db.prepare('SELECT 1 FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)').bind(user.id, recipientId, recipientId, user.id).first();
-  if (blocked) return c.json({ error: 'not possible' }, 400);
+  if (await blockedEither(db, user.id, recipientId)) return c.json({ error: 'not possible' }, 400);
   const dup = await db.prepare("SELECT 1 FROM introductions WHERE requester_user_id = ? AND recipient_user_id = ? AND status = 'proposed'").bind(user.id, recipientId).first();
   if (dup) return c.json({ error: 'already proposed' }, 409);
   await db.prepare("INSERT INTO introductions (id, requester_user_id, recipient_user_id, context, status, consent_at, created_at) VALUES (?, ?, ?, ?, 'proposed', NULL, ?)").bind(newId(), user.id, recipientId, str(body.context, 500), nowIso()).run();
-  await notify(db, recipientId, 'bond', `${nameOf(user)} would like an introduction`, str(body.context, 160), '/bond');
+  await notify(db, recipientId, 'bond', `${nameOf(user)} would like an introduction`, str(body.context, 160), '/bond#bond-intros');
   return c.json({ ok: true }, 201);
 });
 
@@ -77,8 +77,8 @@ bond.post('/intros/:id', async (c) => {
   if (status === 'accepted') {
     const me = await db.prepare('SELECT handle, email FROM users WHERE id = ?').bind(user.id).first<{ handle: string | null; email: string | null }>();
     const them = await db.prepare('SELECT handle, email FROM users WHERE id = ?').bind(i.requester_user_id).first<{ handle: string | null; email: string | null }>();
-    await notify(db, i.requester_user_id, 'bond', `${nameOf({ display_name: i.recipient_name })} said yes`, me?.email ? `Reach them at ${me.email}${me.handle ? ` or /u/${me.handle}` : ''}` : me?.handle ? `Find them at /u/${me.handle}` : 'Say hello in the community.', '/bond');
-    await notify(db, user.id, 'bond', `You are introduced to ${nameOf({ display_name: i.requester_name })}`, them?.email ? `Reach them at ${them.email}${them.handle ? ` or /u/${them.handle}` : ''}` : them?.handle ? `Find them at /u/${them.handle}` : 'Say hello in the community.', '/bond');
+    await notify(db, i.requester_user_id, 'bond', `${nameOf({ display_name: i.recipient_name })} said yes`, me?.email ? `Reach them at ${me.email}${me.handle ? ` or /u/${me.handle}` : ''}` : me?.handle ? `Find them at /u/${me.handle}` : 'Say hello in the community.', '/bond#bond-intros');
+    await notify(db, user.id, 'bond', `You are introduced to ${nameOf({ display_name: i.requester_name })}`, them?.email ? `Reach them at ${them.email}${them.handle ? ` or /u/${them.handle}` : ''}` : them?.handle ? `Find them at /u/${them.handle}` : 'Say hello in the community.', '/bond#bond-intros');
   }
   return c.json({ ok: true });
 });
@@ -89,7 +89,9 @@ bond.post('/block', async (c) => {
   const body = await c.req.json<{ userId?: string; reason?: string }>().catch(() => ({}) as Record<string, never>);
   const id = str(body.userId, 64);
   if (!id || id === user.id) return c.json({ error: 'who?' }, 400);
-  // Blocking ends any friendship or open request between the two, in either direction.
+  // Blocking ends any friendship or open request between the two, in either direction, and any coaching.
+  const target = await db.prepare(`SELECT id FROM users WHERE id = ?`).bind(id).first<{ id: string }>();
+  if (target) await endLinksOnBlock(db, user.id, nameOf(user), target.id);
   await db.batch([
     db.prepare('INSERT OR REPLACE INTO blocks (blocker_id, blocked_id, reason, created_at) VALUES (?, ?, ?, ?)').bind(user.id, id, str(body.reason, 300), nowIso()),
     db.prepare('DELETE FROM friendships WHERE (requester_id = ?1 AND recipient_id = ?2) OR (requester_id = ?2 AND recipient_id = ?1)').bind(user.id, id),
@@ -160,37 +162,37 @@ const toFriend = (r: FriendRow, userId: string): Friend => ({
 const FRIEND_SELECT = `SELECT f.id, f.requester_id, f.recipient_id, f.status, f.created_at, u.display_name AS name, u.handle, u.avatar_url
        FROM friendships f JOIN users u ON u.id = CASE WHEN f.requester_id = ?1 THEN f.recipient_id ELSE f.requester_id END AND ${liveUser('u')}`;
 
-// Open requests (pending and sent) are naturally few, so they come back in full; accepted friends are the list that
-// can grow, so that part alone is paged.
+// Open requests (pending and sent) and accepted friends are each a page at a time.
 bond.get('/friends', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const ask = pageOf(c, 'fr');
+  const openAsk = pageOf(c, 'op');
   const [openRows, friendRows] = await Promise.all([
-    db.prepare(`${FRIEND_SELECT} WHERE (f.requester_id = ?1 OR f.recipient_id = ?1) AND f.status = 'pending' ORDER BY f.created_at DESC LIMIT 100`).bind(user.id).all<FriendRow>(),
+    db.prepare(`${FRIEND_SELECT} WHERE (f.requester_id = ?1 OR f.recipient_id = ?1) AND f.status = 'pending' ORDER BY f.created_at DESC LIMIT ?2 OFFSET ?3`).bind(user.id, openAsk.limit, openAsk.offset).all<FriendRow>(),
     db.prepare(`${FRIEND_SELECT} WHERE (f.requester_id = ?1 OR f.recipient_id = ?1) AND f.status = 'accepted' ORDER BY f.created_at DESC LIMIT ?2 OFFSET ?3`).bind(user.id, ask.limit, ask.offset).all<FriendRow>(),
   ]);
   const pg = paged(friendRows.results, ask);
-  return c.json({ page: pg.page, open: openRows.results.map((r) => toFriend(r, user.id)), friends: pg.items.map((r) => toFriend(r, user.id)) });
+  const openPg = paged(openRows.results, openAsk);
+  return c.json({ page: pg.page, open: openPg.items.map((r) => toFriend(r, user.id)), openPage: openPg.page, friends: pg.items.map((r) => toFriend(r, user.id)) });
 });
 
 /** Ask someone to be friends, or say yes if they asked first. Shared by the friend code, a page and an event. */
 export async function requestFriend(db: D1Database, user: UserRow, id: string, via = ''): Promise<{ code: number; body: Record<string, unknown> }> {
-  const blocked = await db.prepare('SELECT 1 FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)').bind(user.id, id, id, user.id).first();
-  if (blocked) return { code: 400, body: { error: 'not possible' } };
+  if (await blockedEither(db, user.id, id)) return { code: 400, body: { error: 'not possible' } };
   const existing = await db.prepare('SELECT id, requester_id, status FROM friendships WHERE (requester_id = ?1 AND recipient_id = ?2) OR (requester_id = ?2 AND recipient_id = ?1)').bind(user.id, id).first<{ id: string; requester_id: string; status: string }>();
   if (existing?.status === 'accepted') return { code: 409, body: { error: 'already friends' } };
   if (existing?.status === 'pending') {
     // They asked first: asking back is a yes.
     if (existing.requester_id !== user.id) {
       await db.prepare("UPDATE friendships SET status = 'accepted', answered_at = ? WHERE id = ?").bind(nowIso(), existing.id).run();
-      await notify(db, existing.requester_id, 'bond', `${nameOf(user)} is now your friend`, 'Say hello from Bond.', '/bond');
+      await notify(db, existing.requester_id, 'bond', `${nameOf(user)} is now your friend`, 'Say hello from Bond.', '/bond#bond-friends');
       return { code: 200, body: { ok: true, status: 'friends' } };
     }
     return { code: 409, body: { error: 'already asked' } };
   }
   await db.prepare("INSERT OR REPLACE INTO friendships (id, requester_id, recipient_id, status, created_at, answered_at) VALUES (?, ?, ?, 'pending', ?, NULL)").bind(newId(), user.id, id, nowIso()).run();
-  await notify(db, id, 'bond', `${nameOf(user)} would like to be friends`, via ? `You are both in ${via}. Accept or decline under Bond.` : 'Accept or decline under Bond.', '/bond');
+  await notify(db, id, 'bond', `${nameOf(user)} would like to be friends`, via ? `You are both in ${via}. Accept or decline under Bond.` : 'Accept or decline under Bond.', '/bond#bond-friends');
   return { code: 201, body: { ok: true, status: 'sent' } };
 }
 
@@ -221,7 +223,7 @@ bond.post('/friends/:id', async (c) => {
   const body = await c.req.json<{ status?: string }>().catch(() => ({}) as { status?: string });
   const status = oneOf(body.status, ['accepted', 'declined'] as const, 'declined');
   await db.prepare('UPDATE friendships SET status = ?, answered_at = ? WHERE id = ?').bind(status, nowIso(), row.id).run();
-  if (status === 'accepted') await notify(db, row.requester_id, 'bond', `${nameOf(user)} said yes`, 'You are friends now. Say hello from Bond.', '/bond');
+  if (status === 'accepted') await notify(db, row.requester_id, 'bond', `${nameOf(user)} said yes`, 'You are friends now. Say hello from Bond.', '/bond#bond-friends');
   return c.json({ ok: true });
 });
 
@@ -279,8 +281,9 @@ bond.post('/chats', async (c) => {
     source = 'circle';
   }
   if (!other || other === user.id) return c.json({ error: 'who do you want to talk to?' }, 400);
-  const blocked = await db.prepare('SELECT 1 FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)').bind(user.id, other, other, user.id).first();
-  if (blocked) return c.json({ error: 'not possible' }, 400);
+  // A circle's alias says nobody's name, so the asker's own block by name is not read here: refusing on it would say who the alias is. The other person's block still holds.
+  const refused = source === 'circle' ? await db.prepare('SELECT 1 AS x FROM blocks WHERE blocker_id = ? AND blocked_id = ?').bind(other, user.id).first() : await blockedEither(db, user.id, other);
+  if (refused) return c.json({ error: 'not possible' }, 400);
   const [a, b] = user.id < other ? [user.id, other] : [other, user.id];
   const existing = await db.prepare(`${CHAT_SELECT} WHERE c.a_user_id = ? AND c.b_user_id = ?`).bind(a, b).first<ChatRow>();
   if (existing) return c.json({ chat: toChat(existing, user.id) });

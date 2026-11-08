@@ -43,7 +43,7 @@ import { FILTER_SELECT, PAPER_FILL } from '../components/AgencyInvoices';
 import { useView, ViewToggle } from '../components/ViewToggle';
 import { useWide } from '../lib/useWide';
 import { api } from '../lib/api';
-import { bento } from '../lib/bento';
+import { evenGrid, evenTile } from '../lib/bento';
 import { prettyDate } from '../lib/date';
 import { useAuthed } from '../lib/queries';
 import { useParamState } from '../lib/useParamState';
@@ -292,6 +292,9 @@ export function Agency() {
 /** "an editor", "a videographer". */
 const aWord = (w: string) => `${/^[aeiou]/i.test(w) ? 'an' : 'a'} ${w.toLowerCase()}`;
 
+/** The Overview's tiles: two to a row on a phone, four from the tablet, in even rows (lib/bento.ts). */
+const TILE_COLS = { base: 2, md: 4 } as const;
+
 /** Tile placeholders while the overview loads. */
 function TilesLoading() {
   return (
@@ -360,9 +363,9 @@ function Overview({ onTab, onAdd }: { onTab: (t: TabKey, paper?: 'invoices' | 'a
     }
   }
   const tiles = (list: Tile[]) => (
-    <div className="grid grid-cols-2 gap-sm md:grid-cols-4">
+    <div className={`grid gap-sm ${evenGrid(list.length, TILE_COLS)}`}>
       {list.map((x, i) => (
-        <StatTile key={x.label} label={x.label} value={x.value} hint={x.hint} className={bento(i, list.length, 2, 4)} onClick={x.go} />
+        <StatTile key={x.label} label={x.label} value={x.value} hint={x.hint} className={evenTile(i, list.length, TILE_COLS)} onClick={x.go} />
       ))}
     </div>
   );

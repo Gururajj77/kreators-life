@@ -21,7 +21,7 @@ import {
 } from '@kreators/shared';
 import { projectTasks } from '@kreators/shared/ladderChoices';
 import { resolveAccess } from '../access';
-import { getUser, parseList, parseModules, str, toUser } from '../db';
+import { DELETED_NAME_PROBLEM, getUser, isDeletedName, parseList, parseModules, str, toUser } from '../db';
 import { askToCoach, isCoach } from '../coaching';
 import type { AppEnv } from '../env';
 import { DATE_RE, newId, nowIso, readyFromNow, shiftDate, toNode, type NodeRow } from '../db';
@@ -61,6 +61,7 @@ onboarding.post('/', async (c) => {
   const scores = scoreAnswers(merged);
   const now = nowIso();
   const displayName = typeof body.displayName === 'string' && body.displayName.trim() ? body.displayName.trim().slice(0, 40) : user.display_name;
+  if (isDeletedName(displayName)) return c.json({ error: DELETED_NAME_PROBLEM }, 400);
   const focus = typeof body.focus === 'string' && body.focus.trim() ? body.focus.trim().slice(0, 40) : user.creator_type;
 
   await db.batch([

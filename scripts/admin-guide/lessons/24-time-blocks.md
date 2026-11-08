@@ -32,7 +32,7 @@ Every one is hers to change. The page says so above the templates: "The starting
 A block has a name, a tag, a colour and, if she likes, an area of life and a pillar. Under **Blocks**, Riya taps Deep work and changes it.
 
 1. **Tag:** a word or two, like Focus, Admin, Self care or Recovery. She can type her own.
-2. **Colour:** eleven colours round a wheel, from amber to lime. The twelfth button, the pipette, opens a small card for her own colour. She types a hex code like 1E90FF, or a colour name like teal, and taps the tick.
+2. **Colour:** eleven colours round a wheel, from amber to lime. The twelfth button, the pipette, opens a small card for her own colour. She types a hex code like 1E90FF, or a colour name like teal, and taps the tick. A day template picks its colour the same way.
 3. **Area of life** and **Pillar:** tasks in that area, or of that pillar, are suggested for this block.
 4. She taps **Save**.
 
@@ -40,7 +40,7 @@ A block has a name, a tag, a colour and, if she likes, an area of life and a pil
 
 ## Step three: her day templates
 
-A day template lays blocks on the clock, with the pillar that leads and a second pillar. It is her kind of day. Riya opens Deep work day under **Day templates**.
+A day template lays blocks on the clock, with the pillar that leads, a second pillar and a colour of its own. It is her kind of day. Riya opens Deep work day under **Day templates**.
 
 1. Each slot is a block with a start and an end. An end before the start runs past midnight, like Sleep from 11 pm to 7 am.
 2. Slots never overlap. If two do, a line names both, and **Save** waits until she fixes it. A gap shows as free time.
@@ -57,11 +57,14 @@ Some days do not fit. For one date only, she picks another template in **Kind of
 
 ## Step five: tasks in blocks
 
-A task finds its block in one of three ways:
+A task finds its block in one of four ways:
 
 1. She picks it in the task's plan, under **Time block**.
 2. Left on **By its time**, a task sits in the block its time falls in.
 3. Plan my week suggests one, from the task's area of life, else its pillar. P0 and P1 lean to a block tagged Focus. P2 and P3 lean to the others.
+4. Daily suggests one. Under **By time block**, a task with no block and no time shows as **Suggested** inside the block that fits, with **Keep here**. Nothing is saved until she taps. It never suggests her night's sleep, a full block or a block already over.
+
+A timed task in a block meant for something else gets one quiet line, with **Move it** or **Keep here**. The task's form says the same under its time.
 
 On Daily, **Sort by** has **By time block** and **By area**. Each draws her tasks in coloured boxes, up to 60 tasks, with P0 first in every box. **By context** reads the pillar her day template leads with. **Your day**, a fold above the list, shows each block as a band with "45 min free" or "Over by 30 min".
 
@@ -73,7 +76,7 @@ In Plan my week, each suggestion shows its block, with a select to change it. **
 
 After some weeks, Emerging on Daily reads her blocks back to her. It may say "You ticked 14 of 20 Deep work tasks inside the block." It also sets the tasks she ticks on one kind of day beside her other days.
 
-**Your kinds of day** shows her last four weeks by kind, each in the colour of its longest block, and how each kind went beside her other days: tasks ticked, and focus minutes and mood while those apps are on. She sees it on Daily, on the Time blocks page, under Emerging and on Reviews. A day counts as the kind set for that date, else the one her week gives it. Days on Everyday count as no kind. Reviews also has a **Kinds of day** tile for the period, and **This month** on the Time blocks page counts her days of each kind so far. Every line says what went together, never what caused what.
+**Your kinds of day** shows her last four weeks by kind, each in its own colour, and how each kind went beside her other days: tasks ticked, and focus minutes and mood while those apps are on. She sees it on Daily, on the Time blocks page, under Emerging and on Reviews. A day counts as the kind set for that date, else the one her week gives it. Days on Everyday count as no kind. Reviews also has a **Kinds of day** tile for the period, and **This month** on the Time blocks page counts her days of each kind so far. Every line says what went together, never what caused what.
 
 > **Result:** Riya's Monday is a Deep work day, her Sunday a Family day, and her tasks sit in the blocks where they fit. When a trip comes up, she changes one date and her week stays whole.
 
@@ -85,7 +88,7 @@ Nothing here is staff-only. There is no admin screen for blocks, templates or th
 2. **"I can't delete a template."** It is the default. They make another one the default first.
 3. **"I can't add a block."** They have 24, the most anyone can keep. Templates stop at 24 too.
 4. **"A slot won't save."** Two slots overlap. The line under them names both.
-5. **"A task is in the wrong block."** A block picked in the task's plan wins over its time. They set it back to **By its time**.
+5. **"A task is in the wrong block."** A block picked in the task's plan wins over its time. They set it back to **By its time**. A task with no block and no time shows as Suggested until they keep it.
 6. **"My Everyday days are not counted."** Everyday is the default, and a day on it counts as no kind. They give a day a kind on Daily or in the month calendar, or set a weekday's template in their usual week.
 7. **"Daily sorts in an odd order."** On a day that follows the default, Daily sorts by day. A changed date or another weekday template sorts By context. Any sort they pick stays theirs.
 8. **The assistant:** with a plan, it can read their blocks and set a day's template for them, each with Undo.

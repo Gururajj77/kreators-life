@@ -1,4 +1,4 @@
-import { FOCUS_OPTIONS, HONORS, IDENTITY_STAGES, identityLine, levelFromXp, passwordProblem, POINTS, RELATIONSHIPS, BADGE_META, badgeRoleOf, type MeResponse, MODULE_GROUP_ORDER, nextBadge, LOCALE } from '@kreators/shared';
+import { FOCUS_OPTIONS, HONORS, IDENTITY_STAGES, identityLine, levelFromXp, passwordProblem, POINTS, RELATIONSHIPS, BADGE_META, badgeRoleOf, type MeResponse, MODULE_GROUP_ORDER, nextBadge, DEFAULT_ZONE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Suspense, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -19,10 +19,10 @@ import { useTheme, type ThemeMode } from '../lib/theme';
 import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
-import { FIELD } from '../lib/ui';
+import { FIELD, RED_YES_LG } from '../lib/ui';
 import { useMe, useRefreshAll } from '../lib/queries';
 import { tie } from '../lib/text';
-import { bento } from '../lib/bento';
+import { evenGrid, evenTile } from '../lib/bento';
 import { lazyNamed } from '../lib/lazy';
 import { CalendarLink } from '../components/CalendarLink';
 import { PrivacyChoices } from '../components/PrivacyChoices';
@@ -30,9 +30,13 @@ import { UserRound, WandSparkles } from 'lucide-react';
 import { TagPicker } from '../components/TagPicker';
 import { Icon } from '../components/Icon';
 import { StatTile } from '../components/Charts';
+import { monthYear } from '../lib/date';
+import { DatesAndTimes, datePrefsChange } from '../components/DatesAndTimes';
 
 const BadgeGallery = lazyNamed(() => import('../components/BadgeGallery'), 'BadgeGallery');
 const ActivityGrid = lazyNamed(() => import('../components/ActivityGrid'), 'ActivityGrid');
+/** The honors: two to a row on a phone, three from the tablet, in even rows (lib/bento.ts). */
+const HONOR_COLS = { base: 2, lg: 3 } as const;
 
 export function You() {
   const me = useMe();
@@ -88,10 +92,13 @@ function YouView({ data }: { data: MeResponse }) {
   const [name, setName] = useState(user.displayName);
   const [type, setType] = useState(user.focus);
   const [optIn, setOptIn] = useState(user.leaderboardOptIn);
+  const [timezone, setTimezone] = useState(user.timezone || DEFAULT_ZONE);
+  const [dateFormat, setDateFormat] = useState(user.datePrefs.date);
+  const [timeFormat, setTimeFormat] = useState(user.datePrefs.time);
   const [saved, setSaved] = useState(false);
 
   const save = useMutation({
-    mutationFn: () => api.updateMe({ displayName: name, focus: type, leaderboardOptIn: optIn }),
+    mutationFn: () => api.updateMe({ displayName: name, focus: type, leaderboardOptIn: optIn, timezone, ...datePrefsChange(user.datePrefs, dateFormat, timeFormat) }),
     onSuccess: () => {
       refresh();
       setSaved(true);
@@ -149,7 +156,7 @@ function YouView({ data }: { data: MeResponse }) {
           <>
             {(FOCUS_OPTIONS as readonly string[]).includes(user.focus) && user.focus !== 'Other' ? `Mostly ${user.focus.toLowerCase()}. ` : ''}Level{' '}
             {levelFromXp(user.xp)}, climbing since{' '}
-            {new Date(user.createdAt).toLocaleDateString(LOCALE, { month: 'short', year: 'numeric' })}.
+            {monthYear(user.createdAt)}.
           </>
         }
       >
@@ -306,8 +313,9 @@ function YouView({ data }: { data: MeResponse }) {
           <p className="m-0 text-subhead font-semibold">This cannot be undone.</p>
           <ul className="mt-xs m-0 flex list-disc flex-col gap-xs pl-md text-subhead text-ink-soft">
             <li>Gone: your name, email, page, bio, pillars, logs, journal, messages and notifications.</li>
-            <li>Archived: anything you sell.</li>
-            <li>Kept, anonymised: money records, because the books have to.</li>
+            <li>Cancelled: your events, runs and sessions still to come. Whoever was coming is told.</li>
+            <li>Archived: anything you have sold. Anything you never sold goes.</li>
+            <li>Kept without your name or words: money records, because the books have to, and what others rely on.</li>
           </ul>
           <label className="mt-md block">
             <span className="block text-subhead font-semibold">Type DELETE to confirm</span>
@@ -322,9 +330,9 @@ function YouView({ data }: { data: MeResponse }) {
             type="button"
             disabled={confirmText !== 'DELETE' || deleteAccount.isPending}
             onClick={() => deleteAccount.mutate()}
-            className="toy mt-md inline-flex min-h-[56px] w-full items-center justify-center gap-xs rounded-pill bg-r1 px-md text-headline text-on-fill disabled:opacity-50"
+            className={`${RED_YES_LG} mt-md w-full`}
           >
-            Delete everything
+            Delete my account
           </button>
         </Sheet>
       <Sheet open={erasing} onClose={() => setErasing(false)} title="Erase everything?">
@@ -339,7 +347,7 @@ function YouView({ data }: { data: MeResponse }) {
             type="button"
             disabled={reset.isPending}
             onClick={() => reset.mutate()}
-            className="toy inline-flex min-h-[56px] items-center justify-center gap-xs rounded-pill bg-r1 px-md text-headline text-on-fill disabled:opacity-50"
+            className={RED_YES_LG}
           >
             {reset.isPending ? 'Erasing' : 'Yes, erase everything'}
           </button>
@@ -411,7 +419,7 @@ function YouView({ data }: { data: MeResponse }) {
             </p>
           </div>
           <div className="flex shrink-0 flex-col gap-xs">
-            <Link to="/rewards" className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
+            <Link to="/rewards" className="toy toy-ink inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-ink bg-card px-md font-semibold text-ink">
               Rewards
             </Link>
             <Link to="/leaderboard" className="toy toy-ink inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-ink bg-card px-md font-semibold text-ink">
@@ -449,13 +457,13 @@ function YouView({ data }: { data: MeResponse }) {
         {nextBadge(badges) && <Nudge className="mt-sm" text={`Next up: ${nextBadge(badges)!.name}. ${nextBadge(badges)!.how}.`} />}
         <h3 className="mt-md text-headline">Awarded</h3>
         <p className="mt-xs m-0 text-subhead text-ink-soft">Given by the kreators.app team, or unlocked by time in the app. These count on the leaderboard too.</p>
-        <ul className="mt-sm grid list-none grid-cols-2 gap-sm p-0 m-0 md:grid-cols-3">
+        <ul className={`mt-sm grid list-none gap-sm p-0 m-0 ${evenGrid(HONORS.length, HONOR_COLS)}`}>
           {HONORS.map((h, i) => {
             const on = awarded.has(h.key);
             return (
-              // On a phone the seal sits over the words, so the words keep the tile's width instead of a column of short lines. The first
-              // tiles widen until the last row is full (bento), so no tile is left alone on it.
-              <li key={h.key} className={`flex flex-col items-start gap-sm rounded-tile bg-card p-sm shadow-toy-soft sm:flex-row sm:items-center ${bento(i, HONORS.length, 2, 3)}`}>
+              // On a phone and a tablet the seal sits over the words, so the words keep the tile's width instead of a column of short lines. Even rows
+              // (lib/bento.ts): every row full, its tiles one width, so no tile is left alone.
+              <li key={h.key} className={`flex flex-col items-start gap-sm rounded-tile bg-card p-sm shadow-toy-soft lg:flex-row lg:items-center ${evenTile(i, HONORS.length, HONOR_COLS)}`}>
                 <BadgeArt name={h.name} icon={h.icon} tier={h.tier} shape="seal" earned={on} size="sm" decorative />
                 <span className="min-w-0">
                   <span className="block text-card-title">{h.name}</span>
@@ -543,6 +551,7 @@ function YouView({ data }: { data: MeResponse }) {
               ))}
             </div>
           </fieldset>
+          <DatesAndTimes timezone={timezone} onZone={setTimezone} dateFormat={dateFormat} onDate={setDateFormat} timeFormat={timeFormat} onTime={setTimeFormat} />
           <label className="flex min-h-[44px] cursor-pointer items-center gap-sm text-body">
             <input type="checkbox" checked={optIn} onChange={(e) => setOptIn(e.target.checked)} className="size-[20px] accent-ink" />
             Show me on the leaderboard

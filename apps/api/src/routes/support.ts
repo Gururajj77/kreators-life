@@ -47,6 +47,6 @@ support.post('/:id/reply', async (c) => {
   const reply = str(body.reply, 4000);
   const status = oneOf(body.status, ['open', 'answered', 'closed'] as const, 'answered');
   await db.prepare('UPDATE support_tickets SET reply = ?, replied_by = ?, status = ?, updated_at = ? WHERE id = ?').bind(reply || prev.reply, user.id, status, nowIso(), prev.id).run();
-  if (reply) await notify(db, prev.user_id, 'support', `Reply: ${prev.subject}`, reply.slice(0, 160), '/help');
+  if (reply) await notify(db, prev.user_id, 'support', `Reply: ${prev.subject}`, reply.slice(0, 160), '/help#mine-heading');
   return c.json({ ok: true });
 });

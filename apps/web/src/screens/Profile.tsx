@@ -1,4 +1,4 @@
-import { AVAILABILITY, CATEGORIES, EXPERIENCE_LEVELS, GOALS, SKILLS, TIMEZONES, CURRENCIES, DEFAULT_ZONE, money, type PortfolioItem, type Socials, type User, DEFAULT_PUBLIC, PUBLIC_SETTING_META, type PublicSettings } from '@kreators/shared';
+import { AVAILABILITY, CATEGORIES, EXPERIENCE_LEVELS, GOALS, SKILLS, CURRENCIES, DEFAULT_ZONE, money, type DateFormat, type PortfolioItem, type Socials, type TimeFormat, type User, DEFAULT_PUBLIC, PUBLIC_SETTING_META, type PublicSettings } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -10,6 +10,7 @@ import { Screen } from '../components/Screen';
 import { Toggle } from '../components/Toggle';
 import { ConfirmDelete } from '../components/ConfirmDelete';
 import { api } from '../lib/api';
+import { DatesAndTimes, datePrefsChange } from '../components/DatesAndTimes';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
 import { Icon } from '../components/Icon';
 import { ArrowUpRight, ShoppingBag, UserRound, type LucideIcon } from 'lucide-react';
@@ -88,13 +89,15 @@ function ProfileView({ user }: { user: User }) {
   const [socials, setSocials] = useState<Socials>(user.socials);
   const [timezone, setTimezone] = useState(user.timezone || DEFAULT_ZONE);
   const [currency, setCurrency] = useState(user.currency || 'INR');
+  const [dateFormat, setDateFormat] = useState<DateFormat>(user.datePrefs.date);
+  const [timeFormat, setTimeFormat] = useState<TimeFormat>(user.datePrefs.time);
   const [saved, setSaved] = useState(false);
   // What the form holds, as one string, against what was last saved: the save bar shows only while they differ.
-  const current = JSON.stringify({ handle, bio, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, city, area, avatarUrl, socials, timezone, currency, pub, coords });
+  const current = JSON.stringify({ handle, bio, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, city, area, avatarUrl, socials, timezone, currency, dateFormat, timeFormat, pub, coords });
   const [baseline, setBaseline] = useState(current);
   const dirty = current !== baseline;
   const save = useMutation({
-    mutationFn: () => api.updateMe({ handle: handle || null, bio, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, city, area, avatarUrl, socials, timezone, currency, publicSettings: pub, ...(coords === undefined ? {} : { lat: coords?.lat ?? null, lng: coords?.lng ?? null }) }),
+    mutationFn: () => api.updateMe({ handle: handle || null, bio, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, city, area, avatarUrl, socials, timezone, currency, publicSettings: pub, ...(coords === undefined ? {} : { lat: coords?.lat ?? null, lng: coords?.lng ?? null }), ...datePrefsChange(user.datePrefs, dateFormat, timeFormat) }),
     onSuccess: () => {
       refresh();
       setBaseline(current);
@@ -176,17 +179,7 @@ function ProfileView({ user }: { user: User }) {
             ))}
           </div>
         </fieldset>
-        <label className="block">
-          <span className="block text-subhead font-semibold">Time zone</span>
-          <select value={timezone} onChange={(e) => setTimezone(e.target.value)} className={FIELD}>
-            {(TIMEZONES.includes(timezone as (typeof TIMEZONES)[number]) ? TIMEZONES : [timezone, ...TIMEZONES]).map((z) => (
-              <option key={z} value={z}>
-                {z.replace(/_/g, ' ')}
-              </option>
-            ))}
-          </select>
-          <span className="mt-xs block text-caption text-ink-soft">Your availability and bookings are written in this zone. Buyers see the same slots in their own.</span>
-        </label>
+        <DatesAndTimes timezone={timezone} onZone={setTimezone} dateFormat={dateFormat} onDate={setDateFormat} timeFormat={timeFormat} onTime={setTimeFormat} />
         <label className="block">
           <span className="block text-subhead font-semibold">Currency</span>
           <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={FIELD}>
@@ -205,7 +198,7 @@ function ProfileView({ user }: { user: User }) {
           <Chips legend="Categories" options={CATEGORIES} value={categories} onChange={setCategories} max={12} hint="What your work is about." />
         </div>
         <div>
-          <Chips legend="Goals" options={GOALS} value={goals} onChange={setGoals} max={12} hint="What you want from Kreators. It shapes what we suggest." />
+          <Chips legend="Goals" options={GOALS} value={goals} onChange={setGoals} max={12} hint="What you want from kreators.app. It shapes what we suggest." />
         </div>
         <OneOf legend="Experience" options={EXPERIENCE_LEVELS} value={experienceLevel} onChange={setExperience} />
         <OneOf legend="Availability" options={AVAILABILITY} value={availability} onChange={setAvailability} />
@@ -264,9 +257,11 @@ function ProfileView({ user }: { user: User }) {
             ))}
           </ul>
         </fieldset>
-        {/* One save, in a bar that sticks to the bottom of the screen (above the tab bar on a phone) while there is something to save. */}
+        {/* One save, in a bar that sticks to the bottom of the screen while there is something to save. It rests above the assistant's round
+            button (60px, 96px up on a phone, 16px from the tablet), so the button never sits on Save profile, until the laptop column has
+            moved clear of the button's corner. */}
         {(dirty || saved || save.isError) && (
-          <div className="sticky bottom-[calc(var(--spacing-xl)+var(--spacing-md)+env(safe-area-inset-bottom))] z-10 -mx-xs flex flex-wrap items-center justify-between gap-sm rounded-tile border-2 border-line bg-card-strong p-sm shadow-toy-soft md:bottom-md" role="region" aria-label="Save your profile">
+          <div className="sticky bottom-[calc(var(--spacing-xl)*2+var(--spacing-lg)+var(--spacing-sm)+env(safe-area-inset-bottom))] z-10 -mx-xs flex flex-wrap items-center justify-between gap-sm rounded-tile border-2 border-line bg-card-strong p-sm shadow-toy-soft md:bottom-[calc(var(--spacing-xl)+var(--spacing-md)+var(--spacing-xs))] xl:bottom-md" role="region" aria-label="Save your profile">
             <div className="min-w-0 flex-1">
               {save.isError ? <ErrorLine e={save.error} /> : <p className="m-0 text-subhead text-ink-soft" aria-live="polite">{saved && !dirty ? 'Saved.' : 'You have changes that are not saved yet.'}</p>}
             </div>
