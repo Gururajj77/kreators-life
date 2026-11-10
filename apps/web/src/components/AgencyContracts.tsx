@@ -222,7 +222,8 @@ export function AgencyAgreements({ clientId, adding: outside, onAdding, kinds }:
               <li key={c.id} className="rounded-tile bg-card shadow-toy-soft">
                 <div className="flex items-center gap-xs pr-xs">
                   <Link to={`/agency/contracts/${c.id}`} className="toy flex min-w-0 flex-1 flex-wrap items-center justify-between gap-sm rounded-tile p-sm text-ink no-underline">
-                    <span className="min-w-0 flex-1">
+                    {/* At least 14rem before the tag: a long tied title ("ENGAGEMENT AGREEMENT") never runs under it; on a phone the tag wraps under the words. */}
+                    <span className="min-w-0 flex-[1_1_14rem]">
                       <span className="block text-headline">{tie(c.title)}</span>
                       <span className="block text-subhead text-ink-soft">
                         {[c.clientName || 'No client yet', TEMPLATE_NAME[c.templateKey] ?? 'Your own', c.signedAt ? `Signed ${day(c.signedAt)}` : c.sentAt ? `Sent ${day(c.sentAt)}` : `Changed ${day(c.updatedAt)}`].join(' · ')}

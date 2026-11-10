@@ -76,7 +76,7 @@ function MoreOnHome({ children }: { children: ReactNode }) {
   if (!isPhone) return <div className="contents">{children}</div>;
   return (
     <div className="contents">
-      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="toy toy-flat col-span-full flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile bg-paper px-sm text-left text-headline aria-expanded:bg-line">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="toy toy-flat col-span-full mt-lg flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile bg-paper px-sm text-left text-headline aria-expanded:bg-line">
         More on Home
         <ToggleChevron open={open} className="text-ink-soft" />
       </button>
@@ -187,7 +187,7 @@ export function Home() {
           {/* My page alone (2026-11-07, the founder): the Inbox bell lives in the phone's top bar and the sidebar, so Home no longer
               carries a second one with the same count. */}
           <div className="order-1 flex items-center gap-xs md:order-2 md:shrink-0 md:justify-end">
-            <Link to={myPage} className="toy inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-white/15 px-sm text-subhead font-medium text-on-fill">
+            <Link to={myPage} className="toy inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center gap-xs rounded-pill bg-white/15 px-sm text-subhead font-medium text-on-fill">
               <Icon icon={UserRound} size={18} />
               My page
             </Link>
@@ -235,7 +235,9 @@ export function Home() {
       <QuoteOfTheDay date={date} />
       {/* Breathe and focus, the same living panel as Mindfulness (FocusRoundsHost moves it here while Home is showing), above the daily
           brief (the founder, 2026-11-06). */}
-      {mindfulOn && <div ref={setFocusSlot} className="span-all" style={{ minHeight: focusHeight || undefined }} />}
+      {/* A section's own 32px from the line of the day, like every titled section on Home: on a phone the panel's 16px top margin
+          folds into this one, and in the laptop grid (an item keeps its child's margin) the two add up to the same 32. */}
+      {mindfulOn && <div ref={setFocusSlot} className="span-all mt-lg lg:mt-md" style={{ minHeight: focusHeight || undefined }} />}
       <DailyBrief date={date} hour={hour} />
 
 
@@ -384,10 +386,10 @@ export function Home() {
                   <p className="mt-xs m-0 text-subhead opacity-95">{d.nudge.body}</p>
                 </div>
                 <div className="mt-auto flex items-stretch gap-xs pt-sm">
-                  <Link to={d.nudge.path} className="toy inline-flex min-h-[48px] min-w-0 flex-1 items-center justify-center rounded-pill bg-card px-md text-headline text-ink">
+                  <Link to={d.nudge.path} className="toy inline-flex min-h-[40px] md:min-h-[48px] tap-pad min-w-0 flex-1 items-center justify-center rounded-pill bg-card px-md text-headline text-ink">
                     {d.nudge.action}
                   </Link>
-                  <Link to="/today" aria-label="Open Today" className="toy flex min-h-[48px] w-[48px] shrink-0 items-center justify-center rounded-pill bg-white/25 text-on-fill">
+                  <Link to="/today" aria-label="Open Today" className="toy tap-pad flex min-h-[40px] w-[40px] md:min-h-[48px] md:w-[48px] shrink-0 items-center justify-center rounded-pill bg-white/25 text-on-fill">
                     <Icon icon={ArrowUpRight} size={20} />
                   </Link>
                 </div>
@@ -399,7 +401,7 @@ export function Home() {
                   <Link
                     to="/today?taskSort=open#tasks-heading"
                     aria-label={`Close the unfinished: ${d.today.openBusiness} open`}
-                    className="toy mt-xs inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill bg-ink-fixed/20 px-md text-headline text-on-fill"
+                    className="toy mt-xs inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center justify-center gap-xs rounded-pill bg-ink-fixed/20 px-md text-headline text-on-fill"
                   >
                     {/* The card's own darker wash (the three boxes, the nudge), so its white words keep AA on the green (four-check: 3.4:1 on white/25). */}
                     Close the unfinished
@@ -543,8 +545,9 @@ export function Home() {
                   ))}
                 </ul>
               )}
+              {/* The card's foot: its two ways on at the bottom right, where a card's action sits (they were centred, the only centred links on Home). */}
               {(isOn('party') || isOn('circles')) && (
-              <div className="mt-auto flex justify-center gap-md pt-sm">
+              <div className="mt-auto flex justify-end gap-md pt-sm">
                 {isOn('party') && (
                 <Link to="/party" className="inline-flex min-h-[44px] items-center text-subhead text-ink-mute underline-offset-4 hover:underline">
                   All events

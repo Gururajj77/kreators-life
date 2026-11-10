@@ -213,7 +213,7 @@ export function LinkTrouble({ error, what = 'page', onRetry }: { error: unknown;
         <div className="mt-md flex flex-wrap gap-sm">
           {broke && onRetry && <Button onClick={onRetry}>Try again</Button>}
           {email && (
-            <a href={`mailto:${email}`} className="toy toy-ink inline-flex min-h-[44px] items-center justify-center rounded-pill border border-ink/30 bg-card-strong px-sm text-subhead text-ink hover:border-ink">
+            <a href={`mailto:${email}`} className="toy toy-ink inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center justify-center rounded-pill border border-ink/30 bg-card-strong px-sm text-subhead text-ink hover:border-ink">
               {`Email ${agency || 'them'}`}
             </a>
           )}

@@ -117,13 +117,15 @@ export function LifecycleCard({ client, life, compact = false }: { client: Agenc
       </div>
     </li>
   );
-  const logList =
+  // Inside the compact view's card the lines sit on the card's own edge (a paper tile in a card drew no box, only a 12px indent);
+  // in the fold of the full view each line is its own tile.
+  const logList = (inCard: boolean) =>
     life.log.length === 0 ? (
       <p className="m-0 text-subhead text-ink-soft">Nothing yet. Stage moves, password changes and retainer steps are written here.</p>
     ) : (
-      <ul className="m-0 flex list-none flex-col gap-xs p-0">
+      <ul className={`m-0 flex list-none flex-col p-0 ${inCard ? 'gap-sm' : 'gap-xs'}`}>
         {life.log.map((l) => (
-          <li key={l.id} className="rounded-tile bg-paper p-sm text-subhead">
+          <li key={l.id} className={inCard ? 'text-subhead' : 'rounded-tile bg-paper p-sm text-subhead'}>
             <span className="block text-caption text-ink-soft">{`${l.actor === 'me' ? 'You' : l.actor === 'client' ? 'The client' : 'Automatic'}, ${prettyDate(l.at)}`}</span>
             {l.text}
           </li>
@@ -192,7 +194,7 @@ export function LifecycleCard({ client, life, compact = false }: { client: Agenc
             {trialRules}
             <li className="rounded-tile bg-card p-sm shadow-toy-soft">
               <h3 className="m-0 text-headline">What happened</h3>
-              <div className="mt-xs">{logList}</div>
+              <div className="mt-xs">{logList(true)}</div>
             </li>
           </ul>
         </Fold>
@@ -219,7 +221,7 @@ export function LifecycleCard({ client, life, compact = false }: { client: Agenc
       </ul>
       {moves}
       <Fold className="mt-sm" title="What happened" hint={life.log.length ? String(life.log.length) : undefined}>
-        {logList}
+        {logList(false)}
       </Fold>
       {daysSheet}
     </div>

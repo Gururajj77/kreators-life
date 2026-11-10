@@ -294,7 +294,7 @@ function KindsChart({ chart }: { chart: Extract<InsightChart, { kind: 'kinds' }>
   );
 }
 
-const ACTION = 'toy toy-ink btn-outline inline-flex min-h-[48px] min-w-0 flex-1 items-center justify-center rounded-pill border border-ink/30 bg-card-strong px-md text-center text-callout text-ink';
+const ACTION = 'toy toy-ink btn-outline inline-flex min-h-[40px] md:min-h-[48px] tap-pad min-w-0 flex-1 items-center justify-center rounded-pill border border-ink/30 bg-card-strong px-md text-center text-callout text-ink';
 
 /** The card's More menu: where the habit lives (unless the main action already goes there), Not now and How this works. */
 function InsightMore({ insight, onHide }: { insight: Insight; onHide?: () => void }) {
@@ -334,7 +334,7 @@ function InsightActions({
   const ntdId = useId();
   const a = insight.action;
   const tie = insight.tie;
-  const cls = compact ? ACTION.replace('min-h-[48px]', 'min-h-[44px]').replace('text-callout', 'text-subhead') : ACTION;
+  const cls = compact ? ACTION.replace('min-h-[40px] md:min-h-[48px]', 'min-h-[36px] md:min-h-[44px]').replace('text-callout', 'text-subhead') : ACTION;
   return (
     <>
       <div className={`${compact ? '' : 'mt-auto pt-xs'} flex items-center gap-sm`}>

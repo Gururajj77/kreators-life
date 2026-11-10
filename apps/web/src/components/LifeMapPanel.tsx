@@ -74,11 +74,11 @@ export function LifeMapPanel() {
       </h2>
       <p className="mt-xs m-0 text-subhead text-ink-soft">{`From your strategy session on ${when}. Health lives inside Yourself; work, money and time live inside Servitude.`}</p>
       <div className="mt-sm flex flex-wrap gap-xs">
-        <Link to="/session?fresh=1" className="toy inline-flex min-h-[44px] items-center rounded-pill bg-card px-sm text-subhead font-semibold shadow-toy-soft">
+        <Link to="/session?fresh=1" className="toy inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center rounded-pill bg-card px-sm text-subhead font-semibold shadow-toy-soft">
           Run the session again
         </Link>
         {unbuilt.length > 0 && (
-          <Link to={`/vibe-check?floors=${unbuilt.join(',')}`} className="toy inline-flex min-h-[44px] items-center rounded-pill bg-ink px-sm text-subhead font-semibold text-on-ink">
+          <Link to={`/vibe-check?floors=${unbuilt.join(',')}`} className="toy inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center rounded-pill bg-ink px-sm text-subhead font-semibold text-on-ink">
             Build the pillars for your focus
           </Link>
         )}
@@ -88,7 +88,7 @@ export function LifeMapPanel() {
         <ul className="m-0 flex list-none flex-wrap gap-xs p-0">
           {focus.map((k) => (
             <li key={k} data-pillar={k}>
-              <Link to={`/realm/${k}`} className="toy flex min-h-[44px] items-center gap-xs rounded-pill px-sm text-subhead font-medium" style={{ background: RELATIONSHIP_BY_KEY[k].color, color: RELATIONSHIP_BY_KEY[k].text }}>
+              <Link to={`/realm/${k}`} className="toy flex min-h-[36px] md:min-h-[44px] tap-pad items-center gap-xs rounded-pill px-sm text-subhead font-medium" style={{ background: RELATIONSHIP_BY_KEY[k].color, color: RELATIONSHIP_BY_KEY[k].text }}>
                 <Avatar relationship={k} size={24} decorative still />
                 {RELATIONSHIP_BY_KEY[k].name}
               </Link>

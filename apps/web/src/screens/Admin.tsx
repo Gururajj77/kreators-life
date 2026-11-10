@@ -406,7 +406,7 @@ export function Admin() {
           // at /admin/guide, outside School's switch, so an admin who switched School off still reaches it.
           // With one, the key form is gone and this is the cover's one solid action.
           sessionAdmin ? (
-            <Link to="/admin/guide" className="toy btn-primary inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill bg-ink px-md text-headline text-on-ink select-none">
+            <Link to="/admin/guide" className="toy btn-primary inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center justify-center gap-xs rounded-pill bg-ink px-md text-headline text-on-ink select-none">
               Admin guide
             </Link>
           ) : undefined
@@ -611,7 +611,7 @@ export function Admin() {
                               act: change,
                             });
                           }}
-                          className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${on || (selected.role === 'admin' && p !== 'coach') ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+                          className={`toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm py-0 md:py-xs text-subhead font-medium ${on || (selected.role === 'admin' && p !== 'coach') ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
                         >
                           {PERMISSION_NAMES[p]}
                         </button>
@@ -624,7 +624,7 @@ export function Admin() {
                   <div className="mt-xs flex flex-wrap gap-xs">
                     {selected.honors.length === 0 && <span className="text-subhead text-ink-soft">None yet.</span>}
                     {selected.honors.map((h) => (
-                      <button key={h} type="button" disabled={busy} onClick={() => askFirst({ title: `Take ${HONOR_BY_KEY[h]?.name ?? h} from ${selected.displayName || 'this person'}?`, body: 'The honor comes off their profile. You can grant it again later.', yes: 'Yes, take it away', act: async () => applyUser((await adminApi.revokeHonor(key, selected.id, h)).user) })} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-paper px-sm text-subhead font-medium" aria-label={`Remove ${HONOR_BY_KEY[h]?.name ?? h}`}>
+                      <button key={h} type="button" disabled={busy} onClick={() => askFirst({ title: `Take ${HONOR_BY_KEY[h]?.name ?? h} from ${selected.displayName || 'this person'}?`, body: 'The honor comes off their profile. You can grant it again later.', yes: 'Yes, take it away', act: async () => applyUser((await adminApi.revokeHonor(key, selected.id, h)).user) })} className="toy toy-soft inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center gap-xs rounded-pill bg-paper px-sm text-subhead font-medium" aria-label={`Remove ${HONOR_BY_KEY[h]?.name ?? h}`}>
                         <AppIcon name={HONOR_BY_KEY[h]?.icon} size={16} />
                         {HONOR_BY_KEY[h]?.name ?? h}
                         <Icon icon={X} size={14} />
@@ -669,7 +669,7 @@ export function Admin() {
                   <div className="mt-xs flex flex-wrap gap-xs">
                     {selected.grantedBadges.length === 0 && <span className="text-subhead text-ink-soft">None given.</span>}
                     {selected.grantedBadges.map((b) => (
-                      <button key={b} type="button" disabled={busy} onClick={() => askFirst({ title: `Take ${BADGES.find((x) => x.key === b)?.name ?? b} from ${selected.displayName || 'this person'}?`, body: 'The badge you gave comes off. One they earned stays. You can give it again later.', yes: 'Yes, take it away', act: async () => applyUser((await adminApi.revokeBadge(key, selected.id, b)).user) })} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-paper px-sm text-subhead font-medium" aria-label={`Remove ${BADGES.find((x) => x.key === b)?.name ?? b}`}>
+                      <button key={b} type="button" disabled={busy} onClick={() => askFirst({ title: `Take ${BADGES.find((x) => x.key === b)?.name ?? b} from ${selected.displayName || 'this person'}?`, body: 'The badge you gave comes off. One they earned stays. You can give it again later.', yes: 'Yes, take it away', act: async () => applyUser((await adminApi.revokeBadge(key, selected.id, b)).user) })} className="toy toy-soft inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center gap-xs rounded-pill bg-paper px-sm text-subhead font-medium" aria-label={`Remove ${BADGES.find((x) => x.key === b)?.name ?? b}`}>
                         <AppIcon name={BADGES.find((x) => x.key === b)?.icon} size={16} />
                         {BADGES.find((x) => x.key === b)?.name ?? b}
                         <Icon icon={X} size={14} />
@@ -1401,7 +1401,7 @@ export function Admin() {
               {/* Three equal choices across the full width in equal parts (as PeriodFilter); three stay on one row, so none is left alone. */}
               <div className="mt-sm grid grid-cols-3 gap-xs" role="group" aria-label="Status">
                 {(['pending', 'approved', 'rejected'] as const).map((s) => (
-                  <button key={s} type="button" aria-pressed={kycStatus === s} onClick={() => { setKycStatus(s); void loadKyc(s); }} className={`toy inline-flex min-h-[44px] min-w-0 items-center justify-center rounded-pill border-2 px-sm text-subhead font-medium ${kycStatus === s ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                  <button key={s} type="button" aria-pressed={kycStatus === s} onClick={() => { setKycStatus(s); void loadKyc(s); }} className={`toy inline-flex min-h-[36px] md:min-h-[44px] tap-pad min-w-0 items-center justify-center rounded-pill border-2 px-sm text-subhead font-medium ${kycStatus === s ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                     {s}
                   </button>
                 ))}

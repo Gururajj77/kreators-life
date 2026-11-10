@@ -7,7 +7,7 @@ import { AgencyContracts } from '../components/AgencyContracts';
 import { ClientDocs } from '../components/AgencyDocs';
 import { LifecycleCard, RetainerCard } from '../components/AgencyLifecycle';
 import { ClientPassword } from '../components/ClientPassword';
-import { AgencyInvoices } from '../components/AgencyInvoices';
+import { AgencyInvoices, PAPER_FILL } from '../components/AgencyInvoices';
 import { AgencyPipeline } from '../components/AgencyPipeline';
 import { Button } from '../components/Button';
 import { StatTile } from '../components/Charts';
@@ -36,6 +36,7 @@ import { useAuthed } from '../lib/queries';
 import { useParamState } from '../lib/useParamState';
 import { useCopy } from '../lib/clipboard';
 import { FIELD } from '../lib/ui';
+import { CondensedTitle } from '../components/fx/CondensedTitle';
 
 /** The client's tiles: two to a row on a phone and a tablet, three from the laptop width, in even rows (lib/bento.ts). */
 const TILE_COLS = { base: 2, lg: 3 } as const;
@@ -242,19 +243,26 @@ export function AgencyClient() {
       <AppCover
         back={{ to: '/agency', label: 'Agency' }}
         title={c.name}
-        lede={
+        // The client's state sits right under their name, on the title's own edge (the left on a phone, the right on a laptop), not
+        // in the helper's column beside the More button, where it started a step in from the name.
+        heading={
           <>
-            <span className="inline-flex flex-wrap items-center justify-end gap-xs">
+            <CondensedTitle className="app-cover-title" title={c.name}>
+              <h1 className="text-large-title">{c.name}</h1>
+            </CondensedTitle>
+            <span className="mt-xs flex flex-wrap items-center justify-start gap-xs md:justify-end">
               <StatusTag tone={CLIENT_STATUS_TONE[c.status]}>{AGENCY_STATUS_NAME[c.status]}</StatusTag>
               <StatusTag tone={CLIENT_HEALTH_TONE[c.health]}>{AGENCY_HEALTH_NAME[c.health]}</StatusTag>
               {c.campaignName && <StatusTag tone="info">{`Army: ${c.campaignName}`}</StatusTag>}
             </span>
-            {facts.length > 0 && (
-              <p className="mt-xs m-0">
-                <Inert text={facts.join(' · ')} />
-              </p>
-            )}
           </>
+        }
+        lede={
+          facts.length > 0 ? (
+            <p className="m-0">
+              <Inert text={facts.join(' · ')} />
+            </p>
+          ) : undefined
         }
         actions={
           <MoreMenu
@@ -302,8 +310,9 @@ export function AgencyClient() {
         ))}
       </div>
 
-      <div className="mt-lg">
-        <Segmented label="Show" value={seg} onChange={(v) => setSeg(v)} options={SEGMENTS} />
+      {/* Under 34rem (a phone) the four parts share the full width, like Paperwork's kinds; wider, the switch keeps its own width. */}
+      <div className="mt-lg @container">
+        <Segmented label="Show" value={seg} onChange={(v) => setSeg(v)} options={SEGMENTS} className={PAPER_FILL} />
       </div>
 
       {seg === 'work' && (
@@ -442,14 +451,14 @@ export function AgencyClient() {
                 How long
                 <input value={minutesText} onChange={(e) => setMinutesText(e.target.value)} placeholder="1h 30m" inputMode="text" className={field} />
               </label>
-              <span className="block text-subhead text-ink-soft">Like 90, 1:30 or 1h 30m.</span>
+              <span className="mt-xs block text-subhead text-ink-soft">Like 90, 1:30 or 1h 30m.</span>
             </div>
             <div className="min-w-0">
               <label className="block text-subhead font-semibold">
                 Day
                 <input type="date" value={day} max={today} onChange={(e) => setDay(e.target.value)} className={field} />
               </label>
-              <span className="block text-subhead text-ink-soft">Today or an earlier day.</span>
+              <span className="mt-xs block text-subhead text-ink-soft">Today or an earlier day.</span>
             </div>
           </div>
           <label className="mt-sm block text-subhead font-semibold">
@@ -463,12 +472,12 @@ export function AgencyClient() {
               ))}
             </select>
           </label>
-          <span className="block text-subhead text-ink-soft">Its title shows beside the time in the list.</span>
+          <span className="mt-xs block text-subhead text-ink-soft">Its title shows beside the time in the list.</span>
           <label className="mt-sm block text-subhead font-semibold">
             Note
             <input value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="Optional" className={field} />
           </label>
-          <span className="block text-subhead text-ink-soft">Up to 200 characters. The client never sees it.</span>
+          <span className="mt-xs block text-subhead text-ink-soft">Up to 200 characters. The client never sees it.</span>
           <div className="mt-sm">
             <Toggle compact on={billable} onChange={setBillable} label="Billable" hint="Counts towards the hours the client pays for." />
           </div>

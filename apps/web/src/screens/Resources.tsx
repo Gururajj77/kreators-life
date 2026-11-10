@@ -114,7 +114,7 @@ function List() {
                   !r.published ? <StatusTag key="draft" tone="neutral">Draft</StatusTag> : null,
                 ]}
               >
-                <span className="mt-xs block text-card-note text-ink-soft"><Phrases text={r.summary} at={/(?<=\.) /} /></span>
+                {r.summary && <span className="mt-xs block text-card-note text-ink-soft"><Phrases text={r.summary} at={/(?<=\.) /} /></span>}
               </RowCard>
             </Reveal>
           );
@@ -145,14 +145,14 @@ function Detail({ id }: { id: string }) {
       )}
       {r && (
         <article data-reading className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-          <p className="m-0 text-headline">{r.summary}</p>
+          {r.summary && <p className="m-0 text-headline">{r.summary}</p>}
           {r.body.split(/\n{2,}/).map((p, i) => (
-            <p key={i} className="prose-long mt-md m-0 text-prose">
+            <p key={i} className={`prose-long m-0 text-prose ${r.summary || i > 0 ? 'mt-md' : ''}`}>
               {p}
             </p>
           ))}
           {r.url && (
-            <a href={r.url} target="_blank" rel="noreferrer" className="toy mt-md inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
+            <a href={r.url} target="_blank" rel="noreferrer" className="toy mt-md inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
               Open {r.kind === 'video' ? 'video' : 'link'}
             </a>
           )}
@@ -216,7 +216,7 @@ function ResourceSheet({ resource, onClose, onSaved }: { resource: Resource | 'n
       >
         <div className="grid grid-cols-3 gap-xs" role="group" aria-label="Kind">
           {(['article', 'exercise', 'video'] as const).map((k) => (
-            <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={`min-h-[44px] rounded-pill border-2 text-subhead font-medium ${kind === k ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+            <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={`min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 text-subhead font-medium ${kind === k ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
               <span className="inline-flex items-center justify-center gap-xs">
                 <AppIcon name={knowledgeKindIcon(k)} size={16} />
                 {k}

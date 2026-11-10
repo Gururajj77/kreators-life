@@ -124,8 +124,8 @@ export function Bond() {
         lede="Private rooms for you and friends you ask in. Unlike chats, names show here."
         action={<NewChannelButton scope="bond" className="hidden md:block" />}
       >
-        {/* On a phone the button sits under the heading at the right, so the title and its line keep their width. */}
-        <NewChannelButton scope="bond" className="mb-sm flex justify-end md:hidden" />
+        {/* On a phone the button sits under the heading at the full width (a lone add button under 34rem), so the title and its line keep theirs. */}
+        <NewChannelButton scope="bond" className="mb-sm grid md:hidden" />
         <ChannelsPanel scope="bond" create={false} />
       </Section>
 
@@ -211,22 +211,25 @@ export function Bond() {
         ) : (
           <ul className="flex list-none flex-col gap-xs p-0 m-0">
             {[...sent, ...friends].map((f) => (
-              <li key={f.requestId} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-                <Link to={f.handle ? `/u/${f.handle}` : `/people/${f.userId}`} className="min-h-[44px] min-w-0 flex-1">
+              // The name keeps at least 60% of the row; on a phone the two actions wrap under it, at the right.
+              <li key={f.requestId} className="flex flex-wrap items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+                <Link to={f.handle ? `/u/${f.handle}` : `/people/${f.userId}`} className="min-h-[44px] min-w-0 flex-[1_1_60%]">
                   <span className="block text-card-title">
                     {f.name}
                     {f.handle ? <span className="text-ink-soft"> @{f.handle}</span> : ''}
                   </span>
                   <span className="block text-card-note text-ink-soft">{f.status === 'sent' ? 'Request sent, waiting' : 'Friends'}</span>
                 </Link>
-                {f.status === 'friends' && (
-                  <Button variant="outline" className="shrink-0" onClick={() => openChat.mutate(f.userId)} disabled={openChat.isPending}>
-                    Chat
+                <span className="ml-auto flex shrink-0 gap-xs">
+                  {f.status === 'friends' && (
+                    <Button variant="outline" className="shrink-0" onClick={() => openChat.mutate(f.userId)} disabled={openChat.isPending}>
+                      Chat
+                    </Button>
+                  )}
+                  <Button variant="ghost" className="shrink-0" onClick={() => { unfriend.reset(); setDropping({ userId: f.userId, name: f.name, sent: f.status === 'sent' }); }} disabled={unfriend.isPending}>
+                    {f.status === 'sent' ? 'Cancel' : 'Remove'}
                   </Button>
-                )}
-                <Button variant="ghost" className="shrink-0" onClick={() => { unfriend.reset(); setDropping({ userId: f.userId, name: f.name, sent: f.status === 'sent' }); }} disabled={unfriend.isPending}>
-                  {f.status === 'sent' ? 'Cancel' : 'Remove'}
-                </Button>
+                </span>
               </li>
             ))}
           </ul>
@@ -272,7 +275,7 @@ export function Bond() {
             {d.suggestions.length === 0 && <li className="text-subhead text-ink-soft">Nobody yet. RSVP to an event in Party and tick "happy to be introduced".</li>}
             {d.suggestions.map((s) => (
               <li key={s.userId} className="flex flex-wrap items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-                <span className="min-w-0 flex-1">
+                <span className="min-w-0 flex-[1_1_60%]">
                   <span className="block text-card-title">
                     {s.name}
                     {s.handle ? <span className="text-ink-soft"> @{s.handle}</span> : ''}
@@ -282,15 +285,17 @@ export function Bond() {
                     {s.skills.length > 0 ? `. ${s.skills.join(', ')}` : ''}
                   </span>
                 </span>
-                <Button className="shrink-0" variant="outline" onClick={() => openChat.mutate(s.userId)} disabled={openChat.isPending}>
-                  Chat
-                </Button>
-                <Button variant="outline" className="shrink-0" onClick={() => setAsking({ userId: s.userId, name: s.name })}>
-                  Introduce
-                </Button>
-                <Button variant="ghost" className="shrink-0" aria-label={`Block ${s.name}`} onClick={() => setBlocking({ userId: s.userId, name: s.name })}>
-                  Block
-                </Button>
+                <span className="ml-auto flex flex-wrap justify-end gap-xs">
+                  <Button className="shrink-0" variant="outline" onClick={() => openChat.mutate(s.userId)} disabled={openChat.isPending}>
+                    Chat
+                  </Button>
+                  <Button variant="outline" className="shrink-0" onClick={() => setAsking({ userId: s.userId, name: s.name })}>
+                    Introduce
+                  </Button>
+                  <Button variant="ghost" className="shrink-0" aria-label={`Block ${s.name}`} onClick={() => setBlocking({ userId: s.userId, name: s.name })}>
+                    Block
+                  </Button>
+                </span>
               </li>
             ))}
           </ul>

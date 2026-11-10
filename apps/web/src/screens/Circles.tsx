@@ -288,12 +288,12 @@ function EventCard({ e, ready, busy, onJoin, onLeave }: { e: CircleEvent; ready:
       </div>
       <div className="mt-xs flex flex-wrap gap-xs">
         {e.myGroupId ? (
-          <Link to={`/circles/${e.myGroupId}`} className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
+          <Link to={`/circles/${e.myGroupId}`} className="toy inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
             Your table
           </Link>
         ) : e.joined ? (
           <>
-            <span className="inline-flex min-h-[48px] items-center text-subhead">You are in{e.myStatus ? `, wearing ${CIRCLE_STATUS_META[e.myStatus].wear}` : ''}. Tables are set two days before.</span>
+            <span className="inline-flex min-h-[40px] md:min-h-[48px] items-center text-subhead">You are in{e.myStatus ? `, wearing ${CIRCLE_STATUS_META[e.myStatus].wear}` : ''}. Tables are set two days before.</span>
             {open && (
               <Button variant="ghost" onClick={onLeave} disabled={busy}>
                 Leave
@@ -499,7 +499,7 @@ export function CircleGroup() {
                 <span className="block text-balance text-card-note text-ink-soft">{m.interests.join(', ') || 'interests hidden'}</span>
               </span>
               {!m.isMe && (
-                <button type="button" onClick={() => chat.mutate(m.alias)} disabled={chat.isPending} className="toy toy-soft inline-flex min-h-[44px] shrink-0 items-center rounded-pill bg-paper px-sm text-subhead font-medium">
+                <button type="button" onClick={() => chat.mutate(m.alias)} disabled={chat.isPending} className="toy toy-soft inline-flex min-h-[36px] md:min-h-[44px] tap-pad shrink-0 items-center rounded-pill bg-paper px-sm text-subhead font-medium">
                   Chat
                 </button>
               )}

@@ -203,7 +203,7 @@ export function Inbox() {
                   setUndo(null);
                   setShow(k);
                   pg.reset();
-                }} className={`toy min-h-[44px] min-w-0 rounded-pill border-2 px-sm py-xs text-subhead @max-[19rem]:px-xs font-medium ${show === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                }} className={`toy min-h-[36px] md:min-h-[44px] tap-pad min-w-0 rounded-pill border-2 px-sm py-0 md:py-xs text-subhead @max-[19rem]:px-xs font-medium ${show === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                   {label}
                 </button>
               ))}

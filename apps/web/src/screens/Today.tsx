@@ -1,6 +1,7 @@
 import { LIFE_AREA_ORDER, LIFE_AREAS, RELATIONSHIP_BY_KEY, TASK_SORTS, addDays, openDay, isTaskSort, parseLifeArea, sortTasks, type LifeAreaKey, type Node } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
+import { WATER_LANE } from '../lib/ui';
 import { AnimatePresence } from 'motion/react';
 import { Link, useSearchParams } from 'react-router';
 import { useModule } from '../lib/modules';
@@ -49,14 +50,8 @@ const inArea = (pick: AreaPick) => (t: Node) => (pick === '' ? true : pick === '
 const VIEWS: readonly { key: string; label: string }[] = [...TASK_SORTS.map((s) => ({ key: s.key, label: s.name })), { key: 'open', label: 'Bottlenecks' }];
 /** The sorts that draw Daily's coloured boxes. */
 const isGrouped = (s: string): s is 'block' | 'area' => s === 'block' || s === 'area';
-const outline = 'toy toy-ink btn-outline inline-flex min-h-[44px] items-center justify-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-sm text-subhead font-semibold leading-none text-ink select-none';
+const outline = 'toy toy-ink btn-outline inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center justify-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-sm text-subhead font-semibold leading-none text-ink select-none';
 
-/**
- * Room for the Water bubble at the bottom left (see Today's Screen): the bubble's right edge (16px past the sidebar plus up to 10rem)
- * and an 8px gap, less the column's own left gap (32px, and from the laptop width half of what the window has past the 1072px frame).
- * From the `lg` width, where the bubble is: a tablet has the Water and reminders section in the page like a phone, so its column keeps the room.
- */
-const WATER_LANE = 'lg:[&>*]:ml-[max(0px,calc(10rem_-_var(--spacing-xs)_-_max(0px,(100vw_-_1040px_-_var(--spacing-lg))_/_2)))]';
 
 // The month calendar downloads only when its toggle is opened.
 const TaskMonth = lazyNamed(() => import('../components/TaskMonth'), 'TaskMonth');
@@ -158,10 +153,10 @@ function BacklogTask({ t, date, queue }: { t: Node; date: string; queue: ReturnT
       panel={
         <>
           <div className="mt-xs flex flex-wrap items-center gap-xs" role="group" aria-label={`Pick a day for ${t.title}`}>
-            <button type="button" onClick={() => pick.mutate(date)} className="toy toy-soft min-h-[44px] rounded-pill border-2 border-line bg-card px-sm text-subhead font-medium">
+            <button type="button" onClick={() => pick.mutate(date)} className="toy toy-soft min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 border-line bg-card px-sm text-subhead font-medium">
               Today
             </button>
-            <button type="button" onClick={() => pick.mutate(addDays(date, 1))} className="toy toy-soft min-h-[44px] rounded-pill border-2 border-line bg-card px-sm text-subhead font-medium">
+            <button type="button" onClick={() => pick.mutate(addDays(date, 1))} className="toy toy-soft min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 border-line bg-card px-sm text-subhead font-medium">
               Tomorrow
             </button>
             <input type="date" aria-label={`Do date for ${t.title}`} min={date} onChange={(e) => /^\d{4}-\d{2}-\d{2}$/.test(e.target.value) && e.target.value >= '2000-01-01' && pick.mutate(e.target.value)} className="min-h-[44px] rounded-pill border-2 border-line bg-paper px-sm text-subhead font-medium" />
@@ -318,7 +313,7 @@ export function Today() {
               <Link
                 to="/leaderboard?by=streak"
                 aria-label={`Streak: ${data.streak} ${data.streak === 1 ? 'day' : 'days'}. See where you rank`}
-                className="toy toy-soft inline-flex min-h-[44px] shrink-0 items-center gap-xs rounded-pill bg-card px-sm py-xs text-subhead font-medium text-ink no-underline shadow-toy-soft"
+                className="toy toy-soft inline-flex min-h-[36px] md:min-h-[44px] tap-pad shrink-0 items-center gap-xs rounded-pill bg-card px-sm py-0 md:py-xs text-subhead font-medium text-ink no-underline shadow-toy-soft"
               >
                 <Icon icon={Flame} size={16} />
                 <span>
@@ -552,7 +547,7 @@ export function Today() {
                 <p className="m-0 min-w-0 flex-1 basis-[60%] text-subhead text-ink-soft">
                   {taskDone ? 'Tasks done for today. Their pyramids got stronger. More arrive as their dates come up.' : 'Tasks come from pillars you set up.'}
                 </p>
-                <Link to="/tower" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
+                <Link to="/tower" className="toy inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
                   {taskDone ? 'Set up another pillar' : 'Set up a pillar'}
                 </Link>
               </div>

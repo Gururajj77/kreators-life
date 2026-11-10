@@ -43,7 +43,7 @@ export function PeriodFilter({ period, blank, onChange, today, kinds = DASHBOARD
               type="button"
               aria-pressed={on}
               onClick={() => onChange(pick(k, today))}
-              className={`toy min-h-[44px] min-w-0 rounded-pill border-2 px-xs text-subhead font-medium sm:px-md ${periodCell(i, kinds.length)} ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card text-ink'}`}
+              className={`toy min-h-[36px] md:min-h-[44px] tap-pad min-w-0 rounded-pill border-2 px-xs text-subhead font-medium sm:px-md ${periodCell(i, kinds.length)} ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card text-ink'}`}
             >
               <span className="whitespace-nowrap">{PERIOD_META[k].short}</span>
             </button>

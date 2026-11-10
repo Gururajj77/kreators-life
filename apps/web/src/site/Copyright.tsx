@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Button } from '../components/Button';
+import { StickyAction } from '../components/StickyAction';
 import { Bullets, Fact, Grievance, H, LegalPage, Mail, NOT_SET, P, Strong, contactEmail, useBusiness } from './legalBits';
 import { Link } from 'react-router';
 import { FIELD } from '../lib/ui';
@@ -97,12 +98,21 @@ function NoticeForm({ kind }: { kind: 'notice' | 'counter' }) {
           {error}
         </p>
       )}
-      <div className="mt-md">
-        {/* One solid button a page: the notice is the main form, the counter-notice wears the site's secondary look. */}
-        <Button type="submit" variant={counter ? 'outline' : 'primary'} full disabled={busy}>
-          {busy ? 'Sending' : counter ? 'Send the counter-notice' : 'Send the notice'}
-        </Button>
-      </div>
+      {/* One solid button a page: the notice is the main form, the counter-notice wears the site's secondary look. The notice's
+          button is the page's main action and its form runs well past a phone's screen, so it stays in reach (StickyAction). */}
+      {counter ? (
+        <div className="mt-md">
+          <Button low type="submit" variant="outline" full disabled={busy}>
+            {busy ? 'Sending' : 'Send the counter-notice'}
+          </Button>
+        </div>
+      ) : (
+        <StickyAction className="mt-md">
+          <Button low type="submit" full disabled={busy}>
+            {busy ? 'Sending' : 'Send the notice'}
+          </Button>
+        </StickyAction>
+      )}
     </form>
   );
 }

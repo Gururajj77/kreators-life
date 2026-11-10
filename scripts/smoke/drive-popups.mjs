@@ -5,6 +5,7 @@
 //   SHOOT_TOKEN=<token> SHOOT_OUT=<folder> node scripts/smoke/drive-popups.mjs
 //   POPUP_SIZES=390x844,768x1024   POPUP_THEMES=light   POPUP_CASES=week-plan,sign-out
 //   POPUP_MOTION=1 keeps the animations on.
+//   POPUP_PROBE=scripts/smoke/spacing-probe.js POPUP_HITS=<file>   run a probe inside each open popup and write its hits.
 //   POPUP_BEFORE=1 records the panel's box only (for a build from before the rail), with no rail checks.
 //
 // Prints one line per popup and size, then a summary. Writes results.json into SHOOT_OUT.
@@ -101,6 +102,9 @@ let missed = 0;
 const only = process.env.POPUP_CASES?.split(',');
 const TARGET = fs.readFileSync(new URL('./target-probe.js', import.meta.url), 'utf8');
 const OVERFLOW = fs.readFileSync(new URL('./overflow-probe.js', import.meta.url), 'utf8');
+// POPUP_PROBE=scripts/smoke/spacing-probe.js runs a probe inside each open popup; POPUP_HITS=<file> writes its hits as JSON.
+const PROBE = process.env.POPUP_PROBE ? fs.readFileSync(process.env.POPUP_PROBE, 'utf8') : null;
+const probeHits = [];
 if (!BEFORE && (!only || only.includes('nested-confirm'))) {
   // Something to remove from the day's sheet. A row of the test account's own, on its own server.
   const day = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
@@ -189,6 +193,27 @@ try {
             if (!atTop.rail) row.problems.push('no rail');
             if (c.rails && (atTop.rail?.length ?? 0) < c.rails) row.problems.push(`rail has ${atTop.rail?.length ?? 0} buttons, wanted ${c.rails}`);
             for (const p of atFoot?.problems ?? []) if (!row.problems.includes(p)) row.problems.push(p);
+            if (PROBE) {
+              // POPUP_PROBE: run that probe inside the open popup only (it reads data-spacing-root), from its top.
+              const hits = await page.evaluate(
+                (f, src) => {
+                  const d = [...document.querySelectorAll(f)].pop();
+                  const root = d?.querySelector('.dialog-panel') ?? d;
+                  if (!root) return [];
+                  root.scrollTop = 0;
+                  root.setAttribute('data-spacing-root', '');
+                  try {
+                    return (0, eval)(src) ?? [];
+                  } finally {
+                    root.removeAttribute('data-spacing-root');
+                  }
+                },
+                frame,
+                PROBE,
+              );
+              for (const h of hits) probeHits.push({ shot: `popup:${c.key} ${width}x${height} ${theme}`, path: c.path, ...h });
+              row.probe = hits.length;
+            }
             const over = (await page.evaluate(OVERFLOW)) ?? [];
             const target = ((await page.evaluate(TARGET)) ?? []).filter((h) => /dialog|rail|panel|sheet/.test(JSON.stringify(h)));
             row.overflow = over.length;
@@ -308,5 +333,10 @@ try {
   await browser.close();
 }
 fs.writeFileSync(path.join(OUT, 'results.json'), JSON.stringify(results, null, 1));
+if (PROBE) {
+  console.log(`\n${path.basename(process.env.POPUP_PROBE)} inside the popups: ${probeHits.length} hit${probeHits.length === 1 ? '' : 's'}`);
+  for (const h of probeHits) console.log(`  ${h.shot}  ${h.line}`);
+  if (process.env.POPUP_HITS) fs.writeFileSync(process.env.POPUP_HITS, JSON.stringify(probeHits, null, 1));
+}
 console.log(`\n${results.length} popups drawn, ${bad} with a problem, ${missed} not reached`);
 process.exit(bad || missed ? 1 : 0);

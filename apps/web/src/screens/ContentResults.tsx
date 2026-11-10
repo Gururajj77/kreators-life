@@ -19,7 +19,7 @@ import { Fold } from '../components/Fold';
 /** Agency's PAPER_FILL (components/AgencyInvoices.tsx), copied so this page does not pull the Agency chunk in: equal parts on a
  * phone's row, each its own width from 34rem. */
 const PAPER_FILL = 'flex w-full *:flex-1 *:px-xs @min-[34rem]:inline-flex @min-[34rem]:w-auto @min-[34rem]:*:flex-none @min-[34rem]:*:px-sm';
-const chip = (on: boolean) => `min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`;
+const chip = (on: boolean) => `min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm py-0 md:py-xs text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`;
 
 
 
@@ -85,13 +85,19 @@ export function ContentResults() {
       </section>
 
       <section className="mt-lg" aria-labelledby="links-heading">
-        <div className="flex items-center justify-between gap-sm">
-          <h2 id="links-heading" className="text-title2">
-            Tracked links
-          </h2>
-          <Button variant="outline" onClick={() => setLinking(true)}>New link</Button>
+        {/* Empty, the line sits beside the button, so the button is held to one title line (as on Section). With rows, the button
+            keeps the row's height, so it never hangs over the first card. */}
+        <div className={`flex justify-between gap-sm ${(links.data && links.data.links.length === 0) ? 'items-start' : 'items-center'}`}>
+          <div className="min-w-0">
+            <h2 id="links-heading" className="text-title2">
+              Tracked links
+            </h2>
+            {links.data && links.data.links.length === 0 && <p className="mt-xs m-0 text-balance text-subhead text-ink-soft">Nothing yet. A link can open your page or one product.</p>}
+          </div>
+          <div className={`flex shrink-0 items-center ${(links.data && links.data.links.length === 0) ? 'h-[1.2em] text-[24px] leading-none' : ''}`}>
+            <Button variant="outline" onClick={() => setLinking(true)}>New link</Button>
+          </div>
         </div>
-        {links.data && links.data.links.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">Nothing yet. A link can open your page or one product.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {links.data?.links.map((l) => (
             <LinkCard key={l.id} link={l} goBase={goBase} onChange={() => void links.refetch()} />

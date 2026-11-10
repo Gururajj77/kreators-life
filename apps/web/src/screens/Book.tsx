@@ -37,8 +37,8 @@ export function BookCover({ book, className = '' }: { book: BookInfo; className?
   );
 }
 
-const PRIMARY = 'toy inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill bg-ink px-md text-headline text-on-ink';
-const OUTLINE = 'toy toy-ink inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-md text-callout text-ink';
+const PRIMARY = 'toy inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center justify-center gap-xs rounded-pill bg-ink px-md text-headline text-on-ink';
+const OUTLINE = 'toy toy-ink inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center justify-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-md text-callout text-ink';
 
 /**
  * Book: the founder's three books, reached from Home. Not a module (no switch, no How it works, so `howTo={false}`); it is a door
@@ -135,7 +135,7 @@ function BookCard({ book: b, state, loading, schoolOn, schoolAvailable, primary 
           </Link>
         ) : (
           !loading && (
-            <span className="inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill bg-paper px-md text-subhead font-medium text-ink-soft">
+            <span className="inline-flex min-h-[40px] md:min-h-[48px] items-center justify-center gap-xs rounded-pill bg-paper px-md text-subhead font-medium text-ink-soft">
               <Icon icon={ShoppingBag} size={16} />
               Book: coming soon
             </span>
@@ -149,7 +149,7 @@ function BookCard({ book: b, state, loading, schoolOn, schoolAvailable, primary 
           </Link>
         )}
         {!course && !loading && (
-          <span className="inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill bg-paper px-md text-subhead font-medium text-ink-soft">
+          <span className="inline-flex min-h-[40px] md:min-h-[48px] items-center justify-center gap-xs rounded-pill bg-paper px-md text-subhead font-medium text-ink-soft">
             <Icon icon={GraduationCap} size={16} />
             Course: coming soon
           </span>

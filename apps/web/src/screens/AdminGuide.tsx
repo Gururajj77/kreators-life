@@ -25,7 +25,7 @@ export function AdminGuide() {
         <div className="mt-md rounded-tile bg-card p-md shadow-toy-soft">
           <p className="m-0 text-card-title">This guide is for admins</p>
           <p className="m-0 text-card-note text-ink-soft">Sign in with an admin account to read it.</p>
-          <Link to="/home" className="toy btn-primary mt-md inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill bg-ink px-md text-headline text-on-ink">
+          <Link to="/home" className="toy btn-primary mt-md inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center justify-center gap-xs rounded-pill bg-ink px-md text-headline text-on-ink">
             Go to Home
           </Link>
         </div>

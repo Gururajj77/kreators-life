@@ -270,13 +270,14 @@ export function PillBars({ values, max, labels, colors, color, label, height = 1
           );
         })}
       </div>
-      <div className="mt-xs flex gap-xs">
+      {/* No label shown, no row: an empty row left 8px of nothing under the bars. */}
+      {[...shown].some((i) => labels[i]) && <div className="mt-xs flex gap-xs">
         {values.map((_, i) => (
           <span key={i} className={`flex min-w-0 flex-1 justify-center whitespace-nowrap text-caption ${onFill ? 'text-on-fill opacity-80' : 'text-ink-soft'}`}>
             {shown.has(i) ? labels[i] : ''}
           </span>
         ))}
-      </div>
+      </div>}
     </div>
   );
 }
@@ -299,17 +300,20 @@ export function HBars({ rows, label, stacked = false }: { rows: { key: string; l
         ))}
       </ul>
     );
+  // One grid for every row (each row a subgrid), so the values share one column as wide as the widest and every bar ends on one
+  // line, whatever "1,370 people" or "219 people" needs.
+  const lead = rows.some((r) => r.lead);
   return (
-    <ul role="img" aria-label={label} className="flex list-none flex-col gap-xs p-0 m-0">
+    <ul role="img" aria-label={label} className={`grid list-none items-center gap-x-sm gap-y-xs p-0 m-0 ${lead ? 'grid-cols-[auto_96px_minmax(0,1fr)_minmax(64px,auto)] sm:grid-cols-[auto_136px_minmax(0,1fr)_minmax(64px,auto)]' : 'grid-cols-[96px_minmax(0,1fr)_minmax(64px,auto)] sm:grid-cols-[136px_minmax(0,1fr)_minmax(64px,auto)]'}`}>
       {rows.map((r) => (
-        <li key={r.key} className="flex items-center gap-sm">
-          {r.lead}
-          <span className="w-[96px] shrink-0 text-balance break-words sm:w-[136px] text-subhead">{typeof r.label === 'string' ? tie(r.label) : r.label}</span>
-          <span className="h-[12px] min-w-0 flex-1 overflow-hidden rounded-pill bg-line">
+        <li key={r.key} className="col-span-full grid grid-cols-subgrid items-center">
+          {lead && <span className="flex">{r.lead}</span>}
+          <span className="min-w-0 text-balance break-words text-subhead">{typeof r.label === 'string' ? tie(r.label) : r.label}</span>
+          <span className="h-[12px] min-w-0 overflow-hidden rounded-pill bg-line">
             <span className="block h-full rounded-pill" style={{ width: `${Math.round(Math.max(0, Math.min(1, r.value)) * 100)}%`, background: r.color }} />
           </span>
-          {/* The value keeps one line ("797 people"): at least 64px, wider when its words need it, so every row stays one height. */}
-          <span className="min-w-[64px] shrink-0 whitespace-nowrap text-right text-caption tabular-nums text-ink-soft">{r.text}</span>
+          {/* The value keeps one line ("797 people"), at the right of its column. */}
+          <span className="whitespace-nowrap text-right text-caption tabular-nums text-ink-soft">{r.text}</span>
         </li>
       ))}
     </ul>
@@ -412,9 +416,9 @@ export function Bubbles({ items, size = 260, label, onFill = false }: { items: {
   const scale = Math.min(1, size / Math.max(1, maxX - minX, maxY - minY));
   const ox = size / 2 - ((minX + maxX) / 2) * scale;
   const oy = size / 2 - ((minY + maxY) / 2) * scale;
-  // Nothing to draw: one short line, never a tall empty square (2026-11-05).
+  // Nothing to draw: one short line, never a tall empty square (2026-11-05). The card around it already pads it (no second padding, 2026-11-08).
   if (placed.length === 0)
-    return <p className={`m-0 py-sm text-center text-subhead ${onFill ? 'text-on-fill' : 'text-ink-soft'}`}>Nothing named yet.</p>;
+    return <p className={`m-0 text-center text-subhead ${onFill ? 'text-on-fill' : 'text-ink-soft'}`}>Nothing named yet.</p>;
   return (
     <svg viewBox={`0 0 ${size} ${size}`} width="100%" height={size} role="img" aria-label={label} className="block">
       {placed.map((p) => {

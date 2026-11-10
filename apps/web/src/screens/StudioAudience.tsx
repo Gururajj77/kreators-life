@@ -66,7 +66,7 @@ export function StudioAudience() {
         >
           <div className="grid grid-cols-2 gap-xs" role="group" aria-label="Audience">
             {(['followers', 'buyers'] as const).map((a) => (
-              <button key={a} type="button" aria-pressed={audience === a} onClick={() => setAudience(a)} className={`min-h-[44px] rounded-pill border-2 text-subhead font-medium ${audience === a ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+              <button key={a} type="button" aria-pressed={audience === a} onClick={() => setAudience(a)} className={`min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 text-subhead font-medium ${audience === a ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
                 {a === 'followers' ? `Followers (${d?.followers.length ?? 0})` : 'Buyers'}
               </button>
             ))}

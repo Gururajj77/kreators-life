@@ -2,7 +2,8 @@ import { bountyPayout, detectPlatform, SOCIAL_PLATFORM_META, type Bounty, type B
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { MediaSection } from '../components/MediaSection';
+import { MediaSection, useMediaMenuItem } from '../components/MediaSection';
+import { MoreMenu } from '../components/MoreMenu';
 import { Button } from '../components/Button';
 import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
@@ -23,6 +24,7 @@ import { RowCard } from '../components/RowCard';
 import { Reveal } from '../components/fx/Reveal';
 import { CardHead } from '../components/CardHead';
 import { ToggleChevron } from '../components/ToggleMark';
+import { StickyAction } from '../components/StickyAction';
 
 type Rule = Pick<Bounty, 'ratePerThousand' | 'maxPayoutPoints' | 'minViews'>;
 
@@ -404,9 +406,11 @@ function LaunchSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
           <textarea value={rewardRule} onChange={(e) => setRewardRule(e.target.value)} maxLength={1000} rows={3} className={FIELD} />
         </label>
         <ErrorLine e={create.isError ? create.error : null} />
-        <Button type="submit" size="lg" full disabled={create.isPending || !title.trim()}>
-          Open the pool
-        </Button>
+        <StickyAction>
+          <Button type="submit" size="lg" full disabled={create.isPending || !title.trim()}>
+            Open the pool
+          </Button>
+        </StickyAction>
       </form>
     </Sheet>
   );
@@ -519,7 +523,7 @@ function EditSheet({ b, open, onClose, onSaved }: { b: Bounty; open: boolean; on
           {/* Two equal choices across the full width in equal parts (as PeriodFilter). */}
           <div className="mt-xs grid grid-cols-2 gap-xs">
             {(['open', 'closed'] as const).map((v) => (
-              <button key={v} type="button" aria-pressed={status === v} onClick={() => setStatus(v)} className={`min-h-[44px] min-w-0 rounded-pill border-2 px-sm text-subhead font-medium ${status === v ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+              <button key={v} type="button" aria-pressed={status === v} onClick={() => setStatus(v)} className={`min-h-[36px] md:min-h-[44px] tap-pad min-w-0 rounded-pill border-2 px-sm text-subhead font-medium ${status === v ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
                 {v}
               </button>
             ))}
@@ -676,7 +680,7 @@ function EarnCalc({ b }: { b: Rule }) {
       {/* Two by two on a phone, so the fourth count is never alone on its line; one row from `sm` up. */}
       <div className="grid w-full grid-cols-2 gap-xs sm:ml-auto sm:flex sm:w-auto sm:flex-wrap sm:justify-end" role="group" aria-label="Quick view counts">
         {[1000, 10000, 100000, 1000000].map((x) => (
-          <button key={x} type="button" aria-pressed={v === x} onClick={() => setViews(String(x))} className={`toy min-h-[44px] rounded-pill border-2 px-sm text-subhead font-medium ${v === x ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+          <button key={x} type="button" aria-pressed={v === x} onClick={() => setViews(String(x))} className={`toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm text-subhead font-medium ${v === x ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
             {n(x)}
           </button>
         ))}
@@ -703,6 +707,9 @@ export function Reward() {
   const refreshAll = useRefreshAll();
   const [url, setUrl] = useState('');
   const [editing, setEditing] = useState(false);
+  // "Add pictures and videos" sits with the page's actions on the cover (a More menu), never loose between the cover and the brief.
+  const [editingMedia, setEditingMedia] = useState(false);
+  const mediaItem = useMediaMenuItem('reward', id, () => setEditingMedia(true));
   const submit = useMutation({
     mutationFn: () => api.submitBounty(id, url),
     onSuccess: () => {
@@ -740,14 +747,19 @@ export function Reward() {
         lede={`${b.brandName}${b.featured ? ', featured' : ''}${!open ? `, ${b.status === 'paid' ? 'pool paid out' : 'closed'}` : `, closes ${day(b.endsAt)}`}${b.version > 1 ? `, version ${b.version}` : ''}`}
         actions={
           (reviewer || win.data?.canCreate) && b.status !== 'paid' ? (
-            <Button variant="outline" onClick={() => setEditing(true)}>
-              Change this reward
-            </Button>
+            <>
+              <Button variant="outline" onClick={() => setEditing(true)}>
+                Change this reward
+              </Button>
+              {mediaItem && <MoreMenu label={`More for ${b.title}`} title={b.title} items={[mediaItem]} />}
+            </>
+          ) : mediaItem ? (
+            <MoreMenu label={`More for ${b.title}`} title={b.title} items={[mediaItem]} />
           ) : undefined
         }
       />
 
-      <MediaSection type="reward" id={b.id} />
+      <MediaSection type="reward" id={b.id} trigger={null} open={editingMedia} onOpenChange={setEditingMedia} />
 
       <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-label="The brief">
         <div className="grid grid-cols-2 gap-xs">

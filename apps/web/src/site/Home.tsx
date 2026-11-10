@@ -33,6 +33,7 @@ import { SevenKnot } from '../components/fx/SevenKnot';
 import { StatusTag } from '../components/StatusTag';
 import { fillVar } from '../lib/relFill';
 import { evenGrid, evenTile } from '../lib/bento';
+import { FollowStart } from './FollowStart';
 
 /**
  * The landing page tells one story, in the PASTOR order: the problem, what it costs (the villains), the story and the
@@ -263,7 +264,7 @@ export function Home() {
             <div className="mt-md">
               <Magnet>
                 <LiquidMetal>
-                  <Link to={heroStart} className={`${SITE_PRIMARY} fx-shimmer-intro`}>
+                  <Link to={heroStart} className={`${SITE_PRIMARY} fx-shimmer-intro`} data-main-action="">
                     {token ? 'Open Daily' : 'Start free'}
                   </Link>
                 </LiquidMetal>
@@ -673,7 +674,7 @@ export function Home() {
           <div className="relative z-10 mt-md">
             <Magnet>
               <LiquidMetal>
-                <Link to={start} className={SITE_PRIMARY_ON_GLASS}>
+                <Link to={start} className={SITE_PRIMARY_ON_GLASS} data-main-action="">
                   {token ? 'Go to app' : 'Start free'}
                 </Link>
               </LiquidMetal>
@@ -683,6 +684,8 @@ export function Home() {
           <PeekGuides />
         </motion.div>
       </section>
+      {/* On a phone the page is long and its main action stands at its two ends: between them it waits at the bottom edge. */}
+      <FollowStart to={heroStart}>{token ? 'Open Daily' : 'Start free'}</FollowStart>
     </SiteLayout>
   );
 }

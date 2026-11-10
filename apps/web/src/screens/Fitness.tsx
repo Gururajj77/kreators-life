@@ -189,7 +189,7 @@ export function Fitness() {
               <Donut segments={byKind.map((x) => ({ value: x.minutes, color: KIND_COLOR[x.kind], label: MOVE_KIND_META[x.kind].name }))} size={148} stroke={20} label="Minutes by kind over thirty days">
                 <span className="text-caption font-semibold">{formatCount(byKind.reduce((a, x) => a + x.minutes, 0))} min</span>
               </Donut>
-              <div className="w-full min-w-0 flex-1">
+              <div className="w-full min-w-0 flex-1 sm:max-w-[360px]">
                 <Legend items={byKind.map((x) => ({ color: KIND_COLOR[x.kind], label: MOVE_KIND_META[x.kind].name, text: `${formatCount(x.minutes)} min` }))} />
               </div>
             </div>

@@ -149,7 +149,7 @@ export function ProductPage() {
       {p && meta && (
         <>
           <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-            <span className="text-[48px]" aria-hidden="true">
+            <span className="block text-[48px] leading-none" aria-hidden="true">
               {productHasOwnCover(p.kind, p.cover) ? p.cover : <AppIcon name={meta.icon} size={48} />}
             </span>
             <p className="mt-sm m-0 text-subhead text-ink-soft">
@@ -206,13 +206,13 @@ export function ProductPage() {
           <MediaSection type="product" id={p.id} />
 
           {d.owned ? (
-            <Link to={`/library/${p.id}`} className="toy mt-md flex min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
+            <Link to={`/library/${p.id}`} className="toy mt-md flex min-h-[48px] md:min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
               Open in my purchases
             </Link>
           ) : p.status === 'draft' || p.status === 'archived' ? (
             <p className="mt-md m-0 text-subhead text-ink-soft">{productStatusLabel(p.status, p.kind)}: nobody can buy it right now.</p>
           ) : !token ? (
-            <Link to={`/signin?next=${encodeURIComponent(`${loc.pathname}${loc.search}`)}`} className="toy mt-md flex min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
+            <Link to={`/signin?next=${encodeURIComponent(`${loc.pathname}${loc.search}`)}`} className="toy mt-md flex min-h-[48px] md:min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
               Join to {meta.buy.toLowerCase()}
             </Link>
           ) : (

@@ -2,7 +2,8 @@ import { EVENT_TYPE_META, EVENT_TYPES, type DiscountCheck, type EventRegistratio
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
-import { MediaSection } from '../components/MediaSection';
+import { MediaSection, useMediaMenuItem } from '../components/MediaSection';
+import { MoreMenu } from '../components/MoreMenu';
 import { EventPanel } from '../components/EventPanel';
 import { Button } from '../components/Button';
 import { DiscountField } from '../components/DiscountField';
@@ -26,7 +27,7 @@ import { Reveal } from '../components/fx/Reveal';
 
 const when = eventTime;
 /** A link drawn as the small outline button (Button's own outline look at its small size). */
-const LINK_OUTLINE = 'toy toy-ink btn-outline inline-flex min-h-[44px] items-center justify-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-sm text-subhead font-semibold leading-none text-ink select-none';
+const LINK_OUTLINE = 'toy toy-ink btn-outline inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center justify-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-sm text-subhead font-semibold leading-none text-ink select-none';
 
 
 
@@ -232,7 +233,7 @@ function HostSheet({ open, onClose, canHostAll }: { open: boolean; onClose: () =
           <legend className="text-subhead font-semibold">What kind</legend>
           <div className="mt-xs flex flex-wrap gap-xs">
             {types.map((t) => (
-              <button key={t} type="button" aria-pressed={eventType === t} onClick={() => setEventType(t)} className={`toy inline-flex min-h-[44px] items-center gap-xs rounded-pill border-2 px-sm text-subhead font-medium ${eventType === t ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+              <button key={t} type="button" aria-pressed={eventType === t} onClick={() => setEventType(t)} className={`toy inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center gap-xs rounded-pill border-2 px-sm text-subhead font-medium ${eventType === t ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                 <AppIcon name={EVENT_TYPE_META[t].icon} size={16} />
                 {EVENT_TYPE_META[t].name}
               </button>
@@ -313,7 +314,7 @@ function HostSheet({ open, onClose, canHostAll }: { open: boolean; onClose: () =
                 ['private', 'People with the link'],
               ] as [PartyEvent['visibility'], string][]
             ).map(([v, label]) => (
-              <button key={v} type="button" aria-pressed={visibility === v} onClick={() => setVisibility(v)} className={`toy min-h-[44px] min-w-0 rounded-pill border-2 px-sm py-xs text-subhead font-medium ${visibility === v ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+              <button key={v} type="button" aria-pressed={visibility === v} onClick={() => setVisibility(v)} className={`toy min-h-[36px] md:min-h-[44px] tap-pad min-w-0 rounded-pill border-2 px-sm py-0 md:py-xs text-subhead font-medium ${visibility === v ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                 {label}
               </button>
             ))}
@@ -342,6 +343,10 @@ export function EventPage() {
   const navState = useLocation().state as { codeError?: string; joined?: EventRegistration['status'] } | null;
   const codeError = navState?.codeError ?? null;
   const [networking, setNetworking] = useState(false);
+  // "Add pictures and videos" sits with the page's actions on the cover (a More menu), as on Store, Tools, Work and Win, never loose
+  // between the details and Coming?.
+  const [editingMedia, setEditingMedia] = useState(false);
+  const mediaItem = useMediaMenuItem('event', id, () => setEditingMedia(true));
   // A team discount code on a ticket that costs points. The server prices it again when the RSVP is sent.
   const [discount, setDiscount] = useState<DiscountCheck | null>(null);
   // Someone who joined from the event's public page lands here with how it went (the event attendee's way in).
@@ -403,7 +408,7 @@ export function EventPage() {
       <AppCover
         back={{ to: '/party', label: 'Party' }}
         eyebrow={
-          <span className="inline-flex flex-wrap items-center justify-end gap-xs">
+          <span className="inline-flex flex-wrap items-center justify-start gap-xs md:justify-end">
             <AppIcon name={meta.icon} size={16} />
             <span>
               {meta.name}, hosted by {e.hostName}
@@ -414,7 +419,7 @@ export function EventPage() {
         title={e.title}
         lede={
           mine || e.visibility !== 'public' ? (
-            <span className="inline-flex flex-wrap items-center justify-end gap-xs">
+            <span className="inline-flex flex-wrap items-center justify-start gap-xs md:justify-end">
               <MineBadge mine={mine} />
               {e.visibility !== 'public' && (
                 <IconTag tone="deep" icon="Lock">{e.visibility === 'club' ? 'Club only' : 'Private'}</IconTag>
@@ -422,9 +427,8 @@ export function EventPage() {
             </span>
           ) : undefined
         }
+        actions={mediaItem ? <MoreMenu label={`More for ${e.title}`} title={e.title} items={[mediaItem]} /> : undefined}
       />
-
-      <MediaSection type="event" id={e.id} />
 
       {/* The day at the top left with the price in the corner, where, the seats as tags under it, then the words. */}
       <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-label="Details">
@@ -441,12 +445,15 @@ export function EventPage() {
           </span>
         </div>
         {mine && mine.status !== 'waitlisted' && e.onlineUrl && (
-          <a href={e.onlineUrl} target="_blank" rel="noreferrer" className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
+          <a href={e.onlineUrl} target="_blank" rel="noreferrer" className="toy mt-sm inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
             Open the room
           </a>
         )}
         {e.description && <p className="mt-sm m-0 whitespace-pre-wrap text-prose">{e.description}</p>}
       </section>
+
+      {/* The pictures under the facts they show, so the day, the place and the seats are read first; their editor opens from the More menu. */}
+      <MediaSection type="event" id={e.id} trigger={null} open={editingMedia} onOpenChange={setEditingMedia} />
 
       {d.attendee && (
         <section className="mt-lg" aria-labelledby="code-heading">

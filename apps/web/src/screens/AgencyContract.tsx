@@ -115,8 +115,8 @@ export function DocHeader({ back, backLabel, title, tone, status, save, primary,
       back={{ to: back, label: backLabel }}
       title={tie(title)}
       lede={
-        <span className="inline-flex flex-wrap items-center justify-end gap-x-sm gap-y-xs">
-          {/* The save line first, so the status ends flush with the title even while the line is empty. */}
+        <span className="inline-flex flex-row-reverse flex-wrap items-center justify-end gap-x-sm gap-y-xs md:flex-row">
+          {/* The save line first, so the status ends flush with the title even while the line is empty; on a phone the row is reversed and starts at the left, so the status starts flush with it there. */}
           {save}
           <StatusTag tone={tone}>{status}</StatusTag>
         </span>
@@ -173,14 +173,17 @@ export function DocClientBar({ value, onChange, clients, comments, onComments, a
             ))}
           </select>
         </label>
-        <p className="m-0 text-caption text-ink-soft">It goes to this client's link and email.</p>
+        <p className="m-0 mt-xs text-caption text-ink-soft">It goes to this client's link and email.</p>
       </div>
       <div id={PAPER_CAN_ID} role="group" aria-labelledby={can} className="min-w-0">
         <span id={can} className="block text-subhead font-semibold">
           Client permissions
         </span>
-        <Toggle compact on={comments} onChange={onComments} label="Write comments" hint="They can ask for a change at their link." />
-        <p className="m-0 text-caption text-ink-soft">{always}</p>
+        {/* The same rhythm as the column beside it: its title, 8px, the control, 8px, the line under it. */}
+        <div className="mt-xs">
+          <Toggle compact on={comments} onChange={onComments} label="Write comments" hint="They can ask for a change at their link." />
+        </div>
+        <p className="m-0 mt-xs text-caption text-ink-soft">{always}</p>
       </div>
     </div>
   );

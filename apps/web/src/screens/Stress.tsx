@@ -88,7 +88,7 @@ export function Stress() {
                 type="button"
                 aria-pressed={on}
                 onClick={() => (touch('stressors'), setPicked((p) => (on ? p.filter((x) => x !== s) : [...p, s])))}
-                className={`min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}
+                className={`min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm py-0 md:py-xs text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}
               >
                 {s}
               </button>
@@ -148,7 +148,8 @@ export function Stress() {
         </div>
       </section>
 
-      <section className="mt-lg" aria-labelledby="hist-heading">
+      {/* No heading over nothing: with no entry yet the list and its title wait (the delete sheet portals out, so it still opens). */}
+      <section className="mt-lg" aria-labelledby="hist-heading" hidden={!logs.data?.logs.length}>
         <h2 id="hist-heading" className="text-title2">
           Days
         </h2>

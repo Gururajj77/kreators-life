@@ -17,12 +17,20 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
   expanded?: boolean;
   /** The button itself, for a screen that moves focus to it. */
   ref?: Ref<HTMLButtonElement>;
+  /** The public site's height at every width (the phone's), so a site page's buttons match `site/buttons.ts` on a laptop too. */
+  low?: boolean;
 }
 
-export function Button({ variant = 'primary', color, deep, size = 'md', full = false, plusToX = false, expanded, className = '', style, children, ...rest }: Props) {
+export function Button({ variant = 'primary', color, deep, size = 'md', full = false, plusToX = false, expanded, low = false, className = '', style, children, ...rest }: Props) {
   const base = 'inline-flex items-center justify-center gap-xs rounded-pill select-none disabled:opacity-50 disabled:pointer-events-none';
-  /* sm keeps its compact look through tight padding and line-height, not a bigger box, but the hit area is still 44px (HIG minimum). */
-  const sizing = size === 'lg' ? 'min-h-[56px] px-lg text-headline' : size === 'sm' ? 'min-h-[44px] px-sm text-subhead font-semibold leading-none' : 'min-h-[48px] px-md text-headline';
+  /* Lower on a phone (2026-11-07, the founder: "make the buttons height lesser"): lg 48, md 40, sm 36, and from `md` today's 56, 48 and 44.
+     Under 44 the hit area is still 44 by 44 (HIG minimum) through `tap-pad`'s invisible ::before (app.css). */
+  const sizing =
+    size === 'lg'
+      ? `min-h-[48px] ${low ? '' : 'md:min-h-[56px]'} px-lg text-headline`
+      : size === 'sm'
+        ? `min-h-[36px] ${low ? '' : 'md:min-h-[44px]'} tap-pad px-sm text-subhead font-semibold leading-none`
+        : `min-h-[40px] ${low ? '' : 'md:min-h-[48px]'} tap-pad px-md text-headline`;
   const look = {
     primary: 'toy btn-primary bg-ink text-on-ink',
     outline: 'toy toy-ink btn-outline bg-card-strong text-ink border border-ink/30',

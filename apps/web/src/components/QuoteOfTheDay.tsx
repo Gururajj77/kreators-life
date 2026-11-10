@@ -76,7 +76,10 @@ export function QuoteOfTheDay({ date }: { date: string }) {
       const el = probe.current;
       if (!wide || !room || !el) return true;
       el.textContent = l.tip ? l.text : `“${l.text}”`;
-      return el.offsetWidth <= room - 2;
+      const width = el.offsetWidth;
+      // Emptied again, so a long line measured last never makes a narrow page scroll sideways (768, 2026-11-09).
+      el.textContent = '';
+      return width <= room - 2;
     },
     // fontTick: measured again when the font arrives.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -104,7 +107,8 @@ export function QuoteOfTheDay({ date }: { date: string }) {
           <figcaption className="m-0 text-eyebrow uppercase text-ink-soft">{label}</figcaption>
           <IconButton icon={RefreshCw} label="Another line" tip="tr" onClick={another} />
         </div>
-        <blockquote ref={quote} className="m-0" aria-live="polite">
+        {/* 8px under the 44px round button, since a long line runs on under it (it sat 3.5px under it). */}
+        <blockquote ref={quote} className="m-0 mt-xs" aria-live="polite">
           {/* A hidden copy the width is measured on, set like the quote itself. */}
           <span ref={probe} aria-hidden="true" className="pointer-events-none invisible absolute left-0 top-0 whitespace-nowrap text-callout" />
           {/* From the tablet up the row never wraps (md: width and height, like useWide); the clip is only a last resort. */}

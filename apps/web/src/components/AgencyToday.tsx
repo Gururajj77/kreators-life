@@ -2,6 +2,7 @@ import { money, type TodayAgency, type TodayEvent, LOCALE } from '@kreators/shar
 import { ArrowUpRight, Footprints, PartyPopper, UsersRound, type LucideIcon } from 'lucide-react';
 import { Link } from 'react-router';
 import { Icon } from './Icon';
+import { SeeAll } from './Section';
 import { StatusTag } from './StatusTag';
 import { clockTime } from '../lib/date';
 
@@ -36,13 +37,16 @@ export function AgencyToday({ agency }: { agency: TodayAgency }) {
   if (total === 0) return null;
   return (
     <section className="mt-lg" aria-labelledby="agency-today-heading">
-      <div className="flex items-center justify-between gap-sm">
+      {/* As Section lays a heading out: the link in a box one title line tall, so its 44px tap area never pushes the line under the
+          title further away than under any other section's title. */}
+      <div className="flex items-start justify-between gap-sm">
         <h2 id="agency-today-heading" className="text-title2">
           Agency today
         </h2>
-        <Link to="/agency" className="flex min-h-[44px] shrink-0 items-center text-subhead text-ink-soft underline underline-offset-4 hover:text-ink">
-          Open Agency
-        </Link>
+        <div className="flex h-[var(--text-title2--line-height)] shrink-0 items-center">
+          {/* The quiet heading link every section carries ("Open finance"), with its arrow, since it opens another page. */}
+          <SeeAll to="/agency">Open Agency</SeeAll>
+        </div>
       </div>
       <p className="mt-xs m-0 text-subhead text-ink-soft">What your clients are waiting on. Tap a row to open it.</p>
       <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">

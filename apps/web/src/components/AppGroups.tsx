@@ -101,7 +101,8 @@ export function AppGroups({
     <div className="flex flex-col gap-sm">
       {editing && (
         // The line at the left and Arrange apps at its bottom right, in line with it (the founder, 2026-11-06); a narrow phone wraps it under, still at the right.
-        <div className="flex flex-wrap items-end justify-between gap-sm">
+        // Centred on the button's line, not on its foot: at the foot the 44px button left an empty band above the line (2026-11-07).
+        <div className="flex flex-wrap items-center justify-between gap-sm">
           <p className="m-0 min-w-0 flex-[1_1_220px] text-subhead text-ink-soft">
             {arrange
               ? "Drag a handle or use the arrows. Apps stay in their group."

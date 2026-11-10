@@ -3,7 +3,7 @@ import { Button } from './Button';
 import { Sheet } from './Sheet';
 
 /** The pale red outline a delete wears (the Sign out button's look): the button that opens the question. The yes inside it is `RED_YES`. */
-export const DELETE_BTN = 'toy inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-headline text-r1 hover:bg-r1/10 disabled:opacity-50';
+export const DELETE_BTN = 'toy inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-headline text-r1 hover:bg-r1/10 disabled:opacity-50';
 
 /**
  * Asks before a delete, the Mindful session pattern: a red "Yes, delete it" (solid only on a mouse hover, keyboard focus or a press) and a quiet "Keep it". Every removal asks first (the founder,

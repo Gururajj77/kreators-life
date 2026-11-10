@@ -88,7 +88,8 @@ export function StageBar({ stage, line = true, lineText }: { stage: AgencyStageK
                   )}
                 </span>
                 <span className={`mt-xs block text-caption ${cur ? 'font-semibold text-ink' : 'text-ink-soft'}`}>{s.name}</span>
-                <span className="mt-xs block text-caption text-ink-mute">
+                {/* A stage still to come has no word here, so it takes no room (only its screen-reader words). */}
+                <span className={`${cur || done || i === progress.index + 1 ? 'mt-xs ' : ''}block text-caption text-ink-mute`}>
                   {cur ? 'Now' : done ? 'Done' : i === progress.index + 1 ? 'Next' : ''}
                   <span className="sr-only">{cur ? ', you are here' : done ? ', done' : ', still to come'}</span>
                 </span>

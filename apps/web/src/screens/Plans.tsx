@@ -124,10 +124,18 @@ export function Plans() {
           </Section>
 
           <Section id="plans-limits" title="Limits by plan" lede="What each agent may read and spend. Your plan's column is marked.">
+            {/* One card per agent, 12px apart (they touched), and the same columns in each, so a plan's numbers line up from card to card. */}
+            <div className="flex flex-col gap-sm">
             {AGENTS.map((agent) => (
               <div key={agent} className="overflow-x-auto rounded-card bg-card p-sm shadow-toy-soft">
-                <table className="w-full border-collapse text-left text-subhead">
+                <table className="w-full table-fixed border-collapse text-left text-subhead">
                   <caption className="pb-xs text-left text-subhead font-semibold">{AGENT_META[agent].name}</caption>
+                  <colgroup>
+                    <col className="w-[34%]" />
+                    {PAID_PLANS.map((k) => (
+                      <col key={k} />
+                    ))}
+                  </colgroup>
                   <thead>
                     <tr>
                       <th scope="col" className="py-xs pr-sm text-eyebrow uppercase text-ink-soft">
@@ -135,7 +143,7 @@ export function Plans() {
                       </th>
                       {PAID_PLANS.map((k) => (
                         <th key={k} scope="col" className={`py-xs pr-sm text-eyebrow uppercase ${a.plan === k ? 'text-ink' : 'text-ink-soft'}`}>
-                          <span className="inline-flex items-center gap-xs">
+                          <span className="inline-flex flex-wrap items-center gap-xs">
                             {PLANS[k].name}
                             {a.plan === k && <Icon icon={Check} size={14} strokeWidth={3} label="your plan" />}
                           </span>
@@ -160,6 +168,7 @@ export function Plans() {
                 </table>
               </div>
             ))}
+            </div>
           </Section>
 
           <Section id="plans-pick" title="Plans" lede={`Each gives a fixed worth of model use for ${PLAN_DAYS} days. What is left at the end does not carry over.`}>

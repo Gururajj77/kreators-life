@@ -76,11 +76,11 @@ function ToolRow({ t, reviewer, onChange }: { t: Tool; reviewer: boolean; onChan
         <span className="flex shrink-0 items-center gap-xs">
           {!t.unlock.ok ? null : t.affiliate && t.verified ? (
             // The same outline look as Open, so the page keeps one solid button, Suggest a tool.
-            <a href={`/out/tool/${t.id}`} target="_blank" rel="noreferrer" className="toy toy-ink inline-flex min-h-[44px] items-center rounded-pill border-2 border-ink bg-card px-sm text-subhead font-semibold">
+            <a href={`/out/tool/${t.id}`} target="_blank" rel="noreferrer" className="toy toy-ink inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center rounded-pill border-2 border-ink bg-card px-sm text-subhead font-semibold">
               Get it
             </a>
           ) : (
-            <a href={t.url} target="_blank" rel="noreferrer" className="toy toy-ink inline-flex min-h-[44px] items-center rounded-pill border-2 border-ink bg-card px-sm text-subhead font-semibold">
+            <a href={t.url} target="_blank" rel="noreferrer" className="toy toy-ink inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center rounded-pill border-2 border-ink bg-card px-sm text-subhead font-semibold">
               Open
             </a>
           )}
@@ -232,7 +232,7 @@ function SuggestSheet({ open, onClose, onDone, categories, reviewer }: { open: b
           <legend className="text-subhead font-semibold">Category</legend>
           <div className="mt-xs flex flex-wrap gap-xs">
             {categories.map((c) => (
-              <button key={c} type="button" aria-pressed={category === c} onClick={() => setCategory(c)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${category === c ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+              <button key={c} type="button" aria-pressed={category === c} onClick={() => setCategory(c)} className={`toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm py-0 md:py-xs text-subhead font-medium ${category === c ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                 {c}
               </button>
             ))}

@@ -150,7 +150,9 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
       {/* A calm wash instead of a flat block: the pillar's colour with a soft light at the top left, deepening toward the bottom. */}
       <div className="relative overflow-hidden rounded-b-card" style={{ background: `radial-gradient(70% 55% at 12% 0%, rgba(255, 255, 255, 0.22), transparent 70%), linear-gradient(165deg, ${fillVar(rel)}, color-mix(in oklab, ${fillVar(rel)} 62%, var(--fill-shade)))`, color: ON_FILL }}>
         <HeroBlobs kind={PILLAR_FLOWER[relationship]} />
-        <div className="safe-top relative mx-auto w-full max-w-[480px] px-md pb-lg pt-md md:ml-[240px] md:max-w-[1040px] md:px-lg lg:mx-auto lg:pl-[240px]">
+        {/* The same column as Screen below it (its widths and the sidebar's --nav-w), so the title, the guide's line and the tasks share
+            one left edge, the sidebar open or folded. */}
+        <div className="safe-top relative mx-auto w-full max-w-[480px] px-md pb-lg pt-md md:ml-[var(--nav-w)] md:w-auto md:max-w-[1040px] md:px-lg lg:mx-auto lg:max-w-[calc(1040px+var(--spacing-lg))] lg:pl-[calc(var(--nav-w)+var(--spacing-lg))]">
           {/* On a phone the brand and the corner buttons float over the top 56px, so the way back starts below them. */}
           <div className="pt-xl md:pt-0">
             <BackLink to="/tower" inherit>
@@ -310,7 +312,8 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                   return (
                     <li key={kind}>
                       <Fold
-                        className="rounded-tile bg-card p-xs shadow-toy-soft"
+                        // The fold's own row is the card's face (no 8px frame of card round a second tile), so a layer reads as one box.
+                        className="rounded-tile bg-card shadow-toy-soft"
                         title={
                           <span className="flex items-center gap-sm py-xs">
                             <span
@@ -384,7 +387,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                 {doneTasks.length > 0 && (
                   <li>
                     <Fold
-                      className="rounded-tile bg-card p-xs shadow-toy-soft"
+                      className="rounded-tile bg-card shadow-toy-soft"
                       defaultOpen={params.has('dnpage') || params.has('dnsize')}
                       title={
                         <span className="flex items-center gap-sm py-xs">

@@ -1,6 +1,8 @@
 // A probeFile for shoot.mjs (SHOOT_PROBE=scripts/smoke/cut-probe.js).
 // Finds a one-line row of tabs or filter pills that scrolls sideways or has a pill cut at its right edge (or the screen's).
-// Such a row should be a components/TabRow.tsx (as many as fit, every tab in the All list). Rows of cards (StageBar, kanban lanes,
+// Such a row should be a components/TabRow.tsx. A TabRow that does not fit scrolls sideways on purpose (2026-11-07): its strip carries
+// `data-pinned-scroll` and its All button `data-pinned-all` beside it; that passes only while the strip ends inside its own edge and All
+// is wholly in view, so a pill cut by a plain edge, or a strip with no All pinned beside it, still fails. Rows of cards (StageBar, kanban lanes,
 // media, badge cards, the activity grid) are left alone: only rows of small controls (buttons, links, pills up to 72px tall) count.
 // Run it at 360 and 390 wide; it must report 0. Each hit is { line }.
 (() => {
@@ -43,6 +45,15 @@
     if (kids.some((k) => k.getBoundingClientRect().height > 72)) continue;
     if (kids.filter(control).length < 3) continue;
     const scrolls = row.scrollWidth > row.clientWidth + 1 && getComputedStyle(row).overflowX !== 'visible';
+    if (row.matches('[data-pinned-scroll]')) {
+      // A sideways line with All pinned: the strip itself and its All must sit inside the edge; pills under the fade are meant.
+      const all = [...(row.parentElement?.children ?? [])].find((k) => k.matches('[data-pinned-all]'));
+      const edge = clipRight(row.parentElement ?? row);
+      const ar = all?.getBoundingClientRect();
+      if (!ar) hits.push({ line: `${where(row)}: scrolls sideways with no All pinned beside it` });
+      else if (rr.right > edge + 1 || ar.right > edge + 1 || ar.left < rr.right - 1) hits.push({ line: `${where(row)}: the sideways line or its All is cut at the edge` });
+      continue;
+    }
     const edge = Math.min(clipRight(row), scrolls ? rr.right : Infinity);
     const cut = kids.find((k) => k.getBoundingClientRect().right > edge + 1);
     if (scrolls || cut) hits.push({ line: `${where(row)}: ${scrolls ? 'scrolls sideways' : 'cut'}${cut ? `, "${(cut.textContent ?? '').trim().slice(0, 24)}" past the edge` : ''}` });

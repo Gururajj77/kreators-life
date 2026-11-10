@@ -84,14 +84,14 @@ function ShareBar({ share, onPick }: { share: CoachShare; onPick: (part: CoachSh
   return (
     <>
       <div ref={sentinel} aria-hidden="true" />
-      <div id="share-bar" className="sticky top-0 z-20 -mx-md md:-mx-lg">
+      <div id="share-bar" data-top-bar="" className="sticky top-0 z-20 -mx-md md:-mx-lg">
         <div ref={backdrop} aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 -top-[calc(64px+env(safe-area-inset-top))] border-b border-line bg-paper/85 opacity-0 backdrop-blur-md md:top-0" />
         <nav aria-label="What they share" className="relative px-md py-sm md:px-lg">
           <TabRow
             label="What they share"
             items={COACH_SHARE_PARTS.map((k) => ({ key: k, label: COACH_SHARE_META[k].name, disabled: !share[k], title: share[k] ? undefined : 'They do not share this' }))}
             onChange={(k) => onPick(k)}
-            pillClass={(_on, off) => (off ? 'inline-flex min-h-[44px] items-center rounded-pill bg-line px-sm text-caption font-medium text-ink-soft line-through' : 'toy toy-soft inline-flex min-h-[44px] items-center rounded-pill bg-card px-sm text-caption font-medium text-ink')}
+            pillClass={(_on, off) => (off ? 'inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center rounded-pill bg-line px-sm text-caption font-medium text-ink-soft line-through' : 'toy toy-soft inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center rounded-pill bg-card px-sm text-caption font-medium text-ink')}
           />
         </nav>
       </div>

@@ -149,8 +149,8 @@ function FeaturePage() {
             const r = RELATIONSHIP_BY_KEY[k];
             return (
               <li key={k} data-pillar={k}>
-                <Link to={`/7rp?pillar=${k}`} className={`${SITE_CHIP_BASE} min-h-[48px] w-full pr-md pl-xs`}>
-                  <Avatar relationship={k} size={32} decorative />
+                <Link to={`/7rp?pillar=${k}`} className={`${SITE_CHIP_BASE} w-full pr-md pl-xs`}>
+                  <Avatar relationship={k} size={28} decorative />
                   {r.name}
                 </Link>
               </li>

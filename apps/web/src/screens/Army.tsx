@@ -81,16 +81,14 @@ export function Army() {
                   <Button variant="outline" onClick={() => answer.mutate({ id: a.id, status: 'declined' })} disabled={answer.isPending}>
                     Decline
                   </Button>
-                  <Link to={`/army/${a.campaignId}`} className="toy toy-soft inline-flex min-h-[48px] items-center rounded-pill bg-card px-md font-semibold">
+                  <Link to={`/army/${a.campaignId}`} className="toy toy-soft inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center rounded-pill bg-card px-md font-semibold">
                     Read the brief
                   </Link>
                 </div>
               </li>
             ))}
           </ul>
-          <div className="mt-xs">
-            <ErrorLine e={answer.error} />
-          </div>
+          <ErrorLine e={answer.error} className="mt-xs" />
         </section>
       )}
 
@@ -245,9 +243,7 @@ function OrgCard({ org }: { org: Organization }) {
               </Button>
             </form>
           )}
-          <div className="mt-xs">
-            <ErrorLine e={add.error} />
-          </div>
+          <ErrorLine e={add.error} className="mt-xs" />
         </div>
       )}
       <ConfirmDelete
@@ -292,7 +288,7 @@ function NewOrgSheet({ open, onClose, onCreated }: { open: boolean; onClose: () 
           {/* Three short equal choices across the full width in equal parts (as PeriodFilter). */}
           <div className="mt-xs grid grid-cols-3 gap-xs">
             {(['brand', 'agency', 'partner'] as const).map((t) => (
-              <button key={t} type="button" aria-pressed={type === t} onClick={() => setType(t)} className={`min-h-[44px] min-w-0 rounded-pill border-2 px-sm text-subhead font-medium ${type === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+              <button key={t} type="button" aria-pressed={type === t} onClick={() => setType(t)} className={`min-h-[36px] md:min-h-[44px] tap-pad min-w-0 rounded-pill border-2 px-sm text-subhead font-medium ${type === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
                 {t}
               </button>
             ))}
@@ -549,9 +545,7 @@ export function Campaign() {
             </div>
           )}
           {who === 'brand' && <p className="mt-xs m-0 text-subhead text-ink-soft">You can approve the shortlist or cancel. The team moves the other steps.</p>}
-          <div className="mt-sm">
-            <ErrorLine e={setStatus.error} />
-          </div>
+          <ErrorLine e={setStatus.error} className="mt-sm" />
           <div className="mt-sm">
             <Toggle on={isPublic} onChange={(on) => publish.mutate(on)} label="Show on the public site" hint="Listed under Campaigns so creators can discover it. The brief itself stays private." disabled={publish.isPending} />
             <ErrorLine e={publish.error} />
@@ -613,9 +607,7 @@ export function Campaign() {
             </li>
           ))}
         </ul>
-        <div className="mt-xs">
-          <ErrorLine e={answer.error} />
-        </div>
+        <ErrorLine e={answer.error} className="mt-xs" />
       </section>
 
       <section className="mt-lg" aria-labelledby="log-heading">
@@ -710,7 +702,7 @@ function DeliverableCard({ deliverable: del, who, onChange }: { deliverable: Del
         </StatusTag>
       </div>
       {del.finalUrl && (
-        <a href={del.finalUrl} target="_blank" rel="noreferrer" className="toy toy-soft mt-sm inline-flex min-h-[44px] items-center rounded-pill bg-paper px-md text-subhead font-semibold">
+        <a href={del.finalUrl} target="_blank" rel="noreferrer" className="toy toy-soft mt-sm inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center rounded-pill bg-paper px-md text-subhead font-semibold">
           Open the approved version
         </a>
       )}
@@ -771,9 +763,7 @@ function DeliverableCard({ deliverable: del, who, onChange }: { deliverable: Del
           </Button>
         </form>
       )}
-      <div className="mt-xs">
-        <ErrorLine e={upload.error ?? review.error} />
-      </div>
+      <ErrorLine e={upload.error ?? review.error} className="mt-xs" />
     </div>
   );
 }

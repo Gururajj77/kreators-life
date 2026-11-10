@@ -692,7 +692,7 @@ function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, 
   return (
     <>
       <p className="mt-xs m-0 text-subhead text-ink-soft">Taken {longDate(at)}. Only you can see this.</p>
-      <TabRow className="mt-sm" pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-md text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`} label="Parts of your result" items={TABS.filter(([k]) => k !== 'eq' || result.eq).map(([key, label]) => ({ key, label }))} value={tab} onChange={setTab} />
+      <TabRow className="mt-sm" pillClass={(on) => `toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-md text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`} label="Parts of your result" items={TABS.filter(([k]) => k !== 'eq' || result.eq).map(([key, label]) => ({ key, label }))} value={tab} onChange={setTab} />
       {tab === 'personality' && <PersonalityTab result={result} />}
       {tab === 'eq' && <EqTab result={result} />}
       {tab === 'reasoning' && <ReasoningTab result={result} />}
@@ -788,7 +788,7 @@ function ResultView({ id, at, result, settings, onSettings, onRetake, onDelete, 
           </div>
           <p className="mt-sm m-0 text-subhead">This is your quietest strength today. That does not make it weak. It is the easiest place to start a small habit.</p>
           <p className="mt-xs m-0 text-subhead">{growth.tryThis}</p>
-          <Link to={`/realm/${result.growth}`} className="toy mt-sm inline-flex min-h-[48px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
+          <Link to={`/realm/${result.growth}`} className="toy mt-sm inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
             Open this pillar
           </Link>
         </div>
@@ -920,14 +920,18 @@ export function Discover() {
         <>
           <section className="relative mt-md overflow-hidden rounded-card p-md text-on-fill" style={fillOf(RELATIONSHIP_BY_KEY.self.color)} data-pillar="self" aria-labelledby="quiz-head">
             <HeroBlobs seed="discover" />
+            {/* The title and its line are one block beside the guide, so the line sits under the title and not under the guide's height
+                (the spacing pass, 2026-11-07: a laptop left an empty band between them). */}
             <div className="relative flex items-start justify-between gap-sm">
-              <h2 id="quiz-head" className="min-w-0 text-title2">{prog.done === 0 ? 'Find out what you are good at' : `${prog.done} of ${DISCOVER_STEPS} answered`}</h2>
+              <div className="min-w-0">
+                <h2 id="quiz-head" className="min-w-0 text-title2">{prog.done === 0 ? 'Find out what you are good at' : `${prog.done} of ${DISCOVER_STEPS} answered`}</h2>
+                <p className="mt-xs m-0 text-subhead">Five short parts, saved as you go, so you can stop and come back.</p>
+              </div>
               {/* Dew, guide to yourself: Discover is about knowing yourself, and a coloured card carries its guide. */}
               <span className="shrink-0" aria-hidden="true">
                 <Avatar relationship="self" size={64} decorative mood={prog.done === 0 ? 'happy' : 'excited'} />
               </span>
             </div>
-            <p className="relative mt-xs m-0 text-subhead">Five short parts, saved as you go, so you can stop and come back.</p>
             <div className="relative mt-sm flex flex-wrap gap-xs">
               <Button variant="light" onClick={() => setMode('quiz')}>
                 {prog.done === 0 ? 'Start the quiz' : prog.core.done === prog.core.total ? 'Add emotional intelligence' : 'Continue'}

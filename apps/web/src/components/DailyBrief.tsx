@@ -19,7 +19,10 @@ function Lines({ title, lines, label }: { title: string; lines: BriefLine[]; lab
         {lines.map((l) => {
           const inner = (
             <>
-              <span className="mt-xs size-[10px] shrink-0 rounded-pill" style={{ background: TONE[l.tone] }} aria-hidden="true" />
+              {/* The dot sits on the middle of the first line (a box one line tall), not 8px down, where it hung below the words. */}
+              <span className="flex h-[1lh] shrink-0 items-center text-subhead" aria-hidden="true">
+                <span className="size-[10px] rounded-pill" style={{ background: TONE[l.tone] }} />
+              </span>
               <span className="min-w-0 flex-1 text-subhead">{l.text}</span>
             </>
           );
@@ -51,12 +54,14 @@ export function DailyBrief({ date, hour }: { date: string; hour: number }) {
   const fold = useMutation({ mutationFn: (folded: boolean) => api.foldGettingStarted(folded), onSuccess: () => void q.refetch() });
   const d = q.data;
   // While it loads, a block about the brief's own height keeps its place, so Home does not jump when it lands.
-  if (q.isPending) return <Skeleton className="span-all mt-md h-[232px] rounded-card" />;
+  // A block of its own after Breathe and focus's last line (or the line of the day), so it sits a section's 32px away; Getting
+  // started under it stays close, as its pair.
+  if (q.isPending) return <Skeleton className="span-all mt-lg h-[232px] rounded-card" />;
   if (!d) return null;
   const g = d.gettingStarted;
   return (
     <>
-      <section className="span-all mt-md rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="brief-heading">
+      <section className="span-all mt-lg rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="brief-heading">
         <h2 id="brief-heading" className="text-headline">
           Your daily brief
         </h2>

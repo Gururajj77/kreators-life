@@ -7,6 +7,7 @@ import { FIELD } from '../lib/ui';
 import { Button } from './Button';
 import { GlideFill, StepSlide } from './fx/StepSlide';
 import { Busy, SkeletonCard } from './Skeleton';
+import { StickyAction } from './StickyAction';
 
 /** The words on the form. Short lines, plain words, one idea each. */
 const COPY = {
@@ -383,7 +384,8 @@ export function ClientOnboarding({ token, agencyName, clientName, onDone }: { to
         {review ? (
           <Review draft={draft} questions={questions} byStep={byStep} onChange={moveTo} />
         ) : (
-          <div className="rounded-card bg-card p-md shadow-toy-soft mt-md">
+          // The card pads its own top, so its first field keeps no margin of its own (32px read as an empty band).
+          <div className="rounded-card bg-card p-md shadow-toy-soft mt-md *:first:mt-0">
             {step === 0 && (
               <>
                 <Text k="legalName" draft={draft} set={set} onBlur={blur} error={errOf('legalName')} />
@@ -456,7 +458,8 @@ export function ClientOnboarding({ token, agencyName, clientName, onDone }: { to
           {sendError}
         </p>
       )}
-      <div className="mt-md flex items-center justify-between gap-sm">
+      {/* A step can run past a phone's screen: Back and Next (or Send) stay in reach at the bottom edge (StickyAction). */}
+      <StickyAction className="mt-md flex items-center justify-between gap-sm">
         <Button variant="outline" onClick={() => (review ? moveTo(ONBOARDING_STEPS.length - 1) : moveTo(step - 1))} disabled={!review && step === 0}>
           Back
         </Button>
@@ -470,7 +473,7 @@ export function ClientOnboarding({ token, agencyName, clientName, onDone }: { to
         ) : (
           <Button onClick={() => void next()}>Next</Button>
         )}
-      </div>
+      </StickyAction>
       <p className="mt-md m-0 text-caption text-ink-mute">{`For ${clientName}${agencyName ? `, from ${agencyName}` : ''}.`}</p>
     </section>
   );

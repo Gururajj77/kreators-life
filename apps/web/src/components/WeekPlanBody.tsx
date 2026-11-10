@@ -54,9 +54,8 @@ interface Own {
   relationship: RelationshipKey;
   plan: Plan;
 }
-const chip = (on: boolean) => `toy min-h-[44px] rounded-pill border-2 px-sm text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`;
+const chip = (on: boolean) => `toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`;
 const selectBase = 'block min-h-[44px] rounded-pill border-2 border-line bg-card-strong px-sm text-subhead font-medium text-ink';
-const selectClass = `${selectBase} w-full`;
 
 /** The block a "worth a look" line about an empty block names: matched by the name it starts with, else the first Focus-tagged block. */
 function blockOfLine(a: PlanAttention, blocks: readonly TimeBlock[]): TimeBlock | null {
@@ -360,16 +359,22 @@ export function PlanBody({ plan, blocks = [], onDone }: { plan: WeekPlanData; /*
         {plan.suggestions.length === 0 ? (
           <p className="mt-xs m-0 text-subhead text-ink-soft">{COPY.allPlaced}</p>
         ) : (
-          <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+          // A narrow list (a phone, under 32rem) stacks each row: the box on top, the words under it, then the two pickers side by side;
+          // from 32rem the row is one line as before (the founder, 2026-11-08). The box is 24px and its label's ::before the 44px target.
+          <ul className="@container mt-xs flex list-none flex-col gap-xs p-0 m-0">
             {plan.suggestions.map((s: WeekPlanSuggestion) => (
-              <li key={s.id} data-pillar={s.relationship} className="flex items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-                <input type="checkbox" checked={on[s.id] ?? false} onChange={(e) => setOn((o) => ({ ...o, [s.id]: e.target.checked }))} aria-label={`Keep ${s.title}`} className="size-[24px] shrink-0" />
-                <div className="flex min-w-0 flex-1 items-start gap-xs">
-                  <span className="flex h-[22px] shrink-0 items-center">
+              <li key={s.id} data-pillar={s.relationship} className="flex flex-col items-start gap-sm rounded-tile bg-card p-sm shadow-toy-soft @lg:flex-row @lg:items-center">
+                <label className="relative flex size-[24px] shrink-0 before:absolute before:-inset-[10px] before:content-['']">
+                  <input type="checkbox" checked={on[s.id] ?? false} onChange={(e) => setOn((o) => ({ ...o, [s.id]: e.target.checked }))} aria-label={`Keep ${s.title}`} className="m-0 size-[24px] shrink-0" />
+                </label>
+                <div className="flex w-full min-w-0 items-start gap-xs @lg:w-auto @lg:flex-1">
+                  {/* The pillar's dot hangs beside the words in a row; stacked, it starts the title's line, so every line starts under the box. */}
+                  <span className="hidden h-[22px] shrink-0 items-center @lg:flex">
                     <span className="inline-block size-[10px] rounded-pill" style={{ background: RELATIONSHIP_BY_KEY[s.relationship].color }} aria-hidden="true" />
                   </span>
                   <div className="min-w-0">
                     <p className="m-0 text-row-title">
+                      <span className="mr-xs inline-block size-[10px] rounded-pill align-middle @lg:hidden" style={{ background: RELATIONSHIP_BY_KEY[s.relationship].color }} aria-hidden="true" />
                       <Inert text={s.title} />
                     </p>
                     <p className="m-0 text-card-note text-ink-soft">
@@ -378,9 +383,10 @@ export function PlanBody({ plan, blocks = [], onDone }: { plan: WeekPlanData; /*
                     <BlockMark id={blockOf[s.id] ?? null} blocks={blocks} />
                   </div>
                 </div>
-                {/* The day, and under it the time block, each a fixed width so the title keeps the rest of the line. */}
-                <div className="flex w-[148px] shrink-0 flex-col gap-xs">
-                  <select value={day[s.id]} onChange={(e) => setDay((d) => ({ ...d, [s.id]: e.target.value }))} aria-label={`Day for ${s.title}`} className={selectClass}>
+                {/* The day and the time block, each a fixed width: side by side under the words on a phone, one over the other at the
+                    row's right end from 32rem, so the title keeps the rest of the line. */}
+                <div className="flex flex-wrap gap-xs @lg:w-[148px] @lg:shrink-0 @lg:flex-col">
+                  <select value={day[s.id]} onChange={(e) => setDay((d) => ({ ...d, [s.id]: e.target.value }))} aria-label={`Day for ${s.title}`} className={`${selectBase} w-[148px] @lg:w-full`}>
                     {plan.days.map((d) => (
                       <option key={d.date} value={d.date}>
                         {dayOption(d.date)}
@@ -388,7 +394,7 @@ export function PlanBody({ plan, blocks = [], onDone }: { plan: WeekPlanData; /*
                     ))}
                   </select>
                   {blocks.length > 0 && (
-                    <select value={blockOf[s.id] ?? ''} onChange={(e) => setBlockOf((o) => ({ ...o, [s.id]: e.target.value || null }))} aria-label={`Time block for ${s.title}`} className={selectClass}>
+                    <select value={blockOf[s.id] ?? ''} onChange={(e) => setBlockOf((o) => ({ ...o, [s.id]: e.target.value || null }))} aria-label={`Time block for ${s.title}`} className={`${selectBase} w-[148px] @lg:w-full`}>
                       <option value="">No block</option>
                       {blocks.map((x) => (
                         <option key={x.id} value={x.id}>
@@ -417,10 +423,12 @@ export function PlanBody({ plan, blocks = [], onDone }: { plan: WeekPlanData; /*
               return (
                 <li key={`${a.kind}${i}`} className="rounded-tile bg-paper p-sm">
                   <div className="flex items-center gap-sm">
-                    <input type="checkbox" checked={done} onChange={(e) => setChecked((c) => ({ ...c, [i]: e.target.checked }))} aria-label={`${COPY.handled}: ${a.text}`} className="size-[24px] shrink-0" />
+                    <label className="relative flex size-[24px] shrink-0 before:absolute before:-inset-[10px] before:content-['']">
+                      <input type="checkbox" checked={done} onChange={(e) => setChecked((c) => ({ ...c, [i]: e.target.checked }))} aria-label={`${COPY.handled}: ${a.text}`} className="m-0 size-[24px] shrink-0" />
+                    </label>
                     <p className={`m-0 min-w-0 flex-1 text-subhead ${done ? 'text-ink-soft line-through' : ''}`}>{tie(a.text)}</p>
                     {fixable && (
-                      <button type="button" aria-expanded={openLine === i} aria-controls={`plan-fix-${i}`} onClick={() => setOpenLine(openLine === i ? null : i)} className="toy toy-flat inline-flex min-h-[44px] shrink-0 items-center gap-xs rounded-pill border border-line bg-card-strong px-sm text-subhead font-medium">
+                      <button type="button" aria-expanded={openLine === i} aria-controls={`plan-fix-${i}`} onClick={() => setOpenLine(openLine === i ? null : i)} className="toy toy-flat inline-flex min-h-[36px] md:min-h-[44px] tap-pad shrink-0 items-center gap-xs rounded-pill border border-line bg-card-strong px-sm text-subhead font-medium">
                         {openLine === i ? COPY.hide : COPY.fix}
                         <ToggleChevron open={openLine === i} size={14} />
                       </button>

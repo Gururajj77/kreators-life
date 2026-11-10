@@ -215,7 +215,9 @@ export function SupplementsSection() {
     >
       {q.isPending && <SkeletonList count={1} lines={2} label="Loading your supplements" />}
       {d && (
-        <div data-pillar="self" className="grid gap-md rounded-card p-md" style={{ background: 'var(--tint-sky)' }}>
+        // The tinted panel holds the list; while tracking is off it would hold only the switch's own card, a box in a box, so the switch
+        // then stands alone (the spacing pass, 2026-11-07).
+        <div data-pillar="self" className={on ? 'grid gap-md rounded-card p-md' : 'grid gap-md'} style={on ? { background: 'var(--tint-sky)' } : undefined}>
           <Toggle on={on} label="Track supplements" hint={SUPPLEMENT_PRIVATE_LINE} disabled={settings.isPending} onChange={(v) => settings.mutate({ on: v })} />
           {said && (
             <p role="status" className="m-0 text-caption text-ink-soft">

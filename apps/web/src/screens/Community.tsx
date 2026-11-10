@@ -49,11 +49,11 @@ function Reactions({ counts, mine, onPick, busy }: { counts: ReactionCounts; min
   return (
     <span className="flex flex-wrap items-center gap-xs">
       {shown.map((k) => (
-        <button key={k} type="button" aria-pressed={mine === k} disabled={busy} onClick={() => onPick(k)} aria-label={`${REACTION_META[k].name}, ${counts[k]}`} className={`toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill px-sm text-subhead font-medium ${mine === k ? 'bg-r1/15' : 'bg-paper'}`}>
+        <button key={k} type="button" aria-pressed={mine === k} disabled={busy} onClick={() => onPick(k)} aria-label={`${REACTION_META[k].name}, ${counts[k]}`} className={`toy toy-soft inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center gap-xs rounded-pill px-sm text-subhead font-medium ${mine === k ? 'bg-r1/15' : 'bg-paper'}`}>
           <ReactionGlyph kind={k} size={16} picked={mine === k} /> {counts[k]}
         </button>
       ))}
-      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-paper px-sm text-subhead font-medium">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="toy toy-soft inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center gap-xs rounded-pill bg-paper px-sm text-subhead font-medium">
         {mine ? 'Change' : 'React'}
         <ToggleChevron open={open} size={14} />
       </button>
@@ -296,7 +296,8 @@ function CommunityFeed() {
                   {p.anonymous ? (
                     <span className="min-w-0 text-balance text-subhead font-semibold [overflow-wrap:anywhere]">{p.authorName}</span>
                   ) : (
-                    <Link to={p.authorHandle ? `/u/${p.authorHandle}` : `/people/${p.authorId}`} className="inline-flex min-h-[44px] min-w-[44px] items-center text-subhead font-semibold [overflow-wrap:anywhere]">
+                    // The 44px tap area is drawn by ::before, so the name sits as close to its line under it as an anonymous name does.
+                    <Link to={p.authorHandle ? `/u/${p.authorHandle}` : `/people/${p.authorId}`} className="relative inline-flex min-w-[44px] items-center text-subhead font-semibold [overflow-wrap:anywhere] before:absolute before:-inset-y-[13px] before:inset-x-0 before:content-['']">
                       {p.authorName}
                     </Link>
                   )}
@@ -310,7 +311,7 @@ function CommunityFeed() {
                 </span>
               </span>
               {!p.mine && !p.anonymous && (
-                <button type="button" aria-pressed={p.authorFollowing} onClick={() => follow.mutate(p.authorId)} disabled={follow.isPending} className={`toy shrink-0 min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${p.authorFollowing ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                <button type="button" aria-pressed={p.authorFollowing} onClick={() => follow.mutate(p.authorId)} disabled={follow.isPending} className={`toy shrink-0 min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm py-0 md:py-xs text-subhead font-medium ${p.authorFollowing ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                   {p.authorFollowing ? 'Following' : 'Follow'}
                 </button>
               )}
@@ -319,7 +320,7 @@ function CommunityFeed() {
             <div className="mt-sm flex flex-wrap items-center gap-xs">
               {!p.held && <Reactions counts={p.reactions} mine={p.myReaction} busy={like.isPending} onPick={(kind) => like.mutate({ id: p.id, kind })} />}
               {!p.held && (
-                <button type="button" onClick={() => setOpen(p)} className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-paper px-sm text-subhead font-medium">
+                <button type="button" onClick={() => setOpen(p)} className="toy toy-soft inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center gap-xs rounded-pill bg-paper px-sm text-subhead font-medium">
                   <Icon icon={MessageCircle} size={16} /> {p.replies}
                 </button>
               )}

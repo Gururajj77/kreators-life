@@ -12,6 +12,7 @@ import { feeCents, FIELD, RED_YES } from '../lib/ui';
 import { FieldLabel } from './Field';
 import { useCopy } from '../lib/clipboard';
 import { PasswordField, ShownOnce } from './ClientPassword';
+import { StickyAction } from './StickyAction';
 
 
 const COPY = {
@@ -66,7 +67,7 @@ function Chips<T extends string>({ label, options, value, name, onChange }: { la
       <p className="m-0 text-subhead font-semibold">{label}</p>
       <div role="radiogroup" aria-label={label} className="mt-xs flex flex-wrap gap-xs">
         {options.map((o) => (
-          <button key={o} type="button" role="radio" aria-checked={value === o} onClick={() => onChange(o)} className={`toy min-h-[44px] rounded-pill border-2 px-md text-subhead font-medium ${value === o ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+          <button key={o} type="button" role="radio" aria-checked={value === o} onClick={() => onChange(o)} className={`toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-md text-subhead font-medium ${value === o ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
             {name(o)}
           </button>
         ))}
@@ -241,7 +242,7 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
           {[...AGENCY_CHANNELS, ...channels.filter((c) => !(AGENCY_CHANNELS as readonly string[]).includes(c))].map((c) => {
             const on = channels.some((x) => x.toLowerCase() === c.toLowerCase());
             return (
-              <button key={c} type="button" aria-pressed={on} onClick={() => setChannels(on ? channels.filter((x) => x.toLowerCase() !== c.toLowerCase()) : [...channels, c])} className={`toy min-h-[44px] rounded-pill border-2 px-md text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+              <button key={c} type="button" aria-pressed={on} onClick={() => setChannels(on ? channels.filter((x) => x.toLowerCase() !== c.toLowerCase()) : [...channels, c])} className={`toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-md text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                 {c}
               </button>
             );
@@ -419,7 +420,7 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
           {!client && save.error instanceof Error && save.error.message ? sentence(save.error.message) : COPY.saveFail}
         </p>
       )}
-      <div className="mt-md flex flex-wrap items-center gap-xs">
+      <StickyAction className="mt-md flex flex-wrap items-center gap-xs">
         <Button type="submit" className="flex-1" disabled={save.isPending || !name.trim() || badRetainer || Boolean(badPin) || (!client && (!contactEmail.trim() || !password || Boolean(passwordBad)))}>
           {save.isPending ? 'Saving' : client ? 'Save changes' : 'Add'}
         </Button>
@@ -439,7 +440,7 @@ function ClientForm({ client, onClose }: { client: AgencyClient | null; onClose:
               Remove
             </Button>
           ))}
-      </div>
+      </StickyAction>
     </form>
   );
 }

@@ -31,6 +31,7 @@ import { RowCard } from '../components/RowCard';
 import { Reveal } from '../components/fx/Reveal';
 import { ToggleChevron } from '../components/ToggleMark';
 import { RunMoveTool } from '../components/RunMoveTool';
+import { StickyAction } from '../components/StickyAction';
 
 const day = shortDate;
 const REL = RELATIONSHIP_BY_KEY.friendship;
@@ -50,7 +51,7 @@ function Choice<T extends string>({ options, value, onChange, label, even = fals
   const pills = (
     <div className={even ? `grid gap-xs ${options.length === 4 ? 'grid-cols-4 @max-[23rem]:grid-cols-2' : 'grid-cols-2'}` : 'mt-xs flex flex-wrap gap-xs'} role="group" aria-label={label}>
       {options.map((o) => (
-        <button key={o.key} type="button" aria-pressed={value === o.key} onClick={() => onChange(o.key)} className={`toy min-h-[44px] min-w-0 rounded-pill border-2 px-sm py-xs text-subhead font-medium ${value === o.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+        <button key={o.key} type="button" aria-pressed={value === o.key} onClick={() => onChange(o.key)} className={`toy min-h-[36px] md:min-h-[44px] tap-pad min-w-0 rounded-pill border-2 px-sm py-0 md:py-xs text-subhead font-medium ${value === o.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
           {o.label}
         </button>
       ))}
@@ -144,7 +145,7 @@ export function Run() {
       <div className="mt-md flex flex-wrap items-center justify-between gap-sm">
         <div className="grid w-full grid-cols-2 gap-xs sm:flex sm:w-auto sm:min-w-0 sm:flex-wrap" role="group" aria-label="Sections">
           {TABS.map((t) => (
-            <button key={t.key} type="button" aria-pressed={tab === t.key} onClick={() => setTab(t.key)} className={`toy inline-flex min-h-[44px] items-center justify-center rounded-pill border-2 px-sm py-xs text-subhead font-medium ${tab === t.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={t.key} type="button" aria-pressed={tab === t.key} onClick={() => setTab(t.key)} className={`toy inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center justify-center rounded-pill border-2 px-sm py-0 md:py-xs text-subhead font-medium ${tab === t.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {t.label}
               {t.key === 'collabs' && d && d.collabsOpen > 0 ? ` · ${d.collabsOpen}` : ''}
               {t.key === 'talk' && tab !== 'talk' && <Dot n={unread} />}
@@ -403,7 +404,7 @@ function CollabsTab() {
   const d = q.data;
   return (
     <>
-      <p className="mt-sm m-0 text-subhead text-ink-soft">Brands post a giveaway for runners. A host applies, and it shows on the run.</p>
+      <p className="mt-md m-0 text-subhead text-ink-soft">Brands post a giveaway for runners. A host applies, and it shows on the run.</p>
       {/* A lone add button: the full width in a row under 34rem (a phone), its own width from there up (as New document). */}
       {d?.canPost && (
         <div className="@container mt-md">
@@ -512,9 +513,11 @@ function StartClubSheet({ open, onClose }: { open: boolean; onClose: () => void 
           <p className="mt-xs m-0 text-caption text-ink-soft">{visibility === 'public' ? 'It shows in the clubs list for everyone.' : 'It stays out of the list. Share its link to invite people.'}</p>
         </fieldset>
         <ErrorLine e={create.isError ? create.error : null} />
-        <Button type="submit" size="lg" full disabled={create.isPending || !name.trim() || !city.trim()}>
-          Start the club
-        </Button>
+        <StickyAction>
+          <Button type="submit" size="lg" full disabled={create.isPending || !name.trim() || !city.trim()}>
+            Start the club
+          </Button>
+        </StickyAction>
       </form>
     </Sheet>
   );

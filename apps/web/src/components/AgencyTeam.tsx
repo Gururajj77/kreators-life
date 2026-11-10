@@ -108,7 +108,7 @@ function RolePick({ value, onChange }: { value: TeamRole; onChange: (r: TeamRole
           type="button"
           aria-pressed={value === r}
           onClick={() => onChange(r)}
-          className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${value === r ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+          className={`toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm py-0 md:py-xs text-subhead font-medium ${value === r ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
         >
           {TEAM_ROLE_META[r].name}
         </button>

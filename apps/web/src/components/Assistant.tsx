@@ -666,7 +666,7 @@ function Receipts({ scope, ids }: { scope: string; ids: string[] }) {
               )}
             </span>
             {r.undo && (
-              <button type="button" disabled={busy === r.id} onClick={() => void act(r.id, () => api.assistantUndo(r.id, todayLocal()))} className="toy toy-soft inline-flex min-h-[44px] shrink-0 items-center gap-xs rounded-pill border-2 border-line bg-paper px-sm text-caption font-medium disabled:opacity-60">
+              <button type="button" disabled={busy === r.id} onClick={() => void act(r.id, () => api.assistantUndo(r.id, todayLocal()))} className="toy toy-soft inline-flex min-h-[36px] md:min-h-[44px] tap-pad shrink-0 items-center gap-xs rounded-pill border-2 border-line bg-paper px-sm text-caption font-medium disabled:opacity-60">
                 {busy === r.id && <AnimatedIcon name="loading" size={14} />}
                 Undo
               </button>

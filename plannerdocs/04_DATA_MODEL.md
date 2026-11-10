@@ -6,7 +6,7 @@ Last updated: 2026-11-07
 **Version:** 0.7, reconciled with the app on 7 November 2026
 **Source of truth:** the 117 migrations in `apps/api/migrations` (0001 to 0123; the numbers 0090 to 0094 and 0107 were never used), applied in order with `pnpm db:migrate:local` or `pnpm db:migrate`. Applied to an empty database they make 226 tables (183 after 0060, 198 after 0073, 203 after 0083). This doc lists every table and its columns as they stand after migration 0113. Types are omitted; `_at` columns are UTC ISO strings, `_cents` are integer cents, `_points` are integer points, `_json` is a JSON string. A migration index is at the end. What the export and the delete do with each table is `node scripts/data-coverage.mjs --table` (section 13).
 
-Migrations 0001 to 0119 are committed (the last commit, "big changes", is from 8 November). 0120 to 0123 are new files that must be added to git before a deploy. 0110 and 0111 stay exactly as they were committed; 0122 and 0123 carry the lesson words changed since. Two of the committed ones, 0101 and 0105, rebuild `reviews` and `review_templates`, so back up first (see 09 §6).
+Migrations 0001 to 0123 are committed (0120 to 0123 came with "alphav01.5"; the tree since alphav2.1 adds none). 0110 and 0111 stay exactly as they were committed; 0122 and 0123 carry the lesson words changed since. Two of the committed ones, 0101 and 0105, rebuild `reviews` and `review_templates`, so back up first (see 09 §6).
 
 ## 1. Principles as built
 
@@ -236,7 +236,7 @@ The export (`GET /me/export`) is one JSON file; the keys are the groups above (`
 ## Known gaps
 
 - No purge by age for `analytics_events` or `page_events`; they go with the account.
-- Migrations 0120 to 0123 and the other new files since the commit "big changes" (8 November) are not in git yet (`git status` shows them as `??`). They must be added before a deploy.
+- Every migration, 0001 to 0123, is in git. The work since "alphav2.1" adds no migration; its four new files are added to git (`A` in `git status`) and must be committed before a deploy.
 - A restore procedure is written (`docs/security/RESTORE.md`) but has not been rehearsed.
 - `circle_members.revealed` is always 0 and could go.
 - `reminder_prefs.water_on`, `water_every_min`, `water_from`, `water_to` and `last_water_at` are read by nothing since 2026-11-07. They could go in a later migration.

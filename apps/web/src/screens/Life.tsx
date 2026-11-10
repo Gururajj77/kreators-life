@@ -98,12 +98,14 @@ export function Life() {
         </section>
       )}
 
-      <PeriodPanel id="life-period" parts={['daily', 'notToDo', 'wellbeing', 'journal', 'finance', 'school']} />
-      {/* Always shown here, as on Home (the founder, 2026-11-06: "previously there was emergence in life app, add it back"). */}
-      <EmergenceSlot app="life" max={2} always />
+      {/* Each area's own numbers come with the score and the week (the spacing pass, 2026-11-07: they had sat under Emerging, as if they
+          were its cards); then By period, and Emerging after the numbers, as on every screen. */}
       {d?.areas.map((a) => (
         <AreaCard key={a.key} area={a} />
       ))}
+      <PeriodPanel id="life-period" parts={['daily', 'notToDo', 'wellbeing', 'journal', 'finance', 'school']} />
+      {/* Always shown here, as on Home (the founder, 2026-11-06: "previously there was emergence in life app, add it back"). */}
+      <EmergenceSlot app="life" max={2} always />
 
       <section className="mt-lg" id="move" aria-labelledby="move-heading">
         <h2 id="move-heading" className="text-title2">
@@ -139,17 +141,16 @@ function AreaCard({ area }: { area: LifeArea }) {
             <span className="text-title3 type-figure">{area.score}</span>
           </Ring>
           <div className="min-w-0 flex-1">
-            {/* The title and its link share the top row, the link at the right; on a narrow phone the link wraps under, still at the right.
-                The link's box is one title line tall and centres on it, so its 44px tap area never pushes the lines below down. */}
-            <div className="flex flex-wrap items-center justify-between gap-x-sm">
+            {/* On a laptop the title and its link share the top row, the link at the right. Its box is one title line tall and centres on
+                it, so its 44px tap area never pushes the lines below down. Below that width the middle column is too narrow for both: the
+                link went under the title, between it and its own line, so it sits at the card's foot instead (the spacing pass, 2026-11-07). */}
+            <div className="flex items-center justify-between gap-x-sm">
               <h2 id={`area-${area.key}`} className="m-0 flex min-w-0 items-center gap-xs text-title2">
                 <AppIcon name={meta.icon} size={24} />
                 {meta.name}
               </h2>
-              <div className="ml-auto flex h-[26px] shrink-0 items-center">
-                <Link to={meta.path} className="inline-flex min-h-[44px] items-center text-subhead font-semibold underline-offset-4 hover:underline" style={{ color: `var(--deep-${rel.key})` }}>
-                  Open {meta.name.toLowerCase()} tools
-                </Link>
+              <div className="ml-auto hidden h-[26px] shrink-0 items-center lg:flex">
+                <AreaLink area={area} />
               </div>
             </div>
             {/* Each part up to a comma kept whole, so a narrow phone breaks the line there and never leaves a short one (the rectangle rule). */}
@@ -188,7 +189,20 @@ function AreaCard({ area }: { area: LifeArea }) {
             </li>
           ))}
         </ul>
+        <div className="mt-xs flex justify-end lg:hidden">
+          <AreaLink area={area} />
+        </div>
       </div>
     </section>
+  );
+}
+
+function AreaLink({ area }: { area: LifeArea }) {
+  const meta = LIFE_AREAS[area.key];
+  const rel = RELATIONSHIP_BY_KEY[meta.relationship];
+  return (
+    <Link to={meta.path} className="inline-flex min-h-[44px] items-center text-subhead font-semibold underline-offset-4 hover:underline" style={{ color: `var(--deep-${rel.key})` }}>
+      Open {meta.name.toLowerCase()} tools
+    </Link>
   );
 }

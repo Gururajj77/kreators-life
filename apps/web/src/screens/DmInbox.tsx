@@ -20,7 +20,7 @@ export function DmInbox() {
     <Screen>
       <AppCover back={{ to: '/shop', label: 'Shop' }} title="Priority DMs" lede="Paid questions. Each one has a promised answer date; the buyer sees your reply in their purchases." />
 
-      <section className="mt-md" aria-labelledby="open-heading">
+      <section className="mt-lg" aria-labelledby="open-heading">
         <h2 id="open-heading" className="text-title2">
           Waiting, {open.length}
         </h2>

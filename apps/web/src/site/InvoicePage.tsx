@@ -110,7 +110,7 @@ export function InvoicePage() {
                 )}
                 {d.canComment && !asking && (
                   <div className="mt-sm flex flex-wrap items-center gap-sm">
-                    <Button variant="outline" onClick={() => setAsking(true)} aria-expanded={false} aria-controls="inv-ask-text">
+                    <Button low variant="outline" onClick={() => setAsking(true)} aria-expanded={false} aria-controls="inv-ask-text">
                       Ask for a change
                     </Button>
                     {done && (
@@ -128,10 +128,10 @@ export function InvoicePage() {
                     {/* Opened by a tap, so the keyboard lands in it at once. */}
                     <textarea id="inv-ask-text" autoFocus rows={3} maxLength={600} value={text} onChange={(e) => setText(e.target.value)} className={FIELD} />
                     <div className="mt-xs flex flex-wrap items-center gap-sm">
-                      <Button className="flex-1" onClick={() => send.mutate()} disabled={!text.trim() || send.isPending}>
+                      <Button low className="flex-1" onClick={() => send.mutate()} disabled={!text.trim() || send.isPending}>
                         {send.isPending ? 'Sending' : 'Send'}
                       </Button>
-                      <Button variant="ghost" onClick={() => setAsking(false)}>
+                      <Button low variant="ghost" onClick={() => setAsking(false)}>
                         Cancel
                       </Button>
                       {done && (

@@ -20,6 +20,7 @@ import { FIELD, FIELD_LINE, LABEL } from '../lib/ui';
 import { IconButton } from '../components/IconButton';
 import { CloseButton } from '../components/CloseButton';
 import { Check } from 'lucide-react';
+import { StickyAction } from '../components/StickyAction';
 
 
 
@@ -483,8 +484,9 @@ export function StudioProduct() {
           </fieldset>
         )}
         {p.kind === 'course' && (
-          <label className="flex min-h-[44px] items-center gap-sm text-subhead font-semibold">
-            <input type="checkbox" checked={certificate} onChange={(e) => setCertificate(e.target.checked)} className="size-[20px] accent-ink" />
+          // The box sits by the first line of its words (not the middle of three) and keeps its own 20px, never squeezed by them.
+          <label className="flex min-h-[44px] items-start gap-sm text-subhead font-semibold">
+            <input type="checkbox" checked={certificate} onChange={(e) => setCertificate(e.target.checked)} className="size-[20px] shrink-0 accent-ink" />
             <span>
               Issue a certificate on completion
               <span className="block text-caption text-ink-soft">Every lesson done and every gated quiz passed. Anyone can check the code at /c/code.</span>
@@ -496,9 +498,12 @@ export function StudioProduct() {
             {save.error instanceof Error ? save.error.message : 'Could not save.'}
           </p>
         )}
-        <Button type="submit" full disabled={save.isPending}>
-          Save
-        </Button>
+        {/* The form runs well past a phone's screen: its Save stays in reach above the tab bar (StickyAction). */}
+        <StickyAction>
+          <Button type="submit" full disabled={save.isPending}>
+            Save
+          </Button>
+        </StickyAction>
       </form>
 
       {p.kind === 'course' && (
@@ -544,7 +549,7 @@ export function StudioProduct() {
             <h2 className="text-title2">Members feed</h2>
             <p className="mt-xs m-0 text-subhead text-ink-soft">Members and you can post in a feed only they can see.</p>
           </div>
-          <Link to={`/community?product=${p.id}`} className="toy toy-ink inline-flex min-h-[48px] items-center rounded-pill border-2 border-ink bg-card px-md font-semibold">
+          <Link to={`/community?product=${p.id}`} className="toy toy-ink inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center rounded-pill border-2 border-ink bg-card px-md font-semibold">
             Open members feed
           </Link>
         </section>
@@ -976,16 +981,16 @@ function LessonSheet({ productId, lesson, onClose, onSaved }: { productId: strin
           </p>
         )}
         {/* The main Save takes the width and Delete lesson sits at its right on the same line (2026-11-06, the form rules). */}
-        <div className="flex gap-xs">
+        <StickyAction className="flex gap-xs">
           <Button type="submit" size="lg" className="min-w-0 flex-1" disabled={save.isPending || !title.trim()}>
             {existing ? 'Save lesson' : 'Add lesson'}
           </Button>
           {existing && (
-            <button type="button" disabled={remove.isPending} onClick={() => setDeleting(true)} className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-headline text-r1 hover:bg-r1/10 disabled:opacity-50">
+            <button type="button" disabled={remove.isPending} onClick={() => setDeleting(true)} className="toy inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-headline text-r1 hover:bg-r1/10 disabled:opacity-50">
               Delete lesson
             </button>
           )}
-        </div>
+        </StickyAction>
       </form>
       <ConfirmDelete open={deleting} title="Delete this lesson?" body={`"${existing?.title ?? ''}". Its text and quiz go. This cannot be undone.`} pending={remove.isPending} failed={remove.isError} onYes={() => remove.mutate()} onClose={() => setDeleting(false)} />
     </Sheet>

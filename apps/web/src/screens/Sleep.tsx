@@ -116,7 +116,8 @@ export function Sleep() {
         </div>
       </section>
 
-      <section className="mt-lg" aria-labelledby="hist-heading">
+      {/* No heading over nothing: with no entry yet the list and its title wait (the delete sheet portals out, so it still opens). */}
+      <section className="mt-lg" aria-labelledby="hist-heading" hidden={!logs.data?.logs.length}>
         <h2 id="hist-heading" className="text-title2">
           Nights
         </h2>

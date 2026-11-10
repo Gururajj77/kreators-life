@@ -175,6 +175,7 @@ export function Insights() {
   const watching = all.filter((i) => i.state === 'watching' && fits(i));
   const places: Place[] = [...LIFE_AREA_ORDER, 'across'];
   const inPlace = (p: Place) => shown.filter((i) => PLACE[i.key as keyof typeof PLACE] === p);
+  const anyShown = places.some((p) => inPlace(p).length > 0);
   // Not now takes the card and its menu away, so the keyboard's place moves to the section's heading.
   const hideIn = (heading: string) => (id: string) => {
     hide(id);
@@ -277,17 +278,21 @@ export function Insights() {
             id="emerging-found"
             title="What stands out"
             lede={
-              // Said once: why a short period shows less here.
-              period
-                ? 'Patterns need enough days to be fair, so a short period shows more under Still watching.'
-                : shown.length
-                  ? 'The strongest first, by area of life.'
-                  : aside.length
-                    ? 'You set these aside. Show them again above.'
-                    : 'Nothing yet. Keep logging and patterns show up here.'
+              // Said once: why a short period shows less here. With no card at all the line is the section's content instead (below), so the
+              // block never ends in an empty gap (the spacing pass, 2026-11-07).
+              anyShown
+                ? period
+                  ? 'Patterns need enough days to be fair, so a short period shows more under Still watching.'
+                  : 'The strongest first, by area of life.'
+                : undefined
             }
             tools={<Segmented label="Show" value={filter} onChange={(v) => setFilter(v)} options={FILTERS} />}
           >
+            {!anyShown && (
+              <p className="m-0 text-balance text-subhead text-ink-soft">
+                {period ? 'Patterns need enough days to be fair, so a short period shows more under Still watching.' : aside.length ? 'You set these aside. Show them again above.' : 'Nothing yet. Keep logging and patterns show up here.'}
+              </p>
+            )}
             {places.map((p) => {
               const list = inPlace(p);
               if (!list.length) return null;

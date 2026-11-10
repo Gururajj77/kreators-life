@@ -67,7 +67,7 @@ export function Studio({ tab = 'home' }: { tab?: ShopTab }) {
         title="Shop"
         lede="Sell downloads, courses, memberships, sessions, events, payment links, bundles, locked posts and priority DMs. Points work today; money checkout is in test mode until a payment provider is connected."
       >
-        <TabRow pillClass={(on) => `inline-flex min-h-[44px] items-center rounded-pill border-2 px-sm py-xs text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`} label="Shop sections" items={SHOP_TABS} value={tab} onChange={(k) => nav(SHOP_TABS.find((t) => t.key === k)!.to)} />
+        <TabRow pillClass={(on) => `inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center rounded-pill border-2 px-sm py-0 md:py-xs text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`} label="Shop sections" items={SHOP_TABS} value={tab} onChange={(k) => nav(SHOP_TABS.find((t) => t.key === k)!.to)} />
       </AppCover>
 
       {tab === 'home' && d && (
@@ -109,6 +109,8 @@ export function Studio({ tab = 'home' }: { tab?: ShopTab }) {
           {/* The orders and points tiles above already show the shop's numbers, so the period block adds only money in and out. */}
           <PeriodPanel id="shop-period" parts={['finance']} />
           <section className="mt-lg" aria-labelledby="products-heading">
+            {/* The button keeps the row's height (no one-line box as on Section): what follows is a card or a list, not a line beside
+                the title, so a 48px button held to one title line would hang 10px over it. */}
             <div className="flex items-center justify-between gap-sm">
               <h2 id="products-heading" className="text-title2">
                 Products
@@ -198,6 +200,7 @@ function SalesSection() {
   const orders = sales.data?.orders ?? [];
   return (
     <section className="mt-lg" aria-labelledby="sales-heading">
+      {/* The button keeps the row's height: the filters follow, and a 48px button held to one title line touched them. */}
       <div className="flex items-center justify-between gap-sm">
         <h2 id="sales-heading" className="text-title2">
           Sales
@@ -206,8 +209,9 @@ function SalesSection() {
           Download CSV
         </Button>
       </div>
-      <div className="mt-sm grid grid-cols-3 gap-xs">
-        <label className="block">
+      {/* On a phone Status takes its own line and the two dates share the next, so no date field is squeezed to "dd/mm/". */}
+      <div className="mt-sm grid grid-cols-2 gap-xs sm:grid-cols-3">
+        <label className="col-span-2 block sm:col-span-1">
           <span className="block text-caption">Status</span>
           <select value={status} onChange={(e) => setStatus(e.target.value)} className={FIELD}>
             <option value="">All</option>
@@ -316,7 +320,7 @@ function PageTab() {
   const save = useMutation({ mutationFn: () => api.updateMe({ handle: handle || null, bio }), onSuccess: () => refresh() });
   const link = user?.handle ? `${window.location.origin}/u/${user.handle}` : null;
   return (
-    <section className="mt-md" aria-labelledby="page-heading">
+    <section className="mt-lg" aria-labelledby="page-heading">
       <h2 id="page-heading" className="text-title2">
         My page
       </h2>
@@ -349,14 +353,14 @@ function PageTab() {
         </Button>
       </form>
       {link && (
-        <div className="mt-sm rounded-tile bg-card p-sm shadow-toy-soft">
+        <div className="mt-sm rounded-tile bg-card p-md shadow-toy-soft">
           <p className="m-0 text-subhead font-semibold">Your link</p>
           <p className="m-0 break-all text-callout">{link}</p>
           <div className="mt-sm flex gap-xs">
             <Button variant="outline" onClick={() => void copier.copy(link)}>
               {copier.said === 'Copied' ? 'Copied' : 'Copy'}
             </Button>
-            <Link to={`/u/${user?.handle}`} className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
+            <Link to={`/u/${user?.handle}`} className="toy inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
               Open
             </Link>
           </div>
@@ -395,7 +399,7 @@ function BookingsTab() {
   const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
   return (
     <>
-      <section className="mt-md" aria-labelledby="avail-heading">
+      <section className="mt-lg" aria-labelledby="avail-heading">
         <h2 id="avail-heading" className="text-title2">
           Availability
         </h2>
@@ -663,7 +667,7 @@ function ReviewsTab() {
   const refresh = useRefreshAll();
   const approve = useMutation({ mutationFn: ({ id, approved }: { id: string; approved: boolean }) => api.approveTestimonial(id, approved), onSuccess: () => refresh() });
   return (
-    <section className="mt-md" aria-labelledby="rev-heading">
+    <section className="mt-lg" aria-labelledby="rev-heading">
       <h2 id="rev-heading" className="text-title2">
         Reviews
       </h2>

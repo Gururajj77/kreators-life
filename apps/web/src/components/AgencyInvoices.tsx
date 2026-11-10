@@ -420,75 +420,80 @@ export function InvoiceTemplates() {
   });
   const list = (q.data?.templates ?? []).filter((t) => t.scope === 'own');
   return (
-    <div className="rounded-tile bg-card p-sm">
+    // The same placement as the agreement and house templates beside it: the line on how it works above, then the card with the list.
+    <div>
       <p className="m-0 text-subhead text-ink-soft">Open any invoice and tap Save as template to keep it here. A template keeps the look, the bank, the tax and the lines, never who it was for.</p>
-      {q.isError && (
-        <p role="alert" className="mt-xs m-0 text-subhead">
-          Could not load your templates. Try again.
-        </p>
-      )}
-      {q.data && list.length === 0 && <p className="mt-xs m-0 text-subhead font-semibold">You have none yet.</p>}
-      <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-        {list.map((t) => (
-          <li key={t.id} className="rounded-tile bg-paper p-sm">
-            {renaming?.id === t.id ? (
-              <div className="grid gap-xs">
-                <Field id={`tpl-rename-${t.id}`} label="New name" value={name} onChange={setName} max={TEMPLATE_NAME_MAX} />
-                <div className="flex flex-wrap gap-xs">
-                  <Button size="sm" onClick={() => rename.mutate()} disabled={!name.trim() || rename.isPending}>
-                    Save name
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setRenaming(null)}>
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-wrap items-center justify-between gap-sm">
-                <div className="min-w-0">
-                  <p className="m-0 text-card-title">{t.name}</p>
-                  <p className="m-0 text-card-note text-ink-soft">{t.summary}</p>
-                </div>
-                <div className="flex gap-xs">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setRenaming(t);
-                      setName(t.name);
-                      setSure('');
-                    }}
-                  >
-                    Rename
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className={sure === t.id ? 'red-armed' : ''}
-                    onClick={() => {
-                      if (sure === t.id) {
-                        remove.mutate(t.id);
-                        return;
-                      }
-                      remove.reset();
-                      setMsg('');
-                      setSure(t.id);
-                    }}
-                    disabled={remove.isPending}
-                    aria-label={sure === t.id ? `Tap again to remove template ${t.name}` : `Remove template ${t.name}`}
-                  >
-                    {sure === t.id ? 'Tap again to remove' : 'Remove'}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </li>
-        ))}
-      </ul>
-      {msg && (
-        <p role="status" className="mt-xs m-0 text-subhead">
-          {msg}
-        </p>
+      {(q.isError || q.data || msg) && (
+        <div className="mt-xs rounded-tile bg-card p-sm *:first:mt-0">
+          {q.isError && (
+            <p role="alert" className="mt-xs m-0 text-subhead">
+              Could not load your templates. Try again.
+            </p>
+          )}
+          {q.data && list.length === 0 && <p className="mt-xs m-0 text-subhead font-semibold">You have none yet.</p>}
+          <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+            {list.map((t) => (
+              <li key={t.id} className="rounded-tile bg-paper p-sm">
+                {renaming?.id === t.id ? (
+                  <div className="grid gap-xs">
+                    <Field id={`tpl-rename-${t.id}`} label="New name" value={name} onChange={setName} max={TEMPLATE_NAME_MAX} />
+                    <div className="flex flex-wrap gap-xs">
+                      <Button size="sm" onClick={() => rename.mutate()} disabled={!name.trim() || rename.isPending}>
+                        Save name
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setRenaming(null)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-sm">
+                    <div className="min-w-0">
+                      <p className="m-0 text-card-title">{t.name}</p>
+                      <p className="m-0 text-card-note text-ink-soft">{t.summary}</p>
+                    </div>
+                    <div className="flex gap-xs">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setRenaming(t);
+                          setName(t.name);
+                          setSure('');
+                        }}
+                      >
+                        Rename
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className={sure === t.id ? 'red-armed' : ''}
+                        onClick={() => {
+                          if (sure === t.id) {
+                            remove.mutate(t.id);
+                            return;
+                          }
+                          remove.reset();
+                          setMsg('');
+                          setSure(t.id);
+                        }}
+                        disabled={remove.isPending}
+                        aria-label={sure === t.id ? `Tap again to remove template ${t.name}` : `Remove template ${t.name}`}
+                      >
+                        {sure === t.id ? 'Tap again to remove' : 'Remove'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+          {msg && (
+            <p role="status" className="mt-xs m-0 text-subhead">
+              {msg}
+            </p>
+          )}
+        </div>
       )}
     </div>
   );

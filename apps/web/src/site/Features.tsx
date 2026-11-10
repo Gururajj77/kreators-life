@@ -14,6 +14,7 @@ import { ArrowUpRight } from 'lucide-react';
 import { BookShelf } from '../components/BookShelf';
 import { evenGrid, evenTile } from '../lib/bento';
 import { SITE_LINK_INLINE, SITE_PRIMARY_ON_GLASS } from './buttons';
+import { FollowStart } from './FollowStart';
 
 /**
  * One column on a phone, two on a tablet and four on a laptop, in even rows (lib/bento.ts), so a group never ends with a hole or a lone card.
@@ -95,14 +96,15 @@ export function Features() {
         </p>
         <BookShelf className="mt-md" href={(b) => `/features/books#${b.slug}`} />
       </section>
-      <section className="mt-2xl">
+      {/* The page's 64px rhythm, like every band above it (the founder, 2026-11-09: it sat 120px under Books). */}
+      <section className="mt-xl">
         {/* Fractal glass (FractalGlass) in teal, its own colour (the home's is navy, /7rp's wine): deep in both themes, the glow rising
             from the right through narrow ribs; the words and Start free sit on its dark left. */}
         <div className="fx-fglass-host relative overflow-hidden rounded-card p-md pb-0 text-on-fill shadow-toy-soft md:p-lg md:pb-0">
           <FractalGlass hue="teal" />
           <div className="relative z-10">
             <h2 className="type-hook text-display-2">Switch on only <em>what you need</em></h2>
-            <Link to={entry === '/home' ? '/home' : '/start'} className={`${SITE_PRIMARY_ON_GLASS} mt-md`}>
+            <Link to={entry === '/home' ? '/home' : '/start'} className={`${SITE_PRIMARY_ON_GLASS} mt-md`} data-main-action="">
               {entry === '/home' ? 'Go to app' : 'Start free'}
             </Link>
           </div>
@@ -110,6 +112,8 @@ export function Features() {
           <PeekGuides />
         </div>
       </section>
+      {/* The page's one main action is at its foot: on a phone it waits at the bottom edge until that place shows. */}
+      <FollowStart to={entry === '/home' ? '/home' : '/start'}>{entry === '/home' ? 'Go to app' : 'Start free'}</FollowStart>
     </SiteLayout>
   );
 }

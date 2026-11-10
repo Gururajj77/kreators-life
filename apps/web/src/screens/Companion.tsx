@@ -129,7 +129,7 @@ export function Companion() {
   const note = !canType ? 'Needs a plan. Until then the built-in companion answers, free.' : model?.private ? 'Keeps nothing you send, so it can see your mood and sleep.' : 'May keep what you type, so your mood, sleep and journal stay out.';
 
   return (
-    <Screen>
+    <Screen assistant={false}>
       <header className="pt-lg">
         <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-large-title">Companion</h1>

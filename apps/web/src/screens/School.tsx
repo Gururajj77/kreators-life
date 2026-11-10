@@ -29,6 +29,7 @@ import { FactTag, IconTag } from '../components/FactTag';
 import { RowCard } from '../components/RowCard';
 import { ConfirmSpend } from '../components/ConfirmSpend';
 import { ConfirmDelete } from '../components/ConfirmDelete';
+import { StickyAction } from '../components/StickyAction';
 
 const fmtDate = shortDate;
 const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
@@ -275,7 +276,7 @@ function ProgramCard({ program: p, myIds, onChange, view, canUp, canDown }: { pr
               })()}
             </span>
             {myIds.has(k.id) ? (
-              <Link to={`/school/${k.id}`} className="toy toy-soft inline-flex min-h-[44px] shrink-0 items-center rounded-pill bg-card px-md text-subhead font-semibold">
+              <Link to={`/school/${k.id}`} className="toy toy-soft inline-flex min-h-[36px] md:min-h-[44px] tap-pad shrink-0 items-center rounded-pill bg-card px-md text-subhead font-semibold">
                 Open
               </Link>
             ) : (
@@ -289,9 +290,7 @@ function ProgramCard({ program: p, myIds, onChange, view, canUp, canDown }: { pr
       )}
       {manage && vis === 'private' && !guide && <ProgramInvites program={p} open={inviting} onOpenChange={setInviting} />}
       {(enroll.error || setState.error || move.error) && (
-        <div className="mt-xs">
-          <ErrorLine e={enroll.error ?? setState.error ?? move.error} />
-        </div>
+        <ErrorLine e={enroll.error ?? setState.error ?? move.error} className="mt-xs" />
       )}
       {open.length === 0 && (
         // No dates yet (or archived), said to whoever reads it; the team's tools are in the corner beside the state.
@@ -659,7 +658,7 @@ function NewProgramSheet({ open, onClose, onCreated }: { open: boolean; onClose:
           <span className="block text-caption text-ink-soft">Where its cohorts meet.</span>
           <div className="mt-xs grid grid-cols-3 gap-xs">
             {(['online', 'in_person', 'hybrid'] as const).map((m) => (
-              <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)} className={`min-h-[44px] min-w-0 rounded-pill border-2 px-xs text-subhead font-medium ${mode === m ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+              <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)} className={`min-h-[36px] md:min-h-[44px] tap-pad min-w-0 rounded-pill border-2 px-xs text-subhead font-medium ${mode === m ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
                 {modeName(m)}
               </button>
             ))}
@@ -683,9 +682,11 @@ function NewProgramSheet({ open, onClose, onCreated }: { open: boolean; onClose:
           />
         </fieldset>
         <ErrorLine e={create.error} />
-        <Button type="submit" size="lg" full disabled={create.isPending || !name.trim()}>
-          Create program
-        </Button>
+        <StickyAction>
+          <Button type="submit" size="lg" full disabled={create.isPending || !name.trim()}>
+            Create program
+          </Button>
+        </StickyAction>
       </form>
     </Sheet>
   );

@@ -382,7 +382,7 @@ Random video chat, celebrity messages, a trending-audio or meme library, a stand
   - `/orgs` (brands and their teammates) is open as core because it is not in `MODULE_FOR_PREFIX` (see 05).
 - Fixed since the 2026-11-01 sweep: a host cancelling a Party event now refunds what each guest paid, and a seat promoted from the waitlist is charged with a guarded debit; Store checkout, School enrolment and Party RSVP take points with a guarded `UPDATE … WHERE points >= ?`; a creator's coupon use is taken late in the checkout, guarded, and given back if the checkout then fails.
 - Migrations must be applied to the live database by hand before each deploy (0001 to 0123 on 8 November).
-- The work since the commit "big changes" (8 November) is not committed yet, and its new files must be added to git before a deploy (see 01, Known gaps).
+- The work since the commit "alphav2.1" is not committed yet (its four new files are already added to git), and it must be committed before a deploy (see 01, Known gaps).
 - `/refunds` and the terms' Pricing and billing do not name the live call yet; they wait for the founder's refund rule.
 - A savings goal in a review shows as it stands today, since no dated record of each amount is kept.
 

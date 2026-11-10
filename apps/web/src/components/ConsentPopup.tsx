@@ -152,7 +152,7 @@ export function ConsentPopup() {
           foldChoices();
         }
       }}
-      className={`rounded-card border border-line bg-card-strong p-md text-ink shadow-toy-soft ${tall} ${inFlow ? 'relative mt-sm' : `fixed inset-x-sm z-[45] ${place} ${laptop}`}`}
+      className={`rounded-card border border-line bg-card-strong p-md text-ink shadow-toy-soft ${tall} ${inFlow ? 'relative mt-sm' : `lift-over-sticky fixed inset-x-sm z-[45] ${place} ${laptop}`}`}
     >
       {step === 'terms' ? (
         <div className="flex flex-col gap-xs">
@@ -168,7 +168,7 @@ export function ConsentPopup() {
             .
           </p>
           <div className="flex justify-end">
-            <Button onClick={() => accept.mutate()} disabled={accept.isPending}>
+            <Button low={!inApp} onClick={() => accept.mutate()} disabled={accept.isPending}>
               I agree
             </Button>
           </div>
@@ -204,10 +204,10 @@ export function ConsentPopup() {
                 Choose for each
                 <ToggleChevron open={choosing} size={14} />
               </button>
-              <Button variant="outline" full onClick={() => choose({ ...NO_CONSENT })} disabled={save.isPending} className="md:w-auto">
+              <Button low={!inApp} variant="outline" full onClick={() => choose({ ...NO_CONSENT })} disabled={save.isPending} className="md:w-auto">
                 Reject all
               </Button>
-              <Button variant="outline" full onClick={() => choose({ attribution: true, embeds: true, marketing: true })} disabled={save.isPending} className="md:w-auto">
+              <Button low={!inApp} variant="outline" full onClick={() => choose({ attribution: true, embeds: true, marketing: true })} disabled={save.isPending} className="md:w-auto">
                 Accept all
               </Button>
             </div>
@@ -216,10 +216,10 @@ export function ConsentPopup() {
             <div ref={choicesRef} id="consent-choices" className="mt-sm">
               <Choices draft={draft} setDraft={setDraft} gpc={gpc} wide={!inApp} />
               <div className="mt-sm flex flex-wrap items-center justify-end gap-xs">
-                <Button variant="ghost" onClick={foldChoices}>
+                <Button low={!inApp} variant="ghost" onClick={foldChoices}>
                   Cancel
                 </Button>
-                <Button variant="outline" onClick={() => choose(draft)} disabled={save.isPending}>
+                <Button low={!inApp} variant="outline" onClick={() => choose(draft)} disabled={save.isPending}>
                   Save my choices
                 </Button>
               </div>
@@ -245,7 +245,7 @@ export function ConsentPopup() {
           <Link to="/privacy" target="_blank" className="mr-auto text-subhead text-ink-soft underline underline-offset-4">
             Privacy policy
           </Link>
-          <Button onClick={() => choose(draft)} disabled={save.isPending}>
+          <Button low={!inApp} onClick={() => choose(draft)} disabled={save.isPending}>
             Save my choices
           </Button>
         </div>

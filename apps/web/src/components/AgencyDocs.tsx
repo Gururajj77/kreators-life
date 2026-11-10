@@ -169,7 +169,7 @@ export function NewDocSheet({ open, onClose, clientId, retainer }: { open: boole
 const day = (iso: string) => docDate(iso);
 
 /** The other documents, a page at a time, for every client or one: a kind filter, a row for each with its buttons, and a New document button. */
-export function AgencyDocsList({ clientId, retainer, kinds }: { clientId?: string; retainer?: Partial<RetainerInput>; /** The kind-of-paper switch, at the right of this row (Paperwork). */ kinds?: ReactNode }) {
+export function AgencyDocsList({ clientId, retainer, kinds, heading }: { clientId?: string; retainer?: Partial<RetainerInput>; /** The kind-of-paper switch, at the right of this row (Paperwork). */ kinds?: ReactNode; /** A section title for this row's left (a client's page), so New document sits level with it like a section's action. */ heading?: ReactNode }) {
   const [kind, setKind] = useParamState('adkind', 'all');
   const pg = usePage('ad');
   const [adding, setAdding] = useState(false);
@@ -181,11 +181,13 @@ export function AgencyDocsList({ clientId, retainer, kinds }: { clientId?: strin
     const { doc } = await api.agencyDoc(id);
     return contractAsText(doc.doc, { reference: doc.ref, date: doc.sentAt ?? doc.createdAt, answers: doc.answers, acceptance: doc.acceptance });
   };
+  const filtering = kind !== 'all' || pg.page > 1 || Boolean(list.data && (list.data.docs.length > 10 || list.data.page.more));
   return (
     <div>
       {/* The kind filter is only worth its space once there are more documents than fit on a page; a chosen kind keeps it in sight. */}
-      <div className={`flex flex-wrap justify-between gap-sm ${kinds ? '@container items-center' : 'items-end'}`}>
-        {(kind !== 'all' || pg.page > 1 || (list.data && (list.data.docs.length > 10 || list.data.page.more))) ? (
+      {heading && filtering && heading}
+      <div className={`flex flex-wrap justify-between gap-sm ${kinds ? '@container items-center' : heading && !filtering ? 'items-center' : 'items-end'} ${heading && filtering ? 'mt-sm' : ''}`}>
+        {filtering ? (
           <div className="min-w-0">
             <label htmlFor={`adkind-${clientId ?? 'all'}`} className="block text-subhead font-semibold">
               Kind of document
@@ -207,7 +209,9 @@ export function AgencyDocsList({ clientId, retainer, kinds }: { clientId?: strin
               ))}
             </select>
           </div>
-        ) : kinds ? null : (
+        ) : kinds ? null : heading ? (
+          heading
+        ) : (
           <span />
         )}
         {/* Full width in a row under 34rem (a phone, under the switch); from there up its own width at the top left, centred on the switch
@@ -229,7 +233,8 @@ export function AgencyDocsList({ clientId, retainer, kinds }: { clientId?: strin
         {list.data?.docs.map((d: AgencyDocListItem) => (
           <li key={d.id} className="flex items-center gap-xs rounded-tile bg-card p-sm shadow-toy-soft">
             <Link to={`/agency/docs/${d.id}`} className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-sm text-ink no-underline">
-              <span className="min-w-0 flex-1">
+              {/* At least 14rem before the tag: a long tied title ("ENGAGEMENT AGREEMENT") never runs under it; on a phone the tag wraps under the words. */}
+              <span className="min-w-0 flex-[1_1_14rem]">
                 <span className="block text-headline">{tie(d.title)}</span>
                 <span className="block text-subhead text-ink-soft">{[AGENCY_DOC_KIND_META[d.kind]?.name.trim().toLowerCase() === d.title.trim().toLowerCase() ? '' : AGENCY_DOC_KIND_META[d.kind]?.name, d.clientName || 'No client yet', d.approvedAt ? `Approved ${day(d.approvedAt)}` : d.sentAt ? `Sent ${day(d.sentAt)}` : `Changed ${day(d.updatedAt)}`].filter(Boolean).join(' · ')}</span>
               </span>
@@ -258,12 +263,16 @@ export function AgencyDocsList({ clientId, retainer, kinds }: { clientId?: strin
 export function ClientDocs({ clientId, retainer }: { clientId: string; retainer?: Partial<RetainerInput> }) {
   return (
     <section aria-labelledby={`client-docs-${clientId}`}>
-      <h2 id={`client-docs-${clientId}`} className="text-title2">
-        Documents
-      </h2>
-      <div className="mt-sm">
-        <AgencyDocsList clientId={clientId} retainer={retainer} />
-      </div>
+      {/* The title and New document share one line, like the Agreements section above it on a client's page. */}
+      <AgencyDocsList
+        clientId={clientId}
+        retainer={retainer}
+        heading={
+          <h2 id={`client-docs-${clientId}`} className="text-title2">
+            Documents
+          </h2>
+        }
+      />
     </section>
   );
 }

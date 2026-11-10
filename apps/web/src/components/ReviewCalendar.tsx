@@ -349,7 +349,7 @@ function ScheduleForm({ state, today, onClose, onSaved }: { state: FormState | n
           <div className="@container mt-xs" role="group" aria-label="Which review">
             <div className={periodGrid(PERIOD_KINDS.length)}>
               {PERIOD_KINDS.map((k, i) => (
-                <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={`toy min-h-[44px] min-w-0 rounded-pill border-2 px-xs text-subhead font-medium ${periodCell(i, PERIOD_KINDS.length)} ${kind === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={`toy min-h-[36px] md:min-h-[44px] tap-pad min-w-0 rounded-pill border-2 px-xs text-subhead font-medium ${periodCell(i, PERIOD_KINDS.length)} ${kind === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                   <span className="whitespace-nowrap">{PERIOD_META[k].short}</span>
                 </button>
               ))}

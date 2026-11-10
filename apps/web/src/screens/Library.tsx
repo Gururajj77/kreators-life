@@ -105,7 +105,7 @@ function Mine() {
                   {dateTime(b.startsAt)} in your zone, {b.status}
                 </p>
                 {b.meetingUrl && b.status === 'confirmed' && (
-                  <a href={b.meetingUrl} target="_blank" rel="noreferrer" className="toy mt-sm inline-flex min-h-[44px] items-center rounded-pill bg-ink px-md text-subhead font-semibold text-on-ink">
+                  <a href={b.meetingUrl} target="_blank" rel="noreferrer" className="toy mt-sm inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center rounded-pill bg-ink px-md text-subhead font-semibold text-on-ink">
                     Join
                   </a>
                 )}
@@ -261,7 +261,7 @@ function Owned({ id }: { id: string }) {
             <p className="m-0 text-card-title">Your membership ended on {day(myOrder.expiresAt ?? myOrder.createdAt)}.</p>
             <p className="mt-xs m-0 text-card-note text-ink-soft">Renew to open the members feed again. Nothing you posted is lost.</p>
           </div>
-          <Link to={`/p/${id}`} className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
+          <Link to={`/p/${id}`} className="toy inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
             Renew
           </Link>
         </div>
@@ -270,7 +270,7 @@ function Owned({ id }: { id: string }) {
       {p && (
         <>
           {p.kind === 'digital' && p.url && (
-            <a href={p.url} target="_blank" rel="noreferrer" className="toy mt-md flex min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
+            <a href={p.url} target="_blank" rel="noreferrer" className="toy mt-md flex min-h-[48px] md:min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
               Open your download
             </a>
           )}
@@ -339,14 +339,14 @@ function Owned({ id }: { id: string }) {
             <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
               <p className="m-0 text-card-title">{p.startsAt ? dateTime(p.startsAt) : 'Date to be announced'}</p>
               {p.meetingUrl ? (
-                <a href={p.meetingUrl} target="_blank" rel="noreferrer" className="toy mt-sm inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
+                <a href={p.meetingUrl} target="_blank" rel="noreferrer" className="toy mt-sm inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
                   Join the event
                 </a>
               ) : (
                 <p className="mt-xs m-0 text-card-note text-ink-soft">The joining link appears here once the host adds it.</p>
               )}
               {p.replayUrl && (
-                <a href={p.replayUrl} target="_blank" rel="noreferrer" className="toy toy-ink mt-sm ml-xs inline-flex min-h-[48px] items-center rounded-pill border-2 border-ink bg-card px-md font-semibold">
+                <a href={p.replayUrl} target="_blank" rel="noreferrer" className="toy toy-ink mt-sm ml-xs inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center rounded-pill border-2 border-ink bg-card px-md font-semibold">
                   Watch the recording
                 </a>
               )}
@@ -357,12 +357,12 @@ function Owned({ id }: { id: string }) {
               {lapsed ? (
                 <div className="mt-md flex flex-wrap-reverse items-center justify-between gap-sm rounded-card bg-card p-md shadow-toy-soft">
                   <p className="m-0 min-w-0 flex-1 basis-[60%] text-headline">Your membership ended on {day(myOrder?.expiresAt ?? '')}.</p>
-                  <Link to={`/p/${p.id}`} className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
+                  <Link to={`/p/${p.id}`} className="toy inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
                     Renew
                   </Link>
                 </div>
               ) : (
-                <Link to={`/community?product=${p.id}`} className="toy mt-md flex min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
+                <Link to={`/community?product=${p.id}`} className="toy mt-md flex min-h-[48px] md:min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
                   Open the members feed
                 </Link>
               )}

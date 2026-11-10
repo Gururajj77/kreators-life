@@ -41,7 +41,7 @@ export function SignOut({ compact = false, iconOnly = false, className = '' }: {
         disabled={signout.isPending}
         aria-label={iconOnly ? 'Sign out' : undefined}
         title={iconOnly ? 'Sign out' : undefined}
-        className={`toy inline-flex items-center justify-center gap-xs rounded-pill border-2 border-r1/40 bg-transparent font-semibold text-r1 hover:bg-r1/10 disabled:opacity-50 ${iconOnly ? 'size-[44px]' : compact ? 'min-h-[44px] px-sm text-subhead' : 'min-h-[48px] px-md text-callout'} ${className}`}
+        className={`toy inline-flex items-center justify-center gap-xs rounded-pill border-2 border-r1/40 bg-transparent font-semibold text-r1 hover:bg-r1/10 disabled:opacity-50 ${iconOnly ? 'size-[44px]' : compact ? 'min-h-[36px] md:min-h-[44px] tap-pad px-sm text-subhead' : 'min-h-[40px] md:min-h-[48px] tap-pad px-md text-callout'} ${className}`}
         style={{ '--toy-color': 'var(--color-r1)' } as CSSProperties}
       >
         <DoorIcon size={compact || iconOnly ? 18 : 18} />
@@ -55,7 +55,7 @@ export function SignOut({ compact = false, iconOnly = false, className = '' }: {
         </p>
         <div className="mt-md flex flex-col gap-xs">
           {deviceOnly && (
-            <Link to="/onboarding" className="toy inline-flex min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink" onClick={() => setAsking(false)}>
+            <Link to="/onboarding" className="toy inline-flex min-h-[48px] md:min-h-[56px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink" onClick={() => setAsking(false)}>
               Add an email first
             </Link>
           )}

@@ -43,7 +43,7 @@ export function FocusDashboard() {
       <div className="flex flex-wrap items-center gap-xs">
         <div className="flex gap-xs" role="group" aria-label="Show by">
         {FOCUS_VIEWS.map((v) => (
-          <button key={v.key} type="button" aria-pressed={view === v.key} onClick={() => setView(v.key)} className={`toy min-h-[44px] rounded-pill border-2 px-md text-subhead font-medium ${view === v.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+          <button key={v.key} type="button" aria-pressed={view === v.key} onClick={() => setView(v.key)} className={`toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-md text-subhead font-medium ${view === v.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
             {v.name}
           </button>
         ))}
@@ -51,7 +51,7 @@ export function FocusDashboard() {
 
         <div className="ml-auto flex gap-xs" role="group" aria-label="Show focus time in">
         {(['min', 'hours'] as const).map((u) => (
-          <button key={u} type="button" aria-pressed={unit === u} onClick={() => setUnit(u)} className={`toy min-h-[44px] rounded-pill border-2 px-md text-subhead font-medium ${unit === u ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+          <button key={u} type="button" aria-pressed={unit === u} onClick={() => setUnit(u)} className={`toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-md text-subhead font-medium ${unit === u ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
             {u === 'min' ? 'Minutes' : 'Hours'}
           </button>
         ))}

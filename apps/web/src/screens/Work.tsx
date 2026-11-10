@@ -2,7 +2,8 @@ import { money, OPPORTUNITY_TYPES, SKILLS, type Application, type ApplicationSta
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { MediaSection } from '../components/MediaSection';
+import { MediaSection, useMediaMenuItem } from '../components/MediaSection';
+import { MoreMenu } from '../components/MoreMenu';
 import { Button } from '../components/Button';
 import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
@@ -184,9 +185,7 @@ export function Work() {
             ))}
           </ul>
           <Pager page={d?.draftPage} prefix="d" label="your listings" />
-          <div className="mt-xs">
-            <ErrorLine e={setStatus.error} />
-          </div>
+          <ErrorLine e={setStatus.error} className="mt-xs" />
         </section>
       )}
 
@@ -290,7 +289,7 @@ function PostSheet({ open, onClose, onPosted }: { open: boolean; onClose: () => 
           <legend className="text-subhead font-semibold">Type</legend>
           <div className="mt-xs flex flex-wrap gap-xs">
             {OPPORTUNITY_TYPES.map((t) => (
-              <button key={t} type="button" aria-pressed={type === t} onClick={() => setType(t)} className={`min-h-[44px] rounded-pill border-2 px-sm text-subhead font-medium ${type === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+              <button key={t} type="button" aria-pressed={type === t} onClick={() => setType(t)} className={`min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm text-subhead font-medium ${type === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
                 {typeName(t)}
               </button>
             ))}
@@ -300,7 +299,7 @@ function PostSheet({ open, onClose, onPosted }: { open: boolean; onClose: () => 
           <legend className="text-subhead font-semibold">Skills</legend>
           <div className="mt-xs flex flex-wrap gap-xs">
             {SKILLS.map((s) => (
-              <button key={s} type="button" aria-pressed={skills.includes(s)} onClick={() => toggleSkill(s)} className={`min-h-[44px] rounded-pill border-2 px-sm text-subhead font-medium ${skills.includes(s) ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+              <button key={s} type="button" aria-pressed={skills.includes(s)} onClick={() => toggleSkill(s)} className={`min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm text-subhead font-medium ${skills.includes(s) ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
                 {s}
               </button>
             ))}
@@ -311,7 +310,7 @@ function PostSheet({ open, onClose, onPosted }: { open: boolean; onClose: () => 
           {/* Three short equal choices across the full width in equal parts (as PeriodFilter). */}
           <div className="mt-xs grid grid-cols-3 gap-xs">
             {(['remote', 'on_site', 'hybrid'] as const).map((m) => (
-              <button key={m} type="button" aria-pressed={locationMode === m} onClick={() => setLocationMode(m)} className={`min-h-[44px] min-w-0 rounded-pill border-2 px-sm text-subhead font-medium ${locationMode === m ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+              <button key={m} type="button" aria-pressed={locationMode === m} onClick={() => setLocationMode(m)} className={`min-h-[36px] md:min-h-[44px] tap-pad min-w-0 rounded-pill border-2 px-sm text-subhead font-medium ${locationMode === m ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
                 {typeName(m)}
               </button>
             ))}
@@ -377,6 +376,9 @@ export function Opportunity() {
   // Withdrawing and closing ask first in a sheet.
   const [asking, setAsking] = useState<'withdraw' | 'close' | null>(null);
   const setClubFlag = useMutation({ mutationFn: (clubOnly: boolean) => api.setOpportunity(id, q.data?.opportunity.status ?? 'draft', clubOnly), onSuccess: () => q.refetch() });
+  // "Add pictures and videos" sits with the page's actions on the cover (a More menu), never loose between the cover and the first card.
+  const [editingMedia, setEditingMedia] = useState(false);
+  const mediaItem = useMediaMenuItem('opportunity', id, () => setEditingMedia(true));
 
   if (q.isError) {
     return (
@@ -403,9 +405,10 @@ export function Opportunity() {
             <Chips items={o.skillsRequired} end />
           </>
         }
+        actions={mediaItem ? <MoreMenu label={`More for ${o.title}`} title={o.title} items={[mediaItem]} /> : undefined}
       />
 
-      <MediaSection type="opportunity" id={o.id} />
+      <MediaSection type="opportunity" id={o.id} trigger={null} open={editingMedia} onOpenChange={setEditingMedia} />
 
       <section className="mt-lg rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="about-heading">
         <h2 id="about-heading" className="text-title2">
@@ -451,7 +454,7 @@ export function Opportunity() {
                   Withdraw
                 </Button>
               )}
-              <ErrorLine e={setApp.error} />
+              <ErrorLine e={setApp.error} className="mt-xs" />
             </div>
           ) : closed ? (
             <p className="mt-sm m-0 text-subhead text-ink-soft">Applications are closed.</p>
@@ -480,32 +483,35 @@ export function Opportunity() {
       {d.owner && (
         <>
           <section className="mt-lg" aria-labelledby="listing-heading">
-            <h2 id="listing-heading" className="text-title2">
-              Your listing
-            </h2>
-            <div className="mt-sm flex flex-wrap gap-xs">
-              {o.status !== 'published' && (
-                <Button onClick={() => setStatus.mutate('published')} disabled={setStatus.isPending}>
-                  Publish
-                </Button>
-              )}
-              {o.status !== 'closed' && (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setStatus.reset();
-                    setAsking('close');
-                  }}
-                  disabled={setStatus.isPending}
-                >
-                  Close
-                </Button>
-              )}
-              {o.status === 'closed' && (
-                <Button variant="outline" onClick={() => setStatus.mutate('draft')} disabled={setStatus.isPending}>
-                  Back to draft
-                </Button>
-              )}
+            {/* The listing's state actions sit level with its title at the right, like a section's action; the setting goes under them. */}
+            <div className="flex flex-wrap items-center justify-between gap-sm">
+              <h2 id="listing-heading" className="text-title2">
+                Your listing
+              </h2>
+              <div className="flex flex-wrap justify-end gap-xs">
+                {o.status !== 'published' && (
+                  <Button onClick={() => setStatus.mutate('published')} disabled={setStatus.isPending}>
+                    Publish
+                  </Button>
+                )}
+                {o.status !== 'closed' && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setStatus.reset();
+                      setAsking('close');
+                    }}
+                    disabled={setStatus.isPending}
+                  >
+                    Close
+                  </Button>
+                )}
+                {o.status === 'closed' && (
+                  <Button variant="outline" onClick={() => setStatus.mutate('draft')} disabled={setStatus.isPending}>
+                    Back to draft
+                  </Button>
+                )}
+              </div>
             </div>
             <label className="toy mt-sm flex min-h-[48px] cursor-pointer items-center gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
               <input type="checkbox" checked={o.clubOnly} onChange={(e) => setClubFlag.mutate(e.target.checked)} disabled={setClubFlag.isPending} className="size-[20px] accent-ink" />
@@ -514,17 +520,20 @@ export function Opportunity() {
                 <span className="block text-card-note text-ink-soft">Only Club members see it and can apply.</span>
               </span>
             </label>
-            <ErrorLine e={setStatus.error} />
+            <ErrorLine e={setStatus.error} className="mt-xs" />
           </section>
           <section className="mt-lg" aria-labelledby="applicants-heading">
             <h2 id="applicants-heading" className="text-title2">
               Applicants, {d.applications.length}
             </h2>
             {d.applications.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">No one has applied yet.</p>}
-            <label className="mt-sm block">
-              <span className="block text-subhead">Note to send with a decision</span>
-              <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Optional" className={FIELD} />
-            </label>
+            {/* The note goes with a decision, so it shows only while there is someone to decide on. */}
+            {d.applications.length > 0 && (
+              <label className="mt-sm block">
+                <span className="block text-subhead">Note to send with a decision</span>
+                <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Optional" className={FIELD} />
+              </label>
+            )}
             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
               {d.applications.map((a) => (
                 <li key={a.id}>
@@ -533,9 +542,7 @@ export function Opportunity() {
               ))}
             </ul>
             <Pager page={d.page} label="applicants" />
-            <div className="mt-xs">
-              <ErrorLine e={setApp.error} />
-            </div>
+            <ErrorLine e={setApp.error} className="mt-xs" />
           </section>
         </>
       )}

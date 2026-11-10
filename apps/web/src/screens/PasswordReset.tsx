@@ -33,7 +33,7 @@ export function Forgot() {
           <p className="mt-xs m-0 text-subhead text-ink-soft">
             If <span className="font-semibold text-ink">{email}</span> has an account, a reset link is on its way. It works once, for {send.data.minutes} minutes.
           </p>
-          <Link to="/signin" className="toy mt-md inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
+          <Link to="/signin" className="toy mt-md inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
             Back to sign in
           </Link>
         </div>
@@ -117,7 +117,7 @@ export function ResetPassword() {
           </Button>
         </form>
       ) : (
-        <Link to="/forgot" className="toy mt-md inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
+        <Link to="/forgot" className="toy mt-md inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
           Ask for a new one
         </Link>
       )}

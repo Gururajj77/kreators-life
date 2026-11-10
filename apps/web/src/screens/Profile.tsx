@@ -16,6 +16,7 @@ import { Icon } from '../components/Icon';
 import { ArrowUpRight, ShoppingBag, UserRound, type LucideIcon } from 'lucide-react';
 import { FIELD } from '../lib/ui';
 import { ErrorLine } from '../components/ErrorLine';
+import { StickyAction } from '../components/StickyAction';
 import { useCopy } from '../lib/clipboard';
 
 
@@ -37,7 +38,7 @@ function Chips({ legend, options, value, onChange, max, hint }: { legend: string
           const on = value.includes(o);
           const full = Boolean(max && value.length >= max && !on);
           return (
-            <button key={o} type="button" aria-pressed={on} disabled={full} onClick={() => toggle(o)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium disabled:opacity-50 ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={o} type="button" aria-pressed={on} disabled={full} onClick={() => toggle(o)} className={`toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm py-0 md:py-xs text-subhead font-medium disabled:opacity-50 ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {o}
             </button>
           );
@@ -53,7 +54,7 @@ function OneOf({ legend, options, value, onChange }: { legend: string; options: 
       <legend className="text-subhead font-semibold">{legend}</legend>
       <div className="fill-row-all mt-xs flex flex-wrap gap-xs">
         {options.map((o) => (
-          <button key={o} type="button" aria-pressed={value === o} onClick={() => onChange(value === o ? '' : o)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${value === o ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+          <button key={o} type="button" aria-pressed={value === o} onClick={() => onChange(value === o ? '' : o)} className={`toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm py-0 md:py-xs text-subhead font-medium ${value === o ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
             {o}
           </button>
         ))}
@@ -116,7 +117,8 @@ function ProfileView({ user }: { user: User }) {
         lede="What brands, hosts and other people see. Your journal and wellbeing never appear here."
       >
         {link ? (
-          <div className="rounded-tile bg-card p-sm shadow-toy-soft">
+          // The same 16px inset as the form card under it, so the two share one left edge.
+          <div className="rounded-tile bg-card p-md shadow-toy-soft">
             <p className="m-0 text-subhead font-semibold">Your public page</p>
             <p className="m-0 break-all text-callout">{link}</p>
             <div className="mt-sm flex flex-wrap gap-xs">
@@ -124,7 +126,7 @@ function ProfileView({ user }: { user: User }) {
                 {copier.said === 'Copied' ? 'Copied' : 'Copy'}
               </Button>
               {copier.said && copier.said !== 'Copied' && <p role="status" className="m-0 basis-full text-subhead text-ink-soft">{copier.said}</p>}
-              <Link to={`/u/${user.handle}`} className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
+              <Link to={`/u/${user.handle}`} className="toy inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
                 Open
               </Link>
             </div>
@@ -234,7 +236,7 @@ function ProfileView({ user }: { user: User }) {
               { timeout: 8000 },
             );
           }}
-          className="toy toy-soft inline-flex min-h-[48px] items-center justify-center rounded-pill bg-card px-md text-subhead font-medium disabled:opacity-60"
+          className="toy toy-soft inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center justify-center rounded-pill bg-card px-md text-subhead font-medium disabled:opacity-60"
         >
           {locating ? 'Finding you' : coords ? 'Position ready to save; tap to clear' : coords === null ? 'Position will be removed on save' : user.hasLocation ? 'Position saved; tap to remove' : 'Use my position for nearby matching'}
         </button>
@@ -257,18 +259,17 @@ function ProfileView({ user }: { user: User }) {
             ))}
           </ul>
         </fieldset>
-        {/* One save, in a bar that sticks to the bottom of the screen while there is something to save. It rests above the assistant's round
-            button (60px, 96px up on a phone, 16px from the tablet), so the button never sits on Save profile, until the laptop column has
-            moved clear of the button's corner. */}
+        {/* One save, in a bar that sticks to the bottom of the screen while there is something to save (StickyAction: above the tab bar on a
+            phone, the assistant's button rising over it; from the tablet it rests above that button until the laptop column is clear of it). */}
         {(dirty || saved || save.isError) && (
-          <div className="sticky bottom-[calc(var(--spacing-xl)*2+var(--spacing-lg)+var(--spacing-sm)+env(safe-area-inset-bottom))] z-10 -mx-xs flex flex-wrap items-center justify-between gap-sm rounded-tile border-2 border-line bg-card-strong p-sm shadow-toy-soft md:bottom-[calc(var(--spacing-xl)+var(--spacing-md)+var(--spacing-xs))] xl:bottom-md" role="region" aria-label="Save your profile">
+          <StickyAction className="-mx-xs flex flex-wrap items-center justify-between gap-sm rounded-tile border-2 border-line bg-card-strong p-sm shadow-toy-soft md:sticky md:bottom-[calc(var(--spacing-xl)+var(--spacing-md)+var(--spacing-xs))] md:z-10 xl:bottom-md" label="Save your profile" role="region">
             <div className="min-w-0 flex-1">
               {save.isError ? <ErrorLine e={save.error} /> : <p className="m-0 text-subhead text-ink-soft" aria-live="polite">{saved && !dirty ? 'Saved.' : 'You have changes that are not saved yet.'}</p>}
             </div>
             <Button type="submit" disabled={save.isPending || (!dirty && !save.isError)}>
               {save.isPending ? 'Saving' : saved && !dirty ? 'Saved' : 'Save profile'}
             </Button>
-          </div>
+          </StickyAction>
         )}
       </form>
 
@@ -399,7 +400,7 @@ function Portfolio() {
                 ['private', 'Only you'],
               ] as [PortfolioItem['visibility'], string][]
             ).map(([v, label]) => (
-              <button key={v} type="button" aria-pressed={visibility === v} onClick={() => setVisibility(v)} className={`toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${visibility === v ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+              <button key={v} type="button" aria-pressed={visibility === v} onClick={() => setVisibility(v)} className={`toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm py-0 md:py-xs text-subhead font-medium ${visibility === v ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                 {label}
               </button>
             ))}

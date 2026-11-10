@@ -15,7 +15,7 @@ import { Screen } from '../components/Screen';
 import { SkeletonList } from '../components/Skeleton';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
-import { FIELD, RED_YES } from '../lib/ui';
+import { FIELD, RED_YES, WATER_LANE } from '../lib/ui';
 import { todayLocal, dateTime, fullDay, inZone } from '../lib/date';
 import { lazyNamed } from '../lib/lazy';
 import { useJournal, useRefreshAll } from '../lib/queries';
@@ -23,6 +23,7 @@ import { Pager, usePage } from '../components/Pager';
 import { AppIcon } from '../components/AppIcon';
 import { EmergenceSlot } from '../components/EmergenceSlot';
 import { GratitudeCard, GratitudeLines } from '../components/GratitudeCard';
+import { StickyAction } from '../components/StickyAction';
 
 // The prompt list is a large block of text, so it downloads only when the Journal opens.
 const JournalPrompt = lazyNamed(() => import('../components/JournalPrompt'), 'JournalPrompt');
@@ -60,14 +61,12 @@ export function Journal() {
   const stats = q.data?.stats;
 
   return (
-    <Screen>
+    // From the laptop width the Water bubble sits at the bottom left, as on Daily: the column keeps its lane (WATER_LANE), so New entry is never under it.
+    <Screen className={WATER_LANE}>
       <header className="pt-lg">
         <BackLink to="/wellbeing">Wellbeing</BackLink>
         <h1 className="text-large-title">Journal</h1>
       </header>
-
-      {/* New entry is this screen's one solid button, so the glass tap is an outline here. */}
-      <RemindersSection quiet />
 
       {stats && (
         <Hero color="var(--color-r5)" deep="var(--deep-self)" className="mt-md">
@@ -112,9 +111,15 @@ export function Journal() {
         }}
         onGratitude={openGratitude}
       />
-      <Button full size="lg" className="mt-md" onClick={() => setEditing('new')}>
-        New entry
-      </Button>
+      {/* In a block of its own, so the water lane's left margin narrows it instead of pushing it past the column's right edge. */}
+      <div className="mt-md">
+        <Button full size="lg" onClick={() => setEditing('new')}>
+          New entry
+        </Button>
+      </div>
+      {/* Water and reminders comes after the journal's own number, its calendar and New entry (the hero rule: the number first). New entry
+          is this screen's one solid button, so the glass tap is an outline here. */}
+      <RemindersSection quiet />
 
       <GratitudeCard ref={gratHead} day={gratDay} onDay={openGratitude} />
 
@@ -367,7 +372,7 @@ function EntrySheet({ entry, date, start, onClose, onSaved }: { entry: JournalEn
             {STRESSORS.map((s) => {
               const on = stressors.includes(s);
               return (
-                <button key={s} type="button" aria-pressed={on} onClick={() => setStressors((p) => (on ? p.filter((x) => x !== s) : [...p, s]))} className={`min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+                <button key={s} type="button" aria-pressed={on} onClick={() => setStressors((p) => (on ? p.filter((x) => x !== s) : [...p, s]))} className={`min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm py-0 md:py-xs text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
                   {s}
                 </button>
               );
@@ -380,7 +385,7 @@ function EntrySheet({ entry, date, start, onClose, onSaved }: { entry: JournalEn
           </p>
         )}
         {/* The main save takes the free width, with Delete at its right on the same line (the founder's form rule, 2026-11-06). */}
-        <div className="flex flex-wrap items-center gap-xs">
+        <StickyAction className="flex flex-wrap items-center gap-xs">
           <Button type="submit" size="lg" className="flex-1" disabled={save.isPending || (!body.trim() && !title.trim())}>
             {existing ? 'Save changes' : 'Save entry'}
           </Button>
@@ -389,7 +394,7 @@ function EntrySheet({ entry, date, start, onClose, onSaved }: { entry: JournalEn
               Delete entry
             </Button>
           )}
-        </div>
+        </StickyAction>
         {existing && asking && (
           <div className="grid gap-sm rounded-tile bg-card p-sm" role="group" aria-label="Delete this entry?">
             <p className="m-0 text-headline">Delete this entry?</p>

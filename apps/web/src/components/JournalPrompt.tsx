@@ -116,8 +116,11 @@ export function JournalPrompt({ onWrite }: { onWrite: (start: { title: string; b
         <div className="md:w-[320px]">
           <FilterSelect label="Category" items={CATEGORY_ITEMS} value={kept.category} onChange={pick} />
         </div>
-        <Button variant="outline" className="relative overflow-hidden" onClick={() => draw(kept.category)}>
-          <span ref={shineRef} aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-1/3 -skew-x-12 bg-linear-to-r from-transparent via-on-ink/30 to-transparent opacity-0" />
+        <Button variant="outline" className="relative" onClick={() => draw(kept.category)}>
+          {/* The shine is clipped by its own box, so the button's 44px hit area (tap-pad) is never clipped with it. */}
+          <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-pill">
+            <span ref={shineRef} className="absolute inset-y-0 left-0 w-1/3 -skew-x-12 bg-linear-to-r from-transparent via-on-ink/30 to-transparent opacity-0" />
+          </span>
           Prompt me
         </Button>
       </div>

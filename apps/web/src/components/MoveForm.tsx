@@ -10,6 +10,7 @@ import { ErrorLine } from './ErrorLine';
 import { FieldLabel } from './Field';
 import { Segmented } from './fx/Segmented';
 import { RulerPicker } from './RulerPicker';
+import { StickyAction } from './StickyAction';
 
 /** Today and yesterday on the device: the only two days a movement log or an eating check-in can be for. */
 export function nearDays(): { today: string; yesterday: string } {
@@ -54,6 +55,11 @@ export function MoveForm({ kinds, onSave, initial, solid = true, saveLabel = 'Sa
       onDone?.(body);
     },
   });
+  const saveButton = (
+    <Button type="submit" full size="lg" variant={solid ? 'primary' : 'outline'} disabled={save.isPending || metres === 'bad'}>
+      {save.isPending ? 'Saving' : saveLabel}
+    </Button>
+  );
   return (
     <form
       className="grid gap-md"
@@ -111,9 +117,8 @@ export function MoveForm({ kinds, onSave, initial, solid = true, saveLabel = 'Sa
         <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} className={FIELD} />
       </FieldLabel>
       <ErrorLine e={save.error} />
-      <Button type="submit" full size="lg" variant={solid ? 'primary' : 'outline'} disabled={save.isPending || metres === 'bad'}>
-        {save.isPending ? 'Saving' : saveLabel}
-      </Button>
+      {/* The one main action (solid) stays in reach on a phone while the form runs past the screen (StickyAction). */}
+      {solid ? <StickyAction>{saveButton}</StickyAction> : saveButton}
       <p role="status" className="m-0 text-center text-caption text-ink-soft empty:hidden">
         {said}
       </p>

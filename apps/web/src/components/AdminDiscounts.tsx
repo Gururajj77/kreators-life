@@ -261,7 +261,7 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
             {/* Two equal choices across the full width in equal parts (as PeriodFilter), each 44px tall. */}
             <div className="mt-xs grid grid-cols-2 gap-xs">
               {(['percent', 'fixed'] as const).map((k) => (
-                <button key={k} type="button" aria-pressed={form.kind === k} onClick={() => set('kind', k)} className={`toy min-h-[44px] min-w-0 rounded-pill border-2 px-md py-xs text-subhead font-medium ${form.kind === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                <button key={k} type="button" aria-pressed={form.kind === k} onClick={() => set('kind', k)} className={`toy min-h-[36px] md:min-h-[44px] tap-pad min-w-0 rounded-pill border-2 px-md py-0 md:py-xs text-subhead font-medium ${form.kind === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                   {k === 'percent' ? 'A percent' : 'A fixed amount'}
                 </button>
               ))}

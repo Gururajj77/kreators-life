@@ -602,7 +602,7 @@ function Table({ game, focus, onFocus }: { game: CardGamePlay; focus: boolean; o
         value={deck.key}
         onChange={setDeckKey}
         className={`shrink-0 ${focus ? '' : 'mt-md'} ${focus && game.decks.length === 1 ? 'hidden' : ''}`}
-        pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-md text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+        pillClass={(on) => `toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-md text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
       />
 
       {/* One row: Draw (the one solid button), then Shuffle, Flip all and Clear table as round icons, water and focus mode at the right. How many
@@ -802,7 +802,7 @@ export function CardTable() {
         <div className="mt-md rounded-card bg-card p-md shadow-toy-soft" role="alert">
           <p className="m-0 font-semibold">{err || 'Could not open this game.'}</p>
           {info ? (
-            <Link to="/rewards#games" className="toy mt-sm inline-flex min-h-[48px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
+            <Link to="/rewards#games" className="toy mt-sm inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
               Unlock it in Rewards
             </Link>
           ) : (

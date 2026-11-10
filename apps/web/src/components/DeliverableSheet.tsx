@@ -33,6 +33,7 @@ import { useAgencyCan } from '../lib/agencyWorkspace';
 import { Toggle } from './Toggle';
 import { feeCents, FIELD } from '../lib/ui';
 import { FieldLabel } from './Field';
+import { StickyAction } from './StickyAction';
 
 
 const COPY = {
@@ -213,7 +214,7 @@ function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | 
           </p>
         )}
         {edit && (
-        <div className="mt-md flex flex-wrap items-center gap-xs">
+        <StickyAction className="mt-md flex flex-wrap items-center gap-xs">
           <Button type="submit" className="flex-1" disabled={save.isPending || !title.trim() || !client || badFee}>
             {save.isPending ? 'Saving' : item ? 'Save changes' : 'Add it'}
           </Button>
@@ -229,7 +230,7 @@ function Form({ item, clientId, clients, onClose }: { item: AgencyDeliverable | 
               Remove
             </Button>
           )}
-        </div>
+        </StickyAction>
         )}
       </form>
       {item && !member && (

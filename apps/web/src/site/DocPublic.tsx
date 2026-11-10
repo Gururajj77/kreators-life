@@ -127,7 +127,7 @@ export function DocPublic() {
                   </p>
                 )}
                 <div className="mt-sm">
-                  <Button type="submit" full disabled={!name.trim() || !agree || accept.isPending}>
+                  <Button low type="submit" full disabled={!name.trim() || !agree || accept.isPending}>
                     {accept.isPending ? 'Approving' : 'Approve'}
                   </Button>
                 </div>
@@ -171,7 +171,7 @@ export function DocPublic() {
                   )}
                   {sent && <p role="status" className="mt-xs m-0 text-subhead font-semibold">Sent. They have been told.</p>}
                   <div className="mt-xs">
-                    <Button type="submit" size="sm" variant="outline" full disabled={comment.isPending || !ask.trim()}>
+                    <Button low type="submit" size="sm" variant="outline" full disabled={comment.isPending || !ask.trim()}>
                       {comment.isPending ? 'Sending' : 'Send'}
                     </Button>
                   </div>

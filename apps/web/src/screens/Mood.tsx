@@ -49,11 +49,17 @@ export function Mood() {
   return (
     <>
       <div style={{ background: `linear-gradient(135deg, ${mood.color}, color-mix(in oklab, ${mood.color} 72%, var(--fill-shade)))`, color: mood.text }}>
-        <div className="mood-top safe-top mx-auto w-full max-w-[480px] px-md pb-lg pt-md md:ml-[240px] md:w-auto md:max-w-[1040px] md:px-lg lg:mx-auto lg:pl-[240px]">
-          <BackLink to="/wellbeing" inherit>
-            Wellbeing
-          </BackLink>
-          <h1 className="mt-sm text-center text-large-title">How are you feeling today?</h1>
+        {/* The same column as the Screen under it (its widths, the sidebar's width that folds, and the gap beside it from the laptop
+            width), so the picker and the cards below share one left edge; the room above the back button comes from an inner block, since
+            safe-top sets this one's top padding (the spacing pass, 2026-11-07). */}
+        <div className="mood-top safe-top mx-auto w-full max-w-[480px] px-md pb-lg md:ml-[var(--nav-w)] md:w-auto md:max-w-[1040px] md:px-lg lg:mx-auto lg:max-w-[calc(1040px+var(--spacing-lg))] lg:pl-[calc(var(--nav-w)+var(--spacing-lg))]">
+          <div className="md:pt-lg">
+            <BackLink to="/wellbeing" inherit>
+              Wellbeing
+            </BackLink>
+          </div>
+          {/* Read from the left on a phone, as every app's header is (the founder, 2026-11-07); the laptop keeps the picker's centred line. */}
+          <h1 className="mt-sm text-left text-large-title md:text-center">How are you feeling today?</h1>
           <div className="my-md flex justify-center">
             <MoodFace value={mood.value} size={140} color="rgba(255,255,255,0.22)" face="var(--color-on-fill)" label={mood.name} />
           </div>

@@ -1,6 +1,8 @@
 // A probeFile for shoot.mjs (SHOOT_PROBE=scripts/smoke/lone-probe.js).
 // Finds a wrapping row of pills, chips or buttons whose last line holds one item alone while the line above holds several:
 // the "lone tile" rule in CLAUDE.md, for rows of controls. Each hit is { line }.
+// A TabRow's sideways line (`data-pinned-scroll`, 2026-11-07) is one line by design, so it can never leave a pill alone: it is skipped,
+// and so is the row that holds it (the strip and its pinned All share one line).
 (() => {
   const hits = [];
   const where = (el) => {
@@ -15,6 +17,7 @@
   };
   for (const row of document.querySelectorAll('body *')) {
     if (hits.length > 40) break;
+    if (row.matches('[data-pinned-scroll]') || row.querySelector(':scope > [data-pinned-scroll]')) continue;
     const cs = getComputedStyle(row);
     if (cs.display !== 'flex' && cs.display !== 'inline-flex') continue;
     if (cs.flexWrap !== 'wrap' || cs.flexDirection.startsWith('column')) continue;

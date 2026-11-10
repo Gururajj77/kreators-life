@@ -138,7 +138,8 @@ export function CheckRow({
           <span className="min-w-0 flex-1">
             <span className={`block ${subtitle ? 'text-row-title' : 'text-body'} ${checked && strike ? 'text-ink-mute line-through' : ''}`}>{title}</span>
             {(subtitle || badge) && (
-              <span className="flex flex-wrap items-center gap-x-xs">
+              // The badge sits beside the note, or under it with xs between when the line is full (it touched the note's descenders).
+              <span className="flex flex-wrap items-center gap-xs">
                 {subtitle && <span className="text-card-note text-ink-soft">{subtitle}</span>}
                 {badge}
               </span>

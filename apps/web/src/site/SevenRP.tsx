@@ -25,6 +25,7 @@ import { PeekGuides } from './PeekGuides';
 import { evenGrid, evenTile } from '../lib/bento';
 import { lazyNamed } from '../lib/lazy';
 import { useRise } from './useRise';
+import { FollowStart } from './FollowStart';
 
 /** The seven pillars stacked, each with its character on top: red at the bottom, violet at the top. */
 export function Tower() {
@@ -160,7 +161,7 @@ function Explorer({ picks, value, onPick, label }: { picks: Choice[]; value: str
         }))}
         value={current.key}
         onChange={onPick}
-        pillClass={() => 'toy inline-flex min-h-[44px] items-center gap-xs rounded-pill bg-card-strong px-sm text-subhead font-medium aria-pressed:bg-ink aria-pressed:text-on-ink'}
+        pillClass={() => 'toy inline-flex min-h-[36px] tap-pad items-center gap-xs rounded-pill bg-card-strong px-sm text-subhead font-medium aria-pressed:bg-ink aria-pressed:text-on-ink'}
       />
       <ul className="m-0 hidden list-none flex-col gap-xs rounded-card bg-card p-xs shadow-toy-soft md:flex" role="group" aria-label={label}>
         {picks.map((p) => {
@@ -355,7 +356,7 @@ export function SevenRP() {
               where <em>yours stand</em>
             </h2>
             <p className="type-measure m-0 mt-sm text-callout text-on-fill">A short chat maps all seven, then builds a plan for the ones that need you most.</p>
-            <Link to={entry === '/home' ? '/home' : '/start'} className={`${SITE_PRIMARY_ON_GLASS} mt-md`}>
+            <Link to={entry === '/home' ? '/home' : '/start'} className={`${SITE_PRIMARY_ON_GLASS} mt-md`} data-main-action="">
               {entry === '/home' ? 'Go to app' : 'Start free'}
             </Link>
           </div>
@@ -363,6 +364,8 @@ export function SevenRP() {
           <PeekGuides />
         </motion.div>
       </section>
+      {/* The page's one main action is at its foot: on a phone it waits at the bottom edge until that place shows. */}
+      <FollowStart to={entry === '/home' ? '/home' : '/start'}>{entry === '/home' ? 'Go to app' : 'Start free'}</FollowStart>
     </SiteLayout>
   );
 }

@@ -170,7 +170,8 @@ export function Public() {
             }
             title={d.name}
             heading={
-              <div className="flex items-center justify-end gap-sm">
+              // On a phone the picture and the name read from the left, like every app's cover there (the founder, 2026-11-08); the laptop keeps them at the right.
+              <div className="flex items-center justify-start gap-sm md:justify-end">
                 {d.avatarUrl ? (
                   <img src={d.avatarUrl} alt={`${d.name}, profile picture`} width={72} height={72} fetchPriority="high" decoding="async" className="size-[72px] shrink-0 rounded-pill bg-paper object-cover shadow-toy-soft" onError={(e) => (e.currentTarget.style.display = 'none')} />
                 ) : (
@@ -178,7 +179,7 @@ export function Public() {
                     {d.name.slice(0, 1).toUpperCase()}
                   </span>
                 )}
-                <div className="min-w-0 text-right">
+                <div className="min-w-0 text-left md:text-right">
                   <h1 className="type-large break-words">{d.name}</h1>
                   {!d.isPrivate && (
                     <p className="m-0 mt-xs text-subhead text-ink-soft">
@@ -201,7 +202,7 @@ export function Public() {
             }
             actions={
               d.isPrivate ? undefined : d.mine ? (
-                <Link to="/profile" className="toy btn-outline inline-flex min-h-[48px] items-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-md text-callout text-ink">
+                <Link to="/profile" className="toy btn-outline inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-md text-callout text-ink">
                   <Icon icon={PenLine} size={18} />
                   Edit my page
                 </Link>
@@ -213,7 +214,7 @@ export function Public() {
                   {friendAction}
                 </>
               ) : (
-                <Link to="/" className="toy btn-primary inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md text-callout text-on-ink">
+                <Link to="/" className="toy btn-primary inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center rounded-pill bg-ink px-md text-callout text-on-ink">
                   Join to follow
                 </Link>
               )
@@ -457,7 +458,7 @@ function addFailed(e: unknown): string {
   return 'That did not work. Try again.';
 }
 /** A link drawn as Button's outline look, at rest and on hover. */
-const LINK_OUTLINE = 'toy toy-ink btn-outline inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-md text-headline text-ink';
+const LINK_OUTLINE = 'toy toy-ink btn-outline inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center justify-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-md text-headline text-ink';
 const NOBODY = 'This code does not work. Ask them to show theirs again.';
 
 /**

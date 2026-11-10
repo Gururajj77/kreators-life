@@ -38,7 +38,7 @@ export function SiteLayout({ children, wide = true, minimal = false }: { childre
   const setThemeMode = useTheme((s) => s.setMode);
   // Two classes, because Tailwind 4 orders `inline-flex` after `hidden`: a link that carries both would always show.
   const navBase =
-    'relative min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-pill px-sm text-callout text-ink-soft transition-colors hover:text-ink aria-[current=page]:text-ink';
+    'relative min-h-[40px] tap-pad shrink-0 items-center whitespace-nowrap rounded-pill px-sm text-callout text-ink-soft transition-colors hover:text-ink aria-[current=page]:text-ink';
   // Phones keep only the logo, "Go to app" and the theme button; the rest comes back from the laptop breakpoint.
   const navWide = `hidden lg:inline-flex ${navBase}`;
   // The header frosts once the page has moved: a one-pixel marker at the very top tells us when it has left the screen (no scroll listener).
@@ -57,7 +57,9 @@ export function SiteLayout({ children, wide = true, minimal = false }: { childre
   return (
     <div className="min-h-dvh overflow-x-clip text-ink">
       <div ref={top} aria-hidden="true" className="pointer-events-none absolute top-0 left-0 h-xs w-xs" />
-      <header data-scrolled={scrolled ? '' : undefined} className="fx-header safe-top relative z-30 md:sticky md:top-0">
+      {/* `data-follow-wait`: on a phone, where this header scrolls with the page, a page's FollowStart bar waits until it has left, so its
+          Go to app and the bar's Start free never show together (the founder, 2026-11-09). */}
+      <header data-top-bar="" data-follow-wait="" data-scrolled={scrolled ? '' : undefined} className="fx-header safe-top relative z-30 md:sticky md:top-0">
         {/* The header and the footer are the same width on every page, like the home page; only the reading column narrows. */}
         <div className="mx-auto flex min-w-0 max-w-[1080px] items-center justify-between gap-sm px-md py-xs md:px-lg lg:px-xl">
           {clock ? (
@@ -101,7 +103,9 @@ export function SiteLayout({ children, wide = true, minimal = false }: { childre
       <div ref={setConsentSlot} className="mx-auto max-w-[720px] px-md empty:hidden md:hidden" />
       {/* On this page (PageContents.tsx) draws here, so the keyboard meets it before the page and not after every control in it. */}
       <div data-contents-slot="" className="contents" />
-      <main className={`mx-auto ${wide ? 'max-w-[1080px]' : 'max-w-[720px]'} px-md md:px-lg lg:px-xl pb-xl`}>{children}</main>
+      {/* No bottom padding of its own: the footer's 64px margin is the one gap after the page (with both, the last line sat 128px over
+          the footer, an empty band). */}
+      <main className={`mx-auto ${wide ? 'max-w-[1080px]' : 'max-w-[720px]'} px-md md:px-lg lg:px-xl`}>{children}</main>
       {/* The footer (2026-11-05, laid out after the founder's FyndFlow footer): the brand and a glass card on the left, the links in three
           headed columns on the right, a hairline, then a bottom bar (who built it on the left, the main policies on the right), the
           privacy line, and the wordmark rising out of the foot behind fluted glass, over the four-colour ground. */}

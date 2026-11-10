@@ -174,7 +174,7 @@ export function VibeCheck() {
                   type="button"
                   aria-pressed={focus === t}
                   onClick={() => setFocus(t)}
-                  className={`min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${focus === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}
+                  className={`min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm py-0 md:py-xs text-subhead font-medium ${focus === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}
                 >
                   {t}
                 </button>
@@ -641,7 +641,7 @@ function AboutYou({ onNext }: { onNext: () => void }) {
             <input value={area} onChange={(e) => setArea(e.target.value)} maxLength={80} placeholder="Indiranagar" className="mt-xs w-full rounded-tile border-2 border-line bg-card px-sm py-sm text-body" />
           </label>
         </div>
-        <button type="button" onClick={locate} disabled={locating || coords !== null} className="toy toy-soft inline-flex min-h-[48px] items-center justify-center rounded-pill bg-card px-md text-subhead font-medium disabled:opacity-60">
+        <button type="button" onClick={locate} disabled={locating || coords !== null} className="toy toy-soft inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center justify-center rounded-pill bg-card px-md text-subhead font-medium disabled:opacity-60">
           {coords ? 'Position saved for nearby matching' : locating ? 'Finding you' : 'Use my position for nearby matching (optional)'}
         </button>
         <p className="m-0 text-caption text-ink-mute">Your position stays on the server and is only used to keep tables within twenty kilometres. Nobody sees it.</p>
@@ -672,7 +672,7 @@ function Picker({ label, options, chosen, color, deep, onPick }: { label: string
       </p>
       <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label={label}>
         {options.map((o) => (
-          <button key={o.title} type="button" aria-pressed={chosen === o.title} onClick={() => onPick(o.title)} className="toy toy-soft min-h-[44px] rounded-pill border-2 px-sm py-xs text-left text-subhead font-medium" style={chosen === o.title ? { background: color, borderColor: color, color: 'var(--color-on-fill)' } : { background: 'var(--color-card)', borderColor: 'transparent' }}>
+          <button key={o.title} type="button" aria-pressed={chosen === o.title} onClick={() => onPick(o.title)} className="toy toy-soft min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm py-0 md:py-xs text-left text-subhead font-medium" style={chosen === o.title ? { background: color, borderColor: color, color: 'var(--color-on-fill)' } : { background: 'var(--color-card)', borderColor: 'transparent' }}>
             {o.title}
           </button>
         ))}

@@ -85,7 +85,7 @@ export function LinksEditor({ initial }: { initial: LinkBlock[] }) {
               setEditing(blank(t));
               setIsNew(true);
             }}
-            className="toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill border-2 border-line bg-card px-sm text-subhead font-medium disabled:opacity-50"
+            className="toy toy-soft inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center gap-xs rounded-pill border-2 border-line bg-card px-sm text-subhead font-medium disabled:opacity-50"
           >
             <AppIcon name={LINK_BLOCK_META[t].icon} size={16} />
             {LINK_BLOCK_META[t].name}

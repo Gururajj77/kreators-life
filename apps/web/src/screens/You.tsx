@@ -162,14 +162,14 @@ function YouView({ data }: { data: MeResponse }) {
         }
       >
         <div className="flex flex-wrap items-center gap-xs">
-          <Link to={user.handle ? `/u/${user.handle}` : `/people/${user.id}`} className="toy toy-soft inline-flex min-h-[48px] items-center gap-xs rounded-pill bg-card px-md text-subhead font-semibold text-ink">
+          <Link to={user.handle ? `/u/${user.handle}` : `/people/${user.id}`} className="toy toy-soft inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center gap-xs rounded-pill bg-card px-md text-subhead font-semibold text-ink">
             <Icon icon={UserRound} size={18} />
             See my public page
           </Link>
-          <Link to="/profile" className="inline-flex min-h-[48px] items-center px-sm text-subhead text-ink-mute underline-offset-4 hover:text-ink hover:underline">
+          <Link to="/profile" className="inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center px-sm text-subhead text-ink-mute underline-offset-4 hover:text-ink hover:underline">
             Edit page
           </Link>
-          <Link to="/plans" className="toy toy-soft inline-flex min-h-[48px] w-full items-center justify-center gap-xs rounded-pill bg-card px-md text-subhead font-semibold text-ink lg:ml-auto lg:w-auto lg:justify-start">
+          <Link to="/plans" className="toy toy-soft inline-flex min-h-[40px] md:min-h-[48px] tap-pad w-full items-center justify-center gap-xs rounded-pill bg-card px-md text-subhead font-semibold text-ink lg:ml-auto lg:w-auto lg:justify-start">
             <Icon icon={WandSparkles} size={18} />
             Plans and credits
           </Link>
@@ -182,7 +182,10 @@ function YouView({ data }: { data: MeResponse }) {
           <h2 id="who-heading" className="min-w-0 text-title2">
             Who you are
           </h2>
-          <Link to="/onboarding?fresh=1" className="toy toy-soft ml-auto inline-flex min-h-[48px] shrink-0 items-center rounded-pill bg-card px-md text-subhead font-semibold text-ink">
+          {/* -my-xs: the 48px button reaches 8px above and below the title's row instead of making the row 48px tall, so the line under the
+              title sits as close to it as every other section's (it pushed it 11px further down). From the tablet up only: on a phone the
+              line runs under the button, so there the button keeps its row and the line stays clear of it. */}
+          <Link to="/onboarding?fresh=1" className="toy toy-soft md:-my-xs ml-auto inline-flex min-h-[40px] md:min-h-[48px] tap-pad shrink-0 items-center rounded-pill bg-card px-md text-subhead font-semibold text-ink">
             Match my apps again
           </Link>
         </div>
@@ -220,7 +223,7 @@ function YouView({ data }: { data: MeResponse }) {
               ['dark', 'Dark'],
             ] as [ThemeMode, string][]
           ).map(([m, label]) => (
-            <button key={m} type="button" aria-pressed={themeMode === m} onClick={() => setThemeMode(m)} className={`toy min-h-[48px] rounded-pill border-2 text-subhead font-medium ${themeMode === m ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={m} type="button" aria-pressed={themeMode === m} onClick={() => setThemeMode(m)} className={`toy min-h-[40px] md:min-h-[48px] tap-pad rounded-pill border-2 text-subhead font-medium ${themeMode === m ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {label}
             </button>
           ))}
@@ -232,7 +235,8 @@ function YouView({ data }: { data: MeResponse }) {
           Features
         </h2>
         <p className="mt-xs m-0 text-subhead text-ink-soft">Hide the apps you do not use. Nothing is deleted.</p>
-        <div className="mt-md">
+        {/* The next line (how each group starts, with Arrange apps) is the second line of this lede, so it follows it closely. */}
+        <div className="mt-sm">
           <AppGroups groups={featureGroups} fits={fits} open where="profile" />
         </div>
       </section>
@@ -263,7 +267,7 @@ function YouView({ data }: { data: MeResponse }) {
               <p className="m-0 text-card-title">Only on this device so far.</p>
               <p className="mt-xs m-0 text-card-note">Add an email and password and everything here comes with you to a new phone.</p>
             </div>
-            <Link to="/onboarding" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
+            <Link to="/onboarding" className="toy inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
               Create an account
             </Link>
           </div>
@@ -431,10 +435,10 @@ function YouView({ data }: { data: MeResponse }) {
             </p>
           </div>
           <div className="flex shrink-0 flex-col gap-xs">
-            <Link to="/rewards" className="toy toy-ink inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-ink bg-card px-md font-semibold text-ink">
+            <Link to="/rewards" className="toy toy-ink inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center justify-center rounded-pill border-2 border-ink bg-card px-md font-semibold text-ink">
               Rewards
             </Link>
-            <Link to="/leaderboard" className="toy toy-ink inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-ink bg-card px-md font-semibold text-ink">
+            <Link to="/leaderboard" className="toy toy-ink inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center justify-center rounded-pill border-2 border-ink bg-card px-md font-semibold text-ink">
               Rank
             </Link>
           </div>
@@ -556,7 +560,7 @@ function YouView({ data }: { data: MeResponse }) {
                   type="button"
                   aria-pressed={type === t}
                   onClick={() => setType(t)}
-                  className={`min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${type === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}
+                  className={`min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm py-0 md:py-xs text-subhead font-medium ${type === t ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}
                 >
                   {t}
                 </button>

@@ -607,9 +607,22 @@
     scroll-padding-top: 80px;
     scroll-padding-bottom: 120px;
   }
+  /* On a phone the assistant's round button (60px) floats 96px above the bottom, so its top is 156px up: the keyboard's stop lands 8px
+     above it, never under it (120px left a control at the right edge wholly under the button; the mobile check of 2026-11-07). */
+  @media not all and (min-width: 48rem) and (min-height: 30rem) {
+    html {
+      scroll-padding-bottom: calc(var(--spacing-xl) + var(--spacing-lg) + 68px + env(safe-area-inset-bottom));
+    }
+  }
   /* Select on Apps: its row sticks under the title bar, at most about 96px tall, so the keyboard's next stop lands clear of it too. */
   html:has([data-apps-selecting]) {
     scroll-padding-top: calc(env(safe-area-inset-top) + 52px + 96px + var(--spacing-sm));
+  }
+  /* A control inside a bar that sticks to the top (`data-top-bar`: the site's header, a whole-page chat's header, the coach's share row)
+     is always in view, so the 80px above must not make the browser scroll the page to "reveal" it on focus: it scrolled up 350px or more
+     for every Tab or arrow key (the mobile check of 2026-11-07). */
+  [data-top-bar] :where(a[href], button, input, select, textarea, summary, [tabindex]) {
+    scroll-margin-top: -80px;
   }
   /* A placeholder is text: it takes the quiet ink, which holds 4.5:1 on a field in both modes. */
   ::placeholder {
@@ -877,6 +890,45 @@
   }
   .scroll-row::-webkit-scrollbar {
     display: none;
+  }
+  /* A TabRow that does not fit (components/TabRow.tsx, the founder 2026-11-07): every pill on one line that scrolls sideways, with All
+     pinned outside it at the right. The strip bleeds 8px each way and pads the same, so a pill's ring and lift are not clipped; pills
+     snap to its start, so none rests half hidden; a fade at the end (and at the start once scrolled) says more lies past the edge. */
+  .tab-scroll {
+    --tab-fade-s: 0px;
+    --tab-fade-e: 0px;
+    position: relative;
+    display: flex;
+    /* Centred, not stretched: a pill wrapped onto two lines never makes the others taller than the pinned All beside them. */
+    align-items: center;
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: var(--spacing-xs);
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    margin: calc(var(--spacing-xs) * -1);
+    padding: var(--spacing-xs);
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: var(--spacing-xs) var(--spacing-lg);
+    scrollbar-width: none;
+    mask-image: linear-gradient(to right, transparent 0, black var(--tab-fade-s), black calc(100% - var(--tab-fade-e)), transparent 100%);
+  }
+  .tab-scroll::-webkit-scrollbar {
+    display: none;
+  }
+  .tab-scroll > * {
+    scroll-snap-align: start;
+  }
+  /* A pill too long for the line wraps inside itself, short enough to rest whole clear of the end fade. */
+  .tab-scroll > [data-wrap] {
+    max-width: calc(100% - var(--spacing-lg) + var(--spacing-xs));
+  }
+  .tab-scroll[data-more-start] {
+    --tab-fade-s: var(--spacing-md);
+  }
+  .tab-scroll[data-more-end] {
+    --tab-fade-e: var(--spacing-lg);
   }
   /* A wrapping row of pills or buttons that fills each line on a phone, so a pill that wraps onto a line of its own
      spans the row instead of standing alone (the lone-pill rule; scripts/smoke/lone-probe.js). */
@@ -1612,6 +1664,13 @@ nav .bg-card {
   }
 }
 
+/* A list with nothing in it yet takes no room: its own margin (a section's mt-sm under its line) would otherwise leave an empty band, and
+   in a gap stack it would hold a second gap (the founder, 2026-11-08: "check redundant spacing"; scripts/smoke/spacing-probe.js). */
+ul:empty:not([aria-live]),
+ol:empty:not([aria-live]) {
+  display: none;
+}
+
 /* Checkboxes and radios take the calm violet, not the browser's loud blue. */
 input[type='checkbox'],
 input[type='radio'] {
@@ -2065,9 +2124,11 @@ input[type='radio'] {
     0 0 0 1px var(--edge),
     0 2px 6px var(--shade-2);
 }
+/* A segment is 36px on a phone and 44 from `md` (2026-11-07, lower buttons), so the capsule is 44 on a phone; its ::before keeps the 44px
+   hit area, reaching only to the capsule's own edge. */
 .fx-seg > button {
   position: relative;
-  min-height: 44px;
+  min-height: 36px;
   padding: 0 var(--spacing-md);
   border-radius: var(--radius-pill);
   font-size: var(--text-footnote);
@@ -2077,6 +2138,19 @@ input[type='radio'] {
   color: var(--label-2);
   white-space: nowrap;
   transition: color 160ms ease;
+}
+.fx-seg > button::before {
+  content: '';
+  position: absolute;
+  top: min(0px, calc(50% - 22px));
+  bottom: min(0px, calc(50% - 22px));
+  left: min(0px, calc(50% - 22px));
+  right: min(0px, calc(50% - 22px));
+}
+@media (width >= 48rem) and (height >= 30rem) {
+  .fx-seg > button {
+    min-height: 44px;
+  }
 }
 .fx-seg > button[aria-pressed='true'],
 .fx-seg > button[aria-selected='true'] {
@@ -3879,6 +3953,25 @@ select.inv-edit { appearance: none; cursor: pointer; }
   }
 }
 
+/* Lower buttons (2026-11-07, the founder: "make the buttons height lesser, this is more for mobile and for frontend website too"): a
+   button drawn under 44px (40 for the everyday size on a phone and on the public site, 36 for the small size and chips) keeps a 44 by 44
+   hit area through an invisible ::before that reaches out only as far as it needs, centred on the button, so a finger still finds it and
+   a neighbour 8px away is never covered. In the components layer, so an `absolute` or `sticky` utility on the same element still wins.
+   It cannot help an element that clips its own overflow (`fx-shimmer`, `truncate`), so those stay 44 or taller. */
+@layer components {
+  .tap-pad {
+    position: relative;
+  }
+  .tap-pad::before {
+    content: '';
+    position: absolute;
+    top: min(0px, calc(50% - 22px));
+    bottom: min(0px, calc(50% - 22px));
+    left: min(0px, calc(50% - 22px));
+    right: min(0px, calc(50% - 22px));
+  }
+}
+
 /* The red yes, one look everywhere (the founder, 2026-11-07: "red yes can be solid on hover or second confirmation tap", his own exception
    to "never a new filled hover"): the pale red outline at rest, solid red with white words on a mouse hover, on keyboard focus and while
    pressed. A second-tap control keeps its own look at rest and wears `.red-armed` only while its label says "Tap again to …". White on
@@ -4626,7 +4719,8 @@ html.kanban-drag.kanban-no * {
   flex: none;
   display: grid;
   grid-template-rows: auto auto;
-  row-gap: 3px;
+  /* 8px between the month names and the first week (it was 3px: the names sat on the cells; 2026-11-07). */
+  row-gap: var(--spacing-xs);
 }
 /* The weeks scroll; the day names stay put beside them. The scroller bleeds only 8px (room for the grid's focus ring), not the row's 16px,
    so the first week lines up with the card's padding. */
@@ -4649,8 +4743,8 @@ html.kanban-drag.kanban-no * {
   display: grid;
   grid-template-rows: repeat(7, 12px);
   row-gap: 3px;
-  /* under the month row (14px) and its 3px gap, and one cell gap from the first week */
-  border-top: 17px solid transparent;
+  /* under the month row (14px) and its 8px gap, so Mon sits on the first week's row */
+  border-top: calc(14px + var(--spacing-xs)) solid transparent;
   border-right: var(--spacing-xs) solid transparent;
 }
 .act-grid {
@@ -4851,6 +4945,17 @@ li.sort-lifted {
 }
 .screen > header:first-child:has(> [data-back]) > p {
   text-align: right;
+}
+/* A very narrow phone (under 360px, the founder's yes of 2026-11-09): beside the back button a one-word title ("Mindfulness") no longer
+   fits at the large title's size, so it steps down to title1 rather than run past the edge; never cut or hyphenated. In em, so a larger
+   text size in the browser moves the line with it; 360 and up keep the large title exactly. */
+@media (max-width: 22.49em) {
+  .screen > header:first-child:has(> [data-back]) h1.text-large-title {
+    font-size: var(--text-title1);
+    line-height: var(--text-title1--line-height);
+    letter-spacing: var(--text-title1--letter-spacing);
+    font-weight: var(--text-title1--font-weight);
+  }
 }
 /* A header's actions (PageHeader's `aside`): a line of their own at the right on a phone; the end of the title's line from the tablet up. */
 .screen > header:first-child:has(> [data-back]) > [data-aside] {
@@ -6311,5 +6416,111 @@ body:has([data-assistant-panel]) .page-contents {
   .pc-slot[data-now] .pc-dash,
   .pc-slot[data-pointed] .pc-dash {
     background-color: Highlight;
+  }
+}
+
+/* The main action that stays in reach on a phone (StickyAction and FollowAction, components/StickyAction.tsx; the founder, 2026-11-07).
+   A long form's action row is sticky: held just above the tab bar inside the app (`nav[data-tabbar]`), above the bottom edge on the
+   public site and pages without one, and at the foot of a popup's panel, and back in its place once that place is on screen. Nothing
+   moves in the flow: while it is held (`data-stuck`) a bar of --card-strong is drawn behind it by a ::before, edge to edge (--sa-l and
+   --sa-r, measured), from one sm gap above it down to the tab bar or the edge, so the row's own look and width never change. Under sheets
+   (z-index 40 and up) and the tab bar (30). */
+.sticky-action {
+  --sticky-floor: env(safe-area-inset-bottom);
+  --sticky-under: env(safe-area-inset-bottom);
+}
+:root:has(nav[data-tabbar]) .sticky-action {
+  /* The tab bar's own height, measured by StickyAction (--tabbar-h, its safe area included). */
+  --sticky-floor: var(--tabbar-h, calc(76px + env(safe-area-inset-bottom)));
+  --sticky-under: 0px;
+}
+/* A popup's panel keeps 64px (and the safe area) of room at its foot, which sticky counts from: the bar comes down into that room. */
+.dialog-panel .sticky-action {
+  --sticky-floor: -64px !important;
+  --sticky-under: env(safe-area-inset-bottom) !important;
+}
+@media not all and (min-width: 48rem) and (min-height: 30rem) {
+  .sticky-action {
+    position: sticky;
+    bottom: calc(var(--sticky-floor) + var(--spacing-sm));
+    z-index: 20;
+    isolation: isolate;
+  }
+  /* Its main button is disabled (Add task before a title is typed): the row waits in its place, with no bar, until it can be used. */
+  .sticky-action[data-idle] {
+    position: static;
+  }
+  .sticky-action[data-stuck]::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    top: calc(-1 * (var(--spacing-sm) + var(--sa-t, 0px)));
+    bottom: calc(-1 * (var(--spacing-sm) + var(--sticky-under) + var(--sa-b, 0px)));
+    left: calc(-1 * var(--sa-l, 0px));
+    right: calc(-1 * var(--sa-r, 0px));
+    border-top: 1px solid var(--color-line);
+    /* Solid: the strong card over the page's own base, so nothing scrolling behind shows through. It takes taps, so a tap beside the
+       button never reaches a field hidden under the bar. */
+    background: linear-gradient(var(--card-strong), var(--card-strong)), var(--page-base-a);
+  }
+  /* A field brought into view by the browser (Tab, find in page) stops above a held bar. */
+  :root[data-sticky-held] {
+    scroll-padding-bottom: calc(var(--sticky-action-h, 0px) + var(--tabbar-h, env(safe-area-inset-bottom)));
+  }
+  /* Inside the app the assistant's button rides above a held bar, so the stop clears the lifted button too (see the html rule above). */
+  :root[data-sticky-held]:has(nav[data-tabbar]) {
+    scroll-padding-bottom: calc(var(--sticky-action-h, 0px) + var(--spacing-xl) + var(--spacing-lg) + 68px + env(safe-area-inset-bottom));
+  }
+  /* The assistant's round button and the privacy card float where a held bar rests: they rise above it while it is held. */
+  :root[data-sticky-held] .lift-over-sticky {
+    translate: 0 calc(-1 * var(--sticky-action-h, 0px));
+  }
+  .follow-action {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 30;
+    border-top: 1px solid var(--color-line);
+    background: linear-gradient(var(--card-strong), var(--card-strong)), var(--page-base-a);
+    padding: var(--spacing-sm) var(--spacing-md) calc(var(--spacing-sm) + env(safe-area-inset-bottom));
+  }
+}
+.lift-over-sticky {
+  transition: translate 200ms var(--ease-open);
+}
+/* Riding above a row just let go (StickyAction, 2026-11-09): it moves with the row as the page scrolls, so no easing lags it behind. */
+:root[data-sticky-ride] .lift-over-sticky {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lift-over-sticky {
+    transition: none;
+  }
+}
+@media (min-width: 48rem) and (min-height: 30rem) {
+  .follow-action {
+    display: none;
+  }
+}
+.follow-action[hidden] {
+  display: none;
+}
+/* A phone on its side (or a window the keyboard shrank) and a keyboard that is up keep the action in its place: there the bar and the tab
+   bar would take close to half the window, or sit over the field being typed in (the mobile check of 2026-11-07, ROOMY and data-kb-up in
+   StickyAction.tsx). The Public page's own `md:sticky` is a laptop's and is left alone. */
+@media not all and (min-width: 48rem) and (min-height: 30rem) {
+  @media (max-height: 25.99rem) {
+    .sticky-action {
+      position: static;
+    }
+    .follow-action {
+      display: none;
+    }
+  }
+  :root[data-kb-up] .sticky-action {
+    position: static;
+  }
+  :root[data-kb-up] .follow-action {
+    display: none;
   }
 }

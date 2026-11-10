@@ -315,8 +315,8 @@ export function AgencyInvoice() {
         back={{ to: '/agency?tab=invoices', label: 'Invoices' }}
         title={inv.number}
         lede={
-          <span className="inline-flex flex-wrap items-center justify-end gap-x-sm gap-y-xs">
-            {/* The save line first, so the status ends flush with the title even while the line is empty. */}
+          <span className="inline-flex flex-row-reverse flex-wrap items-center justify-end gap-x-sm gap-y-xs md:flex-row">
+            {/* The save line first, so the status ends flush with the title even while the line is empty; on a phone the row is reversed and starts at the left, so the status starts flush with it there. */}
             <span role="status" aria-live="polite" className="inline-flex min-h-[24px] items-center gap-xs">
               {save.isPending ? 'Saving' : note}
               {note === 'Saved' && undo && !save.isPending && (
@@ -360,7 +360,8 @@ export function AgencyInvoice() {
         }
       />
 
-      <div className="legal-host">
+      {/* 16px between the cover and the paper, as on an agreement (the print rule takes it off). */}
+      <div className="legal-host mt-md">
         <div aria-hidden="true" />
         <InvoiceView invoice={paper} totals={totals} editor={editor} />
       </div>
@@ -472,7 +473,7 @@ function DuplicateSheet({ open, onClose, inv }: { open: boolean; onClose: () => 
         <p className="m-0 text-subhead text-ink-soft">The copy is a draft with the same lines, design and details.</p>
         <div>
           <Field id="dup-issue" label="Date for the copy" type="date" value={issue} onChange={setIssue} />
-          <span className="block text-subhead text-ink-soft">The copy's issue date. It starts on today.</span>
+          <span className="mt-xs block text-subhead text-ink-soft">The copy's issue date. It starts on today.</span>
         </div>
         <p className="m-0 text-subhead">
           Number: {nextHint(inv.number) || 'the next free one'}

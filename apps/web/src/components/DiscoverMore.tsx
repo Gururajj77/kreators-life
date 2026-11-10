@@ -69,10 +69,11 @@ export function MoreSection({ onOpen }: { onOpen: (k: ExtraKind) => void }) {
                   </span>
                 }
               >
+                {/* The blurb under its title, beside the icon, not under the icon's height (the spacing pass, 2026-11-07). */}
                 <h3 className="text-balance text-card-title">{k.name}</h3>
+                <ShortBlurb text={k.blurb} />
               </CardHead>
-              <ShortBlurb text={k.blurb} />
-              <div className="mt-sm flex flex-wrap-reverse items-center justify-between gap-sm">
+              <div className="mt-auto flex flex-wrap-reverse items-center justify-between gap-sm pt-sm">
                 <StatusTag fit tone={done ? 'good' : started ? 'info' : 'neutral'}>
                   {done && st?.takenAt ? `Taken ${when(st.takenAt)}` : started ? `${st!.progress.done} of ${st!.progress.total} done` : 'Not taken yet'}
                 </StatusTag>
@@ -876,7 +877,7 @@ function DesignView({ result, onEdit }: { result: DesignResult; onEdit: () => vo
       <div className="mt-sm grid gap-xs md:grid-cols-2">
         <div role="group" aria-label="Zodiac" className="flex flex-wrap gap-xs">
           {ZODIACS.map((z) => (
-            <button key={z.key} type="button" aria-pressed={zodiac === z.key} onClick={() => setZodiac(z.key)} className={`toy min-h-[44px] rounded-pill border-2 px-md text-subhead font-medium ${zodiac === z.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={z.key} type="button" aria-pressed={zodiac === z.key} onClick={() => setZodiac(z.key)} className={`toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-md text-subhead font-medium ${zodiac === z.key ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {z.name}
             </button>
           ))}
@@ -891,7 +892,7 @@ function DesignView({ result, onEdit }: { result: DesignResult; onEdit: () => vo
         items={DESIGN_DEPTHS.map((d) => ({ key: d.key, label: d.name }))}
         value={depth}
         onChange={setDepth}
-        pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-md text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+        pillClass={(on) => `toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-md text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
       />
       <p className="mt-xs m-0 text-caption text-ink-soft">{DESIGN_DEPTHS.find((d) => d.key === depth)!.blurb} {depth === 'num' ? 'Numerology is another way to reflect, and is not science.' : 'The three layers are the app’s own way to group a chart. They are not part of the old system.'}</p>
 

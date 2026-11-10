@@ -61,7 +61,8 @@ export function Mindful() {
 
       {/* One panel for breathing and focus (Breathe is its first tab). FocusRounds itself lives in FocusRoundsHost, mounted once so a
           running clock survives leaving this page; this slot is where it draws while Mindful is the screen showing (lib/focusPortal.ts). */}
-      <div ref={setFocusSlot} style={{ minHeight: focusHeight || undefined }} />
+      {/* mt-lg: the panel's own section keeps Home's 16px, so here it takes a section's room under the hero like every block after it. */}
+      <div ref={setFocusSlot} className="mt-lg" style={{ minHeight: focusHeight || undefined }} />
 
       <FocusDashboard />
 
@@ -93,7 +94,8 @@ export function Mindful() {
               <span className="mt-xs text-caption text-ink-soft">min</span>
             </span>
           </Donut>
-          <div className="min-w-0 flex-1">
+          {/* Held to a legend's width, so on a laptop each minute count stays beside its name instead of across the card. */}
+          <div className="min-w-0 max-w-[360px] flex-1">
             <p className="m-0 text-subhead">By session length, last thirty days</p>
             <div className="mt-xs">
               <Legend items={buckets.map((b) => ({ color: b.color, label: b.label, text: `${b.value} min` }))} />

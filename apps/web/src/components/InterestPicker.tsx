@@ -33,7 +33,7 @@ export function InterestPicker({ value, onChange, legend = 'Interests', hint }: 
                 {g.options.map((o) => {
                   const picked = value.includes(o);
                   return (
-                    <button key={o} type="button" aria-pressed={picked} disabled={full && !picked} onClick={() => toggle(o)} className={`toy min-h-[44px] rounded-pill border-2 px-sm text-subhead font-medium disabled:opacity-50 ${picked ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+                    <button key={o} type="button" aria-pressed={picked} disabled={full && !picked} onClick={() => toggle(o)} className={`toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm text-subhead font-medium disabled:opacity-50 ${picked ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
                       {o}
                     </button>
                   );

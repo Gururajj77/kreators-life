@@ -23,6 +23,7 @@ import { Skeleton } from './Skeleton';
 import { OpenTag, planBody, planOf, planProblem, PriorityChip, TaskPlanFields, type Plan } from './TaskPlan';
 import { FactTag } from './FactTag';
 import { StatusTag } from './StatusTag';
+import { StickyAction } from './StickyAction';
 
 const COPY = {
   lede: 'Tap a day to see its tasks or add one. A task sits on its do date, or on its due date when it has no do date.',
@@ -323,7 +324,7 @@ function AddOnDay({ day, today, projects, onAdded, autoFocus = false, note }: { 
     return (
       <div className="flex flex-wrap-reverse items-center justify-between gap-sm rounded-tile bg-paper p-sm">
         <p className="m-0 min-w-0 flex-1 basis-[60%] text-subhead text-ink-soft">{COPY.noProject}</p>
-        <Link to="/tower" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
+        <Link to="/tower" className="toy inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
           Set up a pillar
         </Link>
       </div>
@@ -370,9 +371,11 @@ function AddOnDay({ day, today, projects, onAdded, autoFocus = false, note }: { 
           {create.error instanceof Error ? create.error.message : 'Could not add it. Try again.'}
         </p>
       )}
-      <Button type="submit" size="lg" full disabled={create.isPending || !title.trim() || planProblem(plan) !== null}>
-        {create.isSuccess && !create.isPending ? 'Added. Add another' : 'Add task'}
-      </Button>
+      <StickyAction>
+        <Button type="submit" size="lg" full disabled={create.isPending || !title.trim() || planProblem(plan) !== null}>
+          {create.isSuccess && !create.isPending ? 'Added. Add another' : 'Add task'}
+        </Button>
+      </StickyAction>
     </form>
   );
 }

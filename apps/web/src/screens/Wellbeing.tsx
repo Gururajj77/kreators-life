@@ -110,8 +110,8 @@ export function Wellbeing() {
           </Hero>
         )}
       </header>
-      <PeriodPanel id="wellbeing-period" parts={['wellbeing', 'water', 'journal']} />
-      <EmergenceSlot app="wellbeing" max={2} />
+      {/* What makes the score sits right under it, and the rows the lede points at follow; By period and Emerging come after the numbers
+          (the spacing pass, 2026-11-07: they had stood between the score and its own breakdown). */}
       {d && (
         <>
 
@@ -122,7 +122,7 @@ export function Wellbeing() {
                 <span className="mt-xs text-caption text-ink-soft">of 100</span>
               </span>
             </Donut>
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 max-w-[360px] flex-1">
               <p className="m-0 text-headline">What makes it</p>
               <div className="mt-xs">
                 <Legend items={makeup.map((m) => ({ color: m.color, label: m.label, text: `${Math.round(m.value)}` }))} />
@@ -229,12 +229,14 @@ export function Wellbeing() {
           </ul>
           {/* Two doors, placed by the card rule: the name at the top left, the app's icon in the top right corner, the line at the foot on
               the left and an arrow at the bottom right that nudges on hover. */}
-          <div className="mt-md grid grid-cols-2 gap-xs">
+          {/* Side by side from 34rem; on a phone each takes the row, since "Companion" ran into its icon in a half-width card, and a full-width
+              door drops the half's least height, so no empty band sits between its name and its line. */}
+          <div className="mt-md grid grid-cols-1 gap-xs min-[34rem]:grid-cols-2">
             {[
               { to: '/journal', name: 'Journal', line: 'Write it down', icon: MODULE_BY_KEY.journal?.icon },
               { to: '/companion', name: 'Companion', line: 'Talk it through', icon: MODULE_BY_KEY.companion?.icon },
             ].map((t) => (
-              <Link key={t.to} to={t.to} className="fx-spot toy toy-soft group flex min-h-[112px] flex-col rounded-tile bg-card p-sm text-ink">
+              <Link key={t.to} to={t.to} className="fx-spot toy toy-soft group flex flex-col rounded-tile bg-card p-sm text-ink min-[34rem]:min-h-[112px]">
                 <CardHead
                   tag={
                     <span className="flex size-[44px] items-center justify-center rounded-inner bg-paper text-ink-soft" aria-hidden="true">
@@ -253,6 +255,8 @@ export function Wellbeing() {
           </div>
         </>
       )}
+      <PeriodPanel id="wellbeing-period" parts={['wellbeing', 'water', 'journal']} />
+      <EmergenceSlot app="wellbeing" max={2} />
     </Screen>
   );
 }

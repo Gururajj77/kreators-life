@@ -45,7 +45,8 @@ export function RunMoveTool() {
         <MoveForm kinds={RUN_TOOL_KINDS} solid={false} saveLabel="Save it" onSave={(body) => api.logMove(body, 'run')} onDone={() => void refresh()} />
       </div>
       {moves.length > 0 && (
-        <div className="mt-md">
+        // A step further from Save than from its own rows, so the list reads as its own group under the form.
+        <div className="mt-lg">
           <div className="flex flex-wrap items-baseline justify-between gap-xs">
             <h3 className="m-0 text-headline">On your own, last 7 days</h3>
             <p className="m-0 text-subhead text-ink-soft">{formatCount(q.data?.minutes ?? 0)} min</p>

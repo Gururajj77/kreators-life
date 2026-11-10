@@ -104,7 +104,7 @@ export function Assistant() {
       </Suspense>
     );
   return (
-    <div className="fixed right-md bottom-[calc(var(--spacing-xl)+var(--spacing-lg)+env(safe-area-inset-bottom))] z-40 md:bottom-md">
+    <div className="fixed right-md bottom-[calc(var(--spacing-xl)+var(--spacing-lg)+env(safe-area-inset-bottom))] lift-over-sticky z-40 md:bottom-md">
       <span
         ref={tip}
         id="assistant-tip"

@@ -113,7 +113,7 @@ export function ChannelTabs() {
         ]}
         value={tab}
         onChange={setTab}
-        pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+        pillClass={(on) => `toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm py-0 md:py-xs text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
       />
     </div>
   );

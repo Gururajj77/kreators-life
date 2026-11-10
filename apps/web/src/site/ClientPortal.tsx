@@ -102,7 +102,7 @@ function Heading({ id, title, lede }: { id: string; title: string; lede?: string
 
 
 /** An outline-button look for a real link (a link is an `<a>`, never a button inside one), 44px tall like every target. */
-const linkButton = 'toy toy-ink inline-flex min-h-[44px] items-center justify-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-sm text-subhead leading-none text-ink hover:border-ink';
+const linkButton = 'toy toy-ink inline-flex min-h-[36px] tap-pad items-center justify-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-sm text-subhead leading-none text-ink hover:border-ink';
 
 /**
  * What a client can do with one piece. A piece waiting on them (`waiting`) has one main action, Approve, with "Ask for a change"
@@ -167,24 +167,24 @@ function PieceActions({ doors, id, stage, changes, waiting = false, onDone }: { 
       {canChange && (waiting || mode === 'change' || mode === 'paid') && <p className="m-0 text-subhead font-semibold text-ink-soft">{left > 0 ? changesLabel(changes.used, changes.allowed) : doors.paidChange ? COPY.noneLeft : (doors.noneLeft ?? COPY.noneLeft)}</p>}
       <div className="fill-row mt-xs flex flex-wrap items-center gap-xs">
         {waiting && can.canApprove && stage === 'review' && (
-          <Button size="sm" onClick={() => send('approve')} disabled={busy}>
+          <Button low size="sm" onClick={() => send('approve')} disabled={busy}>
             Approve
           </Button>
         )}
         {canChange && left > 0 && (
-          <Button size="sm" variant={quiet} onClick={() => setMode(mode === 'change' ? null : 'change')} aria-expanded={mode === 'change'} disabled={busy}>
+          <Button low size="sm" variant={quiet} onClick={() => setMode(mode === 'change' ? null : 'change')} aria-expanded={mode === 'change'} disabled={busy}>
             Ask for a change
             <ToggleChevron open={mode === 'change'} size={14} />
           </Button>
         )}
         {canChange && left === 0 && doors.paidChange && (
-          <Button size="sm" variant={quiet} onClick={() => setMode(mode === 'paid' ? null : 'paid')} aria-expanded={mode === 'paid'} disabled={busy}>
+          <Button low size="sm" variant={quiet} onClick={() => setMode(mode === 'paid' ? null : 'paid')} aria-expanded={mode === 'paid'} disabled={busy}>
             Ask for a paid change
             <ToggleChevron open={mode === 'paid'} size={14} />
           </Button>
         )}
         {can.canComment && (
-          <Button size="sm" variant="ghost" onClick={() => setMode(mode === 'comment' ? null : 'comment')} aria-expanded={mode === 'comment'} disabled={busy}>
+          <Button low size="sm" variant="ghost" onClick={() => setMode(mode === 'comment' ? null : 'comment')} aria-expanded={mode === 'comment'} disabled={busy}>
             Comment
             <ToggleChevron open={mode === 'comment'} size={14} />
           </Button>
@@ -205,7 +205,7 @@ function PieceActions({ doors, id, stage, changes, waiting = false, onDone }: { 
           </label>
           <textarea id={`note-${id}`} value={note} onChange={(e) => setNote(e.target.value)} rows={3} maxLength={500} className={FIELD} />
           <div className="mt-xs">
-            <Button size="sm" full onClick={() => send(mode === 'change' ? 'changes' : mode === 'paid' ? 'paid_change' : 'comment')} disabled={busy || !note.trim()}>
+            <Button low size="sm" full onClick={() => send(mode === 'change' ? 'changes' : mode === 'paid' ? 'paid_change' : 'comment')} disabled={busy || !note.trim()}>
               {mode === 'comment' ? 'Send the comment' : mode === 'paid' ? 'Send the request' : 'Send the change'}
             </Button>
           </div>
@@ -266,7 +266,7 @@ function ActionLink({ href, className, children }: { href: string; className: st
   );
 }
 
-const primaryLink = 'toy inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill bg-ink px-md text-callout text-on-ink';
+const primaryLink = 'toy inline-flex min-h-[40px] tap-pad items-center justify-center gap-xs rounded-pill bg-ink px-md text-callout text-on-ink';
 
 /**
  * "Your next step": the one thing to do now as the one solid button, with the other to-dos quieter under it. With nothing waiting it
@@ -419,11 +419,11 @@ function Retainer({ token, view, onDone }: { token: string; view: PortalView; on
             })}
           </div>
           <div className="mt-sm no-print flex flex-wrap items-center gap-sm">
-            <Button className="flex-1" onClick={choose} disabled={busy || !months}>
+            <Button low className="flex-1" onClick={choose} disabled={busy || !months}>
               {busy ? 'Sending' : months ? `Choose ${lengthWord(months)}` : 'Pick a length first'}
             </Button>
             {changing && (
-              <Button variant="ghost" onClick={() => setChanging(false)}>
+              <Button low variant="ghost" onClick={() => setChanging(false)}>
                 Keep my pick
               </Button>
             )}
@@ -438,7 +438,7 @@ function Retainer({ token, view, onDone }: { token: string; view: PortalView; on
               <p className="m-0 min-w-0 flex-[1_1_240px] text-headline">{`You chose ${r.chosenMonths ? lengthWord(r.chosenMonths) : 'a length'}. ${agency} will confirm it.`}</p>
               {r.options.length > 1 && (
                 <div className="ml-auto no-print">
-                  <Button variant="outline" size="sm" onClick={() => { setMonths(r.chosenMonths); setChanging(true); }}>
+                  <Button low variant="outline" size="sm" onClick={() => { setMonths(r.chosenMonths); setChanging(true); }}>
                     Change my pick
                   </Button>
                 </div>
@@ -800,7 +800,8 @@ export function ClientPortal() {
                               {d.line !== d.title && <span className="block text-card-note text-ink-soft">{d.line}</span>}
                             </span>
                           </Link>
-                          <span className="flex shrink-0 items-center gap-xs">
+                          {/* On a phone the tag and Download wrap under the title as the card's foot: the state at the left, the action at the right. */}
+                          <span className="flex basis-full items-center justify-between gap-xs sm:shrink-0 sm:basis-auto sm:justify-start">
                             <StatusTag tone={d.tone}>{d.status}</StatusTag>
                             <Link to={`${d.href}?print=1`} className={`${linkButton} no-print`} aria-label={`Download ${d.title}`}>
                               Download
@@ -815,7 +816,7 @@ export function ClientPortal() {
             )}
 
             <div className="mt-xl no-print flex flex-wrap items-center gap-sm">
-              <Button variant="outline" size="sm" onClick={() => printAs(fileTitle('Dashboard', v.clientName))}>
+              <Button low variant="outline" size="sm" onClick={() => printAs(fileTitle('Dashboard', v.clientName))}>
                 Print or save as PDF
               </Button>
               {v.agencyEmail && (
@@ -916,7 +917,7 @@ export function TeamPortal() {
               <p className="mt-lg m-0 text-callout text-ink-soft">Nothing is shared on this link yet.</p>
             )}
             <div className="mt-xl no-print flex flex-wrap items-center gap-sm">
-              <Button variant="outline" size="sm" onClick={() => printAs(fileTitle('Team view', v.clientName))}>
+              <Button low variant="outline" size="sm" onClick={() => printAs(fileTitle('Team view', v.clientName))}>
                 Print or save as PDF
               </Button>
               {v.agencyEmail && (

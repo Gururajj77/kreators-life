@@ -51,13 +51,19 @@ export function Automations() {
       )}
 
       <section className="mt-lg" aria-labelledby="auto-heading">
-        <div className="flex items-center justify-between gap-sm">
-          <h2 id="auto-heading" className="text-title2">
-            Automations
-          </h2>
-          <Button onClick={() => setNewAuto(true)}>New automation</Button>
+        {/* Empty, the line sits beside the button, so the button is held to one title line (as on Section). With rows, the button
+            keeps the row's height, so it never hangs over the first card. */}
+        <div className={`flex justify-between gap-sm ${(autos.data && autos.data.automations.length === 0) ? 'items-start' : 'items-center'}`}>
+          <div className="min-w-0">
+            <h2 id="auto-heading" className="text-title2">
+              Automations
+            </h2>
+            {autos.data && autos.data.automations.length === 0 && <p className="mt-xs m-0 text-balance text-subhead text-ink-soft">None yet. Pick a keyword like GUIDE and the message to send.</p>}
+          </div>
+          <div className={`flex shrink-0 items-center ${(autos.data && autos.data.automations.length === 0) ? 'h-[1.2em] text-[24px] leading-none' : ''}`}>
+            <Button onClick={() => setNewAuto(true)}>New automation</Button>
+          </div>
         </div>
-        {autos.data && autos.data.automations.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">None yet. Pick a keyword like GUIDE and the message to send.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {autos.data?.automations.map((a) => (
             <AutomationCard key={a.id} a={a} onChange={() => void autos.refetch()} />
@@ -80,13 +86,17 @@ export function Automations() {
       </section>
 
       <section className="mt-lg" aria-labelledby="funnel-heading">
-        <div className="flex items-center justify-between gap-sm">
-          <h2 id="funnel-heading" className="text-title2">
-            Funnels
-          </h2>
-          <Button variant="outline" onClick={() => setNewFunnel(true)}>New funnel</Button>
+        <div className={`flex justify-between gap-sm ${(funnels.data && funnels.data.funnels.length === 0) ? 'items-start' : 'items-center'}`}>
+          <div className="min-w-0">
+            <h2 id="funnel-heading" className="text-title2">
+              Funnels
+            </h2>
+            {funnels.data && funnels.data.funnels.length === 0 && <p className="mt-xs m-0 text-balance text-subhead text-ink-soft">Chain a post, an Auto-DM, a link, a lead and a sale to see the drop-off at every step.</p>}
+          </div>
+          <div className={`flex shrink-0 items-center ${(funnels.data && funnels.data.funnels.length === 0) ? 'h-[1.2em] text-[24px] leading-none' : ''}`}>
+            <Button variant="outline" onClick={() => setNewFunnel(true)}>New funnel</Button>
+          </div>
         </div>
-        {funnels.data && funnels.data.funnels.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">Chain a post, an Auto-DM, a link, a lead and a sale to see the drop-off at every step.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {funnels.data?.funnels.map((f) => (
             <FunnelCard key={f.id} f={f} onChange={() => void funnels.refetch()} />
@@ -95,13 +105,17 @@ export function Automations() {
       </section>
 
       <section className="mt-lg" aria-labelledby="seq-heading">
-        <div className="flex items-center justify-between gap-sm">
-          <h2 id="seq-heading" className="text-title2">
-            Sequences
-          </h2>
-          <Button variant="outline" onClick={() => setNewSeq(true)}>New message</Button>
+        <div className="flex items-start justify-between gap-sm">
+          <div className="min-w-0">
+            <h2 id="seq-heading" className="text-title2">
+              Sequences
+            </h2>
+            <p className="mt-xs m-0 text-balance text-subhead text-ink-soft">Messages buyers get in their Inbox some days after a purchase.</p>
+          </div>
+          <div className="flex h-[1.2em] shrink-0 items-center text-[24px] leading-none">
+            <Button variant="outline" onClick={() => setNewSeq(true)}>New message</Button>
+          </div>
         </div>
-        <p className="mt-xs m-0 text-subhead text-ink-soft">Messages buyers get in their Inbox some days after a purchase.</p>
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {sequences.data?.sequences.map((s) => (
             <SequenceCard key={s.id} s={s} onChange={() => void sequences.refetch()} />

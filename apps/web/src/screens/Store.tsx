@@ -27,6 +27,7 @@ import { Reveal } from '../components/fx/Reveal';
 import { Icon } from '../components/Icon';
 import { ArrowRight } from 'lucide-react';
 import '../components/fx/spotlight';
+import { StickyAction } from '../components/StickyAction';
 
 const pill = chip;
 /** Shelves of cards: one to a row on a phone and a tablet, two from the laptop width, in even rows (lib/bento.ts). */
@@ -310,7 +311,7 @@ function ItemBody({ item, team = [] }: { item: StoreItem; team?: MoreMenuItem[] 
             <TeamMenu title={item.title} items={menu} />
             {item.unlock.ok ? (
               // The outline look Tools uses for Open and Get it, so the screen keeps one solid button, Sell something.
-              <a href={`/out/item/${item.id}`} target="_blank" rel="noreferrer" className="toy toy-ink inline-flex min-h-[44px] items-center rounded-pill border-2 border-ink bg-card px-sm text-subhead font-semibold">
+              <a href={`/out/item/${item.id}`} target="_blank" rel="noreferrer" className="toy toy-ink inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center rounded-pill border-2 border-ink bg-card px-sm text-subhead font-semibold">
                 Get it
               </a>
             ) : null}
@@ -468,7 +469,7 @@ function SellSheet({ open, onClose, onSaved, city }: { open: boolean; onClose: (
         </Field>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-subhead font-semibold">Category</legend>
-          <div className="mt-xs flex flex-wrap gap-xs">
+          <div className="fill-row mt-xs flex flex-wrap gap-xs">
             {STORE_CATEGORIES.map((c) => (
               <button key={c} type="button" aria-pressed={category === c} onClick={() => setCategory(c)} className={pill(category === c)}>
                 {c}
@@ -478,7 +479,7 @@ function SellSheet({ open, onClose, onSaved, city }: { open: boolean; onClose: (
         </fieldset>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-subhead font-semibold">Condition</legend>
-          <div className="mt-xs flex flex-wrap gap-xs">
+          <div className="fill-row mt-xs flex flex-wrap gap-xs">
             {PREOWNED_CONDITIONS.map((c) => (
               <button key={c} type="button" aria-pressed={condition === c} onClick={() => setCondition(c)} className={pill(condition === c)} title={PREOWNED_CONDITION_META[c].blurb}>
                 {PREOWNED_CONDITION_META[c].name}
@@ -514,9 +515,11 @@ function SellSheet({ open, onClose, onSaved, city }: { open: boolean; onClose: (
           <span className="text-subhead">This is a whole setup sold together</span>
         </label>
         <ErrorLine e={save.isError ? save.error : null} />
-        <Button type="submit" size="lg" full disabled={save.isPending || !title.trim() || !price}>
-          List it
-        </Button>
+        <StickyAction>
+          <Button type="submit" size="lg" full disabled={save.isPending || !title.trim() || !price}>
+            List it
+          </Button>
+        </StickyAction>
       </form>
     </Sheet>
   );
@@ -577,7 +580,7 @@ function ItemSheet({ open, onClose, onSaved }: { open: boolean; onClose: () => v
         </div>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-subhead font-semibold">Category</legend>
-          <div className="mt-xs flex flex-wrap gap-xs">
+          <div className="fill-row mt-xs flex flex-wrap gap-xs">
             {STORE_CATEGORIES.map((c) => (
               <button key={c} type="button" aria-pressed={category === c} onClick={() => setCategory(c)} className={pill(category === c)}>
                 {c}

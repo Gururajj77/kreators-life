@@ -175,7 +175,7 @@ export function Rewards() {
                             )}
                           </span>
                           {r.game && data.games.includes(r.game) ? (
-                            <Link to={`/cards/${r.game}`} className={`toy inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-pill bg-card-strong px-md text-subhead text-ink ${tile ? 'w-full' : ''}`}>
+                            <Link to={`/cards/${r.game}`} className={`toy inline-flex min-h-[36px] md:min-h-[44px] tap-pad shrink-0 items-center justify-center rounded-pill bg-card-strong px-md text-subhead text-ink ${tile ? 'w-full' : ''}`}>
                               Play
                             </Link>
                           ) : r.game && gamesQ.data?.games.find((x) => x.key === r.game && !x.unlock.ok) ? (

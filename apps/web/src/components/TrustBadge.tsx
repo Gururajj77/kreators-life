@@ -27,7 +27,7 @@ export function TrustBadge({ trust, onInk = false, size = 'md' }: { trust: Trust
         aria-expanded={open}
         aria-controls={id}
         aria-label={`Trust ${trust.score} of 100, ${trust.label}. See what it is made of`}
-        className={`toy toy-soft inline-flex min-h-[44px] items-center gap-xs rounded-pill px-sm text-subhead font-medium ${onInk ? 'bg-on-ink/15 text-on-ink' : 'bg-paper text-ink'}`}
+        className={`toy toy-soft inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center gap-xs rounded-pill px-sm text-subhead font-medium ${onInk ? 'bg-on-ink/15 text-on-ink' : 'bg-paper text-ink'}`}
       >
         <Ring value={trust.score / 100} size={ring} stroke={4} color={onInk ? 'var(--color-on-ink)' : 'var(--color-r4)'} track={onInk ? 'color-mix(in oklab, var(--color-on-ink) 30%, transparent)' : 'var(--color-line)'} label="">
           <span className="text-caption font-semibold">{trust.score}</span>

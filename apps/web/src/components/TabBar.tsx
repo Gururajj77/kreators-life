@@ -139,7 +139,7 @@ export function TabBar() {
   return (
     <>
       {/* Phone: tabs along the bottom. */}
-      <nav aria-label="Main" className="fx-bar safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line md:hidden">
+      <nav aria-label="Main" data-tabbar="" className="fx-bar safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line md:hidden">
         <ul ref={bottom.ref} className="fx-slide mx-auto flex max-w-[480px] list-none items-stretch justify-around p-0 m-0">
           {TABS.map((t) => (
             <li key={t.to} className="flex-1">

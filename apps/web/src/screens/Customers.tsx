@@ -67,21 +67,27 @@ export function Customers() {
     <Screen>
       <AppCover back={{ to: '/shop', label: 'Shop' }} title="Customers" lede="Everyone who bought from you, and what lands in your balance after fees." />
 
-      <section className="mt-md" aria-labelledby="cust-heading">
-        <div className="flex items-center justify-between gap-sm">
-          <h2 id="cust-heading" className="text-title2">
-            People
-          </h2>
-          <Button variant="outline" onClick={() => void downloadCsv()} disabled={!customers.data || customers.data.customers.length === 0}>
-            Download CSV
-          </Button>
+      <section className="mt-lg" aria-labelledby="cust-heading">
+        {/* Empty, the line sits beside the button, so the button is held to one title line (as on Section). With rows, the button
+            keeps the row's height, so it never hangs over the first card. */}
+        <div className={`flex justify-between gap-sm ${(customers.data && customers.data.customers.length === 0) ? 'items-start' : 'items-center'}`}>
+          <div className="min-w-0">
+            <h2 id="cust-heading" className="text-title2">
+              People
+            </h2>
+            {customers.data && customers.data.customers.length === 0 && <p className="mt-xs m-0 text-balance text-subhead text-ink-soft">No buyers yet. They appear here after someone buys one of your products.</p>}
+          </div>
+          <div className={`flex shrink-0 items-center ${(customers.data && customers.data.customers.length === 0) ? 'h-[1.2em] text-[24px] leading-none' : ''}`}>
+            <Button variant="outline" onClick={() => void downloadCsv()} disabled={!customers.data || customers.data.customers.length === 0}>
+              Download CSV
+            </Button>
+          </div>
         </div>
         {csvError && (
           <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {csvError}
           </p>
         )}
-        {customers.data && customers.data.customers.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">No buyers yet. They appear here after someone buys one of your products.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {customers.data?.customers.map((c) => (
             <li key={c.userId} className="rounded-tile bg-card p-sm shadow-toy-soft">

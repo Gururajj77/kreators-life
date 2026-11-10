@@ -7,7 +7,7 @@ import { HBars, StatTile } from '../components/Charts';
 import { PageHeader } from '../components/PageHeader';
 import { RoleBadge } from '../components/RoleBadge';
 import { Screen } from '../components/Screen';
-import { Section } from '../components/Section';
+import { Section, SeeAll } from '../components/Section';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
 import { evenGrid, evenTile } from '../lib/bento';
@@ -79,7 +79,7 @@ export function Observability() {
 
   return (
     <Screen>
-      <PageHeader back={{ to: '/apps', label: 'Apps' }} eyebrow={MODULE_GROUPS.manage} aside={isAdmin ? <Link to="/internal/logs" className="toy toy-soft inline-flex min-h-[44px] items-center rounded-pill border border-line bg-card-strong px-md text-subhead font-semibold">Logs</Link> : undefined} title="Dev Tools" lede="Who is here, which apps they have on, and who holds which role. Only the team sees this. Journals and wellbeing never appear." />
+      <PageHeader back={{ to: '/apps', label: 'Apps' }} eyebrow={MODULE_GROUPS.manage} aside={isAdmin ? <Link to="/internal/logs" className="toy toy-soft inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center rounded-pill border border-line bg-card-strong px-md text-subhead font-semibold">Logs</Link> : undefined} title="Dev Tools" lede="Who is here, which apps they have on, and who holds which role. Only the team sees this. Journals and wellbeing never appear." />
 
       {d.isPending && (
         <p className="mt-md m-0 text-subhead text-ink-soft" role="status">
@@ -151,20 +151,8 @@ export function Observability() {
             id="obs-log"
             title="The log, last 24 hours"
             lede="Changes people made, requests that were refused and errors, from the app's own log."
-            action={isAdmin ? (
-              <Link to="/internal/logs" className="toy hidden min-h-[48px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink md:inline-flex">
-                Open the logs
-              </Link>
-            ) : undefined}
+            action={isAdmin ? <SeeAll to="/internal/logs">See all</SeeAll> : undefined}
           >
-            {/* On a phone the link sits under the heading at the right, so the title keeps its width. */}
-            {isAdmin && (
-              <div className="mb-sm flex justify-end md:hidden">
-                <Link to="/internal/logs" className="toy inline-flex min-h-[48px] items-center justify-center rounded-pill bg-ink px-md text-headline text-on-ink">
-                  Open the logs
-                </Link>
-              </div>
-            )}
             <div className="grid grid-cols-3 gap-xs">
               <StatTile label="Errors" value={data.additions.logs.errors} hint="server and browser" />
               <StatTile label="Refused" value={data.additions.logs.warnings} hint="400s and rate limits" />

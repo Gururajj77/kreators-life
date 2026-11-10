@@ -29,6 +29,7 @@ import { Icon as LucideGlyph } from './Icon';
 import { AnimatedIcon } from './AnimatedIcon';
 import { EighthNotes, Play, Square, Target } from 'lucide-react';
 import { Fold } from './Fold';
+import { StickyAction } from './StickyAction';
 
 type Phase = 'focus' | 'short' | 'long';
 type Mode = 'breathe' | 'timer' | 'pomodoro' | 'stopwatch';
@@ -1611,7 +1612,7 @@ export function FocusRounds({
             const p = FOCUS_PRESETS.find((x) => x.name === name);
             if (p) save({ ...settings, ...p });
           }}
-          pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-sm text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+          pillClass={(on) => `toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
         />
         <p className="mt-xs m-0 text-caption text-ink-soft">{planLine(settings)}</p>
         <div className="mt-sm flex flex-col gap-xs text-left">
@@ -1647,7 +1648,7 @@ export function FocusRounds({
                       aria-pressed={onDay}
                       aria-label={d.long}
                       onClick={() => save({ ...settings, reminderDays: onDay ? settings.reminderDays.filter((n) => n !== d.n) : [...settings.reminderDays, d.n].sort((a, b) => a - b) })}
-                      className={`toy min-h-[44px] min-w-0 rounded-pill border-2 px-xs text-subhead font-medium ${onDay ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+                      className={`toy min-h-[36px] md:min-h-[44px] tap-pad min-w-0 rounded-pill border-2 px-xs text-subhead font-medium ${onDay ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
                     >
                       <span className="sm:hidden">{d.short}</span>
                       <span className="hidden sm:inline">{d.long}</span>
@@ -1662,9 +1663,11 @@ export function FocusRounds({
         <div className="mt-md border-t border-line pt-sm">
           <SoundControls settings={settings} onChange={save} breaks />
         </div>
-        <Button className="mt-md" full onClick={() => setSheet(null)}>
-          Done
-        </Button>
+        <StickyAction className="mt-md">
+          <Button full onClick={() => setSheet(null)}>
+            Done
+          </Button>
+        </StickyAction>
       </Sheet>
     </section>
   );

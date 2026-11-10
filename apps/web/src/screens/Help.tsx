@@ -19,7 +19,7 @@ import { TabRow } from '../components/TabRow';
 
 const slug = (name: string) => name.toLowerCase().replace(/[^a-z]+/g, '-');
 /** The jump pills at the top of Help and over its words: as many as fit, the rest behind More, never cut at the edge. */
-const JUMP_PILL = () => 'toy toy-flat inline-flex min-h-[44px] items-center rounded-pill bg-card px-md text-subhead font-medium';
+const JUMP_PILL = () => 'toy toy-flat inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center rounded-pill bg-card px-md text-subhead font-medium';
 const PAGE_PARTS = [
   { key: 'earning', label: 'How you earn' },
   { key: 'words', label: 'Words we use' },

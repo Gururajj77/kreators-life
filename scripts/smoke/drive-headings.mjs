@@ -14,8 +14,10 @@ for (const [w, h] of [[1280, 900], [390, 844]]) {
     await page.evaluateOnNewDocument((t) => localStorage.setItem('kreators.session', JSON.stringify({ state: { token: t }, version: 0 })), token);
     try {
       await page.goto(`${ORIGIN}${shot.path}`, { waitUntil: 'networkidle0', timeout: 20000 });
-      const r = await page.evaluate(() => [...document.querySelectorAll('main section > div.flex.items-start.justify-between')].map((row) => {
-        const h2 = row.querySelector('h2'); const act = row.children[1]; if (!h2 || !act) return null;
+      // A hand-made heading row, or Section's own (a grid since 2026-11-08: the title, the action in its second column, the line under them).
+      const r = await page.evaluate(() => [...document.querySelectorAll('main section > div.flex.items-start.justify-between, main section > div.grid:has(> h2)')].map((row) => {
+        const grid = row.matches('.grid');
+        const h2 = row.querySelector('h2'); const act = grid ? row.querySelector(':scope > div.col-start-2') : row.children[1]; if (!h2 || !act) return null;
         const inner = act.querySelector('a,button'); if (!inner) return null;
         // An action drawn only from the tablet up (Bond's New channel, which a phone shows under the heading) has no box here. A title on two lines is judged by its first: the action sits level with that.
         if (!inner.getClientRects().length) return null;

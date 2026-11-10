@@ -18,6 +18,7 @@ import { PasswordField } from '../screens/Auth';
 import { SITE_LINK, SITE_PRIMARY, SITE_SECONDARY, SiteArrow } from './buttons';
 import { LISTING_COLS, ListingCard } from './ListingCard';
 import { SiteLayout } from './SiteLayout';
+import { StickyAction } from '../components/StickyAction';
 
 /** The kind of event in words ("Meetup"), from its stored key. */
 const kindOf = (e: PublicEvent): string => EVENT_TYPE_META[e.eventType as EventType]?.name ?? 'Event';
@@ -277,18 +278,20 @@ export function EventLanding() {
               </>
             )}
             {!paid && (
-              <label className="flex min-h-[44px] cursor-pointer items-center gap-sm text-subhead font-semibold">
+              // Inset by the terms box's own 8px, so the two ticks above the button start on one edge.
+              <label className={`flex min-h-[44px] cursor-pointer items-center gap-sm text-subhead font-semibold ${signedIn ? '' : 'px-xs'}`}>
                 <input type="checkbox" checked={networking} onChange={(x) => setNetworking(x.target.checked)} className="size-[20px] accent-ink" />
                 <span>Introduce me to other guests</span>
               </label>
             )}
             <ErrorLine e={join.isError ? join.error : null} />
-            <div>
+            {/* With the sign-up above it the form runs past a phone's screen: Join stays in reach at the bottom edge (StickyAction). */}
+            <StickyAction>
               <button type="submit" disabled={!ready || join.isPending} className={`${SITE_PRIMARY} w-full disabled:opacity-50`}>
                 {join.isPending ? 'Joining' : label}
               </button>
               <p className="mt-xs m-0 text-center text-caption text-ink-soft">{caption}</p>
-            </div>
+            </StickyAction>
           </form>
         )}
         {!over && !signedIn && !checking && (

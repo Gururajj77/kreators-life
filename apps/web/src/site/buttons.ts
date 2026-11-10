@@ -19,21 +19,27 @@ import { Icon } from '../components/Icon';
  */
 const PILL = 'inline-flex items-center justify-center gap-xs rounded-pill text-center';
 
+/*
+ * Heights (2026-11-07, the founder: "make the buttons height lesser … for frontend website too"), the same at every width on the site:
+ * the main action 48 (was 56), the header's door and every secondary 40 (was 44 and 48), a chip 36 (was 44). Under 44 the hit area stays
+ * 44 by 44 through `tap-pad`'s invisible ::before (app.css). The main action keeps 48 because `fx-shimmer` clips its own overflow.
+ */
+
 /** The one main action: solid ink with the sweep of light. */
-export const SITE_PRIMARY = `toy fx-shimmer btn-primary ${PILL} min-h-[56px] bg-ink px-lg text-headline text-on-ink`;
+export const SITE_PRIMARY = `toy fx-shimmer btn-primary ${PILL} min-h-[48px] bg-ink px-lg text-headline text-on-ink`;
 /** The main action on an ink band: the card colour with ink text, so it still reads as the one solid thing there. */
-export const SITE_PRIMARY_ON_INK = `toy fx-shimmer ${PILL} min-h-[56px] bg-card px-lg text-headline text-ink`;
+export const SITE_PRIMARY_ON_INK = `toy fx-shimmer ${PILL} min-h-[48px] bg-card px-lg text-headline text-ink`;
 /** The main action on the fractal glass bands (`FractalGlass`, deep navy in both themes): white with the fixed slate ink, so it is the one bright thing there in either theme. */
-export const SITE_PRIMARY_ON_GLASS = `toy fx-shimmer ${PILL} min-h-[56px] bg-on-fill px-lg text-headline text-ink-fixed`;
+export const SITE_PRIMARY_ON_GLASS = `toy fx-shimmer ${PILL} min-h-[48px] bg-on-fill px-lg text-headline text-ink-fixed`;
 /** The header's door into the app: the primary look at the header's height. */
-export const SITE_PRIMARY_SM = `toy btn-primary ${PILL} min-h-[44px] bg-ink px-md text-callout font-semibold text-on-ink`;
+export const SITE_PRIMARY_SM = `toy btn-primary ${PILL} min-h-[40px] tap-pad bg-ink px-md text-callout font-semibold text-on-ink`;
 
 /** No fill at rest: only the edge says "button" (the hover tints it). */
 const OUTLINE = `toy toy-ink btn-outline ${PILL} border border-ink/40 bg-transparent text-ink`;
 /** Every other action button. Put `<SiteArrow />` after the words when it opens another page. */
-export const SITE_SECONDARY = `${OUTLINE} min-h-[48px] px-md text-callout font-semibold`;
+export const SITE_SECONDARY = `${OUTLINE} min-h-[40px] tap-pad px-md text-callout font-semibold`;
 /** The secondary look at a chip's size (app and pillar pills). Without padding: add `px-sm`, or `pl-xs pr-md` beside an avatar. */
-export const SITE_CHIP_BASE = `${OUTLINE} min-h-[44px] text-subhead font-semibold`;
+export const SITE_CHIP_BASE = `${OUTLINE} min-h-[36px] tap-pad text-subhead font-semibold`;
 export const SITE_CHIP = `${SITE_CHIP_BASE} px-sm`;
 
 /** The arrow a secondary button wears when it goes somewhere: the one sign, besides its edge, that it is a control. */

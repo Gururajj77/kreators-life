@@ -245,7 +245,7 @@ export function Reviews() {
                   <Donut segments={areaSegments} size={120} stroke={18} label="Xp by pillar">
                     <span className="text-title3 type-figure">{formatCount(s.now.xp)}</span>
                   </Donut>
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 max-w-[360px] flex-1">
                     <Legend items={areaSegments.map((a) => ({ color: a.color, label: a.label, text: `${formatCount(a.value)} xp` }))} />
                   </div>
                 </div>
@@ -264,7 +264,7 @@ export function Reviews() {
                   <Donut segments={areaSegments} size={120} stroke={18} label="Xp by pillar">
                     <span className="text-title3 type-figure">{formatCount(s.now.xp)}</span>
                   </Donut>
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 max-w-[360px] flex-1">
                     <Legend items={areaSegments.map((a) => ({ color: a.color, label: a.label, text: `${formatCount(a.value)} xp` }))} />
                   </div>
                 </div>

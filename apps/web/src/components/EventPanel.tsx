@@ -57,7 +57,7 @@ export function EventPanel({ app, id, talk = true }: { app: EventApp; id: string
       <Section id={`photos-${id}`} title="Photos" lede={host ? 'Share one folder. Everyone on the list is told when it is up.' : undefined}>
         {d.photos ? (
           <div className="rounded-tile bg-card p-sm shadow-toy-soft">
-            <a href={d.photos.url} target="_blank" rel="noreferrer noopener" className="toy inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md text-headline text-on-ink">
+            <a href={d.photos.url} target="_blank" rel="noreferrer noopener" className="toy inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center rounded-pill bg-ink px-md text-headline text-on-ink">
               Get your photos
             </a>
             {d.photos.note && <p className="mt-xs m-0 text-subhead text-ink-soft">{d.photos.note}</p>}

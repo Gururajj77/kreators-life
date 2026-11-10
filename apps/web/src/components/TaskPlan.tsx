@@ -160,7 +160,7 @@ export function PriorityPicker({ value, onChange }: { value: Priority | null; on
       {/* Two columns of equal buttons on a phone (P0 and P1, then P2 and P3), four in a row from the tablet width. */}
       <div className="mt-xs grid grid-cols-2 gap-xs sm:grid-cols-4" role="group" aria-label="Priority">
         {PRIORITIES.map((p) => (
-          <button key={p.value} type="button" aria-pressed={value === p.value} onClick={() => onChange(value === p.value ? null : p.value)} className={`pri-${p.value} pri-chip toy min-h-[44px] w-full whitespace-nowrap rounded-pill px-xs text-subhead font-medium`}>
+          <button key={p.value} type="button" aria-pressed={value === p.value} onClick={() => onChange(value === p.value ? null : p.value)} className={`pri-${p.value} pri-chip toy min-h-[36px] md:min-h-[44px] tap-pad w-full whitespace-nowrap rounded-pill px-xs text-subhead font-medium`}>
             {p.tag} {p.name}
           </button>
         ))}
@@ -242,7 +242,7 @@ export function TaskPlanFields({ plan, onChange, today, pillar, taskId }: { plan
             { name: 'Tomorrow', day: addDays(today, 1) },
             { name: 'Next week', day: addDays(today, 7) },
           ].map((q) => (
-            <button key={q.name} type="button" aria-pressed={plan.doDate === q.day} onClick={() => set({ doDate: plan.doDate === q.day ? '' : q.day })} className={`toy min-h-[44px] whitespace-nowrap rounded-pill border-2 px-xs text-subhead font-medium sm:px-sm ${plan.doDate === q.day ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={q.name} type="button" aria-pressed={plan.doDate === q.day} onClick={() => set({ doDate: plan.doDate === q.day ? '' : q.day })} className={`toy min-h-[36px] md:min-h-[44px] tap-pad whitespace-nowrap rounded-pill border-2 px-xs text-subhead font-medium sm:px-sm ${plan.doDate === q.day ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {q.name}
             </button>
           ))}
@@ -305,7 +305,7 @@ export function TaskPlanFields({ plan, onChange, today, pillar, taskId }: { plan
       {/* On a phone the five chips are one even row across the full width, like the quick days above; wider, at the right. */}
       <div className="grid w-full grid-cols-5 gap-xs sm:ml-auto sm:flex sm:w-auto sm:flex-wrap sm:justify-end" role="group" aria-label="How long it should take">
         {ESTIMATES.map((m) => (
-          <button key={m} type="button" aria-pressed={plan.minutes === String(m)} onClick={() => set({ minutes: plan.minutes === String(m) ? '' : String(m) })} className={`toy min-h-[44px] whitespace-nowrap rounded-pill border-2 px-0 text-subhead font-medium sm:px-sm ${plan.minutes === String(m) ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+          <button key={m} type="button" aria-pressed={plan.minutes === String(m)} onClick={() => set({ minutes: plan.minutes === String(m) ? '' : String(m) })} className={`toy min-h-[36px] md:min-h-[44px] tap-pad whitespace-nowrap rounded-pill border-2 px-0 text-subhead font-medium sm:px-sm ${plan.minutes === String(m) ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
             {m >= 60 ? `${m / 60} h` : `${m} min`}
           </button>
         ))}
@@ -339,14 +339,14 @@ export function TaskPlanFields({ plan, onChange, today, pillar, taskId }: { plan
 export function StartFocus({ task, className = '' }: { task: Node; className?: string }) {
   const min = task.estimateMin ?? 25;
   return (
-    <Link to={`/mindful?task=${task.id}&min=${min}#focus-heading`} className={`toy toy-soft inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-line bg-card px-md text-subhead font-medium ${className}`}>
+    <Link to={`/mindful?task=${task.id}&min=${min}#focus-heading`} className={`toy toy-soft inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center justify-center rounded-pill border-2 border-line bg-card px-md text-subhead font-medium ${className}`}>
       Start focus, {min} min
     </Link>
   );
 }
 
 /** The look of the panel's own actions (Start focus), so the three endings sit beside it as its equals. */
-const ACTION = 'toy toy-soft inline-flex min-h-[48px] items-center justify-center rounded-pill border-2 border-line bg-card px-md text-subhead font-medium';
+const ACTION = 'toy toy-soft inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center justify-center rounded-pill border-2 border-line bg-card px-md text-subhead font-medium';
 
 /**
  * The three ways to end a task marked Unfinished, Unresolved or Undecided (Close the unfinished, 2026-11-07), shown only while it carries a
@@ -390,7 +390,7 @@ export function TaskEndings({ task, today, onPlan, onGone }: { task: Node; today
       <p className="mt-xs m-0 text-caption text-ink-soft">{OPEN_KIND_META[task.openKind].question}</p>
       <div className="mt-xs grid gap-xs sm:flex sm:flex-wrap" role="group" aria-label={`End “${task.title}”`}>
         {onToday ? (
-          <span className="inline-flex min-h-[48px] items-center px-xs text-subhead text-ink-soft">On today. Tick it when it is done.</span>
+          <span className="inline-flex min-h-[40px] md:min-h-[48px] items-center px-xs text-subhead text-ink-soft">On today. Tick it when it is done.</span>
         ) : (
           <button type="button" disabled={run.isPending} onClick={() => run.mutate({ body: { doDate: today }, said: `“${task.title}” is on today's tasks.`, plan: { doDate: today } })} className={ACTION}>
             {OPEN_ENDINGS.doIt.name}
@@ -521,7 +521,7 @@ export function Subtasks({ task }: { task: Node }) {
         }}
       >
         <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} placeholder="Add a small step" aria-label="New subtask" className={`${FIELD_LINE} min-w-0 flex-1`} />
-        <button type="submit" disabled={add.isPending || !title.trim()} className="toy min-h-[48px] rounded-pill bg-ink px-md text-subhead font-medium text-on-ink disabled:opacity-60">
+        <button type="submit" disabled={add.isPending || !title.trim()} className="toy min-h-[40px] md:min-h-[48px] tap-pad rounded-pill bg-ink px-md text-subhead font-medium text-on-ink disabled:opacity-60">
           Add
         </button>
       </form>
@@ -625,7 +625,7 @@ export function TaskPanel({ task, today }: { task: Node; today: string }) {
           {save.error instanceof Error ? save.error.message : 'Could not save. Try again.'}
         </p>
       )}
-      <button type="button" disabled={save.isPending || problem !== null} onClick={() => save.mutate()} className="toy min-h-[48px] rounded-pill bg-ink px-md text-headline text-on-ink disabled:opacity-60">
+      <button type="button" disabled={save.isPending || problem !== null} onClick={() => save.mutate()} className="toy min-h-[40px] md:min-h-[48px] tap-pad rounded-pill bg-ink px-md text-headline text-on-ink disabled:opacity-60">
         {save.isSuccess && !save.isPending ? 'Saved' : 'Save plan'}
       </button>
       <Subtasks task={task} />

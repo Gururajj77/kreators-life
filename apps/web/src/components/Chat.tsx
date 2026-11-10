@@ -70,7 +70,7 @@ function Mark({ c, size = 16 }: { c: { icon?: IconName; mood?: number }; size?: 
 export const typingTime = (line: string | { node: ReactNode }) => (typeof line === 'string' ? Math.min(1800, 450 + line.length * 14) : 500);
 
 /** A pill that is picked or not: soft until it is picked, then ink. */
-export const chip = (on: boolean) => `toy min-h-[44px] rounded-pill border-2 px-sm text-subhead font-medium disabled:opacity-60 ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`;
+export const chip = (on: boolean) => `toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm text-subhead font-medium disabled:opacity-60 ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`;
 
 /** The person's line opens a turn; the guide's lines after it belong to that turn. */
 function turnsOf(log: ChatLine[]): ChatLine[][] {
@@ -296,7 +296,7 @@ export function ChatActions({
   return (
     <div ref={row} className={`mt-sm flex gap-sm ${stacked ? 'flex-col' : 'flex-wrap items-center'}`}>
       {skip && (
-        <button type="button" onClick={onSkip} className={`toy toy-flat inline-flex min-h-[48px] max-w-full items-center justify-center whitespace-nowrap rounded-pill border-2 border-line px-md text-headline ${stacked ? 'w-full' : 'shrink-0'}`}>
+        <button type="button" onClick={onSkip} className={`toy toy-flat inline-flex min-h-[40px] md:min-h-[48px] tap-pad max-w-full items-center justify-center whitespace-nowrap rounded-pill border-2 border-line px-md text-headline ${stacked ? 'w-full' : 'shrink-0'}`}>
           <span>{skip}</span>
         </button>
       )}
@@ -320,7 +320,7 @@ export function ChoiceChips({ choices, onPick, wide = false, full = false }: { c
     return (
       <div role="group" aria-label="Your answer" className={numbers ? 'grid gap-xs' : 'flex flex-col gap-xs'} style={numbers ? { gridTemplateColumns: `repeat(${choices.length}, minmax(0, 1fr))` } : undefined}>
         {choices.map((c) => (
-          <button key={c.value} type="button" onClick={() => onPick(c)} className="toy toy-soft min-h-[48px] w-full rounded-pill border-2 border-line bg-card px-sm text-headline">
+          <button key={c.value} type="button" onClick={() => onPick(c)} className="toy toy-soft min-h-[40px] md:min-h-[48px] tap-pad w-full rounded-pill border-2 border-line bg-card px-sm text-headline">
             <Mark c={c} />
             {c.label}
           </button>
@@ -340,7 +340,7 @@ export function ChoiceChips({ choices, onPick, wide = false, full = false }: { c
             {c.blurb && <span className="block text-subhead text-ink-soft">{c.blurb}</span>}
           </button>
         ) : (
-          <button key={c.value} type="button" onClick={() => onPick(c)} className={`toy toy-soft min-h-[44px] rounded-pill border-2 border-line bg-card px-sm text-subhead font-medium ${c.row ? 'basis-full' : ''}`}>
+          <button key={c.value} type="button" onClick={() => onPick(c)} className={`toy toy-soft min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 border-line bg-card px-sm text-subhead font-medium ${c.row ? 'basis-full' : ''}`}>
             <Mark c={c} />
             {c.label}
           </button>
@@ -593,7 +593,7 @@ export function ChatScreen({
     <div className="min-h-dvh">
       {/* Fully opaque in both themes: the near-solid card colour laid over the page's own solid base, so no line of the
           chat shows through the header or the typing box as it scrolls under them. */}
-      <header ref={head} className="safe-top sticky top-0 z-20" style={{ background: SOLID }}>
+      <header ref={head} data-top-bar="" className="safe-top sticky top-0 z-20" style={{ background: SOLID }}>
         {/* Start over on the left, Close and the theme on the right. On a phone the title and the step take a second
             line under the buttons, so they are never cut short; on a laptop they sit between them. */}
         <div className="mx-auto grid w-full max-w-[760px] grid-cols-[1fr_auto] items-center gap-x-xs gap-y-xs px-md py-sm md:grid-cols-[1fr_auto_1fr]">

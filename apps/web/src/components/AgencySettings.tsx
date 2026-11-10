@@ -313,7 +313,8 @@ export function AgencySettings() {
         </div>
       </Fold>
 
-      <h3 className="mt-sm mb-xs text-headline">Your invoice</h3>
+      {/* The two papers' headings sit the same 32px under what comes before them, closer to their own paper than to it. */}
+      <h3 className="mt-lg mb-xs text-headline">Your invoice</h3>
       <div className="legal-host">
         <div aria-hidden="true" />
         <InvoiceView invoice={preview} editor={editor} />

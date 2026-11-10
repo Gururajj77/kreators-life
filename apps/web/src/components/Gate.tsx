@@ -32,7 +32,7 @@ export function Gate({ moduleKey, children }: { moduleKey: string; children: Rea
           {m.available ? 'You hid it. Show it again from Apps.' : 'It is not available on your account right now.'}
         </p>
         {m.available && (
-          <Link to="/apps" className="toy mt-md inline-flex min-h-[48px] items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
+          <Link to="/apps" className="toy mt-md inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center rounded-pill bg-ink px-md font-semibold text-on-ink">
             Open Apps
           </Link>
         )}

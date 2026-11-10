@@ -215,15 +215,21 @@ export function Finance() {
           )}
 
           <section className="mt-lg" aria-labelledby="budgets-heading">
-            <div className="flex items-center justify-between gap-sm">
-              <h2 id="budgets-heading" className="text-title2">
-                Budgets
-              </h2>
-              <Button variant="ghost" onClick={() => setSheet('budgets')}>
-                {d.budgets.length ? 'Edit' : 'Set budgets'}
-              </Button>
+            {/* As Section lays it out: the button level with the title, one title line tall, and the line under "Budgets" in the title's
+                column, so it sits as close to the title as under every other title on the page and never runs under the button. */}
+            <div className="flex items-start justify-between gap-sm">
+              <div className="min-w-0">
+                <h2 id="budgets-heading" className="text-title2">
+                  Budgets
+                </h2>
+                {d.budgets.length === 0 && <p className="mt-xs m-0 text-balance text-subhead text-ink-soft">A monthly ceiling per expense category. The bar fills as you spend.</p>}
+              </div>
+              <div className="flex h-[1.2em] shrink-0 items-center text-[24px] leading-none">
+                <Button variant="ghost" onClick={() => setSheet('budgets')}>
+                  {d.budgets.length ? 'Edit' : 'Set budgets'}
+                </Button>
+              </div>
             </div>
-            {d.budgets.length === 0 && <p className="mt-xs m-0 text-subhead text-ink-soft">A monthly ceiling per expense category. The bar fills as you spend.</p>}
             <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
               {d.budgets.map((b) => {
                 const pct = Math.round((b.spentCents / Math.max(1, b.monthlyCents)) * 100);
@@ -355,7 +361,7 @@ function TxRow({ t, currency, onChange }: { t: FinanceTransaction; currency: str
               <span>
                 {s.name}’s share {money(s.cents, t.currency || currency)}
               </span>
-              <button type="button" onClick={() => paySplit.mutate(i)} disabled={paySplit.isPending} className={`toy toy-soft min-h-[44px] rounded-pill px-sm text-caption font-medium ${s.status === 'paid' ? 'bg-r4 text-on-fill' : 'bg-paper'}`}>
+              <button type="button" onClick={() => paySplit.mutate(i)} disabled={paySplit.isPending} className={`toy toy-soft min-h-[36px] md:min-h-[44px] tap-pad rounded-pill px-sm text-caption font-medium ${s.status === 'paid' ? 'bg-r4 text-on-fill' : 'bg-paper'}`}>
                 {s.status === 'paid' ? 'Paid' : 'Mark paid'}
               </button>
             </li>
@@ -535,9 +541,9 @@ function CategoryChips({ cats, value, onChange }: { cats: readonly string[]; val
   return (
     <fieldset className="m-0 border-0 p-0">
       <legend className="text-subhead font-semibold">Category</legend>
-      <div className="mt-xs flex flex-wrap gap-xs">
+      <div className="fill-row mt-xs flex flex-wrap gap-xs">
         {cats.map((c) => (
-          <button key={c} type="button" aria-pressed={value === c} onClick={() => onChange(c)} className={`min-h-[44px] rounded-pill border-2 px-sm py-xs text-subhead font-medium ${value === c ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
+          <button key={c} type="button" aria-pressed={value === c} onClick={() => onChange(c)} className={`min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm py-0 md:py-xs text-subhead font-medium ${value === c ? 'border-ink bg-ink text-on-ink' : 'border-line bg-card'}`}>
             {c}
           </button>
         ))}
@@ -670,7 +676,7 @@ function DueSheet({ open, onClose, onDone }: { open: boolean; onClose: () => voi
               ['owe', 'I owe someone'],
             ] as const
           ).map(([k, label]) => (
-            <button key={k} type="button" aria-pressed={direction === k} onClick={() => { setDirection(k); setCategory(''); }} className={`toy min-h-[48px] rounded-pill border-2 text-subhead font-medium ${direction === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={k} type="button" aria-pressed={direction === k} onClick={() => { setDirection(k); setCategory(''); }} className={`toy min-h-[40px] md:min-h-[48px] tap-pad rounded-pill border-2 text-subhead font-medium ${direction === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {label}
             </button>
           ))}
@@ -745,7 +751,7 @@ function RecurringSheet({ open, onClose, onDone }: { open: boolean; onClose: () 
               ['income', 'Comes in'],
             ] as const
           ).map(([k, label]) => (
-            <button key={k} type="button" aria-pressed={kind === k} onClick={() => { setKind(k); setCategory(''); }} className={`toy min-h-[48px] rounded-pill border-2 text-subhead font-medium ${kind === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={k} type="button" aria-pressed={kind === k} onClick={() => { setKind(k); setCategory(''); }} className={`toy min-h-[40px] md:min-h-[48px] tap-pad rounded-pill border-2 text-subhead font-medium ${kind === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {label}
             </button>
           ))}
@@ -814,7 +820,7 @@ function GoalSheet({ open, onClose, onDone }: { open: boolean; onClose: () => vo
               ['earn', 'Earn'],
             ] as const
           ).map(([k, label]) => (
-            <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={`toy min-h-[48px] rounded-pill border-2 text-subhead font-medium ${kind === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
+            <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={`toy min-h-[40px] md:min-h-[48px] tap-pad rounded-pill border-2 text-subhead font-medium ${kind === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
               {label}
             </button>
           ))}

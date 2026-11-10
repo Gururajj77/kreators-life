@@ -53,16 +53,22 @@ export function Content() {
       </AppCover>
 
       <section className="mt-lg" aria-labelledby="brands-heading">
-        <div className="flex items-center justify-between gap-sm">
-          <h2 id="brands-heading" className="text-title2">
-            Brand folders
-          </h2>
-          <Button onClick={() => setMaking(true)} disabled={Boolean(d && d.brands.length >= MAX_BRANDS)}>
-            New brand
-          </Button>
+        {/* Empty, the line sits beside the button, so the button is held to one title line (as on Section). With rows, the button
+            keeps the row's height, so it never hangs over the first card. */}
+        <div className={`flex justify-between gap-sm ${(d && d.brands.length === 0) ? 'items-start' : 'items-center'}`}>
+          <div className="min-w-0">
+            <h2 id="brands-heading" className="text-title2">
+              Brand folders
+            </h2>
+            {d && d.brands.length === 0 && <p className="mt-xs m-0 text-balance text-subhead text-ink-soft">No folders yet. Make one for your own brand, or for a client.</p>}
+          </div>
+          <div className={`flex shrink-0 items-center ${(d && d.brands.length === 0) ? 'h-[1.2em] text-[24px] leading-none' : ''}`}>
+            <Button onClick={() => setMaking(true)} disabled={Boolean(d && d.brands.length >= MAX_BRANDS)}>
+              New brand
+            </Button>
+          </div>
         </div>
         {q.isError && <p className="mt-sm m-0 font-semibold">{errorText(q.error, 'Could not load.')}</p>}
-        {d && d.brands.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">No folders yet. Make one for your own brand, or for a client.</p>}
         <ul data-tile-list="paged" className={`mt-sm grid list-none gap-xs p-0 m-0 ${evenGrid(d?.brands.length ?? 0, FOLDER_COLS)}`}>
           {d?.brands.map((b, i, all) => (
             <li key={b.id} className={evenTile(i, all.length, FOLDER_COLS)}>

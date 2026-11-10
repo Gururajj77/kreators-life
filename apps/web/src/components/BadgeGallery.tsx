@@ -147,7 +147,7 @@ export function BadgeGallery() {
         items={TIER_ITEMS}
         value={tier ?? 'all'}
         onChange={setTierPick}
-        pillClass={(on) => `toy min-h-[44px] rounded-pill border-2 px-md text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+        pillClass={(on) => `toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-md text-subhead font-medium ${on ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
       />
 
       {q.isLoading && (

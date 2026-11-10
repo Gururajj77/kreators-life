@@ -105,7 +105,7 @@ export function Cohort({ cohortId, back = { to: '/school', label: 'School' } }: 
               <p className="m-0 text-card-note text-ink-soft">Try again in a moment.</p>
             </>
           )}
-          <Link to="/school#programs-heading" className="toy btn-primary mt-md inline-flex min-h-[48px] items-center justify-center gap-xs rounded-pill bg-ink px-md text-headline text-on-ink">
+          <Link to="/school#programs-heading" className="toy btn-primary mt-md inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center justify-center gap-xs rounded-pill bg-ink px-md text-headline text-on-ink">
             See the programs
           </Link>
         </div>
@@ -211,7 +211,7 @@ export function Cohort({ cohortId, back = { to: '/school', label: 'School' } }: 
               </CardHead>
               <div className="mt-sm flex flex-wrap justify-end gap-xs">
                 {s.onlineUrl && (
-                  <a href={s.onlineUrl} target="_blank" rel="noreferrer" className="toy toy-ink btn-outline inline-flex min-h-[48px] items-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-md text-headline font-semibold text-ink">
+                  <a href={s.onlineUrl} target="_blank" rel="noreferrer" className="toy toy-ink btn-outline inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-md text-headline font-semibold text-ink">
                     Join
                     <Icon icon={ArrowUpRight} size={16} />
                   </a>
@@ -249,9 +249,7 @@ export function Cohort({ cohortId, back = { to: '/school', label: 'School' } }: 
             </li>
           ))}
         </ul>
-        <div className="mt-xs">
-          <ErrorLine e={attend.error} />
-        </div>
+        <ErrorLine e={attend.error} className="mt-xs" />
       </Section>
 
       {/* The cohort's discussion: everyone enrolled (or finished) and whoever runs it; the server decides who is in the room. */}
@@ -293,9 +291,7 @@ export function Cohort({ cohortId, back = { to: '/school', label: 'School' } }: 
             })}
           </ul>
           <Pager page={d.learnersPage ?? undefined} prefix="l" label="learners" only={TEN_A_PAGE} />
-          <div className="mt-xs">
-            <ErrorLine e={complete.error} />
-          </div>
+          <ErrorLine e={complete.error} className="mt-xs" />
         </Section>
       )}
 
@@ -337,7 +333,7 @@ const RESOURCE_CAPTION: Record<LessonResourceKind, string> = {
 };
 const RESOURCES_CAPTION = 'Read it here, then try it. Each one opens on its own.';
 const RESOURCE_ICON: Record<LessonResourceKind, LucideIcon> = { video: Video, book: BookOpen, file: Download, link: Link2 };
-const WAY_IN = 'toy toy-soft inline-flex min-h-[44px] w-full items-center justify-center gap-xs rounded-pill border border-line bg-card-strong px-md text-center text-subhead font-semibold';
+const WAY_IN = 'toy toy-soft inline-flex min-h-[36px] md:min-h-[44px] tap-pad w-full items-center justify-center gap-xs rounded-pill border border-line bg-card-strong px-md text-center text-subhead font-semibold';
 
 /**
  * One way into a lesson, full width. A file shows its download mark and every other way its arrow; beside others, each also leads with
@@ -1020,9 +1016,7 @@ function SubmissionReview({ s, onChange }: { s: Submission; onChange: () => void
               Ask for changes
             </Button>
           </div>
-          <div className="mt-xs">
-            <ErrorLine e={feedback.error} />
-          </div>
+          <ErrorLine e={feedback.error} className="mt-xs" />
         </div>
       )}
     </div>
