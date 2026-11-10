@@ -1,4 +1,5 @@
-import { RELATIONSHIP_BY_KEY } from '@kreators/shared';
+import { formatCount, RELATIONSHIP_BY_KEY } from '@kreators/shared';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Button } from '../components/Button';
 import { StatTile } from '../components/Charts';
@@ -7,9 +8,11 @@ import { PageHeader } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { Toggle } from '../components/Toggle';
 import { api } from '../lib/api';
-import { useAuthed, useMe } from '../lib/queries';
+import { useMe } from '../lib/queries';
+import { useSession } from '../lib/store';
 import { useParamState } from '../lib/useParamState';
 import { FIELD_FILTER } from '../lib/ui';
+import { ErrorLine } from '../components/ErrorLine';
 import { clockSeconds, shortDate } from '../lib/date';
 
 const LEVELS: [string, string][] = [
@@ -45,7 +48,10 @@ export function Logs() {
     return () => window.clearTimeout(t);
   }, [text]); // eslint-disable-line react-hooks/exhaustive-deps
   const params = new URLSearchParams({ ...(level ? { level } : {}), ...(area ? { area } : {}), ...(actor ? { actor } : {}), ...(q ? { q } : {}) }).toString();
-  const d = useAuthed(['logs', params, pg.query], () => api.appLogs(params, pg.query), isAdmin);
+  const token = useSession((s) => s.token);
+  // Keep the lines on screen while a new answer loads (2026-11-09). Before, the whole block left, so a field lost the keyboard and a new
+  // page went to the top.
+  const d = useQuery({ queryKey: ['logs', params, pg.query], queryFn: () => api.appLogs(params, pg.query), enabled: Boolean(token) && isAdmin, placeholderData: keepPreviousData });
   // Live: look again every fifteen seconds while the page is open.
   useEffect(() => {
     if (!live) return;
@@ -59,9 +65,7 @@ export function Logs() {
       <PageHeader back={{ to: '/internal/observability', label: 'Dev Tools' }} eyebrow="Operations" title="Logs" lede="What is happening, where and by whom. Changes, refused requests and errors. Lines are kept for thirty days." />
 
       {!isAdmin && me.data && (
-        <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-subhead">
-          Only a super admin reads the logs. The lines name people.
-        </p>
+        <ErrorLine e="Only a super admin reads the logs. The lines name people." className="mt-md" />
       )}
       {isAdmin && d.isPending && (
         <p className="mt-md m-0 text-subhead text-ink-soft" role="status">
@@ -69,17 +73,15 @@ export function Logs() {
         </p>
       )}
       {d.isError && (
-        <p role="alert" className="mt-md m-0 rounded-tile bg-r1/15 p-sm text-subhead">
-          Could not load the logs. Try again in a moment.
-        </p>
+        <ErrorLine e="Could not load the logs. Try again in a moment." className="mt-md" />
       )}
 
       {data && (
         <>
           <div className="mt-md grid grid-cols-3 gap-xs">
-            <StatTile label="Errors" value={data.last24h.error} hint="last 24 hours, tap to see them" onClick={() => { setLevel(level === 'error' ? '' : 'error'); pg.reset(); }} pressed={level === 'error'} />
-            <StatTile label="Refused" value={data.last24h.warn} hint="last 24 hours, tap to see them" onClick={() => { setLevel(level === 'warn' ? '' : 'warn'); pg.reset(); }} pressed={level === 'warn'} />
-            <StatTile label="Changes" value={data.last24h.info} hint="last 24 hours, tap to see them" onClick={() => { setLevel(level === 'info' ? '' : 'info'); pg.reset(); }} pressed={level === 'info'} />
+            <StatTile label="Errors" value={formatCount(data.last24h.error)} hint="last 24 hours, tap to see them" onClick={() => { setLevel(level === 'error' ? '' : 'error'); pg.reset(); }} pressed={level === 'error'} />
+            <StatTile label="Refused" value={formatCount(data.last24h.warn)} hint="last 24 hours, tap to see them" onClick={() => { setLevel(level === 'warn' ? '' : 'warn'); pg.reset(); }} pressed={level === 'warn'} />
+            <StatTile label="Changes" value={formatCount(data.last24h.info)} hint="last 24 hours, tap to see them" onClick={() => { setLevel(level === 'info' ? '' : 'info'); pg.reset(); }} pressed={level === 'info'} />
           </div>
 
           <p className="mt-md m-0 text-subhead text-ink-soft">Newest first. Pick a kind or a person. Tap a name to see only that person. Tap Look now for new lines.</p>

@@ -3,6 +3,7 @@ import {
   MAX_TEAM,
   MAX_TEAM_INVITES,
   TEAM_ROLE_META,
+  TEAM_TABS,
   isTeamRole,
   parseTeamAccess,
   teamAllows,
@@ -13,11 +14,12 @@ import {
   type TeamRole,
   type TeamStatus,
 } from '@kreators/shared';
-import type { AppEnv } from '../env';
+import type { AppEnv, UserRow } from '../env';
 import { blockedEither, DELETED_NAME, liveUser, nameOf, noteStmt, notify, nowIso, newId, pageOf, paged, personBy, publicOf, str } from '../db';
 import { agencyFace } from '../portalAccess';
 import { requestFriend } from './bond';
 import { portalClientById, portalViewFor, type PortalPending } from './agency';
+import { connectionsCameTrue } from '../invites';
 
 /**
  * The Agency team (wave 14). `agencyTeam` is the owner's side, mounted at /agency/team (gated by the `agency` module; the team gate refuses
@@ -110,44 +112,71 @@ agencyTeam.post('/', async (c) => {
   if (target && target.id === user.id) return c.json({ error: 'That is you. Ask someone else.' }, 400);
   const blocked = target ? await blockedEither(db, user.id, target.id) : false;
   if (!target || target.display_name === DELETED_NAME || blocked) return c.json({ error: NOT_FOUND_PERSON }, 404);
+  const r = await inviteToTeam(db, user, target, { role, access: body.access, clientId: body.clientId }, { friendRequest: true });
+  return c.json(r.body, r.code);
+});
+
+/**
+ * The one invite to an Agency team, with two callers: the owner's own POST above, and the team's Connect people in Admin
+ * (routes/adminConnect.ts), which asks on the owner's behalf. The caller has found the person and checked self, nobody and a block.
+ * Only the owner's own invite also sends a friend request in their name; the team never makes one for them.
+ */
+export async function inviteToTeam(
+  db: D1Database,
+  owner: UserRow,
+  target: UserRow,
+  input: { role: TeamRole; access?: unknown; clientId?: unknown },
+  opts: { friendRequest: boolean; byTeam?: boolean },
+): Promise<{ code: 201 | 400 | 409; body: { id?: string; friendRequest?: 'sent' | 'friends' | 'skipped'; error?: string } }> {
+  const role = input.role;
   let clientId: string | null = null;
   if (role === 'client') {
-    const cl = typeof body.clientId === 'string' ? await db.prepare('SELECT id FROM agency_clients WHERE id = ? AND user_id = ?').bind(body.clientId, user.id).first<{ id: string }>() : null;
-    if (!cl) return c.json({ error: 'pick which client they are' }, 400);
+    const cl = typeof input.clientId === 'string' ? await db.prepare('SELECT id FROM agency_clients WHERE id = ? AND user_id = ?').bind(input.clientId, owner.id).first<{ id: string }>() : null;
+    if (!cl) return { code: 400, body: { error: 'pick which client they are' } };
     clientId = cl.id;
   }
   const [open, counts] = await Promise.all([
-    db.prepare("SELECT id FROM agency_team WHERE owner_id = ? AND member_id = ? AND status IN ('invited', 'active')").bind(user.id, target.id).first(),
-    db.prepare("SELECT COUNT(*) AS n, SUM(CASE WHEN status = 'invited' THEN 1 ELSE 0 END) AS waiting FROM agency_team WHERE owner_id = ? AND status IN ('invited', 'active')").bind(user.id).first<{ n: number; waiting: number | null }>(),
+    db.prepare("SELECT id FROM agency_team WHERE owner_id = ? AND member_id = ? AND status IN ('invited', 'active')").bind(owner.id, target.id).first(),
+    db.prepare("SELECT COUNT(*) AS n, SUM(CASE WHEN status = 'invited' THEN 1 ELSE 0 END) AS waiting FROM agency_team WHERE owner_id = ? AND status IN ('invited', 'active')").bind(owner.id).first<{ n: number; waiting: number | null }>(),
   ]);
-  if (open) return c.json({ error: 'They are already on your team or invited.' }, 409);
-  if ((counts?.n ?? 0) >= MAX_TEAM) return c.json({ error: `A team holds up to ${MAX_TEAM} people.` }, 400);
-  if ((counts?.waiting ?? 0) >= MAX_TEAM_INVITES) return c.json({ error: `Up to ${MAX_TEAM_INVITES} invites can wait at once. Resend or remove one first.` }, 400);
-  const access = parseTeamAccess(body.access ?? teamDefaults(role), role);
+  if (open) return { code: 409, body: { error: 'They are already on your team or invited.' } };
+  if ((counts?.n ?? 0) >= MAX_TEAM) return { code: 400, body: { error: `A team holds up to ${MAX_TEAM} people.` } };
+  if ((counts?.waiting ?? 0) >= MAX_TEAM_INVITES) return { code: 400, body: { error: `Up to ${MAX_TEAM_INVITES} invites can wait at once. Resend or remove one first.` } };
+  // The team's invite (Admin, Connect people) opens nothing of the owner's books: every tab starts Off, so what the member sees is the
+  // owner's own choice under Agency, Team, never the team's (2026-11-09, the safety review).
+  const access = opts.byTeam ? parseTeamAccess(Object.fromEntries(TEAM_TABS.map((t) => [t, 'off'])), role) : parseTeamAccess(input.access ?? teamDefaults(role), role);
   const id = newId();
   const now = nowIso();
   try {
     await db
       .prepare("INSERT INTO agency_team (id, owner_id, member_id, role, status, access_json, client_id, invited_at, updated_at) VALUES (?, ?, ?, ?, 'invited', ?, ?, ?, ?)")
-      .bind(id, user.id, target.id, role, JSON.stringify(access), clientId, now, now)
+      .bind(id, owner.id, target.id, role, JSON.stringify(access), clientId, now, now)
       .run();
   } catch {
     // Two taps at once: the unique open row lets one in.
-    return c.json({ error: 'They are already on your team or invited.' }, 409);
+    return { code: 409, body: { error: 'They are already on your team or invited.' } };
   }
-  const agencyName = await agencyNameOf(db, user.id);
+  const agencyName = await agencyNameOf(db, owner.id);
   const word = roleWord(role);
-  await teamNote(db, target.id, `team-${id}`, `${agencyName} asked you to join their Agency as ${article(word)} ${word.toLowerCase()}`, 'Accept or decline in Agency.', `/agency?team=${id}`);
+  await teamNote(
+    db,
+    target.id,
+    `team-${id}`,
+    opts.byTeam ? `The team asked you to join ${agencyName}’s Agency as ${article(word)} ${word.toLowerCase()}` : `${agencyName} asked you to join their Agency as ${article(word)} ${word.toLowerCase()}`,
+    opts.byTeam ? `Accept or decline in Agency. You see their work once ${agencyName} gives you access.` : 'Accept or decline in Agency.',
+    `/agency?team=${id}`,
+  );
+  if (!opts.friendRequest) return { code: 201, body: { id, friendRequest: 'skipped' } };
   // A friend request too, when they are not friends yet and the person takes requests. requestFriend refuses across a block and turns an
   // ask they made first into a yes. When they do not take requests, the invite still goes and nothing is said to them about it.
-  const friends = await db.prepare("SELECT 1 AS x FROM friendships WHERE status = 'accepted' AND ((requester_id = ?1 AND recipient_id = ?2) OR (requester_id = ?2 AND recipient_id = ?1))").bind(user.id, target.id).first();
+  const friends = await db.prepare("SELECT 1 AS x FROM friendships WHERE status = 'accepted' AND ((requester_id = ?1 AND recipient_id = ?2) OR (requester_id = ?2 AND recipient_id = ?1))").bind(owner.id, target.id).first();
   let friendRequest: 'sent' | 'friends' | 'skipped' = friends ? 'friends' : 'skipped';
   if (!friends && publicOf(target).allowFriendRequests) {
-    const r = await requestFriend(db, user, target.id, `${agencyName} on Agency`);
+    const r = await requestFriend(db, owner, target.id, `${agencyName} on Agency`);
     friendRequest = r.code === 201 ? 'sent' : r.body.status === 'friends' ? 'friends' : r.code === 409 && r.body.error === 'already asked' ? 'sent' : 'skipped';
   }
-  return c.json({ id, friendRequest }, 201);
-});
+  return { code: 201, body: { id, friendRequest } };
+}
 
 // Change a member's role, access or tied client. A new role starts from its defaults unless access comes with it.
 agencyTeam.patch('/:id', async (c) => {
@@ -194,19 +223,27 @@ agencyTeam.post('/:id/resend', async (c) => {
 
 // Remove someone (or take back an invite). Their access ends on their next request, since the gate reads the row every time.
 agencyTeam.delete('/:id', async (c) => {
-  const db = c.env.DB;
   const user = c.get('user');
+  const r = await removeFromTeam(c.env.DB, user.id, c.req.param('id'), ['invited', 'active']);
+  return c.json(r.body, r.code);
+});
+
+/**
+ * Remove a member or take back an invite, the one way: the owner's DELETE above, and the team's Withdraw in Connect people
+ * (routes/adminConnect.ts), which may only take back an invite still waiting (`from` ['invited']).
+ */
+export async function removeFromTeam(db: D1Database, ownerId: string, id: string, from: readonly ('invited' | 'active')[]): Promise<{ code: 200 | 404; body: { ok?: true; error?: string } }> {
   const now = nowIso();
-  const row = await db.prepare("SELECT * FROM agency_team WHERE id = ? AND owner_id = ? AND status IN ('invited', 'active')").bind(c.req.param('id'), user.id).first<TeamRow>();
-  if (!row) return c.json({ error: 'not found' }, 404);
-  const res = await db.prepare("UPDATE agency_team SET status = 'removed', ended_by = 'owner', removed_at = ?, updated_at = ? WHERE id = ? AND owner_id = ? AND status IN ('invited', 'active')").bind(now, now, row.id, user.id).run();
-  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
-  const agencyName = await agencyNameOf(db, user.id);
+  const row = await db.prepare("SELECT * FROM agency_team WHERE id = ? AND owner_id = ? AND status IN ('invited', 'active')").bind(id, ownerId).first<TeamRow>();
+  if (!row || !from.includes(row.status as 'invited' | 'active')) return { code: 404, body: { error: 'not found' } };
+  const res = await db.prepare('UPDATE agency_team SET status = \'removed\', ended_by = \'owner\', removed_at = ?, updated_at = ? WHERE id = ? AND owner_id = ? AND status = ?').bind(now, now, row.id, ownerId, row.status).run();
+  if (!res.meta.changes) return { code: 404, body: { error: 'not found' } };
+  const agencyName = await agencyNameOf(db, ownerId);
   if (row.status === 'active') await notify(db, row.member_id, 'agency', `${agencyName} removed you from their team`, 'Their Agency is closed to you now.', '/agency');
   // A waiting invite that is taken back leaves no line to answer.
   else await db.prepare('DELETE FROM notifications WHERE id = ? AND user_id = ?').bind(`team-${row.id}`, row.member_id).run();
-  return c.json({ ok: true });
-});
+  return { code: 200, body: { ok: true } };
+}
 
 // ---- the member's side (core)
 
@@ -246,6 +283,8 @@ myTeams.post('/:id/answer', async (c) => {
     ? await db.prepare("UPDATE agency_team SET status = 'active', joined_at = ?, updated_at = ? WHERE id = ? AND member_id = ? AND status = 'invited'").bind(now, now, row.id, user.id).run()
     : await db.prepare("UPDATE agency_team SET status = 'removed', ended_by = 'member', removed_at = ?, updated_at = ? WHERE id = ? AND member_id = ? AND status = 'invited'").bind(now, now, row.id, user.id).run();
   if (!res.meta.changes) return c.json({ error: 'You answered already.' }, 409);
+  // An invite the team made (Admin, Connect people) came true with this yes.
+  if (body.yes) await connectionsCameTrue(db, 'agency', { refId: row.id });
   await db.prepare('UPDATE notifications SET read_at = COALESCE(read_at, ?) WHERE id = ? AND user_id = ?').bind(now, `team-${row.id}`, user.id).run();
   await notify(db, row.owner_id, 'agency', body.yes ? `${nameOf(user)} joined your team` : `${nameOf(user)} said no to joining your team`, body.yes ? `As ${article(roleWord(row.role))} ${roleWord(row.role).toLowerCase()}.` : '', '/agency?tab=team');
   return c.json({ ok: true, status: body.yes ? 'active' : 'removed' });

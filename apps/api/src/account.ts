@@ -110,6 +110,18 @@ export async function deleteAccount(db: D1Database, userId: string, env: { CLICK
     // The Agency team: every row where they own the agency or are on someone's team, then their name off what they did on others' agencies
     // (the lines and notes stay on the owner's books as "A former team member").
     db.prepare('DELETE FROM agency_team WHERE owner_id = ? OR member_id = ?').bind(userId, userId),
+    // Connections the team made with them (Admin, Connect people) go; one they made as staff keeps its row without who made it. The audit
+    // lines about those connections keep the fact and lose their words first (the two ids and the reason staff typed, which may name them).
+    db.prepare("UPDATE audit_logs SET before_summary = '', after_summary = '' WHERE resource_type = 'team_connection' AND resource_id IN (SELECT id FROM team_connections WHERE first_user_id = ?1 OR second_user_id = ?1)").bind(userId),
+    db.prepare('DELETE FROM team_connections WHERE first_user_id = ? OR second_user_id = ?').bind(userId, userId),
+    db.prepare('UPDATE team_connections SET created_by = NULL WHERE created_by = ?').bind(userId),
+    // Joining by invite (2026-11-10): a code they made that nobody used is taken back and every label they gave goes (it may name someone);
+    // a used code stays, pointing at the "Deleted member" row, so it can never be used again. Their waitlist row (by their email, read
+    // before the account row is wiped at the end) goes, and a waitlist decision they made loses who made it.
+    db.prepare("UPDATE invite_codes SET revoked_at = COALESCE(revoked_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), revoked_by = COALESCE(revoked_by, ?1) WHERE created_by = ?1 AND used_by IS NULL").bind(userId),
+    db.prepare("UPDATE invite_codes SET label = '' WHERE created_by = ?").bind(userId),
+    db.prepare('DELETE FROM waitlist WHERE email = (SELECT email FROM users WHERE id = ?)').bind(userId),
+    db.prepare('UPDATE waitlist SET decided_by = NULL WHERE decided_by = ?').bind(userId),
     db.prepare('UPDATE agency_log SET actor_id = NULL WHERE actor_id = ?').bind(userId),
     db.prepare('UPDATE agency_notes SET author_id = NULL WHERE author_id = ?').bind(userId),
     db.prepare('DELETE FROM portal_sessions WHERE client_id IN (SELECT id FROM agency_clients WHERE user_id = ?)').bind(userId),
@@ -337,12 +349,12 @@ export async function deleteAccount(db: D1Database, userId: string, env: { CLICK
     db.prepare("UPDATE proposals SET title = 'Deleted pitch', pitch = '' WHERE user_id = ?").bind(userId),
     db.prepare('UPDATE decision_log SET actor_user_id = NULL WHERE actor_user_id = ?').bind(userId),
     // Army: a role they never took goes; one they took stays on the brand's campaign, with the fee, as its record. A brand or campaign they
-    // started stays for the people on it; a brand of theirs with nothing and nobody else in it goes.
+    // started stays for the people on it; a brand of theirs with nothing and nobody else in it goes (an ask still waiting is nobody; it goes with the brand).
     db.prepare("DELETE FROM campaign_assignments WHERE creator_user_id = ? AND status IN ('offered', 'declined')").bind(userId),
     db.prepare("UPDATE deliverable_versions SET note = '' WHERE submitted_by = ?").bind(userId),
     db.prepare('UPDATE campaign_events SET actor_user_id = NULL WHERE actor_user_id = ?').bind(userId),
     db.prepare('UPDATE campaigns SET owner_user_id = NULL WHERE owner_user_id = ?').bind(userId),
-    db.prepare('DELETE FROM organizations WHERE created_by = ?1 AND id NOT IN (SELECT organization_id FROM organization_members WHERE user_id != ?1) AND id NOT IN (SELECT organization_id FROM campaigns) AND id NOT IN (SELECT organization_id FROM bounties WHERE organization_id IS NOT NULL) AND id NOT IN (SELECT organization_id FROM opportunities WHERE organization_id IS NOT NULL) AND id NOT IN (SELECT organization_id FROM run_collabs WHERE organization_id IS NOT NULL)').bind(userId),
+    db.prepare('DELETE FROM organizations WHERE created_by = ?1 AND id NOT IN (SELECT organization_id FROM organization_members WHERE user_id != ?1 AND status = \'active\') AND id NOT IN (SELECT organization_id FROM campaigns) AND id NOT IN (SELECT organization_id FROM bounties WHERE organization_id IS NOT NULL) AND id NOT IN (SELECT organization_id FROM opportunities WHERE organization_id IS NOT NULL) AND id NOT IN (SELECT organization_id FROM run_collabs WHERE organization_id IS NOT NULL)').bind(userId),
     db.prepare('DELETE FROM organization_members WHERE user_id = ?').bind(userId),
     db.prepare('UPDATE organizations SET created_by = NULL WHERE created_by = ?').bind(userId),
     // What the team made for everyone stays without who made it: published knowledge, verified tools, store items and kits. A draft and an

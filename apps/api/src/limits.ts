@@ -58,6 +58,8 @@ export const LIMITS = {
   companion: { max: 60, windowSec: 3600 },
   /** Coaching asks: a coach asking a student, a student asking a coach, and asking the team to be made a life coach. */
   coachAsk: { max: 20, windowSec: 3600 },
+  /** Connections the team makes or ends in Admin, Connect people. /admin is a door before the session check, so it counts per address. */
+  connect: { max: 60, windowSec: 3600 },
   /** What a life coach writes for a student: notes, and tasks added or changed. */
   coachWrite: { max: 60, windowSec: 3600 },
   /** A coach's page for one student: a period's report and the patterns, each many reads on the server. */
@@ -131,6 +133,12 @@ export const LIMITS = {
   eventsPublic: { max: 300, windowSec: 600 },
   /** Joining an event from its public page (POST /party/events/:id/arrive), per person. */
   eventJoin: { max: 30, windowSec: 3600 },
+  /** Whether an invite code works (GET /public/invite/:code), per address: enough for a few typos, too few to guess at a ten-character code. */
+  inviteCheck: { max: 30, windowSec: 600 },
+  /** Joining the waitlist, per address. The answer is the same for every email, and a new row sends one mail. */
+  waitlist: { max: 5, windowSec: 3600 },
+  /** Making invite codes (up to twenty at a time) and taking one back, per person. */
+  inviteMake: { max: 30, windowSec: 3600 },
 } as const;
 
 export type LimitName = keyof typeof LIMITS;
@@ -160,7 +168,7 @@ export const ROUTE_LIMITS: readonly {
   /** Count the address instead of the person. */
   by?: 'address';
   /** Count only a request whose body carries a discount code, so an ordinary checkout, enrolment or RSVP never spends the code budget. `adminKey` counts only a wrong key. */
-  when?: 'discountCode' | 'appPrefs' | 'datePrefs' | 'adminKey';
+  when?: 'discountCode' | 'appPrefs' | 'datePrefs' | 'adminKey' | 'session';
 }[] = [
   ...CHANNEL_DOORS,
   ...(['GET', 'POST', 'PATCH', 'PUT', 'DELETE'] as const).map((method) => ({ method, path: '/admin/*', limit: 'adminKey' as const, by: 'address' as const, when: 'adminKey' as const })),
@@ -423,6 +431,28 @@ export const ROUTE_LIMITS: readonly {
   { method: 'DELETE', path: '/agency/team/:id', limit: 'agency' },
   { method: 'POST', path: '/me/teams/:id/answer', limit: 'prefs' },
   { method: 'POST', path: '/me/teams/:id/leave', limit: 'prefs' },
+  // Connect people (2026-11-09): the team's connect and end, and a person's answer to a friend suggestion, which may send a friend request.
+  // Since 2026-11-10 staff reach it too, at /manage/connect: one count per person whichever door, and per address only for the key.
+  { method: 'POST', path: '/admin/connect', limit: 'connect', when: 'session' },
+  { method: 'DELETE', path: '/admin/connect/:id', limit: 'connect', when: 'session' },
+  { method: 'POST', path: '/manage/connect', limit: 'connect' },
+  { method: 'DELETE', path: '/manage/connect/:id', limit: 'connect' },
+  { method: 'POST', path: '/me/suggestions/:id/answer', limit: 'intro' },
+  // A brand's ask onto its team and the person's answer (2026-11-10), and the team naming who runs a cohort.
+  { method: 'POST', path: '/orgs/:id/members', limit: 'intro' },
+  { method: 'POST', path: '/me/org-invites/:orgId/answer', limit: 'intro' },
+  { method: 'PATCH', path: '/school/cohorts/:id/manager', limit: 'prefs' },
+  // Joining by invite (2026-11-10): a code checked and the waitlist per address (no session), a maker's codes per person, Admin's under the
+  // admin key's own door like every /admin call, with the make and take-back counted too.
+  { method: 'GET', path: '/public/invite/:code', limit: 'inviteCheck', by: 'address' },
+  { method: 'POST', path: '/public/waitlist', limit: 'waitlist', by: 'address' },
+  { method: 'POST', path: '/me/invites', limit: 'inviteMake' },
+  { method: 'DELETE', path: '/me/invites/:id', limit: 'inviteMake' },
+  { method: 'POST', path: '/admin/invites', limit: 'inviteMake' },
+  { method: 'DELETE', path: '/admin/invites/:id', limit: 'inviteMake' },
+  { method: 'POST', path: '/admin/invites/waitlist/:id/approve', limit: 'inviteMake' },
+  { method: 'POST', path: '/admin/invites/waitlist/:id/decline', limit: 'inviteMake' },
+  { method: 'DELETE', path: '/admin/invites/waitlist/:id', limit: 'inviteMake' },
 ];
 
 /** The doors that take no session are limited before the session check; everything else after it, per person. /admin is mounted before that check too. */

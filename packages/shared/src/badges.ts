@@ -1,7 +1,7 @@
 import { byKey, formatCount } from './core.ts';
 import { XP } from './pillars.ts';
 import { POINTS } from './rewards.ts';
-import { SOCIAL_REWARDS } from './community.ts';
+import { CONNECT_REWARD, INVITE_REWARD, SOCIAL_REWARDS } from './community.ts';
 import { ATTENDEE_CLAIMS_PER_DAY, ATTENDEE_XP_MAX, RUN_REWARD } from './events.ts';
 import { FEATURE_FEE_POINTS } from './store.ts';
 import type { IconName } from './roles.ts';
@@ -29,7 +29,7 @@ export const BADGE_FAMILY_META: Record<BadgeFamily, { shape: BadgeShape; blurb: 
   Pillars: { shape: 'hexagon', blurb: 'Setting up the seven pillars and finishing projects.', private: false },
   Focus: { shape: 'star', blurb: 'Focus rounds and days you stayed away from what you listed. Only you see these.', private: true },
   Reflection: { shape: 'seal', blurb: 'Journal pages, reviews and moods. Only you see these, and only counts are used, never what you wrote.', private: true },
-  Community: { shape: 'ribbon', blurb: 'Posts, replies, friends, followers and events.', private: false },
+  Community: { shape: 'ribbon', blurb: 'Posts, replies, friends, followers, events and people you invited.', private: false },
   Creator: { shape: 'diamond', blurb: 'Products, sales and content rewards.', private: false },
   Money: { shape: 'medal', blurb: 'Finance entries, goals and paid invoices. Only you see these.', private: true },
   Fitness: { shape: 'medal', blurb: 'Runs and kilometres with your clubs.', private: false },
@@ -43,6 +43,7 @@ export const BADGE_STATS = [
   'focus_rounds', 'focus_minutes', 'journal_entries', 'reviews_written', 'mood_days', 'mindful_logs', 'discover_taken',
   'posts', 'replies', 'friends', 'followers', 'referrals', 'events_claimed', 'products_live', 'sales', 'bounties_paid',
   'finance_entries', 'finance_goals_done', 'invoices_paid', 'runs_logged', 'run_metres', 'lessons_done', 'certificates', 'club',
+  'invites_joined', 'connections_made',
 ] as const;
 export type BadgeStat = (typeof BADGE_STATS)[number];
 export type BadgeFacts = Record<BadgeStat, number>;
@@ -81,6 +82,8 @@ export const BADGE_STAT_UNIT: Record<BadgeStat, { one: string; many: string; per
   lessons_done: { one: 'lesson', many: 'lessons' },
   certificates: { one: 'certificate', many: 'certificates' },
   club: { one: 'membership', many: 'memberships' },
+  invites_joined: { one: 'person', many: 'people' },
+  connections_made: { one: 'connection', many: 'connections' },
 };
 
 export interface Badge {
@@ -142,6 +145,13 @@ export const BADGES: readonly Badge[] = [
   badge('follower_10', 'Ten followers', 'Users', 'Community', 'silver', 'followers', 10, 'Get ten followers on your public page'),
   badge('referral_1', 'Brought a friend', 'Gift', 'Community', 'bronze', 'referrals', 1, 'Have a friend sign up with your link and an email'),
   badge('event_1', 'Showed up', 'Ticket', 'Community', 'bronze', 'events_claimed', 1, 'Claim an attendee code at an event'),
+  // Invites (2026-11-10): people who joined with your invite codes and finished setting up. Connections: ones the team made that came true for you.
+  badge('invite_1', 'Opened the door', 'Share2', 'Community', 'bronze', 'invites_joined', 1, 'Invite someone who joins and finishes setting up'),
+  badge('invite_5', 'Five through the door', 'HandHeart', 'Community', 'silver', 'invites_joined', 5, 'Invite five people who join and finish setting up'),
+  badge('invite_20', 'Twenty through the door', 'RadioTower', 'Community', 'gold', 'invites_joined', 20, 'Invite twenty people who join and finish setting up'),
+  badge('invite_50', 'Fifty through the door', 'Orbit', 'Community', 'platinum', 'invites_joined', 50, 'Invite fifty people who join and finish setting up'),
+  badge('connect_1', 'Connected', 'Link', 'Community', 'bronze', 'connections_made', 1, 'Say yes to a connection the team made for you'),
+  badge('connect_5', 'Well connected', 'HandHelping', 'Community', 'silver', 'connections_made', 5, 'Say yes to five connections the team made for you'),
 
   badge('product_1', 'First product', 'ShoppingBag', 'Creator', 'bronze', 'products_live', 1, 'Put a product live in your Shop'),
   badge('product_5', 'Five products', 'Store', 'Creator', 'silver', 'products_live', 5, 'Have five products live in your Shop'),
@@ -340,6 +350,8 @@ export function earningGuide(): { title: string; lines: EarningLine[] }[] {
       { what: 'A new follower', pays: `${SOCIAL_REWARDS.follower.points} points`, how: 'Paid to you, once per person.' },
       { what: 'A run with a club', pays: `Up to ${ATTENDEE_XP_MAX} xp and ${RUN_REWARD.points} points`, how: `The host sets the xp before the code opens. Enter the start code during the run. Once per run, ${RUN_REWARD.perDay} runs a day.` },
       { what: 'Going to an event or a circle', pays: `Up to ${ATTENDEE_XP_MAX} xp`, how: `If the host set xp, type their attendee code at the event. Guests only, once each, ${ATTENDEE_CLAIMS_PER_DAY} in any 24 hours.` },
+      { what: 'Someone you invited finishes setting up', pays: `${INVITE_REWARD.xp} xp and ${INVITE_REWARD.points} points`, how: `Paid to whoever made the invite code, once per person, up to ${INVITE_REWARD.perDay} a day. Admins earn nothing from it.` },
+      { what: 'A connection the team made for you', pays: `${CONNECT_REWARD.xp} xp`, how: `Paid to each side when it comes true, such as both saying yes to a friend suggestion. Once each, up to ${CONNECT_REWARD.perDay} a day.` },
     ],
   },
   {

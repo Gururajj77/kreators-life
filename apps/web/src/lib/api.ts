@@ -186,7 +186,7 @@ export class ApiError extends Error {
 /** Add a page query ("page=2&size=25") to a path that may already carry a query string. */
 const withQ = (path: string, q: string) => (q ? `${path}${path.includes('?') ? '&' : '?'}${q}` : path);
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = useSession.getState().token;
   const res = await fetch(`/api${path}`, {
     ...init,
@@ -314,8 +314,9 @@ type CodeChange = { xp?: number; code?: string; fresh?: boolean };
 
 export const api = {
   // accounts
-  anon: (ref?: string | null) => post<{ token: string; user: User }>('/auth/anon', { ref }),
-  signup: (body: { email: string; password: string; displayName?: string; phone: string; birthDate: string; acceptTerms: boolean }) => post<{ token: string; user: User }>('/auth/signup', body),
+  /** A new device session. While joining is by invite, `invite` is the code (403 reason invite without a working one). */
+  anon: (ref?: string | null, invite?: string | null) => post<{ token: string; user: User }>('/auth/anon', { ref, invite: invite || undefined }),
+  signup: (body: { email: string; password: string; displayName?: string; phone: string; birthDate: string; acceptTerms: boolean; invite?: string }) => post<{ token: string; user: User }>('/auth/signup', body),
   signin: (body: { email: string; password: string }) => post<{ token: string; user: User }>('/auth/signin', body),
   signout: () => post<{ ok: true }>('/auth/signout'),
   /** Forgot the password: the answer is the same for any email. */
@@ -749,7 +750,8 @@ export const api = {
   // organizations (brands)
   orgs: (all = false) => request<{ organizations: Organization[] }>(`/orgs${all ? '?all=1' : ''}`),
   createOrg: (body: { name: string; type?: Organization['type'] }) => post<{ organization: Organization }>('/orgs', body),
-  orgMembers: (id: string) => request<{ members: OrganizationMember[] }>(`/orgs/${id}/members`),
+  // `invited`: asks still waiting, for the owner and talent staff only (2026-11-10, a brand's team is joined by a yes).
+  orgMembers: (id: string) => request<{ members: OrganizationMember[]; invited?: OrganizationMember[] }>(`/orgs/${id}/members`),
   addOrgMember: (id: string, email: string) => post<{ ok: true }>(`/orgs/${id}/members`, { email }),
   removeOrgMember: (id: string, userId: string) => del<{ ok: true }>(`/orgs/${id}/members/${userId}`),
 
@@ -792,7 +794,7 @@ export const api = {
   enroll: (cohortId: string, pay?: 'test', discountCode?: string) => post<{ ok: true; id: string }>(`/school/cohorts/${cohortId}/enroll`, { ...(pay ? { pay } : {}), ...(discountCode ? { discountCode } : {}) }),
   /** A cohort; for whoever runs it, `enrollments` is one page of learners (prefix `l`), `learnerCount` all of them. */
   cohort: (id: string, pq = '') =>
-    request<{ cohort: Cohort; items: LearningItem[]; assignments: CourseAssignment[]; submissions: Submission[]; sessions: CohortSession[]; enrollments: Enrollment[]; learnersPage: Page | null; learnerCount: number; manager: boolean; mentor: boolean; myProgress: Enrollment['progress'] | null; myStatus: Enrollment['status'] | null }>(withQ(`/school/cohorts/${id}`, pq)),
+    request<{ cohort: Cohort; items: LearningItem[]; assignments: CourseAssignment[]; submissions: Submission[]; sessions: CohortSession[]; enrollments: Enrollment[]; learnersPage: Page | null; learnerCount: number; manager: boolean; mentor: boolean; canSetManager?: boolean; myProgress: Enrollment['progress'] | null; myStatus: Enrollment['status'] | null }>(withQ(`/school/cohorts/${id}`, pq)),
   submitAssignment: (assignmentId: string, body: { cohortId: string; url?: string; text?: string }) => post<{ ok: true }>(`/school/assignments/${assignmentId}/submit`, body),
   giveFeedback: (submissionId: string, body: { comment: string; status: 'approved' | 'changes'; grade?: string }) => post<{ ok: true }>(`/school/submissions/${submissionId}/feedback`, body),
   scheduleSession: (cohortId: string, body: { title: string; startsAt: string; minutes?: number; onlineUrl?: string }) => post<{ ok: true }>(`/school/cohorts/${cohortId}/sessions`, body),
@@ -1144,7 +1146,8 @@ export interface DiscountInput {
 }
 
 /** Admin calls use the shared key when given; an admin's own session also works. */
-async function adminRequest<T>(key: string, path: string, init: RequestInit = {}): Promise<T> {
+/** Exported for the lazy screens that keep their own calls out of the first download (lib/connectApi.ts). */
+export async function adminRequest<T>(key: string, path: string, init: RequestInit = {}): Promise<T> {
   const token = useSession.getState().token;
   const res = await fetch(`/api/admin${path}`, {
     ...init,
@@ -1307,6 +1310,8 @@ export const publicApi = {
     publicRequest<{ page: Page; listings: Listing[] }>(`/explore?${new URLSearchParams({ ...(opts.q ? { q: opts.q } : {}), ...(opts.type ? { type: opts.type } : {}), ...(opts.featured ? { featured: '1' } : {}), ...(opts.pq ? Object.fromEntries(new URLSearchParams(opts.pq)) : {}) })}`),
   listing: (type: ListingType, id: string) => publicRequest<{ listing: Listing }>(`/explore/${type}/${id}`),
   stats: () => publicRequest<PublicStats>('/explore/stats'),
+  /** Whether a new account needs an invite code right now (the Invite only switch in Admin, Invites). */
+  join: () => publicRequest<{ inviteOnly: boolean }>('/join'),
   /** The upcoming public events (the /events page), a page at a time. */
   events: (pq = '') => publicRequest<{ page: Page; events: PublicEvent[] }>(`/events${pq ? `?${pq}` : ''}`),
   /** One public event's story, for its landing page. */

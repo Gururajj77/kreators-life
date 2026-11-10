@@ -245,7 +245,7 @@ The drive scripts check what a still shot cannot: `drive-home.mjs` (Home's halve
 - **Even rows** on every tile grid (see 11), measured by `bento-probe.js`.
 - **The tablet layout.** Columns that hold words start at `lg` (see 2).
 - **Dates.** Every time on a screen follows the person's zone and format (see 8). An inbox note's date and time are its card's foot at the bottom right.
-- **Numbers:** 47 modules, 130 words in `TERMS`, 52 `HOW_TO` entries, migrations 0001 to 0123, 859 shared tests, 2,607 smoke checks, `LEGAL_VERSION` 2026-11-07.
+- **Numbers:** 47 modules, 138 words in `TERMS`, 52 `HOW_TO` entries, migrations 0001 to 0128, 871 shared tests, 2,836 smoke checks, `LEGAL_VERSION` 2026-11-10.
 
 ## 2026-11-03: icons, one primary action, and the print section (the overhaul)
 

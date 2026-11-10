@@ -2,7 +2,9 @@ import { Hono } from 'hono';
 import { birthDateProblem, normalizePhone, passwordProblem, phoneProblem, RELATIONSHIPS, MAX_DEVICES } from '@kreators/shared';
 import { limited, limitKey, safeEqual, sendEmail, track } from '../ops';
 import { recordAcceptance } from './legal';
-import { promoteBootstrapAdmin } from '../admins';
+import { isBootstrapAdmin, promoteBootstrapAdmin } from '../admins';
+import { INVITE_GATE_LINE, INVITE_UNUSABLE, normalizeInviteCode } from '@kreators/shared/invites';
+import { afterInviteJoin, inviteGate, inviteOnly, inviteWorks, payInviteOnSetup, releaseInvite, type GateAnswer } from '../invites';
 import { LIMITS } from '../limits';
 import type { AppEnv, UserRow } from '../env';
 import { DELETED_NAME_PROBLEM, getUser, isDeletedName, newFriendCode, newHandle, newId, nowIso, randomCode, sessionUser, toUser } from '../db';
@@ -49,19 +51,32 @@ async function newSession(db: D1Database, userId: string): Promise<string> {
   return token;
 }
 
-// Anonymous device session. Progress lives on the device until an email is attached.
+/** What a refused new account hears: no code at all, or a code that does not work (one answer for every reason). */
+const gateRefusal = (g: Extract<GateAnswer, { ok: false }>) => (g.reason === 'invite' ? { error: INVITE_GATE_LINE, reason: 'invite' } : { error: INVITE_UNUSABLE, reason: 'invite-unusable' });
+
+// Anonymous device session. Progress lives on the device until an email is attached. While Invite only is on (Admin, Invites) it is a new
+// account, so it needs a code that works: claimed before the account is made, given back if making it fails, and the account is credited
+// to the code's maker (an invite beats a ref).
 auth.post('/anon', async (c) => {
   const db = c.env.DB;
   const id = newId();
   const now = nowIso();
-  const body = await c.req.json<{ ref?: string }>().catch(() => ({}) as { ref?: string });
-  const ref = typeof body.ref === 'string' && body.ref.trim() ? body.ref.trim().toUpperCase().slice(0, 12) : null;
-  await db.batch([
-    db.prepare('INSERT INTO users (id, created_at, referral_code, referred_by, handle, friend_code) VALUES (?, ?, ?, ?, ?, ?)').bind(id, now, randomCode(), ref, newHandle(), newFriendCode()),
-    ...RELATIONSHIPS.map((r) =>
-      db.prepare('INSERT INTO relationship_scores (user_id, relationship, score, xp) VALUES (?, ?, 0, 0)').bind(id, r.key),
-    ),
-  ]);
+  const body = await c.req.json<{ ref?: string; invite?: string }>().catch(() => ({}) as { ref?: string; invite?: string });
+  const gate = await inviteGate(db, body.invite, id);
+  if (!gate.ok) return c.json(gateRefusal(gate), 403);
+  const ref = gate.referral ?? (typeof body.ref === 'string' && body.ref.trim() ? body.ref.trim().toUpperCase().slice(0, 12) : null);
+  try {
+    await db.batch([
+      db.prepare('INSERT INTO users (id, created_at, referral_code, referred_by, handle, friend_code) VALUES (?, ?, ?, ?, ?, ?)').bind(id, now, randomCode(), ref, newHandle(), newFriendCode()),
+      ...RELATIONSHIPS.map((r) =>
+        db.prepare('INSERT INTO relationship_scores (user_id, relationship, score, xp) VALUES (?, ?, 0, 0)').bind(id, r.key),
+      ),
+    ]);
+  } catch (e) {
+    if (gate.invite) await releaseInvite(db, gate.invite.code, id);
+    throw e;
+  }
+  if (gate.invite) await afterInviteJoin(db, gate.invite);
   const token = await newSession(db, id);
   const user = await getUser(db, id);
   return c.json({ token, user: user ? toUser(user) : null }, 201);
@@ -71,7 +86,7 @@ auth.post('/anon', async (c) => {
 // survives a new phone. Without a session, it creates a fresh account.
 auth.post('/signup', async (c) => {
   const db = c.env.DB;
-  const body = await c.req.json<{ email?: string; password?: string; displayName?: string; phone?: string; birthDate?: string; acceptTerms?: boolean }>().catch(() => ({}) as Record<string, never>);
+  const body = await c.req.json<{ email?: string; password?: string; displayName?: string; phone?: string; birthDate?: string; acceptTerms?: boolean; invite?: string }>().catch(() => ({}) as Record<string, never>);
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   const password = typeof body.password === 'string' ? body.password : '';
   if (!EMAIL_RE.test(email) || email.length > EMAIL_MAX) return c.json({ error: 'that email does not look right' }, 400);
@@ -86,6 +101,16 @@ auth.post('/signup', async (c) => {
   const birthDate = typeof body.birthDate === 'string' ? body.birthDate.trim() : '';
   const ageBad = birthDateProblem(birthDate);
   if (ageBad) return c.json({ error: ageBad.charAt(0).toLowerCase() + ageBad.slice(1) }, 400);
+  let user = await sessionUser(c);
+  if (user && user.email) user = null; // already an account; make a new one rather than overwrite
+  // A new account while Invite only is on: the code is looked at first (the safety review, 2026-11-10), before "that email already has
+  // an account" and before the password is hashed, so without a code that works this door says nothing about who has an account and
+  // costs no hashing. The code is only used further down, once the account is about to be made.
+  if (!user && !isBootstrapAdmin(c.env, email) && (await inviteOnly(db))) {
+    if (typeof body.invite !== 'string' || body.invite.trim() === '') return c.json(gateRefusal({ ok: false, reason: 'invite' }), 403);
+    const code = normalizeInviteCode(body.invite);
+    if (!code || !(await inviteWorks(db, code))) return c.json(gateRefusal({ ok: false, reason: 'invite-unusable' }), 403);
+  }
   const taken = await db.prepare('SELECT id FROM users WHERE email = ?').bind(email).first<{ id: string }>();
   if (taken) return c.json({ error: 'that email already has an account. Sign in instead.' }, 409);
 
@@ -94,26 +119,37 @@ auth.post('/signup', async (c) => {
   const displayName = typeof body.displayName === 'string' ? body.displayName.trim().slice(0, 40) : '';
   if (isDeletedName(displayName)) return c.json({ error: DELETED_NAME_PROBLEM }, 400);
 
-  let user = await sessionUser(c);
-  if (user && user.email) user = null; // already an account; make a new one rather than overwrite
   let token: string;
   if (user) {
     await db
       .prepare('UPDATE users SET email = ?, password_hash = ?, password_salt = ?, phone = ?, birth_date = ?, display_name = CASE WHEN display_name = \'\' THEN ? ELSE display_name END WHERE id = ?')
       .bind(email, hash, salt, phone, birthDate, displayName, user.id)
       .run();
+    // A device account that joined with a code and finished setup before it had an email: the referral pays now (invites.ts).
+    await payInviteOnSetup(db, user.id);
     token = (c.req.header('Authorization') ?? '').slice(7).trim();
   } else {
+    // A new account: while Invite only is on it needs a code that works, claimed before the account is made. A founder's address passes
+    // with no code and never uses one (ADMIN_EMAILS), so the founders can never be locked out. Adding an email to a device session
+    // (above) needs none: that account already exists.
     const id = newId();
     const now = nowIso();
-    await db.batch([
-      db
-        .prepare('INSERT INTO users (id, created_at, email, password_hash, password_salt, display_name, referral_code, phone, birth_date, handle, friend_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(id, now, email, hash, salt, displayName, randomCode(), phone, birthDate, newHandle(), newFriendCode()),
-      ...RELATIONSHIPS.map((r) =>
-        db.prepare('INSERT INTO relationship_scores (user_id, relationship, score, xp) VALUES (?, ?, 0, 0)').bind(id, r.key),
-      ),
-    ]);
+    const gate = await inviteGate(db, body.invite, id, isBootstrapAdmin(c.env, email));
+    if (!gate.ok) return c.json(gateRefusal(gate), 403);
+    try {
+      await db.batch([
+        db
+          .prepare('INSERT INTO users (id, created_at, email, password_hash, password_salt, display_name, referral_code, referred_by, phone, birth_date, handle, friend_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+          .bind(id, now, email, hash, salt, displayName, randomCode(), gate.referral, phone, birthDate, newHandle(), newFriendCode()),
+        ...RELATIONSHIPS.map((r) =>
+          db.prepare('INSERT INTO relationship_scores (user_id, relationship, score, xp) VALUES (?, ?, 0, 0)').bind(id, r.key),
+        ),
+      ]);
+    } catch (e) {
+      if (gate.invite) await releaseInvite(db, gate.invite.code, id);
+      throw e;
+    }
+    if (gate.invite) await afterInviteJoin(db, gate.invite);
     user = await getUser(db, id);
     token = await newSession(db, id);
   }

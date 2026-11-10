@@ -80,7 +80,7 @@ export async function runScheduled(env: Env, cron: string = '', now: Date = new 
   const reminders = (name: string, run: (w: When, turn: Turn) => Promise<number>, timed = true): Job => ({ name, timed, run: (turn) => run(when, turn) });
   const jobs: Job[] = [
     // Security first in line: an alert is the one thing that must not wait for a tick that is busy with reminders.
-    { name: 'alerts', first: true, run: (turn) => securityAlerts(db, { ready: Boolean(env.RESEND_API_KEY), site: env.PUBLIC_URL, send: (msg) => sendEmail(db, env, msg) }, now, turn) },
+    { name: 'alerts', first: true, run: (turn) => securityAlerts(db, { ready: Boolean(env.RESEND_API_KEY), site: env.PUBLIC_URL, send: async (msg) => { await sendEmail(db, env, msg); } }, now, turn) },
     reminders('checkins', sendReminders),
     reminders('custom', sendCustomReminders),
     reminders('tasks', sendTaskReminders),
@@ -246,6 +246,13 @@ export async function tidyOld(db: D1Database): Promise<void> {
     // newer reply is never left without the post or the line it hangs from.
     db.prepare('DELETE FROM cohort_talk WHERE thread_id IN (SELECT thread_id FROM cohort_talk GROUP BY thread_id HAVING MAX(created_at) < ?)').bind(ago(RETENTION_DAYS.channelLines)),
     db.prepare('DELETE FROM agency_password_requests WHERE closed_at IS NOT NULL AND closed_at < ?').bind(ago(RETENTION_DAYS.passwordRequests)),
+    // The waitlist (2026-11-10), each through idx_waitlist_decided or idx_waitlist_status: a no after 180 days, an unanswered row after a
+    // year, and an invited or joined row thirty days after its code was used, ran out or was taken back (the code is read by its key).
+    db.prepare("DELETE FROM waitlist WHERE status = 'declined' AND decided_at < ?").bind(ago(RETENTION_DAYS.waitlistDeclined)),
+    db.prepare("DELETE FROM waitlist WHERE status = 'waiting' AND created_at < ?").bind(ago(RETENTION_DAYS.waitlistWaiting)),
+    db
+      .prepare("DELETE FROM waitlist WHERE status IN ('invited', 'joined') AND (EXISTS (SELECT 1 FROM invite_codes i WHERE i.id = waitlist.invite_id AND (i.used_at < ?1 OR i.expires_at < ?1 OR i.revoked_at < ?1)) OR (invite_id IS NULL AND decided_at < ?1))")
+      .bind(ago(RETENTION_DAYS.waitlistSettled)),
     db.prepare('DELETE FROM data_requests WHERE requested_at < ?').bind(ago(RETENTION_DAYS.requests)),
     db.prepare("DELETE FROM copyright_notices WHERE status != 'new' AND COALESCE(resolved_at, created_at) < ?").bind(ago(RETENTION_DAYS.notices)),
     // A limit's count only matters inside its window (a day at most). Sign-in counts are keyed by the email typed, so they do not stay.

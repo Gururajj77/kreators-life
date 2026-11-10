@@ -15,8 +15,11 @@
 // EVAL_PLAN picks the plan (pro by default), EVAL_ONLY=3,7 runs some cases, EVAL_OUT=file.json saves the results.
 import { ASSISTANT_MODELS, PLANS } from '../../packages/shared/src/index.ts';
 import fs from 'node:fs';
+import { openJoining } from '../smoke/openJoining.mjs';
 
 const ORIGIN = process.env.SMOKE_ORIGIN ?? 'http://127.0.0.1:8788';
+// Joining is by invite (migration 0125): on the test server, turn Invite only off so this script's own sign-ups work.
+await openJoining(ORIGIN);
 const ADMIN_KEY = process.env.SMOKE_ADMIN_KEY ?? 'smoke-admin-key';
 const API = `${ORIGIN}/api`;
 const stamp = Date.now().toString(36);

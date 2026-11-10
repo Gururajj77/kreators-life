@@ -1,9 +1,13 @@
 import { Hono } from 'hono';
 import type { Organization, OrganizationMember } from '@kreators/shared';
-import type { AppEnv } from '../env';
-import { audit, can, nameOf, newId, notify, nowIso, oneOf, orgRole, str } from '../db';
+import type { OrgInvite } from '@kreators/shared/connect';
+import type { AppEnv, UserRow } from '../env';
+import { audit, blockedByName, can, DELETED_NAME, nameOf, newId, notify, nowIso, objectBody, oneOf, orgRole, str } from '../db';
+import { connectionsCameTrue } from '../invites';
 
 export const orgs = new Hono<AppEnv>();
+/** The person's side of a brand's ask (2026-11-10): read it, say yes or no. Mounted at /me/org-invites, core, so Army being off never stops a no. */
+export const myOrgInvites = new Hono<AppEnv>();
 
 interface OrgRow { id: string; name: string; type: Organization['type']; status: Organization['status']; created_at: string; my_role?: 'owner' | 'member' | null }
 const toOrg = (r: OrgRow): Organization => ({ id: r.id, name: r.name, type: r.type, status: r.status, myRole: r.my_role ?? null, createdAt: r.created_at });
@@ -12,8 +16,9 @@ orgs.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const all = c.req.query('all') === '1' && can(user, 'talent');
+  // An ask still waiting is not a role: only an active membership is (2026-11-10, a brand's team is joined by a yes).
   const rows = all
-    ? await db.prepare('SELECT o.*, (SELECT role FROM organization_members m WHERE m.organization_id = o.id AND m.user_id = ?) AS my_role FROM organizations o ORDER BY o.name LIMIT 200').bind(user.id).all<OrgRow>()
+    ? await db.prepare("SELECT o.*, (SELECT role FROM organization_members m WHERE m.organization_id = o.id AND m.user_id = ? AND m.status = 'active') AS my_role FROM organizations o ORDER BY o.name LIMIT 200").bind(user.id).all<OrgRow>()
     : await db.prepare("SELECT o.*, m.role AS my_role FROM organizations o JOIN organization_members m ON m.organization_id = o.id WHERE m.user_id = ? AND m.status = 'active' ORDER BY o.name").bind(user.id).all<OrgRow>();
   return c.json({ organizations: rows.results.map(toOrg) });
 });
@@ -36,17 +41,46 @@ orgs.post('/', async (c) => {
   return c.json({ organization: row ? toOrg(row) : null }, 201);
 });
 
+// The team, and for its owner and talent staff the asks still waiting (so one can be taken back). Members are only those who said yes.
 orgs.get('/:id/members', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const id = c.req.param('id');
-  if (!(await orgRole(db, id, user.id)) && !can(user, 'talent')) return c.json({ error: 'not your organization' }, 403);
-  const rows = await db.prepare("SELECT m.user_id, m.role, u.display_name, u.email FROM organization_members m JOIN users u ON u.id = m.user_id WHERE m.organization_id = ? AND m.status = 'active'").bind(id).all<{ user_id: string; role: 'owner' | 'member'; display_name: string; email: string | null }>();
-  const members: OrganizationMember[] = rows.results.map((r) => ({ userId: r.user_id, name: nameOf(r), email: r.email, role: r.role }));
-  return c.json({ members });
+  const role = await orgRole(db, id, user.id);
+  if (!role && !can(user, 'talent')) return c.json({ error: 'not your organization' }, 403);
+  const rows = await db
+    .prepare("SELECT m.user_id, m.role, m.status, u.display_name, u.email FROM organization_members m JOIN users u ON u.id = m.user_id WHERE m.organization_id = ? AND m.status IN ('active', 'invited') ORDER BY m.created_at")
+    .bind(id)
+    .all<{ user_id: string; role: 'owner' | 'member'; status: string; display_name: string; email: string | null }>();
+  const as = (r: (typeof rows.results)[number]): OrganizationMember => ({ userId: r.user_id, name: nameOf(r), email: r.email, role: r.role });
+  const members = rows.results.filter((r) => r.status === 'active').map(as);
+  const invited = role === 'owner' || can(user, 'talent') ? rows.results.filter((r) => r.status === 'invited').map(as) : [];
+  return c.json({ members, invited });
 });
 
-// Add a teammate by the email on their account.
+/**
+ * Ask someone onto a brand's team (2026-11-10, the founder: an ask they answer, not an add). One action, two callers: the owner's own
+ * form below and Admin, Connect people (adminConnect.ts). Writes the membership as `invited`, which no reader counts as a member, and tells
+ * the person, who says yes or no on their Profile tab. A block with any of the brand's owners reads as nobody, as everywhere.
+ */
+export async function inviteToOrg(db: D1Database, org: { id: string; name: string }, person: UserRow, by: string): Promise<{ code: 201 } | { code: 404 | 409; error: string }> {
+  const row = await db
+    .prepare(
+      `SELECT (SELECT status FROM organization_members WHERE organization_id = ?1 AND user_id = ?2) AS status,
+        EXISTS (SELECT 1 FROM organization_members o WHERE o.organization_id = ?1 AND o.role = 'owner' AND o.status = 'active' AND ${blockedByName('o.user_id', '?2')}) AS blocked`,
+    )
+    .bind(org.id, person.id)
+    .first<{ status: string | null; blocked: number }>();
+  if (row?.blocked) return { code: 404, error: 'no account with that email yet. Ask them to sign up first.' };
+  if (row?.status === 'active') return { code: 409, error: 'They are on the team already.' };
+  if (row?.status === 'invited') return { code: 409, error: 'They were asked already. They answer on their Profile tab.' };
+  const res = await db.prepare("INSERT OR IGNORE INTO organization_members (organization_id, user_id, role, status, created_at) VALUES (?, ?, 'member', 'invited', ?)").bind(org.id, person.id, nowIso()).run();
+  if (!res.meta.changes) return { code: 409, error: 'They were asked already. They answer on their Profile tab.' };
+  await notify(db, person.id, 'org', `${by} asked you to join ${org.name}`, 'Say yes or no on your Profile tab. You join its team only if you say yes.', '/you#org-invites');
+  return { code: 201 };
+}
+
+// Ask a teammate by the email on their account.
 orgs.post('/:id/members', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
@@ -55,19 +89,80 @@ orgs.post('/:id/members', async (c) => {
   if (role !== 'owner' && !can(user, 'talent')) return c.json({ error: 'only the owner can add people' }, 403);
   const body = await c.req.json<{ email?: string }>().catch(() => ({}) as { email?: string });
   const email = str(body.email, 120).toLowerCase();
-  const person = await db.prepare('SELECT id, display_name FROM users WHERE email = ?').bind(email).first<{ id: string; display_name: string }>();
-  if (!person) return c.json({ error: 'no account with that email yet. Ask them to sign up first.' }, 404);
-  await db.prepare("INSERT OR IGNORE INTO organization_members (organization_id, user_id, role, status, created_at) VALUES (?, ?, 'member', 'active', ?)").bind(id, person.id, nowIso()).run();
-  const org = await db.prepare('SELECT name FROM organizations WHERE id = ?').bind(id).first<{ name: string }>();
-  await notify(db, person.id, 'org', `You were added to ${org?.name ?? 'a brand'}`, 'Open Army to see its campaigns.', '/army');
-  return c.json({ ok: true }, 201);
+  const person = email ? await db.prepare('SELECT * FROM users WHERE email = ?').bind(email).first<UserRow>() : null;
+  const org = await db.prepare('SELECT id, name FROM organizations WHERE id = ?').bind(id).first<{ id: string; name: string }>();
+  if (!org) return c.json({ error: 'not found' }, 404);
+  if (!person || person.display_name === DELETED_NAME) return c.json({ error: 'no account with that email yet. Ask them to sign up first.' }, 404);
+  if (person.id === user.id) return c.json({ error: 'That is you.' }, 400);
+  const r = await inviteToOrg(db, org, person, nameOf(user));
+  if (r.code !== 201) return c.json({ error: r.error }, r.code);
+  await audit(db, user.id, 'org.invite', 'organization', id, '', { user: person.id });
+  return c.json({ ok: true, status: 'invited' }, 201);
 });
 
+// Remove a teammate, or take back an ask still waiting (the person is not told, as an Agency invite taken back).
 orgs.delete('/:id/members/:userId', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const id = c.req.param('id');
   if ((await orgRole(db, id, user.id)) !== 'owner' && !can(user, 'talent')) return c.json({ error: 'only the owner can remove people' }, 403);
-  await db.prepare("DELETE FROM organization_members WHERE organization_id = ? AND user_id = ? AND role != 'owner'").bind(id, c.req.param('userId')).run();
+  await withdrawFromOrg(db, id, c.req.param('userId'), ['active', 'invited']);
   return c.json({ ok: true });
+});
+
+/** Take someone off a brand's team, or take back their ask; never an owner. Returns whether a row went. Ends the team's Connect row with it. */
+export async function withdrawFromOrg(db: D1Database, orgId: string, userId: string, states: readonly ('active' | 'invited')[]): Promise<boolean> {
+  const res = await db.prepare("DELETE FROM organization_members WHERE organization_id = ? AND user_id = ? AND role != 'owner' AND status IN (SELECT value FROM json_each(?))").bind(orgId, userId, JSON.stringify(states)).run();
+  if (res.meta.changes) await db.prepare("UPDATE team_connections SET ended_at = ? WHERE kind = 'org' AND ref_id = ? AND first_user_id = ? AND ended_at IS NULL").bind(nowIso(), orgId, userId).run();
+  return res.meta.changes > 0;
+}
+
+// ---- the person's side (/me/org-invites, core)
+
+/** A block by name either way between this person and any of the brand's owners: an ask across it is as good as gone (2026-11-10, the break-it check). */
+const ownerBlocked = (orgId: string, userId: string) =>
+  `EXISTS (SELECT 1 FROM organization_members ob WHERE ob.organization_id = ${orgId} AND ob.role = 'owner' AND ob.status = 'active' AND ${blockedByName('ob.user_id', userId)})`;
+
+myOrgInvites.get('/', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const rows = await db
+    .prepare(`SELECT o.id, o.name, o.type, m.created_at FROM organization_members m JOIN organizations o ON o.id = m.organization_id WHERE m.user_id = ?1 AND m.status = 'invited' AND o.status = 'active' AND NOT ${ownerBlocked('o.id', '?1')} ORDER BY m.created_at DESC LIMIT 20`)
+    .bind(user.id)
+    .all<{ id: string; name: string; type: string; created_at: string }>();
+  const invites: OrgInvite[] = rows.results.map((r) => ({ orgId: r.id, name: r.name, type: r.type, createdAt: r.created_at }));
+  return c.json({ invites });
+});
+
+// Yes makes them a member and tells the owners; no takes the ask away and tells nobody who said no, as a declined friend request in Bond.
+// Each is one guarded statement on the ask still waiting, so two taps answer once.
+myOrgInvites.post('/:orgId/answer', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const orgId = c.req.param('orgId');
+  const body = await objectBody(c);
+  if (typeof body.yes !== 'boolean') return c.json({ error: 'yes or no?' }, 400);
+  const org = await db.prepare('SELECT id, name FROM organizations WHERE id = ?').bind(orgId).first<{ id: string; name: string }>();
+  if (!org) return c.json({ error: 'not found' }, 404);
+  const now = nowIso();
+  if (!body.yes) {
+    const res = await db.prepare("DELETE FROM organization_members WHERE organization_id = ? AND user_id = ? AND status = 'invited'").bind(orgId, user.id).run();
+    if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
+    await db.prepare("UPDATE team_connections SET answered_at = ? WHERE kind = 'org' AND ref_id = ? AND first_user_id = ? AND ended_at IS NULL AND answered_at IS NULL").bind(now, orgId, user.id).run();
+    await audit(db, user.id, 'org.invite.answer', 'organization', orgId, '', { yes: false });
+    return c.json({ ok: true, status: 'declined' });
+  }
+  // Guarded on no block either way with an owner, made after the ask: then the ask goes, and the answer is as for no ask at all.
+  const res = await db.prepare(`UPDATE organization_members SET status = 'active', created_at = ?1 WHERE organization_id = ?2 AND user_id = ?3 AND status = 'invited' AND NOT ${ownerBlocked('?2', '?3')}`).bind(now, orgId, user.id).run();
+  if (!res.meta.changes) {
+    await db.prepare("DELETE FROM organization_members WHERE organization_id = ? AND user_id = ? AND status = 'invited'").bind(orgId, user.id).run();
+    return c.json({ error: 'not found' }, 404);
+  }
+  await db.prepare("UPDATE team_connections SET answered_at = ? WHERE kind = 'org' AND ref_id = ? AND first_user_id = ? AND ended_at IS NULL AND answered_at IS NULL").bind(now, orgId, user.id).run();
+  const owners = await db.prepare("SELECT user_id FROM organization_members WHERE organization_id = ? AND role = 'owner' AND status = 'active' LIMIT 20").bind(orgId).all<{ user_id: string }>();
+  for (const o of owners.results) await notify(db, o.user_id, 'org', `${nameOf(user)} joined ${org.name}`, 'They can see its campaigns in Army now.', '/army');
+  await audit(db, user.id, 'org.invite.answer', 'organization', orgId, '', { yes: true });
+  // A team's ask that came true pays once (invites.ts).
+  await connectionsCameTrue(db, 'org', { refId: orgId, userId: user.id });
+  return c.json({ ok: true, status: 'member' });
 });

@@ -2526,7 +2526,7 @@ import { BADGE_BY_KEY, BADGE_FAMILIES, BADGE_FAMILY_META, BADGE_STAT_UNIT, BADGE
 describe('badges', () => {
   it('has a sensible set with unique keys, valid tiers and families, and a rule on a count the server knows', () => {
     expect(ALL_BADGES.length).toBeGreaterThanOrEqual(40);
-    expect(ALL_BADGES.length).toBeLessThanOrEqual(60);
+    expect(ALL_BADGES.length).toBeLessThanOrEqual(70);
     expect(new Set(ALL_BADGES.map((b) => b.key)).size).toBe(ALL_BADGES.length);
     expect(new Set(ALL_BADGES.map((b) => b.name)).size).toBe(ALL_BADGES.length);
     for (const b of ALL_BADGES) {

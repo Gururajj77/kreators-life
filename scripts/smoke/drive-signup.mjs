@@ -4,7 +4,10 @@
 import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
 import path from 'node:path';
+import { openJoining } from './openJoining.mjs';
 const ORIGIN = process.env.SHOOT_ORIGIN ?? 'http://127.0.0.1:8788';
+// Joining is by invite (migration 0125): on the test server, turn Invite only off so this script's own sign-ups work.
+await openJoining(ORIGIN);
 const OUT = process.env.SHOOT_OUT ?? path.join(path.dirname(new URL(import.meta.url).pathname), 'shots');
 fs.mkdirSync(OUT, { recursive: true });
 const candidates = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Chromium.app/Contents/MacOS/Chromium'];

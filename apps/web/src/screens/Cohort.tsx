@@ -1,9 +1,10 @@
+import { lazyNamed } from '../lib/lazy';
 import { BOOKS, cohortAlwaysOpen, LESSON_BODY_MAX, LESSON_TITLE_MAX, type CohortSession, type CourseAssignment, type Enrollment, type LearningItem, type Submission } from '@kreators/shared';
 import { LESSON_RESOURCE_KIND_META, LESSON_RESOURCE_KINDS, LESSON_RESOURCE_LABEL_MAX, LESSON_RESOURCE_LINK_MAX, LESSON_RESOURCES_FULL, MAX_LESSON_RESOURCES, lessonResourceLabel, type LessonResource, type LessonResourceKind } from '@kreators/shared/lessonResources';
 import { Phrases } from '../components/Phrases';
 import type { TagTone } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { useEffect, useId, useRef, useState } from 'react';
+import { Suspense, useEffect, useId, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Button } from '../components/Button';
 import { AppCover } from '../components/AppCover';
@@ -69,6 +70,9 @@ const KIND_TIP: Record<string, string> = {
  * A cohort's page. `cohortId` and `back` let a page outside School draw one cohort: the Admin guide at /admin/guide, which is not
  * behind School's switch, so an admin with School off still reaches it.
  */
+/** The team's control for who runs the cohort (2026-11-10), its own chunk: only an admin or Cohorts staff ever see it. */
+const CohortManager = lazyNamed(() => import('../components/CohortManager'), 'CohortManager');
+
 export function Cohort({ cohortId, back = { to: '/school', label: 'School' } }: { cohortId?: string; back?: { to: string; label: string } } = {}) {
   const params = useParams();
   const id = cohortId ?? params.id ?? '';
@@ -293,6 +297,12 @@ export function Cohort({ cohortId, back = { to: '/school', label: 'School' } }: 
           <Pager page={d.learnersPage ?? undefined} prefix="l" label="learners" only={TEN_A_PAGE} />
           <ErrorLine e={complete.error} className="mt-xs" />
         </Section>
+      )}
+
+      {d.canSetManager && (
+        <Suspense fallback={null}>
+          <CohortManager cohortId={id} managerId={k.managerId ?? null} managerName={k.managerId && k.managerName !== 'Unassigned' ? k.managerName : null} onChanged={() => void q.refetch()} />
+        </Suspense>
       )}
 
       <ScheduleSheet

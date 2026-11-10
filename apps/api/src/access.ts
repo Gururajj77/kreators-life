@@ -43,6 +43,8 @@ export const MODULE_FOR_PREFIX: Record<string, readonly string[]> = {
   // /today, which reads it for every Daily, so it is always open.
   // Not listed on purpose: `me/teams` (an Agency team invite's answer, leaving, and a client member's read-only view). It is core like
   // /me/coach, so a person can always say no or leave a team even when Agency is off for them. The owner's side, /agency/team, is gated by `agency`.
+  // Not listed on purpose: `me/suggestions` (the answer to a friend suggestion the team made in Admin, Connect people). Core, on the Profile tab.
+  // Not listed on purpose: `me/org-invites` (the answer to a brand's ask onto its team, 2026-11-10) and `orgs` (a brand's own team). Core, on the Profile tab and in Army.
   assistant: ['assistant'],
   // The feelings reader in the strategy session: the assistant's model, so the assistant's switch.
   'assistant/feelings': ['assistant'],

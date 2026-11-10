@@ -1,6 +1,7 @@
 import { RELATIONSHIPS } from '@kreators/shared';
 import { m as motion, useReducedMotion } from 'motion/react';
-import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Suspense, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
@@ -9,7 +10,8 @@ import { burstFrom } from '../components/fx/burst';
 import { LiquidMetal } from '../components/fx/LiquidMetal';
 import { TextReveal } from '../components/fx/TextReveal';
 import { Screen } from '../components/Screen';
-import { api } from '../lib/api';
+import { api, publicApi } from '../lib/api';
+import { InviteDoor, inviteRefusal, keepInvite, keptInvite } from '../lib/invite';
 import { useMe } from '../lib/queries';
 import { captureRef, storedRef, useSession } from '../lib/store';
 
@@ -43,21 +45,34 @@ export function Welcome() {
   captureRef(location.search);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Joining is by invite while the team says so: without a session and a code the server said works, the gate shows instead of the button.
+  const [refused, setRefused] = useState<string | null>(null);
+  const join = useQuery({ queryKey: ['site', 'join'], queryFn: publicApi.join, enabled: !token, staleTime: 60_000 });
+  const kept = keptInvite();
 
   if (token && me.data?.user.onboardedAt) return <Navigate to="/home" replace />;
   const resuming = Boolean(token && me.data && !me.data.user.onboardedAt);
+  const gated = !token && (refused !== null || (Boolean(join.data?.inviteOnly) && !kept));
 
+  /** The device session, with the invite code when there is one, then the setup chat. The code is used once the account is made. */
+  const open = async (code: string | null) => {
+    const r = await api.anon(storedRef(), code);
+    keepInvite(null);
+    setToken(r.token);
+    nav('/onboarding');
+  };
   const start = async () => {
     setBusy(true);
     setError(null);
     try {
-      if (!token) {
-        const r = await api.anon(storedRef());
-        setToken(r.token);
-      }
-      nav('/onboarding');
-    } catch {
-      setError("Couldn't reach the server. Check your connection and try again.");
+      if (!token) await open(kept);
+      else nav('/onboarding');
+    } catch (e) {
+      const why = inviteRefusal(e);
+      if (why) {
+        keepInvite(null);
+        setRefused(why);
+      } else setError("Couldn't reach the server. Check your connection and try again.");
     } finally {
       setBusy(false);
     }
@@ -75,29 +90,38 @@ export function Welcome() {
           A daily game for all seven, with the apps a creator or an agency needs. Answer a few questions and the apps that fit you switch on.
         </p>
       </div>
-      <div className="flex flex-col gap-sm pb-lg">
+      {/* Room above the gate: the hero shrinks to its words when the gate's card and the waitlist fill the screen. */}
+      <div className={`flex flex-col gap-sm pb-lg ${gated ? 'pt-lg' : ''}`}>
         {error && (
           <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {error}
           </p>
         )}
-        <LiquidMetal className="w-full">
-          <Button
-            variant="shimmer"
-            size="lg"
-            full
-            onClick={(e) => {
-              burstFrom(e.currentTarget);
-              void start();
-            }}
-            disabled={busy}
-          >
-            {busy ? 'Opening your chat' : resuming ? 'Carry on setting up' : 'Start with a short chat'}
-          </Button>
-        </LiquidMetal>
-        <p className="m-0 text-center text-subhead text-ink-mute">
-          Free to start. Your answers are saved on this device, so you can stop and come back.
-        </p>
+        {gated ? (
+          <Suspense fallback={null}>
+            <InviteDoor gate={{ onCode: open, unusable: refused === 'invite-unusable' }} />
+          </Suspense>
+        ) : !token && !kept && join.isPending ? null : (
+          <>
+            <LiquidMetal className="w-full">
+              <Button
+                variant="shimmer"
+                size="lg"
+                full
+                onClick={(e) => {
+                  burstFrom(e.currentTarget);
+                  void start();
+                }}
+                disabled={busy}
+              >
+                {busy ? 'Opening your chat' : resuming ? 'Carry on setting up' : 'Start with a short chat'}
+              </Button>
+            </LiquidMetal>
+            <p className="m-0 text-center text-subhead text-ink-mute">
+              {kept && !token ? 'Your invite code is ready. ' : ''}Free to start. Your answers are saved on this device, so you can stop and come back.
+            </p>
+          </>
+        )}
         <p className="m-0 text-center text-subhead">
           Already have an account?{' '}
           {/* nowrap: "Sign" ended one line and "in" began the next on a phone. */}

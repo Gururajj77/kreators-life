@@ -40,6 +40,10 @@ Dev Tools is in the Operations group. Staff and admins can open it. It never sho
 - **People in numbers:** every account that is not deleted.
 - **People per app:** how many have each app on.
 - **Games, Discover and Agency:** counts only, never names, answers or amounts.
+- **Daily and the ways in:** open bottlenecks by kind, own time blocks, people who came through an event and are not set up, and new QR codes.
+- **Life coaches and School:** coach links by state, invite links, links the team made, programs by state, lesson resources and cohort talk.
+- **What the team did:** in the last 30 days, people connected by kind and what was given by hand.
+- **Invites:** whether Invite only is on, codes made, used, open, taken back and ended, how many joined with one this week and finished setup, and the waitlist by state.
 - **The log, last 24 hours:** changes, refused requests and errors, counted.
 - **People:** accounts, newest first. Only an admin changes a role from a row's menu, and a sheet asks first.
 

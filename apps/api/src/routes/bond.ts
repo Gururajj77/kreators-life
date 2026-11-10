@@ -4,6 +4,7 @@ import type { AppEnv, UserRow } from '../env';
 import { blockedByName, blockedEither, liveUser, nameOf, newId, notify, nowIso, oneOf, pageOf, paged, parseList, publicOf, str } from '../db';
 import { endLinksOnBlock } from '../coaching';
 import { memberBehindAlias } from './circles';
+import { connectionsCameTrue } from '../invites';
 
 export const bond = new Hono<AppEnv>();
 
@@ -187,6 +188,8 @@ export async function requestFriend(db: D1Database, user: UserRow, id: string, v
     if (existing.requester_id !== user.id) {
       await db.prepare("UPDATE friendships SET status = 'accepted', answered_at = ? WHERE id = ?").bind(nowIso(), existing.id).run();
       await notify(db, existing.requester_id, 'bond', `${nameOf(user)} is now your friend`, 'Say hello from Bond.', '/bond#bond-friends');
+      // A friend suggestion the team made for these two came true, whichever door the yes came through.
+      await connectionsCameTrue(db, 'friends', { pair: [user.id, existing.requester_id] });
       return { code: 200, body: { ok: true, status: 'friends' } };
     }
     return { code: 409, body: { error: 'already asked' } };
@@ -226,7 +229,10 @@ bond.post('/friends/:id', async (c) => {
   const body = await c.req.json<{ status?: string }>().catch(() => ({}) as { status?: string });
   const status = oneOf(body.status, ['accepted', 'declined'] as const, 'declined');
   await db.prepare('UPDATE friendships SET status = ?, answered_at = ? WHERE id = ?').bind(status, nowIso(), row.id).run();
-  if (status === 'accepted') await notify(db, row.requester_id, 'bond', `${nameOf(user)} said yes`, 'You are friends now. Say hello from Bond.', '/bond#bond-friends');
+  if (status === 'accepted') {
+    await notify(db, row.requester_id, 'bond', `${nameOf(user)} said yes`, 'You are friends now. Say hello from Bond.', '/bond#bond-friends');
+    await connectionsCameTrue(db, 'friends', { pair: [user.id, row.requester_id] });
+  }
   return c.json({ ok: true });
 });
 

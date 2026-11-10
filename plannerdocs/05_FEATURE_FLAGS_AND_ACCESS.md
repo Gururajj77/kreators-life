@@ -164,7 +164,7 @@ The `admin` routes sit outside the session check and have their own (§7). The p
 - **What a browser may keep.** An authenticated answer is `no-store`. Only anonymous answers that are the same for every visitor (Explore, an uploaded picture) are public. The Workers cache copy is skipped for any request that carries Authorization or a cookie.
 - **Who is told.** `securityAlerts` writes to every admin's inbox (kind `team`) when failed sign-ins, answers of 429, server errors or a role or permission change cross a line in the last fifteen minutes. It tells them once an hour per kind, and each new note also goes out as one private email with counts only (2026-11-07). Reading the log itself is still only for a super admin.
 - **Consent gates behaviour, not access.** A person's privacy choices (`attribution`, `embeds`, `marketing`, all off until they say yes) decide three things. They decide whether the tracked-link cookie is set, whether a YouTube or Vimeo video loads, and whether marketing mail is sent. `sendEmail({ marketing: true })` sends only with a recorded yes and refuses with none. Receipts and password resets are never marketing. They do not change what any role or module may do.
-- **The terms notice.** `LEGAL_VERSION` is the day the terms or privacy policy last changed; it is now 2026-11-07. When it changes, every account sees the one-time terms notice again. Accepting it is core (`me/legal`), and it does not change access.
+- **The terms notice.** `LEGAL_VERSION` is the day the terms or privacy policy last changed; it is now 2026-11-10 (the waitlist and invite codes in `/privacy` and `RETENTION`, one sentence in `/terms`). When it changes, every account sees the one-time terms notice again. Accepting it is core (`me/legal`), and it does not change access.
 
 ## 5b. Agency team members (wave 14, migrations 0076 and 0081)
 
@@ -250,7 +250,7 @@ A new app takes its place in `MODULES`, which is the default order inside its gr
 
 ## 11. Required tests, with status
 
-As of 2026-11-08 the shared suite has 859 tests passing and the smoke test 2,607 checks.
+As of 2026-11-10 the shared suite has 871 tests passing and the smoke test 2,836 checks.
 
 - A disabled module cannot be reached through the UI: holds (`Gate`).
 - A disabled module cannot be reached through the API: holds ("a switched-off app refuses its API" demands a 403 and "the core stays open while an app is off"). An override is refused the same way ("an override refuses the API too", "and the door opens again when it is removed"), and so is a rollout the person falls outside.

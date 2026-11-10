@@ -335,6 +335,13 @@ me.get('/export', async (c) => {
     ['coachLinks', 'SELECT * FROM coach_links WHERE coach_id = ? OR student_id = ?'],
     ['coachNotes', 'SELECT * FROM coach_notes WHERE coach_id = ? OR student_id = ?'],
     ['coachLog', 'SELECT * FROM coach_log WHERE coach_id = ? OR student_id = ?'],
+    // Connections the team made with them (Admin, Connect people): the kind, the state and when, never who on the team or the other's answer.
+    ['teamConnections', 'SELECT id, kind, mode, place, status, created_at, answered_at, ended_at, came_true_at FROM team_connections WHERE first_user_id = ? OR second_user_id = ?'],
+    // Invite codes they made and the one they joined with: the label, the dates and whether it is used, never the code itself (a live key) or who used it.
+    // The label is the maker's private words, so only the maker's own rows carry it (the safety review, 2026-11-10).
+    ['inviteCodes', "SELECT id, CASE WHEN created_by = ? THEN label ELSE '' END AS label, created_at, expires_at, revoked_at, used_at, setup_done_at, CASE WHEN created_by = ? THEN 'made' ELSE 'joined with' END AS mine, 1 AS has_link FROM invite_codes WHERE created_by = ? OR used_by = ?"],
+    // Their waitlist row, found by the account's email.
+    ['waitlist', 'SELECT name, email, note, status, created_at, decided_at FROM waitlist WHERE email = (SELECT email FROM users WHERE id = ?)'],
     ['coachProfile', 'SELECT * FROM coach_profiles WHERE user_id = ?'],
     // What shows on their Coaching pages, and that a coach has an invite link (never the token: it is a live key).
     ['coachPrefs', 'SELECT * FROM coach_prefs WHERE user_id = ?'],

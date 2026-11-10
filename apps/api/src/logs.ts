@@ -33,7 +33,8 @@ export function cleanPath(path: string): string {
   // The address of a client link, agreement, invoice or document is its key: it never reaches the log (parts[0] is empty, so /public/agency/<token> is at 3).
   // A page of the app that holds one (/a/<token>, /k/, /i/, /d/) is named the same way.
   // A life coach's invite link (/public/coach-join/<token>, /me/coach/join/<token>, the page /coach/join/<token>) is the same, and so is a team link (/public/team-link/<token>, the page /t/<token>).
-  const invite = parts[1] === 'public' && parts[2] === 'coach-join' ? 3 : parts[1] === 'me' && parts[2] === 'coach' && parts[3] === 'join' ? 4 : parts[1] === 'coach' && parts[2] === 'join' ? 3 : -1;
+  // An invite code to join (/public/invite/<code>, the page /join/<code>) is a live key too (2026-11-10).
+  const invite = parts[1] === 'public' && (parts[2] === 'coach-join' || parts[2] === 'invite') ? 3 : parts[1] === 'me' && parts[2] === 'coach' && parts[3] === 'join' ? 4 : parts[1] === 'coach' && parts[2] === 'join' ? 3 : parts[1] === 'join' ? 2 : -1;
   const at = invite > 0 ? invite : parts[1] === 'public' && (parts[2] === 'agency' || parts[2] === 'contracts' || parts[2] === 'invoices' || parts[2] === 'team-link') ? (parts[2] === 'agency' && parts[3] === 'doc' ? 4 : 3) : ['a', 'k', 'i', 'd', 't'].includes(parts[1] ?? '') ? 2 : -1;
   return parts
     .map((seg, i) => (i === at && seg ? ':token' : /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(seg) || /^[0-9a-f]{16,}$/i.test(seg) || /^\d{5,}$/.test(seg) ? ':id' : seg))

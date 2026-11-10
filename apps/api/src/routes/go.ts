@@ -11,6 +11,7 @@ import { nameOf, notify } from '../db';
 import type { Env } from '../env';
 import { FEATURE_KEYS } from '../sitemap';
 import { handleCallPayment } from '../liveCall';
+import { connectionsCameTrue } from '../invites';
 
 /** Tracked redirects at /go/:code. The click is written after the redirect is sent. */
 export const go = new Hono<AppEnv>();
@@ -138,6 +139,7 @@ export async function handlePaymentEvent(db: D1Database, env: Env, parsed: { typ
     await track(db, o.buyer_id, 'payment_succeeded', { productId: o.product_id, method: 'razorpay' });
     await notify(db, o.owner_id, 'order', `${nameOf({ display_name: o.buyer_name })} got ${o.product_title}`, money(o.cents, o.currency), `/shop/products/${o.product_id}`);
     await notify(db, o.buyer_id, 'order', `Paid: ${o.product_title}`, 'It is in My purchases now.', '/library');
+    if (o.product_kind === 'course') await connectionsCameTrue(db, 'product', { refId: o.product_id, userId: o.buyer_id });
     const buyer = await db.prepare('SELECT email FROM users WHERE id = ?').bind(o.buyer_id).first<{ email: string | null }>();
     await sendEmail(db, env, { userId: o.buyer_id, to: buyer?.email, subject: `Your receipt: ${o.product_title}`, body: `Paid ${money(o.cents, o.currency)}. Find it under My purchases.` });
     return 'paid';

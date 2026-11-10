@@ -10,18 +10,21 @@ import { handleComment } from './growth';
 import { providerFor } from '../payments';
 import { toKyc, type KycRow } from './kyc';
 import { logEvent, sendEmail, track } from '../ops';
-import { likeFit, liveUser, notify, pageOf, paged, httpUrl, parseModules, inBatches } from '../db';
+import { DELETED_NAME, likeFit, liveUser, notify, pageOf, paged, httpUrl, parseModules, inBatches } from '../db';
 import type { AdminFunnel, AdminKyc, AdminOrder, OrderEvent, OutboxEmail, WebhookEvent } from '@kreators/shared';
 import type { Context } from 'hono';
 import type { AppEnv, UserRow } from '../env';
 import { actorOf, audit, badgesNow, can, getUser, nameOf, newId, nowIso, num, oneOf, parseList, sessionUser, str } from '../db';
 import { accountOf, addCredits, setPlan } from '../credits';
 import { setEventCode, setRunCode } from '../attendee';
-import { endLinkStatements, LINK, linkById, logCoach, type LinkRow, endLink } from '../coaching';
-import { closeInvite, linkProblem, startLink } from './coach';
+import { endLinkStatements, LINK, linkById, type LinkRow, endLink } from '../coaching';
+import { closeInvite, linkProblem } from './coach';
 import { toRedemption, type RedemptionRow } from './rewards';
 import { adminDiscounts } from './adminDiscounts';
 import { adminAgency } from './adminAgency';
+import { adminConnect, teamCoachLink } from './adminConnect';
+import { adminInvites } from './invites';
+import { revokeIfCannotInvite } from '../invites';
 
 export const admin = new Hono<AppEnv>();
 
@@ -89,7 +92,8 @@ admin.post('/users/:id/permissions', async (c) => {
   const perms = Array.isArray(body.permissions) ? body.permissions.filter((p): p is Permission => (PERMISSIONS as readonly string[]).includes(String(p))) : [];
   const prev = await getUser(db, c.req.param('id'));
   if (!prev) return c.json({ error: 'not found' }, 404);
-  await db.prepare('UPDATE users SET permissions = ? WHERE id = ?').bind(JSON.stringify(perms), prev.id).run();
+  // Taking Inviter away also takes back the unused codes they made (invites.ts), in the same batch.
+  await db.batch([db.prepare('UPDATE users SET permissions = ? WHERE id = ?').bind(JSON.stringify(perms), prev.id), revokeIfCannotInvite(db, prev.id, actorOf(c))]);
   await audit(db, actorOf(c), 'user.permissions', 'user', prev.id, parseList(prev.permissions), perms);
   // Life coach is the one permission the person hears about: given, it answers their ask; taken, their students are told.
   const was = parseList(prev.permissions).includes('coach');
@@ -175,16 +179,15 @@ admin.post('/coaching/links', async (c) => {
   const student = who
     ? await db.prepare('SELECT * FROM users WHERE id = ? OR LOWER(email) = ? OR handle = ?').bind(who, who, who.replace(/^@/, '')).first<UserRow>()
     : null;
-  if (!student) return c.json({ error: 'No account has that email, handle or id.' }, 404);
+  // A deleted member keeps its id; it reads as no account, as in Connect people.
+  if (!student || student.display_name === DELETED_NAME) return c.json({ error: 'No account has that email, handle or id.' }, 404);
   const bad = await linkProblem(db, coachRow.id, student.id);
   if (bad) return c.json({ error: bad.error }, bad.status);
   const now = body.mode === 'link';
-  const link = await startLink(db, { coachId: coachRow.id, studentId: student.id, askedBy: 'admin', createdBy: actorOf(c), active: now });
-  if (!link) return c.json({ error: 'not found' }, 404);
+  // The same action Connect people takes (routes/adminConnect.ts); this older door stays for a tab of the older Admin.
+  const link = await teamCoachLink(db, actorOf(c), coachRow, student, now);
+  if (!link) return c.json({ error: 'There is already an ask waiting between them.' }, 409);
   await audit(db, actorOf(c), now ? 'coach.link' : 'coach.ask', 'coach_link', link.id, '', { coach: coachRow.id, student: student.id });
-  await logCoach(db, { linkId: link.id, coachId: coachRow.id, studentId: student.id, actorId: null, action: now ? 'link.admin' : 'link.ask', label: now ? `The team linked ${nameOf(coachRow)} and ${nameOf(student)}` : `The team asked ${nameOf(student)} to work with ${nameOf(coachRow)}` });
-  await notify(db, student.id, 'coach', now ? `${nameOf(coachRow)} is your life coach now` : `The team suggests ${nameOf(coachRow)} as your life coach`, now ? 'Pick what they see on your Profile tab, or end it there.' : 'Say yes or no on your Profile tab. Nothing is shared until you say yes.', '/you#coach');
-  await notify(db, coachRow.id, 'coach', now ? `${nameOf(student)} is your student now` : `The team asked ${nameOf(student)} to work with you`, now ? 'Open Coaching to see what they share.' : 'You hear back when they answer.', '/coaching');
   const row = await db.prepare(`${COACH_LINK_SELECT} WHERE l.id = ?`).bind(link.id).first<AdminLinkRow>();
   return c.json({ link: row ? toAdminLink(row) : null }, 201);
 });
@@ -206,7 +209,8 @@ admin.post('/users/:id/role', async (c) => {
   if (!isRole(body.role)) return c.json({ error: 'role must be user, sub_admin or admin' }, 400);
   if (c.get('user')?.id === c.req.param('id')) return c.json({ error: 'you cannot change your own role' }, 400);
   const before = await getUser(db, c.req.param('id'));
-  await db.prepare('UPDATE users SET role = ? WHERE id = ?').bind(body.role, c.req.param('id')).run();
+  // A role that can no longer make codes takes back the unused ones (invites.ts), in the same batch.
+  await db.batch([db.prepare('UPDATE users SET role = ? WHERE id = ?').bind(body.role, c.req.param('id')), revokeIfCannotInvite(db, c.req.param('id'), actorOf(c))]);
   await audit(db, actorOf(c), 'user.role', 'user', c.req.param('id'), before?.role ?? '', body.role);
   const fresh = await loadUser(db, c.req.param('id'));
   if (!fresh) return c.json({ error: 'not found' }, 404);
@@ -311,6 +315,10 @@ admin.get('/audit', async (c) => {
 admin.route('/discounts', adminDiscounts);
 // ---- house templates for Agency, made by the super admin (routes/adminAgency.ts)
 admin.route('/agency', adminAgency);
+// ---- Connect people: every kind of connection the team makes, in one place (routes/adminConnect.ts)
+admin.route('/connect', adminConnect);
+// ---- Invites: the Invite only switch, every code and the waitlist (routes/invites.ts)
+admin.route('/invites', adminInvites);
 
 // ---- orders: search, the timeline, a refund
 interface AdminOrderRow extends OrderRow { owner_name: string; owner_handle: string | null; buyer_email: string | null; platform_fee_points: number; provider_payment_id: string | null }

@@ -56,19 +56,26 @@ club.post('/memberships/:id/manager', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   if (!can(user, 'review')) return c.json({ error: 'reviewers name managers' }, 403);
-  const prev = await db.prepare(`${SELECT} WHERE m.id = ?`).bind(c.req.param('id')).first<Row>();
-  if (!prev) return c.json({ error: 'not found' }, 404);
   const body = await c.req.json<{ managerId?: string | null }>().catch(() => ({}) as { managerId?: string | null });
-  let managerId: string | null = null;
+  const r = await nameClubManager(db, user.id, c.req.param('id'), typeof body.managerId === 'string' && body.managerId ? body.managerId : null);
+  return c.json(r.body, r.code);
+});
+
+/**
+ * Name (or clear) a member's Club manager, the one way: a reviewer's route above, and the team's Connect people in Admin
+ * (routes/adminConnect.ts). A manager is someone on staff; the member is told.
+ */
+export async function nameClubManager(db: D1Database, actorId: string | null, membershipId: string, managerId: string | null): Promise<{ code: 200 | 400 | 404; body: { ok?: true; error?: string } }> {
+  const prev = await db.prepare(`${SELECT} WHERE m.id = ?`).bind(membershipId).first<Row>();
+  if (!prev) return { code: 404, body: { error: 'not found' } };
   let managerName = '';
-  if (typeof body.managerId === 'string' && body.managerId) {
-    const m = await getUser(db, body.managerId);
-    if (!m || m.role === 'user') return c.json({ error: 'a manager is someone on staff' }, 400);
-    managerId = m.id;
+  if (managerId) {
+    const m = await getUser(db, managerId);
+    if (!m || m.role === 'user') return { code: 400, body: { error: 'a manager is someone on staff' } };
     managerName = nameOf(m);
   }
   await db.prepare('UPDATE memberships SET manager_user_id = ? WHERE id = ?').bind(managerId, prev.id).run();
-  await audit(db, user.id, 'membership.manager', 'membership', prev.id, prev.manager_user_id ?? '', managerId ?? '');
+  await audit(db, actorId, 'membership.manager', 'membership', prev.id, prev.manager_user_id ?? '', managerId ?? '');
   if (managerId) await notify(db, prev.user_id, 'club', `Your Club manager is ${managerName}`, 'Someone on staff who knows your work. Write to the team under Help to reach them.', '/club#mine-heading');
-  return c.json({ ok: true });
-});
+  return { code: 200, body: { ok: true } };
+}

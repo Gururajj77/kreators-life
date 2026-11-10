@@ -324,6 +324,12 @@ export const BRAND_PITCH = {
   steps: ['Create your brand and invite your team.', 'Write a brief or launch a content reward.', 'Approve, review, and see every version and view count.'],
 };
 
+/** Shown second among the questions, and only while Invite only is on (GET /api/public/join), so it never says what is not so. */
+export const INVITE_FAQ = {
+  q: 'Do I need an invite?',
+  a: 'Right now, yes: joining is by invite. If someone gave you a code or a link, Start free asks for it. Each code works once, for one account. No code? Join the waitlist on the same page, and we will email you when there is a place.',
+};
+
 /** The doubts a first-time visitor has, most common first. Each answer accepts the worry, then answers it. */
 export const SITE_FAQ: { q: string; a: string }[] = [
   { q: 'What’s the catch?', a: `Fair question. The daily game and every app are free to start and free to stay, Agency included: we take nothing from what you invoice. Three things cost money. Typing to the assistant needs a plan, because the model costs us money; plans are not on sale yet. The Shop takes 5% of each sale. An optional live call with a coach costs ${money(LIVE_CALL_CENTS, PLAN_CURRENCY)}, and it is not on sale yet either. Partner links in the Store may earn us a share, and every card says so.` },

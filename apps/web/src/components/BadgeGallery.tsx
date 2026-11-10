@@ -2,9 +2,9 @@ import { BADGE_FAMILIES, BADGE_FAMILY_META, BADGE_TIER_LABEL, BADGE_TIERS, BADGE
 import { keepTail } from '../lib/textNodes';
 import { useWide } from '../lib/useWide';
 import { Fold } from './Fold';
+import { TileGroups } from './TileGroups';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
-import { evenGrid, evenTile } from '../lib/bento';
 import { useAuthed } from '../lib/queries';
 import { useParamState } from '../lib/useParamState';
 import { BadgeArt } from './BadgeArt';
@@ -22,6 +22,22 @@ const TIER_ITEMS: { key: BadgeTier | 'all'; label: string }[] = [{ key: 'all', l
  */
 /** Badge tiles: two to a row on a phone and a tablet (a column of 464px beside the sidebar), four from the laptop width, in even rows (lib/bento.ts). */
 const BADGE_COLS = { base: 2, lg: 4 } as const;
+/**
+ * A medal's name keeps its last words together so a wrap never leaves one word alone; a name of four words or more keeps its last three
+ * ("Twenty / through the door", "Fifty / hours of focus"), so the second line is the longer one and the name reads as a rectangle.
+ */
+function nameTail(name: string) {
+  const words = name.trim().split(/\s+/);
+  if (words.length < 4) return keepTail(name);
+  return (
+    <>
+      {words.slice(0, -3).join(' ')} <span className="whitespace-nowrap">{words.slice(-3).join(' ')}</span>
+    </>
+  );
+}
+
+/** The counts of people someone brought in (a referral, an invite that joined, a connection that came true): their own part of a long family. */
+const BROUGHT_IN: ReadonlySet<string> = new Set(['referrals', 'invites_joined', 'connections_made']);
 const SEEN = 'kreators.badgesSeen';
 const FRESH_MS = 10 * 60_000;
 
@@ -59,7 +75,7 @@ function Tile({ b, held, count, fresh, onOpen }: { b: Badge; held: HeldBadge | u
     <button type="button" onClick={onOpen} className="toy toy-soft flex min-h-[44px] w-full flex-col items-center gap-xs rounded-tile bg-card p-sm text-center">
       <BadgeArt name={b.name} icon={b.icon} tier={b.tier} shape={BADGE_FAMILY_META[b.family].shape} earned={earned} size="md" shine={fresh} decorative />
       {/* The name keeps its last two words together, so a narrow phone tile reads "Ten / projects cleared", never a lone "cleared". */}
-      <span className="text-subhead font-semibold">{keepTail(b.name)}</span>
+      <span className="text-subhead font-semibold">{nameTail(b.name)}</span>
       <span className="text-caption text-ink-soft">
         {earned ? (held?.at ? `Earned ${day(held.at)}` : held?.given ? 'Given by the team' : 'Earned') : 'Locked'} · {BADGE_TIER_LABEL[b.tier]}
       </span>
@@ -172,13 +188,23 @@ export function BadgeGallery() {
           const body = (
             <>
               <p className="mt-xs m-0 text-caption text-ink-soft">{BADGE_FAMILY_META[f].blurb}</p>
-              <ul className={`mt-sm grid list-none gap-sm p-0 m-0 ${evenGrid(ordered.length, BADGE_COLS)}`}>
-                {ordered.map((b, i) => (
-                  <li key={b.key} className={evenTile(i, ordered.length, BADGE_COLS)}>
+              {/* Past ten medals a family reads in two parts (TileGroups): Community's people you brought in stand apart since wave 25. */}
+              <TileGroups
+                className="mt-sm"
+                gap="gap-sm"
+                list
+                cols={BADGE_COLS}
+                flat={ordered}
+                groups={[
+                  { key: 'own', name: f === 'Community' ? 'Posts, friends and events' : f, tiles: ordered.filter((b) => !BROUGHT_IN.has(b.stat)) },
+                  { key: 'brought', name: 'People you brought in', tiles: ordered.filter((b) => BROUGHT_IN.has(b.stat)) },
+                ]}
+                render={(b, cls) => (
+                  <li key={b.key} className={cls}>
                     <Tile b={b} held={held.get(b.key)} count={q.data.progress[b.stat] ?? 0} fresh={fresh.has(b.key)} onOpen={() => setOpen(b.key)} />
                   </li>
-                ))}
-              </ul>
+                )}
+              />
             </>
           );
           // On a phone each family is a fold (ten families of medals are a long scroll); one you hold a badge in starts open.

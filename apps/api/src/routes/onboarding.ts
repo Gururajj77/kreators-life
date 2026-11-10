@@ -26,6 +26,7 @@ import { DELETED_NAME_PROBLEM, getUser, isDeletedName, parseList, parseModules, 
 import { askToCoach, isCoach } from '../coaching';
 import type { AppEnv } from '../env';
 import { DATE_RE, newId, nowIso, readyFromNow, shiftDate, toNode, type NodeRow } from '../db';
+import { payInviteOnSetup } from '../invites';
 
 export const onboarding = new Hono<AppEnv>();
 
@@ -79,6 +80,8 @@ onboarding.post('/', async (c) => {
       .bind(now, displayName, focus, user.id),
   ]);
 
+  // Setup is finished: a referral pays the code's maker now, once (invites.ts).
+  await payInviteOnSetup(db, user.id);
   const answered = RELATIONSHIPS.map((r) => r.key).filter((k) => Object.keys(merged).some((id) => QUESTION_BY_ID[id]?.relationship === k));
   const weakest = [...RELATIONSHIPS].filter((r) => answered.includes(r.key)).sort((a, b) => scores[a.key] - scores[b.key]).slice(0, 2).map((r) => r.key);
   const res: OnboardingResponse = { scores, weakest, answered, ladders: deriveAllLadders(merged) };
@@ -241,6 +244,8 @@ onboarding.post('/setup', async (c) => {
       user.id,
     )
     .run();
+  // Setup is finished: a referral pays the code's maker now, once, never at the bare sign-up (invites.ts).
+  await payInviteOnSetup(db, user.id);
   // Saying "I'm a life coach" asks the team to make you one: the badge and the students wait for their yes.
   const coach = answers.identities.includes('coach') ? (isCoach(user) ? 'coach' : await askToCoach(db, user, '')) : null;
   const fresh = await getUser(db, user.id);

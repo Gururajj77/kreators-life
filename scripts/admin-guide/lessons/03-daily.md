@@ -59,7 +59,7 @@ Riya plans "Edit the brand reel": do date Thursday, due Friday, P1, Financial, 9
 
 - **To remember:** Remember tasks with no day yet. She picks a day to move one into Tasks.
 - **Not scheduled yet:** tasks with no do date and no due date. They never join the main list until she picks a day.
-- **Done today:** what she ticked, struck through with the time. Tapping one unticks it and takes back its xp. It shows ten at a time, with 25 or 50 and the next page under it, so a long day never makes a long page. A pillar's done tasks and a coach's view of her day page the same way.
+- **Done today:** what she ticked, struck through with the time. It starts folded, with the day's count beside it. Tapping one unticks it and takes back its xp. It shows ten at a time, with 25 or 50 and the next page under it, so a long day never makes a long page. A pillar's done tasks and a coach's view of her day page the same way.
 
 ## Step seven: close the unfinished
 

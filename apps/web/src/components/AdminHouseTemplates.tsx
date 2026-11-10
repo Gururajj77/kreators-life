@@ -14,6 +14,7 @@ import { MoreMenu } from './MoreMenu';
 import { BackLink } from './PageHeader';
 import { StatusTag } from './StatusTag';
 import { FIELD } from '../lib/ui';
+import { ErrorLine } from './ErrorLine';
 
 const KIND_NAME: Record<string, string> = { invoice: 'Invoice', contract: 'Agreement', doc: 'Document' };
 const day = longDate;
@@ -81,11 +82,7 @@ export function AdminHouseTemplates({ adminKey }: { adminKey: string }) {
         Agency house templates
       </h2>
       <p className="mt-xs m-0 text-subhead text-ink-soft">Starting points every Agency user can copy.</p>
-      {error && (
-        <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
-          {error}
-        </p>
-      )}
+      <ErrorLine e={error} className="mt-sm" />
       <div className="mt-sm">
         <DataTable<HouseTemplate>
           rows={rows ?? []}
@@ -249,11 +246,7 @@ function HouseTemplatePaper({ adminKey, id, onBack }: { adminKey: string; id: st
             ]}
           />
         </div>
-        {error && (
-          <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
-            {error}
-          </p>
-        )}
+        <ErrorLine e={error} className="mt-sm" />
       </header>
       <div className="mt-md">
         {paper.contract && <ContractView audience="owner" kind={meta.kind === 'doc' ? 'document' : 'agreement'} doc={paper.contract} onDocChange={(contract) => setPaper((p) => (p ? { ...p, contract } : p))} />}

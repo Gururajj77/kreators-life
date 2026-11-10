@@ -47,6 +47,8 @@ Bond is for the people you actually know.
 
 Meeting in person? Open **My QR code** on your Profile, in Bond or on an event's page. It shows your @username and friend code. The other person scans it, their page opens with **Add friend**, and you still say yes. If your code has spread too far, tap **Make a new code**, and the old one stops working.
 
+Now and then the team thinks two people would get on. The suggestion shows on your Profile tab under **Suggested by the team**, with **Yes** and **No, thanks**. You become friends only if you both say yes, and nobody is told who said no. A yes from both pays you each 10 xp.
+
 Chats in Bond always run under two made-up names, even between friends. Bond's own **Channels** are different: small private rooms where names show, and only friends you ask can join.
 
 Under **Introductions**, turn on **Open to introductions** to meet people from events you went to. Your details move only after the other person says yes.

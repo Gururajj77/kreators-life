@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { AFFILIATE_SHARE, INVITE_NOT_FOUND, PRODUCT_KINDS, statusesFor, type Availability, type AvailabilityOverride, type Booking, type Coupon, type Lead, type Lesson, type Order, type Product, type ProductInvite, type ProductKind, type ProductStatus, type QuizQuestion, type StudioAnalytics, type Testimonial, parseFaq } from '@kreators/shared';
-import { isUnlockBadgeKey } from '@kreators/shared';
+import { formatCount, isUnlockBadgeKey, money } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
 import { audit, badLink, blockedByName, DELETED_NAME, LINK_PROBLEM, nameOf, newId, noteStmt, notify, nowIso, parseList, pageOf, paged, TEN_A_PAGE, personBy, httpUrl, str } from '../db';
 import { logEvent, sendEmail, track } from '../ops';
@@ -425,21 +425,38 @@ studio.post('/products/:id/invites', async (c) => {
     : null;
   if (!target || target.display_name === DELETED_NAME || blocked) return c.json({ error: INVITE_NOT_FOUND }, 404);
   if (target.id === row.owner_id) return c.json({ error: 'That is the course owner. They can always open it.' }, 400);
-  const res = await db.prepare('INSERT OR IGNORE INTO product_invites (product_id, user_id, invited_by, created_at) VALUES (?, ?, ?, ?)').bind(row.id, target.id, user.id, nowIso()).run();
-  if (res.meta.changes > 0) await notify(db, target.id, 'invite', `You are invited to ${row.title}`, `${nameOf({ display_name: row.owner_name })} invited you to a private course.`, `/p/${row.id}`);
-  if (row.owner_id !== user.id) await audit(db, user.id, 'product.invite', 'product', row.id, '', { userId: target.id });
-  const out = await db.prepare(`${INVITE_SELECT} WHERE i.product_id = ? AND i.user_id = ?`).bind(row.id, target.id).first<InviteRow>();
-  return c.json({ invite: out ? toInvite(out) : null, already: res.meta.changes === 0 }, res.meta.changes > 0 ? 201 : 200);
+  const r = await inviteToCourse(db, row, target, user.id);
+  return c.json({ invite: r.invite, already: !r.added }, r.added ? 201 : 200);
 });
+
+/**
+ * The one invite to a private course, with two callers: its owner or an admin above, and the team's Connect people in Admin
+ * (routes/adminConnect.ts). The caller checked the course is private, the person, a block and the owner. The note names the price, so a
+ * course that costs points or money is never bought for anyone: they see it and decide.
+ */
+export async function inviteToCourse(db: D1Database, row: ProductRow, target: UserRow, actorId: string | null): Promise<{ added: boolean; invite: ProductInvite | null }> {
+  const res = await db.prepare('INSERT OR IGNORE INTO product_invites (product_id, user_id, invited_by, created_at) VALUES (?, ?, ?, ?)').bind(row.id, target.id, actorId, nowIso()).run();
+  const price = [row.price_points > 0 ? `${formatCount(row.price_points)} points` : '', row.price_cents > 0 ? money(row.price_cents, row.currency) : ''].filter(Boolean).join(' or ');
+  if (res.meta.changes > 0) await notify(db, target.id, 'invite', `You are invited to ${row.title}`, `${nameOf({ display_name: row.owner_name })} invited you to a private course.${price ? ` It costs ${price}, paid only if you buy it.` : ''}`, `/p/${row.id}`);
+  if (row.owner_id !== actorId) await audit(db, actorId, 'product.invite', 'product', row.id, '', { userId: target.id });
+  const out = await db.prepare(`${INVITE_SELECT} WHERE i.product_id = ? AND i.user_id = ?`).bind(row.id, target.id).first<InviteRow>();
+  return { added: res.meta.changes > 0, invite: out ? toInvite(out) : null };
+}
+
+/** Take a course invite back, the one way: the owner or an admin below, and the team's Withdraw in Connect people. */
+export async function uninviteFromCourse(db: D1Database, row: Pick<ProductRow, 'id' | 'owner_id'>, userId: string, actorId: string | null): Promise<boolean> {
+  const res = await db.prepare('DELETE FROM product_invites WHERE product_id = ? AND user_id = ?').bind(row.id, userId).run();
+  if (res.meta.changes === 0) return false;
+  if (row.owner_id !== actorId) await audit(db, actorId, 'product.uninvite', 'product', row.id, { userId }, '');
+  return true;
+}
 
 studio.delete('/products/:id/invites/:userId', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const row = await editableProduct(db, user, c.req.param('id'));
   if (!row) return c.json({ error: 'not found' }, 404);
-  const res = await db.prepare('DELETE FROM product_invites WHERE product_id = ? AND user_id = ?').bind(row.id, c.req.param('userId')).run();
-  if (res.meta.changes === 0) return c.json({ error: 'not found' }, 404);
-  if (row.owner_id !== user.id) await audit(db, user.id, 'product.uninvite', 'product', row.id, { userId: c.req.param('userId') }, '');
+  if (!(await uninviteFromCourse(db, row, c.req.param('userId'), user.id))) return c.json({ error: 'not found' }, 404);
   return c.json({ ok: true });
 });
 

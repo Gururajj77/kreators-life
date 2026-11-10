@@ -83,6 +83,16 @@ out=$(node "$ROOT/scripts/data-coverage.mjs" 2>/dev/null)
 if [ "$?" != "0" ] && [ -z "$out" ]; then out="scripts/data-coverage.mjs did not run"; fi
 if [ -n "$out" ]; then echo "$out"; hits=$((hits + $(echo "$out" | wc -l | tr -d ' '))); fi
 
+echo "dev tools: every file, check and route the build map names is real, and every built item has a check behind it (scripts/check-buildmap.mjs; 2026-11-09)"
+out=$(node --experimental-strip-types --no-warnings "$ROOT/scripts/check-buildmap.mjs" 2>/dev/null)
+if [ "$?" != "0" ] && [ -z "$out" ]; then out="scripts/check-buildmap.mjs did not run"; fi
+if [ -n "$out" ]; then echo "$out"; hits=$((hits + $(echo "$out" | wc -l | tr -d ' '))); fi
+
+echo "logs: every route file is mounted under an area, and the person's own files under a private one (scripts/check-log-areas.mjs; 2026-11-09)"
+out=$(node "$ROOT/scripts/check-log-areas.mjs" 2>/dev/null)
+if [ "$?" != "0" ] && [ -z "$out" ]; then out="scripts/check-log-areas.mjs did not run"; fi
+if [ -n "$out" ]; then echo "$out"; hits=$((hits + $(echo "$out" | wc -l | tr -d ' '))); fi
+
 echo "dates: an instant is never cut to its UTC day before a date helper shows it, or the day is wrong ahead of UTC (lib/date.ts takes an instant; 2026-11-07)"
 out=$(grep -rnE "\b(prettyDate|shortDay|shortDate|longDate|dayLabel|fullDay|monthYear)\([^()]*[A-Za-z]+(At|Until)\.slice\(0, 10\)\)" "$ROOT/apps/web/src" 2>/dev/null)
 if [ -n "$out" ]; then echo "$out"; hits=$((hits + $(echo "$out" | wc -l | tr -d ' '))); fi

@@ -50,7 +50,7 @@ Under the list, open **Add a task**. Type the task, pick which project it holds 
 ## The lists below
 
 - **Not scheduled yet:** tasks with no do date and no due date. They stay out of Tasks until you pick a day. Then they move up.
-- **Done today:** what you ticked, struck through, with the time. Tap one to untick it. That takes back its xp. It shows ten at a time. Pick 25 or 50 under it, or go to the next page.
+- **Done today:** what you ticked, struck through, with the time. It starts folded, with the day's count beside it; tap it to open. Tap one to untick it. That takes back its xp. It shows ten at a time. Pick 25 or 50 under it, or go to the next page.
 
 ## Close the unfinished
 

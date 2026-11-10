@@ -105,6 +105,8 @@ const Plans = lazyNamed(() => import('./screens/Plans'), 'Plans');
 const Coaching = lazyNamed(() => import('./screens/Coaching'), 'Coaching');
 const CoachStudent = lazyNamed(() => import('./screens/CoachStudent'), 'CoachStudent');
 const CoachJoin = lazyNamed(() => import('./screens/CoachJoin'), 'CoachJoin');
+// An invite link (2026-11-10): checks the code and goes on to Welcome with it kept for the tab.
+const JoinInvite = lazyNamed(() => import('./screens/JoinInvite'), 'JoinInvite');
 const School = lazyNamed(() => import('./screens/School'), 'School');
 const Search = lazyNamed(() => import('./screens/Search'), 'Search');
 const Sessions = lazyNamed(() => import('./screens/Sessions'), 'Sessions');
@@ -297,7 +299,7 @@ function Standalone() {
   const clock = useFocusSession((s) => s.snap.active) && Boolean(token) && !vibe;
   // The doors in (sign-in, sign-up, a lost password, Welcome) carry the mark back to the site; the other pages here keep their own
   // BackLink in that corner. On a phone a running clock takes the corner instead, as in the app.
-  const door = DOORS.has(pathname);
+  const door = DOORS.has(pathname) || pathname.startsWith('/join/');
   return (
     <>
       {door && (
@@ -362,6 +364,7 @@ const router = createBrowserRouter([
       { path: '/signin/reset', element: <ResetPassword /> },
       { path: '/signup', element: <Auth mode="signup" /> },
       { path: '/coach/join/:token', element: <CoachJoin /> },
+      { path: '/join/:code', element: <JoinInvite /> },
       { path: '/u/:handle', element: <Public /> },
       { path: '/people/:id', element: <Public /> },
       { path: '/p/:id', element: <ProductPage /> },
@@ -473,7 +476,8 @@ const router = createBrowserRouter([
       { path: '/internal/observability', element: gated('observability', <Observability />) },
       { path: '/internal/logs', element: gated('observability', <Logs />) },
       // team
-      { path: '/manage', element: gated('manage', <Manage />) },
+      // `/manage/connect` (Connect people for staff, their own kinds only, 2026-11-10) is drawn by Manage's own chunk, so the first download keeps no new import.
+      { path: '/manage/:page?', element: gated('manage', <Manage />) },
     ],
   },
   // Old addresses keep working.

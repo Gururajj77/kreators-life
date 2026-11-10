@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 /** The version of the terms and the privacy policy (the day they were last changed). A new version is shown to people once. */
-export const LEGAL_VERSION = '2026-11-07';
+export const LEGAL_VERSION = '2026-11-10';
 export const LEGAL_DOCS = [
   { key: 'terms', name: 'Terms of use', path: '/terms' },
   { key: 'privacy', name: 'Privacy policy', path: '/privacy' },
@@ -47,6 +47,8 @@ export const RETENTION: readonly RetentionRule[] = [
   { category: 'Your journal, gratitude lines and wellbeing logs', keep: 'Until you delete an entry, empty a day\'s lines or delete your account. A note of which gratitude prompts you wrote under or skipped (the prompt and the day, never your words) stays until you delete your account.', why: 'Only you can read them, unless you share wellbeing numbers with a life coach. The note keeps a prompt from coming back too soon.' },
   { category: 'A life coach\'s closed invite link (only a hash of it)', keep: 'A year', why: 'So opening an old link says it was closed.' },
   { category: 'Supplements you list in Fitness, and the days you ticked them', keep: 'Until you remove them or delete your account', why: 'It is your own list. Only you see it.' },
+  { category: 'The waitlist (your name, your email and the line you wrote, if any)', keep: 'Thirty days after the invite you were sent is used or runs out, 180 days after the team says no, or a year if nobody has answered yet. It goes at once if you ask us, or when you delete an account with that email.', why: 'So the team can let you in when there is a place, and so an address is not kept once that is settled.' },
+  { category: 'Invite codes you made, and the one you joined with', keep: 'Until you delete your account. Then a code you made that nobody used is taken back, and the label you gave a code is cleared; a used code stays, so it can never be used again.', why: 'A code works once, for one account, and a join is credited to whoever made the code.' },
   { category: 'Sign-in sessions', keep: 'Until you sign out, you pass the device limit, or thirty days after you were signed out by it', why: 'To keep you signed in, and to say why you were signed out.' },
   { category: 'A client\'s unlock of an Agency link that has a password (a random token kept only as a hash)', keep: 'Twelve hours, or until the owner changes the password', why: 'So a client does not type the password on every page.' },
   { category: 'A client\'s ask for a new Agency link password (the day, and a short reason if they gave one)', keep: 'Until the owner sets a new one or dismisses it, then ninety days', why: 'So the owner knows the link may be at risk.' },
@@ -87,7 +89,7 @@ export const SUBPROCESSORS: readonly Subprocessor[] = [
 ];
 
 /** The days after which a thing is removed by the daily tidy-up. One list, read by the cron. */
-export const RETENTION_DAYS = { outbox: 90, webhooks: 365, clicks: 396, resets: 7, requests: 1095, notices: 1095, channelLines: 365, passwordRequests: 90, rateLimits: 2 } as const;
+export const RETENTION_DAYS = { outbox: 90, webhooks: 365, clicks: 396, resets: 7, requests: 1095, notices: 1095, channelLines: 365, passwordRequests: 90, rateLimits: 2, waitlistDeclined: 180, waitlistWaiting: 365, waitlistSettled: 30 } as const;
 
 /** What the business that runs kreators.app wants shown on the contact page and in the copyright notice process. Every field is set by the owner, never in code. */
 export interface BusinessInfo {

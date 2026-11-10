@@ -8,6 +8,7 @@ In this lesson you'll learn:
 - What roles and permissions are, and how to give them.
 - How to give xp, points, honors and badges.
 - How to set what a person sees, start a plan and delete an account.
+- How to connect two people, and how invites and the waitlist work.
 
 ## Open Admin
 
@@ -17,7 +18,7 @@ Admin is in the Operations group, which only the team sees.
 2. Tap **Admin**.
 3. Signed in as an admin, no key is needed. The cover says so.
 
-The sections are tabs: **People, Listings, Redemptions, Orders, KYC, Life coaches, Flags, Discount codes, Attendee codes, Agency templates, Audit, Webhooks and Ops**. The row shows what fits, and **All** lists the rest.
+The sections are tabs: **People, Connect people, Invites, Listings, Redemptions, Orders, KYC, Life coaches, Flags, Discount codes, Attendee codes, Agency templates, Audit, Webhooks and Ops**. The row shows what fits, and **All** lists the rest.
 
 Who is an admin? The founders' email addresses are set on the server. Signing up or in with one of them gives the admin role, and that is written to the audit log.
 
@@ -37,9 +38,9 @@ There are three roles:
 - **Staff:** runs parts of the app, as far as their permissions go.
 - **Admin:** everything, including roles, permissions and which features exist.
 
-A permission is a job someone is trusted with. There are nine: **Talent manager, Cohort manager, Event host, Finance, Moderator, Support, Reviewer, Mentor and Life coach.**
+A permission is a job someone is trusted with. There are ten: **Talent manager, Cohort manager, Event host, Finance, Moderator, Support, Reviewer, Mentor, Life coach and Inviter.**
 
-- **A creator can hold three:** Mentor, Life coach and Moderator. The rest need the Staff role.
+- **A creator can hold four:** Mentor, Life coach, Moderator and Inviter. The rest need the Staff role.
 - **An admin holds all but Life coach.** Life coach is always given on purpose.
 - **Only an admin changes a role,** and never their own.
 
@@ -88,6 +89,34 @@ This only decides what she may use. She still hides and unhides her own apps.
 
 Tick several rows. The buttons that appear are **Make creator, Make staff, Make admin, Make life coach, Start Pro and End plan**. The ones that take power away ask first.
 
+## Connect two people
+
+Riya's friend Kabir wants a life coach, and the team knows one who fits. Connect people, right after People, is where the team joins two people.
+
+1. Open **Connect people**. Under **Kind of connection**, pick one: a life coach and a student, an Agency team member, a private School program, a private Shop course, a Club manager, a cohort manager, a brand team member, or two friends.
+2. Find each person by email, @username, friend code or id. A small card shows their picture, name and @username, never their email or phone.
+3. Pick **Ask them** or, where the kind allows it, **Link now**. Link now needs a line under **Why they are linked now**, kept only in the audit log.
+4. Tap **Send this connection**.
+
+Each kind runs the app's own steps. A coach's student says yes or no on their Profile tab. Two friends are both asked there, and become friends only when both say yes; nobody is told who said no. An Agency member answers in their inbox and sees nothing until the owner gives them access. A program or course invite shows the price, and nothing is bought for them. A Club manager is named at once, and the member is told. A cohort manager is named at once too, with a reason, and the new and the old manager are told. A brand team member says yes or no on their Profile tab, and joins only with a yes.
+
+**Connections the team made** lists every one with its state: Asked, Connected, Said no or Ended. **Withdraw** takes back an ask, and **End** ends a link; both ask first. On People, the link icon in a row opens that person's **Connections**, with **Connect to someone** to start from them.
+
+Staff use it too, from **Manage**, then **Connect people**, but only for the jobs they hold. Cohorts covers School programs, Shop courses and cohort managers. Reviewer covers Club managers, Talent manager covers brand teams, and Moderator covers friends. A staff member sees only those kinds in the form and in the list. A coach and a student, and an Agency team, stay with admins.
+
+## Invites and the waitlist
+
+While **Invite only** is on, a new account needs an invite code. Signing in, and the founders' own addresses, never need one. There are two ways in.
+
+1. **The waitlist:** someone with no code leaves a name and email. Open **Invites**, find them under **Waitlist** and tap **Approve**. They get a code by email, and the code and its link show in place, with **Copy link** and **Copy code**, in case mail is not set up. **Decline**, tapped twice, sends nothing.
+2. **Invite codes:** tap **Make codes**, pick **How many**, add a label for who they are for, and pick how long they stay open. Share each one as a link or as the code.
+
+Each code works for one account, once, and an account uses one code at most. **Take it back** stops a code nobody has used; it asks first. The list shows who made each code and, once used, who joined with it.
+
+Staff, and anyone you give the **Inviter** permission, make codes from **Invite people** on their own Profile tab. The person who joins is credited to whoever made the code, like an affiliate link. When that person finishes setting up, the maker earns xp and points, unless the maker is an admin.
+
+Turning **Invite only** off opens sign-up to everyone, so it asks first. Turning it on is one tap.
+
 ## Delete an account
 
 Say Riya made a second account to test her page, and asks you to remove it.
@@ -100,7 +129,7 @@ What is private goes. Their events, runs and sessions still to come are cancelle
 
 ## What an admin checks
 
-- **The audit log:** every role, permission, honor, badge, xp, plan and delete is written to the **Audit** tab, with the before and after.
+- **The audit log:** every role, permission, honor, badge, xp, plan, connection, invite and delete is written to the **Audit** tab, with the before and after.
 - **Role changes are watched:** every admin's inbox hears about role changes.
 - **Never shown:** the panel never shows anyone's journal, wellbeing, Finance or Discover answers.
 

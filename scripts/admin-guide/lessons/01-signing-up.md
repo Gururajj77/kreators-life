@@ -12,6 +12,8 @@ In this lesson you'll learn:
 
 Riya taps Start free on the site. That opens Welcome. It says "Seven relationships. One you." and shows one big button.
 
+While **Invite only** is on, Welcome asks for an invite code first. Riya's friend on the team sent her an invite link, so her code is already in and Welcome works as below. Someone with no code types one in, or taps **Join the waitlist** and leaves a name and email. Each code makes one account, once.
+
 1. She taps **Start with a short chat**.
 2. The app opens a session on her phone, so nothing she says is lost.
 3. The setup chat opens with Bumling, the app's own guide.
@@ -88,7 +90,8 @@ Open **Admin** from the Operations group on Apps. Only admins see it.
 
 A few more things to know:
 
-- **Founder emails:** an address on the admin list gets the admin role at sign-up. Sign up with yours before anyone else can.
+- **Founder emails:** an address on the admin list gets the admin role at sign-up, and needs no invite code. Sign up with yours before anyone else can.
+- **Invites:** the **Invites** tab holds the waitlist, the codes and the **Invite only** switch. Admin: People walks through it.
 - **Alerts:** many failed sign-ins in a short time send a note to every admin's inbox, at most once an hour.
 - **Logs:** a super admin can read refusals and failed sign-ins under Logs. No message bodies are kept there.
 - **Audit:** every role change and hand-given xp shows on the **Audit** tab.

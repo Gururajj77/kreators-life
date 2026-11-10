@@ -3,6 +3,7 @@ import { MODULES, RELATIONSHIPS } from '@kreators/shared';
 import { BUILD_FILES, BUILD_SECTIONS, itemsOf, percentOf, type BuildCard, type BuildItem, type BuildState } from '../lib/buildMap';
 import { tie } from '../lib/text';
 import { Section } from './Section';
+import { Fold } from './Fold';
 import { Icon } from './Icon';
 import { AppIcon } from './AppIcon';
 import { evenGrid, evenTile } from '../lib/bento';
@@ -11,7 +12,7 @@ import { ArrowRight, Check, CircleAlert, FlaskConical, type LucideIcon } from 'l
 const STATE: Record<BuildState, { name: string; glyph: LucideIcon | null; bg: string; edge: string }> = {
   ok: { name: 'Built and checked', glyph: Check, bg: 'var(--tint-green)', edge: 'var(--color-r4)' },
   key: { name: 'Needs a key', glyph: CircleAlert, bg: 'var(--tint-yellow)', edge: 'var(--color-r3)' },
-  test: { name: 'Test mode or not tried live', glyph: FlaskConical, bg: 'var(--tint-orange)', edge: 'var(--color-r2)' },
+  test: { name: 'Test mode, or checked by hand', glyph: FlaskConical, bg: 'var(--tint-orange)', edge: 'var(--color-r2)' },
   off: { name: 'Not built', glyph: null, bg: 'transparent', edge: 'var(--color-line)' },
 };
 const colorOf = (floor: number) => `var(--color-r${floor})`;
@@ -107,6 +108,29 @@ function Card({ card, color }: { card: BuildCard; color: string }) {
           ))}
         </ul>
       )}
+      {/* The files to open and what checks the card, folded so the map stays short; scripts/check-buildmap.mjs holds every one to the repo. */}
+      {(card.files?.length || card.checks?.length) ? (
+        <Fold className="mt-sm" title="Files and checks" hint={`${card.files?.length ?? 0} files, ${card.checks?.length ?? 0} checks`}>
+          <dl className="m-0 text-caption">
+            {card.files?.length ? (
+              <>
+                <dt className="text-eyebrow uppercase text-ink-soft">Files</dt>
+                <dd className="m-0 mt-xs flex flex-col break-all font-mono text-ink-mute">
+                  {card.files.map((f) => <span key={f}>{f}</span>)}
+                </dd>
+              </>
+            ) : null}
+            {card.checks?.length ? (
+              <>
+                <dt className={`text-eyebrow uppercase text-ink-soft ${card.files?.length ? 'mt-sm' : ''}`}>Checked by</dt>
+                <dd className="m-0 mt-xs flex flex-col break-words text-ink-soft">
+                  {card.checks.map((c) => <span key={c}>{c.startsWith('smoke: ') ? `The smoke test, ${c.slice(7)}` : c}</span>)}
+                </dd>
+              </>
+            ) : null}
+          </dl>
+        </Fold>
+      ) : null}
     </article>
   );
 }
@@ -124,13 +148,13 @@ export function BuildMap() {
 
   return (
     <>
-      <Section id="obs-map" title="Build map" lede="What is built, what waits on a key, what runs in test mode and what is not built. Green is built and checked, yellow needs a key, orange is test mode or not tried live, dashed is not built.">
+      <Section id="obs-map" title="Build map" lede="Green is built and checked by a script, yellow needs a key, orange is test mode or checked by hand, dashed is not built. A scan holds every file and check named here.">
         <div className="grid grid-cols-2 gap-xs lg:grid-cols-6">
           {[
             [`${percentOf(everything)}%`, 'of everything listed, weighted'],
             [count('ok'), 'built and checked'],
             [count('key'), 'waiting on a key'],
-            [count('test'), 'in test mode'],
+            [count('test'), 'test mode or checked by hand'],
             [count('off'), 'not built'],
             [MODULES.length, 'modules in the registry'],
           ].map(([b, l]) => (

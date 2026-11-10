@@ -65,10 +65,13 @@ export const ROLE_META: Record<Role, { name: string; blurb: string; icon: IconNa
  * Staff permissions. A permission is a job someone is trusted with; admins hold all of them, apart from Life coach,
  * which is never implied: a life coach is someone the team chose to coach, so even an admin is given it on purpose.
  */
-export const PERMISSIONS = ['talent', 'cohorts', 'events', 'finance', 'moderation', 'support', 'review', 'mentor', 'coach'] as const;
+export const PERMISSIONS = ['talent', 'cohorts', 'events', 'finance', 'moderation', 'support', 'review', 'mentor', 'coach', 'invite'] as const;
 export type Permission = (typeof PERMISSIONS)[number];
-/** The permissions a creator can hold (2026-11-05, the founder: a creator with Moderation is a guide). Every other one needs the Staff role. */
-export const CREATOR_PERMISSIONS: readonly Permission[] = ['mentor', 'coach', 'moderation'];
+/**
+ * The permissions a creator can hold (2026-11-05, the founder: a creator with Moderation is a guide; 2026-11-10, Inviter, so a creator the
+ * team trusts can bring people in). Every other one needs the Staff role.
+ */
+export const CREATOR_PERMISSIONS: readonly Permission[] = ['mentor', 'coach', 'moderation', 'invite'];
 
 export const PERMISSION_META: Record<Permission, { name: string; blurb: string; icon: IconName }> = {
   talent: { name: 'Talent manager', blurb: 'Runs Army campaigns, shortlists and assigns creators.', icon: 'Clapperboard' },
@@ -80,7 +83,13 @@ export const PERMISSION_META: Record<Permission, { name: string; blurb: string; 
   review: { name: 'Reviewer', blurb: 'Decides Club applications, bounties, TV and Fund proposals.', icon: 'SearchCheck' },
   mentor: { name: 'Mentor', blurb: 'Gives feedback on assignments. Can be held by a creator.', icon: 'Presentation' },
   coach: { name: 'Life coach', blurb: 'Coaches students who said yes: sees what they share, leaves notes, adds tasks. Never their journal. Can be held by a creator.', icon: 'Target' },
+  invite: { name: 'Inviter', blurb: 'Makes invite codes. People who join with one are credited to them. Can be held by a creator.', icon: 'Ticket' },
 };
+
+/** Who may make invite codes (2026-11-10): an admin, anyone on staff, or anyone holding Inviter. The one rule, on the server and on screen. */
+export function canInvite(user: { role: Role; permissions: readonly string[] }): boolean {
+  return user.role === 'admin' || user.role === 'sub_admin' || user.permissions.includes('invite');
+}
 
 /**
  * Staff-level: admin or staff holding the permission. Mentor and Life coach are the permissions a creator can hold,

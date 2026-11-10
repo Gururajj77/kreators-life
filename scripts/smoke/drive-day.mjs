@@ -6,8 +6,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer-core';
 import { QUESTIONS } from '../../packages/shared/src/index.ts';
+import { openJoining } from './openJoining.mjs';
 
 const ORIGIN = process.env.SMOKE_ORIGIN ?? 'http://127.0.0.1:8788';
+// Joining is by invite (migration 0125): on the test server, turn Invite only off so this script's own sign-ups work.
+await openJoining(ORIGIN);
 if (/:(5173|8787)\b/.test(ORIGIN)) throw new Error('never on the founder\'s dev app: use the test server on 8788');
 const LIMITS = { requests: 100_000, read: 5_000_000, written: 100_000 };
 const stamp = Date.now().toString(36);

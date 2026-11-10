@@ -11,8 +11,8 @@ import { fetchT, TIMEOUT } from './http';
  */
 
 /** Queue an email. Sent through Resend when RESEND_API_KEY is set; otherwise kept in the outbox so the admin can see it. */
-export async function sendEmail(db: D1Database, env: Env, msg: { userId?: string | null; to: string | null | undefined; subject: string; body: string; marketing?: boolean; /** The words hold a live link (a password reset): the outbox keeps a note, not the link. */ private?: boolean }): Promise<void> {
-  if (!msg.to) return;
+export async function sendEmail(db: D1Database, env: Env, msg: { userId?: string | null; to: string | null | undefined; subject: string; body: string; marketing?: boolean; /** The words hold a live link (a password reset): the outbox keeps a note, not the link. */ private?: boolean }): Promise<'sent' | 'failed' | 'skipped'> {
+  if (!msg.to) return 'skipped';
   const id = newId();
   const now = nowIso();
   let status: 'sent' | 'failed' | 'skipped' = 'skipped';
@@ -54,6 +54,8 @@ export async function sendEmail(db: D1Database, env: Env, msg: { userId?: string
     .prepare('INSERT INTO email_outbox (id, user_id, to_email, subject, body, status, error, created_at, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
     .bind(id, msg.userId ?? null, msg.to, msg.subject.slice(0, 200), msg.private ? '(the link in this mail is not kept)' : body.slice(0, 5000), status, error, now, status === 'sent' ? now : null)
     .run();
+  // What happened to it: an invite's approval says whether the link went out, so the admin can copy it when mail is not set up.
+  return status;
 }
 
 /** One line in an order's or booking's timeline. */
@@ -91,7 +93,7 @@ export async function limitKey(env: { CLICK_SALT?: string }, raw: string): Promi
 }
 
 /** Middleware: the named limit from limits.ts, per address, or per person once there is a session. */
-export function rateLimit(name: LimitName, by?: 'address', when?: 'discountCode' | 'appPrefs' | 'datePrefs' | 'adminKey') {
+export function rateLimit(name: LimitName, by?: 'address', when?: 'discountCode' | 'appPrefs' | 'datePrefs' | 'adminKey' | 'session') {
   const { max, windowSec } = LIMITS[name];
   return async (c: Context<AppEnv>, next: Next) => {
     if (when === 'adminKey') return adminKeyDoor(c, next, `${name}:ip:${await limitKey(c.env, ipOf(c))}`, max, windowSec);
@@ -110,8 +112,9 @@ export function rateLimit(name: LimitName, by?: 'address', when?: 'discountCode'
       const body = await c.req.json<{ datePrefs?: unknown }>().catch(() => null);
       if (!body || body.datePrefs === undefined) return next();
     }
-    // `by: 'address'` counts the address even for a signed-in person, so one address cannot try codes through many accounts.
-    const userId = by === 'address' ? undefined : c.get('user')?.id;
+    // `by: 'address'` counts the address even for a signed-in person, so one address cannot try codes through many accounts. A door that
+    // runs before the session check (`session`, /admin/connect) reads the session itself, so a signed-in person is counted as themself.
+    const userId = by === 'address' ? undefined : (c.get('user') ?? (when === 'session' ? await sessionUser(c) : null))?.id;
     const who = userId ?? (await limitKey(c.env, ipOf(c)));
     if (await limited(c.env.DB, `${name}${by === 'address' ? ':ip' : ''}:${who}`, max, windowSec)) return c.json({ error: 'too many tries, wait a minute' }, 429);
     await next();

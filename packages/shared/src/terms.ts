@@ -143,6 +143,8 @@ export const TERMS: Record<string, string> = {
   'change log': 'The list at the end of a coaching page: every ask, yes, note and task change between a coach and a student, with when it happened.',
   username: 'Your own name in the app, like @sam_k. Nobody else has it. It is also your public page address. Change it under Profile.',
   'friend code': 'Eight letters and numbers, yours alone. Someone types it in Bond or scans your QR code, and you get a friend request.',
+  'invite code': 'Lets one new account join while joining is by invite. Shared as a link or a code, it works once, and who joins is credited to its maker.',
+  waitlist: 'Leave your name and email when you have no invite code. When the team says yes, a code comes by email.',
 };
 
 /** True for the username an account is given at sign-up, before the person picks their own. */
@@ -153,7 +155,7 @@ export const TERM_GROUPS: { name: string; terms: string[] }[] = [
   { name: 'Pillars and pyramids', terms: ['pillar', 'pyramid', 'foundation', 'guiding principle', 'value goal', 'goal outcome', 'project', 'task', 'ripple', 'map', 'life map', 'strategy session', 'live call', 'routine', 'contract', 'core', 'floor'] },
   { name: 'Daily and progress', terms: ['small act', 'check-in', 'daily three', 'do date', 'due date', 'priority', 'day type', 'time block', 'day template', 'weekly pattern', 'by time block', 'by area', 'habit', 'good habit', 'bad habit', 'emerging', 'subtask', 'remember', 'not scheduled', 'bottlenecks', 'unfinished', 'unresolved', 'undecided', 'three endings', 'daily brief', 'not-to-do', 'kept day', 'streak', 'xp', 'points', 'level', 'who you are becoming', 'life score', 'five areas of life', 'period', 'review', 'season', 'active minutes', 'eating check-in', 'eating moment', 'serving', 'protein goal', 'supplement', 'nootropic', 'CBT', 'ACT', 'trauma-informed care', 'family systems', 'improv', 'positive psychology', 'self-compassion', 'karma yoga', 'the Stoics'] },
   { name: 'You and your page', terms: ['strength', 'personality type', 'love language', 'signs', 'human design', 'gate', 'channel', 'sidereal', 'numerology', 'master number', 'username', 'identity tag', 'setup chat', 'public page', 'badge', 'honor', 'trust', 'unlock'] },
-  { name: 'Friends and community', terms: ['friend code', 'chat channel', 'alias', 'circle', 'reaction', 'mention', 'guide', 'life coach', 'student', 'invite link', 'patterns', 'change log', 'run club', 'start code', 'attendee code', 'deck', 'focus mode', 'focus session'] },
+  { name: 'Friends and community', terms: ['friend code', 'chat channel', 'alias', 'circle', 'reaction', 'mention', 'guide', 'life coach', 'student', 'invite link', 'invite code', 'waitlist', 'patterns', 'change log', 'run club', 'start code', 'attendee code', 'deck', 'focus mode', 'focus session'] },
   { name: 'Learn and earn', terms: ['cohort', 'campaign', 'bounty', 'Club', 'collab', 'giveaway', 'retainer', 'deliverable', 'client link', 'utilisation', 'paperwork', 'team member', 'first pass', 'plan strength', 'pace'] },
   { name: 'Shop and store', terms: ['featured', 'partner link', 'pre-owned', 'kit', 'offer', 'discount code'] },
   { name: 'Content', terms: ['brand folder', 'outlier', 'hook', 'piece'] },

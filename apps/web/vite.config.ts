@@ -71,6 +71,10 @@ export default defineConfig({
           if (id.includes('/packages/shared/src/openBusiness.ts')) return 'shared-open';
           // A coach's report (a subpath export and a leaf: the section switches and the rules behind suggestions), read by the Coaching screens, both lazy.
           if (id.includes('/packages/shared/src/coachReport.ts')) return 'shared-coach';
+          // Connect people's kinds and words (a subpath export and a leaf: it imports nothing), read by Admin's lazy Connect tab and the Profile card.
+          if (id.includes('/packages/shared/src/connect.ts')) return 'shared-connect';
+          // Joining by invite's words and readers (a subpath export and a leaf: it imports only types), read by Welcome's gate, /join, Admin's Invites and Profile, all lazy.
+          if (id.includes('/packages/shared/src/invites.ts')) return 'shared-invites';
           // The line of the day (a long list of text) is a chunk of its own, which keeps the shared chunk under the 400 kB a chunk may
           // be. It must stay a leaf (lines.ts imports nothing): a split-off file that imports the rest of shared makes a cycle between
           // the two chunks and the app stops at "Cannot access before initialization" (design.ts did, 2026-11-04).

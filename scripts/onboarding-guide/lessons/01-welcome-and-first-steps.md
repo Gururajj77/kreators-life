@@ -12,6 +12,8 @@ In this lesson you'll learn:
 
 When you open the app for the first time, you land on Welcome. It says "Seven relationships. One you." There is one big button.
 
+While joining is by invite, Welcome first asks for an invite code. If you came from an invite link, your code is already in, and Welcome goes on as below. If not, type the code you were given. No code yet? **Join the waitlist** takes your name and email, and the team emails you a code when there is a place. Each code makes one account, once.
+
 1. Tap **Start with a short chat**.
 2. The app opens a session on your device, so nothing you say gets lost.
 3. The setup chat opens. Your guide is Bumling, a friendly grey robot with a gold antenna. Bumling is the app's own guide, not one of the seven.

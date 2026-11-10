@@ -1,4 +1,6 @@
 import { AFFILIATE_SHARE, CONSENT_PURPOSES, LEGAL_VERSION, LIVE_CALL_CENTS, MIN_AGE, PAID_PLANS, PAYMENTS_LIVE, PLAN_CURRENCY, PLAN_DAYS, PLANS, RETENTION, money } from '@kreators/shared';
+import { useQuery } from '@tanstack/react-query';
+import { publicApi } from '../lib/api';
 import { A, ActionLink, StartLink, Bullets, Fact, Grid, Grievance, H, LegalPage, Mail, NOT_SET, P, Strong, contactEmail, useBusiness, versionDate } from './legalBits';
 
 type Kind = 'terms' | 'privacy' | 'refunds' | 'contact' | 'pricing';
@@ -40,6 +42,8 @@ export function Policy({ kind }: { kind: Kind }) {
   const t = TITLES[kind];
   const { business, loading } = useBusiness();
   const email = contactEmail(business);
+  // Pricing's fine print names the invite only while joining is by invite (the switch in Admin, Invites).
+  const join = useQuery({ queryKey: ['site', 'join'], queryFn: publicApi.join, staleTime: 5 * 60_000, enabled: kind === 'pricing' });
   return (
     <LegalPage
       title={t.title}
@@ -56,7 +60,7 @@ export function Policy({ kind }: { kind: Kind }) {
           <H>Who may use it</H>
           <P>You need to be {MIN_AGE} or older. Sign-up asks for your date of birth and a phone number, and an account for anyone younger is refused. If we learn that an account belongs to someone under {MIN_AGE}, we close it.</P>
           <H>Your account</H>
-          <P>You start with a session on your device and may add an email. Keep your password private. You are responsible for what happens under your account, and one person has one account. You can end your account at any time from Profile, Account: it deletes your personal details and your logs at once. Money records stay without your name, as the law asks, and so does what other people rely on, such as a product they bought.</P>
+          <P>You start with a session on your device and may add an email. While joining is by invite, a new account needs an invite code, and each code makes one account only. Keep your password private. You are responsible for what happens under your account, and one person has one account. You can end your account at any time from Profile, Account: it deletes your personal details and your logs at once. Money records stay without your name, as the law asks, and so does what other people rely on, such as a product they bought.</P>
           <H>Your content and the licence you give us</H>
           <P>What you write, upload or post stays yours. To run the service, you give us a licence to store it, show it to the people you chose, copy it as the system needs and, where you put it on a public page, display it there. The licence is only for running kreators.app, it is not exclusive, and it ends when you delete the content or your account, except for copies that other people already made by sharing it, and what stays for the people who rely on it, such as a product they bought. We do not use what you write to train AI models.</P>
           <H>Who owns what the app helps you make</H>
@@ -199,6 +203,8 @@ export function Policy({ kind }: { kind: Kind }) {
           <H>Life coaches</H>
           <P>A life coach is someone our team chose. A coach sees nothing of yours until you say yes, and then only the parts you switch on: daily check-ins and tasks, your pillars, your routine and contract, your life map answers, your wellbeing numbers (mood, sleep, stress, mindful minutes, movement and the number for how you ate) with your saved reviews, and patterns. Patterns are worked out by plain rules from those same parts when your coach opens your page, and kept nowhere. A coach also gets plain tips from the numbers you share. A coach never sees your journal, gratitude, the notes you add to your trackers, your supplements, your water, your money, your Discover results or your Companion chats. You can switch a part off or end the coaching at any time, from your Profile tab, and the coach loses sight of it at once. Every ask, note and task a coach adds is kept in a change log you can read. It all comes with your export and goes with your account.</P>
           <P>If a coach types an email that has no account, we send that address one email with the coach’s invite link, and keep only a masked address in the coach’s log. Nothing is shared unless the person says yes.</P>
+          <H>Invites and the waitlist</H>
+          <P>If you join the waitlist, we keep your name, your email and the line you wrote, so the team can say yes and email you a code. If you join with an invite code, the person who made it is told that someone joined with it, never who. Your account is credited to them as a referral, and the team can see which account used which code.</P>
           <H>Position</H>
           <P>If you share your position for nearby matching it is rounded, stored on the server only, used to keep tables within twenty kilometres, and never shown to anyone.</P>
           <H>Payments and KYC</H>
@@ -304,6 +310,7 @@ export function Policy({ kind }: { kind: Kind }) {
           <H>The fine print</H>
           <Bullets
             items={[
+              ...(join.data?.inviteOnly ? ['Joining is by invite for now: an invite code, or a place from the waitlist. Neither costs anything.'] : []),
               'Plans do not renew by themselves, so nothing more is charged unless you pick one again.',
               `When a plan ends after ${PLAN_DAYS} days, its credits end with it. Top-up credits stay until you use them.`,
               `${RUPEE_LINE} The price shown is the price charged.`,

@@ -1,9 +1,10 @@
 import { quoteCode, redeem, release, type Quoted } from '../discounts';
 import { Hono } from 'hono';
-import { ADMIN_GUIDE_PROGRAM, LESSON_BODY_MAX, LESSON_TITLE_MAX, MAX_PROGRAM_INVITES, isProgramVisibility, lessonBodyProblem, programTakesEnrolment, programVisibleTo, type Cohort, type CohortSession, type CourseAssignment, type Enrollment, type LearningItem, type Program, type ProgramInvite, type ProgramVisibility, type Submission } from '@kreators/shared';
+import { ADMIN_GUIDE_COHORT, ADMIN_GUIDE_PROGRAM, formatCount, money, LESSON_BODY_MAX, LESSON_TITLE_MAX, MAX_PROGRAM_INVITES, isProgramVisibility, lessonBodyProblem, programTakesEnrolment, programVisibleTo, type Cohort, type CohortSession, type CourseAssignment, type Enrollment, type LearningItem, type Program, type ProgramInvite, type ProgramVisibility, type Submission } from '@kreators/shared';
 import { LESSON_RESOURCE_REPEAT, LESSON_RESOURCES_FULL, MAX_LESSON_RESOURCES, lessonResourceKindOf, lessonResourceLink, parseLessonResources, storedLessonResources } from '@kreators/shared/lessonResources';
 import type { AppEnv, UserRow } from '../env';
 import { audit, badLink, blockedEither, can, DELETED_NAME, inBatches, liveUser, LINK_PROBLEM, nameOf, newId, notify, nowIso, num, objectBody, oneOf, personBy, str, pageOf, paged, httpUrl, TEN_A_PAGE } from '../db';
+import { connectionsCameTrue } from '../invites';
 
 export const school = new Hono<AppEnv>();
 
@@ -14,7 +15,7 @@ type VisRow = ProgramRow & { vis: ProgramVisibility };
  * A program's state, read the one way (migration 0086). Admin's listings still flip `published` by itself, so `published = 1` is public
  * and a row marked public whose `published` went to 0 reads as a draft; otherwise the stored state.
  */
-const VIS = `(CASE WHEN p.published = 1 THEN 'public' WHEN p.visibility = 'public' THEN 'draft' ELSE p.visibility END)`;
+export const VIS = `(CASE WHEN p.published = 1 THEN 'public' WHEN p.visibility = 'public' THEN 'draft' ELSE p.visibility END)`;
 const NOT_FOUND_PERSON = 'We could not find that person.';
 /**
  * School's order inside each state (migration 0095): the programs an admin placed first, by position, then the rest newest first. The
@@ -228,8 +229,6 @@ school.post('/programs/:id/invites', async (c) => {
   const a = await accessTo(db, user, c.req.param('id'));
   if (!a || !a.visible) return c.json({ error: 'not found' }, 404);
   if (!a.manage) return c.json({ error: 'only the person who made this program, or an admin, invites people' }, 403);
-  if (a.row.vis !== 'private') return c.json({ error: 'Make it private first. Invites are for private programs.' }, 400);
-  if (a.row.id === ADMIN_GUIDE_PROGRAM) return c.json({ error: ADMIN_GUIDE_STAYS }, 400);
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
   const who = str(body.who, 200);
   if (!who) return c.json({ error: 'type their email, @username or friend code' }, 400);
@@ -237,15 +236,41 @@ school.post('/programs/:id/invites', async (c) => {
   if (target && target.id === user.id) return c.json({ error: 'That is you. Invite someone else.' }, 400);
   const blocked = target ? await blockedEither(db, user.id, target.id) : false;
   if (!target || target.display_name === DELETED_NAME || blocked) return c.json({ error: NOT_FOUND_PERSON }, 404);
-  const count = await db.prepare('SELECT COUNT(*) AS n FROM program_invites WHERE program_id = ?').bind(a.row.id).first<{ n: number }>();
-  if ((count?.n ?? 0) >= MAX_PROGRAM_INVITES) return c.json({ error: `A program can have up to ${MAX_PROGRAM_INVITES} people invited.` }, 400);
-  const ins = await db.prepare('INSERT OR IGNORE INTO program_invites (program_id, user_id, invited_by, created_at) VALUES (?, ?, ?, ?)').bind(a.row.id, target.id, user.id, nowIso()).run();
-  if (ins.meta.changes !== 1) return c.json({ error: 'They are already invited.' }, 409);
-  await notify(db, target.id, 'school', `${nameOf(user)} invited you to ${a.row.name}`, 'It is a private program. Open School to see its cohorts and enrol.', '/school#programs-heading');
-  await audit(db, user.id, 'program.invite', 'program', a.row.id, '', target.id);
-  const invite: ProgramInvite = { userId: target.id, name: nameOf(target), handle: target.handle ?? '', invitedAt: nowIso() };
-  return c.json({ ok: true, invite }, 201);
+  const r = await inviteToProgram(db, a.row, target, { id: user.id, name: nameOf(user) });
+  return c.json(r.body, r.code);
 });
+
+/**
+ * The one invite to a private program, with two callers: its creator or an admin above, and the team's Connect people in Admin
+ * (routes/adminConnect.ts). The caller found the person and checked self, nobody and a block. The note names the price, so a place
+ * that costs points or money is never bought for anyone: they see it and enrol themselves.
+ */
+export async function inviteToProgram(
+  db: D1Database,
+  program: Pick<ProgramRow, 'id' | 'name' | 'price_points' | 'price_cents' | 'currency'> & { vis: ProgramVisibility },
+  target: UserRow,
+  by: { id: string | null; name: string },
+): Promise<{ code: 201 | 400 | 409; body: { ok?: true; invite?: ProgramInvite; error?: string } }> {
+  if (program.vis !== 'private') return { code: 400, body: { error: 'Make it private first. Invites are for private programs.' } };
+  if (program.id === ADMIN_GUIDE_PROGRAM) return { code: 400, body: { error: ADMIN_GUIDE_STAYS } };
+  const count = await db.prepare('SELECT COUNT(*) AS n FROM program_invites WHERE program_id = ?').bind(program.id).first<{ n: number }>();
+  if ((count?.n ?? 0) >= MAX_PROGRAM_INVITES) return { code: 400, body: { error: `A program can have up to ${MAX_PROGRAM_INVITES} people invited.` } };
+  const ins = await db.prepare('INSERT OR IGNORE INTO program_invites (program_id, user_id, invited_by, created_at) VALUES (?, ?, ?, ?)').bind(program.id, target.id, by.id, nowIso()).run();
+  if (ins.meta.changes !== 1) return { code: 409, body: { error: 'They are already invited.' } };
+  const price = [program.price_points > 0 ? `${formatCount(program.price_points)} points` : '', program.price_cents > 0 ? money(program.price_cents, program.currency) : ''].filter(Boolean).join(' or ');
+  await notify(db, target.id, 'school', `${by.name} invited you to ${program.name}`, `It is a private program. Open School to see its cohorts and enrol.${price ? ` A place costs ${price}, paid only if you enrol.` : ''}`, '/school#programs-heading');
+  await audit(db, by.id, 'program.invite', 'program', program.id, '', target.id);
+  const invite: ProgramInvite = { userId: target.id, name: nameOf(target), handle: target.handle ?? '', invitedAt: nowIso() };
+  return { code: 201, body: { ok: true, invite } };
+}
+
+/** Take an invite back, the one way: its creator or an admin below, and the team's Withdraw in Connect people. Someone who already enrolled keeps their seat. */
+export async function uninviteFromProgram(db: D1Database, programId: string, userId: string, actorId: string | null): Promise<boolean> {
+  const del = await db.prepare('DELETE FROM program_invites WHERE program_id = ? AND user_id = ?').bind(programId, userId).run();
+  if (del.meta.changes !== 1) return false;
+  await audit(db, actorId, 'program.uninvite', 'program', programId, userId, '');
+  return true;
+}
 
 // Taking an invite back. Someone who already enrolled keeps their seat, as with an archived program.
 school.delete('/programs/:id/invites/:userId', async (c) => {
@@ -254,9 +279,7 @@ school.delete('/programs/:id/invites/:userId', async (c) => {
   const a = await accessTo(db, user, c.req.param('id'));
   if (!a || !a.visible) return c.json({ error: 'not found' }, 404);
   if (!a.manage) return c.json({ error: 'only the person who made this program, or an admin, removes an invite' }, 403);
-  const del = await db.prepare('DELETE FROM program_invites WHERE program_id = ? AND user_id = ?').bind(a.row.id, c.req.param('userId')).run();
-  if (del.meta.changes !== 1) return c.json({ error: 'not found' }, 404);
-  await audit(db, user.id, 'program.uninvite', 'program', a.row.id, c.req.param('userId'), '');
+  if (!(await uninviteFromProgram(db, a.row.id, c.req.param('userId'), user.id))) return c.json({ error: 'not found' }, 404);
   return c.json({ ok: true });
 });
 
@@ -577,6 +600,64 @@ school.post('/programs/:id/cohorts', async (c) => {
   return c.json({ ok: true, id }, 201);
 });
 
+/**
+ * Who may name a cohort's manager (2026-11-10, the founder: "the team can change a cohort's manager"): an admin on any program, and staff
+ * holding Cohorts on a public one, the same reach Cohorts has over a program's lessons and cohorts (accessTo's `edit`). The Admin guide
+ * stays with admins: its manager would open it to someone who is not one.
+ */
+export const mayNameManager = (user: UserRow, vis: ProgramVisibility, cohortId: string) =>
+  cohortId !== ADMIN_GUIDE_COHORT && (isAdmin(user) || (user.role === 'sub_admin' && can(user, 'cohorts') && vis === 'public'));
+
+type Named = { code: 200; from: string | null; cohort: string } | { code: 400 | 403 | 404 | 409; error: string };
+
+/**
+ * Name who runs a cohort, or nobody. One action, two callers: PATCH /school/cohorts/:id/manager on the cohort page and Admin (or Manage),
+ * Connect people. A manager today is whoever opened the cohort (someone who runs the program), so the one named is staff, an admin, or a
+ * creator with a full account (an email and setup done), never a deleted member or an account kept only on a device. A block either way with the
+ * program's creator reads as nobody. Guarded on the manager it read, so two changes at once make one; the new and the old are told.
+ */
+export async function setCohortManager(db: D1Database, actor: UserRow | null, cohortId: string, person: UserRow | null, from?: string | null): Promise<Named> {
+  const k = await db
+    .prepare(`SELECT k.id, k.name, k.manager_user_id, p.name AS program, p.created_by, ${VIS} AS vis FROM cohorts k JOIN programs p ON p.id = k.program_id WHERE k.id = ?`)
+    .bind(cohortId)
+    .first<{ id: string; name: string; manager_user_id: string | null; program: string; created_by: string | null; vis: ProgramVisibility }>();
+  if (!k) return { code: 404, error: 'not found' };
+  if (actor && !mayNameManager(actor, k.vis, k.id)) return { code: 403, error: 'Admins, and staff with Cohorts on a public program, name a cohort’s manager.' };
+  if (!actor && k.id === ADMIN_GUIDE_COHORT) return { code: 403, error: 'The Admin guide stays with admins.' };
+  if (from !== undefined && from !== k.manager_user_id) return { code: 409, error: 'Someone changed it a moment ago. Read it again.' };
+  if (person) {
+    if (person.display_name === DELETED_NAME) return { code: 404, error: NOT_FOUND_PERSON };
+    // Staff and admins always may; a creator needs a full account. A device-only account could vanish with its device.
+    if (person.role === 'user' && (!person.email || !person.onboarded_at)) return { code: 400, error: 'They need a full account first: an email and setup done.' };
+    if (k.created_by && k.created_by !== person.id && (await blockedEither(db, k.created_by, person.id))) return { code: 404, error: NOT_FOUND_PERSON };
+    if (k.manager_user_id === person.id) return { code: 409, error: 'They run this cohort already.' };
+  } else if (!k.manager_user_id) return { code: 409, error: 'Nobody runs this cohort now.' };
+  const res = await db.prepare('UPDATE cohorts SET manager_user_id = ? WHERE id = ? AND manager_user_id IS ?').bind(person?.id ?? null, k.id, k.manager_user_id).run();
+  if (!res.meta.changes) return { code: 409, error: 'Someone changed it a moment ago. Read it again.' };
+  const where = `${k.program}, ${k.name}`;
+  // note-link: /school/:id
+  if (person) await notify(db, person.id, 'school', `You run ${where} now`, 'The team named you its manager: sessions, hand-ins and completion are yours.', `/school/${k.id}`);
+  // note-link: /school/:id
+  if (k.manager_user_id) await notify(db, k.manager_user_id, 'school', `You no longer run ${where}`, person ? `The team named ${nameOf(person)} instead.` : 'The team took the manager off for now.', `/school/${k.id}`);
+  await audit(db, actor?.id ?? null, 'cohort.manager', 'cohort', k.id, k.manager_user_id ?? '', person?.id ?? '');
+  return { code: 200, from: k.manager_user_id, cohort: where };
+}
+
+school.patch('/cohorts/:id/manager', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const body = await objectBody(c);
+  if (typeof body.userId !== 'string' || !body.userId.trim()) return c.json({ error: 'Pick who runs it.' }, 400);
+  const person = await db.prepare('SELECT * FROM users WHERE id = ?').bind(body.userId.trim()).first<UserRow>();
+  if (!person) return c.json({ error: NOT_FOUND_PERSON }, 404);
+  // `from`, when sent, is the manager the page showed (null for none): a change someone else made since answers 409 instead of
+  // being written over (2026-11-10, the break-it check: two staff on the same page each wrote, one after the other).
+  const from = body.from === undefined ? undefined : typeof body.from === 'string' ? body.from : null;
+  const r = await setCohortManager(db, user, c.req.param('id'), person, from);
+  if (r.code !== 200) return c.json({ error: r.error }, r.code);
+  return c.json({ ok: true, managerId: person.id, managerName: nameOf(person) });
+});
+
 // Enrol: capacity is checked and the seat taken in one statement.
 school.post('/cohorts/:id/enroll', async (c) => {
   const db = c.env.DB;
@@ -636,6 +717,8 @@ school.post('/cohorts/:id/enroll', async (c) => {
   }
   if (owe > 0) await db.prepare('INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) VALUES (?, ?, ?, ?, ?)').bind(user.id, -owe, 'enrollment', id, now).run();
   if (k.manager_user_id) await notify(db, k.manager_user_id, 'school', `${nameOf(user)} joined ${k.name}`, '', `/school/${k.id}`);
+  // A program invite the team made (Admin, Connect people) came true when they joined a cohort of it.
+  await connectionsCameTrue(db, 'program', { refId: k.program_id, userId: user.id });
   return c.json({ ok: true, id }, 201);
 });
 
@@ -714,6 +797,8 @@ school.get('/cohorts/:id', async (c) => {
     learnerCount: learnerCount?.n ?? 0,
     manager,
     mentor,
+    // The team's control on the page: who may name its manager (mayNameManager), read with the same rule the route checks.
+    canSetManager: role ? mayNameManager(user, role.access.row.vis, k.id) : false,
     myProgress: enrolled ? progressFor(user.id) : null,
     myStatus: me?.status ?? null,
   });

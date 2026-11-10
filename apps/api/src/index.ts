@@ -26,7 +26,7 @@ import { studio } from './routes/studio';
 import { publicPage, store } from './routes/store';
 import { explore } from './routes/explore';
 import { manage } from './routes/manage';
-import { orgs } from './routes/orgs';
+import { myOrgInvites, orgs } from './routes/orgs';
 import { army } from './routes/army';
 import { school } from './routes/school';
 import { cohortTalk } from './routes/cohortTalk';
@@ -71,6 +71,7 @@ import { reminders } from './routes/reminders';
 import { agency, agencyPublic } from './routes/agency';
 import { agencyLife, agencyLifePublic } from './routes/agencyLife';
 import { agencyTeam, myTeams } from './routes/agencyTeam';
+import { mySuggestions } from './routes/adminConnect';
 import { agencyTeamGate } from './agencyTeamAccess';
 import { portalDocGate, portalDocs } from './portalAccess';
 import { refuseTeamSession } from './teamLinkAccess';
@@ -83,6 +84,7 @@ import { connect } from './routes/connect';
 import { activity } from './routes/activity';
 import { booksPublic } from './routes/books';
 import { eventsPublic } from './routes/eventsPublic';
+import { invitesPublic, myInvites } from './routes/invites';
 import { logger, writeClientError, writeLog } from './logs';
 import { blockedPath, originAllowed, PAGE_HEADERS } from './headers';
 import { countingD1, guardedFetch, newTally, noteTick } from './d1Guard';
@@ -124,8 +126,9 @@ app.use(
 app.use('*', async (c, next) => {
   await next();
   const path = new URL(c.req.url).pathname;
-  // A client's paper and a team or invite link answer as the person they were opened for, so they are never kept either.
-  const sensitive = path.startsWith('/api/auth/') || path.startsWith('/api/me/') || path === '/api/me' || /^\/api\/public\/(invoices|contracts|agency|team-link|coach-join)(\/|$)/.test(path);
+  // A client's paper and a team or invite link answer as the person they were opened for, so they are never kept either; nor is an invite
+  // code's check or the Invite only switch, which the team can change at any moment.
+  const sensitive = path.startsWith('/api/auth/') || path.startsWith('/api/me/') || path === '/api/me' || /^\/api\/public\/(invoices|contracts|agency|team-link|coach-join|invite|join|waitlist)(\/|$)/.test(path);
   if (!sensitive && (path.startsWith('/api/public/') || c.res.headers.has('Cache-Control'))) return;
   try {
     c.res.headers.set('Cache-Control', 'no-store');
@@ -175,6 +178,8 @@ app.route('/public/contracts', contractsPublic);
 app.route('/public/calendar', calendarPublic);
 app.route('/public/books', booksPublic);
 app.route('/public/coach-join', coachJoinPublic);
+// Joining by invite: whether a code is needed, whether one works, and the waitlist. Before publicPage, whose /:handle would take /join.
+app.route('/public', invitesPublic);
 app.route('/public', publicPage);
 // Webhooks verify their own signatures.
 app.route('/webhooks', webhooks);
@@ -221,6 +226,11 @@ app.use('/agency/*', agencyTeamGate);
 app.route('/me/coach', myCoach);
 // An Agency team member's answers, leaving and a client member's view: core like /me/coach, so a person can always say no or leave.
 app.route('/me/teams', myTeams);
+app.route('/me/suggestions', mySuggestions);
+// A brand's ask onto its team (2026-11-10): the person's yes or no, core like /me/suggestions, so Army being off never stops a no.
+app.route('/me/org-invites', myOrgInvites);
+// The codes of someone who may make them (an admin, staff, or Inviter): core, so it never depends on an app being on.
+app.route('/me/invites', myInvites);
 app.route('/me/calendar', calendarMe);
 app.route('/me/legal', meLegal);
 app.route('/me/activity', activity);

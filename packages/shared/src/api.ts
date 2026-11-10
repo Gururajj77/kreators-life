@@ -130,11 +130,21 @@ export interface ObservedAdditions {
   games: { key: string; name: string; unlocked: number }[];
   discover: { results: number; people: number; withEq: number; assistantOn: number; stepsOff: number; addons: { type: number; love: number; mind: number; design: number }; mindOn: number };
   /** Agency: counts only, never a client, a name or an amount. */
-  agency: { people: number; clients: number; deliverables: number; published: number; invoices: number; agreementsSigned: number; clientLinksOn: number; metricsOn: number };
+  agency: { people: number; clients: number; deliverables: number; published: number; invoices: number; agreementsSigned: number; clientLinksOn: number; metricsOn: number; teamMembers: number; teamLinksOn: number };
+  /** Life coaches (2026-11-09): links by state, invite links switched on, and the links the team made. Counts only, never who. */
+  coaching: { pending: number; active: number; ended: number; declined: number; invitesOn: number; byTeam: number };
+  /** School: programs by state, lesson resources by kind, cohort discussion lines in the last thirty days. Never a word of them. */
+  school: { programs: { draft: number; private: number; public: number; archived: number }; resources: { video: number; book: number; file: number; link: number }; talkLines30: number };
+  /** Daily and the ways in: open bottleneck tasks by kind, people with their own time blocks, people who came through an event and are not set up yet, friend codes made new in the last 24 hours. */
+  daily: { bottlenecks: { unfinished: number; unresolved: number; undecided: number }; ownTimeBlocks: number; eventArrivals: number; qrRenewed24h: number };
+  /** What the team did for people in the last thirty days, from the audit log: connections made (a coach and a student, and each kind Connect people makes), in all and by kind (`CONNECT_KINDS`). */
+  team: { connections30: number; byKind: Record<string, number> };
   /** What super admins gave by hand in the last thirty days. */
   grants: { xp: number; badges: number; points: number; honors: number };
   /** The app's own log, last 24 hours. */
   logs: { errors: number; warnings: number; changes: number };
+  /** Joining by invite (2026-11-10): whether Invite only is on, codes by state, joins through a code in the last seven days, joins that finished setup, and the waitlist by status. Counts only. */
+  invites: { inviteOnly: boolean; codes: { made: number; used: number; open: number; revoked: number; expired: number }; joinedThisWeek: number; setUp: number; waitlist: { waiting: number; invited: number; joined: number; declined: number } };
 }
 
 export interface LogEntry {

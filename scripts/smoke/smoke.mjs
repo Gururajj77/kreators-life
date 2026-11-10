@@ -10,6 +10,7 @@ import { cohortTalkPrivateLabel } from '../../packages/shared/src/index.ts';
 import { MAX_DAY_TEMPLATES, MAX_TIME_BLOCKS } from '../../packages/shared/src/index.ts';
 import { gratitudePromptsForDay } from '../../packages/shared/src/gratitude.ts';
 import { ATTENDEE_APPS, attendeeMayOpen } from '../../packages/shared/src/eventJoin.ts';
+import { CONNECT_REWARD, INVITE_REWARD } from '../../packages/shared/src/index.ts';
 import http from 'node:http';
 
 const ORIGIN = process.env.SMOKE_ORIGIN ?? 'http://127.0.0.1:8788';
@@ -184,6 +185,10 @@ section('Health');
   check('sitemap answers', sm.status === 200 && (await sm.text()).includes('<urlset'), sm.status);
   const cron = await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
   check('cron can be run by hand', cron.status === 200, cron.status);
+  // Joining is by invite (migration 0125): the founder's sign-up below is checked with Invite only on, and the run then turns it off for
+  // its own sign-ups (its own section turns it on and off again).
+  const gateOn = await admin('PUT', '/admin/invites/settings', { inviteOnly: true });
+  check('Admin can turn Invite only on with the key', gateOn.status === 200 && gateOn.json.inviteOnly === true, gateOn.json);
 }
 
 // ---------------------------------------------------------------- auth
@@ -222,6 +227,9 @@ let C; // a seller and a run host
     A = { token: prev.json.token, user: prev.json.user };
   }
   check('founder email becomes admin on sign-up', A.user.role === 'admin', A.user.role);
+  check('the founder’s address is never asked for an invite code', first.status !== 403, first.json);
+  const opened = await admin('PUT', '/admin/invites/settings', { inviteOnly: false });
+  check('the run opens joining for its own sign-ups', opened.status === 200 && opened.json.inviteOnly === false, opened.json);
   const dup = await api('POST', '/auth/signup', { email: founderEmail, password: founderPass, phone: PHONE, birthDate: GROWN });
   check('a second sign-up with the same email is refused', dup.status === 409, dup.json);
 
@@ -5114,7 +5122,7 @@ section('Discount codes');
 section('Badges');
 {
   const { BADGES: CATALOGUE, BADGE_FAMILIES: FAMILIES, BADGE_STATS: STATS, BADGE_TIERS: TIERS, isPrivateBadge } = await import('../../packages/shared/src/index.ts');
-  check('the catalogue has 40 to 60 badges, each with a tier and a family', CATALOGUE.length >= 40 && CATALOGUE.length <= 60 && CATALOGUE.every((b) => TIERS.includes(b.tier) && FAMILIES.includes(b.family)), CATALOGUE.length);
+  check('the catalogue has 40 to 70 badges, each with a tier and a family', CATALOGUE.length >= 40 && CATALOGUE.length <= 70 && CATALOGUE.every((b) => TIERS.includes(b.tier) && FAMILIES.includes(b.family)), CATALOGUE.length);
   const G = await signup(`badges-${stamp}@smoke.test`, `Kettle-${stamp}-pass`, 'Smoke badges');
   const gallery = await api('GET', '/me/badges', undefined, G.token);
   check('the gallery answers with a count behind every rule', gallery.status === 200 && Array.isArray(gallery.json.held) && STATS.every((k) => typeof gallery.json.progress?.[k] === 'number'), gallery.json);
@@ -8058,6 +8066,331 @@ section('QR code to connect');
   check('a new friend code is limited like other settings', ROUTE_LIMITS.some((r) => r.method === 'POST' && r.path === '/me/friend-code' && r.limit === 'prefs'), '');
 }
 
+section('Connect people');
+{
+  // Admin, Connect people (2026-11-09): every kind through the app's own action, asks the person answers, the block and nobody words, the list.
+  // Its own addresses, so these sign-ups never touch the limit the rest of the checks use.
+  let joined = 0;
+  const join = async (who) => {
+    const email = `connect-${who}-${stamp}@smoke.test`;
+    const from = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 91 + Math.floor(joined++ / 8)) & 255}`;
+    const r = await api('POST', '/auth/signup', { email, password: `Harbor-${stamp}-pass`, displayName: `Connect ${who}`, phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': from });
+    return { token: r.json.token, user: r.json.user, email };
+  };
+  const AD = await join('admin');
+  await admin('POST', `/admin/users/${AD.user.id}/role`, { role: 'admin' });
+  const [K, S, S2, F1, F2, F3, BL, O, M, P, X, ST, CM, CR] = await Promise.all(['coach', 'student', 'student2', 'friend1', 'friend2', 'friend3', 'blocked', 'owner', 'member', 'learner', 'gone', 'staff', 'clubber', 'creator'].map((w) => join(w)));
+  await admin('POST', `/admin/users/${K.user.id}/permissions`, { permissions: ['coach'] });
+  await admin('POST', `/admin/users/${ST.user.id}/role`, { role: 'sub_admin' });
+  const connect = (body, token = AD.token) => api('POST', '/admin/connect', body, token);
+  const NOBODY = 'We could not find that person.';
+  const inboxOf = async (who) => JSON.stringify((await api('GET', '/inbox?size=50', undefined, who.token)).json);
+
+  // Who may: an admin's session or the key. Anyone else, staff included, is refused at Admin's door.
+  check('a member cannot connect people', (await connect({ kind: 'friends', first: F1.email, second: F2.email }, S.token)).status === 403);
+  check('staff are refused at the admin door', (await connect({ kind: 'friends', first: F1.email, second: F2.email }, ST.token)).status === 403);
+  await admin('POST', `/admin/users/${ST.user.id}/permissions`, { permissions: ['cohorts', 'review'] });
+  check('staff with a permission are refused there too (the door is admins only)', (await connect({ kind: 'program', first: P.email, place: 'x' }, ST.token)).status === 403);
+  check('a kind that does not exist is 400', (await connect({ kind: 'cousins', first: F1.email, second: F2.email })).status === 400);
+
+  // The lookup shows a picture, a name and a handle: never an email, a phone or a birth date.
+  const look = await api('GET', `/admin/connect/person?who=${encodeURIComponent(S.email)}`, undefined, AD.token);
+  check('the lookup shows a name and a handle', look.status === 200 && look.json.person?.id === S.user.id && typeof look.json.person.handle === 'string', look.json);
+  check('and nothing private', !/email|phone|birth/i.test(Object.keys(look.json.person ?? {}).join(',')), Object.keys(look.json.person ?? {}));
+  const nobodyLook = await api('GET', `/admin/connect/person?who=${encodeURIComponent(`nobody-${stamp}@smoke.test`)}`, undefined, AD.token);
+  check('nobody reads as nobody', nobodyLook.status === 404 && nobodyLook.json.error === NOBODY, nobodyLook.json);
+  const unknown = await connect({ kind: 'friends', first: F1.email, second: `nobody-${stamp}@smoke.test` });
+  check('an unknown person is refused in the nobody words', unknown.status === 404 && unknown.json.error === NOBODY, unknown.json);
+  check('a person cannot be connected to themself', (await connect({ kind: 'friends', first: F1.email, second: F1.user.id })).status === 400);
+  await admin('DELETE', `/admin/users/${X.user.id}`);
+  const gone = await connect({ kind: 'friends', first: F1.email, second: X.user.id });
+  check('a deleted member reads as nobody', gone.status === 404 && gone.json.error === NOBODY, gone.json);
+  await api('POST', '/bond/block', { userId: F1.user.id }, BL.token);
+  const blocked = await connect({ kind: 'friends', first: F1.email, second: BL.email });
+  check('a blocked pair is refused in the very same words as nobody', blocked.status === 404 && blocked.json.error === NOBODY, blocked.json);
+
+  // A coach and a student: the existing ask, the student's yes, and the direct link that needs a reason kept only in the audit.
+  const ask = await connect({ kind: 'coach', first: K.email, second: S.email, mode: 'ask' });
+  check('the team asks a student to work with a coach', ask.status === 201 && ask.json.id, ask.json);
+  check('the same pair twice is answered plainly and makes no second', (await connect({ kind: 'coach', first: K.email, second: S.email, mode: 'ask' })).status === 409);
+  const sLinks = (await api('GET', '/me/coach', undefined, S.token)).json.links ?? [];
+  const waiting = sLinks.find((l) => l.coach?.id === K.user.id);
+  check('the student sees the ask waiting', waiting?.status === 'pending', sLinks.map((l) => l.status));
+  check('the student is told, with a link to their Profile', (await inboxOf(S)).includes('/you#coach'));
+  const asked = (await api('GET', `/admin/connect?person=${S.user.id}`, undefined, AD.token)).json.connections ?? [];
+  check('the list shows it asked', asked[0]?.state === 'asked' && asked[0]?.kind === 'coach' && asked[0]?.canEnd === true, asked[0]);
+  await api('POST', `/me/coach/links/${waiting?.id}/answer`, { yes: true }, S.token);
+  const yes = (await api('GET', `/admin/connect?person=${S.user.id}`, undefined, AD.token)).json.connections ?? [];
+  check('their yes shows as connected', yes[0]?.state === 'accepted', yes[0]?.state);
+  const noReason = await connect({ kind: 'coach', first: K.email, second: S2.email, mode: 'direct' });
+  check('a direct link without a reason is refused', noReason.status === 400, noReason.json);
+  const reason = `Agreed on a call ${stamp}`;
+  const direct = await connect({ kind: 'coach', first: K.email, second: S2.email, mode: 'direct', reason });
+  check('a direct link with a reason is made', direct.status === 201, direct.json);
+  const auditRows = JSON.stringify((await api('GET', '/admin/audit?size=50', undefined, AD.token)).json.logs ?? []);
+  check('the reason is kept in the audit row', auditRows.includes('connect.coach') && auditRows.includes(reason));
+  check('and never sent to the person', !(await inboxOf(S2)).includes(reason) && !(await inboxOf(K)).includes(reason));
+  const endIt = await api('DELETE', `/admin/connect/${direct.json.id}`, undefined, AD.token);
+  check('the team ends a coach link', endIt.status === 200, endIt.json);
+  check('ending it twice is plain', (await api('DELETE', `/admin/connect/${direct.json.id}`, undefined, AD.token)).status === 409);
+  check('friends cannot be linked directly', (await connect({ kind: 'friends', first: F1.email, second: F2.email, mode: 'direct', reason: 'x' })).status === 400);
+
+  // Friends: both are asked; the first yes sends an ordinary friend request and the second makes them friends.
+  const fr = await connect({ kind: 'friends', first: F1.email, second: F2.email });
+  check('the team suggests two people become friends', fr.status === 201, fr.json);
+  check('asking the same two again makes no second', (await connect({ kind: 'friends', first: F2.email, second: F1.email })).status === 409);
+  const sugNote = ((await api('GET', '/inbox?size=50', undefined, F2.token)).json.notifications ?? []).find((n) => String(n.title).includes('would get on'));
+  check('both are told, and the note opens their Profile at the suggestion', (await inboxOf(F1)).includes('/you#suggested') && sugNote?.link === '/you#suggested', sugNote);
+  const f2s = (await api('GET', '/me/suggestions', undefined, F2.token)).json.suggestions ?? [];
+  check('the suggestion waits on their Profile', f2s.length === 1 && f2s[0].other.id === F1.user.id && f2s[0].said === null, f2s);
+  check('and shows nothing private of the other', !/email|phone|birth/i.test(Object.keys(f2s[0]?.other ?? {}).join(',')));
+  const y1 = await api('POST', `/me/suggestions/${f2s[0]?.id}/answer`, { yes: true }, F2.token);
+  check('the first yes sends a friend request', y1.status === 200 && y1.json.status === 'asked', y1.json);
+  check('answering twice is plain', (await api('POST', `/me/suggestions/${f2s[0]?.id}/answer`, { yes: true }, F2.token)).status === 409);
+  for (const t of [F1, F2, M]) await api('PATCH', '/me/modules', { key: 'bond', on: true }, t.token);
+  const pending = await api('GET', '/bond/friends', undefined, F1.token);
+  check('not friends yet: an ordinary request waits for them', pending.status === 200 && !JSON.stringify(pending.json.friends ?? []).includes(F2.user.id) && JSON.stringify(pending.json.open ?? []).includes(F2.user.id), pending.json);
+  const y2 = await api('POST', `/me/suggestions/${f2s[0]?.id}/answer`, { yes: true }, F1.token);
+  check('the second yes makes them friends', y2.status === 200 && y2.json.status === 'friends', y2.json);
+  const frList = (await api('GET', '/admin/connect?kind=friends&size=50', undefined, AD.token)).json.connections ?? [];
+  check('the list shows them connected', frList.find((r) => r.id === fr.json.id)?.state === 'accepted', frList.find((r) => r.id === fr.json.id));
+  const fr2 = await connect({ kind: 'friends', first: F1.email, second: F3.email });
+  const f3s = (await api('GET', '/me/suggestions', undefined, F3.token)).json.suggestions ?? [];
+  const no = await api('POST', `/me/suggestions/${f3s[0]?.id}/answer`, { yes: false }, F3.token);
+  check('a no closes it', no.status === 200 && no.json.status === 'declined', no.json);
+  check('and it leaves the other side’s Profile', !((await api('GET', '/me/suggestions', undefined, F1.token)).json.suggestions ?? []).some((s) => s.id === fr2.json.id));
+
+  // Agency team member: through the owner's own invite, never while their Agency is off; the owner is told and the team can take it back.
+  const off = await connect({ kind: 'agency', first: O.email, second: M.email, role: 'editor' });
+  check('the team cannot add to an Agency that is off', off.status === 400, off.json);
+  await api('PATCH', '/me/modules', { key: 'agency', on: true }, O.token);
+  check('a role is needed', (await connect({ kind: 'agency', first: O.email, second: M.email })).status === 400);
+  const team = await connect({ kind: 'agency', first: O.email, second: M.email, role: 'editor' });
+  check('the team asks someone onto an Agency team', team.status === 201, team.json);
+  check('the member answers under their teams', ((await api('GET', '/me/teams', undefined, M.token)).json.teams ?? []).some((t) => t.status === 'invited'));
+  check('the owner is told the team asked', (await inboxOf(O)).includes('The team asked'));
+  const mBond = await api('GET', '/bond/friends', undefined, M.token);
+  check('the team sends no friend request in the owner’s name', mBond.status === 200 && !JSON.stringify(mBond.json).includes(O.user.id), mBond.status);
+  check('the same member twice is plain', (await connect({ kind: 'agency', first: O.email, second: M.email, role: 'editor' })).status === 409);
+  check('the team withdraws the invite', (await api('DELETE', `/admin/connect/${team.json.id}`, undefined, AD.token)).status === 200);
+  check('and it is gone from their teams', !((await api('GET', '/me/teams', undefined, M.token)).json.teams ?? []).length);
+
+  // School: an invite that shows the price; nothing is bought for them.
+  const prog = await api('POST', '/school/programs', { name: `Smoke test program connect ${stamp}`, visibility: 'private', pricePoints: 500 }, AD.token);
+  const pointsBefore = (await me(P.token)).points;
+  const inv = await connect({ kind: 'program', first: P.email, place: prog.json.id });
+  check('a paid private program becomes an invite', inv.status === 201, inv.json);
+  check('the invite names the price', (await inboxOf(P)).includes('500 points'));
+  check('and nothing was bought: their points are as they were', (await me(P.token)).points === pointsBefore);
+  check('the same invite twice is plain', (await connect({ kind: 'program', first: P.email, place: prog.json.id })).status === 409);
+  check('a program that is not private is refused', (await connect({ kind: 'program', first: P.email, place: 'nope' })).status === 400);
+  check('the team takes the invite back', (await api('DELETE', `/admin/connect/${inv.json.id}`, undefined, AD.token)).status === 200);
+  const course = await api('POST', '/studio/products', { kind: 'course', title: `Smoke connect course ${stamp}`, pricePoints: 300 }, CR.token);
+  await api('PATCH', `/studio/products/${course.json.product?.id}`, { status: 'private' }, CR.token);
+  const cinv = await connect({ kind: 'product', first: P.email, place: course.json.product?.id });
+  check('a private course becomes an invite that names its price', cinv.status === 201 && (await inboxOf(P)).includes('300 points'), cinv.json);
+
+  // Club: a direct naming of a staff manager, with a reason.
+  await api('PATCH', '/me/modules', { key: 'club', on: true }, CM.token);
+  await api('POST', '/club/apply', { note: 'smoke' }, CM.token);
+  check('a Club manager needs a reason', (await connect({ kind: 'club', first: CM.email, second: ST.email, mode: 'direct' })).status === 400);
+  check('a Club manager is someone on staff', (await connect({ kind: 'club', first: CM.email, second: F2.email, mode: 'direct', reason: 'knows their work' })).status === 400);
+  const club = await connect({ kind: 'club', first: CM.email, second: ST.email, mode: 'direct', reason: 'knows their work' });
+  check('the team names a Club manager', club.status === 201, club.json);
+  check('the member is told', (await inboxOf(CM)).includes('Club manager'));
+  check('the team takes the manager off', (await api('DELETE', `/admin/connect/${club.json.id}`, undefined, AD.token)).status === 200);
+
+  // People: one person's connections, a friend count and never the list.
+  const sheet = await api('GET', `/admin/connect/people/${F1.user.id}`, undefined, AD.token);
+  check('People shows one person’s connections and a friend count', sheet.status === 200 && sheet.json.friends === 1 && Array.isArray(sheet.json.items), sheet.json);
+  check('never the list of friends', !JSON.stringify(sheet.json).includes(F2.user.id));
+  const kSheet = await api('GET', `/admin/connect/people/${K.user.id}`, undefined, AD.token);
+  check('a coach’s sheet lists their student', (kSheet.json.items ?? []).some((i) => i.kind === 'coach' && i.as === 'Life coach'), kSheet.json.items);
+  const listed = await api('GET', '/admin/connect?size=10', undefined, AD.token);
+  check('the list is paged', listed.status === 200 && listed.json.page?.size === 10, listed.json.page);
+  const exported = await api('GET', '/me/export', undefined, F1.token);
+  check('a person’s export holds the connections the team made with them', JSON.stringify(exported.json.teamConnections ?? []).includes(fr.json.id));
+
+  // The safety review (2026-11-09): a guide's power is not the team's, two sends at once make one, the owner decides what an Agency member
+  // sees, a friend-request switch holds at the answer, and a reason leaves the audit line with the person it was about.
+  const [S3, P3, P4, Q1, Q2, M3, GD] = await Promise.all(['student3', 'friend4', 'friend5', 'quiet1', 'quiet2', 'member3', 'guide'].map((w) => join(w)));
+  await admin('POST', `/admin/users/${GD.user.id}/permissions`, { permissions: ['moderation'] });
+  check('a guide (a creator’s moderation power) is refused at the admin door', (await connect({ kind: 'friends', first: P3.email, second: P4.email }, GD.token)).status === 403);
+  const twoCoach = await Promise.all([1, 2].map(() => connect({ kind: 'coach', first: K.email, second: S3.email, mode: 'ask' })));
+  check('two coach asks at once make one and answer the other plainly, never a 500', twoCoach.map((r) => r.status).sort().join() === '201,409', twoCoach.map((r) => r.status));
+  const twoFriends = await Promise.all([connect({ kind: 'friends', first: P3.email, second: P4.email }), connect({ kind: 'friends', first: P4.email, second: P3.email })]);
+  check('two friend suggestions at once make one', twoFriends.map((r) => r.status).sort().join() === '201,409', twoFriends.map((r) => r.status));
+  const oldDoor = await admin('POST', '/admin/coaching/links', { coachId: K.user.id, student: X.user.id, mode: 'ask' });
+  check('the older coach link door reads a deleted member as no account', oldDoor.status === 404, oldDoor.status);
+  const team3 = await connect({ kind: 'agency', first: O.email, second: M3.email, role: 'editor', access: { pipeline: 'edit', clients: 'edit', paperwork: 'edit' } });
+  const t3 = ((await api('GET', '/me/teams', undefined, M3.token)).json.teams ?? [])[0];
+  check('the team’s Agency invite opens no tab of the owner’s books, whatever is sent', team3.status === 201 && t3 && Object.values(t3.access ?? {}).every((v) => v === 'off'), t3?.access);
+  check('and the member is told the team asked, not the owner', (await inboxOf(M3)).includes('The team asked you to join'));
+  check('the owner is told they give the access', (await inboxOf(O)).includes('until you give them access'));
+  const qsug = await connect({ kind: 'friends', first: Q1.email, second: Q2.email });
+  await api('PATCH', '/me', { publicSettings: { allowFriendRequests: false } }, Q2.token);
+  const q1sug = ((await api('GET', '/me/suggestions', undefined, Q1.token)).json.suggestions ?? [])[0];
+  const qyes = await api('POST', `/me/suggestions/${q1sug?.id}/answer`, { yes: true }, Q1.token);
+  await api('PATCH', '/me/modules', { key: 'bond', on: true }, Q2.token);
+  check('a yes sends no friend request to someone who switched requests off since', qsug.status === 201 && qyes.status === 200 && !JSON.stringify((await api('GET', '/bond/friends', undefined, Q2.token)).json).includes(Q1.user.id), [qsug.status, qyes.status]);
+  const directLine = async () => ((await api('GET', '/admin/audit?size=100', undefined, AD.token)).json.logs ?? []).find((l) => l.action === 'connect.coach' && l.resourceId === direct.json.id);
+  const lineBefore = await directLine();
+  await admin('DELETE', `/admin/users/${S2.user.id}`);
+  const lineAfter = await directLine();
+  check('deleting the person takes the reason off the audit line and keeps the fact', String(lineBefore?.after ?? '').includes(reason) && lineAfter && !String(lineAfter.after ?? '').includes(reason), [Boolean(lineBefore), Boolean(lineAfter)]);
+}
+
+section('Connect people for staff, brand teams and cohort managers');
+{
+  // 2026-11-10, the founder ("yes to all"): staff reach Connect people at /manage/connect for the kinds their permissions govern; a brand's
+  // team is joined by a yes; the team names who runs a cohort. Its own addresses (seed + 171 on), so these sign-ups touch no other limit.
+  let joined = 0;
+  const join = async (who) => {
+    const email = `staffconnect-${who}-${stamp}@smoke.test`;
+    const from = `10.${(seed >> 16) & 255}.${(seed >> 8) & 255}.${(seed + 171 + Math.floor(joined++ / 8)) & 255}`;
+    const r = await api('POST', '/auth/signup', { email, password: `Harbor-${stamp}-pass`, displayName: `Staffconnect ${who}`, phone: PHONE, birthDate: GROWN }, null, { 'CF-Connecting-IP': from });
+    return { token: r.json.token, user: r.json.user, email };
+  };
+  const AD = await join('admin');
+  await admin('POST', `/admin/users/${AD.user.id}/role`, { role: 'admin' });
+  const people = ['cohorts', 'review', 'talent', 'moderation', 'bare', 'guide', 'member', 'learner', 'owner', 'asked', 'joiner', 'teamask', 'teamgone', 'manager', 'fresh', 'blocker', 'gone', 'f1', 'f2'];
+  const P = Object.fromEntries(await Promise.all(people.map(async (w) => [w, await join(w)])));
+  for (const [w, perm] of [['cohorts', 'cohorts'], ['review', 'review'], ['talent', 'talent'], ['moderation', 'moderation'], ['bare', null]]) {
+    await admin('POST', `/admin/users/${P[w].user.id}/role`, { role: 'sub_admin' });
+    if (perm) await admin('POST', `/admin/users/${P[w].user.id}/permissions`, { permissions: [perm] });
+  }
+  // A creator who holds Moderation is a guide in Community, never the team.
+  await admin('POST', `/admin/users/${P.guide.user.id}/permissions`, { permissions: ['moderation'] });
+  // Blocked before setup, while Bond is on for a new account; then the cohort's new managers need a full account: an email and setup done.
+  await api('POST', '/bond/block', { userId: AD.user.id }, P.blocker.token);
+  for (const w of ['manager', 'blocker']) await api('POST', '/onboarding/setup', { identities: ['student'], goals: ['learn'], blockers: [] }, P[w].token);
+  const staff = (body, who) => api('POST', '/manage/connect', body, P[who].token);
+  const listOf = async (who) => (await api('GET', '/manage/connect?size=50', undefined, P[who].token)).json;
+  const inboxOf = async (who) => JSON.stringify((await api('GET', '/inbox?size=50', undefined, who.token)).json);
+  const NOBODY = 'We could not find that person.';
+
+  // ---- staff reach their own kinds, and only those
+  const cl = await listOf('cohorts');
+  check('staff with Cohorts open Connect people in Manage and are told their kinds', JSON.stringify(cl.kinds) === '["program","product","cohort"]', cl.kinds);
+  check('a reviewer’s kinds are the Club manager', JSON.stringify((await listOf('review')).kinds) === '["club"]');
+  check('a talent manager’s kinds are a brand’s team', JSON.stringify((await listOf('talent')).kinds) === '["org"]');
+  check('a moderator on staff makes friend suggestions', JSON.stringify((await listOf('moderation')).kinds) === '["friends"]');
+  check('staff with no permission that governs a kind are refused', (await api('GET', '/manage/connect', undefined, P.bare.token)).status === 403);
+  check('a creator holding Moderation (a guide) is refused', (await staff({ kind: 'friends', first: P.f1.email, second: P.f2.email }, 'guide')).status === 403);
+  check('a member is refused', (await staff({ kind: 'friends', first: P.f1.email, second: P.f2.email }, 'member')).status === 403);
+  check('Admin’s own door still admits no staff', (await api('POST', '/admin/connect', { kind: 'program', first: P.learner.email, place: 'x' }, P.cohorts.token)).status === 403);
+  for (const [kind, extra] of [['friends', { second: P.f2.email }], ['club', { second: P.review.email, mode: 'direct', reason: 'x' }], ['coach', { second: P.f2.email }], ['agency', { second: P.f2.email, role: 'editor' }], ['org', { place: 'x' }]]) {
+    const r = await staff({ kind, first: P.f1.email, ...extra }, 'cohorts');
+    check(`staff with Cohorts are refused a ${kind} connection (403)`, r.status === 403, [r.status, r.json]);
+  }
+  check('a reviewer is refused a friend suggestion', (await staff({ kind: 'friends', first: P.f1.email, second: P.f2.email }, 'review')).status === 403);
+  check('no staff member reaches a coach link: admins only', (await Promise.all(['cohorts', 'review', 'talent', 'moderation'].map((w) => staff({ kind: 'coach', first: P.f1.email, second: P.f2.email }, w)))).every((r) => r.status === 403));
+  check('a place list of another kind is refused', (await api('GET', '/manage/connect/places?kind=org', undefined, P.cohorts.token)).status === 403);
+  check('People’s sheet is Admin’s only', (await api('GET', `/manage/connect/people/${P.f1.user.id}`, undefined, P.cohorts.token)).status === 403);
+
+  const sug = await staff({ kind: 'friends', first: P.f1.email, second: P.f2.email }, 'moderation');
+  check('a moderator on staff suggests two people become friends', sug.status === 201, sug.json);
+  const prog = await api('POST', '/school/programs', { name: `Smoke test program staffconnect ${stamp}`, visibility: 'private', pricePoints: 100 }, AD.token);
+  const pinv = await staff({ kind: 'program', first: P.learner.email, place: prog.json.id }, 'cohorts');
+  check('staff with Cohorts invite someone to a private program', pinv.status === 201, pinv.json);
+  const cRows = (await listOf('cohorts')).connections ?? [];
+  check('their list shows only their kinds', cRows.length > 0 && cRows.every((r) => ['program', 'product', 'cohort'].includes(r.kind)) && cRows.some((r) => r.id === pinv.json.id), cRows.map((r) => r.kind));
+  check('and never the moderator’s friend suggestion', !cRows.some((r) => r.id === sug.json.id));
+  const mRows = (await listOf('moderation')).connections ?? [];
+  check('the moderator’s list is friends only', mRows.every((r) => r.kind === 'friends') && mRows.some((r) => r.id === sug.json.id), mRows.map((r) => r.kind));
+  check('ending a kind that is not theirs reads as nothing there', (await api('DELETE', `/manage/connect/${sug.json.id}`, undefined, P.cohorts.token)).status === 404);
+  check('and so does the moderator ending an invite', (await api('DELETE', `/manage/connect/${pinv.json.id}`, undefined, P.moderation.token)).status === 404);
+  check('staff take back their own kind’s invite', (await api('DELETE', `/manage/connect/${pinv.json.id}`, undefined, P.cohorts.token)).status === 200);
+  const adminRows = (await api('GET', '/admin/connect?size=50', undefined, AD.token)).json;
+  check('an admin keeps every kind and sees them all', adminRows.kinds?.length === 8 && (adminRows.connections ?? []).some((r) => r.id === sug.json.id) && (adminRows.connections ?? []).some((r) => r.id === pinv.json.id), adminRows.kinds);
+
+  // ---- a brand's team is joined by a yes
+  const org = (await api('POST', '/orgs', { name: `Smoke brand team ${stamp}`, type: 'brand' }, P.owner.token)).json.organization;
+  const ask = await api('POST', `/orgs/${org.id}/members`, { email: P.asked.email }, P.owner.token);
+  check('the owner asks someone onto the brand’s team', ask.status === 201 && ask.json.status === 'invited', ask.json);
+  const roster = (await api('GET', `/orgs/${org.id}/members`, undefined, P.owner.token)).json;
+  check('an ask waiting is not a member', !(roster.members ?? []).some((m) => m.userId === P.asked.user.id) && (roster.invited ?? []).some((m) => m.userId === P.asked.user.id), roster);
+  check('the owner is still the owner', (roster.members ?? []).some((m) => m.userId === P.owner.user.id && m.role === 'owner'));
+  check('a pending person has no brand of their own yet', !((await api('GET', '/orgs', undefined, P.asked.token)).json.organizations ?? []).some((o) => o.id === org.id));
+  check('nor can they open its team', (await api('GET', `/orgs/${org.id}/members`, undefined, P.asked.token)).status === 403);
+  check('they are told, with a link to their Profile', (await inboxOf(P.asked)).includes('/you#org-invites'));
+  check('the same ask twice is plain', (await api('POST', `/orgs/${org.id}/members`, { email: P.asked.email }, P.owner.token)).status === 409);
+  check('someone not on the team cannot ask', (await api('POST', `/orgs/${org.id}/members`, { email: P.f1.email }, P.member.token)).status === 403);
+  const mine = (await api('GET', '/me/org-invites', undefined, P.asked.token)).json.invites ?? [];
+  check('the person sees the ask on their Profile tab', mine.some((i) => i.orgId === org.id && i.name === org.name), mine);
+  const no = await api('POST', `/me/org-invites/${org.id}/answer`, { yes: false }, P.asked.token);
+  check('a no takes the ask away', no.status === 200 && no.json.status === 'declined' && !((await api('GET', `/orgs/${org.id}/members`, undefined, P.owner.token)).json.invited ?? []).length, no.json);
+  check('and the owner is told nothing of who said no', !(await inboxOf(P.owner)).includes('Staffconnect asked'));
+  check('answering twice is plain', (await api('POST', `/me/org-invites/${org.id}/answer`, { yes: true }, P.asked.token)).status === 404);
+  await api('POST', `/orgs/${org.id}/members`, { email: P.joiner.email }, P.owner.token);
+  const yes = await api('POST', `/me/org-invites/${org.id}/answer`, { yes: true }, P.joiner.token);
+  const after = (await api('GET', `/orgs/${org.id}/members`, undefined, P.owner.token)).json;
+  check('a yes makes them a member', yes.status === 200 && (after.members ?? []).some((m) => m.userId === P.joiner.user.id && m.role === 'member'), [yes.json, after]);
+  check('their brand shows for them now', ((await api('GET', '/orgs', undefined, P.joiner.token)).json.organizations ?? []).some((o) => o.id === org.id && o.myRole === 'member'));
+  check('the owner is told who joined', (await inboxOf(P.owner)).includes('Staffconnect joiner joined'));
+  await api('POST', `/orgs/${org.id}/members`, { email: P.asked.email }, P.owner.token);
+  check('the owner takes back an ask still waiting', (await api('DELETE', `/orgs/${org.id}/members/${P.asked.user.id}`, undefined, P.owner.token)).status === 200 && !((await api('GET', '/me/org-invites', undefined, P.asked.token)).json.invites ?? []).length);
+  const ex = JSON.stringify((await api('GET', '/me/export', undefined, P.joiner.token)).json.organizations ?? []);
+  check('the export holds their brand', ex.includes(org.id));
+  // A block made after the ask, either way with an owner (2026-11-10, the break-it check): the ask is hidden and a yes reads as no ask.
+  await api('POST', `/orgs/${org.id}/members`, { email: P.asked.email }, P.owner.token);
+  await api('POST', '/bond/block', { userId: P.asked.user.id }, P.owner.token);
+  const hiddenAsk = (await api('GET', '/me/org-invites', undefined, P.asked.token)).json.invites ?? [];
+  const blockedYes = await api('POST', `/me/org-invites/${org.id}/answer`, { yes: true }, P.asked.token);
+  const afterBlock = (await api('GET', `/orgs/${org.id}/members`, undefined, P.owner.token)).json;
+  check('an ask across a block made since is hidden, and a yes reads as no ask', !hiddenAsk.some((i) => i.orgId === org.id) && blockedYes.status === 404 && blockedYes.json.error === 'not found', [hiddenAsk.length, blockedYes.status]);
+  check('so they never join, and the ask is gone', !(afterBlock.members ?? []).some((m) => m.userId === P.asked.user.id) && !(afterBlock.invited ?? []).some((m) => m.userId === P.asked.user.id), afterBlock);
+  await api('DELETE', `/bond/block/${P.asked.user.id}`, undefined, P.owner.token);
+
+  // The same ask from Connect people: a talent manager on staff, one action, two callers.
+  const tAsk = await staff({ kind: 'org', first: P.teamask.email, place: org.id }, 'talent');
+  check('a talent manager asks someone onto a brand from Connect people', tAsk.status === 201, tAsk.json);
+  check('a brand ask is never direct', (await staff({ kind: 'org', first: P.teamgone.email, place: org.id, mode: 'direct', reason: 'x' }, 'talent')).status === 400);
+  const tRow = () => listOf('talent').then((l) => (l.connections ?? []).find((r) => r.id === tAsk.json.id));
+  check('the list shows it asked', (await tRow())?.state === 'asked');
+  check('and still no member', !((await api('GET', `/orgs/${org.id}/members`, undefined, P.owner.token)).json.members ?? []).some((m) => m.userId === P.teamask.user.id));
+  await api('POST', `/me/org-invites/${org.id}/answer`, { yes: true }, P.teamask.token);
+  check('their yes shows as connected', (await tRow())?.state === 'accepted');
+  const tGone = await staff({ kind: 'org', first: P.teamgone.email, place: org.id }, 'talent');
+  check('the talent manager withdraws an ask', tGone.status === 201 && (await api('DELETE', `/manage/connect/${tGone.json.id}`, undefined, P.talent.token)).status === 200 && !((await api('GET', '/me/org-invites', undefined, P.teamgone.token)).json.invites ?? []).length);
+
+  // ---- the team names who runs a cohort
+  const pub = await api('POST', '/school/programs', { name: `Smoke test program cohortmgr ${stamp}`, visibility: 'public' }, AD.token);
+  const coh = await api('POST', `/school/programs/${pub.json.id}/cohorts`, { name: `Spring ${stamp}`, startAt: '2027-01-01T00:00:00.000Z', endAt: '2027-03-01T00:00:00.000Z' }, AD.token);
+  const cid = coh.json.id;
+  const setMgr = (who, userId) => api('PATCH', `/school/cohorts/${cid}/manager`, { userId }, P[who]?.token ?? who);
+  check('a member cannot change a cohort’s manager', (await setMgr('member', P.manager.user.id)).status === 403);
+  check('nor can staff without Cohorts', (await setMgr('review', P.manager.user.id)).status === 403);
+  check('a cohort page tells Cohorts staff they may change it', (await api('GET', `/school/cohorts/${cid}`, undefined, P.cohorts.token)).json.canSetManager === true);
+  const ch = await setMgr('cohorts', P.manager.user.id);
+  check('staff with Cohorts name a new manager', ch.status === 200 && ch.json.managerId === P.manager.user.id, ch.json);
+  check('the new manager is told', (await inboxOf(P.manager)).includes('You run'));
+  check('the old one is told', (await inboxOf(AD)).includes('You no longer run'));
+  check('the new manager runs the cohort', (await api('GET', `/school/cohorts/${cid}`, undefined, P.manager.token)).json.manager === true);
+  const audits = JSON.stringify((await api('GET', '/admin/audit?size=50', undefined, AD.token)).json.logs ?? []);
+  check('the change is in the audit as cohort.manager', audits.includes('cohort.manager') && audits.includes(cid));
+  check('the same manager twice is plain', (await setMgr('cohorts', P.manager.user.id)).status === 409);
+  // The cohort page sends the manager it showed: a change someone made since is refused, never written over.
+  const stale = await api('PATCH', `/school/cohorts/${cid}/manager`, { userId: AD.user.id, from: null }, P.cohorts.token);
+  check('a change from a page that showed an older manager is refused', stale.status === 409 && (await api('GET', `/school/cohorts/${cid}`, undefined, AD.token)).json.cohort?.managerId === P.manager.user.id, stale.json);
+  check('someone without setup done is refused', (await setMgr('cohorts', P.fresh.user.id)).status === 400);
+  await admin('DELETE', `/admin/users/${P.gone.user.id}`);
+  check('a deleted member reads as nobody', (await setMgr('cohorts', P.gone.user.id)).json.error === NOBODY);
+  const blk = await setMgr('cohorts', P.blocker.user.id);
+  check('someone blocked with the program’s maker reads as nobody', blk.status === 404 && blk.json.error === NOBODY, blk.json);
+  const priv = await api('POST', '/school/programs', { name: `Smoke test program cohortpriv ${stamp}`, visibility: 'private' }, AD.token);
+  const pcoh = await api('POST', `/school/programs/${priv.json.id}/cohorts`, { name: `Quiet ${stamp}`, startAt: '2027-01-01T00:00:00.000Z', endAt: '2027-03-01T00:00:00.000Z' }, AD.token);
+  check('Cohorts staff reach public programs only', (await api('PATCH', `/school/cohorts/${pcoh.json.id}/manager`, { userId: P.manager.user.id }, P.cohorts.token)).status === 403);
+  check('an admin reaches any', (await api('PATCH', `/school/cohorts/${pcoh.json.id}/manager`, { userId: P.manager.user.id }, AD.token)).status === 200);
+  check('the Admin guide stays with admins', (await api('PATCH', '/school/cohorts/coh-admin-guide/manager', { userId: P.manager.user.id }, AD.token)).status === 403);
+  check('a cohort manager from Connect people needs a reason', (await staff({ kind: 'cohort', first: AD.email, place: cid, mode: 'direct' }, 'cohorts')).status === 400);
+  const viaConnect = await staff({ kind: 'cohort', first: AD.email, place: cid, mode: 'direct', reason: 'Back to its maker' }, 'cohorts');
+  check('a cohort manager named from Connect people', viaConnect.status === 201, viaConnect.json);
+  const cRow = ((await listOf('cohorts')).connections ?? []).find((r) => r.id === viaConnect.json.id);
+  check('shows as connected in the list', cRow?.state === 'accepted' && cRow?.kind === 'cohort', cRow);
+  check('and ending it takes the manager off', (await api('DELETE', `/manage/connect/${viaConnect.json.id}`, undefined, P.cohorts.token)).status === 200 && (await api('GET', `/school/cohorts/${cid}`, undefined, AD.token)).json.cohort?.managerId === null);
+}
+
 section("An event attendee's way in");
 {
   // Its own host and its own address for the visitor's sign-up, so no other section's limits are touched.
@@ -8234,7 +8567,298 @@ section('Pages for every list');
   check('pages: a learner gets no list of learners', asLearner.status === 200 && asLearner.json.enrollments?.length === 0 && asLearner.json.learnersPage === null, [asLearner.json.enrollments?.length, asLearner.json.learnersPage]);
 }
 
-// The run's own admin goes back to a user once every section that needs it is done (the Pages section makes a program as it).
+section('Invites');
+// Joining by invite (2026-11-10): the gate on a new account, codes made by the team and by Inviters, single use, the waitlist's one answer,
+// the referral credit and rewards, the connection rewards, the badges, Dev Tools' counts, and People's labels. Own addresses (another
+// second octet), so these sign-ups never touch the limits the rest of the checks use; Invite only goes back off at the end whatever happens.
+{
+  let k = 0;
+  const from = () => ({ 'CF-Connecting-IP': `10.${((seed >> 16) + 77) & 255}.${(seed >> 8) & 255}.${(seed + k++) & 255}` });
+  const gate = (on) => admin('PUT', '/admin/invites/settings', { inviteOnly: on });
+  const anon = (invite) => api('POST', '/auth/anon', invite === undefined ? {} : { invite }, null, from());
+  const person = async (who, perms) => {
+    const r = await api('POST', '/auth/signup', { email: `inv-${who}-${stamp}@smoke.test`, password: `Beacon-${stamp}-pass`, displayName: `Invite ${who}`, phone: PHONE, birthDate: GROWN }, null, from());
+    if (perms) await admin('POST', `/admin/users/${r.json.user.id}/permissions`, { permissions: perms });
+    return { token: r.json.token, user: r.json.user, email: `inv-${who}-${stamp}@smoke.test` };
+  };
+  const meOf = async (who) => (await api('GET', '/me', undefined, who.token)).json.user ?? {};
+  const setup = (token) => api('POST', '/onboarding/setup', { identities: ['student'], goals: ['learn'], blockers: [] }, token);
+  const inboxOf = async (who) => JSON.stringify((await api('GET', '/inbox?size=50', undefined, who.token)).json);
+  const badgesOf = async (who) => (await api('GET', '/me/badges', undefined, who.token)).json;
+  // Made while the door is open: a member, a creator holding another permission, staff, an Inviter, and an admin.
+  const [M, CR, ST, IV, IV2, AD] = await Promise.all([person('member'), person('creator', ['mentor']), person('staff'), person('inviter', ['invite']), person('inviter2', ['invite']), person('admin')]);
+  await admin('POST', `/admin/users/${ST.user.id}/role`, { role: 'sub_admin' });
+  await admin('POST', `/admin/users/${AD.user.id}/role`, { role: 'admin' });
+  try {
+    // The switch.
+    const on = await gate(true);
+    check('Admin turns Invite only on', on.status === 200 && on.json.inviteOnly === true, on.json);
+    check('the public door says joining needs a code', (await api('GET', '/public/join')).json.inviteOnly === true);
+    const bare = await anon();
+    check('a new device session without a code is refused, and says why', bare.status === 403 && bare.json.reason === 'invite' && /invite/i.test(bare.json.error ?? ''), bare.json);
+    const bad = await anon('NOPE2NOPE2');
+    const shapeless = await anon('x');
+    check('a code that does not work is refused in one answer', bad.status === 403 && bad.json.reason === 'invite-unusable' && JSON.stringify(bad.json) === JSON.stringify(shapeless.json), [bad.json, shapeless.json]);
+    const noCodeSignup = await api('POST', '/auth/signup', { email: `inv-nocode-${stamp}@smoke.test`, password: `Beacon-${stamp}-pass`, phone: PHONE, birthDate: GROWN }, null, from());
+    check('a sign-up without a session needs a code too', noCodeSignup.status === 403 && noCodeSignup.json.reason === 'invite', noCodeSignup.json);
+
+    // Who may make codes.
+    check('a member cannot make or read codes', (await api('GET', '/me/invites', undefined, M.token)).status === 403 && (await api('POST', '/me/invites', { count: 1 }, M.token)).status === 403);
+    check('a creator with another permission cannot either', (await api('POST', '/me/invites', { count: 1 }, CR.token)).status === 403);
+    const staffMade = await api('POST', '/me/invites', { count: 2, label: 'For the staff check', days: 7 }, ST.token);
+    check('staff make codes', staffMade.status === 201 && staffMade.json.items?.length === 2 && staffMade.json.items.every((i) => i.state === 'open' && i.link.endsWith(`/join/${i.code}`) && i.code.length === 10), staffMade.json);
+    const ivMade = await api('POST', '/me/invites', { count: 3, label: 'For a friend' }, IV.token);
+    check('an Inviter makes codes, thirty days by default', ivMade.status === 201 && ivMade.json.items?.length === 3 && ivMade.json.items.every((i) => i.expiresAt && Date.parse(i.expiresAt) - Date.now() > 29 * 86_400_000), ivMade.json);
+    check('a batch past twenty is refused', (await api('POST', '/me/invites', { count: 21 }, IV.token)).status === 400);
+    check('a length that is not a choice is refused', (await api('POST', '/me/invites', { count: 1, days: 3 }, IV.token)).status === 400);
+    const [c1, c2, c3] = ivMade.json.items.map((i) => i.code);
+    const [i1, , i3] = ivMade.json.items.map((i) => i.id);
+    check('a code checks as working, typed in any case with dashes', (await api('GET', `/public/invite/${c1.slice(0, 5).toLowerCase()}-${c1.slice(5).toLowerCase()}`)).json.ok === true);
+
+    // Single use: two people with one code at once, exactly one gets in.
+    const ivStart = await meOf(IV);
+    const before = ivStart.xp;
+    const [a1, a2] = await Promise.all([anon(c1), anon(c1)]);
+    const won = [a1, a2].filter((r) => r.status === 201);
+    const lost = [a1, a2].filter((r) => r.status === 403);
+    check('two people with one code at once: exactly one gets in', won.length === 1 && lost.length === 1 && lost[0].json.reason === 'invite-unusable', [a1.status, a2.status]);
+    const J1 = { token: won[0]?.json.token, user: won[0]?.json.user };
+    check('the used code no longer checks as working', (await api('GET', `/public/invite/${c1}`)).json.ok === false);
+    check('and a third try with it is refused', (await anon(c1)).json.reason === 'invite-unusable');
+    check('nothing is paid at the bare sign-up', (await meOf(IV)).xp === before);
+    check('the maker hears someone joined, under the label, never the name', (await inboxOf(IV)).includes('Someone joined with your invite') && (await inboxOf(IV)).includes('For a friend') && (await inboxOf(IV)).includes('/you#invites'));
+    const mine = await api('GET', '/me/invites', undefined, IV.token);
+    check('the maker sees the code used and the count, never who used it', mine.status === 200 && mine.json.items?.find((i) => i.id === i1)?.state === 'used' && mine.json.joinedCount === 1 && !JSON.stringify(mine.json).includes(J1.user?.id ?? '\u0000') && mine.json.page?.size === 10, mine.json);
+    // An account uses one code: adding an email to the device session takes none, so c2 still works after.
+    const attach = await api('POST', '/auth/signup', { email: `inv-j1-${stamp}@smoke.test`, password: `Beacon-${stamp}-pass`, phone: PHONE, birthDate: GROWN, invite: c2 }, J1.token, from());
+    check('adding an email to a device account needs no code and uses none', attach.status === 201 && attach.json.user?.id === J1.user?.id && (await api('GET', `/public/invite/${c2}`)).json.ok === true, [attach.status, attach.json?.error]);
+    check('the account a code made is credited to the maker (their referral code)', (await badgesOf(IV)).progress?.referrals >= 1, (await badgesOf(IV)).progress?.referrals);
+
+    // Taken back, and the same words as an unknown code.
+    check('a used code cannot be taken back', (await api('DELETE', `/me/invites/${i1}`, undefined, IV.token)).status === 409);
+    check('someone else cannot take back your code', (await api('DELETE', `/me/invites/${i3}`, undefined, IV2.token)).status === 404);
+    check('the maker takes back an unused code', (await api('DELETE', `/me/invites/${i3}`, undefined, IV.token)).status === 200);
+    const revoked = await anon(c3);
+    check('a code taken back is refused in the same words as an unknown one', revoked.status === 403 && JSON.stringify(revoked.json) === JSON.stringify(bad.json), revoked.json);
+
+    // The open cap for someone who is not an admin: fifty unused at once.
+    await api('POST', '/me/invites', { count: 20 }, IV2.token);
+    await api('POST', '/me/invites', { count: 20 }, IV2.token);
+    const nine = await api('POST', '/me/invites', { count: 10 }, IV2.token);
+    const over = await api('POST', '/me/invites', { count: 1 }, IV2.token);
+    check('an Inviter holds at most fifty unused codes', nine.status === 201 && nine.json.items?.length === 10 && over.status === 400 && /50/.test(over.json.error ?? ''), [nine.status, over.json]);
+    const adminMade = await api('POST', '/me/invites', { count: 1, label: 'Admin code' }, AD.token);
+    check('an admin makes codes too', adminMade.status === 201, adminMade.json);
+
+    // Referral rewards: paid on setup, once, to a maker who is not an admin, within the day's cap.
+    const s1 = await setup(J1.token);
+    const afterSetup = await meOf(IV);
+    check('the referral pays the maker when the person finishes setup', s1.status === 200 && afterSetup.xp === before + INVITE_REWARD.xp && afterSetup.points === ivStart.points + INVITE_REWARD.points, [afterSetup.xp, before, afterSetup.points, ivStart.points]);
+    await setup(J1.token);
+    await api('POST', '/me/reset', {}, J1.token);
+    await setup(J1.token);
+    check('setup done again, even after an erase, never pays twice', (await meOf(IV)).xp === before + INVITE_REWARD.xp, (await meOf(IV)).xp);
+    const ivInbox = await inboxOf(IV);
+    check('the maker’s note became the setup note, one note for one code', (ivInbox.match(/Someone you invited finished setting up/g) ?? []).length === 1 && !ivInbox.includes('Someone joined with your invite') && ivInbox.includes(`+${INVITE_REWARD.xp} xp`), ivInbox.slice(0, 300));
+    const ivBadges = await badgesOf(IV);
+    check('the badge counts people who joined and finished setup', ivBadges.progress?.invites_joined === 1 && ivBadges.held?.some((b) => b.key === 'invite_1'), [ivBadges.progress?.invites_joined, ivBadges.held?.map((b) => b.key)]);
+    // The cap: five a day. Five more people join with the second Inviter's codes and finish setup; the sixth pays nothing.
+    const ivCodes = (await api('GET', '/me/invites?ivsize=50', undefined, IV2.token)).json.items.filter((i) => i.state === 'open').map((i) => i.code).slice(0, 6);
+    const iv2Before = await meOf(IV2);
+    for (const [n, code] of ivCodes.entries()) {
+      const j = await anon(code);
+      await api('POST', '/auth/signup', { email: `inv-cap${n}-${stamp}@smoke.test`, password: `Beacon-${stamp}-pass`, phone: PHONE, birthDate: GROWN }, j.json.token, from());
+      await setup(j.json.token);
+    }
+    const iv2After = await meOf(IV2);
+    check(`the referral pays at most ${INVITE_REWARD.perDay} a day`, iv2After.xp - iv2Before.xp === INVITE_REWARD.perDay * INVITE_REWARD.xp && iv2After.points - iv2Before.points === INVITE_REWARD.perDay * INVITE_REWARD.points, [iv2After.xp - iv2Before.xp, iv2After.points - iv2Before.points]);
+    check('the sixth still counts for the badge', (await badgesOf(IV2)).progress?.invites_joined === 6);
+    // An admin maker earns nothing.
+    const adBefore = await meOf(AD);
+    const ja = await anon(adminMade.json.items[0].code);
+    await api('POST', '/auth/signup', { email: `inv-ja-${stamp}@smoke.test`, password: `Beacon-${stamp}-pass`, phone: PHONE, birthDate: GROWN }, ja.json.token, from());
+    await setup(ja.json.token);
+    const adAfter = await meOf(AD);
+    check('an admin maker earns nothing from a referral', ja.status === 201 && adAfter.xp === adBefore.xp && adAfter.points === adBefore.points, [adBefore.xp, adAfter.xp]);
+    check('and hears it in Admin', (await inboxOf(AD)).includes('/admin?tab=invites'));
+
+    // Admin, Invites: every code with who made it and who used it, filters, take back, audit.
+    const list = await admin('GET', `/admin/invites?maker=${IV.user.id}`);
+    const usedRow = list.json.items?.find((i) => i.id === i1);
+    check('Admin lists a maker’s codes with who made and who used each', list.status === 200 && usedRow?.maker?.id === IV.user.id && usedRow?.usedBy?.id === J1.user?.id && usedRow.state === 'used', usedRow);
+    const opens = await admin('GET', `/admin/invites?maker=${IV2.user.id}&state=open&size=10`);
+    check('Admin filters by state', opens.status === 200 && opens.json.items?.length > 0 && opens.json.items.every((i) => i.state === 'open'), opens.json.items?.map((i) => i.state));
+    const found = await admin('GET', `/admin/invites?q=${encodeURIComponent('For the staff')}`);
+    check('Admin searches labels', found.json.items?.length >= 2 && found.json.items.every((i) => i.label === 'For the staff check'), found.json.items?.length);
+    const keyMade = await admin('POST', '/admin/invites', { count: 2, label: 'Key made', days: null });
+    check('Admin makes codes that never run out', keyMade.status === 201 && keyMade.json.items?.every((i) => i.expiresAt === null), keyMade.json);
+    const take = await admin('DELETE', `/admin/invites/${keyMade.json.items[0].id}`);
+    check('Admin takes a code back', take.status === 200 && (await api('GET', `/public/invite/${keyMade.json.items[0].code}`)).json.ok === false);
+    const audit = JSON.stringify((await admin('GET', '/admin/audit?size=100')).json.logs?.map((l) => l.action));
+    check('making, taking back and the switch are audited', audit.includes('invite.make') && audit.includes('invite.revoke') && audit.includes('invite.gate'), audit.slice(0, 200));
+
+    // The waitlist: one answer for every email, approve twice gives one code, the code joins and marks the row.
+    const wl = (email, name = 'Wait smoke') => api('POST', '/public/waitlist', { email, name, note: 'Here for the pillars' }, null, from());
+    const newOne = await wl(`wl-new-${stamp}@smoke.test`);
+    const again = await wl(`wl-new-${stamp}@smoke.test`);
+    const hasAccount = await wl(IV.email);
+    check('the waitlist answers the same for a new email, the same email again and one with an account', newOne.status === 201 && again.status === 201 && hasAccount.status === 201 && JSON.stringify(newOne.json) === JSON.stringify(again.json) && JSON.stringify(again.json) === JSON.stringify(hasAccount.json), [newOne.json, again.json, hasAccount.json]);
+    check('a bad email is refused plainly', (await wl('nope')).status === 400);
+    const waitList = await admin('GET', `/admin/invites/waitlist?q=${encodeURIComponent(`wl-new-${stamp}`)}`);
+    const row = waitList.json.items?.[0];
+    check('Admin sees the row waiting, and no row for the address that has an account', waitList.status === 200 && row?.status === 'waiting' && (await admin('GET', `/admin/invites/waitlist?q=${encodeURIComponent(IV.email)}`)).json.items?.length === 0, waitList.json);
+    check('the admins are told a count', (await inboxOf(AD)).includes('New on the waitlist'));
+    const ok1 = await admin('POST', `/admin/invites/waitlist/${row.id}/approve`);
+    const ok2 = await admin('POST', `/admin/invites/waitlist/${row.id}/approve`);
+    check('approve makes a code and its link, and says whether it was mailed', ok1.status === 200 && ok1.json.code?.length === 10 && ok1.json.link?.endsWith(`/join/${ok1.json.code}`) && typeof ok1.json.emailed === 'boolean', ok1.json);
+    check('approve twice gives the same code, never a second', ok2.status === 200 && ok2.json.code === ok1.json.code, [ok1.json.code, ok2.json.code]);
+    check('an invited email answers the waitlist the same way', JSON.stringify((await wl(`wl-new-${stamp}@smoke.test`)).json) === JSON.stringify(newOne.json));
+    const outbox = JSON.stringify((await admin('GET', '/admin/outbox')).json);
+    check('the invite mail waits in the outbox without its link', outbox.includes('Your invite to kreators.app') && !outbox.includes(ok1.json.code), '');
+    const jw = await anon(ok1.json.code);
+    const joinedRow = (await admin('GET', `/admin/invites/waitlist?q=${encodeURIComponent(`wl-new-${stamp}`)}`)).json.items?.[0];
+    check('joining with the approved code marks the row joined', jw.status === 201 && joinedRow?.status === 'joined', joinedRow?.status);
+    await wl(`wl-no-${stamp}@smoke.test`, 'Decline smoke Visit-this-site');
+    const noRow = (await admin('GET', `/admin/invites/waitlist?q=${encodeURIComponent(`wl-no-${stamp}`)}`)).json.items?.[0];
+    const declined = await admin('POST', `/admin/invites/waitlist/${noRow.id}/decline`);
+    const declinedRow = (await admin('GET', `/admin/invites/waitlist?status=declined&q=${encodeURIComponent(`wl-no-${stamp}`)}`)).json.items?.[0];
+    check('decline marks the row and makes no code', declined.status === 200 && declinedRow?.status === 'declined' && declinedRow.code === null, declinedRow);
+    const outboxHad = JSON.stringify((await admin('GET', '/admin/outbox?size=100')).json.outbox ?? []);
+    const removed = await admin('DELETE', `/admin/invites/waitlist/${noRow.id}`);
+    check('a waitlist row can be removed', removed.status === 200 && (await admin('GET', `/admin/invites/waitlist?q=${encodeURIComponent(`wl-no-${stamp}`)}`)).json.items?.length === 0);
+    const outboxAfter = JSON.stringify((await admin('GET', '/admin/outbox?size=100')).json.outbox ?? []);
+    check('its waitlist mail leaves the outbox with it, and no mail ever carried the typed name', outboxHad.includes(`wl-no-${stamp}@smoke.test`) && !outboxAfter.includes(`wl-no-${stamp}@smoke.test`) && !outboxHad.includes('Visit-this-site'), [outboxHad.includes(`wl-no-${stamp}`), outboxAfter.includes(`wl-no-${stamp}`)]);
+
+    // The safety review (2026-11-10): twenty at once, a deleted joiner, what a codeless sign-up says, a device account's setup, the
+    // joiner's export, staff without the key, and a maker who can no longer make codes.
+    const spare = (await api('GET', '/me/invites?ivsize=50', undefined, IV2.token)).json.items?.find((i) => i.state === 'open')?.code;
+    const twenty = await Promise.all(Array.from({ length: 20 }, () => anon(spare)));
+    const winner = twenty.find((r) => r.status === 201);
+    check('twenty at once with one code: exactly one account', twenty.filter((r) => r.status === 201).length === 1 && twenty.filter((r) => r.json.reason === 'invite-unusable').length === 19, twenty.map((r) => r.status).join(''));
+    await api('DELETE', '/me', { confirm: 'DELETE' }, winner?.json.token);
+    check('a code stays used after the account that used it is deleted', (await anon(spare)).json.reason === 'invite-unusable' && (await api('GET', `/public/invite/${spare}`)).json.ok === false);
+    const known = await api('POST', '/auth/signup', { email: IV2.email, password: `Beacon-${stamp}-pass`, phone: PHONE, birthDate: GROWN }, null, from());
+    const knownBad = await api('POST', '/auth/signup', { email: IV2.email, password: `Beacon-${stamp}-pass`, phone: PHONE, birthDate: GROWN, invite: 'ABCDEFGHJK' }, null, from());
+    check('without a code that works, sign-up never says an email has an account', known.status === 403 && known.json.reason === 'invite' && knownBad.status === 403 && knownBad.json.reason === 'invite-unusable', [known.status, knownBad.status]);
+    const stBefore = await meOf(ST);
+    const dv = await anon(staffMade.json.items[0].code);
+    await setup(dv.json.token);
+    check('a device account that finishes setup with no email pays its maker nothing', dv.status === 201 && (await meOf(ST)).xp === stBefore.xp, [dv.status, (await meOf(ST)).xp, stBefore.xp]);
+    await api('POST', '/auth/signup', { email: `inv-dv-${stamp}@smoke.test`, password: `Beacon-${stamp}-pass`, phone: PHONE, birthDate: GROWN }, dv.json.token, from());
+    await api('POST', '/auth/signup', { email: `inv-dv-${stamp}@smoke.test`, password: `Beacon-${stamp}-pass`, phone: PHONE, birthDate: GROWN }, dv.json.token, from());
+    check('adding the email after setup pays the maker then, once', (await meOf(ST)).xp === stBefore.xp + INVITE_REWARD.xp, [(await meOf(ST)).xp, stBefore.xp]);
+    const dvExp = (await api('GET', '/me/export', undefined, dv.json.token)).json.inviteCodes ?? [];
+    check("the joiner's export never carries the maker's private label", dvExp.length === 1 && dvExp[0].label === '' && dvExp[0].mine === 'joined with' && !JSON.stringify(dvExp).includes('For the staff check'), dvExp);
+    check('staff without the key cannot open Admin, Invites or flip the switch', (await api('GET', '/admin/invites', undefined, ST.token)).status === 403 && (await api('PUT', '/admin/invites/settings', { inviteOnly: false }, ST.token)).status === 403 && (await api('GET', '/public/join')).json.inviteOnly === true);
+    await admin('POST', `/admin/users/${ST.user.id}/role`, { role: 'user' });
+    const stCode = staffMade.json.items[1].code;
+    const stRow = (await admin('GET', `/admin/invites?maker=${ST.user.id}`)).json.items?.find((i) => i.code === stCode);
+    check('a code stops working once its maker can no longer make codes, and reads as taken back', (await api('GET', `/public/invite/${stCode}`)).json.ok === false && (await anon(stCode)).json.reason === 'invite-unusable' && stRow?.state === 'revoked', stRow?.state);
+
+    // The switch off lets anyone in, and back on refuses again.
+    await gate(false);
+    check('with Invite only off, anyone can start', (await anon()).status === 201);
+    await gate(true);
+    check('back on, a new account needs a code again', (await anon()).status === 403);
+
+    // Dev Tools: counts only.
+    const obs = (await api('GET', '/internal/observability?size=10', undefined, AD.token)).json.additions?.invites ?? {};
+    check('Dev Tools counts codes by state, the waitlist and joins this week, as numbers', obs.inviteOnly === true && Number.isInteger(obs.codes?.used) && obs.codes.used >= 8 && obs.joinedThisWeek >= 8 && Number.isInteger(obs.waitlist?.joined) && obs.waitlist.joined >= 1 && !JSON.stringify(obs).includes('@'), obs);
+
+    // The export names codes, never the code itself; the delete takes back unused codes.
+    const exp = (await api('GET', '/me/export', undefined, IV.token)).json;
+    check('the export lists the codes made without the code', Array.isArray(exp.inviteCodes) && exp.inviteCodes.length === 3 && !JSON.stringify(exp.inviteCodes).includes(c2) && exp.inviteCodes.every((r) => r.has_link === 1), exp.inviteCodes);
+    const del = await api('DELETE', '/me', { confirm: 'DELETE' }, IV.token);
+    const gone = (await api('GET', '/me', undefined, IV.token)).status === 401;
+    check('deleting the maker takes back the codes nobody used', gone && (await api('GET', `/public/invite/${c2}`)).json.ok === false, [del.status, gone]);
+  } finally {
+    // Back to open for the rest of the run, and for the next script on the test server.
+    const off = await gate(false);
+    check('Invite only is off again for the rest of the run', off.status === 200 && off.json.inviteOnly === false, off.json);
+  }
+}
+
+section('Invite and connection rewards');
+{
+  // A connection the team made pays each side who is not an admin, once, on the yes that makes it real; an ask pays nothing.
+  let k = 0;
+  const from = () => ({ 'CF-Connecting-IP': `10.${((seed >> 16) + 78) & 255}.${(seed >> 8) & 255}.${(seed + k++) & 255}` });
+  const person = async (who) => {
+    const r = await api('POST', '/auth/signup', { email: `cr-${who}-${stamp}@smoke.test`, password: `Beacon-${stamp}-pass`, displayName: `Reward ${who}`, phone: PHONE, birthDate: GROWN }, null, from());
+    return { token: r.json.token, user: r.json.user, email: `cr-${who}-${stamp}@smoke.test` };
+  };
+  const xpOf = async (who) => (await api('GET', '/me', undefined, who.token)).json.user?.xp ?? -1;
+  const [AD, F1, F2, K, S, AK, S2, P] = await Promise.all(['admin', 'f1', 'f2', 'coach', 'student', 'admincoach', 'student2', 'learner'].map(person));
+  await admin('POST', `/admin/users/${AD.user.id}/role`, { role: 'admin' });
+  await admin('POST', `/admin/users/${AK.user.id}/role`, { role: 'admin' });
+  await admin('POST', `/admin/users/${K.user.id}/permissions`, { permissions: ['coach'] });
+  await admin('POST', `/admin/users/${AK.user.id}/permissions`, { permissions: ['coach'] });
+  const connect = (body) => api('POST', '/admin/connect', body, AD.token);
+
+  // Friends: nothing on the ask, nothing on one yes, both paid on the second.
+  const [f1a, f2a] = [await xpOf(F1), await xpOf(F2)];
+  const sug = await connect({ kind: 'friends', first: F1.email, second: F2.email });
+  check('a friend suggestion is made', sug.status === 201, sug.json);
+  check('an ask pays nothing', (await xpOf(F1)) === f1a && (await xpOf(F2)) === f2a);
+  await api('POST', `/me/suggestions/${sug.json.id}/answer`, { yes: true }, F1.token);
+  check('one yes pays nothing', (await xpOf(F1)) === f1a);
+  await api('POST', `/me/suggestions/${sug.json.id}/answer`, { yes: true }, F2.token);
+  check('both yeses pay each side once', (await xpOf(F1)) === f1a + CONNECT_REWARD.xp && (await xpOf(F2)) === f2a + CONNECT_REWARD.xp, [await xpOf(F1), await xpOf(F2)]);
+  const fb = (await api('GET', '/me/badges', undefined, F1.token)).json;
+  check('the connection counts for the Connected badge', fb.progress?.connections_made === 1 && fb.held?.some((b) => b.key === 'connect_1'), fb.progress?.connections_made);
+
+  // A coach link the team asked for: nothing on the ask, both paid on the student's yes.
+  const [ka, sa] = [await xpOf(K), await xpOf(S)];
+  const ask = await connect({ kind: 'coach', first: K.email, second: S.email, mode: 'ask' });
+  check('a coach ask pays nothing', ask.status === 201 && (await xpOf(K)) === ka && (await xpOf(S)) === sa, ask.json);
+  const link = (await api('GET', '/me/coach', undefined, S.token)).json.links?.find((l) => l.coach?.id === K.user.id);
+  await api('POST', `/me/coach/links/${link?.id}/answer`, { yes: true }, S.token);
+  check('the student’s yes pays both sides once', (await xpOf(K)) === ka + CONNECT_REWARD.xp && (await xpOf(S)) === sa + CONNECT_REWARD.xp, [await xpOf(K), await xpOf(S)]);
+  const ended = await api('DELETE', `/admin/connect/${ask.json.id}`, undefined, AD.token);
+  check('ending it later takes nothing back', ended.status === 200 && (await xpOf(S)) === sa + CONNECT_REWARD.xp);
+
+  // A direct link with an admin on one side: only the side who is not an admin is paid.
+  const [aka, s2a] = [await xpOf(AK), await xpOf(S2)];
+  const direct = await connect({ kind: 'coach', first: AK.email, second: S2.email, mode: 'direct', reason: `Agreed on a call ${stamp}` });
+  check('a direct link pays the side who is not an admin, and not the admin', direct.status === 201 && (await xpOf(S2)) === s2a + CONNECT_REWARD.xp && (await xpOf(AK)) === aka, [direct.status, await xpOf(S2), await xpOf(AK)]);
+
+  // People's Connections sheet: a cohort of a public program reads by its real state, and an enrolment of one's own is not an invite.
+  const enrolled = await api('POST', '/school/cohorts/coh-onboarding/enroll', {}, P.token);
+  if (enrolled.status === 201 || enrolled.status === 409) {
+    const sheet = await api('GET', `/admin/connect/people/${P.user.id}`, undefined, AD.token);
+    const item = sheet.json.items?.find((i) => i.kind === 'program');
+    check('People: a public program’s cohort reads as public, enrolled by themselves', item?.label === 'Public School program' && item?.as === 'Enrolled in a cohort', item);
+  } else check('People: the onboarding cohort could be joined for the label check', false, enrolled.json);
+}
+
+section('Dev Tools');
+{
+  // Dev Tools brought up to date (2026-11-09): counts for the newer parts, aggregated and nameless, and nothing private, not even as a count.
+  const DT = await signup(`dt-${stamp}@smoke.test`, `Lantern-tools-${stamp}-ok`, 'Dev Tools Smoke');
+  const renew = await api('POST', '/me/friend-code', {}, DT.token);
+  await new Promise((r) => setTimeout(r, 800));
+  const obs = await api('GET', '/internal/observability?size=10', undefined, A.token);
+  const add = obs.json.additions ?? {};
+  const leaves = (o) => (o && typeof o === 'object' ? Object.values(o).flatMap(leaves) : [o]);
+  const newer = { coaching: add.coaching, school: add.school, daily: add.daily, team: add.team };
+  check('Dev Tools counts coach links, School, bottlenecks, event arrivals, QR codes and the team’s connections, as numbers only', obs.status === 200 && Object.values(newer).every((v) => v && typeof v === 'object') && leaves(newer).every((n) => Number.isInteger(n) && n >= 0) && ['unfinished', 'unresolved', 'undecided'].every((k) => k in (add.daily?.bottlenecks ?? {})) && ['draft', 'private', 'public', 'archived'].every((k) => k in (add.school?.programs ?? {})) && ['video', 'book', 'file', 'link'].every((k) => k in (add.school?.resources ?? {})), newer);
+  check('the counts follow the data: the seeded programs are public, a lesson link is a resource, a new friend code is counted', renew.status === 200 && add.school?.programs?.public >= 2 && add.school?.resources?.file >= 1 && add.daily?.qrRenewed24h >= 1, [renew.status, add.school, add.daily?.qrRenewed24h]);
+  check('Agency counts its team members and team links', Number.isInteger(add.agency?.teamMembers) && Number.isInteger(add.agency?.teamLinksOn), add.agency);
+  check('the connections the team made are counted from the audit log', Number.isInteger(add.team?.connections30) && add.team.connections30 >= 1, add.team);
+  const keys = JSON.stringify(add, (k, v) => v).match(/"[A-Za-z0-9]+":/g)?.map((k) => k.slice(1, -2).toLowerCase()) ?? [];
+  check('nothing private is counted: no journal, gratitude, mood, sleep, stress, mindful, Fitness, protein, supplement, Companion or assistant words', !keys.some((k) => /journal|gratitude|mood|sleep|stress|mindful|fitness|move|eat|protein|supplement|companion|assistant(?!on)/.test(k)), keys.filter((k) => /journal|gratitude|mood|sleep|stress|mindful|fitness|protein|supplement|companion/.test(k)));
+  const handles = JSON.stringify(add);
+  check('the counts never carry a name, a handle or an email', !handles.includes('@') && !handles.includes(DT.user.handle ?? '\u0000') && !handles.includes('Dev Tools Smoke'), '');
+  check('Dev Tools stays closed to members', (await api('GET', '/internal/observability', undefined, DT.token)).status === 403, '');
+  // Staff read the counts; only a super admin reads the log, which names people (the safety review, 2026-11-09).
+  await admin('POST', `/admin/users/${DT.user.id}/role`, { role: 'sub_admin' });
+  const staffObs = await api('GET', '/internal/observability', undefined, DT.token);
+  const staffLogs = await api('GET', '/internal/logs', undefined, DT.token);
+  check('staff read Dev Tools but never the Logs', staffObs.status === 200 && staffLogs.status === 403, [staffObs.status, staffLogs.status]);
+  await admin('POST', `/admin/users/${DT.user.id}/role`, { role: 'user' });
+}
+
+// The run's own admin goes back to a user once every section that needs it is done (the Pages section makes a program as it, Dev Tools reads as it).
 await admin('POST', `/admin/users/${A.user.id}/role`, { role: 'user' });
 
 // The guard: every route and tick this suite reached stays under the ceiling. On Workers Free the 51st D1 query of an invocation fails.

@@ -1,6 +1,6 @@
 import { CAMPAIGN_STATUSES, CAMPAIGN_STATUS_META, type Campaign as CampaignT, type CampaignAssignment, type CampaignStatus, type Deliverable, type Organization } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Button } from '../components/Button';
 import { AppCover } from '../components/AppCover';
@@ -130,7 +130,7 @@ export function Army() {
             New brand
           </Button>
         </div>
-        <p className="mt-xs m-0 text-subhead text-ink-soft">A brand is a team that runs campaigns. Whoever creates it owns it and can add teammates by email.</p>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">A brand is a team that runs campaigns. Whoever creates it owns it and can ask teammates by email.</p>
         {orgs.data && myOrgs.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">You are not part of a brand yet.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {myOrgs.map((o) => (
@@ -167,9 +167,14 @@ function OrgCard({ org }: { org: Organization }) {
   const [open, setOpen] = useState(false);
   const members = useAuthed(['org-members', org.id], () => api.orgMembers(org.id), open);
   const [email, setEmail] = useState('');
+  // An ask, not an add (2026-11-10): they join only with their own yes on their Profile tab.
+  const [asked, setAsked] = useState('');
+  // A double tap or two Enters before Ask shows it is busy asks once (the second would answer "asked already").
+  const asking = useRef(false);
   const add = useMutation({
     mutationFn: () => api.addOrgMember(org.id, email),
     onSuccess: () => {
+      setAsked(`Asked ${email.trim()}. They join when they say yes.`);
       setEmail('');
       members.refetch();
     },
@@ -181,8 +186,8 @@ function OrgCard({ org }: { org: Organization }) {
       members.refetch();
     },
   });
-  // Removing a teammate asks first, with the person it is about.
-  const [removing, setRemoving] = useState<{ userId: string; name: string } | null>(null);
+  // Removing a teammate, or taking back an ask, asks first, with the person it is about.
+  const [removing, setRemoving] = useState<{ userId: string; name: string; invited: boolean } | null>(null);
   const owner = org.myRole === 'owner';
   return (
     <div className="rounded-tile bg-card p-sm shadow-toy-soft">
@@ -215,7 +220,7 @@ function OrgCard({ org }: { org: Organization }) {
                     variant="ghost"
                     onClick={() => {
                       remove.reset();
-                      setRemoving({ userId: m.userId, name: m.name });
+                      setRemoving({ userId: m.userId, name: m.name, invited: false });
                     }}
                     disabled={remove.isPending}
                     aria-label={`Remove ${m.name}`}
@@ -226,35 +231,69 @@ function OrgCard({ org }: { org: Organization }) {
               </li>
             ))}
           </ul>
+          {/* Asks still waiting: listed apart, never as members, each with a way to take it back. */}
+          {(members.data?.invited?.length ?? 0) > 0 && (
+            <>
+              <p className="mt-sm m-0 text-subhead font-semibold">Asked, waiting for a yes</p>
+              <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+                {members.data?.invited?.map((m) => (
+                  <li key={m.userId} className="flex items-center gap-sm rounded-tile bg-paper p-sm">
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-balance text-card-title [overflow-wrap:anywhere]">{m.name}</span>
+                      <span className="block text-card-note text-ink-soft [overflow-wrap:anywhere]">{m.email ? `Asked, ${m.email}` : 'Asked'}</span>
+                    </span>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        remove.reset();
+                        setRemoving({ userId: m.userId, name: m.name, invited: true });
+                      }}
+                      disabled={remove.isPending}
+                      aria-label={`Take back the ask to ${m.name}`}
+                    >
+                      Withdraw
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
           {owner && (
             <form
               className="mt-sm flex flex-wrap items-end gap-xs"
               onSubmit={(e) => {
                 e.preventDefault();
-                if (email.trim()) add.mutate();
+                if (!email.trim() || asking.current) return;
+                asking.current = true;
+                add.mutate(undefined, { onSettled: () => void (asking.current = false) });
               }}
             >
               <label className="block min-w-0 flex-1">
-                <span className="block text-subhead font-semibold">Add a teammate by email</span>
+                <span className="block text-subhead font-semibold">Ask a teammate by email</span>
                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@brand.com" className={FIELD} />
               </label>
               <Button type="submit" disabled={add.isPending || !email.trim()}>
-                Add
+                Ask
               </Button>
             </form>
           )}
           <ErrorLine e={add.error} className="mt-xs" />
+          {asked && !add.error && (
+            <p role="status" className="mt-xs m-0 text-subhead">
+              {asked}
+            </p>
+          )}
         </div>
       )}
       <ConfirmDelete
         open={removing !== null}
-        title="Remove this teammate?"
-        body={`${removing?.name ?? ''} leaves ${org.name} and loses access to its campaigns. You can add them again by email.`}
+        title={removing?.invited ? 'Take back this ask?' : 'Remove this teammate?'}
+        body={removing?.invited ? `${removing.name} is not asked to join ${org.name} any more. They are not told.` : `${removing?.name ?? ''} leaves ${org.name} and loses access to its campaigns. You can ask them again by email.`}
         pending={remove.isPending}
         failed={remove.isError}
         onYes={() => removing && remove.mutate(removing.userId)}
         onClose={() => setRemoving(null)}
-        yes="Yes, remove them"
+        yes={removing?.invited ? 'Yes, take it back' : 'Yes, remove them'}
       />
     </div>
   );

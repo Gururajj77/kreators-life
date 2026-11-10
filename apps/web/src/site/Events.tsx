@@ -19,6 +19,8 @@ import { SITE_LINK, SITE_PRIMARY, SITE_SECONDARY, SiteArrow } from './buttons';
 import { LISTING_COLS, ListingCard } from './ListingCard';
 import { SiteLayout } from './SiteLayout';
 import { StickyAction } from '../components/StickyAction';
+import { InviteCodeField } from '../components/InviteGate';
+import { inviteRefusal, keepInvite, keptInvite } from '../lib/invite';
 
 /** The kind of event in words ("Meetup"), from its stored key. */
 const kindOf = (e: PublicEvent): string => EVENT_TYPE_META[e.eventType as EventType]?.name ?? 'Event';
@@ -129,6 +131,9 @@ export function EventLanding() {
   const [v, setV] = useState<Account>(EMPTY);
   const [agree, setAgree] = useState(false);
   const [networking, setNetworking] = useState(false);
+  // While joining is by invite a visitor with no session needs a code (2026-11-10): the one this tab arrived with, or one typed here.
+  const [invite, setInvite] = useState(() => keptInvite() ?? '');
+  const gate = useQuery({ queryKey: ['site', 'join'], queryFn: publicApi.join, enabled: !token, staleTime: 60_000 });
   // Set once the account is made here, so a second try after a failed join never asks for a new account.
   const [madeHere, setMadeHere] = useState(false);
   const signedIn = Boolean(token && me.data?.user.email) || madeHere;
@@ -140,7 +145,10 @@ export function EventLanding() {
     mutationFn: async () => {
       if (!signedIn) {
         // The device session first, as Welcome makes it, then the account on top of it, so nothing said on this device is lost.
-        if (!token) setToken((await api.anon(storedRef())).token);
+        if (!token) {
+          setToken((await api.anon(storedRef(), invite.trim() || null)).token);
+          keepInvite(null);
+        }
         const made = await api.signup({ email: v.email.trim(), password: v.password, displayName: v.name.trim(), phone: v.phone.trim(), birthDate: v.birthDate, acceptTerms: agree });
         setToken(made.token);
         setMadeHere(true);
@@ -155,6 +163,9 @@ export function EventLanding() {
         if (err instanceof ApiError && err.status === 409) return null;
         throw err;
       }
+    },
+    onError: (err) => {
+      if (inviteRefusal(err) === 'invite-unusable') keepInvite(null);
     },
     onSuccess: async (status) => {
       await qc.invalidateQueries();
@@ -196,7 +207,7 @@ export function EventLanding() {
   const over = e.status !== 'published' || new Date(e.endsAt).getTime() < Date.now();
   const full = e.seatsLeft === 0;
   const label = full ? 'Join the waitlist' : 'Join this event';
-  const ready = signedIn || formReady;
+  const ready = signedIn || (formReady && (Boolean(token) || !gate.data?.inviteOnly || invite.trim().length > 0));
   const caption = paid ? `The ticket is ${priceLine(e)}. You pay in the app, only when you say yes.` : full ? 'The room is full. You go on the waitlist and hear if a seat opens.' : 'Free. You land on the event, with its chat one tap away.';
 
   return (
@@ -275,6 +286,7 @@ export function EventLanding() {
                   <span className="mt-xs block text-caption text-ink-soft">{ageBad ?? 'Nobody else sees it.'}</span>
                 </label>
                 <TermsBox checked={agree} onChange={setAgree} />
+                {!token && (gate.data?.inviteOnly || invite || inviteRefusal(join.error)) && <InviteCodeField value={invite} onChange={setInvite} />}
               </>
             )}
             {!paid && (

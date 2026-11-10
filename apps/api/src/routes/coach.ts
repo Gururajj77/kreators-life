@@ -9,6 +9,7 @@ import { coachPatterns, coachReport } from '../coachReport';
 import { emailProblem, maskEmail, publicUrl } from '../agencyPaper';
 import { limited, sendEmail, sha } from '../ops';
 import { createNode, DATES_PROBLEM, editNode, type NodeBody } from './nodes';
+import { connectionsCameTrue } from '../invites';
 
 /**
  * Coaching, the coach's side: the roster, the directory, asking someone to be a student, and what a coach does for
@@ -542,6 +543,8 @@ myCoach.post('/join/:token', async (c) => {
     const done = await db.prepare("UPDATE coach_links SET status = 'active', answered_at = ?, share_json = ? WHERE id = ? AND status = 'pending'").bind(nowIso(), JSON.stringify(share), waiting.id).run();
     if ((done.meta.changes ?? 0) === 0) return c.json({ error: 'That ask is not waiting any more.' }, 409);
     linkId = waiting.id;
+    // An ask the team made, said yes to through the coach's link, came true.
+    await connectionsCameTrue(db, 'coach', { refId: waiting.id });
   } else {
     const bad = await linkProblem(db, coachRow.id, user.id);
     if (bad) return c.json({ error: bad.error }, bad.status);
@@ -586,6 +589,8 @@ myCoach.post('/links/:id/answer', async (c) => {
   }
   const done = await db.prepare("UPDATE coach_links SET status = ?, answered_at = ? WHERE id = ? AND status = 'pending'").bind(yes ? 'active' : 'declined', nowIso(), link.id).run();
   if ((done.meta.changes ?? 0) === 0) return c.json({ error: 'That ask is not waiting any more.' }, 409);
+  // A link the team asked for (Admin, Connect people) came true with this yes: each side is paid once (invites.ts).
+  if (yes) await connectionsCameTrue(db, 'coach', { refId: link.id });
   const coachName = nameOf({ display_name: link.c_name });
   const studentName = nameOf({ display_name: link.s_name });
   await logCoach(db, { linkId: link.id, coachId: link.coach_id, studentId: link.student_id, actorId: user.id, action: yes ? 'link.yes' : 'link.no', label: `${nameOf(user)} said ${yes ? 'yes' : 'no'}` });

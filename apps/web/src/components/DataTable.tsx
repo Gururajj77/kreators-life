@@ -96,7 +96,7 @@ export function Select({ className = '', selectClass = '', children, ...rest }: 
 /** A small switch for a cell. Same look as the app's Toggle, without a label of its own. */
 function Switch({ on, onChange, disabled, label }: { on: boolean; onChange: (on: boolean) => void; disabled?: boolean; label: string }) {
   return (
-    <button type="button" role="switch" aria-checked={on} aria-label={label} disabled={disabled} onClick={() => onChange(!on)} className={`relative h-[24px] w-[44px] shrink-0 rounded-pill transition-colors disabled:opacity-50 ${on ? 'bg-r4' : 'bg-line'}`}>
+    <button type="button" role="switch" aria-checked={on} aria-label={label} disabled={disabled} onClick={() => onChange(!on)} className={`tap-pad relative h-[24px] w-[44px] shrink-0 rounded-pill transition-colors disabled:opacity-50 ${on ? 'bg-r4' : 'bg-line'}`}>
       <span className={`absolute top-[2px] left-[2px] size-[20px] rounded-pill bg-card shadow-toy-soft transition-transform ${on ? 'translate-x-[20px]' : ''}`} aria-hidden="true" />
     </button>
   );
@@ -219,7 +219,7 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
             .filter((c) => c.filter)
             .map((c) => (
               <label key={c.key} className="flex min-w-[min(100%,220px)] max-w-full flex-1 items-center gap-xs">
-                <span className="shrink-0 text-eyebrow uppercase text-ink-soft">{c.label}</span>
+                <span className="min-w-[76px] shrink-0 text-eyebrow uppercase text-ink-soft md:min-w-0">{c.label}</span>
                 <Select value={filters[c.key] ?? ''} aria-label={`Filter by ${c.label}`} onChange={(e) => setFilters((f) => ({ ...f, [c.key]: e.target.value }))} className="min-w-0 flex-1 sm:min-w-[140px]" selectClass="rounded-pill bg-card">
                   <option value="">All</option>
                   {(options[c.key] ?? []).map((o) => (

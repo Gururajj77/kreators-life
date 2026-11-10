@@ -1,11 +1,30 @@
-import { DEFAULT_PAGE_SIZE, DEFAULT_ZONE, DISCOUNT_AREAS, DISCOUNT_AREA_META, DISCOUNT_CODE_MAX, DISCOUNT_PER_PERSON_MAX, discountLabel, money, pageQuery, zonedToUtc, type AdminDiscountCode, type DiscountArea, type Page, type PageSize } from '@kreators/shared';
+import { DEFAULT_PAGE_SIZE, DEFAULT_ZONE, formatCount, DISCOUNT_AREAS, DISCOUNT_AREA_META, DISCOUNT_CODE_MAX, DISCOUNT_PER_PERSON_MAX, discountLabel, money, pageQuery, zonedToUtc, type AdminDiscountCode, type DiscountArea, type Page, type PageSize } from '@kreators/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { adminApi, type DiscountInput, type DiscountList } from '../lib/api';
 import { Button } from './Button';
 import { StatTile } from './Charts';
 import { DataTable, Select } from './DataTable';
 import { Sheet } from './Sheet';
-import { FIELD_44 } from '../lib/ui';
+import { FIELD_44, FIELD_FILTER } from '../lib/ui';
+import { ErrorLine } from './ErrorLine';
+import { SectionHead } from './SectionHead';
+import { Segmented } from './fx/Segmented';
+import { StickyAction } from './StickyAction';
+import { FilterBar, FilterSelect } from './FilterSelect';
+import { evenGrid, evenTile } from '../lib/bento';
+
+/** The four totals: two a row, four from the laptop width (a tablet's column is a phone's). */
+const TOTAL_COLS = { base: 2, lg: 4 } as const;
+const ACTIVE_ITEMS = [
+  { key: '', label: 'On and off' },
+  { key: '1', label: 'On' },
+  { key: '0', label: 'Off' },
+] as const;
+const AREA_ITEMS = [{ key: '', label: 'Every place' }, ...DISCOUNT_AREAS.map((a) => ({ key: a, label: DISCOUNT_AREA_META[a].name }))];
+const KIND_OPTIONS = [
+  { value: 'percent', label: 'A percent' },
+  { value: 'fixed', label: 'A fixed amount' },
+] as const;
 
 const zone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || DEFAULT_ZONE;
 const isDay = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v;
@@ -25,7 +44,7 @@ const randomWord = () => {
 
 const BLANK = { code: '', kind: 'percent' as 'percent' | 'fixed', percent: '10', amount: '', currency: 'INR', areas: ['product'] as DiscountArea[], itemId: '', minAmount: '', maxUses: '', perPersonLimit: '1', startDay: '', endDay: '', note: '' };
 
-const moneyGiven = (c: AdminDiscountCode) => [c.givenCents > 0 ? money(c.givenCents, c.currency) : '', c.givenPoints > 0 ? `${c.givenPoints} points` : ''].filter(Boolean).join(' and ') || 'Nothing yet';
+const moneyGiven = (c: AdminDiscountCode) => [c.givenCents > 0 ? money(c.givenCents, c.currency) : '', c.givenPoints > 0 ? `${formatCount(c.givenPoints)} ${c.givenPoints === 1 ? 'point' : 'points'}` : ''].filter(Boolean).join(' and ') || 'Nothing yet';
 
 /**
  * Admin, Discount codes. The team makes a code (a percent or a fixed amount, which places it works in, how many times, between which
@@ -125,58 +144,47 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
 
   return (
     <section className="mt-md" aria-labelledby="discounts-heading">
-      <div className="flex items-center justify-between gap-sm">
-        <h2 id="discounts-heading" className="text-title2">
-          Discount codes
-        </h2>
-        <Button onClick={() => setMaking(true)}>Make a code</Button>
-      </div>
-      <p className="mt-xs m-0 text-subhead text-ink-soft">A code takes a percent or an amount off a product, program, ticket, plan or top-up.</p>
+      <SectionHead
+        id="discounts-heading"
+        title="Discount codes"
+        lede="A code takes a percent or an amount off a product, program, ticket, plan or top-up."
+        action={<Button onClick={() => setMaking(true)}>Make a code</Button>}
+      />
       <ul className="mt-xs m-0 flex list-disc flex-col gap-xs pl-md text-subhead text-ink-soft">
         <li>The platform pays, so the seller still gets the full price.</li>
         <li>A code’s word and worth never change. For a new deal, make a new code.</li>
       </ul>
 
       {totals && (
-        <div className="mt-sm grid grid-cols-2 gap-sm md:grid-cols-4">
-          <StatTile label="Codes" value={totals.codes} hint={`${totals.live} switched on`} />
-          <StatTile label="Times used" value={totals.redemptions} />
-          <StatTile label="Money given away" value={totals.givenCents.length === 0 ? '0' : totals.givenCents.map((m) => money(m.cents, m.currency)).join(', ')} />
-          <StatTile label="Points given away" value={totals.givenPoints} />
+        <div className={`mt-sm grid gap-sm ${evenGrid(4, TOTAL_COLS)}`}>
+          <StatTile className={evenTile(0, 4, TOTAL_COLS)} label="Codes" value={totals.codes} hint={`${totals.live} switched on`} />
+          <StatTile className={evenTile(1, 4, TOTAL_COLS)} label="Times used" value={totals.redemptions} />
+          <StatTile className={evenTile(2, 4, TOTAL_COLS)} label="Money given away" value={totals.givenCents.length === 0 ? '0' : totals.givenCents.map((m) => money(m.cents, m.currency)).join(', ')} />
+          <StatTile className={evenTile(3, 4, TOTAL_COLS)} label="Points given away" value={totals.givenPoints} />
         </div>
       )}
 
+      {/* The search on one line, the two filters under it (one a line on a phone, side by side from the tablet up). */}
       <form
-        className="mt-sm flex flex-wrap gap-xs"
+        className="mt-sm flex gap-xs"
         onSubmit={(e) => {
           e.preventDefault();
           void load({ page: 1, size: ask.size });
         }}
       >
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a code or note" aria-label="Search codes" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-body" />
-        <Select value={active} onChange={(e) => setActive(e.target.value)} aria-label="Status" className="w-[140px]">
-          <option value="">On and off</option>
-          <option value="1">On</option>
-          <option value="0">Off</option>
-        </Select>
-        <Select value={area} onChange={(e) => setArea(e.target.value)} aria-label="Place" className="w-[180px]">
-          <option value="">Every place</option>
-          {DISCOUNT_AREAS.map((a) => (
-            <option key={a} value={a}>
-              {DISCOUNT_AREA_META[a].name}
-            </option>
-          ))}
-        </Select>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a code or note" aria-label="Search codes" className={`min-w-0 flex-1 ${FIELD_FILTER}`} />
         <Button type="submit" variant="outline" disabled={busy}>
           Search
         </Button>
       </form>
+      <div className="mt-sm">
+        <FilterBar count={2} label="Filter the codes">
+          <FilterSelect label="Status" value={active as (typeof ACTIVE_ITEMS)[number]['key']} items={ACTIVE_ITEMS} onChange={setActive} />
+          <FilterSelect label="Place" value={area} items={AREA_ITEMS} onChange={setArea} />
+        </FilterBar>
+      </div>
 
-      {error && (
-        <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
-          {error}
-        </p>
-      )}
+      <ErrorLine e={making ? null : error} className="mt-sm" />
 
       <div className="mt-sm">
         <DataTable<AdminDiscountCode>
@@ -238,11 +246,6 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
             void submit();
           }}
         >
-          {error && (
-            <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
-              {error}
-            </p>
-          )}
           <div>
             <label htmlFor="dc-code" className="block text-subhead font-semibold">
               Code
@@ -258,14 +261,8 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
 
           <fieldset className="m-0 border-0 p-0">
             <legend className="text-subhead font-semibold">What it takes off</legend>
-            {/* Two equal choices across the full width in equal parts (as PeriodFilter), each 44px tall. */}
-            <div className="mt-xs grid grid-cols-2 gap-xs">
-              {(['percent', 'fixed'] as const).map((k) => (
-                <button key={k} type="button" aria-pressed={form.kind === k} onClick={() => set('kind', k)} className={`toy min-h-[36px] md:min-h-[44px] tap-pad min-w-0 rounded-pill border-2 px-md py-0 md:py-xs text-subhead font-medium ${form.kind === k ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-                  {k === 'percent' ? 'A percent' : 'A fixed amount'}
-                </button>
-              ))}
-            </div>
+            {/* A choice of two is Segmented (2026-11-09), as everywhere else in the app. */}
+            <Segmented className="mt-xs" label="What it takes off" value={form.kind} options={KIND_OPTIONS} onChange={(k) => set('kind', k)} />
             {form.kind === 'percent' ? (
               <label className="mt-sm block">
                 <span className="block text-subhead font-semibold">Percent off (0.01 to 100)</span>
@@ -346,9 +343,13 @@ export function AdminDiscounts({ adminKey }: { adminKey: string }) {
             <input value={form.note} onChange={(e) => set('note', e.target.value)} maxLength={200} className={FIELD_44} />
             <span className="mt-xs block text-caption text-ink-soft">Only the team sees it. You can search the table by it.</span>
           </label>
-          <Button type="submit" size="lg" full disabled={busy || form.areas.length === 0}>
-            Make the code
-          </Button>
+          {/* The error sits right over the action, and on a phone the action stays in reach at the sheet's foot (a long form). */}
+          <ErrorLine e={making ? error : null} />
+          <StickyAction label="Make this code">
+            <Button type="submit" size="lg" full disabled={busy || form.areas.length === 0}>
+              Make the code
+            </Button>
+          </StickyAction>
         </form>
       </Sheet>
     </section>

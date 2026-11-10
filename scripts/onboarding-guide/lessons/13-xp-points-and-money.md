@@ -24,7 +24,12 @@ Here is what the everyday things pay:
 - **A kept day on the not to do list:** 5 xp.
 - **Clearing a project:** 30 xp, when every task in it is done.
 
-Posts, events and runs pay a little more. The full list is in **Help**, under **How you earn**.
+Posts, events and runs pay a little more. Two more pay when people come together:
+
+- **Someone you invited:** if the team lets you make invite codes, under **Invite people** on the Profile tab, a person who joins with yours pays you 50 xp and 20 points once they finish setting up.
+- **A connection the team made:** when it comes true, such as you and a friend both saying yes, it pays each of you 10 xp.
+
+An admin earns neither. The full list is in **Help**, under **How you earn**.
 
 Your stage grows with xp and days together. You start as a Seed, become a Sprout at 300 xp and 3 days, and grow on up to Luminary. A stage cannot be rushed.
 
@@ -50,6 +55,7 @@ Badges are medals the app gives by its own count. Find them on the **Profile** t
 - **One rule each:** a single count reaching a number. Tap a badge to see its next step and a bar.
 - **Kept for good:** once earned, the app never takes a badge back on its own (only Erase everything clears them).
 - **Some stay private:** the Reflection, Focus and Money families show only to you. They never appear on your page or the Leaderboard.
+- **People count too:** Community holds Opened the door, for someone you invited who finished setting up, up to Fifty through the door, and Connected and Well connected, for connections the team made for you that came true.
 
 A badge pays nothing, but some products, games and tools ask for one before they open.
 

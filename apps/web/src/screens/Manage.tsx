@@ -1,7 +1,10 @@
 import { formatCount, MODULE_BY_KEY, PERMISSION_META, ROLE_META, type Permission } from '@kreators/shared';
+import { connectKindsFor } from '@kreators/shared/connect';
 import { longDate, shortDay } from '../lib/date';
 import { AppIcon } from '../components/AppIcon';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
+import { useLocation } from 'react-router';
+import { lazyNamed } from '../lib/lazy';
 import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
@@ -14,7 +17,8 @@ import { RowCard } from '../components/RowCard';
 import { Reveal } from '../components/fx/Reveal';
 import { CountUp } from '../components/fx/CountUp';
 import { FactTag, IconTag } from '../components/FactTag';
-import { evenGrid, evenTile } from '../lib/bento';
+import { TileGroups, type TileGroup } from '../components/TileGroups';
+import { FIELD_FILTER } from '../lib/ui';
 
 /** Each permission's queue tile: where it opens and what is waiting. Its icon is the permission's own, from `PERMISSION_META` in shared. */
 // However many permissions a person holds, the rows stay full (lib/bento.ts): an odd count leads with a tile that takes the row.
@@ -30,10 +34,25 @@ const PERMISSION_TILES: Record<Permission, { name: string; blurb: string; to: st
   review: { name: 'Review', blurb: 'Club, rewards, tools, TV and Fund proposals', to: '/club', queue: (q) => q.clubApplied + q.proposals },
   mentor: { name: 'Mentor', blurb: 'Feedback on learners’ assignments', to: '/school', queue: (q) => q.assignments },
   coach: { name: 'Life coach', blurb: 'Your students, their asks, notes and tasks', to: '/coaching', queue: (q) => q.coachAsks },
+  invite: { name: 'Invites', blurb: 'Make invite codes and share the link', to: '/you#invites' },
 };
 type Queues = { campaigns: number; applications: number; tickets: number; clubApplied: number; bountyQueue: number; proposals: number; assignments: number; coachAsks: number };
 
+/** Connect people for staff (2026-11-10), its own chunk, at /manage/connect (App.tsx sends that path here too). */
+const ManageConnect = lazyNamed(() => import('./ManageConnect'), 'ManageConnect');
+
 export function Manage() {
+  const path = useLocation().pathname.replace(/\/+$/, '');
+  if (path === '/manage/connect')
+    return (
+      <Suspense fallback={null}>
+        <ManageConnect />
+      </Suspense>
+    );
+  return <ManageHome />;
+}
+
+function ManageHome() {
   const me = useMe();
   const overview = useAuthed(['manage-overview'], api.manageOverview);
   const [q, setQ] = useState('');
@@ -43,17 +62,26 @@ export function Manage() {
   const members = useAuthed(['members', asked, pg.query], () => api.members(asked, pg.query));
   const o = overview.data;
   const role = me.data?.user.role ?? 'user';
-  const tiles = o
+  const queues = o
+    ? // An admin holds every permission but Life coach, which the server lists only when given.
+      (role === 'admin' ? (Object.keys(PERMISSION_TILES) as Permission[]).filter((p) => p !== 'coach' || o.permissions.includes('coach')) : o.permissions).map((p) => {
+        const m = PERMISSION_TILES[p];
+        return { key: p, name: m.name, blurb: m.blurb, to: m.to, icon: PERMISSION_META[p].icon, waiting: m.queue ? m.queue(o.queues) : null };
+      })
+    : [];
+  const tools = o
     ? [
-        // An admin holds every permission but Life coach, which the server lists only when given.
-        ...(role === 'admin' ? (Object.keys(PERMISSION_TILES) as Permission[]).filter((p) => p !== 'coach' || o.permissions.includes('coach')) : o.permissions).map((p) => {
-          const m = PERMISSION_TILES[p];
-          return { key: p, name: m.name, blurb: m.blurb, to: m.to, icon: PERMISSION_META[p].icon, waiting: m.queue ? m.queue(o.queues) : null };
-        }),
+        // Connect people for the kinds this person's permissions govern (2026-11-10); an admin has it under Admin too.
+        ...(connectKindsFor({ role, permissions: o.permissions }).length ? [{ key: 'connect', name: 'Connect people', blurb: 'Join people for the jobs you hold', to: '/manage/connect', icon: 'Handshake' as const, waiting: null }] : []),
         { key: 'knowledge', name: 'Knowledge', blurb: 'Write and publish articles', to: '/knowledge', icon: MODULE_BY_KEY.knowledge?.icon, waiting: null },
         ...(role === 'admin' ? [{ key: 'admin', name: 'Admin', blurb: 'People, flags, listings, audit', to: '/admin', icon: MODULE_BY_KEY.admin?.icon, waiting: null }] : []),
       ]
     : [];
+  // Past ten tiles they read in two categories (TileGroups, the founder's rule of 2026-11-07); at ten or fewer one even block as before.
+  const tileGroups: TileGroup<(typeof queues)[number] | (typeof tools)[number]>[] = [
+    { key: 'queues', name: 'By permission', tiles: queues },
+    { key: 'tools', name: 'Tools', tiles: tools },
+  ];
   return (
     <Screen>
       <AppCover
@@ -75,9 +103,13 @@ export function Manage() {
           {/* A queue tile is placed like every card (2026-11-05): the name and its line at the top left, the permission's icon on a neutral
               tile at the top right, what is waiting at the foot of every tile (a neutral word when nothing is, or when the area keeps no
               queue) and an arrow at the bottom right. One to a row on a phone, so no line is squeezed; two from the small tablet up. */}
-          <ul className={`mt-sm grid list-none gap-xs p-0 m-0 ${evenGrid(tiles.length, TILE_COLS)}`}>
-            {tiles.map((t, i) => (
-              <Reveal as="li" key={t.key} index={i} className={`flex ${evenTile(i, tiles.length, TILE_COLS)}`}>
+          <TileGroups
+            className="mt-sm"
+            list
+            cols={TILE_COLS}
+            groups={tileGroups}
+            render={(t, span, i) => (
+              <Reveal as="li" key={t.key} index={i} className={`flex ${span}`}>
                 <RowCard
                   to={t.to}
                   title={t.name}
@@ -98,8 +130,8 @@ export function Manage() {
                   }
                 />
               </Reveal>
-            ))}
-          </ul>
+            )}
+          />
         </section>
       )}
 
@@ -130,7 +162,7 @@ export function Manage() {
         <input value={q} onChange={(e) => {
             setQ(e.target.value);
             pg.reset();
-          }} placeholder="Search by name, page or email" aria-label="Search members" className="mt-sm w-full rounded-pill border-2 border-line bg-card px-md py-sm text-body" />
+          }} placeholder="Search by name, page or email" aria-label="Search members" className={`mt-sm ${FIELD_FILTER}`} />
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {members.data?.members.map((m) => (
             <li key={m.id} className="flex">

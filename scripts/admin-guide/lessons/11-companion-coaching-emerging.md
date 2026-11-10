@@ -73,7 +73,7 @@ On Daily, a **Habits** section sits under Not to do with her good and bad habits
 - **Companion plans:** in Admin, **People**, the Plan column starts or ends a plan, and the Credits column shows what is left. Plans are only started by an admin until payments go live.
 - **Life coaches:** in Admin, **Life coaches**, the table **Asked to be a life coach** lists asks. Tick rows and tap **Make life coach**, or **Say no**. The person is told.
 - **Taking the badge:** in the **Life coaches** table, **Take the badge** ends every link that coach has, and their students are told. It asks first.
-- **Linking:** under **Link a coach and a student**, pick a coach, enter the student and choose **Ask the student** or **Link now**. Use Link now only if the student already agreed.
+- **Linking:** open **Connect people** in Admin, pick **Life coach and student**, enter both and choose **Ask them** or **Link now**. Use Link now only if the student already agreed.
 - **Emerging:** it is computed when read and stored nowhere. No staff screen shows it. It reaches a coach only through the student's own Patterns switch, and never the assistant or the leaderboard.
 - **Switches:** in Admin, **Flags**, the Companion and Coaching rows set On, Minimum role, Rollout % and Overrides.
 

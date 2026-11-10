@@ -52,6 +52,12 @@ const CASES = [
   { key: 'nested-confirm', path: '/fitness', steps: [new RegExp(`^${Number(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }).slice(8))}$`), /^Remove /], nested: true, optional: true, needsMove: true },
   { key: 'bubble', path: '/today', steps: [/^Water \d/], min: 1024, frame: '[role="dialog"][aria-label="Water and reminders"]', close: 'Close water and reminders', rails: 4 },
   { key: 'assistant', path: '/today', steps: [/^Open the assistant$/], frame: '[data-assistant-panel]', close: 'Close', rails: 1 },
+  // Admin's sheets (2026-11-09): the account must be an admin (shots-all.mjs makes one).
+  { key: 'admin-override', path: '/admin?tab=flags', steps: [/^Add override$/] },
+  { key: 'admin-listing', path: '/admin?tab=listings', steps: [/^New event$/] },
+  { key: 'admin-discount', path: '/admin?tab=discounts', steps: [/^Make a code$/] },
+  { key: 'admin-connections', path: '/admin?tab=people', steps: [/^Connections of /] },
+  { key: 'admin-delete', path: '/admin?tab=people', steps: [/^Delete (?!all)/] },
 ];
 
 const measure = (frameSel, closeLabel) => {

@@ -6,8 +6,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { MODULES, QUESTIONS } from '../../packages/shared/src/index.ts';
+import { openJoining } from './openJoining.mjs';
 
 const ORIGIN = process.env.SMOKE_ORIGIN ?? 'http://127.0.0.1:8788';
+// Joining is by invite (migration 0125): on the test server, turn Invite only off so this script's own sign-ups work.
+await openJoining(ORIGIN);
 const ADMIN_KEY = process.env.SMOKE_ADMIN_KEY ?? 'smoke-admin-key';
 const stamp = Date.now().toString(36);
 const ip = `10.98.${Date.now() % 255}.${(Date.now() >> 8) % 255}`;

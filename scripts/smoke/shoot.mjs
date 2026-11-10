@@ -19,8 +19,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer-core';
 import { QUESTIONS } from '../../packages/shared/src/index.ts';
+import { openJoining } from './openJoining.mjs';
 
 const ORIGIN = process.env.SHOOT_ORIGIN ?? 'http://127.0.0.1:8788';
+// Joining is by invite (migration 0125): on the test server, turn Invite only off so this script's own sign-ups work.
+await openJoining(ORIGIN);
 const OUT = process.env.SHOOT_OUT ?? path.join(path.dirname(new URL(import.meta.url).pathname), 'shots');
 const THEMES = process.env.SHOOT_THEME === 'dark' ? ['dark'] : process.env.SHOOT_THEME === 'light' ? ['light'] : ['light', 'dark'];
 const MOTION = process.env.SHOOT_MOTION === '1';

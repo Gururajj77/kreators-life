@@ -1,4 +1,4 @@
-import { FOCUS_OPTIONS, HONORS, IDENTITY_STAGES, identityLine, levelFromXp, passwordProblem, POINTS, RELATIONSHIPS, BADGE_META, badgeRoleOf, type MeResponse, MODULE_GROUP_ORDER, nextBadge, DEFAULT_ZONE } from '@kreators/shared';
+import { canInvite, FOCUS_OPTIONS, HONORS, IDENTITY_STAGES, identityLine, levelFromXp, passwordProblem, POINTS, RELATIONSHIPS, BADGE_META, badgeRoleOf, type MeResponse, MODULE_GROUP_ORDER, nextBadge, DEFAULT_ZONE } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Suspense, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -36,6 +36,12 @@ import { DatesAndTimes, datePrefsChange } from '../components/DatesAndTimes';
 
 const BadgeGallery = lazyNamed(() => import('../components/BadgeGallery'), 'BadgeGallery');
 const ActivityGrid = lazyNamed(() => import('../components/ActivityGrid'), 'ActivityGrid');
+/** Friend suggestions the team made (Admin, Connect people), shown only while one is open (`/you#suggested`). */
+const TeamSuggestions = lazyNamed(() => import('../components/TeamSuggestions'), 'TeamSuggestions');
+/** A brand's ask onto its team (2026-11-10), shown only while one waits (`/you#org-invites`). */
+const OrgInvites = lazyNamed(() => import('../components/OrgInvites'), 'OrgInvites');
+// Invite people (2026-11-10): only for those who may make invite codes, in its own chunk.
+const InvitePeople = lazyNamed(() => import('../components/InvitePeople'), 'InvitePeople');
 /** The honors: two to a row on a phone, three from the tablet, in even rows (lib/bento.ts). */
 const HONOR_COLS = { base: 2, lg: 3 } as const;
 
@@ -198,6 +204,18 @@ function YouView({ data }: { data: MeResponse }) {
       </section>
 
       <MyCoachSection />
+
+      <Suspense fallback={null}>
+        <TeamSuggestions />
+        <OrgInvites />
+      </Suspense>
+
+      {/* Invite people: an admin, staff, or someone holding the Inviter permission makes codes here (`/you#invites`). */}
+      {canInvite(user) && (
+        <Suspense fallback={null}>
+          <InvitePeople />
+        </Suspense>
+      )}
 
       {/* My QR code: your page and friend code as a picture to show someone in person (components/FriendQr.tsx; `/you#qr`). */}
       <section className="mt-lg" aria-labelledby="qr-heading" id="qr">

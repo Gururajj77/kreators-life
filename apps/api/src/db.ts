@@ -1,5 +1,5 @@
 import { anonAliasFrom, normalizeCode, DEFAULT_ZONE, isCurrency, parseAppPrefs, parseDatePrefs, isRealDay, pageSizeOf, parseIdentities, parseRepeat, parsePriority, parseIntake, parseLifeArea, parseLinkBlocks, parseOpenKind, type InboxKind, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
-import { BADGE_STATS, BADGES, badgesFrom, communityRankOf, type CommunityRank, EMPTY_SOCIALS, isPrivateBadge, parsePublicSettings, HONORS, isStaffFor, levelFromXp, PERMISSIONS, roleRank, taskReadyAt, timeHonors, type BadgeFacts, type BadgesResponse, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
+import { BADGE_STATS, BADGES, badgesFrom, canInvite as canInviteRule, communityRankOf, type CommunityRank, EMPTY_SOCIALS, isPrivateBadge, parsePublicSettings, HONORS, isStaffFor, levelFromXp, PERMISSIONS, roleRank, taskReadyAt, timeHonors, type BadgeFacts, type BadgesResponse, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
 import type { Context, Next } from 'hono';
 import type { AppEnv } from './env';
 import type { UserRow } from './env';
@@ -234,6 +234,9 @@ export const nameOf = (r: { display_name: string }) => r.display_name || 'Anonym
 export function can(user: UserRow, perm: Permission): boolean {
   return isStaffFor({ role: user.role, permissions: parseList(user.permissions) }, perm);
 }
+
+/** Who may make invite codes (2026-11-10): an admin, anyone on staff, or anyone holding Inviter. `canInvite` in shared is the one rule. */
+export const canInvite = (user: Pick<UserRow, 'role' | 'permissions'>): boolean => canInviteRule({ role: user.role, permissions: parseList(user.permissions) });
 
 /** A guide in Community and its channels: anyone holding the moderation permission (every admin does). The one guide rule. */
 export const isGuide = (user: UserRow): boolean => can(user, 'moderation');
@@ -537,7 +540,9 @@ export async function getStats(db: D1Database, userId: string): Promise<Stats> {
         (SELECT COALESCE(SUM(metres), 0) FROM run_entries WHERE user_id = ?1 AND status = 'logged') AS run_metres,
         (SELECT COUNT(*) FROM lesson_progress WHERE user_id = ?1) AS lessons_done,
         (SELECT COUNT(*) FROM certificates WHERE user_id = ?1) AS certificates,
-        (SELECT COUNT(*) FROM memberships WHERE user_id = ?1 AND status IN ('accepted', 'member', 'active')) AS club`,
+        (SELECT COUNT(*) FROM memberships WHERE user_id = ?1 AND status IN ('accepted', 'member', 'active')) AS club,
+        (SELECT COUNT(*) FROM invite_codes WHERE created_by = ?1 AND setup_done_at IS NOT NULL) AS invites_joined,
+        (SELECT COUNT(*) FROM team_connections WHERE first_user_id = ?1 AND came_true_at IS NOT NULL) + (SELECT COUNT(*) FROM team_connections WHERE second_user_id = ?1 AND came_true_at IS NOT NULL) AS connections_made`,
     )
     .bind(userId)
     .first<Record<string, number>>();

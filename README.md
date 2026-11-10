@@ -12,7 +12,7 @@ Seven relationships as seven pillars, a few boxes to tick every day. Around that
 
 ```bash
 pnpm install
-pnpm db:migrate:local      # creates or upgrades the local D1 database (migrations 0001 to 0123)
+pnpm db:migrate:local      # creates or upgrades the local D1 database (migrations 0001 to 0128)
 pnpm --filter @kreators/shared test   # unit tests for money, time, slots, matching and flags
 pnpm dev                   # web on http://localhost:5173, api on http://localhost:8787
 ```

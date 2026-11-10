@@ -11,6 +11,7 @@ import { paymentsConfig, providerFor } from '../payments';
 import { logEvent, sendEmail, track } from '../ops';
 import { quoteCode, redeem, release, type Quoted } from '../discounts';
 import { BOOKING_SELECT, ORDER_SELECT, PRODUCT_SELECT, TESTIMONIAL_SELECT, canSeeProduct, isSuperAdmin, toBooking, toLesson, toOrder, toProduct, toTestimonial, type BookingRow, type LessonRow, type OrderRow, type ProductRow } from './studio';
+import { connectionsCameTrue } from '../invites';
 
 /** Public: no session needed. */
 export const publicPage = new Hono<AppEnv>();
@@ -385,6 +386,8 @@ store.post('/:productId/checkout', async (c) => {
     await track(db, user.id, 'payment_succeeded', { productId: product.id, method: pay });
     await notify(db, product.owner_id, 'order', `${nameOf(user)} got ${product.title}${replay ? ' (replay)' : ''}`, pay === 'points' ? `${paidPoints} points${src.linkId ? ', via a tracked link' : ''}` : `${money(cents, product.currency)}, test mode`, product.kind === 'dm' ? '/shop/dm' : `/shop/products/${product.id}`);
     if (affiliate) await notify(db, affiliate.id, 'affiliate', 'Your link made a sale', `${product.title}, ${share} points to you`, '/shop/audience#aff-heading');
+    // A course invite the team made (Admin, Connect people) came true when they got the course.
+    if (product.kind === 'course') await connectionsCameTrue(db, 'product', { refId: product.id, userId: user.id });
     await sendEmail(db, c.env, { userId: user.id, to: user.email, subject: `Your receipt: ${product.title}`, body: `You got ${product.title}${pay === 'points' && paidPoints > 0 ? ` for ${paidPoints} points` : ''}${discount ? ` with the code ${discount.row.code}` : ''}. Find it under My purchases.` });
   }
   const row = await db.prepare(`${ORDER_SELECT} WHERE o.id = ?`).bind(id).first<OrderRow>();

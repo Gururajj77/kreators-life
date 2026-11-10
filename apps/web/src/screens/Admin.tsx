@@ -38,7 +38,8 @@ import {
   type Permission,
   type Role,
 } from '@kreators/shared';
-import { useEffect, useState, type ReactNode } from 'react';
+import { Suspense, useEffect, useState, type ReactNode } from 'react';
+import { lazyNamed } from '../lib/lazy';
 import { Link } from 'react-router';
 import { Button } from '../components/Button';
 import { DataTable, Select } from '../components/DataTable';
@@ -52,11 +53,17 @@ import { Toggle } from '../components/Toggle';
 import { AppIcon } from '../components/AppIcon';
 import { AnimatedIcon } from '../components/AnimatedIcon';
 import { Icon } from '../components/Icon';
-import { X } from 'lucide-react';
+import { Link2, X } from 'lucide-react';
+import { IconButton } from '../components/IconButton';
 import { adminApi } from '../lib/api';
 import { useMe } from '../lib/queries';
 import { useParamState } from '../lib/useParamState';
-import { FIELD, FIELD_LINE } from '../lib/ui';
+import { BTN_MD, FIELD, FIELD_FILTER, FIELD_LINE } from '../lib/ui';
+import { ErrorLine } from '../components/ErrorLine';
+import { SectionHead } from '../components/SectionHead';
+import { Segmented } from '../components/fx/Segmented';
+import { StickyAction } from '../components/StickyAction';
+import { FilterSelect } from '../components/FilterSelect';
 import { dateTime, longDate } from '../lib/date';
 import { StatusTag } from '../components/StatusTag';
 import { Fold } from '../components/Fold';
@@ -64,19 +71,27 @@ import { ConfirmDelete } from '../components/ConfirmDelete';
 import { evenGrid, evenTile } from '../lib/bento';
 import { TileGroups } from '../components/TileGroups';
 
+/** Connect people (2026-11-09): the tab and People's Connections sheet, their own chunk. */
+const AdminConnect = lazyNamed(() => import('../components/AdminConnect'), 'AdminConnect');
+const PersonConnectionsSheet = lazyNamed(() => import('../components/AdminConnect'), 'PersonConnectionsSheet');
+/** Invites (2026-11-10): the Invite only switch, the waitlist and every invite code, its own chunk. */
+const AdminInvites = lazyNamed(() => import('../components/AdminInvites'), 'AdminInvites');
 const ADMIN_HONORS = HONORS.filter((h) => h.source === 'admin' && h.key !== 'pro');
 const KEY_STORE = 'kreators.adminKey';
 /** What a person sees: one app a row on a phone, two on a small tablet, three from md, in even rows (lib/bento.ts). */
 const APP_LIST_COLS = { base: 1, sm: 2, md: 3 } as const;
 const FUNNEL_COLS = { base: 1, md: 2 } as const;
-const PERMISSION_NAMES: Record<Permission, string> = { talent: 'Talent', cohorts: 'Cohorts', events: 'Events', finance: 'Finance', moderation: 'Moderation', support: 'Support', review: 'Review', mentor: 'Mentor', coach: 'Life coach' };
-const TAB_KEYS = ['people', 'flags', 'listings', 'coaches', 'codes', 'discounts', 'agencyhouse', 'orders', 'webhooks', 'kyc', 'ops', 'redemptions', 'audit'] as const;
+const PERMISSION_NAMES: Record<Permission, string> = { talent: 'Talent', cohorts: 'Cohorts', events: 'Events', finance: 'Finance', moderation: 'Moderation', support: 'Support', review: 'Review', mentor: 'Mentor', coach: 'Life coach', invite: 'Inviter' };
+const TAB_KEYS = ['people', 'connect', 'invites', 'flags', 'listings', 'coaches', 'codes', 'discounts', 'agencyhouse', 'orders', 'webhooks', 'kyc', 'ops', 'redemptions', 'audit'] as const;
 type Tab = (typeof TAB_KEYS)[number];
 /** The tab in the address (an inbox note about a coach ask opens Life coaches), else People. */
 const asTab = (t: string): Tab => ((TAB_KEYS as readonly string[]).includes(t) ? (t as Tab) : 'people');
 const LINK_STATUS_NAMES: Record<AdminCoachLink['status'], string> = { pending: 'Waiting', active: 'Active', declined: 'Said no', ended: 'Ended' };
 const ASKED_BY_NAMES: Record<AdminCoachLink['askedBy'], string> = { coach: 'Coach asked', student: 'Student asked', admin: 'The team' };
 const APP_NAMES: Record<AdminAttendeeCode['app'], string> = { party: 'Party', run: 'Run', circles: 'Circles' };
+const KYC_STATUS_NAMES = { pending: 'Waiting', approved: 'Approved', rejected: 'Rejected' } as const;
+/** The server's app filter for attendee codes: every app, or one. */
+const CODE_APPS = [{ key: '', label: 'Every app' }, ...(Object.keys(APP_NAMES) as AdminAttendeeCode['app'][]).map((k) => ({ key: k, label: APP_NAMES[k] }))] as const;
 const ORDER_STATUSES = ['', 'pending', 'paid', 'test', 'failed', 'refunded', 'expired'] as const;
 const statusTone = (s: string) => (s === 'paid' || s === 'test' ? 'bg-r4 text-on-fill' : s === 'pending' ? 'bg-r3 text-ink-fixed' : s === 'refunded' || s === 'failed' ? 'bg-r1 text-white' : 'bg-paper text-ink-soft');
 const ROLE_OPTIONS = ROLES.map((r) => ({ value: ROLE_META[r].name, label: ROLE_META[r].name }));
@@ -162,10 +177,9 @@ export function Admin() {
   const [coaches, setCoaches] = useState<{ id: string; name: string; handle: string | null; email: string | null; students: number }[]>([]);
   const [coachLinks, setCoachLinks] = useState<AdminCoachLink[]>([]);
   const [linkStatus, setLinkStatus] = useState('');
-  const [linkCoach, setLinkCoach] = useState('');
-  const [linkStudent, setLinkStudent] = useState('');
-  const [linkMode, setLinkMode] = useState<'ask' | 'link'>('ask');
-  const [linked, setLinked] = useState<string | null>(null);
+  // Connect people: whose Connections sheet is open (People), and the person the Connect tab starts from.
+  const [connectionsOf, setConnectionsOf] = useState<string | null>(null);
+  const [, setWithParam] = useParamState('with', '');
   // attendee codes: every event with guests, across Party, Run and Circles
   const [codes, setCodes] = useState<AdminAttendeeCode[] | null>(null);
   const [codeApp, setCodeApp] = useState('');
@@ -381,6 +395,8 @@ export function Admin() {
   // Most used first: the row shows what fits and puts the rest behind More.
   const tabs: [Tab, string][] = [
     ['people', 'People'],
+    ['connect', 'Connect people'],
+    ['invites', 'Invites'],
     ['listings', 'Listings'],
     ['redemptions', `Redemptions${redemptions.length ? ` (${redemptions.length})` : ''}`],
     ['orders', 'Orders'],
@@ -404,9 +420,9 @@ export function Admin() {
         actions={
           // The Admin guide is a private School program only an admin account can open, so it shows only with an admin session. It opens
           // at /admin/guide, outside School's switch, so an admin who switched School off still reaches it.
-          // With one, the key form is gone and this is the cover's one solid action.
+          // Outline (2026-11-09): a tab's own main action (Send, Make a code) is the screen's one solid button.
           sessionAdmin ? (
-            <Link to="/admin/guide" className="toy btn-primary inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center justify-center gap-xs rounded-pill bg-ink px-md text-headline text-on-ink select-none">
+            <Link to="/admin/guide" className={`toy toy-ink btn-outline inline-flex ${BTN_MD} items-center justify-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-md text-headline text-ink select-none`}>
               Admin guide
             </Link>
           ) : undefined
@@ -421,17 +437,13 @@ export function Admin() {
             void load();
           }}
         >
-          <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Admin key" aria-label="Admin key" autoComplete="off" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-body" />
+          <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Admin key" aria-label="Admin key" autoComplete="off" className={`min-w-0 flex-1 ${FIELD_FILTER}`} />
           <Button type="submit" disabled={busy || !key}>
             {loaded ? 'Reload' : 'Open'}
           </Button>
         </form>
       )}
-      {error && (
-        <p role="alert" className="mt-sm m-0 rounded-tile bg-r1/15 p-sm text-subhead">
-          {error}
-        </p>
-      )}
+      <ErrorLine e={error} className="mt-sm" />
 
       {loaded && (
         <>
@@ -457,7 +469,7 @@ export function Admin() {
                   void run(() => refreshUsers({ page: 1, size: asks.users?.size ?? DEFAULT_PAGE_SIZE }));
                 }}
               >
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, email, page or id" aria-label="Search people on the server" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-body" />
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, email, page or id" aria-label="Search people on the server" className={`min-w-0 flex-1 ${FIELD_FILTER}`} />
                 <Button type="submit" variant="outline" disabled={busy}>
                   Search
                 </Button>
@@ -523,6 +535,19 @@ export function Admin() {
                     { key: 'points', label: 'Points', get: (u) => u.points, render: (u) => formatCount(u.points), align: 'right' },
                     { key: 'honors', label: 'Honors', get: (u) => u.honors.map((h) => HONOR_BY_KEY[h]?.name ?? h).join(', '), render: (u) => <span role="img" aria-label={u.honors.map((h) => HONOR_BY_KEY[h]?.name ?? h).join(', ')} className="inline-flex gap-xs">{u.honors.map((h) => <AppIcon key={h} name={HONOR_BY_KEY[h]?.icon} size={16} />)}</span>, wide: true },
                     { key: 'joined', label: 'Joined', get: (u) => u.createdAt.slice(0, 10), render: (u) => day(u.createdAt), wide: true },
+                    {
+                      key: 'links',
+                      label: 'Connections',
+                      get: () => '',
+                      sortable: false,
+                      align: 'right',
+                      render: (u) => (
+                        // Its own tap: the row's tap opens the person's panel.
+                        <span className="inline-flex" onClick={(e) => e.stopPropagation()}>
+                          <IconButton icon={Link2} label={`Connections of ${u.displayName || 'this person'}`} tip="br" opens onClick={() => setConnectionsOf(u.id)} />
+                        </span>
+                      ),
+                    },
                     {
                       key: 'delete',
                       label: 'Delete',
@@ -591,8 +616,8 @@ export function Admin() {
                   <p className="mt-xs m-0 text-caption text-ink-mute">{selected.id}</p>
 
                   <p className="mt-md m-0 text-subhead font-semibold">Permissions</p>
-                  <p className="m-0 text-caption text-ink-soft">A permission is a job someone is trusted with. Admins hold all of them but Life coach. A creator can hold Mentor, Life coach and Moderation (a guide in Community); the rest need the Staff role.</p>
-                  <div className="mt-xs flex flex-wrap gap-xs" role="group" aria-label="Permissions">
+                  <p className="m-0 text-caption text-ink-soft">A job someone is trusted with. Admins hold all but Life coach. A creator can hold Mentor, Life coach, Moderation (a Community guide) and Inviter; the rest need Staff.</p>
+                  <div className="fill-row mt-xs flex flex-wrap gap-xs" role="group" aria-label="Permissions">
                     {PERMISSIONS.map((p) => {
                       const on = selected.permissions.includes(p);
                       return (
@@ -907,7 +932,7 @@ export function Admin() {
                   <li>Brands make their own campaigns public from Army.</li>
                 </ul>
               </Fold>
-              <div className="fill-row mt-sm flex flex-wrap gap-xs">
+              <div className="fill-row-all mt-sm flex flex-wrap gap-xs">
                 {LISTING_TYPES.filter((t) => t !== 'campaign').map((t) => (
                   <Button key={t} variant="outline" size="sm" onClick={() => { setCreating(t); setForm({}); }}>
                     New {LISTING_TYPE_META[t].name.toLowerCase()}
@@ -948,7 +973,7 @@ export function Admin() {
                     { key: 'created', label: 'Created', get: (l) => l.createdAt.slice(0, 10), render: (l) => day(l.createdAt), wide: true },
                   ]}
                   actions={(l) => (
-                    <Link to={l.path} className="inline-flex min-h-[44px] items-center text-subhead text-ink-soft underline-offset-4 hover:underline">
+                    <Link to={l.path} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-subhead text-ink-soft underline-offset-4 hover:underline">
                       Open
                     </Link>
                   )}
@@ -1168,9 +1193,12 @@ export function Admin() {
                     )}
                     <Toggle on={form.publish !== false} onChange={(on) => setForm({ ...form, publish: on })} label="Publish now" hint="Off saves it hidden; publish later from the list." />
                     {creating !== 'tool' && creating !== 'circle' && <Toggle on={form.featured === true} onChange={(on) => setForm({ ...form, featured: on })} label="Feature on the home page" />}
-                    <Button type="submit" full disabled={busy}>
-                      Create
-                    </Button>
+                    {/* A long form: on a phone its action stays in reach at the foot of the sheet until its place is on screen. */}
+                    <StickyAction label="Create this listing">
+                      <Button type="submit" full disabled={busy}>
+                        Create
+                      </Button>
+                    </StickyAction>
                   </form>
                 )}
               </Sheet>
@@ -1201,7 +1229,7 @@ export function Admin() {
                   ]}
                   actions={(r) => (
                     <>
-                      <Button size="sm" disabled={busy} onClick={() => run(async () => { await adminApi.setRedemption(key, r.id, 'fulfilled'); setRedemptions((all) => all.filter((x) => x.id !== r.id)); })}>
+                      <Button size="sm" variant="outline" disabled={busy} onClick={() => run(async () => { await adminApi.setRedemption(key, r.id, 'fulfilled'); setRedemptions((all) => all.filter((x) => x.id !== r.id)); })}>
                         Fulfilled
                       </Button>
                       <Button size="sm" variant="outline" disabled={busy} onClick={() => askFirst({ title: `Cancel ${REWARD_BY_KEY[r.rewardKey]?.name ?? 'this reward'} for ${r.userName}?`, body: 'The reservation ends and its points go back to them. This cannot be undone.', yes: 'Yes, cancel and refund', keep: 'Keep it reserved', act: async () => { await adminApi.setRedemption(key, r.id, 'cancelled'); setRedemptions((all) => all.filter((x) => x.id !== r.id)); } })}>
@@ -1230,24 +1258,28 @@ export function Admin() {
               </h2>
               <p className="mt-xs m-0 text-subhead text-ink-soft">Search by order, provider id, buyer, page or product. Tap a row for its timeline and a refund.</p>
               <form
-                className="mt-sm flex flex-wrap gap-xs"
+                className="mt-sm flex gap-xs"
                 onSubmit={(e) => {
                   e.preventDefault();
                   void searchOrders();
                 }}
               >
-                <input value={orderQ} onChange={(e) => setOrderQ(e.target.value)} placeholder="Order, payment, buyer, page" aria-label="Search orders on the server" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-body" />
-                <Select value={orderStatus} onChange={(e) => { setOrderStatus(e.target.value); void searchOrders(orderQ, e.target.value); }} aria-label="Status on the server" className="min-w-[160px]" selectClass="rounded-pill bg-card">
-                  {ORDER_STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {s || 'all statuses'}
-                    </option>
-                  ))}
-                </Select>
+                <input value={orderQ} onChange={(e) => setOrderQ(e.target.value)} placeholder="Order, payment, buyer, page" aria-label="Search orders on the server" className={`min-w-0 flex-1 ${FIELD_FILTER}`} />
                 <Button type="submit" variant="outline" disabled={busy}>
                   Search
                 </Button>
               </form>
+              <div className="mt-sm md:max-w-[360px]">
+                <FilterSelect
+                  label="Status"
+                  value={orderStatus as (typeof ORDER_STATUSES)[number]}
+                  items={ORDER_STATUSES.map((st) => ({ key: st, label: st ? st[0]!.toUpperCase() + st.slice(1) : 'Every status' }))}
+                  onChange={(st) => {
+                    setOrderStatus(st);
+                    void searchOrders(orderQ, st);
+                  }}
+                />
+              </div>
               <div className="mt-sm">
                 <DataTable<AdminOrder>
                   rows={orders ?? []}
@@ -1313,11 +1345,7 @@ export function Admin() {
                       <Label text="Refund reason">
                         <input value={refundReason} onChange={(e) => setRefundReason(e.target.value)} className={FIELD} />
                       </Label>
-                      {refundError && (
-                        <p role="alert" className="mt-xs m-0 rounded-tile bg-r1/15 p-sm text-subhead">
-                          {refundError}
-                        </p>
-                      )}
+                      <ErrorLine e={refundError} className="mt-xs" />
                       <Button
                         variant="outline"
                         className="mt-xs"
@@ -1354,15 +1382,16 @@ export function Admin() {
 
           {tab === 'webhooks' && (
             <section className="mt-md" aria-labelledby="hooks-heading">
-              <div className="flex items-center justify-between gap-sm">
-                <h2 id="hooks-heading" className="text-title2">
-                  Webhooks
-                </h2>
-                <Button variant="outline" size="sm" disabled={busy} onClick={() => loadHooks()}>
-                  Refresh
-                </Button>
-              </div>
-              <p className="mt-xs m-0 text-subhead text-ink-soft">Every signed event from Meta and the payment provider, stored before it is processed. Replay runs one again.</p>
+              <SectionHead
+                id="hooks-heading"
+                title="Webhooks"
+                lede="Every signed event from Meta and the payment provider, stored before it is processed. Replay runs one again."
+                action={
+                  <Button variant="outline" size="sm" disabled={busy} onClick={() => loadHooks()}>
+                    Refresh
+                  </Button>
+                }
+              />
               <div className="mt-sm">
                 <DataTable<WebhookEvent>
                   rows={hooks ?? []}
@@ -1397,15 +1426,18 @@ export function Admin() {
               <h2 id="kyc-heading" className="text-title2">
                 Payout details
               </h2>
-              <p className="mt-xs m-0 text-subhead text-ink-soft">Only the last digits are stored here. Approve once the bank account and PAN match the legal name. Type a note in the row before deciding, if the person should hear why.</p>
-              {/* Three equal choices across the full width in equal parts (as PeriodFilter); three stay on one row, so none is left alone. */}
-              <div className="mt-sm grid grid-cols-3 gap-xs" role="group" aria-label="Status">
-                {(['pending', 'approved', 'rejected'] as const).map((s) => (
-                  <button key={s} type="button" aria-pressed={kycStatus === s} onClick={() => { setKycStatus(s); void loadKyc(s); }} className={`toy inline-flex min-h-[36px] md:min-h-[44px] tap-pad min-w-0 items-center justify-center rounded-pill border-2 px-sm text-subhead font-medium ${kycStatus === s ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
-                    {s}
-                  </button>
-                ))}
-              </div>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">Only the last digits are kept. Approve once the bank and PAN match the legal name. To tell them why, type a note in the row first.</p>
+              {/* A choice of three views is Segmented (2026-11-09), as everywhere else in the app. */}
+              <Segmented
+                className="mt-sm"
+                label="Status"
+                value={kycStatus}
+                options={(['pending', 'approved', 'rejected'] as const).map((st) => ({ value: st, label: KYC_STATUS_NAMES[st] }))}
+                onChange={(st) => {
+                  setKycStatus(st);
+                  void loadKyc(st);
+                }}
+              />
               <div className="mt-sm">
                 <DataTable<AdminKyc>
                   rows={kycList ?? []}
@@ -1414,7 +1446,7 @@ export function Admin() {
                   rowKey={(k) => k.userId}
                   label="Payout details"
                   busy={busy}
-                  empty={`Nothing ${kycStatus} right now.`}
+                  empty={`Nothing ${KYC_STATUS_NAMES[kycStatus].toLowerCase()} right now.`}
                   columns={[
                     { key: 'person', label: 'Person', get: (k) => `${k.userName} ${k.email ?? ''}`.trim(), render: (k) => <><span className="block font-semibold">{k.userName}</span><span className="block text-caption text-ink-soft">{k.email ?? 'no email'}</span></> },
                     { key: 'legal', label: 'Legal name', get: (k) => k.legalName },
@@ -1429,7 +1461,7 @@ export function Admin() {
                   actions={(k) =>
                     k.status === 'pending' ? (
                       <>
-                        <Button size="sm" disabled={busy} onClick={() => run(async () => { await adminApi.decideKyc(key, k.userId, { status: 'approved', note: kycNote[k.userId] ?? '' }); await loadKyc(); })}>
+                        <Button size="sm" variant="outline" disabled={busy} onClick={() => run(async () => { await adminApi.decideKyc(key, k.userId, { status: 'approved', note: kycNote[k.userId] ?? '' }); await loadKyc(); })}>
                           Approve
                         </Button>
                         <Button size="sm" variant="outline" disabled={busy} onClick={() => run(async () => { await adminApi.decideKyc(key, k.userId, { status: 'rejected', note: kycNote[k.userId] ?? '' }); await loadKyc(); })}>
@@ -1445,15 +1477,16 @@ export function Admin() {
 
           {tab === 'ops' && (
             <section className="mt-md" aria-labelledby="ops-heading">
-              <div className="flex items-center justify-between gap-sm">
-                <h2 id="ops-heading" className="text-title2">
-                  Funnels
-                </h2>
-                <Button variant="outline" size="sm" disabled={busy} onClick={() => loadOps()}>
-                  Refresh
-                </Button>
-              </div>
-              <p className="mt-xs m-0 text-subhead text-ink-soft">Counted from our own tables, nothing leaves the server. Each bar is the share of the step before it.</p>
+              <SectionHead
+                id="ops-heading"
+                title="Funnels"
+                lede="Counted from our own tables, nothing leaves the server. Each bar is the share of the step before it."
+                action={
+                  <Button variant="outline" size="sm" disabled={busy} onClick={() => loadOps()}>
+                    Refresh
+                  </Button>
+                }
+              />
               <ul className={`mt-sm grid list-none gap-xs p-0 m-0 ${evenGrid(funnels?.length ?? 0, FUNNEL_COLS)}`}>
                 {funnels?.map((f, fi, all) => {
                   const top = Math.max(1, f.steps[0]?.count ?? 0);
@@ -1508,12 +1541,33 @@ export function Admin() {
             </section>
           )}
 
+          {tab === 'connect' && (
+            <Suspense fallback={<p role="status" className="mt-md m-0 text-subhead text-ink-soft">Opening Connect people</p>}>
+              <AdminConnect door={key} />
+            </Suspense>
+          )}
+
+          {tab === 'invites' && (
+            <Suspense fallback={<p role="status" className="mt-md m-0 text-subhead text-ink-soft">Opening Invites</p>}>
+              <AdminInvites adminKey={key} />
+            </Suspense>
+          )}
+
           {tab === 'coaches' && (
             <section className="mt-md" aria-labelledby="coaches-heading">
               <h2 id="coaches-heading" className="text-title2">
                 Life coaches
               </h2>
               <p className="mt-xs m-0 text-subhead text-ink-soft">A life coach works only with students who said yes, and never sees the journal. A student has up to {MAX_COACHES} coaches. Every change is audited, and the person is told.</p>
+              {/* The link form moved to Connect people (2026-11-09), the one place the team connects anyone; said at the top (2026-11-09), not
+                  under the list of coaches, where the founder would have had to scroll past every coach to find it. */}
+              <p className="mt-xs m-0 text-subhead text-ink-soft">
+                To link a coach and a student, open{' '}
+                <Link to="?tab=connect" preventScrollReset className="tap-pad font-semibold text-ink underline">
+                  Connect people
+                </Link>
+                .
+              </p>
 
               <h3 className="mt-md text-headline">Asked to be a life coach</h3>
               <div className="mt-sm">
@@ -1587,41 +1641,6 @@ export function Admin() {
                 />
               </div>
 
-              <h3 className="mt-md text-headline">Link a coach and a student</h3>
-              <p className="mt-xs m-0 text-subhead text-ink-soft">Ask, and the student answers on their Profile tab. Link now only if they already agreed.</p>
-              <form
-                className="mt-sm grid gap-xs md:grid-cols-[1fr_1fr_auto_auto]"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void run(async () => {
-                    setLinked(null);
-                    const r = await adminApi.linkCoach(key, { coachId: linkCoach, student: linkStudent, mode: linkMode });
-                    setLinked(r.link ? `${r.link.status === 'active' ? 'Linked' : 'Asked'}: ${r.link.coachName} and ${r.link.studentName}.` : null);
-                    setLinkStudent('');
-                    await loadCoaches();
-                  });
-                }}
-              >
-                <Select value={linkCoach} onChange={(e) => setLinkCoach(e.target.value)} aria-label="Life coach" selectClass="rounded-pill bg-card">
-                  <option value="">Pick a life coach</option>
-                  {coaches.map((k) => (
-                    <option key={k.id} value={k.id}>
-                      {k.name}
-                      {k.handle ? ` (@${k.handle})` : ''}
-                    </option>
-                  ))}
-                </Select>
-                <input value={linkStudent} onChange={(e) => setLinkStudent(e.target.value)} placeholder="Student's email or @handle" aria-label="Student's email or handle" className="min-w-0 rounded-pill border-2 border-line bg-card px-md py-sm text-body" />
-                <Select value={linkMode} onChange={(e) => setLinkMode(e.target.value === 'link' ? 'link' : 'ask')} aria-label="How" selectClass="rounded-pill bg-card">
-                  <option value="ask">Ask the student</option>
-                  <option value="link">Link now</option>
-                </Select>
-                <Button type="submit" disabled={busy || !linkCoach || !linkStudent.trim()}>
-                  {linkMode === 'link' ? 'Link them' : 'Send the ask'}
-                </Button>
-              </form>
-              {linked && <p className="mt-xs m-0 text-subhead font-semibold">{linked}</p>}
-
               {/* The status filter sits at the top right, level with its heading (P5); on a narrow phone it wraps under it, at the right. */}
               <div className="mt-md flex flex-wrap items-center justify-between gap-sm">
                 <h3 className="text-headline">Every link</h3>
@@ -1686,31 +1705,28 @@ export function Admin() {
                 <li>The host hears about your change, and it is audited.</li>
               </ul>
               <form
-                className="mt-sm flex flex-wrap gap-xs"
+                className="mt-sm flex gap-xs"
                 onSubmit={(e) => {
                   e.preventDefault();
                   void loadCodes(codeApp, { page: 1, size: asks.codes?.size ?? DEFAULT_PAGE_SIZE });
                 }}
               >
-                <select
-                  value={codeApp}
-                  onChange={(e) => {
-                    setCodeApp(e.target.value);
-                    void loadCodes(e.target.value, { page: 1, size: asks.codes?.size ?? DEFAULT_PAGE_SIZE });
-                  }}
-                  aria-label="App"
-                  className="rounded-pill border-2 border-line bg-card px-md py-sm text-body"
-                >
-                  <option value="">All apps</option>
-                  <option value="party">Party</option>
-                  <option value="run">Run</option>
-                  <option value="circles">Circles</option>
-                </select>
-                <input value={codeQ} onChange={(e) => setCodeQ(e.target.value)} placeholder="Event title" aria-label="Search events by title" className="min-w-0 flex-1 rounded-pill border-2 border-line bg-card px-md py-sm text-body" />
+                <input value={codeQ} onChange={(e) => setCodeQ(e.target.value)} placeholder="Event title" aria-label="Search events by title" className={`min-w-0 flex-1 ${FIELD_FILTER}`} />
                 <Button type="submit" variant="outline" disabled={busy}>
                   Search
                 </Button>
               </form>
+              <div className="mt-sm md:max-w-[360px]">
+                <FilterSelect
+                  label="App"
+                  value={codeApp as (typeof CODE_APPS)[number]['key']}
+                  items={CODE_APPS}
+                  onChange={(app) => {
+                    setCodeApp(app);
+                    void loadCodes(app, { page: 1, size: asks.codes?.size ?? DEFAULT_PAGE_SIZE });
+                  }}
+                />
+              </div>
               <div className="mt-sm">
                 <DataTable<AdminAttendeeCode>
                   rows={codes ?? []}
@@ -1722,7 +1738,7 @@ export function Admin() {
                   busy={busy}
                   empty={codes === null ? 'Loading' : 'No events with guests from a week ago on.'}
                   columns={[
-                    { key: 'app', label: 'App', get: (r) => APP_NAMES[r.app], filter: true },
+                    { key: 'app', label: 'App', get: (r) => APP_NAMES[r.app] },
                     {
                       key: 'title',
                       label: 'Event',
@@ -1783,15 +1799,16 @@ export function Admin() {
 
           {tab === 'audit' && (
             <section className="mt-md" aria-labelledby="audit-heading">
-              <div className="flex items-center justify-between gap-sm">
-                <h2 id="audit-heading" className="text-title2">
-                  Audit log
-                </h2>
-                <Button variant="outline" size="sm" disabled={busy} onClick={() => run(refreshAudit)}>
-                  Refresh
-                </Button>
-              </div>
-              <p className="mt-xs m-0 text-subhead text-ink-soft">Who changed what, with the before and after. The last two hundred entries.</p>
+              <SectionHead
+                id="audit-heading"
+                title="Audit log"
+                lede="Who changed what, with the before and after. The last two hundred entries."
+                action={
+                  <Button variant="outline" size="sm" disabled={busy} onClick={() => run(refreshAudit)}>
+                    Refresh
+                  </Button>
+                }
+              />
               <div className="mt-sm">
                 <DataTable<AuditLog>
                   rows={logs}
@@ -1835,6 +1852,21 @@ export function Admin() {
           );
         }}
       />
+      {connectionsOf !== null && (
+        <Suspense fallback={null}>
+          <PersonConnectionsSheet
+            adminKey={key}
+            personId={connectionsOf}
+            onClose={() => setConnectionsOf(null)}
+            onConnect={(id) => {
+              // Two setters in one tick go out as one change of the address (writeParams).
+              setConnectionsOf(null);
+              setWithParam(id);
+              openTab('connect');
+            }}
+          />
+        </Suspense>
+      )}
     </Screen>
   );
 }

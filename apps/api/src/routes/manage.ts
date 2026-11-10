@@ -1,11 +1,15 @@
 import { Hono } from 'hono';
 import { PERMISSIONS } from '@kreators/shared';
 import type { AppEnv } from '../env';
+import { adminConnect } from './adminConnect';
 import { can, likeFit, liveUser, nameOf, parseList, requireRole, pageOf, paged } from '../db';
 
 /** Guides and admins: a light view over members and the community. */
 export const manage = new Hono<AppEnv>();
 manage.use('*', requireRole('sub_admin'));
+// Connect people for staff (2026-11-10, the founder: "yes to all"): the same routes as Admin's tab, each kind only for the permission
+// that governs it (connectKindsFor in shared connect.ts, checked in adminConnect.ts). Behind the staff-only check above.
+manage.route('/connect', adminConnect);
 
 manage.get('/overview', async (c) => {
   const db = c.env.DB;

@@ -1,6 +1,6 @@
 import { attendeeMayOpen, birthDateProblem, MAX_DEVICES, MIN_AGE, passwordProblem, PHONE_HINT, phoneProblem } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
@@ -12,6 +12,7 @@ import { useSession } from '../lib/store';
 import { TermsBox } from '../components/TermsBox';
 import { AnimatedIcon } from '../components/AnimatedIcon';
 import { FIELD_CARD } from '../lib/ui';
+import { InviteDoor, inviteRefusal, keepInvite, keptInvite } from '../lib/invite';
 
 
 /** A password field with a show button, so a typo is seen before it is saved. */
@@ -90,14 +91,21 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
   const [phone, setPhone] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [agree, setAgree] = useState(false);
+  // A new account needs an invite code while joining is by invite: the one this tab arrived with, or one typed once the server asked.
+  const [invite, setInvite] = useState(() => keptInvite() ?? '');
   const go = useMutation({
-    mutationFn: () => (mode === 'signup' ? api.signup({ email, password, displayName: name, phone, birthDate, acceptTerms: agree }) : api.signin({ email, password })),
+    mutationFn: () => (mode === 'signup' ? api.signup({ email, password, displayName: name, phone, birthDate, acceptTerms: agree, ...(invite.trim() ? { invite: invite.trim() } : {}) }) : api.signin({ email, password })),
+    // A kept code the server would not take is forgotten, so Welcome never calls it ready again (the field keeps it to change).
+    onError: (e) => {
+      if (inviteRefusal(e) === 'invite-unusable') keepInvite(null);
+    },
     onSuccess: async (r) => {
       try {
         localStorage.removeItem('kreators.signedOutNote');
       } catch {
         // nothing to clear
       }
+      keepInvite(null);
       setToken(r.token);
       await refresh();
       // A new or unfinished account starts with the setup chat at /onboarding; the strategy session waits in Pillars. Someone signing in from an
@@ -157,6 +165,11 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
           </label>
         )}
         {mode === 'signup' && <TermsBox checked={agree} onChange={setAgree} />}
+        {mode === 'signup' && (invite || inviteRefusal(go.error)) && (
+          <Suspense fallback={null}>
+            <InviteDoor field={{ value: invite, onChange: setInvite }} />
+          </Suspense>
+        )}
         {go.isError && (
           <p role="alert" className="m-0 rounded-tile bg-r1/15 p-sm text-subhead">
             {go.error instanceof Error ? go.error.message : 'That did not work. Check your connection and try again.'}
