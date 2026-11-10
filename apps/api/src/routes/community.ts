@@ -3,6 +3,7 @@ import { canModerate, canMute, canUndo, communityRankOf, FEED_FILTERS, MAX_REPLY
 import type { AppEnv, UserRow } from '../env';
 import { anonAlias, audit, blockedEither, hiddenByBlock, isGuide, isStaff, nameOf, newId, notify, notifyMany, nowIso, oneOf, parseList, rankOf, pageOf, paged, seenBy } from '../db';
 import { endLinksOnBlock } from '../coaching';
+import { blockAsksStmts } from '../blockAsks';
 import { rewardSocial } from '../rewards';
 
 export const community = new Hono<AppEnv>();
@@ -400,7 +401,11 @@ export async function blockBehind(c: Context<AppEnv>, target: string | undefined
       ? db.prepare('INSERT INTO blocks (blocker_id, blocked_id, reason, created_at, by_name) VALUES (?, ?, ?, ?, 0) ON CONFLICT (blocker_id, blocked_id) DO NOTHING').bind(me.id, target, '', now)
       : db.prepare('INSERT OR REPLACE INTO blocks (blocker_id, blocked_id, reason, created_at, by_name) VALUES (?, ?, ?, ?, 1)').bind(me.id, target, '', now),
     ...(alias ? [db.prepare('INSERT OR IGNORE INTO block_aliases (id, blocker_id, blocked_id, alias, created_at) VALUES (?, ?, ?, ?, ?)').bind(newId(), me.id, target, alias, now)] : []),
-    db.prepare('DELETE FROM friendships WHERE (requester_id = ?1 AND recipient_id = ?2) OR (requester_id = ?2 AND recipient_id = ?1)').bind(me.id, target),
+    // A block by name ends the friendship and every ask still waiting between the two, as Bond's Block does (blockAsks.ts). Behind a
+    // made-up name it touches nothing with a name on it: a friend who vanished would say who wrote the line (2026-11-10, the break-it check).
+    ...(alias
+      ? []
+      : [db.prepare('DELETE FROM friendships WHERE (requester_id = ?1 AND recipient_id = ?2) OR (requester_id = ?2 AND recipient_id = ?1)').bind(me.id, target), ...blockAsksStmts(db, me.id, target, now)]),
   ]);
   return c.json({ ok: true }, 201);
 }

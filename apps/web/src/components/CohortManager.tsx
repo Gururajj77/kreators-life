@@ -8,9 +8,10 @@ import { Fold } from './Fold';
 import { Section } from './Section';
 
 /**
- * Who runs a cohort, and the team's way to change it (2026-11-10, the founder: "the team can change a cohort's manager"), on the cohort
- * page for an admin, or staff with Cohorts on a public program (the server's `canSetManager`, the same rule the route checks). The change
- * is PATCH /school/cohorts/:id/manager: the new and the old manager are told, and it is audited. Connect people does the same.
+ * Who runs a cohort, and the way to change it (2026-11-10, the founder: "the team can change a cohort's manager"), on the cohort page for
+ * an admin, staff with Cohorts on a public program, or the program's own maker in any state (the server's `canSetManager`, the same
+ * mayNameManager the route checks). The person is found through the cohort's own lookup, so a maker who is not on staff can find them.
+ * The change is PATCH /school/cohorts/:id/manager: the new and the old manager are told, and it is audited. Connect people does the same.
  */
 export function CohortManager({ cohortId, managerId, managerName, onChanged }: { cohortId: string; managerId: string | null; managerName: string | null; onChanged: () => void }) {
   const [open, setOpen] = useState(false);
@@ -52,7 +53,7 @@ export function CohortManager({ cohortId, managerId, managerName, onChanged }: {
             void save();
           }}
         >
-          <PersonField door={null} label="New manager" value={who} onChange={setWho} onFound={setPerson} />
+          <PersonField door={null} find={(q) => connectApi.cohortPerson(cohortId, q)} label="New manager" value={who} onChange={setWho} onFound={setPerson} />
           <ErrorLine e={error} />
           <div className="flex justify-end">
             <Button type="submit" variant="outline" disabled={!person || busy}>

@@ -213,7 +213,7 @@ function YouView({ data }: { data: MeResponse }) {
       {/* Invite people: an admin, staff, or someone holding the Inviter permission makes codes here (`/you#invites`). */}
       {canInvite(user) && (
         <Suspense fallback={null}>
-          <InvitePeople />
+          <InvitePeople pays={user.role !== 'admin'} />
         </Suspense>
       )}
 

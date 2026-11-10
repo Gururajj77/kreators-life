@@ -26,8 +26,8 @@ Here is what the everyday things pay:
 
 Posts, events and runs pay a little more. Two more pay when people come together:
 
-- **Someone you invited:** if the team lets you make invite codes, under **Invite people** on the Profile tab, a person who joins with yours pays you 50 xp and 20 points once they finish setting up.
-- **A connection the team made:** when it comes true, such as you and a friend both saying yes, it pays each of you 10 xp.
+- **Someone you invited:** if the team lets you make invite codes, under **Invite people** on the Profile tab, a person who joins with yours pays you 50 xp and 20 points once they have used the app on three different days.
+- **A connection the team made:** when it comes true, such as you and a friend both saying yes, it pays each of you 10 xp, once for each pair.
 
 An admin earns neither. The full list is in **Help**, under **How you earn**.
 
@@ -55,7 +55,7 @@ Badges are medals the app gives by its own count. Find them on the **Profile** t
 - **One rule each:** a single count reaching a number. Tap a badge to see its next step and a bar.
 - **Kept for good:** once earned, the app never takes a badge back on its own (only Erase everything clears them).
 - **Some stay private:** the Reflection, Focus and Money families show only to you. They never appear on your page or the Leaderboard.
-- **People count too:** Community holds Opened the door, for someone you invited who finished setting up, up to Fifty through the door, and Connected and Well connected, for connections the team made for you that came true.
+- **People count too:** Community holds Opened the door, for someone you invited who used the app on three different days, up to Fifty through the door, and Connected and Well connected, for connections the team made for you that came true.
 
 A badge pays nothing, but some products, games and tools ask for one before they open.
 

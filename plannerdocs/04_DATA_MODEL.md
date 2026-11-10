@@ -4,9 +4,9 @@ Last updated: 2026-11-07
 
 **Product:** kreators.app
 **Version:** 0.7, reconciled with the app on 7 November 2026
-**Source of truth:** the 122 migrations in `apps/api/migrations` (0001 to 0128; the numbers 0090 to 0094 and 0107 were never used), applied in order with `pnpm db:migrate:local` or `pnpm db:migrate`. Applied to an empty database they make 230 tables (183 after 0060, 198 after 0073, 203 after 0083). This doc lists every table and its columns as they stand after migration 0113. Types are omitted; `_at` columns are UTC ISO strings, `_cents` are integer cents, `_points` are integer points, `_json` is a JSON string. A migration index is at the end. What the export and the delete do with each table is `node scripts/data-coverage.mjs --table` (section 13).
+**Source of truth:** the 126 migrations in `apps/api/migrations` (0001 to 0132; the numbers 0090 to 0094 and 0107 were never used), applied in order with `pnpm db:migrate:local` or `pnpm db:migrate`. Applied to an empty database they make 230 tables (183 after 0060, 198 after 0073, 203 after 0083). This doc lists every table and its columns as they stand after migration 0113. Types are omitted; `_at` columns are UTC ISO strings, `_cents` are integer cents, `_points` are integer points, `_json` is a JSON string. A migration index is at the end. What the export and the delete do with each table is `node scripts/data-coverage.mjs --table` (section 13).
 
-Migrations 0001 to 0123 are committed (0120 to 0123 came with "alphav01.5"); the tree since alphav2.1 adds 0124 (`team_connections`), 0125 (`invites`), 0126 (`invites_guides`), 0127 (`connect_staff_orgs`) and 0128 (`connect_guides`), not committed yet. 0110 and 0111 stay exactly as they were committed; 0122 and 0123 carry the lesson words changed since. Two of the committed ones, 0101 and 0105, rebuild `reviews` and `review_templates`, so back up first (see 09 §6).
+Migrations 0001 to 0128 are committed (0124 to 0128 came with "alphav2.2"); the tree since adds 0129 (`invite_active`), 0130 (`rank_place_pay_guides`), 0131 (`connect_made_as`) and 0132 (`connect_rank_guide`), not committed yet. 0110 and 0111 stay exactly as they were committed; 0122 and 0123 carry the lesson words changed since. Two of the committed ones, 0101 and 0105, rebuild `reviews` and `review_templates`, so back up first (see 09 §6).
 
 ## 1. Principles as built
 
@@ -236,7 +236,7 @@ The export (`GET /me/export`) is one JSON file; the keys are the groups above (`
 ## Known gaps
 
 - No purge by age for `analytics_events` or `page_events`; they go with the account.
-- Every migration from 0001 to 0123 is in git. The work since "alphav2.1" adds 0124 (`team_connections`), 0125 (`invites`), 0126 (`invites_guides`), 0127 (`connect_staff_orgs`) and 0128 (`connect_guides`), which are not added to git yet (`??`), with 26 other new files; four more are added (`A`). Commit with `git add -A` before a deploy.
+- Every migration from 0001 to 0128 is in git. The work since "alphav2.2" adds 0129 (`invite_active`), 0130 (`rank_place_pay_guides`), 0131 (`connect_made_as`) and 0132 (`connect_rank_guide`), which are not added to git yet (`??`), with three other new files. Commit with `git add -A` before a deploy.
 - A restore procedure is written (`docs/security/RESTORE.md`) but has not been rehearsed.
 - `circle_members.revealed` is always 0 and could go.
 - `reminder_prefs.water_on`, `water_every_min`, `water_from`, `water_to` and `last_water_at` are read by nothing since 2026-11-07. They could go in a later migration.
@@ -371,6 +371,10 @@ The export (`GET /me/export`) is one JSON file; the keys are the groups above (`
 | 0126 | invites_guides | no schema change: Onboarding lessons 01, 04, 11 and 13 and Admin guide lessons 01, 03, 11, 15, 21, 22 and 23 brought up to their files (invites and the waitlist, Connect people, the rewards and badges) |
 | 0127 | connect_staff_orgs | `team_connections` rebuilt with two more kinds in its CHECK, `cohort` (Cohort manager, direct) and `org` (Brand team member, ask), every column kept, its indexes again plus `(kind, created_at)` and `(kind, ref_id)`; any `organization_members` row neither `active` nor `invited` becomes `active`, so a member stays a member and only a yes makes a new one |
 | 0128 | connect_guides | no schema change: Admin guide lessons 17 and 21 brought up to their files (staff in Connect people, a brand's team joined by a yes, a cohort's manager) |
+| 0129 | invite_active | `invite_codes.active_at` (when the person who joined with the code reached their third different day of use, a Daily check-in or a task ticked; it claims the referral's pay once; joins settled at setup before take their setup day); older connection payments in `xp_events` move onto the key of kind, pair and place, so a pair paid once is never paid again; any email not in lower case is lowered, unless another account already holds it |
+| 0130 | rank_place_pay_guides | no schema change: Admin guide lessons 15, 17 and 21 and Onboarding lesson 13 brought up to their files (a referral pays on three days of use, who a connection pays, staff reach their own private places, End by rank, a program's maker names its cohorts' manager) |
+| 0131 | connect_made_as | `team_connections.made_as` ('key', 'admin' or 'staff', how its maker stood when they made it; older rows from their makers' roles now); rows already replaced on a cohort or a Club membership take their end, and brand asks answered no take theirs |
+| 0132 | connect_rank_guide | no schema change: Admin guide lesson 21 brought up to its file (an invite to a place its sender made pays nobody, undoing an admin's connection is an admin's on the place's own page too) |
 
 ## What changed since this was written
 

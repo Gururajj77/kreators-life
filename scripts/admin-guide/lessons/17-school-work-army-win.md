@@ -31,7 +31,7 @@ Making programs needs the **Cohorts** permission (cohort manager). Giving feedba
 3. Under **Who can see it** they pick Draft, Private or Public, then tap **Create program**.
 4. In the program's menu: **Add lesson**, **Add assignment** and **Open a cohort**. Whoever opens a cohort becomes its manager, scheduling sessions, giving feedback and marking completion.
 
-The team can change who runs a cohort. On the cohort page, **Who runs it** has **Change the manager**: find the person and tap **Make them the manager**. Admins can do it on any program, and staff with Cohorts on a public one. The new and the old manager are both told.
+The team can change who runs a cohort. On the cohort page, **Who runs it** has **Change the manager**: find the person and tap **Make them the manager**. Admins can do it on any program, staff with Cohorts on a public one, and a program's own maker on theirs, private ones too. The new and the old manager are both told.
 5. Whoever may edit a program changes it in place: its name and words, and a lesson's title, kind, words and order. They add and remove lessons too.
 6. **Add a resource**, at a lesson's foot, takes up to six: a YouTube or Vimeo video, a book, a file or another link, each with an optional **Label**. **Change resources** moves or changes one, and removes it on a second tap. A lesson from one of the founder's books shows **The book** until it has a resource, so add the book too to keep it.
 7. An admin moves a program with **Show first**, **Move up** and **Move down**. Every change is audited.

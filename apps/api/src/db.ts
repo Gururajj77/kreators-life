@@ -4,6 +4,7 @@ import type { Context, Next } from 'hono';
 import type { AppEnv } from './env';
 import type { UserRow } from './env';
 import { noteStmt } from './notes.ts';
+import { CONNECT_PAY_KEY, CONNECT_PAYS } from './connectPay.ts';
 
 export interface NodeRow {
   id: string;
@@ -297,11 +298,15 @@ export function requireRole(min: Role) {
   };
 }
 
-/** Someone by their email, their @username or their friend code (the one Bond uses). The one finder: Coaching and the Agency team use it. */
+/**
+ * Someone by their email, their @username or their friend code (the one Bond uses). The one finder: Coaching and the Agency team use it.
+ * Every write of users.email stores it lower case (sign-up, a device account adding one), as sign-in reads it, so `email = ?` with the
+ * typed words lowered finds them through the unique index; LOWER(email) read every account (3,896 rows on one Connect send, 2026-11-10).
+ */
 export async function personBy(db: D1Database, who: string): Promise<UserRow | null> {
   const q = who.trim().toLowerCase();
   if (!q) return null;
-  if (q.includes('@') && !q.startsWith('@')) return db.prepare('SELECT * FROM users WHERE LOWER(email) = ?').bind(q).first<UserRow>();
+  if (q.includes('@') && !q.startsWith('@')) return db.prepare('SELECT * FROM users WHERE email = ?').bind(q).first<UserRow>();
   const byHandle = await db.prepare('SELECT * FROM users WHERE handle = ?').bind(q.replace(/^@/, '')).first<UserRow>();
   if (byHandle) return byHandle;
   const code = normalizeCode(q);
@@ -446,6 +451,15 @@ export async function getUser(db: D1Database, id: string): Promise<UserRow | nul
   return db.prepare('SELECT * FROM users WHERE id = ?').bind(id).first<UserRow>();
 }
 
+/** A person by id, email, @username or friend code; a deleted member reads as nobody. Connect people and the cohort page's manager field. */
+export async function findPerson(db: D1Database, who: string): Promise<UserRow | null> {
+  const q = who.trim();
+  if (!q) return null;
+  const byId = /^[\w-]{8,64}$/.test(q) ? await getUser(db, q) : null;
+  const u = byId ?? (await personBy(db, q));
+  return u && u.display_name !== DELETED_NAME ? u : null;
+}
+
 export async function getNode(db: D1Database, userId: string, id: string): Promise<NodeRow | null> {
   return db.prepare('SELECT * FROM nodes WHERE id = ? AND user_id = ?').bind(id, userId).first<NodeRow>();
 }
@@ -541,8 +555,9 @@ export async function getStats(db: D1Database, userId: string): Promise<Stats> {
         (SELECT COUNT(*) FROM lesson_progress WHERE user_id = ?1) AS lessons_done,
         (SELECT COUNT(*) FROM certificates WHERE user_id = ?1) AS certificates,
         (SELECT COUNT(*) FROM memberships WHERE user_id = ?1 AND status IN ('accepted', 'member', 'active')) AS club,
-        (SELECT COUNT(*) FROM invite_codes WHERE created_by = ?1 AND setup_done_at IS NOT NULL) AS invites_joined,
-        (SELECT COUNT(*) FROM team_connections WHERE first_user_id = ?1 AND came_true_at IS NOT NULL) + (SELECT COUNT(*) FROM team_connections WHERE second_user_id = ?1 AND came_true_at IS NOT NULL) AS connections_made`,
+        (SELECT COUNT(*) FROM invite_codes WHERE created_by = ?1 AND active_at IS NOT NULL) AS invites_joined,
+        (SELECT COUNT(DISTINCT k) FROM (SELECT ${CONNECT_PAY_KEY('t')} AS k FROM team_connections t WHERE t.first_user_id = ?1 AND t.came_true_at IS NOT NULL AND ${CONNECT_PAYS('t', '?1')}
+           UNION ALL SELECT ${CONNECT_PAY_KEY('t')} FROM team_connections t WHERE t.second_user_id = ?1 AND t.came_true_at IS NOT NULL AND ${CONNECT_PAYS('t', '?1')})) AS connections_made`,
     )
     .bind(userId)
     .first<Record<string, number>>();

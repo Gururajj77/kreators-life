@@ -1,5 +1,5 @@
 import type { Page } from '@kreators/shared';
-import type { ConnectKind, ConnectMode, ConnectPerson, ConnectPlace, OrgInvite, PersonConnections, TeamConnection, TeamSuggestion } from '@kreators/shared/connect';
+import type { ConnectKind, ConnectMode, ConnectPerson, ConnectPlaces, OrgInvite, PersonConnections, TeamConnection, TeamSuggestion } from '@kreators/shared/connect';
 import { adminRequest, request } from './api';
 
 const withQ = (path: string, q: string) => (q ? `${path}${path.includes('?') ? '&' : '?'}${q}` : path);
@@ -17,10 +17,11 @@ const via = <T>(door: ConnectDoor, path: string, init: RequestInit = {}) => (doo
  */
 export const connectApi = {
   person: (door: ConnectDoor, who: string) => via<{ person: ConnectPerson }>(door, `/connect/person?who=${encodeURIComponent(who)}`),
-  places: (door: ConnectDoor, kind: 'program' | 'product' | 'client' | 'cohort' | 'org', owner = '') => via<{ places: ConnectPlace[] }>(door, `/connect/places?kind=${kind}${owner ? `&owner=${encodeURIComponent(owner)}` : ''}`),
+  /** `mine` says the list holds only the caller's own private programs or courses (a staff member's; 2026-11-10). */
+  places: (door: ConnectDoor, kind: 'program' | 'product' | 'client' | 'cohort' | 'org', owner = '') => via<ConnectPlaces>(door, `/connect/places?kind=${kind}${owner ? `&owner=${encodeURIComponent(owner)}` : ''}`),
   list: (door: ConnectDoor, filter: { kind?: string; person?: string }, pq = '') =>
     via<{ page: Page; connections: TeamConnection[]; kinds: ConnectKind[] }>(door, withQ(`/connect?kind=${encodeURIComponent(filter.kind ?? '')}&person=${encodeURIComponent(filter.person ?? '')}`, pq)),
-  connect: (door: ConnectDoor, body: { kind: ConnectKind; first: string; second?: string; mode: ConnectMode; reason?: string; role?: string; clientId?: string; place?: string }) =>
+  connect: (door: ConnectDoor, body: { kind: ConnectKind; first: string; second?: string; mode: ConnectMode; reason?: string; role?: string; clientId?: string; place?: string; from?: string | null }) =>
     via<{ id: string }>(door, '/connect', { method: 'POST', body: JSON.stringify(body) }),
   end: (door: ConnectDoor, id: string) => via<{ ok: true }>(door, `/connect/${id}`, { method: 'DELETE' }),
   ofPerson: (key: string, id: string) => adminRequest<PersonConnections>(key, `/connect/people/${id}`),
@@ -30,6 +31,8 @@ export const connectApi = {
   /** A brand's ask onto its team, answered on the Profile tab (`/me/org-invites`, core; 2026-11-10). */
   orgInvites: () => request<{ invites: OrgInvite[] }>('/me/org-invites'),
   answerOrg: (orgId: string, yes: boolean) => request<{ ok: true; status: 'member' | 'declined' }>(`/me/org-invites/${orgId}/answer`, { method: 'POST', body: JSON.stringify({ yes }) }),
-  /** Name who runs a cohort (the cohort page; admins and staff with Cohorts on a public program). */
+  /** The cohort page's own lookup for a new manager, for whoever may name one, the program's maker too (2026-11-10). */
+  cohortPerson: (cohortId: string, who: string) => request<{ person: ConnectPerson }>(`/school/cohorts/${cohortId}/manager/person?who=${encodeURIComponent(who)}`),
+  /** Name who runs a cohort (the cohort page; admins, staff with Cohorts on a public program, and the program's maker). */
   setCohortManager: (cohortId: string, userId: string, from: string | null) => request<{ ok: true; managerId: string; managerName: string }>(`/school/cohorts/${cohortId}/manager`, { method: 'PATCH', body: JSON.stringify({ userId, from }) }),
 };

@@ -219,9 +219,27 @@ async function ownProduct(db: D1Database, ownerId: string, id: string): Promise<
 /** A super admin (role admin) sees and changes every product of every creator in every state; nobody else is let past an owner check. */
 export const isSuperAdmin = (user: Pick<UserRow, 'role'> | null | undefined): boolean => user?.role === 'admin';
 
-/** A product this person may open and change in Studio: their own, or any product for an admin. */
+/**
+ * Who may change a product and its invites, the one rule with two callers (2026-11-10, the founder's "fix all these properly"): its owner
+ * or an admin in Studio, and Connect people asks the same before anyone on staff invites to a private course or takes an invite back, so
+ * Cohorts reaches only the private courses that staff member owns. Null is the admin key.
+ */
+export const mayEditProduct = (user: Pick<UserRow, 'id' | 'role'> | null, row: Pick<ProductRow, 'owner_id'>): boolean => user === null || isSuperAdmin(user) || user.id === row.owner_id;
+/** The words for anyone else who tries to invite, the same from the course's own route and from Connect people. */
+export const COURSE_INVITER_ONLY = 'Only the course’s owner, or an admin, invites people.';
+
+/** A product this person may open and change in Studio: their own, or any product for an admin (mayEditProduct). */
 async function editableProduct(db: D1Database, user: UserRow, id: string): Promise<ProductRow | null> {
-  return isSuperAdmin(user) ? db.prepare(`${PRODUCT_SELECT} WHERE p.id = ?`).bind(id).first<ProductRow>() : ownProduct(db, user.id, id);
+  const row = await db.prepare(`${PRODUCT_SELECT} WHERE p.id = ?`).bind(id).first<ProductRow>();
+  return row && mayEditProduct(user, row) ? row : null;
+}
+
+/** A course whose invites this person may change: 404 for one they cannot see, 403 in the one rule's words for one they can see but not change. */
+async function courseToInviteTo(db: D1Database, user: UserRow, id: string): Promise<{ row: ProductRow } | { code: 403 | 404; error: string }> {
+  const row = await db.prepare(`${PRODUCT_SELECT} WHERE p.id = ?`).bind(id).first<ProductRow>();
+  if (!row || !(await canSeeProduct(db, user, row))) return { code: 404, error: 'not found' };
+  if (!mayEditProduct(user, row)) return { code: 403, error: COURSE_INVITER_ONLY };
+  return { row };
 }
 
 /**
@@ -411,8 +429,9 @@ studio.get('/products/:id/invites', async (c) => {
 studio.post('/products/:id/invites', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const row = await editableProduct(db, user, c.req.param('id'));
-  if (!row) return c.json({ error: 'not found' }, 404);
+  const found = await courseToInviteTo(db, user, c.req.param('id'));
+  if (!('row' in found)) return c.json({ error: found.error }, found.code);
+  const row = found.row;
   if (row.kind !== 'course') return c.json({ error: 'Only a course can be private.' }, 400);
   if (row.status !== 'private') return c.json({ error: 'Make the course private first, then invite people.' }, 409);
   const body = await c.req.json<{ who?: unknown }>().catch(() => ({}) as { who?: unknown });
@@ -454,8 +473,9 @@ export async function uninviteFromCourse(db: D1Database, row: Pick<ProductRow, '
 studio.delete('/products/:id/invites/:userId', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const row = await editableProduct(db, user, c.req.param('id'));
-  if (!row) return c.json({ error: 'not found' }, 404);
+  const found = await courseToInviteTo(db, user, c.req.param('id'));
+  if (!('row' in found)) return c.json({ error: found.error }, found.code);
+  const row = found.row;
   if (!(await uninviteFromCourse(db, row, c.req.param('userId'), user.id))) return c.json({ error: 'not found' }, 404);
   return c.json({ ok: true });
 });

@@ -442,6 +442,8 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/orgs/:id/members', limit: 'intro' },
   { method: 'POST', path: '/me/org-invites/:orgId/answer', limit: 'intro' },
   { method: 'PATCH', path: '/school/cohorts/:id/manager', limit: 'prefs' },
+  // The cohort page's own lookup for a new manager (2026-11-10, for a program's maker who is not on staff): a lookup's budget, as a coach's.
+  { method: 'GET', path: '/school/cohorts/:id/manager/person', limit: 'coachLookup' },
   // Joining by invite (2026-11-10): a code checked and the waitlist per address (no session), a maker's codes per person, Admin's under the
   // admin key's own door like every /admin call, with the make and take-back counted too.
   { method: 'GET', path: '/public/invite/:code', limit: 'inviteCheck', by: 'address' },

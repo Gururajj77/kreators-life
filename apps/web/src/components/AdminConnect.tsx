@@ -35,10 +35,27 @@ function PlaceCell({ r }: { r: TeamConnection }) {
   );
 }
 
-/** The kinds whose second side is a place picked from a list, and what the picker is called. */
-const PLACE_OF: Partial<Record<ConnectKind, { kind: 'program' | 'product' | 'cohort' | 'org'; label: string; none: string; hint: string }>> = {
-  program: { kind: 'program', label: 'Private program', none: 'None is private yet.', hint: 'The invite shows the price. Nothing is bought for them.' },
-  product: { kind: 'product', label: 'Private course', none: 'None is private yet.', hint: 'The invite shows the price. Nothing is bought for them.' },
+/**
+ * The kinds whose second side is a place picked from a list, and what the picker is called. A staff member's list of private programs or
+ * courses holds only their own (the server's `mine`, 2026-11-10): `mine` leads the hint then, and `noneMine` says why it is empty.
+ */
+const PLACE_OF: Partial<Record<ConnectKind, { kind: 'program' | 'product' | 'cohort' | 'org'; label: string; none: string; hint: string; mine?: string; noneMine?: string }>> = {
+  program: {
+    kind: 'program',
+    label: 'Private program',
+    none: 'None is private yet.',
+    hint: 'The invite shows the price. Nothing is bought for them.',
+    mine: 'Only the ones you made.',
+    noneMine: 'No private programs of yours. A creator’s private program is theirs and an admin’s to invite to.',
+  },
+  product: {
+    kind: 'product',
+    label: 'Private course',
+    none: 'None is private yet.',
+    hint: 'The invite shows the price. Nothing is bought for them.',
+    mine: 'Only the ones you own.',
+    noneMine: 'No private courses of yours. A creator’s private course is theirs and an admin’s to invite to.',
+  },
   cohort: { kind: 'cohort', label: 'Cohort', none: 'No cohort you can change yet.', hint: 'The one it names runs it from now on.' },
   org: { kind: 'org', label: 'Brand', none: 'No brand yet.', hint: 'They join only if they say yes.' },
 };
@@ -52,6 +69,8 @@ const PLACE_OF: Partial<Record<ConnectKind, { kind: 'program' | 'product' | 'coh
 export function AdminConnect({ door, titled = true }: { door: ConnectDoor; titled?: boolean }) {
   // The kinds this person may make, as the list's answer says; until it arrives the form waits on the first.
   const [kinds, setKinds] = useState<ConnectKind[]>([]);
+  // Every kind on offer is made one way only (a staff member's kinds): the list then needs no How column.
+  const oneWay = kinds.length > 0 && kinds.every((k) => CONNECT_KIND_META[k].modes.length === 1);
   // A person from People's Connections sheet arrives as `with`: their name fills the first field and the list shows theirs.
   const [withId, setWithId] = useParamState('with', '');
   const [picked, setKind] = useState<ConnectKind | null>(null);
@@ -66,6 +85,8 @@ export function AdminConnect({ door, titled = true }: { door: ConnectDoor; title
   const [reason, setReason] = useState('');
   const [role, setRole] = useState<TeamRole>('content_creator');
   const [places, setPlaces] = useState<ConnectPlace[]>([]);
+  // The list holds only the caller's own (a staff member's private programs or courses).
+  const [placesMine, setPlacesMine] = useState(false);
   const [place, setPlace] = useState('');
   const [clients, setClients] = useState<ConnectPlace[]>([]);
   const [clientId, setClientId] = useState('');
@@ -132,10 +153,15 @@ export function AdminConnect({ door, titled = true }: { door: ConnectDoor; title
   useEffect(() => {
     let live = true;
     setPlace('');
+    setPlacesMine(false);
     if (!placeKind || !kinds.length) return setPlaces([]);
     connectApi
       .places(door, placeKind)
-      .then((r) => live && setPlaces(r.places))
+      .then((r) => {
+        if (!live) return;
+        setPlaces(r.places);
+        setPlacesMine(r.mine);
+      })
       .catch(() => live && setPlaces([]));
     return () => {
       live = false;
@@ -183,12 +209,15 @@ export function AdminConnect({ door, titled = true }: { door: ConnectDoor; title
         ...(mode === 'direct' ? { reason: reason.trim() } : {}),
         ...(kind === 'agency' ? { role, ...(role === 'client' ? { clientId } : {}) } : {}),
         ...(placeOf ? { place } : {}),
+        // The manager the cohort's line named when it was read: a change someone made since answers 409, as on the cohort page.
+        ...(kind === 'cohort' ? { from: places.find((p) => p.id === place)?.managerId ?? null } : {}),
       });
-      // A person and a place are not a pair: an invite names where it is to.
-      const where = places.find((p) => p.id === place)?.name;
+      // A person and a place are not a pair: an invite names where it is to. A cohort's line names who runs it now, never the one before.
+      const picked = places.find((p) => p.id === place);
+      const where = picked?.name;
       setDone(
         kind === 'cohort'
-          ? `${firstP.name} runs ${where ?? 'the cohort'} now. Both managers were told.`
+          ? `${firstP.name} runs ${picked?.label ?? where ?? 'the cohort'} now. Both managers were told.`
           : !meta.second
           ? `Invited ${firstP.name}${where ? ` to ${where}` : ''}. The invite is in their inbox.`
           : mode === 'direct'
@@ -208,6 +237,8 @@ export function AdminConnect({ door, titled = true }: { door: ConnectDoor; title
       after.current = 'next';
     } catch (e) {
       setError(e);
+      // A cohort changed since its list was read (409): read the list again, so its line names who runs it now.
+      if (placeKind === 'cohort') void connectApi.places(door, 'cohort').then((r) => setPlaces(r.places)).catch(() => undefined);
       // Back to Send, which can be used again once it is no longer busy.
       after.current = 'send';
     } finally {
@@ -252,7 +283,7 @@ export function AdminConnect({ door, titled = true }: { door: ConnectDoor; title
           <PersonField door={door} label={meta.first} value={first} onChange={setFirst} onFound={setFirstP} inputRef={firstRef} />
           {meta.second && <PersonField door={door} label={meta.second} value={second} onChange={setSecond} onFound={setSecondP} inputRef={secondRef} />}
           {placeOf && (
-            <FieldLabel label={placeOf.label} hint={places.length ? placeOf.hint : placeOf.none}>
+            <FieldLabel label={placeOf.label} hint={places.length ? (placesMine && placeOf.mine ? `${placeOf.mine} ${placeOf.hint}` : placeOf.hint) : placesMine && placeOf.noneMine ? placeOf.noneMine : placeOf.none}>
               <select value={place} onChange={(e) => setPlace(e.target.value)} className={FIELD} disabled={!places.length}>
                 <option value="">Pick one</option>
                 {places.map((p) => (
@@ -369,19 +400,27 @@ export function AdminConnect({ door, titled = true }: { door: ConnectDoor; title
           columns={[
             // The kind is chosen by the select above, which asks the server, so the column carries no second filter.
             // Who and With may wrap, so End and Withdraw stay inside the card on a laptop (a 40-letter name pushed them out at 1024 and 1280).
-            { key: 'kind', label: 'Kind', get: (r) => KIND_SHORT[r.kind] },
+            // The kind's two words over each other (a block each, never a lone word), so the column is one word wide (2026-11-10).
+            { key: 'kind', label: 'Kind', get: (r) => KIND_SHORT[r.kind], render: (r) => KIND_SHORT[r.kind].split(' ').map((w) => <span key={w} className="block">{w}</span>) },
             { key: 'first', label: 'Who', get: (r) => r.first.name, render: (r) => (<><span className="block font-semibold">{r.first.name}</span>{r.first.handle && <span className="block text-caption text-ink-soft">@{r.first.handle}</span>}</>), wrap: true },
             { key: 'second', label: 'With', get: (r) => r.second?.name ?? r.place, render: (r) => (r.second ? (<><span className="block font-semibold">{r.second.name}</span>{r.place ? <span className="block text-caption text-ink-soft">{r.place}</span> : r.second.handle && <span className="block text-caption text-ink-soft">@{r.second.handle}</span>}</>) : <PlaceCell r={r} />), wrap: true },
-            { key: 'mode', label: 'How', get: (r) => CONNECT_MODE_NAMES[r.mode], filter: true, wide: true },
+            // How, only where a kind on offer can be made two ways (an admin's coach links): each of a staff member's kinds has one way, so
+            // there the column said nothing the kind did not, and its room kept End off the card on a laptop (2026-11-10, the break-it check).
+            ...(oneWay ? [] : [{ key: 'mode', label: 'How', get: (r: TeamConnection) => CONNECT_MODE_NAMES[r.mode], filter: true, wide: true }]),
             { key: 'state', label: 'State', get: (r) => CONNECT_STATE_NAMES[r.state], render: (r) => <StatusTag tone={STATE_TONE[r.state]}>{CONNECT_STATE_NAMES[r.state]}</StatusTag>, filter: true },
             // Who on the team made it sits under the day, so the card keeps room for End on a laptop.
-            { key: 'when', label: 'When', get: (r) => r.createdAt, render: (r) => (<><span className="block">{longDate(r.createdAt)}</span><span className="block text-caption text-ink-soft">By {r.by}</span></>) },
+            // Who made it may wrap under the day (the day never does), so End stays inside the card on Manage's narrower column at 1280 (2026-11-10).
+            { key: 'when', label: 'When', get: (r) => r.createdAt, render: (r) => (<><span className="block">{longDate(r.createdAt)}</span><span className="block whitespace-normal text-caption text-ink-soft">{tie(`By ${r.by}`, 12)}</span></>) },
           ]}
           actions={(r) =>
             r.canEnd ? (
               <Button size="sm" variant="outline" onClick={() => (setEndFailed(''), setEnding(r))}>
                 {endWord(r)}
               </Button>
+            ) : r.endNote ? (
+              // An admin's row stays with admins, and a place that is not theirs with its maker (by rank, 2026-11-10): said, not hidden.
+              // No wider than a Withdraw button, so the table is no wider than with one (2026-11-10).
+              <span className="block w-[5.75rem] whitespace-normal text-caption text-ink-soft">{r.endNote}</span>
             ) : null
           }
         />
@@ -412,9 +451,12 @@ export function AdminConnect({ door, titled = true }: { door: ConnectDoor; title
           connectApi
             .end(door, ending.id)
             .then(async () => {
+              const was = ending;
               setEnding(null);
               // Its End button goes with it, so the keyboard moves to the heading of the list.
               focusHeadingAfter('connect-list-heading');
+              // A cohort's manager came off: its line in the picker reads again, so the next Send carries the cohort as it is now (2026-11-10).
+              if (was.kind === 'cohort' && placeKind === 'cohort') void connectApi.places(door, 'cohort').then((r) => setPlaces(r.places)).catch(() => undefined);
               await load();
             })
             .catch((e: unknown) => setEndFailed(errorText(e)))

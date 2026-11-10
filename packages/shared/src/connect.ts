@@ -71,6 +71,17 @@ export const CONNECT_MODE_NAMES: Record<ConnectMode, string> = { ask: 'Ask', dir
 /** The words for nobody, a deleted member and a pair the rules refuse: the same, so a lookup never tells who blocked whom. */
 export const CONNECT_NOBODY = 'We could not find that person.';
 export const CONNECT_REASON_MAX = 200;
+/**
+ * Ending by rank (2026-11-10, the rule a guide's undo follows: undoing needs at least the rank that did it): staff end or take back only
+ * what staff made; a connection an admin or the admin key made stays with admins. The row says so in its quiet line, and DELETE answers
+ * 403 in the longer words.
+ */
+export const CONNECT_ADMIN_ROW = 'An admin made this one.';
+export const CONNECT_ADMIN_ONLY = 'An admin made this one. Only an admin can end it.';
+/** A row whose place is not this staff member's (a creator's private program or course): its maker's and an admin's to end. */
+export const CONNECT_PLACE_NOT_YOURS = 'Its maker or an admin ends it.';
+/** Whoever makes a connection is never paid for it, so nobody on the team suggests themself as a friend (2026-11-10). */
+export const CONNECT_NOT_YOURSELF = 'You are one of the two. Send your own friend request in Bond.';
 
 /** A person as the form shows them: never a phone, a birth date, an email or anything private. */
 export interface ConnectPerson {
@@ -87,6 +98,15 @@ export interface ConnectPlace {
   pricePoints: number;
   priceCents: number;
   currency: string;
+  /** A cohort's manager as the list read it (null for none): the form sends it back as `from`, so a change made since answers 409. */
+  managerId?: string | null;
+  /** A cohort's own words without who runs it now, for the line after a send, which names the new manager. */
+  label?: string;
+}
+/** GET …/connect/places. `mine` is true when the list holds only the caller's own (a staff member's private programs and courses). */
+export interface ConnectPlaces {
+  places: ConnectPlace[];
+  mine: boolean;
 }
 
 /** One row of "Connections the team made". */
@@ -104,6 +124,8 @@ export interface TeamConnection {
   by: string;
   /** Whether the team may still end it or take it back from here. */
   canEnd: boolean;
+  /** Why this caller may not end it while it is not over: an admin made it (CONNECT_ADMIN_ROW), or its place is not theirs (CONNECT_PLACE_NOT_YOURS). */
+  endNote: string | null;
 }
 
 /** One line in a person's Connections sheet under People. */

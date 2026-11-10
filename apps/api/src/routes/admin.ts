@@ -177,7 +177,7 @@ admin.post('/coaching/links', async (c) => {
   if (!coachRow || !can(coachRow, 'coach')) return c.json({ error: 'Pick a life coach.' }, 400);
   const who = typeof body.student === 'string' ? body.student.trim().toLowerCase() : '';
   const student = who
-    ? await db.prepare('SELECT * FROM users WHERE id = ? OR LOWER(email) = ? OR handle = ?').bind(who, who, who.replace(/^@/, '')).first<UserRow>()
+    ? await db.prepare('SELECT * FROM users WHERE id = ? OR email = ? OR handle = ?').bind(who, who, who.replace(/^@/, '')).first<UserRow>()
     : null;
   // A deleted member keeps its id; it reads as no account, as in Connect people.
   if (!student || student.display_name === DELETED_NAME) return c.json({ error: 'No account has that email, handle or id.' }, 404);

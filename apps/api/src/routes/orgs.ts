@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
 import type { Organization, OrganizationMember } from '@kreators/shared';
-import type { OrgInvite } from '@kreators/shared/connect';
+import { CONNECT_ADMIN_ONLY, type OrgInvite } from '@kreators/shared/connect';
 import type { AppEnv, UserRow } from '../env';
-import { audit, blockedByName, can, DELETED_NAME, nameOf, newId, notify, nowIso, objectBody, oneOf, orgRole, str } from '../db';
+import { audit, blockedByName, can, DELETED_NAME, nameOf, newId, noteStmt, notify, nowIso, objectBody, oneOf, orgRole, str } from '../db';
 import { connectionsCameTrue } from '../invites';
+import { adminHolds } from '../connectRank';
 
 export const orgs = new Hono<AppEnv>();
 /** The person's side of a brand's ask (2026-11-10): read it, say yes or no. Mounted at /me/org-invites, core, so Army being off never stops a no. */
@@ -76,7 +77,8 @@ export async function inviteToOrg(db: D1Database, org: { id: string; name: strin
   if (row?.status === 'invited') return { code: 409, error: 'They were asked already. They answer on their Profile tab.' };
   const res = await db.prepare("INSERT OR IGNORE INTO organization_members (organization_id, user_id, role, status, created_at) VALUES (?, ?, 'member', 'invited', ?)").bind(org.id, person.id, nowIso()).run();
   if (!res.meta.changes) return { code: 409, error: 'They were asked already. They answer on their Profile tab.' };
-  await notify(db, person.id, 'org', `${by} asked you to join ${org.name}`, 'Say yes or no on your Profile tab. You join its team only if you say yes.', '/you#org-invites');
+  // A fixed id, one note per brand and person, so a block that takes the ask away takes its note too (blockAsks.ts).
+  await noteStmt(db, { id: `org-ask-${org.id}-${person.id}`, userId: person.id, kind: 'org', title: `${by} asked you to join ${org.name}`, body: 'Say yes or no on your Profile tab. You join its team only if you say yes.', link: '/you#org-invites' }, 'renew').run();
   return { code: 201 };
 }
 
@@ -105,7 +107,11 @@ orgs.delete('/:id/members/:userId', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const id = c.req.param('id');
-  if ((await orgRole(db, id, user.id)) !== 'owner' && !can(user, 'talent')) return c.json({ error: 'only the owner can remove people' }, 403);
+  const owner = (await orgRole(db, id, user.id)) === 'owner';
+  if (!owner && !can(user, 'talent')) return c.json({ error: 'only the owner can remove people' }, 403);
+  // By rank (connectRank.ts): an ask an admin or the key made through Connect people is an admin's to take back, or the brand's own
+  // owner's, never talent staff's, so Connect people's 403 is not one step from a 200 here (2026-11-10, the break-it check).
+  if (!owner && user.role !== 'admin' && (await adminHolds(db, 'org', id, c.req.param('userId')))) return c.json({ error: CONNECT_ADMIN_ONLY }, 403);
   await withdrawFromOrg(db, id, c.req.param('userId'), ['active', 'invited']);
   return c.json({ ok: true });
 });
@@ -148,7 +154,8 @@ myOrgInvites.post('/:orgId/answer', async (c) => {
   if (!body.yes) {
     const res = await db.prepare("DELETE FROM organization_members WHERE organization_id = ? AND user_id = ? AND status = 'invited'").bind(orgId, user.id).run();
     if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
-    await db.prepare("UPDATE team_connections SET answered_at = ? WHERE kind = 'org' AND ref_id = ? AND first_user_id = ? AND ended_at IS NULL AND answered_at IS NULL").bind(now, orgId, user.id).run();
+    // Answered and over: the row reads "Said no" in Connect people for good, and a later ask, or a yes to one, never touches it.
+    await db.prepare("UPDATE team_connections SET answered_at = ?1, ended_at = ?1 WHERE kind = 'org' AND ref_id = ?2 AND first_user_id = ?3 AND ended_at IS NULL AND answered_at IS NULL").bind(now, orgId, user.id).run();
     await audit(db, user.id, 'org.invite.answer', 'organization', orgId, '', { yes: false });
     return c.json({ ok: true, status: 'declined' });
   }

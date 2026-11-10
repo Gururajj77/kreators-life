@@ -13,7 +13,7 @@ import {
   normalizeInviteCode,
   WAITLIST_DONE,
 } from './invites.ts';
-import { BADGE_BY_KEY, BADGE_FAMILY_META, CONNECT_REWARD, canInvite, CREATOR_PERMISSIONS, earningGuide, INVITE_REWARD, isPrivateBadge, isStaffFor, PERMISSION_META, PERMISSIONS } from './index.ts';
+import { BADGE_BY_KEY, BADGE_FAMILY_META, CONNECT_REWARD, canInvite, CREATOR_PERMISSIONS, earningGuide, INVITE_ACTIVE_DAYS, INVITE_REWARD, isPrivateBadge, isStaffFor, PERMISSION_META, PERMISSIONS } from './index.ts';
 
 describe('invite codes', () => {
   it('use ten characters with no look-alikes', () => {
@@ -71,8 +71,9 @@ describe('who may invite', () => {
 });
 
 describe('what bringing people in and the team’s connections pay', () => {
-  it('pays a referral on setup and a connection on its yes, within a daily cap', () => {
+  it('pays a referral on the third day of use and a connection on its yes, within a daily cap', () => {
     expect(INVITE_REWARD).toEqual({ xp: 50, points: 20, perDay: 5 });
+    expect(INVITE_ACTIVE_DAYS).toBe(3);
     expect(CONNECT_REWARD).toEqual({ xp: 10, points: 0, perDay: 5 });
   });
   it('lists both in the earning guide, so Help says how they pay', () => {
@@ -81,7 +82,14 @@ describe('what bringing people in and the team’s connections pay', () => {
     const connect = lines.find((l) => /connection/.test(l.what));
     expect(invite?.pays).toBe(`${INVITE_REWARD.xp} xp and ${INVITE_REWARD.points} points`);
     expect(invite?.how).toMatch(/Admins earn nothing/);
+    // The moment it pays reads the constant, never "finishes setting up" (2026-11-10).
+    expect(invite?.how).toContain(`${INVITE_ACTIVE_DAYS} days`);
+    expect(`${invite?.what} ${invite?.how}`).not.toMatch(/setting up|setup/);
     expect(connect?.pays).toBe(`${CONNECT_REWARD.xp} xp`);
+    // Never its maker, never a manager given the job, once per pair.
+    expect(connect?.how).toMatch(/never its maker/);
+    expect(connect?.how).toMatch(/manager/);
+    expect(connect?.how).toMatch(/Once per pair/);
   });
   it('has public Community badges for both, at the asked counts', () => {
     const want: [string, string, number][] = [['invite_1', 'invites_joined', 1], ['invite_5', 'invites_joined', 5], ['invite_20', 'invites_joined', 20], ['invite_50', 'invites_joined', 50], ['connect_1', 'connections_made', 1], ['connect_5', 'connections_made', 5]];

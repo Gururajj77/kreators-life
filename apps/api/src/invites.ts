@@ -1,8 +1,9 @@
-import { CONNECT_REWARD, INVITE_REWARD, type RelationshipKey } from '@kreators/shared';
+import { CONNECT_REWARD, DEFAULT_ZONE, INVITE_ACTIVE_DAYS, INVITE_REWARD, zonedToUtc, type RelationshipKey } from '@kreators/shared';
 import { INVITE_ALPHABET, INVITE_CODE_LENGTH, inviteLinkPath, normalizeInviteCode, type InviteExpiry } from '@kreators/shared/invites';
 import type { ConnectKind } from '@kreators/shared/connect';
 import type { Env, UserRow } from './env';
 import { DELETED_NAME, getUser, inBatches, newId, noteStmt, nowIso, randomCode } from './db';
+import { CONNECT_PAID_BEFORE, CONNECT_PAY_KEY, CONNECT_PAYS } from './connectPay';
 
 /**
  * Joining by invite (2026-11-10) and what bringing people in and the team's connections pay. The routes are in routes/invites.ts; the gate
@@ -47,6 +48,7 @@ export interface InviteRow {
   used_at: string | null;
   waitlist_id: string | null;
   setup_done_at: string | null;
+  active_at: string | null;
 }
 
 /** The SQL for a code that still works at ?now (a numbered parameter). */
@@ -94,6 +96,7 @@ export async function makeCodes(db: D1Database, o: { makerId: string | null; cou
     used_at: null,
     waitlist_id: o.waitlistId ?? null,
     setup_done_at: null,
+    active_at: null,
   }));
   const done = await inBatches(
     db,
@@ -163,7 +166,8 @@ const noteLink = (maker: Pick<UserRow, 'role'>) => (maker.role === 'admin' ? '/a
 
 /**
  * After an account was made with a code: the waitlist row it came from is marked joined, and the maker hears it once, under the code's label
- * and never the new person's name. The note is rewritten in place (`invite-<code id>`) when the person finishes setup, so one code is one note.
+ * and never the new person's name. The note is rewritten in place (`invite-<code id>`) when the person finishes setup and again when the
+ * referral pays, so one code is one note.
  */
 export async function afterInviteJoin(db: D1Database, invite: InviteRow): Promise<void> {
   const maker = invite.created_by ? await getUser(db, invite.created_by) : null;
@@ -208,33 +212,109 @@ async function payOnce(db: D1Database, p: { userId: string; source: string; ref:
 const earns = (u: UserRow | null): u is UserRow => Boolean(u && u.role !== 'admin' && u.display_name !== DELETED_NAME);
 
 /**
- * The person who joined with a code finished setup: the referral pays the code's maker once (INVITE_REWARD), never at the bare sign-up.
- * Claimed by `setup_done_at` on the code, so setup done twice (an erase of progress, then setup again) never pays twice. Called by both of
- * the setup's saves (routes/onboarding.ts). The maker's note is the join note, rewritten in place.
+ * The person who joined with a code finished setup on a real account (an email on it as well as setup, the safety review of 2026-11-10, so
+ * a device session that ticked through the setup and was never made an account counts for nothing; when the email comes after the setup,
+ * the sign-up that adds it calls this too, routes/auth.ts). Claimed once by `setup_done_at`, so setup done twice (an erase, then setup
+ * again) tells the maker once. It pays nothing by itself (2026-11-10): the maker's note says the referral pays once the person has used
+ * the app on INVITE_ACTIVE_DAYS days, and a person who already has (a device account that added its email late) is paid now.
  */
 export async function payInviteOnSetup(db: D1Database, userId: string): Promise<void> {
   const now = nowIso();
-  // Setup finished on a real account (the safety review, 2026-11-10): an email on it as well as setup, so a device session that ticked
-  // through the setup and was never made an account pays nothing. The setup chat asks for the account first, so a real join has both;
-  // when the email comes after the setup, the sign-up that adds it calls this too (routes/auth.ts).
   const claim = await db
     .prepare('UPDATE invite_codes SET setup_done_at = ?1 WHERE used_by = ?2 AND setup_done_at IS NULL AND EXISTS (SELECT 1 FROM users WHERE id = ?2 AND email IS NOT NULL AND onboarded_at IS NOT NULL)')
     .bind(now, userId)
     .run();
   if (!claim.meta.changes) return;
-  const invite = await db.prepare('SELECT * FROM invite_codes WHERE used_by = ?').bind(userId).first<InviteRow>();
-  const maker = invite?.created_by ? await getUser(db, invite.created_by) : null;
-  if (!invite || !maker || maker.display_name === DELETED_NAME) return;
-  const paid = earns(maker) ? await payOnce(db, { userId: maker.id, source: 'invite', ref: userId, xp: INVITE_REWARD.xp, points: INVITE_REWARD.points, relationship: 'friendship', perDay: INVITE_REWARD.perDay }) : false;
-  const body = paid
-    ? `+${INVITE_REWARD.xp} xp, +${INVITE_REWARD.points} points.`
-    : earns(maker)
-      ? `That is ${INVITE_REWARD.perDay} today, the most that pay in a day, so this one paid nothing.`
-      : invite.label
-        ? `Your code for “${invite.label}” was used.`
-        : '';
+  const row = await db
+    .prepare('SELECT i.id, i.label, m.id AS maker_id, m.role, m.display_name, u.timezone FROM invite_codes i JOIN users u ON u.id = i.used_by LEFT JOIN users m ON m.id = i.created_by WHERE i.used_by = ?')
+    .bind(userId)
+    .first<{ id: string; label: string; maker_id: string | null; role: UserRow['role']; display_name: string; timezone: string | null }>();
+  if (!row?.maker_id || row.display_name === DELETED_NAME) return;
+  const body = row.role !== 'admin' ? `You get ${INVITE_REWARD.xp} xp and ${INVITE_REWARD.points} points once they have used the app on ${INVITE_ACTIVE_DAYS} different days.` : row.label ? `Your code for “${row.label}” was used.` : '';
   // note-link: /you#invites, /admin
-  await noteStmt(db, { id: noteId(invite.id), userId: maker.id, kind: 'affiliate', title: 'Someone you invited finished setting up', body, link: noteLink(maker) }, 'renew').run();
+  await noteStmt(db, { id: noteId(row.id), userId: row.maker_id, kind: 'affiliate', title: 'Someone you invited finished setting up', body, link: noteLink({ role: row.role }) }, 'renew').run();
+  await afterInviteActive(db, await db.batch(inviteActiveStmts(db, { id: userId, timezone: row.timezone ?? DEFAULT_ZONE })));
+}
+
+/** SQLite's shift from UTC to the person's own clock now ('+330 minutes' in India), so a tick's instant is read as their day. */
+function zoneShift(zone: string): string {
+  const today = new Date().toISOString().slice(0, 10);
+  const minutes = Math.round((Date.parse(`${today}T00:00:00.000Z`) - zonedToUtc(today, 0, zone || DEFAULT_ZONE).getTime()) / 60_000);
+  return `${minutes >= 0 ? '+' : ''}${minutes} minutes`;
+}
+
+/** The maker earns from a referral: alive and not an admin (an admin earns nothing from bringing people in). `m` is the maker's row. */
+const EARNS_SQL = `(m.role != 'admin' AND m.display_name != '${DELETED_NAME}')`;
+
+/**
+ * A person who joined with a code has used the app on INVITE_ACTIVE_DAYS different days of their own (2026-11-10, since an email is not
+ * checked): a day counts when they checked in on Daily or ticked a task, each by the instant it happened (the server's clock, read at
+ * their zone's offset now), never by the day the device named, so three check-ins in one sitting are one day, not three (the break-it
+ * check of 2026-11-10: a check-in for yesterday, today and tomorrow, sent a second apart, paid at once). Only on a real account with
+ * setup done.
+ *
+ * Three statements for the batch Daily's check-in and a task's tick already send, so the referral costs those routes no round trip until
+ * the day it pays, and then one (`afterInviteActive`): the claim (`active_at`, one guarded UPDATE, so two at once claim once); the maker's
+ * pay claimed in the same transaction (an xp_events row, only when this batch made the claim, the maker still earns and may still make
+ * codes, none was paid for this person before and the day's cap has room); and a read of the maker for the note. For someone who joined
+ * with no code, or whose code was settled, the index on used_by finds nothing.
+ */
+export function inviteActiveStmts(db: D1Database, user: Pick<UserRow, 'id' | 'timezone'>): D1PreparedStatement[] {
+  const now = nowIso();
+  const dayStart = `${now.slice(0, 10)}T00:00:00`;
+  return [
+    db
+      .prepare(
+        `UPDATE invite_codes SET active_at = ?1 WHERE used_by = ?2 AND active_at IS NULL
+          AND EXISTS (SELECT 1 FROM users u WHERE u.id = ?2 AND u.email IS NOT NULL AND u.onboarded_at IS NOT NULL)
+          AND (SELECT COUNT(*) FROM (SELECT date(created_at, ?3) AS d FROM xp_events WHERE user_id = ?2 AND source = 'checkin'
+               UNION SELECT date(completed_at, ?3) FROM nodes WHERE user_id = ?2 AND kind = 'task' AND status = 'done' AND completed_at IS NOT NULL)) >= ?4`,
+      )
+      .bind(now, user.id, zoneShift(user.timezone), INVITE_ACTIVE_DAYS),
+    db
+      .prepare(
+        `INSERT INTO xp_events (user_id, relationship, source, source_id, amount, created_at)
+         SELECT invite_codes.created_by, 'friendship', 'invite', ?1, ?2, ?3 FROM invite_codes JOIN users m ON m.id = invite_codes.created_by
+         WHERE invite_codes.used_by = ?1 AND invite_codes.active_at = ?3 AND ${EARNS_SQL} AND ${MAKER_CAN_SQL}
+           AND NOT EXISTS (SELECT 1 FROM xp_events x WHERE x.user_id = invite_codes.created_by AND x.source = 'invite' AND x.source_id = ?1)
+           AND (SELECT COUNT(*) FROM xp_events x WHERE x.user_id = invite_codes.created_by AND x.source = 'invite' AND x.created_at >= ?4) < ?5`,
+      )
+      .bind(user.id, INVITE_REWARD.xp, now, dayStart, INVITE_REWARD.perDay),
+    db
+      .prepare(
+        `SELECT invite_codes.id AS invite_id, m.id AS maker_id, m.role, (${EARNS_SQL} AND ${MAKER_CAN_SQL}) AS earns,
+           EXISTS (SELECT 1 FROM xp_events x WHERE x.user_id = m.id AND x.source = 'invite' AND x.source_id = ?1 AND x.created_at = ?2) AS paid
+         FROM invite_codes JOIN users m ON m.id = invite_codes.created_by WHERE invite_codes.used_by = ?1 AND invite_codes.active_at = ?2 AND m.display_name != '${DELETED_NAME}'`,
+      )
+      .bind(user.id, now),
+  ];
+}
+/**
+ * After the batch that carried `inviteActiveStmts` (their three results, in order): when this batch made the claim, the maker's totals move
+ * by what the claim paid and the join note is rewritten in place with it, in one round trip. Nothing for anyone else.
+ */
+export async function afterInviteActive(db: D1Database, results: readonly D1Result[]): Promise<void> {
+  const [claim, , read] = results;
+  if (!claim?.meta.changes) return;
+  const m = (read?.results as { invite_id: string; maker_id: string; role: UserRow['role']; earns: number; paid: number }[] | undefined)?.[0];
+  if (!m) return;
+  const body = m.paid
+    ? `+${INVITE_REWARD.xp} xp, +${INVITE_REWARD.points} points.`
+    : m.earns
+      ? `That is ${INVITE_REWARD.perDay} today, the most that pay in a day, so this one paid nothing.`
+      : `They have used the app on ${INVITE_ACTIVE_DAYS} days.`;
+  const now = nowIso();
+  await db.batch([
+    ...(m.paid
+      ? [
+          db.prepare('UPDATE users SET xp = xp + ?, points = points + ? WHERE id = ?').bind(INVITE_REWARD.xp, INVITE_REWARD.points, m.maker_id),
+          db.prepare("UPDATE relationship_scores SET xp = xp + ? WHERE user_id = ? AND relationship = 'friendship'").bind(INVITE_REWARD.xp, m.maker_id),
+          db.prepare("INSERT INTO points_ledger (user_id, amount, reason, ref, created_at) SELECT ?, ?, 'invite', used_by, ? FROM invite_codes WHERE id = ?").bind(m.maker_id, INVITE_REWARD.points, now, m.invite_id),
+        ]
+      : []),
+    // note-link: /you#invites, /admin
+    noteStmt(db, { id: noteId(m.invite_id), userId: m.maker_id, kind: 'affiliate', title: 'Someone you invited is using the app', body, link: noteLink({ role: m.role }) }, 'renew'),
+  ]);
 }
 
 /**
@@ -245,17 +325,21 @@ export async function payInviteOnSetup(db: D1Database, userId: string): Promise<
 const CONNECT_PILLAR: Record<ConnectKind, RelationshipKey> = { friends: 'friendship', coach: 'guru', program: 'guru', product: 'guru', agency: 'servant_leader', club: 'servant_leader', cohort: 'guru', org: 'servant_leader' };
 
 /**
- * A connection the team made came true (a yes, or a direct link): each side who earns gets CONNECT_REWARD once, within the day's cap.
- * Claimed by `came_true_at`, so two yeses at once pay once and nothing is paid again; nothing comes back when it later ends.
+ * A connection the team made came true (a yes, or a direct link): each side it pays (connectPay.ts: never whoever made it, never the
+ * manager of a job, once per kind, pair and place ever) gets CONNECT_REWARD once, within the day's cap, unless an admin. Claimed by
+ * `came_true_at`, so two yeses at once pay once; the payment is claimed under the pair's key, so a connection ended and made again never
+ * pays again (2026-11-10). Nothing comes back when it later ends.
  */
 export async function payConnection(db: D1Database, connectionId: string): Promise<void> {
   const claim = await db.prepare('UPDATE team_connections SET came_true_at = ? WHERE id = ? AND came_true_at IS NULL AND ended_at IS NULL').bind(nowIso(), connectionId).run();
   if (!claim.meta.changes) return;
-  const row = await db.prepare('SELECT kind, first_user_id, second_user_id FROM team_connections WHERE id = ?').bind(connectionId).first<{ kind: ConnectKind; first_user_id: string; second_user_id: string | null }>();
-  if (!row) return;
-  const people = await Promise.all([row.first_user_id, row.second_user_id].filter((x): x is string => Boolean(x)).map((id) => getUser(db, id)));
-  for (const u of people) {
-    if (earns(u)) await payOnce(db, { userId: u.id, source: 'connect', ref: connectionId, xp: CONNECT_REWARD.xp, points: CONNECT_REWARD.points, relationship: CONNECT_PILLAR[row.kind] ?? 'friendship', perDay: CONNECT_REWARD.perDay });
+  // The sides this connection pays, with the key and the kind, read by the same rule the Connected badge counts by.
+  const people = await db
+    .prepare(`SELECT u.*, t.kind AS pay_kind, ${CONNECT_PAY_KEY('t')} AS pay_key FROM team_connections t JOIN users u ON u.id IN (t.first_user_id, t.second_user_id) WHERE t.id = ? AND ${CONNECT_PAYS('t', 'u.id')} AND NOT ${CONNECT_PAID_BEFORE('t', 'u.id')}`)
+    .bind(connectionId)
+    .all<UserRow & { pay_kind: ConnectKind; pay_key: string }>();
+  for (const u of people.results) {
+    if (earns(u)) await payOnce(db, { userId: u.id, source: 'connect', ref: u.pay_key, xp: CONNECT_REWARD.xp, points: CONNECT_REWARD.points, relationship: CONNECT_PILLAR[u.pay_kind] ?? 'friendship', perDay: CONNECT_REWARD.perDay });
   }
 }
 

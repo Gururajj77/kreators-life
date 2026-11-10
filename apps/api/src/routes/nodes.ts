@@ -5,6 +5,7 @@ import { TIME_RE } from '@kreators/shared';
 import { ancestorsOf, DATE_RE, diffBadges, getNode, newId, nowIso, pageOf, paged, readyFromNow, toNode, type NodeRow, taskGate, readyAtFor, withSubtasks, badgeState, getUser, keptStats, statsAfterTick, storeStats } from '../db';
 import { dateNearToday, shiftDate } from '../db';
 import { blockFromBody } from '../timeBlocks';
+import { afterInviteActive, inviteActiveStmts } from '../invites';
 
 /** Whether a request names a block, by id or by name. */
 const namesBlock = (b: NodeBody): boolean => (b.timeBlockId !== undefined) || (b.timeBlock !== undefined);
@@ -430,11 +431,16 @@ nodes.post('/:id/complete', async (c) => {
   const ripple: RippleEvent[] = [];
   let total = 0;
 
+  // A day of use for someone who joined with an invite code (a task ticked): on the third, the referral pays its maker (invites.ts). It rides
+  // in the batch the tick sends anyway, after the claim above, so it costs no round trip but the one on the day it pays.
+  const invite = inviteActiveStmts(db, user);
+  let inviteDone: D1Result[] = [];
   if (capped) {
-    await db
-      .prepare('INSERT INTO xp_events (user_id, relationship, source, source_id, amount, created_at) VALUES (?, ?, ?, ?, 0, ?)')
-      .bind(user.id, row.relationship, 'task_capped', row.id, now)
-      .run();
+    const done = await db.batch([
+      db.prepare('INSERT INTO xp_events (user_id, relationship, source, source_id, amount, created_at) VALUES (?, ?, ?, ?, 0, ?)').bind(user.id, row.relationship, 'task_capped', row.id, now),
+      ...invite,
+    ]);
+    inviteDone = done.slice(-invite.length);
   } else {
     ripple.push({ id: row.id, kind: 'task', title: row.title, amount: XP.task });
     const stmts = [db.prepare('UPDATE nodes SET xp = xp + ? WHERE id = ?').bind(XP.task, row.id)];
@@ -450,10 +456,13 @@ nodes.post('/:id/complete', async (c) => {
       db
         .prepare('INSERT INTO xp_events (user_id, relationship, source, source_id, amount, created_at) VALUES (?, ?, ?, ?, ?, ?)')
         .bind(user.id, row.relationship, 'task', row.id, XP.task, now),
+      ...invite,
     );
-    await db.batch(stmts);
+    const done = await db.batch(stmts);
+    inviteDone = done.slice(-invite.length);
     total = XP.task;
   }
+  await afterInviteActive(db, inviteDone);
 
   // Clear the project if this was its last open task. The check and the
   // change are one statement, so two last ticks can only clear it once.

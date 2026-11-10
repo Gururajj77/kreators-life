@@ -3,8 +3,10 @@ import { Hono } from 'hono';
 import { ADMIN_GUIDE_COHORT, ADMIN_GUIDE_PROGRAM, formatCount, money, LESSON_BODY_MAX, LESSON_TITLE_MAX, MAX_PROGRAM_INVITES, isProgramVisibility, lessonBodyProblem, programTakesEnrolment, programVisibleTo, type Cohort, type CohortSession, type CourseAssignment, type Enrollment, type LearningItem, type Program, type ProgramInvite, type ProgramVisibility, type Submission } from '@kreators/shared';
 import { LESSON_RESOURCE_REPEAT, LESSON_RESOURCES_FULL, MAX_LESSON_RESOURCES, lessonResourceKindOf, lessonResourceLink, parseLessonResources, storedLessonResources } from '@kreators/shared/lessonResources';
 import type { AppEnv, UserRow } from '../env';
-import { audit, badLink, blockedEither, can, DELETED_NAME, inBatches, liveUser, LINK_PROBLEM, nameOf, newId, notify, nowIso, num, objectBody, oneOf, personBy, str, pageOf, paged, httpUrl, TEN_A_PAGE } from '../db';
+import { audit, badLink, blockedEither, can, DELETED_NAME, findPerson, inBatches, liveUser, LINK_PROBLEM, nameOf, newId, notify, nowIso, num, objectBody, oneOf, personBy, str, pageOf, paged, httpUrl, TEN_A_PAGE } from '../db';
+import { CONNECT_NOBODY, type ConnectPerson } from '@kreators/shared/connect';
 import { connectionsCameTrue } from '../invites';
+import { ADMIN_NAMED_MANAGER, adminHolds, endManagerRows } from '../connectRank';
 
 export const school = new Hono<AppEnv>();
 
@@ -54,6 +56,15 @@ async function orderEndsIn(db: D1Database, userId: string, every: boolean) {
 const ADMIN_GUIDE_STAYS = 'The Admin guide stays private to admins.';
 /** An admin (role admin) sees and changes every program in every state. */
 const isAdmin = (user: Pick<UserRow, 'role'>) => user.role === 'admin';
+/**
+ * Who manages a program, the one rule with two callers (2026-11-10, the founder's "fix all these properly"): its state, its invites and
+ * the delete belong to its maker or an admin (accessTo's `manage`), and Connect people asks the same before anyone on staff invites to a
+ * private program or takes an invite back, so Cohorts reaches only the private programs that staff member made. Null is the admin key.
+ */
+export const mayManageProgram = (user: Pick<UserRow, 'id' | 'role'> | null, program: { created_by: string | null }): boolean =>
+  user === null || isAdmin(user) || (Boolean(program.created_by) && program.created_by === user.id);
+/** The words for anyone else who tries to invite, the same from the program's own route and from Connect people. */
+export const PROGRAM_INVITER_ONLY = 'Only the person who made this program, or an admin, invites people.';
 
 /** Who this person is to one program: whether they made it, manage one of its cohorts or were invited. Null when there is no program. */
 export async function accessTo(db: D1Database, user: UserRow, programId: string) {
@@ -77,8 +88,8 @@ export async function accessTo(db: D1Database, user: UserRow, programId: string)
     creator,
     visible: programVisibleTo(row.vis, who),
     enrolOpen: programTakesEnrolment(row.vis, who),
-    /** Its state, invites and the delete: its creator or an admin. */
-    manage: admin || creator,
+    /** Its state, invites and the delete: its creator or an admin (mayManageProgram, which Connect people asks too). */
+    manage: mayManageProgram(user, row),
     /** Its lessons, assignments and cohorts: whoever runs it, an admin, or the team with the cohorts permission on a public program, as before. */
     edit: admin || runs || (can(user, 'cohorts') && row.vis === 'public'),
   };
@@ -228,7 +239,7 @@ school.post('/programs/:id/invites', async (c) => {
   const user = c.get('user');
   const a = await accessTo(db, user, c.req.param('id'));
   if (!a || !a.visible) return c.json({ error: 'not found' }, 404);
-  if (!a.manage) return c.json({ error: 'only the person who made this program, or an admin, invites people' }, 403);
+  if (!a.manage) return c.json({ error: PROGRAM_INVITER_ONLY }, 403);
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
   const who = str(body.who, 200);
   if (!who) return c.json({ error: 'type their email, @username or friend code' }, 400);
@@ -278,7 +289,7 @@ school.delete('/programs/:id/invites/:userId', async (c) => {
   const user = c.get('user');
   const a = await accessTo(db, user, c.req.param('id'));
   if (!a || !a.visible) return c.json({ error: 'not found' }, 404);
-  if (!a.manage) return c.json({ error: 'only the person who made this program, or an admin, removes an invite' }, 403);
+  if (!a.manage) return c.json({ error: PROGRAM_INVITER_ONLY }, 403);
   if (!(await uninviteFromProgram(db, a.row.id, c.req.param('userId'), user.id))) return c.json({ error: 'not found' }, 404);
   return c.json({ ok: true });
 });
@@ -601,12 +612,25 @@ school.post('/programs/:id/cohorts', async (c) => {
 });
 
 /**
- * Who may name a cohort's manager (2026-11-10, the founder: "the team can change a cohort's manager"): an admin on any program, and staff
- * holding Cohorts on a public one, the same reach Cohorts has over a program's lessons and cohorts (accessTo's `edit`). The Admin guide
- * stays with admins: its manager would open it to someone who is not one.
+ * Who may name a cohort's manager, the one rule for the cohort page, its lookup and Connect people (2026-11-10, the founder: "the team
+ * can change a cohort's manager", then "fix all these properly"): an admin on any program; staff holding Cohorts on a public one, the
+ * reach Cohorts has over a program's lessons and cohorts (accessTo's `edit`); and the program's own maker on their own program in any
+ * state, so a private program is covered by its maker, not by the team. The Admin guide stays with admins: its manager would open it to
+ * someone who is not one.
  */
-export const mayNameManager = (user: UserRow, vis: ProgramVisibility, cohortId: string) =>
-  cohortId !== ADMIN_GUIDE_COHORT && (isAdmin(user) || (user.role === 'sub_admin' && can(user, 'cohorts') && vis === 'public'));
+export const mayNameManager = (user: UserRow, k: { vis: ProgramVisibility; cohortId: string; programId: string; createdBy: string | null }) =>
+  k.cohortId !== ADMIN_GUIDE_COHORT &&
+  k.programId !== ADMIN_GUIDE_PROGRAM &&
+  (isAdmin(user) || (user.role === 'sub_admin' && can(user, 'cohorts') && k.vis === 'public') || (Boolean(k.createdBy) && k.createdBy === user.id && can(user, 'cohorts')));
+/**
+ * mayNameManager in SQL for someone on staff holding Cohorts who is not an admin (the only kind of caller Connect people's lists narrow for):
+ * a cohort of a public program, or of their own, never the Admin guide's. `p` is the program's alias (VIS reads it), `me` their id.
+ * The maker's branch asks Cohorts too (2026-11-10, the break-it check): only staff make programs, so a maker taken off staff is no
+ * longer trusted to pick who runs one, nor to look people up for it.
+ */
+export const cohortManagerSql = (me: string) => `(p.id != '${ADMIN_GUIDE_PROGRAM}' AND (${VIS} = 'public' OR p.created_by = ${me}))`;
+/** The words for anyone else, from the cohort page and from Connect people. */
+export const COHORT_MANAGER_ONLY = 'Admins, staff with Cohorts on a public program, and the program’s maker name who runs a cohort.';
 
 type Named = { code: 200; from: string | null; cohort: string } | { code: 400 | 403 | 404 | 409; error: string };
 
@@ -618,12 +642,15 @@ type Named = { code: 200; from: string | null; cohort: string } | { code: 400 | 
  */
 export async function setCohortManager(db: D1Database, actor: UserRow | null, cohortId: string, person: UserRow | null, from?: string | null): Promise<Named> {
   const k = await db
-    .prepare(`SELECT k.id, k.name, k.manager_user_id, p.name AS program, p.created_by, ${VIS} AS vis FROM cohorts k JOIN programs p ON p.id = k.program_id WHERE k.id = ?`)
+    .prepare(`SELECT k.id, k.name, k.manager_user_id, p.id AS program_id, p.name AS program, p.created_by, ${VIS} AS vis FROM cohorts k JOIN programs p ON p.id = k.program_id WHERE k.id = ?`)
     .bind(cohortId)
-    .first<{ id: string; name: string; manager_user_id: string | null; program: string; created_by: string | null; vis: ProgramVisibility }>();
+    .first<{ id: string; name: string; manager_user_id: string | null; program_id: string; program: string; created_by: string | null; vis: ProgramVisibility }>();
   if (!k) return { code: 404, error: 'not found' };
-  if (actor && !mayNameManager(actor, k.vis, k.id)) return { code: 403, error: 'Admins, and staff with Cohorts on a public program, name a cohort’s manager.' };
-  if (!actor && k.id === ADMIN_GUIDE_COHORT) return { code: 403, error: 'The Admin guide stays with admins.' };
+  // The Admin guide first, for everyone, the key and an admin too, in its own words: a manager would open it to someone who is not one.
+  if (k.program_id === ADMIN_GUIDE_PROGRAM || k.id === ADMIN_GUIDE_COHORT) return { code: 403, error: 'The Admin guide stays with admins.' };
+  if (actor && !mayNameManager(actor, { vis: k.vis, cohortId: k.id, programId: k.program_id, createdBy: k.created_by })) return { code: 403, error: COHORT_MANAGER_ONLY };
+  // By rank (connectRank.ts): a manager an admin or the key named stays until an admin, or the program's own maker, changes it.
+  if (actor && !isAdmin(actor) && k.created_by !== actor.id && k.manager_user_id && (await adminHolds(db, 'cohort', k.id))) return { code: 403, error: ADMIN_NAMED_MANAGER };
   if (from !== undefined && from !== k.manager_user_id) return { code: 409, error: 'Someone changed it a moment ago. Read it again.' };
   if (person) {
     if (person.display_name === DELETED_NAME) return { code: 404, error: NOT_FOUND_PERSON };
@@ -632,16 +659,40 @@ export async function setCohortManager(db: D1Database, actor: UserRow | null, co
     if (k.created_by && k.created_by !== person.id && (await blockedEither(db, k.created_by, person.id))) return { code: 404, error: NOT_FOUND_PERSON };
     if (k.manager_user_id === person.id) return { code: 409, error: 'They run this cohort already.' };
   } else if (!k.manager_user_id) return { code: 409, error: 'Nobody runs this cohort now.' };
-  const res = await db.prepare('UPDATE cohorts SET manager_user_id = ? WHERE id = ? AND manager_user_id IS ?').bind(person?.id ?? null, k.id, k.manager_user_id).run();
-  if (!res.meta.changes) return { code: 409, error: 'Someone changed it a moment ago. Read it again.' };
+  // The change, and in the same batch the end of every team row that named the one before, so one row is live per real connection.
+  const [res] = await db.batch([
+    db.prepare('UPDATE cohorts SET manager_user_id = ? WHERE id = ? AND manager_user_id IS ?').bind(person?.id ?? null, k.id, k.manager_user_id),
+    endManagerRows(db, 'cohort', k.id, person?.id ?? null, nowIso()),
+  ]);
+  if (!res?.meta.changes) return { code: 409, error: 'Someone changed it a moment ago. Read it again.' };
   const where = `${k.program}, ${k.name}`;
+  // The program's own maker names as themself; anyone else (an admin, staff or the key) as the team.
+  const by = actor && k.created_by === actor.id ? nameOf(actor) : 'The team';
   // note-link: /school/:id
-  if (person) await notify(db, person.id, 'school', `You run ${where} now`, 'The team named you its manager: sessions, hand-ins and completion are yours.', `/school/${k.id}`);
+  if (person) await notify(db, person.id, 'school', `You run ${where} now`, `${by} named you its manager: sessions, hand-ins and completion are yours.`, `/school/${k.id}`);
   // note-link: /school/:id
-  if (k.manager_user_id) await notify(db, k.manager_user_id, 'school', `You no longer run ${where}`, person ? `The team named ${nameOf(person)} instead.` : 'The team took the manager off for now.', `/school/${k.id}`);
+  if (k.manager_user_id) await notify(db, k.manager_user_id, 'school', `You no longer run ${where}`, person ? `${by} named ${nameOf(person)} instead.` : `${by} took the manager off for now.`, `/school/${k.id}`);
   await audit(db, actor?.id ?? null, 'cohort.manager', 'cohort', k.id, k.manager_user_id ?? '', person?.id ?? '');
   return { code: 200, from: k.manager_user_id, cohort: where };
 }
+
+// The cohort page's lookup for its new manager, for whoever may name one (mayNameManager), so a program's maker who is not on staff finds
+// the person too (Connect people's lookup is the team's). A picture, a name and a handle, never an email; a deleted member, nobody and a
+// block either way with the program's maker read the same.
+school.get('/cohorts/:id/manager/person', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const k = await db
+    .prepare(`SELECT k.id, p.id AS program_id, p.created_by, ${VIS} AS vis FROM cohorts k JOIN programs p ON p.id = k.program_id WHERE k.id = ?`)
+    .bind(c.req.param('id'))
+    .first<{ id: string; program_id: string; created_by: string | null; vis: ProgramVisibility }>();
+  if (!k) return c.json({ error: 'not found' }, 404);
+  if (!mayNameManager(user, { vis: k.vis, cohortId: k.id, programId: k.program_id, createdBy: k.created_by })) return c.json({ error: COHORT_MANAGER_ONLY }, 403);
+  const u = await findPerson(db, str(c.req.query('who'), 200));
+  if (!u || (k.created_by && k.created_by !== u.id && (await blockedEither(db, k.created_by, u.id)))) return c.json({ error: CONNECT_NOBODY }, 404);
+  const person: ConnectPerson = { id: u.id, name: nameOf(u), handle: u.handle ?? '', avatarUrl: u.avatar_url ?? '' };
+  return c.json({ person });
+});
 
 school.patch('/cohorts/:id/manager', async (c) => {
   const db = c.env.DB;
@@ -743,7 +794,11 @@ school.get('/cohorts/:id', async (c) => {
   // Learners, for whoever runs it, a page at a time (prefix `l`, ten by default, 2026-11-07): a cohort open all year can hold thousands.
   // Each row's progress is counted in the same statement, so a page never reads every hand-in to work it out.
   const lAsk = pageOf(c, 'l', TEN_A_PAGE);
-  const [items, resourceRows, assigns, subs, fbs, sessions, att, enrolls, learnerCount] = await Promise.all([
+  // The team's control on the page: who may name its manager (mayNameManager), read with the same rule the route checks, and by rank
+  // (connectRank.ts): a manager an admin named stays an admin's, or the program's maker's, to change. Read with the rest, no trip of its own.
+  const mayName = role ? mayNameManager(user, { vis: role.access.row.vis, cohortId: k.id, programId: k.program_id, createdBy: role.access.row.created_by }) : false;
+  const heldRead = mayName && !isAdmin(user) && role?.access.row.created_by !== user.id && k.manager_user_id ? adminHolds(db, 'cohort', k.id) : Promise.resolve(false);
+  const [items, resourceRows, assigns, subs, fbs, sessions, att, enrolls, learnerCount, adminHeld] = await Promise.all([
     db.prepare('SELECT * FROM learning_items WHERE program_id = ? AND published = 1 ORDER BY sequence').bind(k.program_id).all<ItemRow>(),
     db.prepare('SELECT r.item_id, r.id, r.kind, r.ref, r.label FROM lesson_resources r JOIN learning_items i ON i.id = r.item_id WHERE i.program_id = ? AND i.published = 1 ORDER BY r.item_id, r.position, r.id').bind(k.program_id).all<ResourceRow & { item_id: string }>(),
     db.prepare('SELECT * FROM course_assignments WHERE program_id = ? ORDER BY sequence').bind(k.program_id).all<AssignRow>(),
@@ -771,6 +826,7 @@ school.get('/cohorts/:id', async (c) => {
           .all<{ id: string; cohort_id: string; learner_user_id: string; learner_name: string; status: Enrollment['status']; payment_status: Enrollment['paymentStatus']; enrolled_at: string; completed_at: string | null; approved: number; attended: number }>()
       : Promise.resolve({ results: [] }),
     mentor ? db.prepare("SELECT COUNT(*) AS n FROM enrollments WHERE cohort_id = ? AND status != 'withdrawn'").bind(k.id).first<{ n: number }>() : Promise.resolve(null),
+    heldRead,
   ]);
   const learners = paged(enrolls.results, lAsk);
   const resourcesByItem = new Map<string, ResourceRow[]>();
@@ -797,8 +853,7 @@ school.get('/cohorts/:id', async (c) => {
     learnerCount: learnerCount?.n ?? 0,
     manager,
     mentor,
-    // The team's control on the page: who may name its manager (mayNameManager), read with the same rule the route checks.
-    canSetManager: role ? mayNameManager(user, role.access.row.vis, k.id) : false,
+    canSetManager: mayName && !adminHeld,
     myProgress: enrolled ? progressFor(user.id) : null,
     myStatus: me?.status ?? null,
   });

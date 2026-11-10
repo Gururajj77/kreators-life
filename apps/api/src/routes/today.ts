@@ -4,6 +4,7 @@ import type { AppEnv } from '../env';
 import { resolveAccess } from '../access';
 import { DATE_RE, dateNearToday, getUser, newId, noteStmt, nowIso, pageOf, paged, shiftDate, streakNow, toNode, type NodeRow, taskGate, withSubtasks } from '../db';
 import { dayPlan, kindsBetween, loadBlocking } from '../timeBlocks';
+import { afterInviteActive, inviteActiveStmts } from '../invites';
 
 export const today = new Hono<AppEnv>();
 
@@ -575,7 +576,12 @@ today.post('/checkin', async (c) => {
         .bind(user.id, streakBonus, 'streak_bonus', String(streak), now),
     );
   }
-  await db.batch(stmts);
+  // A day of use for someone who joined with an invite code: on the third, the referral pays its maker (invites.ts). In the same batch,
+  // after the check-in it counts, so it costs no round trip but the one on the day it pays; it finds nothing for anyone whose code is
+  // settled or who had none.
+  const invite = inviteActiveStmts(db, user);
+  const done = await db.batch([...stmts, ...invite]);
+  await afterInviteActive(db, done.slice(-invite.length));
   const res: CheckinResponse = { streak, bestStreak: best, awarded: XP.checkin, points, streakBonus, alreadyCheckedIn: false };
   return c.json(res);
 });

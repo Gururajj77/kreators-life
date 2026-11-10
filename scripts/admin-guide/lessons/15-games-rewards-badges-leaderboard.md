@@ -61,7 +61,7 @@ Badges are medals the app gives by its own count. Riya finds them on the **Profi
 - **One rule each:** a single count reaching a number, like ten projects cleared.
 - **Kept for good:** once earned, a badge is never taken back.
 - **Private families:** Reflection, Focus and Money show only to her. They never appear on her page, the Leaderboard count or an unlock.
-- **People badges:** Community also counts people who joined with her invite codes and finished setting up (Opened the door, up to Fifty through the door), and connections the team made for her that came true (Connected, Well connected). They are public like the rest of Community.
+- **People badges:** Community also counts people who joined with her invite codes and used the app on three different days (Opened the door, up to Fifty through the door), and connections the team made that came true and paid her side (Connected, Well connected). They are public like the rest of Community.
 
 Tapping a badge opens a sheet with its next step and a bar. A badge pays nothing. Some products, store items, tools and games ask for a badge before they open.
 

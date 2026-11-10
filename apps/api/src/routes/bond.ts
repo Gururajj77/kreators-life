@@ -5,6 +5,7 @@ import { blockedByName, blockedEither, liveUser, nameOf, newId, notify, nowIso, 
 import { endLinksOnBlock } from '../coaching';
 import { memberBehindAlias } from './circles';
 import { connectionsCameTrue } from '../invites';
+import { blockAsksStmts } from '../blockAsks';
 
 export const bond = new Hono<AppEnv>();
 
@@ -93,9 +94,13 @@ bond.post('/block', async (c) => {
   // Blocking ends any friendship or open request between the two, in either direction, and any coaching.
   const target = await db.prepare(`SELECT id FROM users WHERE id = ?`).bind(id).first<{ id: string }>();
   if (target) await endLinksOnBlock(db, user.id, nameOf(user), target.id);
+  const now = nowIso();
   await db.batch([
-    db.prepare('INSERT OR REPLACE INTO blocks (blocker_id, blocked_id, reason, created_at) VALUES (?, ?, ?, ?)').bind(user.id, id, str(body.reason, 300), nowIso()),
+    db.prepare('INSERT OR REPLACE INTO blocks (blocker_id, blocked_id, reason, created_at) VALUES (?, ?, ?, ?)').bind(user.id, id, str(body.reason, 300), now),
     db.prepare('DELETE FROM friendships WHERE (requester_id = ?1 AND recipient_id = ?2) OR (requester_id = ?2 AND recipient_id = ?1)').bind(user.id, id),
+    // Every ask still waiting between the two goes with the block, at once and quietly, nobody told (blockAsks.ts, the one list, which a
+    // block from a named post or line runs too).
+    ...blockAsksStmts(db, user.id, id, now),
   ]);
   return c.json({ ok: true }, 201);
 });

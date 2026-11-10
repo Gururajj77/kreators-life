@@ -10,7 +10,7 @@ import { cohortTalkPrivateLabel } from '../../packages/shared/src/index.ts';
 import { MAX_DAY_TEMPLATES, MAX_TIME_BLOCKS } from '../../packages/shared/src/index.ts';
 import { gratitudePromptsForDay } from '../../packages/shared/src/gratitude.ts';
 import { ATTENDEE_APPS, attendeeMayOpen } from '../../packages/shared/src/eventJoin.ts';
-import { CONNECT_REWARD, INVITE_REWARD } from '../../packages/shared/src/index.ts';
+import { CONNECT_REWARD, INVITE_ACTIVE_DAYS, INVITE_REWARD } from '../../packages/shared/src/index.ts';
 import http from 'node:http';
 
 const ORIGIN = process.env.SMOKE_ORIGIN ?? 'http://127.0.0.1:8788';
@@ -84,7 +84,17 @@ async function api(method, path, body, token, headers = {}) {
   }
   return { status: res.status, json, headers: res.headers };
 }
-const admin = (method, path, body) => api(method, path, body, null, { 'X-Admin-Key': ADMIN_KEY });
+// Every account a run makes staff or an admin through the key goes back to a user at the end (below), so a kept database never
+// gathers staff from run to run (the Club's staff picker reads the first 100 by name; 2026-11-10).
+const raised = new Set();
+const admin = (method, path, body) => {
+  const role = method === 'POST' ? /^\/admin\/users\/([^/]+)\/role$/.exec(path) : null;
+  if (role) {
+    if (body?.role === 'admin' || body?.role === 'sub_admin') raised.add(role[1]);
+    else raised.delete(role[1]);
+  }
+  return api(method, path, body, null, { 'X-Admin-Key': ADMIN_KEY });
+};
 
 // A client is added the way the owner adds one: the brand, the client's email and a password for their page (made here). The older
 // Agency checks read the link without unlocking it and expect its dashboard, so unless `locked` is asked for this clears the password,
@@ -3077,8 +3087,16 @@ section('Life coaches');
   check('the coach’s roster lists the student with what they share', hub.json.coach === true && hub.json.counts?.students === 1 && hub.json.students?.[0]?.student?.id === S.user.id && hub.json.students[0].share.reflection === false, hub.json.counts);
 
   // The student finds a coach in the directory and asks; a no waits a month before another ask.
-  const dir = await api('GET', '/coach/directory?dirsize=100', undefined, T.token);
-  check('the directory lists life coaches taking students', dir.json.coaches?.some((k) => k.coach.id === K.user.id), dir.json.coaches?.length);
+  // It is paged by name, and a kept database holds every earlier run's coaches, so walk the pages until this run's coach turns up.
+  let dirFound = false;
+  let dirSeen = 0;
+  for (let p = 1; p <= 50 && !dirFound; p++) {
+    const dir = await api('GET', `/coach/directory?dirsize=100&dirpage=${p}`, undefined, T.token);
+    dirSeen += dir.json.coaches?.length ?? 0;
+    dirFound = Boolean(dir.json.coaches?.some((k) => k.coach.id === K.user.id));
+    if (!dir.json.page?.more) break;
+  }
+  check('the directory lists life coaches taking students', dirFound, dirSeen);
   const tAsks = await api('POST', `/coach/ask/${K.user.id}`, {}, T.token);
   check('a student asks a coach from the directory', tAsks.status === 201 && tAsks.json.link?.askedBy === 'student', tAsks.json);
   const no = await api('POST', `/me/coach/links/${tAsks.json.link?.id}/answer`, { yes: false }, K.token);
@@ -8290,9 +8308,10 @@ section('Connect people for staff, brand teams and cohort managers');
 
   const sug = await staff({ kind: 'friends', first: P.f1.email, second: P.f2.email }, 'moderation');
   check('a moderator on staff suggests two people become friends', sug.status === 201, sug.json);
-  const prog = await api('POST', '/school/programs', { name: `Smoke test program staffconnect ${stamp}`, visibility: 'private', pricePoints: 100 }, AD.token);
+  // A private program is its maker's and an admin's to invite to (2026-11-10): Cohorts staff invite to the ones they made.
+  const prog = await api('POST', '/school/programs', { name: `Smoke test program staffconnect ${stamp}`, visibility: 'private', pricePoints: 100 }, P.cohorts.token);
   const pinv = await staff({ kind: 'program', first: P.learner.email, place: prog.json.id }, 'cohorts');
-  check('staff with Cohorts invite someone to a private program', pinv.status === 201, pinv.json);
+  check('staff with Cohorts invite someone to a private program they made', pinv.status === 201, pinv.json);
   const cRows = (await listOf('cohorts')).connections ?? [];
   check('their list shows only their kinds', cRows.length > 0 && cRows.every((r) => ['program', 'product', 'cohort'].includes(r.kind)) && cRows.some((r) => r.id === pinv.json.id), cRows.map((r) => r.kind));
   check('and never the moderator’s friend suggestion', !cRows.some((r) => r.id === sug.json.id));
@@ -8567,6 +8586,23 @@ section('Pages for every list');
   check('pages: a learner gets no list of learners', asLearner.status === 200 && asLearner.json.enrollments?.length === 0 && asLearner.json.learnersPage === null, [asLearner.json.enrollments?.length, asLearner.json.learnersPage]);
 }
 
+// Days of use are counted by when they happened, which a request cannot send, so the invite checks move a check-in back a day or two in
+// the smoke database itself (only ever that one, on 8788), as the Emerging checks move ticks.
+import { execFileSync as invitesExec } from 'node:child_process';
+import { existsSync as invitesStateExists } from 'node:fs';
+const invitesState = new URL('./state', import.meta.url).pathname;
+const smokeDb = (sql) => {
+  if (ORIGIN !== 'http://127.0.0.1:8788' || !invitesStateExists(invitesState)) throw new Error('days of use need the smoke server on 8788 and its own database');
+  invitesExec('npx', ['--no-install', 'wrangler', 'd1', 'execute', 'kreators-life', '--local', '--persist-to', invitesState, '--command', sql], { cwd: new URL('../../apps/api', import.meta.url).pathname, stdio: 'pipe' });
+};
+const daysAgo = (n) => new Date(Date.now() - n * 86_400_000).toISOString();
+/** The person's check-ins for yesterday and today (by the day they named) move to two days ago and one day ago. */
+const daysBack = (id) => {
+  if (!/^[\w-]+$/.test(id)) throw new Error('no person to move');
+  const day = (n) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+  smokeDb(`UPDATE xp_events SET created_at = CASE source_id WHEN '${day(-1)}' THEN '${daysAgo(2)}' WHEN '${day(0)}' THEN '${daysAgo(1)}' ELSE created_at END WHERE user_id = '${id}' AND source = 'checkin'`);
+};
+
 section('Invites');
 // Joining by invite (2026-11-10): the gate on a new account, codes made by the team and by Inviters, single use, the waitlist's one answer,
 // the referral credit and rewards, the connection rewards, the badges, Dev Tools' counts, and People's labels. Own addresses (another
@@ -8585,6 +8621,20 @@ section('Invites');
   const setup = (token) => api('POST', '/onboarding/setup', { identities: ['student'], goals: ['learn'], blockers: [] }, token);
   const inboxOf = async (who) => JSON.stringify((await api('GET', '/inbox?size=50', undefined, who.token)).json);
   const badgesOf = async (who) => (await api('GET', '/me/badges', undefined, who.token)).json;
+  // Days of use (2026-11-10): Daily check-ins on yesterday, today and tomorrow by the server's UTC day (the window it takes), from the
+  // `from`-th of them to just before the `to`-th, in order, since a check-in never goes back to an earlier day. A check-in counts on the
+  // day it was made, by the server's clock (the break-it check: three sent in one sitting were three days), so once the first two are in
+  // they are moved back two days and one day in the smoke database itself, as the Emerging checks move ticks; never another database.
+  const utcDay = (n) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+  const useDays = async (token, to, fromN = 0) => {
+    const id = (await api('GET', '/me', undefined, token)).json.user?.id ?? '';
+    const out = [];
+    for (let n = fromN; n < to; n++) {
+      out.push(await api('POST', '/today/checkin', { date: utcDay(n - 1) }, token));
+      if (n === 1) daysBack(id);
+    }
+    return out;
+  };
   // Made while the door is open: a member, a creator holding another permission, staff, an Inviter, and an admin.
   const [M, CR, ST, IV, IV2, AD] = await Promise.all([person('member'), person('creator', ['mentor']), person('staff'), person('inviter', ['invite']), person('inviter2', ['invite']), person('admin')]);
   await admin('POST', `/admin/users/${ST.user.id}/role`, { role: 'sub_admin' });
@@ -8650,34 +8700,47 @@ section('Invites');
     const adminMade = await api('POST', '/me/invites', { count: 1, label: 'Admin code' }, AD.token);
     check('an admin makes codes too', adminMade.status === 201, adminMade.json);
 
-    // Referral rewards: paid on setup, once, to a maker who is not an admin, within the day's cap.
+    // Referral rewards (2026-11-10, settled): nothing at the bare sign-up or for setup alone; once the person has used the app on
+    // INVITE_ACTIVE_DAYS different days of their own (a Daily check-in or a task ticked), the maker is paid once, never an admin, within the
+    // day's cap. A day counts by when it happened, so `useDays` moves the first two check-ins back two days and one in the smoke database.
     const s1 = await setup(J1.token);
     const afterSetup = await meOf(IV);
-    check('the referral pays the maker when the person finishes setup', s1.status === 200 && afterSetup.xp === before + INVITE_REWARD.xp && afterSetup.points === ivStart.points + INVITE_REWARD.points, [afterSetup.xp, before, afterSetup.points, ivStart.points]);
+    check('setup alone pays the maker nothing now', s1.status === 200 && afterSetup.xp === before && afterSetup.points === ivStart.points, [afterSetup.xp, before]);
+    check('the setup note says when it pays', (await inboxOf(IV)).includes('Someone you invited finished setting up') && (await inboxOf(IV)).includes(`once they have used the app on ${INVITE_ACTIVE_DAYS} different days`));
+    const two = await useDays(J1.token, 2);
+    check('two days of use pay nothing yet', two.every((r) => r.status === 200) && (await meOf(IV)).xp === before, two.map((r) => r.status));
+    await useDays(J1.token, 3, 2);
+    const paid = await meOf(IV);
+    check('the third different day pays the maker once', paid.xp === before + INVITE_REWARD.xp && paid.points === ivStart.points + INVITE_REWARD.points, [paid.xp, before, paid.points, ivStart.points]);
     await setup(J1.token);
     await api('POST', '/me/reset', {}, J1.token);
     await setup(J1.token);
-    check('setup done again, even after an erase, never pays twice', (await meOf(IV)).xp === before + INVITE_REWARD.xp, (await meOf(IV)).xp);
+    await useDays(J1.token, 3);
+    check('setup and days of use again, even after an erase, never pay twice', (await meOf(IV)).xp === before + INVITE_REWARD.xp, (await meOf(IV)).xp);
     const ivInbox = await inboxOf(IV);
-    check('the maker’s note became the setup note, one note for one code', (ivInbox.match(/Someone you invited finished setting up/g) ?? []).length === 1 && !ivInbox.includes('Someone joined with your invite') && ivInbox.includes(`+${INVITE_REWARD.xp} xp`), ivInbox.slice(0, 300));
+    check('the maker’s note became the pay note, one note for one code', (ivInbox.match(/Someone you invited is using the app/g) ?? []).length === 1 && !ivInbox.includes('Someone joined with your invite') && !ivInbox.includes('Someone you invited finished setting up') && ivInbox.includes(`+${INVITE_REWARD.xp} xp`), ivInbox.slice(0, 300));
     const ivBadges = await badgesOf(IV);
-    check('the badge counts people who joined and finished setup', ivBadges.progress?.invites_joined === 1 && ivBadges.held?.some((b) => b.key === 'invite_1'), [ivBadges.progress?.invites_joined, ivBadges.held?.map((b) => b.key)]);
-    // The cap: five a day. Five more people join with the second Inviter's codes and finish setup; the sixth pays nothing.
+    check('the badge counts people who joined and used the app on three days', ivBadges.progress?.invites_joined === 1 && ivBadges.held?.some((b) => b.key === 'invite_1'), [ivBadges.progress?.invites_joined, ivBadges.held?.map((b) => b.key)]);
+    // The cap: five a day. Six more people join with the second Inviter's codes, finish setup and use the app on three days; the sixth pays nothing.
     const ivCodes = (await api('GET', '/me/invites?ivsize=50', undefined, IV2.token)).json.items.filter((i) => i.state === 'open').map((i) => i.code).slice(0, 6);
     const iv2Before = await meOf(IV2);
+    const capped = [];
     for (const [n, code] of ivCodes.entries()) {
       const j = await anon(code);
       await api('POST', '/auth/signup', { email: `inv-cap${n}-${stamp}@smoke.test`, password: `Beacon-${stamp}-pass`, phone: PHONE, birthDate: GROWN }, j.json.token, from());
       await setup(j.json.token);
+      if (n === 0) check('a joiner set up but not yet using the app does not count for the badge', (await badgesOf(IV2)).progress?.invites_joined === 0);
+      capped.push(...(await useDays(j.json.token, 3)));
     }
     const iv2After = await meOf(IV2);
-    check(`the referral pays at most ${INVITE_REWARD.perDay} a day`, iv2After.xp - iv2Before.xp === INVITE_REWARD.perDay * INVITE_REWARD.xp && iv2After.points - iv2Before.points === INVITE_REWARD.perDay * INVITE_REWARD.points, [iv2After.xp - iv2Before.xp, iv2After.points - iv2Before.points]);
+    check(`the referral pays at most ${INVITE_REWARD.perDay} a day`, capped.every((r) => r.status === 200) && iv2After.xp - iv2Before.xp === INVITE_REWARD.perDay * INVITE_REWARD.xp && iv2After.points - iv2Before.points === INVITE_REWARD.perDay * INVITE_REWARD.points, [iv2After.xp - iv2Before.xp, iv2After.points - iv2Before.points]);
     check('the sixth still counts for the badge', (await badgesOf(IV2)).progress?.invites_joined === 6);
     // An admin maker earns nothing.
     const adBefore = await meOf(AD);
     const ja = await anon(adminMade.json.items[0].code);
     await api('POST', '/auth/signup', { email: `inv-ja-${stamp}@smoke.test`, password: `Beacon-${stamp}-pass`, phone: PHONE, birthDate: GROWN }, ja.json.token, from());
     await setup(ja.json.token);
+    await useDays(ja.json.token, 3);
     const adAfter = await meOf(AD);
     check('an admin maker earns nothing from a referral', ja.status === 201 && adAfter.xp === adBefore.xp && adAfter.points === adBefore.points, [adBefore.xp, adAfter.xp]);
     check('and hears it in Admin', (await inboxOf(AD)).includes('/admin?tab=invites'));
@@ -8743,10 +8806,11 @@ section('Invites');
     const stBefore = await meOf(ST);
     const dv = await anon(staffMade.json.items[0].code);
     await setup(dv.json.token);
-    check('a device account that finishes setup with no email pays its maker nothing', dv.status === 201 && (await meOf(ST)).xp === stBefore.xp, [dv.status, (await meOf(ST)).xp, stBefore.xp]);
+    await useDays(dv.json.token, 3);
+    check('a device account that sets up and uses the app on three days with no email pays its maker nothing', dv.status === 201 && (await meOf(ST)).xp === stBefore.xp, [dv.status, (await meOf(ST)).xp, stBefore.xp]);
     await api('POST', '/auth/signup', { email: `inv-dv-${stamp}@smoke.test`, password: `Beacon-${stamp}-pass`, phone: PHONE, birthDate: GROWN }, dv.json.token, from());
     await api('POST', '/auth/signup', { email: `inv-dv-${stamp}@smoke.test`, password: `Beacon-${stamp}-pass`, phone: PHONE, birthDate: GROWN }, dv.json.token, from());
-    check('adding the email after setup pays the maker then, once', (await meOf(ST)).xp === stBefore.xp + INVITE_REWARD.xp, [(await meOf(ST)).xp, stBefore.xp]);
+    check('adding the email after those days pays the maker then, once', (await meOf(ST)).xp === stBefore.xp + INVITE_REWARD.xp, [(await meOf(ST)).xp, stBefore.xp]);
     const dvExp = (await api('GET', '/me/export', undefined, dv.json.token)).json.inviteCodes ?? [];
     check("the joiner's export never carries the maker's private label", dvExp.length === 1 && dvExp[0].label === '' && dvExp[0].mine === 'joined with' && !JSON.stringify(dvExp).includes('For the staff check'), dvExp);
     check('staff without the key cannot open Admin, Invites or flip the switch', (await api('GET', '/admin/invites', undefined, ST.token)).status === 403 && (await api('PUT', '/admin/invites/settings', { inviteOnly: false }, ST.token)).status === 403 && (await api('GET', '/public/join')).json.inviteOnly === true);
@@ -8858,8 +8922,323 @@ section('Dev Tools');
   await admin('POST', `/admin/users/${DT.user.id}/role`, { role: 'user' });
 }
 
+section('Connect people by rank, place and pay');
+{
+  // 2026-11-10, the founder's "fix all these properly" on wave 26's open questions: each place's own rule in Connect people (a private
+  // program or course is its maker's and an admin's; a cohort's manager is also its program's maker's), End by rank, who a connection
+  // pays (never its maker, never a manager named to a job, once per kind, pair and place), a referral paid on the third day of use, a block
+  // taking waiting asks away, the guarded cohort change, the indexed email lookup and the connect limit per person. Its own addresses
+  // (another second octet), so these sign-ups touch no other limit. Invite only is off for it, as it is for the rest of the run.
+  let k = 0;
+  const from = () => ({ 'CF-Connecting-IP': `10.${((seed >> 16) + 93) & 255}.${(seed >> 8) & 255}.${(seed + k++) & 255}` });
+  const join = async (who) => {
+    const email = `rank-${who}-${stamp}@smoke.test`;
+    const r = await api('POST', '/auth/signup', { email, password: `Lantern-${stamp}-pass`, displayName: `Rank ${who}`, phone: PHONE, birthDate: GROWN }, null, from());
+    return { token: r.json.token, user: r.json.user, email };
+  };
+  await admin('PUT', '/admin/invites/settings', { inviteOnly: false });
+  const AD = await join('admin');
+  await admin('POST', `/admin/users/${AD.user.id}/role`, { role: 'admin' });
+  const names = ['cs', 'cs2', 'cs3', 'csnone', 'talent', 'review', 'review2', 'mod', 'mod2', 'learner', 'learner2', 'creator', 'brand', 'q', 'q2', 'q3', 'member', 'member2', 'f1', 'f2', 'aowner', 'amember', 'maker', 'limit',
+    // The break-it check of wave 27 (2026-11-10): people for its own checks below.
+    'x1', 'x2', 'x3', 'x4', 'x5', 'x6', 'x7', 'x8', 'x9', 'x10', 'x11', 'aowner2', 'amember2', 'mk2', 'demo', 'gone'];
+  const P = Object.fromEntries(await Promise.all(names.map(async (w) => [w, await join(w)])));
+  for (const [w, perm] of [['cs', 'cohorts'], ['cs2', 'cohorts'], ['cs3', 'cohorts'], ['csnone', 'cohorts'], ['talent', 'talent'], ['review', 'review'], ['review2', 'review'], ['mod', 'moderation'], ['mod2', 'moderation'], ['limit', 'moderation'], ['mk2', 'cohorts'], ['gone', 'moderation']]) {
+    await admin('POST', `/admin/users/${P[w].user.id}/role`, { role: 'sub_admin' });
+    await admin('POST', `/admin/users/${P[w].user.id}/permissions`, { permissions: [perm] });
+  }
+  await admin('POST', `/admin/users/${P.maker.user.id}/permissions`, { permissions: ['invite'] });
+  const staff = (who, body) => api('POST', '/manage/connect', body, P[who].token);
+  const places = async (who, kind) => (await api('GET', `/manage/connect/places?kind=${kind}`, undefined, P[who].token)).json;
+  const listOf = async (who, door = 'manage') => (await api('GET', `/${door}/connect?size=50`, undefined, (P[who] ?? who).token)).json;
+  const rowOf = async (who, id, door = 'manage') => ((await listOf(who, door)).connections ?? []).find((r) => r.id === id);
+  const xpOf = async (who) => ((await api('GET', '/me', undefined, who.token)).json.user ?? {}).xp;
+  const badgesOf = async (who) => (await api('GET', '/me/badges', undefined, who.token)).json;
+  const setup = (token) => api('POST', '/onboarding/setup', { identities: ['student'], goals: ['learn'], blockers: [] }, token);
+  const ONLY_PROGRAM = 'Only the person who made this program, or an admin, invites people.';
+  const ONLY_COURSE = 'Only the course’s owner, or an admin, invites people.';
+  const ONLY_COHORT = 'Admins, staff with Cohorts on a public program, and the program’s maker name who runs a cohort.';
+  const ADMIN_ONLY = 'An admin made this one. Only an admin can end it.';
+
+  // ---- A. each place's own rule: a private program or course is its maker's and an admin's
+  const P1 = (await api('POST', '/school/programs', { name: `Smoke test program rank own ${stamp}`, visibility: 'private' }, P.cs.token)).json.id;
+  const P2 = (await api('POST', '/school/programs', { name: `Smoke test program rank other ${stamp}`, visibility: 'private' }, P.cs2.token)).json.id;
+  const csProg = await places('cs', 'program');
+  check('a Cohorts staff member’s private programs are only their own, and the list says so', csProg.mine === true && csProg.places.some((p) => p.id === P1) && !csProg.places.some((p) => p.id === P2), csProg);
+  const adProg = (await api('GET', '/admin/connect/places?kind=program', undefined, AD.token)).json;
+  check('an admin’s list holds every private program', adProg.mine === false && adProg.places.some((p) => p.id === P1) && adProg.places.some((p) => p.id === P2));
+  const noneProg = await places('csnone', 'program');
+  check('staff with no private program of their own get an empty list that says it is theirs', noneProg.mine === true && noneProg.places.length === 0, noneProg);
+  // Seen by an invite, so the program's own route answers in its words, not as nothing there.
+  await api('POST', `/school/programs/${P2}/invites`, { who: P.cs.email }, P.cs2.token);
+  const viaConnect = await staff('cs', { kind: 'program', first: P.learner.email, place: P2 });
+  const viaSchool = await api('POST', `/school/programs/${P2}/invites`, { who: P.learner.email }, P.cs.token);
+  check('a creator’s private program is refused from Connect people (403)', viaConnect.status === 403 && viaConnect.json.error === ONLY_PROGRAM, viaConnect.json);
+  check('and from the program’s own route, in the same words', viaSchool.status === 403 && viaSchool.json.error === ONLY_PROGRAM, viaSchool.json);
+  const ownInvite = await staff('cs', { kind: 'program', first: P.learner.email, place: P1 });
+  check('the private program they made takes their invite', ownInvite.status === 201, ownInvite.json);
+  const mkCourse = async (who) => {
+    const made = await api('POST', '/studio/products', { kind: 'course', title: `Smoke rank course ${who} ${stamp}`, pricePoints: 0, status: 'live' }, P[who].token);
+    await api('PATCH', `/studio/products/${made.json.product?.id}`, { status: 'private' }, P[who].token);
+    return made.json.product?.id;
+  };
+  const C1 = await mkCourse('cs');
+  const C2 = await mkCourse('creator');
+  const csCourse = await places('cs', 'product');
+  check('their private courses are only the ones they own', csCourse.mine === true && csCourse.places.some((p) => p.id === C1) && !csCourse.places.some((p) => p.id === C2), csCourse);
+  await api('POST', `/studio/products/${C2}/invites`, { who: P.cs.email }, P.creator.token);
+  const cConnect = await staff('cs', { kind: 'product', first: P.learner.email, place: C2 });
+  const cStudio = await api('POST', `/studio/products/${C2}/invites`, { who: P.learner.email }, P.cs.token);
+  check('a creator’s private course is refused from Connect people (403)', cConnect.status === 403 && cConnect.json.error === ONLY_COURSE, cConnect.json);
+  check('and from the course’s own route, in the same words', cStudio.status === 403 && cStudio.json.error === ONLY_COURSE, cStudio.json);
+  check('the course they own takes their invite', (await staff('cs', { kind: 'product', first: P.learner.email, place: C1 })).status === 201);
+
+  // ---- A2 and F. a cohort's manager: Cohorts staff on public programs, and the program's own maker in any state
+  const K2 = (await api('POST', `/school/programs/${P2}/cohorts`, { name: `Rank ${stamp}`, startAt: '2027-01-01T00:00:00.000Z', endAt: '2027-03-01T00:00:00.000Z' }, P.cs2.token)).json.id;
+  check('the maker’s cohort page offers Change the manager', (await api('GET', `/school/cohorts/${K2}`, undefined, P.cs2.token)).json.canSetManager === true);
+  const look = await api('GET', `/school/cohorts/${K2}/manager/person?who=${encodeURIComponent(P.cs3.email)}`, undefined, P.cs2.token);
+  check('the maker finds the new manager through the cohort’s own lookup, never an email', look.status === 200 && look.json.person?.id === P.cs3.user.id && !JSON.stringify(look.json).includes('@smoke.test'), look.json);
+  check('another Cohorts staff member cannot use that lookup', (await api('GET', `/school/cohorts/${K2}/manager/person?who=${encodeURIComponent(P.cs3.email)}`, undefined, P.cs.token)).status === 403);
+  const otherStaff = await api('PATCH', `/school/cohorts/${K2}/manager`, { userId: P.cs3.user.id, from: P.cs2.user.id }, P.cs.token);
+  check('Cohorts staff are refused a private program’s cohort that is not theirs', otherStaff.status === 403 && otherStaff.json.error === ONLY_COHORT, otherStaff.json);
+  check('and so from Connect people', (await staff('cs', { kind: 'cohort', first: P.cs3.email, place: K2, mode: 'direct', reason: 'x' })).status === 403);
+  check('their cohort list leaves it out', !(await places('cs', 'cohort')).places.some((p) => p.id === K2));
+  const mine = (await places('cs2', 'cohort')).places.find((p) => p.id === K2);
+  check('the maker’s cohort list holds it, with who runs it now', mine?.managerId === P.cs2.user.id, mine);
+  const stale = await staff('cs2', { kind: 'cohort', first: P.cs3.email, place: K2, mode: 'direct', reason: 'Runs it from now', from: null });
+  check('Connect people with a stale manager answers 409', stale.status === 409, stale.json);
+  const named = await api('PATCH', `/school/cohorts/${K2}/manager`, { userId: P.cs3.user.id, from: P.cs2.user.id }, P.cs2.token);
+  check('the program’s maker names the manager of their own private cohort', named.status === 200 && named.json.managerId === P.cs3.user.id, named.json);
+  check('the new manager hears it from the maker by name', JSON.stringify((await api('GET', '/inbox?size=50', undefined, P.cs3.token)).json).includes('Rank cs2 named you its manager'));
+  const viaFrom = await staff('cs2', { kind: 'cohort', first: P.cs2.email, place: K2, mode: 'direct', reason: 'Back to me', from: P.cs3.user.id });
+  check('Connect people with the manager it read changes it', viaFrom.status === 201, viaFrom.json);
+
+  // ---- B. End by rank: an admin's row stays with admins; a staff member's row any of their kind's staff may end
+  const adRow = await api('POST', '/admin/connect', { kind: 'friends', first: P.learner2.email, second: P.member2.email }, AD.token);
+  const keyRow = await admin('POST', '/admin/connect', { kind: 'friends', first: P.learner.email, second: P.member2.email });
+  const seenAd = await rowOf('mod', adRow.json.id);
+  check('staff see an admin’s row with no End and a quiet line', seenAd?.canEnd === false && seenAd?.endNote === 'An admin made this one.', seenAd);
+  check('and the admin key’s row the same', (await rowOf('mod', keyRow.json.id))?.endNote === 'An admin made this one.');
+  const endAd = await api('DELETE', `/manage/connect/${adRow.json.id}`, undefined, P.mod.token);
+  check('staff End of an admin’s row is 403 in those words', endAd.status === 403 && endAd.json.error === ADMIN_ONLY, endAd.json);
+  check('an admin sees it with End', (await rowOf(AD, adRow.json.id, 'admin'))?.canEnd === true);
+  check('and ends it', (await api('DELETE', `/admin/connect/${adRow.json.id}`, undefined, AD.token)).status === 200);
+  await api('DELETE', `/admin/connect/${keyRow.json.id}`, undefined, AD.token);
+  // On a place that is their own the maker keeps their own route's power (connectRank.ts): an admin's invite to their private program.
+  const onOwn = await api('POST', '/admin/connect', { kind: 'program', first: P.learner2.email, place: P1 }, AD.token);
+  check('a program’s maker on staff may take back an admin’s invite to their own program', (await rowOf('cs', onOwn.json.id))?.canEnd === true && (await api('DELETE', `/manage/connect/${onOwn.json.id}`, undefined, P.cs.token)).status === 200);
+  check('another Cohorts staff member’s list leaves out a row whose program is not theirs, and End finds nothing', !(await rowOf('cs3', ownInvite.json.id)) && (await api('DELETE', `/manage/connect/${ownInvite.json.id}`, undefined, P.cs3.token)).status === 404);
+  const pub = await api('POST', '/school/programs', { name: `Smoke test program rank public ${stamp}`, visibility: 'public' }, AD.token);
+  const pk = (await api('POST', `/school/programs/${pub.json.id}/cohorts`, { name: `Open ${stamp}`, startAt: '2027-01-01T00:00:00.000Z', endAt: '2027-03-01T00:00:00.000Z' }, AD.token)).json.id;
+  const byCs3 = await staff('cs3', { kind: 'cohort', first: P.cs3.email, place: pk, mode: 'direct', reason: 'Runs the spring one' });
+  check('a staff member’s row is ended by another staff member of that kind', byCs3.status === 201 && (await rowOf('cs', byCs3.json.id))?.canEnd === true && (await api('DELETE', `/manage/connect/${byCs3.json.id}`, undefined, P.cs.token)).status === 200, byCs3.json);
+
+  // ---- C. who a connection pays
+  const brand = (await api('POST', '/orgs', { name: `Smoke rank brand ${stamp}`, type: 'brand' }, P.brand.token)).json.organization;
+  const tBefore = await xpOf(P.talent);
+  const self = await staff('talent', { kind: 'org', first: P.talent.email, place: brand.id });
+  await api('POST', `/me/org-invites/${brand.id}/answer`, { yes: true }, P.talent.token);
+  check('whoever makes a connection is never paid for it', self.status === 201 && (await xpOf(P.talent)) === tBefore, [self.status, await xpOf(P.talent), tBefore]);
+  check('and it never counts for their Connected badge', (await badgesOf(P.talent)).progress?.connections_made === 0);
+  const selfFriend = await staff('mod', { kind: 'friends', first: P.mod.email, second: P.f1.email });
+  check('a friend suggestion naming yourself is refused', selfFriend.status === 400 && /Bond/.test(selfFriend.json.error ?? ''), selfFriend.json);
+  const qBefore = await xpOf(P.q);
+  const ask1 = await staff('talent', { kind: 'org', first: P.q.email, place: brand.id });
+  await api('POST', `/me/org-invites/${brand.id}/answer`, { yes: true }, P.q.token);
+  check('the person asked is paid once on their yes', ask1.status === 201 && (await xpOf(P.q)) === qBefore + CONNECT_REWARD.xp, [await xpOf(P.q), qBefore]);
+  await api('DELETE', `/orgs/${brand.id}/members/${P.q.user.id}`, undefined, P.brand.token);
+  const ask2 = await staff('talent', { kind: 'org', first: P.q.email, place: brand.id });
+  await api('POST', `/me/org-invites/${brand.id}/answer`, { yes: true }, P.q.token);
+  check('ended and made again, it never pays again', ask2.status === 201 && (await xpOf(P.q)) === qBefore + CONNECT_REWARD.xp, [ask2.status, await xpOf(P.q), qBefore]);
+  check('and the badge counts that pair and place once', (await badgesOf(P.q)).progress?.connections_made === 1);
+  check('the earlier row reads ended and the new one connected', (await rowOf('talent', ask1.json.id))?.state === 'ended' && (await rowOf('talent', ask2.json.id))?.state === 'accepted');
+  // A Club manager is a job: the member gained someone, the manager was given work.
+  await api('POST', '/club/apply', { note: 'smoke' }, P.member.token);
+  const queue = (await api('GET', '/club', undefined, P.review.token)).json.queue ?? [];
+  await api('POST', `/club/memberships/${queue.find((x) => x.userId === P.member.user.id)?.id}`, { status: 'approved', months: 12 }, P.review.token);
+  const [mBefore, rBefore] = [await xpOf(P.member), await xpOf(P.review2)];
+  const club = await api('POST', '/admin/connect', { kind: 'club', first: P.member.email, second: P.review2.email, mode: 'direct', reason: 'Knows their work' }, AD.token);
+  check('a Club manager link pays the member', club.status === 201 && (await xpOf(P.member)) === mBefore + CONNECT_REWARD.xp, [club.status, club.json, await xpOf(P.member), mBefore]);
+  check('and never the manager', (await xpOf(P.review2)) === rBefore && (await badgesOf(P.review2)).progress?.connections_made === 0, [await xpOf(P.review2), rBefore]);
+
+  // ---- D. a referral pays on the third different day of use: a task ticked counts as a day, as a Daily check-in does
+  const code = (await api('POST', '/me/invites', { count: 1, label: 'For the day check' }, P.maker.token)).json.items?.[0]?.code;
+  const jn = await api('POST', '/auth/anon', { invite: code }, null, from());
+  await api('POST', '/auth/signup', { email: `rank-joiner-${stamp}@smoke.test`, password: `Lantern-${stamp}-pass`, phone: PHONE, birthDate: GROWN }, jn.json.token, from());
+  await setup(jn.json.token);
+  const mkBefore = await xpOf(P.maker);
+  const jnId = (await api('GET', '/me', undefined, jn.json.token)).json.user?.id ?? '';
+  const utc = (n) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+  // A day counts by when it happened, never by the day the device named (the break-it check, 2026-11-10): check-ins for yesterday,
+  // today and tomorrow sent in one sitting, and a task ticked beside them, are one day of use.
+  const sitting = [];
+  for (const n of [-1, 0, 1]) sitting.push(await api('POST', '/today/checkin', { date: utc(n) }, jn.json.token));
+  // Two pillars, so two tasks open today: one ticked in the sitting, one left to tick on the third day.
+  const rels = ['self', 'friendship'];
+  await api('POST', '/onboarding', { answers: QUESTIONS.filter((q) => rels.includes(q.relationship)).map((q) => ({ questionId: q.id, value: 1 })) }, jn.json.token);
+  const built = await api('POST', '/onboarding/build', { relationships: rels, date: today }, jn.json.token);
+  const tasks = (built.json.nodes ?? []).filter((n) => n.kind === 'task' && n.doDate === today);
+  const tick = await api('POST', `/nodes/${tasks[0]?.id}/complete`, { date: today }, jn.json.token);
+  check('three check-ins and a tick in one sitting are one day of use, which pays nothing', sitting.every((r) => r.status === 200) && tick.status === 200 && (await xpOf(P.maker)) === mkBefore, [sitting.map((r) => r.status), tick.status, tick.json?.error, await xpOf(P.maker), mkBefore]);
+  // Two of them move back to two earlier days (the server stamps them now): the check-in for yesterday two days, the tick one day.
+  smokeDb(`UPDATE xp_events SET created_at = '${daysAgo(2)}' WHERE user_id = '${jnId}' AND source = 'checkin' AND source_id = '${utc(-1)}'; UPDATE nodes SET completed_at = '${daysAgo(1)}' WHERE id = '${tasks[0]?.id}' AND user_id = '${jnId}'`);
+  const plain = Number(sitting[2]?.headers.get('x-d1-round-trips') ?? 0);
+  const third = tasks[1] ? await api('POST', `/nodes/${tasks[1].id}/complete`, { date: today }, jn.json.token) : null;
+  check('a check-in and a tick on two earlier days and a tick today are three days, which pay the maker', third?.status === 200 && (await xpOf(P.maker)) === mkBefore + INVITE_REWARD.xp, [third?.status, await xpOf(P.maker), mkBefore]);
+  // The pay rides the tick's own batch and costs one round trip more, once (2026-11-10, the ask: at most one).
+  const tickTrips = Number(tick.headers.get('x-d1-round-trips') ?? 0);
+  const payTrips = Number(third?.headers.get('x-d1-round-trips') ?? 0);
+  console.log(`  (round trips: a check-in ${plain}, a tick ${tickTrips}, the tick that pays ${payTrips})`);
+  check('the tick that pays costs at most one round trip more than a tick', !third?.headers.has('x-d1-round-trips') || payTrips <= tickTrips + 1, [tickTrips, payTrips]);
+  // Ticked again, the claim finds its code settled.
+  await api('POST', `/nodes/${tasks[1]?.id}/uncomplete`, {}, jn.json.token);
+  const again = await api('POST', `/nodes/${tasks[1]?.id}/complete`, { date: today }, jn.json.token);
+  check('and more days pay nothing more', again.status === 200 && (await xpOf(P.maker)) === mkBefore + INVITE_REWARD.xp, [again.status, again.json?.error]);
+
+  // ---- E. a block takes away every ask still waiting between the two, from both sides, quietly
+  await api('POST', `/orgs/${brand.id}/members`, { email: P.q2.email }, P.brand.token);
+  const q3Ask = await staff('talent', { kind: 'org', first: P.q3.email, place: brand.id });
+  check('two brand asks wait', ((await api('GET', `/orgs/${brand.id}/members`, undefined, P.brand.token)).json.invited ?? []).length === 2);
+  await api('POST', '/bond/block', { userId: P.brand.user.id }, P.q2.token);
+  await api('POST', '/bond/block', { userId: P.q3.user.id }, P.brand.token);
+  const roster = (await api('GET', `/orgs/${brand.id}/members`, undefined, P.brand.token)).json;
+  check('a block by the person asked takes the brand ask from the owner’s list', !(roster.invited ?? []).some((m) => m.userId === P.q2.user.id), roster.invited);
+  check('a block by the owner takes it too', !(roster.invited ?? []).some((m) => m.userId === P.q3.user.id), roster.invited);
+  check('and from the person’s Profile', !((await api('GET', '/me/org-invites', undefined, P.q2.token)).json.invites ?? []).some((i) => i.orgId === brand.id));
+  check('the team’s row for it reads ended', (await rowOf('talent', q3Ask.json.id))?.state === 'ended');
+  check('nobody is told', !JSON.stringify((await api('GET', '/inbox?size=50', undefined, P.brand.token)).json).includes('blocked'));
+  const sug = await api('POST', '/admin/connect', { kind: 'friends', first: P.f1.email, second: P.f2.email }, AD.token);
+  await api('POST', '/bond/block', { userId: P.f2.user.id }, P.f1.token);
+  check('a block closes the team’s friend suggestion between the two', (await rowOf(AD, sug.json.id, 'admin'))?.state === 'ended');
+  await api('PATCH', '/me/modules', { key: 'agency', on: true }, P.aowner.token);
+  const teamAsk = await api('POST', '/agency/team', { who: P.amember.email, role: 'editor' }, P.aowner.token);
+  const waitingTeam = ((await api('GET', '/me/teams', undefined, P.amember.token)).json.teams ?? []).some((t) => t.status === 'invited');
+  await api('POST', '/bond/block', { userId: P.aowner.user.id }, P.amember.token);
+  check('a block takes an Agency team invite away from the member', teamAsk.status === 201 && waitingTeam && !((await api('GET', '/me/teams', undefined, P.amember.token)).json.teams ?? []).length, teamAsk.json);
+  check('and from the owner’s team', !((await api('GET', '/agency/team', undefined, P.aowner.token)).json.members ?? []).some((m) => m.status === 'invited'));
+
+  // ---- The break-it check of wave 27 (2026-11-10): what three testers found, each held here.
+  {
+    const ADMIN_NAMED = 'An admin named this manager. Only an admin can change it.';
+    // One live row per real connection. A brand's ask answered no stays "Said no" when the person is asked again, and is never a way
+    // to end the later one.
+    const r1 = await staff('talent', { kind: 'org', first: P.x1.email, place: brand.id });
+    await api('POST', `/me/org-invites/${brand.id}/answer`, { yes: false }, P.x1.token);
+    const r2 = await admin('POST', '/admin/connect', { kind: 'org', first: P.x1.email, place: brand.id });
+    const [s1, s2] = [await rowOf('talent', r1.json.id), await rowOf('talent', r2.json.id)];
+    check('a brand ask answered no stays Said no when the key asks again', s1?.state === 'declined' && s1?.canEnd === false && s2?.state === 'asked' && s2?.endNote === 'An admin made this one.', [s1?.state, s2?.state]);
+    check('and the older row ends nothing', (await api('DELETE', `/manage/connect/${r1.json.id}`, undefined, P.talent.token)).status === 409 && (await rowOf('talent', r2.json.id))?.state === 'asked');
+    // Undoing by rank holds on the place's own route too: Army's Withdraw by talent staff, the Club's manager route by a reviewer.
+    const armyWithdraw = await api('DELETE', `/orgs/${brand.id}/members/${P.x1.user.id}`, undefined, P.talent.token);
+    check('talent staff cannot take back the key’s ask from Army either', armyWithdraw.status === 403 && armyWithdraw.json.error === ADMIN_ONLY, armyWithdraw.json);
+    check('the brand’s own owner can, and the key’s row ends with it', (await api('DELETE', `/orgs/${brand.id}/members/${P.x1.user.id}`, undefined, P.brand.token)).status === 200 && (await rowOf('talent', r2.json.id))?.state === 'ended');
+    const clubId = queue.find((x) => x.userId === P.member.user.id)?.id;
+    const clubClear = await api('POST', `/club/memberships/${clubId}/manager`, { managerId: null }, P.review.token);
+    check('a reviewer cannot take off a Club manager an admin named', clubClear.status === 403 && clubClear.json.error === ADMIN_NAMED, clubClear.json);
+    const clubSwap = await staff('review', { kind: 'club', first: P.member.email, second: P.review.email, mode: 'direct', reason: 'Swap' });
+    check('nor replace them from Connect people', clubSwap.status === 403 && clubSwap.json.error === ADMIN_NAMED, clubSwap.json);
+    // A cohort's rows: a staff naming replaced by an admin's, then the same person named again by the admin, never reads live twice.
+    const c1 = await staff('cs', { kind: 'cohort', first: P.cs3.email, place: pk, mode: 'direct', reason: 'First', from: null });
+    const c2 = await api('POST', '/admin/connect', { kind: 'cohort', first: P.cs2.email, place: pk, mode: 'direct', reason: 'Second', from: P.cs3.user.id }, AD.token);
+    const c3 = await api('POST', '/admin/connect', { kind: 'cohort', first: P.cs3.email, place: pk, mode: 'direct', reason: 'Third', from: P.cs2.user.id }, AD.token);
+    const [k1, k3] = [await rowOf('cs', c1.json.id), await rowOf('cs', c3.json.id)];
+    check('a replaced cohort row stays ended when its person is named again', c1.status === 201 && c2.status === 201 && c3.status === 201 && k1?.state === 'ended' && k3?.state === 'accepted' && k3?.endNote === 'An admin made this one.', [k1?.state, k3?.state, k3?.endNote]);
+    check('so staff cannot end the admin’s naming through it', (await api('DELETE', `/manage/connect/${c1.json.id}`, undefined, P.cs.token)).status === 409 && (await api('DELETE', `/manage/connect/${c3.json.id}`, undefined, P.cs.token)).status === 403);
+    const pagePatch = await api('PATCH', `/school/cohorts/${pk}/manager`, { userId: P.cs.user.id, from: P.cs3.user.id }, P.cs.token);
+    const viaConnectSwap = await staff('cs', { kind: 'cohort', first: P.cs.email, place: pk, mode: 'direct', reason: 'Swap', from: P.cs3.user.id });
+    check('nor change that manager on the cohort page or from Connect people', pagePatch.status === 403 && pagePatch.json.error === ADMIN_NAMED && viaConnectSwap.status === 403, [pagePatch.json, viaConnectSwap.json]);
+    check('an admin ends it, and the line after End names nobody', (await api('DELETE', `/admin/connect/${c3.json.id}`, undefined, AD.token)).status === 200 && !(await places('cs', 'cohort')).places.find((p) => p.id === pk)?.managerId);
+    check('a cohort place carries its name without who runs it', (await api('GET', '/admin/connect/places?kind=cohort', undefined, AD.token)).json.places?.find((p) => p.id === pk)?.label === `Smoke test program rank public ${stamp}, Open ${stamp}`);
+    // The Admin guide: refused in its own words, to an admin too, and in no admin's list.
+    const guide = await api('PATCH', '/school/cohorts/coh-admin-guide/manager', { userId: AD.user.id }, AD.token);
+    check('an admin naming the Admin guide’s manager reads that the guide stays with admins', guide.status === 403 && guide.json.error === 'The Admin guide stays with admins.', guide.json);
+    // A program's maker taken off staff no longer names a manager or looks anyone up.
+    const MP = (await api('POST', '/school/programs', { name: `Smoke test program rank maker ${stamp}`, visibility: 'private' }, P.mk2.token)).json.id;
+    const MK = (await api('POST', `/school/programs/${MP}/cohorts`, { name: `Maker ${stamp}`, startAt: '2027-01-01T00:00:00.000Z', endAt: '2027-03-01T00:00:00.000Z' }, P.mk2.token)).json.id;
+    await admin('POST', `/admin/users/${P.mk2.user.id}/role`, { role: 'user' });
+    await admin('POST', `/admin/users/${P.mk2.user.id}/permissions`, { permissions: [] });
+    const exLook = await api('GET', `/school/cohorts/${MK}/manager/person?who=${encodeURIComponent(P.q.email)}`, undefined, P.mk2.token);
+    check('a maker taken off staff no longer looks people up for their cohort', exLook.status === 403 && !JSON.stringify(exLook.json).includes(P.q.user.id), exLook.json);
+    check('nor is offered Change the manager', (await api('GET', `/school/cohorts/${MK}`, undefined, P.mk2.token)).json.canSetManager !== true);
+    // End reads how the maker stood when they made it, never their role now.
+    const byMod = await staff('mod', { kind: 'friends', first: P.x2.email, second: P.x3.email });
+    await admin('POST', `/admin/users/${P.mod.user.id}/role`, { role: 'admin' });
+    const seenMod = await rowOf('mod2', byMod.json.id);
+    check('a staff member’s row stays staff’s after they are made an admin', seenMod?.canEnd === true && seenMod?.endNote === null, seenMod);
+    await admin('POST', `/admin/users/${P.mod.user.id}/role`, { role: 'sub_admin' });
+    await admin('POST', `/admin/users/${P.mod.user.id}/permissions`, { permissions: ['moderation'] });
+    await admin('POST', `/admin/users/${P.demo.user.id}/role`, { role: 'admin' });
+    const byDemo = await api('POST', '/admin/connect', { kind: 'friends', first: P.x4.email, second: P.x5.email }, P.demo.token);
+    await admin('POST', `/admin/users/${P.demo.user.id}/role`, { role: 'sub_admin' });
+    check('an admin’s row stays an admin’s after they leave the role', (await rowOf('mod2', byDemo.json.id))?.endNote === 'An admin made this one.');
+    const byGone = await staff('gone', { kind: 'friends', first: P.x6.email, second: P.x7.email });
+    await api('DELETE', '/me', { confirm: 'DELETE' }, P.gone.token);
+    const seenGone = await rowOf('mod2', byGone.json.id);
+    check('a deleted staff member’s row reads as staff’s, never the key’s', seenGone?.by === 'Someone on staff' && seenGone?.canEnd === true, seenGone);
+    // Staff read only the rows on places they may reach (who is invited to a private program is its maker’s and an admin’s).
+    const onP2 = await api('POST', '/admin/connect', { kind: 'program', first: P.q2.email, place: P2 }, AD.token);
+    check('a Cohorts staff member’s list leaves out invites to another maker’s private program', onP2.status === 201 && !(await rowOf('cs', onP2.json.id)) && Boolean(await rowOf('cs2', onP2.json.id)) && Boolean(await rowOf(AD, onP2.json.id, 'admin')), onP2.json);
+    check('and the cohorts of another maker’s private program', !(await listOf('cs')).connections?.some((r) => r.kind === 'cohort' && r.place.startsWith(`Smoke test program rank other ${stamp}`)));
+    // Who a connection pays: a place's own maker connecting someone to it pays nobody (the program's own invite never paid).
+    const PK1 = (await api('POST', `/school/programs/${P1}/cohorts`, { name: `Own ${stamp}`, startAt: '2027-01-01T00:00:00.000Z', endAt: '2027-03-01T00:00:00.000Z' }, P.cs.token)).json.id;
+    const lBefore = await xpOf(P.learner);
+    const enrolOwn = await api('POST', `/school/cohorts/${PK1}/enroll`, {}, P.learner.token);
+    check('joining a maker’s own private program from their invite pays nothing', enrolOwn.status === 201 && (await xpOf(P.learner)) === lBefore && (await badgesOf(P.learner)).progress?.connections_made === 0, [enrolOwn.status, await xpOf(P.learner), lBefore]);
+    // A friend suggestion that came true; a block behind a made-up name keeps the friendship; an erase never makes it pay again.
+    const sg = await api('POST', '/admin/connect', { kind: 'friends', first: P.x8.email, second: P.x9.email }, AD.token);
+    await api('POST', `/me/suggestions/${sg.json.id}/answer`, { yes: true }, P.x8.token);
+    await api('POST', `/me/suggestions/${sg.json.id}/answer`, { yes: true }, P.x9.token);
+    check('both yeses pay each side once', (await xpOf(P.x8)) === CONNECT_REWARD.xp && (await xpOf(P.x9)) === CONNECT_REWARD.xp);
+    const anonPost = (await api('POST', '/community', { category: 'Stories', body: `A smoke line ${stamp}`, anonymous: true }, P.x9.token)).json;
+    const aliasBlock = await api('POST', `/community/posts/${anonPost.post?.id ?? anonPost.id}/block-author`, {}, P.x8.token);
+    check('a block behind a made-up name leaves the friendship, so it says nothing of who wrote', aliasBlock.status === 201 && JSON.stringify((await api('GET', '/bond/friends', undefined, P.x8.token)).json).includes(P.x9.user.id), aliasBlock.json);
+    const x9Before = await xpOf(P.x9);
+    await api('POST', '/me/reset', {}, P.x8.token);
+    await api('DELETE', `/bond/friends/${P.x9.user.id}`, undefined, P.x8.token);
+    const sg2 = await api('POST', '/admin/connect', { kind: 'friends', first: P.x9.email, second: P.x8.email }, AD.token);
+    await api('POST', `/me/suggestions/${sg2.json.id}/answer`, { yes: true }, P.x8.token);
+    await api('POST', `/me/suggestions/${sg2.json.id}/answer`, { yes: true }, P.x9.token);
+    check('an erase of progress, then the same pair suggested again, pays nothing again', sg2.status === 201 && (await xpOf(P.x8)) === 0 && (await xpOf(P.x9)) === x9Before, [sg2.status, await xpOf(P.x8), await xpOf(P.x9), x9Before]);
+    // A block by name from a named post closes the waiting asks, as Bond's Block does: an Agency invite, which then cannot be answered.
+    await api('PATCH', '/me/modules', { key: 'agency', on: true }, P.aowner2.token);
+    const team2 = await api('POST', '/agency/team', { who: P.amember2.email, role: 'editor' }, P.aowner2.token);
+    const named = (await api('POST', '/community', { category: 'Stories', body: `A named smoke line ${stamp}`, anonymous: false }, P.amember2.token)).json;
+    await api('POST', `/community/posts/${named.post?.id ?? named.id}/block-author`, {}, P.aowner2.token);
+    const teams2 = (await api('GET', '/me/teams', undefined, P.amember2.token)).json.teams ?? [];
+    const yes2 = await api('POST', `/me/teams/${team2.json.id}/answer`, { yes: true }, P.amember2.token);
+    check('a block from a named post takes an Agency invite away, and a yes then finds none', team2.status === 201 && !teams2.some((t) => t.status === 'invited') && yes2.status === 404, [team2.status, teams2.map((t) => t.status), yes2.status]);
+    // And a private program's invite between its maker and the person: the program goes from their School and enrolling is refused.
+    const pInv = await staff('cs', { kind: 'program', first: P.x10.email, place: P1 });
+    await api('POST', '/bond/block', { userId: P.x10.user.id }, P.cs.token);
+    const x10School = JSON.stringify((await api('GET', '/school?size=100', undefined, P.x10.token)).json);
+    const x10Enrol = await api('POST', `/school/cohorts/${PK1}/enroll`, {}, P.x10.token);
+    check('a block takes a private program’s invite away: hidden, and no enrolling', pInv.status === 201 && !x10School.includes(`Smoke test program rank own ${stamp}`) && x10Enrol.status === 404 && (await rowOf('cs', pInv.json.id))?.state === 'ended', [pInv.status, x10Enrol.status]);
+    // A brand's ask takes its note with it.
+    await api('POST', `/orgs/${brand.id}/members`, { email: P.x11.email }, P.brand.token);
+    const askNote = JSON.stringify((await api('GET', '/inbox?size=50', undefined, P.x11.token)).json).includes(`asked you to join Smoke rank brand ${stamp}`);
+    await api('POST', '/bond/block', { userId: P.brand.user.id }, P.x11.token);
+    check('a block takes the brand ask’s note away with the ask', askNote && !JSON.stringify((await api('GET', '/inbox?size=50', undefined, P.x11.token)).json).includes(`asked you to join Smoke rank brand ${stamp}`), askNote);
+  }
+
+  // ---- G. an email is found through the index, typed in any case
+  const upper = await api('GET', `/admin/connect/person?who=${encodeURIComponent(P.q.email.toUpperCase())}`, undefined, AD.token);
+  check('an email typed in capitals finds the person', upper.status === 200 && upper.json.person?.id === P.q.user.id, upper.json);
+  const sent = await api('POST', '/admin/connect', { kind: 'friends', first: P.member2.email, second: P.learner2.email }, AD.token);
+  const rows = Number(sent.headers.get('x-d1-rows-read') ?? 0);
+  console.log(`  (rows read on a Connect send by email: ${rows})`);
+  check('a Connect send by email reads no account it does not need', sent.status === 201 && (!sent.headers.has('x-d1-rows-read') || rows < 400), [sent.status, rows]);
+
+  // ---- H. the connect limit counts per person for a session, whatever address it comes from
+  let last = null;
+  for (let n = 0; n <= LIMITS.connect.max; n++) last = await api('POST', '/manage/connect', { kind: 'nope' }, P.limit.token, { 'CF-Connecting-IP': `10.${((seed >> 16) + 94) & 255}.${(n >> 8) & 255}.${n & 255}` });
+  check(`one staff member is stopped after ${LIMITS.connect.max} tries, from any address`, last?.status === 429, last?.status);
+  check('another staff member still has tries', (await api('POST', '/manage/connect', { kind: 'nope' }, P.mod2.token, { 'CF-Connecting-IP': `10.${((seed >> 16) + 94) & 255}.250.1` })).status === 400);
+}
+
 // The run's own admin goes back to a user once every section that needs it is done (the Pages section makes a program as it, Dev Tools reads as it).
 await admin('POST', `/admin/users/${A.user.id}/role`, { role: 'user' });
+// And every other account this run raised through the key and left raised.
+for (const id of [...raised]) await admin('POST', `/admin/users/${id}/role`, { role: 'user' });
 
 // The guard: every route and tick this suite reached stays under the ceiling. On Workers Free the 51st D1 query of an invocation fails.
 section('D1 round trips');

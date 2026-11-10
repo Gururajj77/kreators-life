@@ -279,6 +279,12 @@ myTeams.post('/:id/answer', async (c) => {
   const row = await db.prepare("SELECT * FROM agency_team WHERE id = ? AND member_id = ? AND status = 'invited'").bind(c.req.param('id'), user.id).first<TeamRow>();
   if (!row) return c.json({ error: 'not found' }, 404);
   const now = nowIso();
+  // Across a block either way with the owner, the invite is as good as gone (as a brand's ask and a friend suggestion are): it goes,
+  // quietly, and the answer is as for no invite at all (2026-11-10, the break-it check: the member could still join with edit access).
+  if (await blockedEither(db, row.owner_id, user.id)) {
+    await db.prepare("UPDATE agency_team SET status = 'removed', ended_by = 'owner', removed_at = ?, updated_at = ? WHERE id = ? AND status = 'invited'").bind(now, now, row.id).run();
+    return c.json({ error: 'not found' }, 404);
+  }
   const res = body.yes
     ? await db.prepare("UPDATE agency_team SET status = 'active', joined_at = ?, updated_at = ? WHERE id = ? AND member_id = ? AND status = 'invited'").bind(now, now, row.id, user.id).run()
     : await db.prepare("UPDATE agency_team SET status = 'removed', ended_by = 'member', removed_at = ?, updated_at = ? WHERE id = ? AND member_id = ? AND status = 'invited'").bind(now, now, row.id, user.id).run();

@@ -25,7 +25,7 @@ export function Face({ person }: { person: ConnectPerson }) {
  * network, the field emptied after a send) the form has nobody, so a send never goes out with the person the field no longer names.
  * Connect people (Admin and Manage) and the cohort page's manager share it (2026-11-10).
  */
-export function PersonField({ door, label, value, onChange, onFound, inputRef }: { door: ConnectDoor; label: string; value: string; onChange: (v: string) => void; onFound: (p: ConnectPerson | null) => void; inputRef?: Ref<HTMLInputElement> }) {
+export function PersonField({ door, find, label, value, onChange, onFound, inputRef }: { door: ConnectDoor; find?: (who: string) => Promise<{ person: ConnectPerson }>; label: string; value: string; onChange: (v: string) => void; onFound: (p: ConnectPerson | null) => void; inputRef?: Ref<HTMLInputElement> }) {
   const now = value.trim();
   const typed = useDebounced(now, 300);
   const [answer, setAnswer] = useState<{ for: string; person: ConnectPerson | null; missing: string }>({ for: '', person: null, missing: '' });
@@ -35,13 +35,15 @@ export function PersonField({ door, label, value, onChange, onFound, inputRef }:
       setAnswer({ for: typed, person: null, missing: '' });
       return;
     }
-    connectApi
-      .person(door, typed)
+    // `find` is a lookup of the caller's own (the cohort page's, for a program's maker who is not on staff); else the team's door.
+    (find ? find(typed) : connectApi.person(door, typed))
       .then((r) => live && setAnswer({ for: typed, person: r.person, missing: '' }))
       .catch((e: unknown) => live && setAnswer({ for: typed, person: null, missing: errorText(e) }));
     return () => {
       live = false;
     };
+    // `find` is a new function each render of its parent; the field follows the words and the door only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [door, typed]);
   const current = answer.for === now;
   const found = current ? answer.person : null;

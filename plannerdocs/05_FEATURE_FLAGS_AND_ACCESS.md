@@ -250,7 +250,7 @@ A new app takes its place in `MODULES`, which is the default order inside its gr
 
 ## 11. Required tests, with status
 
-As of 2026-11-10 the shared suite has 871 tests passing and the smoke test 2,836 checks.
+As of 2026-11-10 the shared suite has 871 tests passing and the smoke test 2,921 checks.
 
 - A disabled module cannot be reached through the UI: holds (`Gate`).
 - A disabled module cannot be reached through the API: holds ("a switched-off app refuses its API" demands a 403 and "the core stays open while an app is off"). An override is refused the same way ("an override refuses the API too", "and the door opens again when it is removed"), and so is a rollout the person falls outside.

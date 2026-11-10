@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { CLUB_BENEFITS, type Membership } from '@kreators/shared';
-import type { AppEnv } from '../env';
+import type { AppEnv, UserRow } from '../env';
 import { audit, can, getUser, liveUser, nameOf, newId, notify, nowIso, oneOf, str, pageOf, paged } from '../db';
+import { ADMIN_NAMED_MANAGER, adminHolds, endManagerRows } from '../connectRank';
 
 export const club = new Hono<AppEnv>();
 
@@ -57,25 +58,34 @@ club.post('/memberships/:id/manager', async (c) => {
   const user = c.get('user');
   if (!can(user, 'review')) return c.json({ error: 'reviewers name managers' }, 403);
   const body = await c.req.json<{ managerId?: string | null }>().catch(() => ({}) as { managerId?: string | null });
-  const r = await nameClubManager(db, user.id, c.req.param('id'), typeof body.managerId === 'string' && body.managerId ? body.managerId : null);
+  const r = await nameClubManager(db, user, c.req.param('id'), typeof body.managerId === 'string' && body.managerId ? body.managerId : null);
   return c.json(r.body, r.code);
 });
 
 /**
  * Name (or clear) a member's Club manager, the one way: a reviewer's route above, and the team's Connect people in Admin
- * (routes/adminConnect.ts). A manager is someone on staff; the member is told.
+ * (routes/adminConnect.ts). A manager is someone on staff; the member is told. Null is the admin key. By rank (connectRank.ts): a manager
+ * an admin or the key named through Connect people stays until an admin changes it. With `from` (the manager the caller read, null for
+ * none) the change is guarded on it, so it never takes off someone named a moment ago (Connect people's End); 409 then. Every team row
+ * that named the one before ends with the change, in the same batch.
  */
-export async function nameClubManager(db: D1Database, actorId: string | null, membershipId: string, managerId: string | null): Promise<{ code: 200 | 400 | 404; body: { ok?: true; error?: string } }> {
+export async function nameClubManager(db: D1Database, actor: UserRow | null, membershipId: string, managerId: string | null, from?: string | null): Promise<{ code: 200 | 400 | 403 | 404 | 409; body: { ok?: true; error?: string } }> {
   const prev = await db.prepare(`${SELECT} WHERE m.id = ?`).bind(membershipId).first<Row>();
   if (!prev) return { code: 404, body: { error: 'not found' } };
+  if (actor && actor.role !== 'admin' && prev.manager_user_id && (await adminHolds(db, 'club', prev.id))) return { code: 403, body: { error: ADMIN_NAMED_MANAGER } };
   let managerName = '';
   if (managerId) {
     const m = await getUser(db, managerId);
     if (!m || m.role === 'user') return { code: 400, body: { error: 'a manager is someone on staff' } };
     managerName = nameOf(m);
   }
-  await db.prepare('UPDATE memberships SET manager_user_id = ? WHERE id = ?').bind(managerId, prev.id).run();
-  await audit(db, actorId, 'membership.manager', 'membership', prev.id, prev.manager_user_id ?? '', managerId ?? '');
+  const was = from === undefined ? prev.manager_user_id : from;
+  const [res] = await db.batch([
+    db.prepare('UPDATE memberships SET manager_user_id = ? WHERE id = ? AND manager_user_id IS ?').bind(managerId, prev.id, was),
+    endManagerRows(db, 'club', prev.id, managerId, nowIso()),
+  ]);
+  if (!res?.meta.changes) return { code: 409, body: { error: 'Someone changed it a moment ago. Read it again.' } };
+  await audit(db, actor?.id ?? null, 'membership.manager', 'membership', prev.id, prev.manager_user_id ?? '', managerId ?? '');
   if (managerId) await notify(db, prev.user_id, 'club', `Your Club manager is ${managerName}`, 'Someone on staff who knows your work. Write to the team under Help to reach them.', '/club#mine-heading');
   return { code: 200, body: { ok: true } };
 }

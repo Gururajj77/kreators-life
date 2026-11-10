@@ -1,4 +1,4 @@
-import { MAX_CHANNEL_MEMBERS, MAX_MENTIONS, MAX_PINNED } from './community.ts';
+import { INVITE_ACTIVE_DAYS, MAX_CHANNEL_MEMBERS, MAX_MENTIONS, MAX_PINNED } from './community.ts';
 import { ATTENDEE_CLAIMS_PER_DAY, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, CIRCLE_MINUTES, RUN_CODE_WINDOW } from './events.ts';
 import { MAX_COACHES } from './coaching.ts';
 
@@ -93,7 +93,7 @@ export const HOW_TO: Record<string, HowTo> = {
       'Badges are medals the app earns for you by its own count: ticks, streaks, pillars, community, your shop, runs, lessons and levels. Each is bronze, silver, gold or platinum, and the gallery says the next step for every one. Badges from your journal, money and focus time stay private. Honors are given by the team or unlocked by time here.',
       'Under Account, add an email and password so your progress survives this device, change the password, export your data, or delete the account. Deleting takes your name, logs and journal. Money records and what others rely on stay, without your name.',
       'Under Features, hide or unhide apps, in the same groups and colours as the Apps page. Hidden apps sit open at the end of each group. An app that fits your tags says why. Appearance picks light, dark or auto. Dates and times sets your time zone and how dates and clocks read on every screen.',
-      'See my public page shows exactly what other people see at your address. When the team suggests a friend, you both answer here. If the team lets you invite people, Invite people makes codes to share as a link or a code.',
+      `See my public page shows exactly what other people see at your address. When the team suggests a friend, you both answer here. If the team lets you invite people, Invite people makes codes to share as a link or a code. You earn once someone who joined with yours has used the app on ${INVITE_ACTIVE_DAYS} different days.`,
     ],
     terms: ['identity tag', 'setup chat', 'badge', 'honor', 'life coach', 'who you are becoming', 'public page', 'invite code'],
   },
@@ -483,6 +483,7 @@ export const HOW_TO: Record<string, HowTo> = {
     steps: [
       'Queues for staff: campaigns, cohorts, events, review, moderation, support, finance, mentoring and life coaching.',
       'Each power comes from a permission an admin gives.',
+      'Connect people makes the connections your permissions cover. Private programs and courses are only your own. What an admin made, only an admin ends.',
       'Everything you do here is audited.',
     ],
     terms: ['guide'],
@@ -492,7 +493,7 @@ export const HOW_TO: Record<string, HowTo> = {
       'Tables for people, flags, listings, orders, webhooks, KYC, mail and audit. Sort by any column, search, filter, tick rows for bulk actions, and edit a cell in place. Only an admin changes a role, never their own.',
       'Life coaches: say yes or no to people who asked to coach, and give or take the Life coach badge.',
       'Connect people joins two people the app’s own way: a coach and a student, an Agency team, a private program or course, a Club manager, or two friends. Most wait for a yes. Every one is listed, and you can end it.',
-      'Invites: while Invite only is on, a new account needs an invite code. Approve someone on the waitlist and they get a code by email, or make codes to share as a link or a code. Each works once, and whoever made it is credited.',
+      `Invites: while Invite only is on, a new account needs an invite code. Approve someone on the waitlist and they get a code by email, or make codes to share as a link or a code. Each works once. Whoever made it is credited, and paid once the person has used the app on ${INVITE_ACTIVE_DAYS} different days.`,
       'The Admin guide, from the button on this page’s cover, walks through every screen. Only admins can open it.',
     ],
     terms: ['life coach', 'student', 'invite code', 'waitlist'],

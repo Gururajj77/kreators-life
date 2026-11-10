@@ -1,7 +1,7 @@
 import { byKey, formatCount } from './core.ts';
 import { XP } from './pillars.ts';
 import { POINTS } from './rewards.ts';
-import { CONNECT_REWARD, INVITE_REWARD, SOCIAL_REWARDS } from './community.ts';
+import { CONNECT_REWARD, INVITE_ACTIVE_DAYS, INVITE_REWARD, SOCIAL_REWARDS } from './community.ts';
 import { ATTENDEE_CLAIMS_PER_DAY, ATTENDEE_XP_MAX, RUN_REWARD } from './events.ts';
 import { FEATURE_FEE_POINTS } from './store.ts';
 import type { IconName } from './roles.ts';
@@ -145,11 +145,12 @@ export const BADGES: readonly Badge[] = [
   badge('follower_10', 'Ten followers', 'Users', 'Community', 'silver', 'followers', 10, 'Get ten followers on your public page'),
   badge('referral_1', 'Brought a friend', 'Gift', 'Community', 'bronze', 'referrals', 1, 'Have a friend sign up with your link and an email'),
   badge('event_1', 'Showed up', 'Ticket', 'Community', 'bronze', 'events_claimed', 1, 'Claim an attendee code at an event'),
-  // Invites (2026-11-10): people who joined with your invite codes and finished setting up. Connections: ones the team made that came true for you.
-  badge('invite_1', 'Opened the door', 'Share2', 'Community', 'bronze', 'invites_joined', 1, 'Invite someone who joins and finishes setting up'),
-  badge('invite_5', 'Five through the door', 'HandHeart', 'Community', 'silver', 'invites_joined', 5, 'Invite five people who join and finish setting up'),
-  badge('invite_20', 'Twenty through the door', 'RadioTower', 'Community', 'gold', 'invites_joined', 20, 'Invite twenty people who join and finish setting up'),
-  badge('invite_50', 'Fifty through the door', 'Orbit', 'Community', 'platinum', 'invites_joined', 50, 'Invite fifty people who join and finish setting up'),
+  // Invites (2026-11-10): people who joined with your invite codes and used the app on INVITE_ACTIVE_DAYS days, the moment the referral pays.
+  // Connections: ones the team made that came true for you and paid your side (never one you made, never a manager named to a job).
+  badge('invite_1', 'Opened the door', 'Share2', 'Community', 'bronze', 'invites_joined', 1, `Invite someone who joins and uses the app on ${INVITE_ACTIVE_DAYS} days`),
+  badge('invite_5', 'Five through the door', 'HandHeart', 'Community', 'silver', 'invites_joined', 5, `Invite five people who join and use the app on ${INVITE_ACTIVE_DAYS} days`),
+  badge('invite_20', 'Twenty through the door', 'RadioTower', 'Community', 'gold', 'invites_joined', 20, `Invite twenty people who join and use the app on ${INVITE_ACTIVE_DAYS} days`),
+  badge('invite_50', 'Fifty through the door', 'Orbit', 'Community', 'platinum', 'invites_joined', 50, `Invite fifty people who join and use the app on ${INVITE_ACTIVE_DAYS} days`),
   badge('connect_1', 'Connected', 'Link', 'Community', 'bronze', 'connections_made', 1, 'Say yes to a connection the team made for you'),
   badge('connect_5', 'Well connected', 'HandHelping', 'Community', 'silver', 'connections_made', 5, 'Say yes to five connections the team made for you'),
 
@@ -350,8 +351,8 @@ export function earningGuide(): { title: string; lines: EarningLine[] }[] {
       { what: 'A new follower', pays: `${SOCIAL_REWARDS.follower.points} points`, how: 'Paid to you, once per person.' },
       { what: 'A run with a club', pays: `Up to ${ATTENDEE_XP_MAX} xp and ${RUN_REWARD.points} points`, how: `The host sets the xp before the code opens. Enter the start code during the run. Once per run, ${RUN_REWARD.perDay} runs a day.` },
       { what: 'Going to an event or a circle', pays: `Up to ${ATTENDEE_XP_MAX} xp`, how: `If the host set xp, type their attendee code at the event. Guests only, once each, ${ATTENDEE_CLAIMS_PER_DAY} in any 24 hours.` },
-      { what: 'Someone you invited finishes setting up', pays: `${INVITE_REWARD.xp} xp and ${INVITE_REWARD.points} points`, how: `Paid to whoever made the invite code, once per person, up to ${INVITE_REWARD.perDay} a day. Admins earn nothing from it.` },
-      { what: 'A connection the team made for you', pays: `${CONNECT_REWARD.xp} xp`, how: `Paid to each side when it comes true, such as both saying yes to a friend suggestion. Once each, up to ${CONNECT_REWARD.perDay} a day.` },
+      { what: 'Someone you invited uses the app', pays: `${INVITE_REWARD.xp} xp and ${INVITE_REWARD.points} points`, how: `Paid to the code’s maker once they tick a task or check in on ${INVITE_ACTIVE_DAYS} days. Once each, up to ${INVITE_REWARD.perDay} a day. Admins earn nothing.` },
+      { what: 'A connection the team made for you', pays: `${CONNECT_REWARD.xp} xp`, how: `Paid to each side when it comes true, never its maker or a manager given the job. Once per pair, up to ${CONNECT_REWARD.perDay} a day.` },
     ],
   },
   {

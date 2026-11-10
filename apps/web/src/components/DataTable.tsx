@@ -1,5 +1,5 @@
 import type { Page, PageSize } from '@kreators/shared';
-import { useMemo, useState, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { useMemo, useState, type FocusEvent, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { Button } from './Button';
 import { PagerBar } from './Pager';
 import { Icon } from './Icon';
@@ -107,6 +107,16 @@ function Switch({ on, onChange, disabled, label }: { on: boolean; onChange: (on:
  * its values, tick rows and act on them together, and edit a cell where it sits. Scrolls sideways on
  * a phone instead of squeezing. Nothing here talks to the server; the columns say what each edit does.
  */
+/** Scrolls a sideways-scrolling table box so the control that took focus shows whole, with 8px to spare; nothing when it fits. */
+function showFocused(e: FocusEvent<HTMLDivElement>) {
+  const box = e.currentTarget;
+  if (box.scrollWidth <= box.clientWidth || !(e.target instanceof HTMLElement)) return;
+  const b = box.getBoundingClientRect();
+  const r = e.target.getBoundingClientRect();
+  if (r.right > b.right) box.scrollLeft += r.right - b.right + 8;
+  else if (r.left < b.left) box.scrollLeft -= b.left - r.left + 8;
+}
+
 export function DataTable<T>({ rows, columns, rowKey, label, search = true, selectable = false, bulk = [], actions, pageSize = 25, page: serverPage, onPage, empty = 'Nothing here yet.', busy = false, onRowClick, activeKey = null }: Props<T>) {
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
   const [q, setQ] = useState('');
@@ -261,7 +271,9 @@ export function DataTable<T>({ rows, columns, rowKey, label, search = true, sele
           </Button>
         </div>
       )}
-      <div className="mt-sm overflow-x-auto rounded-card bg-card shadow-toy-soft">
+      {/* A table wider than its card scrolls sideways; a control the keyboard reaches there is brought wholly into view (the browser
+          stops once part of it shows, which left a focused Withdraw cut at the card's edge; 2026-11-10). Sideways only, never the page. */}
+      <div className="mt-sm overflow-x-auto rounded-card bg-card shadow-toy-soft" onFocus={showFocused}>
         <table className="w-full border-collapse text-left" aria-label={label} aria-busy={busy}>
           <thead>
             <tr className="border-b-2 border-line">

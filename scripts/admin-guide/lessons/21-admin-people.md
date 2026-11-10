@@ -102,7 +102,11 @@ Each kind runs the app's own steps. A coach's student says yes or no on their Pr
 
 **Connections the team made** lists every one with its state: Asked, Connected, Said no or Ended. **Withdraw** takes back an ask, and **End** ends a link; both ask first. On People, the link icon in a row opens that person's **Connections**, with **Connect to someone** to start from them.
 
+A connection pays each side 10 xp when it comes true, but never the person who made it, and never a manager named to a job: a Club manager link pays the member only. An invite to a place its sender made or owns pays nobody, as the place's own invite never did. Each pair pays once for a kind and a place, so one ended and made again pays nothing more, even after an erase.
+
 Staff use it too, from **Manage**, then **Connect people**, but only for the jobs they hold. Cohorts covers School programs, Shop courses and cohort managers. Reviewer covers Club managers, Talent manager covers brand teams, and Moderator covers friends. A staff member sees only those kinds in the form and in the list. A coach and a student, and an Agency team, stay with admins.
+
+Each place keeps its own rule there. Staff invite only to the private programs they made and the private courses they own; a creator's is theirs and an admin's. Staff end only what staff made. A row an admin made says so, and only an admin ends it, takes it back or changes it, here or on the place's own page. On a place that is their own, a maker keeps that power.
 
 ## Invites and the waitlist
 
@@ -113,7 +117,7 @@ While **Invite only** is on, a new account needs an invite code. Signing in, and
 
 Each code works for one account, once, and an account uses one code at most. **Take it back** stops a code nobody has used; it asks first. The list shows who made each code and, once used, who joined with it.
 
-Staff, and anyone you give the **Inviter** permission, make codes from **Invite people** on their own Profile tab. The person who joins is credited to whoever made the code, like an affiliate link. When that person finishes setting up, the maker earns xp and points, unless the maker is an admin.
+Staff, and anyone you give the **Inviter** permission, make codes from **Invite people** on their own Profile tab. The person who joins is credited to whoever made the code, like an affiliate link. Once that person has used the app on three different days, ticking a task or checking in on Daily, the maker earns xp and points, unless the maker is an admin.
 
 Turning **Invite only** off opens sign-up to everyone, so it asks first. Turning it on is one tap.
 

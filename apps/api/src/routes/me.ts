@@ -339,7 +339,7 @@ me.get('/export', async (c) => {
     ['teamConnections', 'SELECT id, kind, mode, place, status, created_at, answered_at, ended_at, came_true_at FROM team_connections WHERE first_user_id = ? OR second_user_id = ?'],
     // Invite codes they made and the one they joined with: the label, the dates and whether it is used, never the code itself (a live key) or who used it.
     // The label is the maker's private words, so only the maker's own rows carry it (the safety review, 2026-11-10).
-    ['inviteCodes', "SELECT id, CASE WHEN created_by = ? THEN label ELSE '' END AS label, created_at, expires_at, revoked_at, used_at, setup_done_at, CASE WHEN created_by = ? THEN 'made' ELSE 'joined with' END AS mine, 1 AS has_link FROM invite_codes WHERE created_by = ? OR used_by = ?"],
+    ['inviteCodes', "SELECT id, CASE WHEN created_by = ? THEN label ELSE '' END AS label, created_at, expires_at, revoked_at, used_at, setup_done_at, active_at, CASE WHEN created_by = ? THEN 'made' ELSE 'joined with' END AS mine, 1 AS has_link FROM invite_codes WHERE created_by = ? OR used_by = ?"],
     // Their waitlist row, found by the account's email.
     ['waitlist', 'SELECT name, email, note, status, created_at, decided_at FROM waitlist WHERE email = (SELECT email FROM users WHERE id = ?)'],
     ['coachProfile', 'SELECT * FROM coach_profiles WHERE user_id = ?'],

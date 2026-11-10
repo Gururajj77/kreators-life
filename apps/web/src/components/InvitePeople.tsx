@@ -1,4 +1,4 @@
-import { formatCount } from '@kreators/shared';
+import { formatCount, INVITE_ACTIVE_DAYS, INVITE_REWARD } from '@kreators/shared';
 import { INVITE_CREDIT_LINE } from '@kreators/shared/invites';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -67,9 +67,11 @@ function InviteRow({ inv, onRevoke }: { inv: MyInvite; onRevoke: (inv: MyInvite)
 
 /**
  * Invite people (2026-11-10), on the Profile tab (`/you#invites`), for anyone who may make invite codes (an admin, staff, or someone holding
- * the Inviter permission): make a code, share its link or the code, and see how many joined with yours. Never who used a code.
+ * the Inviter permission): make a code, share its link or the code, and see how many joined with yours. Never who used a code. `pays` is
+ * false for an admin, who earns nothing from it; for anyone else one line says when a referral pays: once the person has used the app on
+ * INVITE_ACTIVE_DAYS different days (invites.ts on the server).
  */
-export function InvitePeople() {
+export function InvitePeople({ pays = true }: { pays?: boolean }) {
   const qc = useQueryClient();
   const pg = usePage('iv', TEN_A_PAGE);
   const q = useAuthed([KEY, pg.query], () => inviteApi.mine(pg.query));
@@ -87,6 +89,11 @@ export function InvitePeople() {
         {INVITE_CREDIT_LINE}
         {q.data ? ` ${formatCount(joined)} ${joined === 1 ? 'person has' : 'people have'} joined with yours.` : ''}
       </p>
+      {pays && (
+        <p className="mt-xs m-0 text-subhead text-ink-soft">
+          You get {INVITE_REWARD.xp} xp and {INVITE_REWARD.points} points for each, once they have used the app on {INVITE_ACTIVE_DAYS} different days.
+        </p>
+      )}
       <Fold adds title="Make a code" className="mt-sm">
         <MakeInvitesForm
           onMake={async (body) => {

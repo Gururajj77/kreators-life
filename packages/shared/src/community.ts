@@ -358,12 +358,15 @@ export const SOCIAL_REWARDS = {
 export type SocialRewardKind = keyof typeof SOCIAL_REWARDS;
 /**
  * Bringing people in and the team's connections (2026-11-10, the founder: "give xp and points to non admins for these new onboarding
- * referral or connections along with badges"). An invite pays its code's maker once the person who joined with it finishes setup, never at
- * the bare sign-up, so empty device accounts pay nothing. A connection the team made (Admin, Connect people) pays each side once, on the yes
- * that makes it real; an ask pays nothing and nothing comes back when it ends. Neither pays an admin. Both count toward a pillar, and the
- * cap is per person per day, held inside the batch that pays (rewards.ts). Kept in the barrel beside SOCIAL_REWARDS, since the earning guide reads them.
+ * referral or connections along with badges"). An invite pays its code's maker once the person who joined with it has used the app on
+ * INVITE_ACTIVE_DAYS different days of their own (a task ticked or a Daily check-in; 2026-11-10, since an email is not checked), never at
+ * the bare sign-up or for setup alone. A connection the team made (Admin, Connect people) pays each side once, on the yes that makes it
+ * real, never whoever made it nor the manager named to a job, and once per kind, pair and place ever; an ask pays nothing and nothing comes
+ * back when it ends. Neither pays an admin. Both count toward a pillar, and the cap is per person per day, held inside the statement that
+ * pays (invites.ts). Kept in the barrel beside SOCIAL_REWARDS, since the earning guide reads them.
  */
 export const INVITE_REWARD = { xp: 50, points: 20, perDay: 5 } as const;
+export const INVITE_ACTIVE_DAYS = 3;
 export const CONNECT_REWARD = { xp: 10, points: 0, perDay: 5 } as const;
 export interface SocialAward {
   xp: number;
