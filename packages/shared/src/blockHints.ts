@@ -8,7 +8,7 @@ import { LIFE_AREAS } from './life.ts';
 import type { LifeAreaKey } from './life.ts';
 import { groupTasks, PLAN_DEFAULT_MINUTES } from './tasks.ts';
 import type { Priority } from './tasks.ts';
-import { blockDayMinutes, blockOfTask, minuteOf, hhmm, slotCrossesMidnight, slotLength, slotOrder, slotRangeLabel, suggestBlock, TASK_GROUP_NONE } from './timeBlocks.ts';
+import { blockDayMinutes, blockOfTask, blocksInDay, FOCUS_TAG, minuteOf, hhmm, slotCrossesMidnight, slotLength, slotOrder, slotRangeLabel, suggestBlock, TASK_GROUP_NONE } from './timeBlocks.ts';
 import type { GroupableTask, TaskGroup, TemplateSlot, TimeBlock } from './timeBlocks.ts';
 
 /** Why a block was suggested: it shares the task's area, its pillar, or (a P0 or P1 with no match) it is a Focus block. */
@@ -187,4 +187,175 @@ export function suggestLine(why: SuggestWhy, block: Pick<TimeBlock, 'area' | 'pi
   if (why === 'area' && block.area) return `It fits here by its area, ${LIFE_AREAS[block.area].name}.`;
   if (why === 'pillar' && block.pillar) return `It fits here by its pillar, ${RELATIONSHIP_BY_KEY[block.pillar].name}.`;
   return 'A top task with no match goes to a Focus block.';
+}
+
+// ---------------------------------------------------------------------------
+// Place my day (2026-11-12, the founder): every open task of the day with no block and no time gets a block and a start time, shown on
+// read in By time block and in Your day ("Placed", the time), and saved only by one tap on "Place my day" (POST /nodes/place, which
+// writes each task's time and nothing else). Rules only: no model, nothing written here.
+// ---------------------------------------------------------------------------
+
+/** What a task needs to be placed. A task with a picked block or a time is never moved; its time counts as taken. */
+export interface AutoPlaceTask {
+  id: string;
+  priority: Priority | null;
+  dueDate: string | null;
+  dueTime: string | null;
+  timeBlockId?: string | null;
+  /** Made from a pillar by the strategy session or the vibe check (`Node.fromPillar`). */
+  fromPillar?: boolean;
+  estimateMin?: number | null;
+  lifeArea?: LifeAreaKey | null;
+  relationship?: RelationshipKey;
+}
+export interface AutoPlaceContext {
+  /** The day's template slots (`DayPlan.slots`) and every block of the person's (`DayPlan.blocks`). */
+  slots: readonly TemplateSlot[];
+  blocks: readonly TimeBlock[];
+  /** Minutes already planned in each block that day: `blockUsedMin(day.slots, day.slotPlannedMin)`. Without it, from the tasks given. */
+  used?: Readonly<Record<string, number>>;
+  /** Timed tasks of the day not in `tasks` (the timed ones in `tasks` are added by themselves). */
+  taken?: readonly TakenTime[];
+  /** For today: the minute of the day it is now, so nothing is placed in time already gone. Null or absent for another day. */
+  after?: number | null;
+}
+export interface AutoPlaced {
+  taskId: string;
+  blockId: string;
+  /** "HH:MM": the time Place my day writes as the task's `dueTime`. */
+  start: string;
+  /** "HH:MM": where it ends, inside the same slot (a task longer than the slot ends with it). */
+  end: string;
+  /** Why this block: its area, its pillar, or (a P0 or P1 that fits no block) a Focus block. */
+  why: SuggestWhy;
+}
+/** Why a task did not fit: the day's blocks are over (today), no block fits it, its blocks have no minutes left, or timed tasks fill them. */
+export type NoRoomReason = 'dayOver' | 'noMatch' | 'full' | 'busy';
+export interface AutoNoRoom {
+  taskId: string;
+  reason: NoRoomReason;
+  /** The first block it would have taken, for the line; null for dayOver and noMatch. */
+  blockId: string | null;
+  /** The plain line under "No room today". */
+  line: string;
+}
+export interface AutoPlan {
+  /** In the order they were placed (`autoPlaceOrder`). */
+  placed: AutoPlaced[];
+  noRoom: AutoNoRoom[];
+}
+
+/** P0, P1, then no priority, then P2 and P3 (2026-11-12: a task nobody ranked sits after the important ones and before the normal ones). */
+const placeRank = (p: Priority | null): number => (p === null ? 2 : p <= 1 ? p : p + 1);
+/**
+ * The order tasks are placed in, so the most pressing claims the room first: priority (P0, P1, none, P2, P3), then the due date (soonest
+ * first, none last), then the ones made from a pillar, then the longest estimate (big tasks first, so the day is not cut into scraps), then
+ * the id, so the same tasks always give the same plan.
+ */
+export function autoPlaceOrder<T extends AutoPlaceTask>(tasks: readonly T[]): T[] {
+  const due = (t: T) => t.dueDate ?? '9999-99-99';
+  return [...tasks].sort(
+    (a, b) =>
+      placeRank(a.priority) - placeRank(b.priority) ||
+      due(a).localeCompare(due(b)) ||
+      Number(Boolean(b.fromPillar)) - Number(Boolean(a.fromPillar)) ||
+      est(b) - est(a) ||
+      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+}
+
+/** The line under "No room today". */
+export function noRoomLine(reason: NoRoomReason, blockName?: string | null): string {
+  if (reason === 'dayOver') return 'The day’s blocks are over.';
+  if (reason === 'noMatch') return 'No block today fits its area or pillar.';
+  if (reason === 'busy') return `Timed tasks fill ${blockName ?? 'its blocks'} today.`;
+  return `${blockName ?? 'Its blocks'} ${blockName ? 'is' : 'are'} full today.`;
+}
+
+const focusy = (b: TimeBlock): boolean => b.tag.trim().toLowerCase() === FOCUS_TAG.toLowerCase();
+
+/**
+ * Place my day: for each open task with no block and no time, in `autoPlaceOrder`, the best block of the day still to come and a start in it.
+ * 1. Blocks: the day's blocks with a slot still to come (`slotsLeft`), never one whose slots all run past midnight (the night's sleep).
+ * 2. Matches, as `suggestBlock` reads them: the blocks with the task's area; only when none has it, the blocks with its pillar. P0 and P1 try
+ *    Focus-tagged matches first, P2 and P3 the others first, and a task with no priority takes them in clock order. A P0 or P1 that matches
+ *    nothing goes to a Focus block. Anything else that matches nothing is "No room today".
+ * 3. Room: the block's minutes still to come against what is already planned in it (`used`, the server's per-slot sums) plus what this run
+ *    placed, each task its estimate or 30 minutes.
+ * 4. Start: `moveStartIn`, the first start in 15-minute steps from the slot's start (from now, for today) that overlaps no timed task of the
+ *    day and nothing placed before it, in a slot the whole task fits in (any slot of the block only when none is long enough). A block with
+ *    minutes but no free start tries the next match.
+ * A task that fits nowhere is in `noRoom` with why. Nothing is written: Place my day saves `start` as each task's time.
+ */
+export function autoPlace(tasks: readonly AutoPlaceTask[], ctx: AutoPlaceContext): AutoPlan {
+  const timed = (t: AutoPlaceTask) => minuteOf(t.dueTime) !== null;
+  const used: Record<string, number> = Object.create(null);
+  if (ctx.used) Object.assign(used, ctx.used);
+  else
+    for (const t of tasks) {
+      const hit = blockOfTask(t, ctx.slots);
+      if (hit) used[hit.blockId] = (used[hit.blockId] ?? 0) + est(t);
+    }
+  const taken: TakenTime[] = [...(ctx.taken ?? []), ...tasks.filter(timed).map((t) => ({ dueTime: t.dueTime, estimateMin: t.estimateMin ?? null }))];
+  const live = slotsLeft(ctx.slots, ctx.after).filter((s) => !slotCrossesMidnight(s));
+  const day = blocksInDay(live, ctx.blocks);
+  const anyBlock = ctx.slots.some((s) => !slotCrossesMidnight(s));
+  // The whole day's blocks, past ones too: a task whose matching blocks are all behind the clock reads "the day's blocks are over",
+  // not "no block fits", which would be untrue at 8 pm on a day that had them.
+  const wholeDay = blocksInDay(ctx.slots.filter((s) => !slotCrossesMidnight(s)), ctx.blocks);
+  const matchedEarlier = (t: AutoPlaceTask, high: boolean) =>
+    ctx.after !== null && ctx.after !== undefined && (wholeDay.some((b) => (t.lifeArea && b.area === t.lifeArea) || (t.relationship && b.pillar === t.relationship)) || (high && wholeDay.some(focusy)));
+  const placed: AutoPlaced[] = [];
+  const noRoom: AutoNoRoom[] = [];
+  const nameOf = (id: string | null) => (id ? (ctx.blocks.find((b) => b.id === id)?.name ?? null) : null);
+  const miss = (taskId: string, reason: NoRoomReason, blockId: string | null) => noRoom.push({ taskId, reason, blockId, line: noRoomLine(reason, nameOf(blockId)) });
+
+  for (const t of autoPlaceOrder(tasks.filter((x) => !x.timeBlockId && !timed(x)))) {
+    if (day.length === 0) {
+      miss(t.id, anyBlock && ctx.after !== null && ctx.after !== undefined ? 'dayOver' : 'noMatch', null);
+      continue;
+    }
+    let matches = t.lifeArea ? day.filter((b) => b.area === t.lifeArea) : [];
+    let why: SuggestWhy = 'area';
+    if (matches.length === 0 && t.relationship) {
+      matches = day.filter((b) => b.pillar === t.relationship);
+      why = 'pillar';
+    }
+    const high = t.priority !== null && t.priority <= 1;
+    const low = t.priority !== null && t.priority >= 2;
+    let candidates: TimeBlock[];
+    if (matches.length > 0) candidates = high ? [...matches.filter(focusy), ...matches.filter((b) => !focusy(b))] : low ? [...matches.filter((b) => !focusy(b)), ...matches.filter(focusy)] : matches;
+    else if (high) {
+      candidates = day.filter(focusy);
+      why = 'focus';
+    } else candidates = [];
+    if (candidates.length === 0) {
+      miss(t.id, matchedEarlier(t, high) ? 'dayOver' : 'noMatch', null);
+      continue;
+    }
+    const need = est(t);
+    let roomButBusy = false;
+    let done = false;
+    for (const b of candidates) {
+      if (!hasRoom(b.id, live, used, need)) continue;
+      // Only the slots the whole task fits in, so a half-hour task is never squeezed into the last quarter of a slot; a task longer than
+      // every slot of the block takes one from its start, as Move it does.
+      const own = live.filter((s) => s.blockId === b.id);
+      const whole = own.filter((s) => slotLength(s) >= need);
+      const move = moveStartIn(b.id, whole.length ? whole : own, taken, need, ctx.after);
+      if (!move) {
+        roomButBusy = true;
+        continue;
+      }
+      const at = minuteOf(move.start)!;
+      const span = Math.min(need, slotLength(move.slot));
+      placed.push({ taskId: t.id, blockId: b.id, start: move.start, end: hhmm(at + span), why });
+      taken.push({ dueTime: move.start, estimateMin: span });
+      used[b.id] = (used[b.id] ?? 0) + need;
+      done = true;
+      break;
+    }
+    if (!done) miss(t.id, roomButBusy ? 'busy' : 'full', candidates[0]!.id);
+  }
+  return { placed, noRoom };
 }

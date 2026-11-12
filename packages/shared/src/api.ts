@@ -5,7 +5,7 @@ import type { Redemption } from './rewards.ts';
 import type { Organization } from './work.ts';
 import { addDays } from './dates.ts';
 import type { DatePrefs } from './dates.ts';
-import type { OpenKind, Priority, Repeat } from './tasks.ts';
+import type { DailyView, OpenKind, PlaceDayItem, PlaceSkipReason, Priority, Repeat, TaskTab } from './tasks.ts';
 import type { LifeAreaKey } from './life.ts';
 import type { DayPlan } from './timeBlocks.ts';
 import type { IconName, Permission, Role } from './roles.ts';
@@ -70,6 +70,9 @@ export interface User {
   currency: string;
   /** How their app groups start (open or closed) and the order of the apps inside each group (migration 0074, `parseAppPrefs`). */
   appPrefs: AppPrefs;
+  /** The sections of Daily the person hid with View (migration 0134, `parseDailyView`); none unless they hid some. GET /me always sends it
+   * (`toUser`); optional only so an answer from before it still reads, as `user.dailyView ?? DAILY_VIEW_DEFAULT`. */
+  dailyView?: DailyView;
   avatarUrl: string;
   socials: Socials;
   publicSettings: PublicSettings;
@@ -244,6 +247,9 @@ export interface Node {
   updatedAt: string;
   /** A task a life coach added: the student still ticks it, and it pays the same. */
   fromCoach?: boolean;
+  /** Tasks only (2026-11-12): made by "Add to my tasks" from a content day's steps (`nodes.origin` `breakdown:<template>:<block>`,
+   * `breakdownOfOrigin` in `@kreators/shared/contentDays`); absent or null for any other task. */
+  breakdown?: { templateSeed: string; blockSeed: string } | null;
 }
 
 export interface RippleEvent {
@@ -311,6 +317,60 @@ export interface TodayResponse {
   looseTasks?: Node[];
   /** How many such tasks there are in all. */
   looseTotal?: number;
+  /**
+   * Daily's task tabs (2026-11-12). With `?tab=today` the main list (`tasks`, `tasksTotal`, `looseTasks` aside) and GET /today/waiting are cut
+   * to the open tasks whose day is the person's day; with no `tab` they keep the old cut, the day and before it, for the assistant and older
+   * tabs. `?open=` (Bottlenecks) is never cut by a tab. Echoes the tab the lists were cut to, or null.
+   */
+  tab?: TaskTab | null;
+  /** The three tabs' counts, under the same Area cut as the lists, from the one count read: open tasks whose day is the day, before it, after it. */
+  todayTotal?: number;
+  pastDueTotal?: number;
+  upcomingTotal?: number;
+  /** Content days (2026-11-12): the tasks "Add to my tasks" made for this day (any state but archived), so a list says "Added" with an Open
+   * link instead of being offered again. */
+  breakdowns?: { templateSeed: string; blockSeed: string; nodeId: string }[];
+}
+
+/**
+ * GET /today/past-due (prefix `pd`) and GET /today/upcoming (prefix `uc`): one tab's open tasks, ten a page (10, 25 or 50,
+ * `TASK_TAB_PAGE_SIZES`), with `date` (the person's day), `area` (the Area cut) and, for Past due, `sort` (`taskTabSort`: day, oldest
+ * first, else priority or due date). Upcoming is by day, soonest first, then time and priority. Read through idx_nodes_user_open_day.
+ */
+export interface TodayTabResponse {
+  tab: Exclude<TaskTab, 'today'>;
+  tasks: Node[];
+  page: Page;
+  /** Every task in the tab under the same cut, so the count stays true while the list is paged. */
+  total: number;
+}
+
+/** POST /nodes/place (2026-11-12, Place my day): the start `autoPlace` gave each task, written as its `dueTime` and nothing else. Limit `prefs`. */
+export interface PlaceDayRequest {
+  /** The person's day (the device's), a real calendar day. */
+  date: string;
+  items: PlaceDayItem[];
+}
+export interface PlaceDayResponse {
+  /** How many tasks took their time. */
+  saved: number;
+  /** The ones left alone: each still had to be an open task of the person's with no time and no block, else `changed` (it has one now) or `gone`. */
+  skipped: { id: string; reason: PlaceSkipReason }[];
+}
+
+/** POST /nodes/breakdown (2026-11-12, content days): one task in the block with the list's steps as its subtasks. Limit `create`. */
+export interface BreakdownRequest {
+  /** The day the list is shown on: the task's do date. */
+  date: string;
+  templateSeed: string;
+  blockSeed: string;
+  /** One of the person's own active projects, in the block's pillar. */
+  projectId: string;
+}
+export interface BreakdownResponse {
+  node: Node;
+  /** True when the task was already there for this day and list, so nothing new was made. */
+  existed?: boolean;
 }
 
 /** A page of tasks and how many in all: done tasks (GET /today/done for the day, prefix `d`; GET /nodes/done for a pillar, prefix `dn`) or the tasks let go (GET /today/let-go, prefix `lg`). */

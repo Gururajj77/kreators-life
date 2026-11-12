@@ -1,7 +1,7 @@
-import { PLAN_DEFAULT_MINUTES, RELATIONSHIP_BY_KEY, dayBlocks, minuteOf, slotIndexOfTask, slotLength, slotOrder, spanLabel, type DayPlan, type FocusRoundRow, type Node, type TimeBlock } from '@kreators/shared';
+import { CONTENT_DAY_SEEDS, PLAN_DEFAULT_MINUTES, RELATIONSHIP_BY_KEY, dayBlocks, minuteOf, slotIndexOfTask, slotLength, slotOrder, spanLabel, type DayPlan, type FocusRoundRow, type Node, type TimeBlock } from '@kreators/shared';
 import { tbClass, tbStyle } from '../lib/blockColor';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useId, useState } from 'react';
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { api } from '../lib/api';
 import { todayLocal, clockAt, slotRange } from '../lib/date';
@@ -12,6 +12,36 @@ import { Fold } from './Fold';
 import { Inert } from './Inert';
 import { StatusTag } from './StatusTag';
 import { ToggleChevron } from './ToggleMark';
+import { minuteNowOn, useDailyAnswer } from './useDailyAnswer';
+import { useNow } from '../lib/useNow';
+import type { DayPlacement } from './PlaceMyDay';
+
+// Place my day and a content day's steps load only once Your day is opened, so Daily's first download never carries the placement rule
+// (`@kreators/shared/blockHints`) or the step words (`@kreators/shared/contentDays`); each module is fetched once and kept.
+type PlaceMod = typeof import('./PlaceMyDay');
+type StepsMod = typeof import('./BlockSteps');
+const PLACE: { m: PlaceMod | null } = { m: null };
+const STEPS: { m: StepsMod | null } = { m: null };
+function useModule<M>(on: boolean, cell: { m: M | null }, load: () => Promise<M>): M | null {
+  const [m, setM] = useState<M | null>(cell.m);
+  useEffect(() => {
+    if (!on || m) return;
+    let live = true;
+    load()
+      .then((x) => {
+        cell.m = x;
+        if (live) setM(x);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [on, m, cell, load]);
+  return m ?? cell.m;
+}
+const loadPlace = () => import('./PlaceMyDay');
+const loadSteps = () => import('./BlockSteps');
+const CONTENT_SEEDS: ReadonlySet<string> = new Set(CONTENT_DAY_SEEDS);
 
 const COPY = {
   title: 'Your day',
@@ -20,16 +50,18 @@ const COPY = {
   elsewhere: 'In blocks not in today’s plan',
   overlaps: 'Overlaps',
   edit: 'Edit in Time blocks',
+  placed: 'Placed',
 } as const;
 
-type Placed = { t: Node; start: number | null; overlaps: boolean };
+/** A task in a band: by its time or block, or (`placed`) only by Place my day's plan, not saved yet. */
+type Placed = { t: Node; start: number | null; overlaps: boolean; placed?: boolean };
 type BlockChoice = { id: string; label: string };
 
 /**
  * A task with no time and no block, with a picker of the day's blocks beside it. Picking one saves it at once through the task's ordinary
  * edit (`PATCH /nodes/:id {timeBlockId}`), and the task then shows in that block's band.
  */
-function LooseTask({ t, choices }: { t: Node; choices: readonly BlockChoice[] }) {
+function LooseTask({ t, choices, note }: { t: Node; choices: readonly BlockChoice[]; /** Where Place my day puts it, or why it has no room. */ note?: ReactNode }) {
   const refresh = useRefreshAll();
   const [failed, setFailed] = useState(false);
   const put = useMutation({
@@ -41,9 +73,12 @@ function LooseTask({ t, choices }: { t: Node; choices: readonly BlockChoice[] })
   return (
     <li className="list-none">
       <div className="flex flex-wrap-reverse items-center justify-between gap-x-sm gap-y-xs">
-        <p className="m-0 min-w-0 flex-1 basis-[60%] text-subhead">
-          <Inert text={t.title} />
-        </p>
+        <div className="min-w-0 flex-1 basis-[60%]">
+          <p className="m-0 text-subhead">
+            <Inert text={t.title} />
+          </p>
+          {note}
+        </div>
         <select
           aria-label={`Time block for ${t.title}`}
           value=""
@@ -69,7 +104,7 @@ function LooseTask({ t, choices }: { t: Node; choices: readonly BlockChoice[] })
 }
 
 /** "3 tasks have no time or block yet": a toggle that lists them right here, each with its block picker. */
-function LooseTasks({ tasks, total, choices }: { tasks: readonly Node[]; total: number; choices: readonly BlockChoice[] }) {
+function LooseTasks({ tasks, total, choices, noteOf }: { tasks: readonly Node[]; total: number; choices: readonly BlockChoice[]; noteOf?: (t: Node) => ReactNode }) {
   const [open, setOpen] = useState(false);
   const id = useId();
   const n = Math.max(total, tasks.length);
@@ -82,7 +117,7 @@ function LooseTasks({ tasks, total, choices }: { tasks: readonly Node[]; total: 
       {open && (
         <ul id={id} className="mt-xs m-0 flex flex-col gap-sm p-0">
           {tasks.map((t) => (
-            <LooseTask key={t.id} t={t} choices={choices} />
+            <LooseTask key={t.id} t={t} choices={choices} note={noteOf?.(t)} />
           ))}
         </ul>
       )}
@@ -116,6 +151,15 @@ export function DayBlocks({
   const today = todayLocal();
   // The same query the focus panel's Today list reads, so a session finished there shows here at once.
   const own = useQuery({ queryKey: ['focus-today', today], queryFn: () => api.focusToday(today), enabled: Boolean(token) && sessions === undefined && tasks.length > 0, staleTime: 30_000 });
+  // Opened, Your day brings Place my day's plan (the same answer and rule as By time block) and, on a content day, each block's steps.
+  const [open, setOpen] = useState(false);
+  const answer = useDailyAnswer(today);
+  const after = minuteNowOn(today, useNow(60_000));
+  const seed = day?.template.seed ?? null;
+  const contentDay = Boolean(seed && CONTENT_SEEDS.has(seed));
+  const place = useModule(open && ((looseAll?.length ?? 0) > 0 || (answer?.looseTasks?.length ?? 0) > 0), PLACE, loadPlace);
+  const steps = useModule(open && contentDay, STEPS, loadSteps);
+  const plan: DayPlacement | null = useMemo(() => (place && answer && answer.date === today ? place.dayPlacement(answer, after) : null), [place, answer, after, today]);
   if (!day || day.slots.length === 0) return null;
   const slots = slotOrder(day.slots);
   const blockById = new Map<string, TimeBlock>(day.blocks.map((b) => [b.id, b]));
@@ -137,6 +181,13 @@ export function DayBlocks({
       else loose.push(t);
     } else if (i < 0) elsewhere.push(p);
     else inSlot[i]!.push(p);
+  }
+  // Place my day's plan, not saved yet: each placed task in the band its start falls in, marked Placed, after the band's own tasks.
+  const looseById = new Map((looseAll ?? loose).map((t) => [t.id, t]));
+  for (const pl of plan?.placed ?? []) {
+    const t = looseById.get(pl.taskId);
+    const i = t ? slotIndexOfTask({ timeBlockId: null, dueTime: pl.start }, slots) : null;
+    if (t && i !== null && i >= 0) inSlot[i]!.push({ t, start: minuteOf(pl.start), overlaps: false, placed: true });
   }
   // The server's list holds every such task of the day, not only the ones Daily shows; an older answer without it falls back to these.
   const looseList = looseAll ?? loose;
@@ -161,6 +212,7 @@ export function DayBlocks({
             <Inert text={p.t.title} />
           </p>
           {p.overlaps && <StatusTag tone="warn">{COPY.overlaps}</StatusTag>}
+          {p.placed && <StatusTag tone="calm">{COPY.placed}</StatusTag>}
         </div>
         {f > 0 && (
           <div className="mt-xs flex items-center gap-xs" data-focused={f}>
@@ -175,7 +227,7 @@ export function DayBlocks({
   };
 
   return (
-    <Fold className="mt-xs" title={COPY.title} hint={day.template.name}>
+    <Fold id="your-day" className="mt-xs" title={COPY.title} hint={day.template.name} open={open} onOpenChange={setOpen}>
       <div role="group" aria-label={`${COPY.title}: ${day.template.name}`}>
         {/* The line on the left and its edit link at the bottom right (as Daily's DayTypeNote): the link keeps its own look (the founder,
             2026-11-06: only its place changes), and its 44px tap area is its ::after. */}
@@ -185,13 +237,18 @@ export function DayBlocks({
             {COPY.edit}
           </Link>
         </div>
+        {place && plan && <place.PlaceMyDay date={today} plan={plan} />}
         <ol className="mt-sm m-0 flex list-none flex-col gap-xs p-0">
           {slots.map((s, i) => {
             const b = blockById.get(s.blockId);
-            const here = inSlot[i]!.sort(byTime);
+            const here = inSlot[i]!.sort((x, y) => Number(Boolean(x.placed)) - Number(Boolean(y.placed)) || byTime(x, y));
+            // A block with two slots (Edit 9 to 1 and 2 to 4) shows its steps once, in its first band.
+            const firstOfBlock = slots.findIndex((x) => x.blockId === s.blockId) === i;
             const len = slotLength(s);
             // The room left comes from every open task of the day (the server's sum), not only the tasks this list was given.
-            const planned = (day.slotPlannedMin?.length === slots.length ? day.slotPlannedMin[i] : undefined) ?? here.reduce((n, p) => n + est(p.t), 0);
+            const planned = (day.slotPlannedMin?.length === slots.length ? day.slotPlannedMin[i] : undefined) ?? here.filter((p) => !p.placed).reduce((n, p) => n + est(p.t), 0);
+            // What the plan put here counts against the room left, so the band never says free for what it shows placed.
+            const placedMin = here.filter((p) => p.placed).reduce((n, p) => n + est(p.t), 0);
             const over = planned > len;
             return (
               <li key={`${s.blockId}-${s.start}`} className="flex items-stretch gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
@@ -207,10 +264,11 @@ export function DayBlocks({
                     {over ? (
                       <StatusTag tone="warn">Over by {spanLabel(planned - len)}</StatusTag>
                     ) : (
-                      <span className="shrink-0 text-caption text-ink-soft">{planned === 0 ? `${spanLabel(len)} free` : `${spanLabel(len - planned)} free`}</span>
+                      <span className="shrink-0 text-caption text-ink-soft">{`${spanLabel(Math.max(0, len - planned - placedMin))} free`}</span>
                     )}
                   </div>
                   {here.length > 0 && <ul className="mt-xs m-0 flex flex-col gap-xs p-0">{here.map(line)}</ul>}
+                  {steps && b && firstOfBlock && <steps.BlockSteps date={today} templateSeed={seed} block={b} />}
                 </div>
               </li>
             );
@@ -228,7 +286,7 @@ export function DayBlocks({
             <ul className="mt-xs m-0 flex flex-col gap-xs p-0">{other.sort(byTime).map(line)}</ul>
           </div>
         )}
-        {looseList.length > 0 && <LooseTasks tasks={looseList} total={looseAll ? (looseTotal ?? looseList.length) : looseList.length} choices={choices} />}
+        {looseList.length > 0 && <LooseTasks tasks={looseList} total={looseAll ? (looseTotal ?? looseList.length) : looseList.length} choices={choices} noteOf={place && plan ? (t) => <place.PlacedNote t={t} plan={plan} blocks={day.blocks} /> : undefined} />}
       </div>
     </Fold>
   );

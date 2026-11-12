@@ -1,10 +1,11 @@
-import { anonAliasFrom, normalizeCode, DEFAULT_ZONE, isCurrency, parseAppPrefs, parseDatePrefs, isRealDay, pageSizeOf, parseIdentities, parseRepeat, parsePriority, parseIntake, parseLifeArea, parseLinkBlocks, parseOpenKind, type InboxKind, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
+import { anonAliasFrom, normalizeCode, DEFAULT_ZONE, isCurrency, parseAppPrefs, parseDatePrefs, isRealDay, pageSizeOf, parseIdentities, parseRepeat, parsePriority, parseIntake, parseLifeArea, parseLinkBlocks, parseOpenKind, parseDailyView, type InboxKind, type LinkBlock, type Page, type PageSize } from '@kreators/shared';
 import { BADGE_STATS, BADGES, badgesFrom, canInvite as canInviteRule, communityRankOf, type CommunityRank, EMPTY_SOCIALS, isPrivateBadge, parsePublicSettings, HONORS, isStaffFor, levelFromXp, PERMISSIONS, roleRank, taskReadyAt, timeHonors, type BadgeFacts, type BadgesResponse, WAIT, type Node, type NodeKind, type Permission, type RelationshipKey, type Role, type Socials, type User } from '@kreators/shared';
 import type { Context, Next } from 'hono';
 import type { AppEnv } from './env';
 import type { UserRow } from './env';
 import { noteStmt } from './notes.ts';
 import { CONNECT_PAY_KEY, CONNECT_PAYS } from './connectPay.ts';
+import { breakdownOfOrigin } from '@kreators/shared/contentDays';
 
 export interface NodeRow {
   id: string;
@@ -188,6 +189,7 @@ export function toUser(r: UserRow): User {
     currency: currencyOf(r),
     appPrefs: parseAppPrefs(r.app_prefs_json ?? null),
     datePrefs: parseDatePrefs(r.date_prefs_json ?? null),
+    dailyView: parseDailyView(r.daily_view_json ?? null),
     avatarUrl: r.avatar_url ?? '',
     socials: parseSocials(r.socials_json),
     links: linksOf(r),
@@ -444,6 +446,8 @@ export function toNode(r: NodeRow, gate?: TaskGate): Node {
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     fromCoach: Boolean(r.added_by),
+    // Made by a content day's "Add to my tasks" (`breakdown:<template>:<block>`); left off every other task.
+    ...(r.kind === 'task' && r.origin?.startsWith('breakdown:') ? { breakdown: breakdownOfOrigin(r.origin) } : {}),
   };
 }
 

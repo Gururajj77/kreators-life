@@ -31,6 +31,7 @@ import { useSeedOnce } from '../lib/useSeed';
 import { FIELD } from '../lib/ui';
 import { SITE_SECONDARY } from '../site/buttons';
 import { dateTime, monthYear, shortDate } from '../lib/date';
+import { pageTitle, usePageMeta } from '../lib/usePageMeta';
 
 const SOCIAL_LABEL = { instagram: 'Instagram', youtube: 'YouTube', x: 'X', website: 'Website' } as const;
 type SocialKey = keyof typeof SOCIAL_LABEL;
@@ -99,6 +100,9 @@ export function Public() {
   const [message, setMessage] = useState('');
   const lead = useMutation({ mutationFn: () => api.lead(handle, { name, email, message }) });
   const d = q.data;
+  // One address for a person's page whichever way it was reached (`/u/<handle>`, `/people/<id>`, a QR code's `?add=`), so a search
+  // engine counts them as one page. A private page names none.
+  usePageMeta(null, d?.handle && !d.isPrivate ? { title: pageTitle(`${d.name} (@${d.handle})`), canonical: `/u/${encodeURIComponent(d.handle)}` } : undefined);
 
   const signedIn = Boolean(token);
   // A QR code's card owns the friend request, so the cover does not offer it twice.

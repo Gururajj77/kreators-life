@@ -8,6 +8,7 @@ import {
   STARTING_BLOCKS,
   STARTING_TEMPLATES,
   templateForDate,
+  startingToRestore,
   addDays,
   dayTypeOf,
   DEFAULT_ZONE,
@@ -232,13 +233,16 @@ export async function restoreStartingSet(db: D1Database, userId: string): Promis
     db.prepare('SELECT 1 AS one FROM day_templates WHERE user_id = ? AND is_default = 1').bind(userId),
   ]);
   if (!(written!.results as { at: string | null }[])[0]?.at) return { blocks: 0, templates: 0 };
-  const haveB = new Set((b!.results as { seed: string | null }[]).map((r) => r.seed).filter(Boolean));
-  const haveT = new Set((t!.results as { seed: string | null }[]).map((r) => r.seed).filter(Boolean));
+  const haveB = new Set((b!.results as { seed: string | null }[]).map((r) => r.seed).filter((x): x is string => Boolean(x)));
+  const haveT = new Set((t!.results as { seed: string | null }[]).map((r) => r.seed).filter((x): x is string => Boolean(x)));
   const maxB = Math.max(-1, ...(b!.results as { sort: number }[]).map((r) => r.sort));
   const maxT = Math.max(-1, ...(t!.results as { sort: number }[]).map((r) => r.sort));
-  // A template needs its blocks, so a missing template brings back the starting blocks it uses as well.
-  const wantT = new Set(STARTING_TEMPLATES.filter((x) => !haveT.has(x.seed)).map((x) => x.seed));
-  const wantB = new Set(STARTING_BLOCKS.filter((x) => !haveB.has(x.seed)).map((x) => x.seed));
+  // A template needs its blocks, so a missing template brings back the starting blocks it uses as well; and never past MAX_TIME_BLOCKS or
+  // MAX_DAY_TEMPLATES (2026-11-12: the content days took the starting set to 18 blocks and 17 templates), so `startingToRestore` adds a
+  // template only with room for it and its missing blocks, then other missing blocks while there is room.
+  const pick = startingToRestore({ blocks: haveB, templates: haveT }, { blocks: b!.results.length, templates: t!.results.length });
+  const wantT = new Set(pick.templates);
+  const wantB = new Set(pick.blocks);
   if (wantB.size === 0 && wantT.size === 0) return { blocks: 0, templates: 0 };
   await db.batch(seedStatements(db, userId, wantB, wantT, { allowDefault: (any!.results as unknown[]).length === 0, blockSortFrom: maxB + 1, templateSortFrom: maxT + 1 }));
   return { blocks: wantB.size, templates: wantT.size };
@@ -321,8 +325,8 @@ export function dayPlan(blocking: Blocking, date: string): DayPlan {
   return {
     date,
     template: tpl
-      ? { id: tpl.id, name: tpl.name, lead: tpl.lead, second: tpl.second, why: tpl.why, source: tpl.source }
-      : { id: '', name: 'Everyday', lead: 'servant_leader' as RelationshipKey, second: 'self', why: null, source: null },
+      ? { id: tpl.id, seed: tpl.seed ?? null, name: tpl.name, lead: tpl.lead, second: tpl.second, why: tpl.why, source: tpl.source }
+      : { id: '', seed: null, name: 'Everyday', lead: 'servant_leader' as RelationshipKey, second: 'self', why: null, source: null },
     from: tpl ? from : 'default',
     slots: tpl ? tpl.slots : [],
     blocks: blocking.blocks,

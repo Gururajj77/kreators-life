@@ -132,8 +132,8 @@ describe('the starting set', () => {
     expect(new Set(STARTING_BLOCKS.map((b) => b.seed)).size).toBe(STARTING_BLOCKS.length);
   });
   it('never takes a seed away: people with no rows name them by id on tasks, dates and weekdays', () => {
-    const blocks = ['hygiene', 'routine', 'deep', 'recovery', 'busy', 'social', 'fun', 'learn', 'selflove', 'sleep', 'travel', 'family', 'date', 'reflect'];
-    const templates = ['everyday', 'deep', 'create', 'learning', 'money', 'admin', 'family', 'recovery', 'social', 'date', 'reflection', 'lowenergy', 'selflove', 'travel'];
+    const blocks = ['hygiene', 'routine', 'deep', 'recovery', 'busy', 'social', 'fun', 'learn', 'selflove', 'sleep', 'travel', 'family', 'date', 'reflect', 'shoot', 'edit', 'plan', 'post'];
+    const templates = ['everyday', 'deep', 'create', 'learning', 'money', 'admin', 'family', 'recovery', 'social', 'date', 'reflection', 'lowenergy', 'selflove', 'travel', 'editday', 'shootday', 'postday'];
     expect(STARTING_BLOCKS.map((b) => b.seed)).toEqual(expect.arrayContaining(blocks));
     expect(STARTING_TEMPLATES.map((t) => t.seed)).toEqual(expect.arrayContaining(templates));
   });
@@ -165,13 +165,18 @@ describe('the starting set', () => {
 });
 
 describe('the starting templates’ colours', () => {
-  // Fourteen templates over eleven wheel colours: three must share, and only these three pairs do (docs/time-blocks.md).
+  // Seventeen templates over eleven wheel colours: six must share, and only these six pairs do (docs/time-blocks.md). The first three since
+  // the wheel (2026-11-06); the content days (2026-11-12) each share with the day nearest in spirit: Edit day with Deep work day (red),
+  // Shoot day with Family day (amber), Plan and post day with Social day (orange).
   const SHARED = [
     ['everyday', 'lowenergy'],
     ['create', 'travel'],
     ['money', 'selflove'],
+    ['deep', 'editday'],
+    ['family', 'shootday'],
+    ['social', 'postday'],
   ];
-  it('each wears a wheel colour, every wheel colour is used, and only the three named pairs share', () => {
+  it('each wears a wheel colour, every wheel colour is used, and only the six named pairs share', () => {
     for (const t of STARTING_TEMPLATES) expect((TIME_BLOCK_SWATCHES as readonly string[]).includes(t.color), t.name).toBe(true);
     expect(new Set(STARTING_TEMPLATES.map((t) => t.color)).size).toBe(TIME_BLOCK_SWATCHES.length);
     const by = new Map<string, string[]>();
@@ -179,9 +184,12 @@ describe('the starting templates’ colours', () => {
     const pairs = [...by.values()].filter((l) => l.length > 1).map((l) => [...l].sort());
     expect(pairs.sort()).toEqual(SHARED.map((p) => [...p].sort()).sort());
   });
-  it('the migration gives each existing starting template the same colour', () => {
+  it('the migration gives each starting template it knew the same colour', () => {
+    // 0098 coloured the rows that existed then. A template added later (the content days) brings its colour with it: its rows are written
+    // by the seeding or a restore from STARTING_TEMPLATES, colour included, and a committed migration is never edited.
+    const ADDED_AFTER_0098 = ['editday', 'shootday', 'postday'];
     const sql = readFileSync(new URL('../../../apps/api/migrations/0098_day_template_color.sql', import.meta.url), 'utf8');
-    for (const t of STARTING_TEMPLATES) {
+    for (const t of STARTING_TEMPLATES.filter((x) => !ADDED_AFTER_0098.includes(x.seed))) {
       expect(sql, t.seed).toContain(`WHEN '${t.seed}' THEN '${t.color}'`);
       if (t.sourceKind) expect(sql, t.sourceKind).toContain(`WHEN '${t.sourceKind}' THEN '${t.color}'`);
     }

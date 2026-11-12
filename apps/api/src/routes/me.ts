@@ -23,7 +23,7 @@ import { sendEmail, track } from '../ops';
 import { deleteAccount, StillClosing } from '../account';
 import { askToCoach, isCoach } from '../coaching';
 import { currencyOf, parseSocials } from '../db';
-import { appPrefsProblem, datePrefsProblem, isAutoHandle, isCurrency, MAX_INTERESTS, parseAppPrefs, parseDatePrefs, parseIdentities, parseLinkBlocks, passwordProblem, TRACKED_EVENTS, type TrackedEvent } from '@kreators/shared';
+import { appPrefsProblem, dailyViewProblem, parseDailyView, datePrefsProblem, isAutoHandle, isCurrency, MAX_INTERESTS, parseAppPrefs, parseDatePrefs, parseIdentities, parseLinkBlocks, passwordProblem, TRACKED_EVENTS, type TrackedEvent } from '@kreators/shared';
 import type { Organization, PortfolioItem } from '@kreators/shared';
 
 export const me = new Hono<AppEnv>();
@@ -223,14 +223,22 @@ me.patch('/', async (c) => {
     if (bad) return c.json({ error: bad }, 400);
     datePrefs = JSON.stringify(parseDatePrefs({ ...parseDatePrefs(datePrefs), ...(body.datePrefs as object) }));
   }
+  // Daily's View menu (2026-11-12): the sections the person hid, the whole set at once; an unknown section or one listed twice is refused.
+  let dailyView = user.daily_view_json ?? null;
+  if ('dailyView' in body) {
+    const bad = dailyViewProblem(body.dailyView);
+    if (bad) return c.json({ error: bad }, 400);
+    const view = parseDailyView(body.dailyView);
+    dailyView = view.hidden.length ? JSON.stringify(view) : null;
+  }
   const avatarUrl = 'avatarUrl' in body ? (/^https?:\/\//.test(str(body.avatarUrl, 500)) ? str(body.avatarUrl, 500) : '') : user.avatar_url;
   const socials = body.socials && typeof body.socials === 'object' ? JSON.stringify(parseSocials(JSON.stringify(body.socials))) : user.socials_json;
   const publicJson = body.publicSettings && typeof body.publicSettings === 'object' ? JSON.stringify(parsePublicSettings({ ...publicOf(user), ...(body.publicSettings as Record<string, unknown>) })) : user.public_json;
   // Link blocks: cleaned in shared, every block gets an id here so clicks can be counted.
   const links = Array.isArray(body.links) ? JSON.stringify(parseLinkBlocks(body.links).map((b) => ({ ...b, id: b.id || newId().slice(0, 12) }))) : user.links_json;
   await db
-    .prepare('UPDATE users SET display_name = ?, creator_type = ?, leaderboard_opt_in = ?, bio = ?, reminder_time = ?, handle = ?, skills = ?, categories = ?, goals = ?, experience_level = ?, availability = ?, location = ?, open_to_intros = ?, interests = ?, identities = ?, city = ?, area = ?, lat = ?, lng = ?, timezone = ?, currency = ?, app_prefs_json = ?, date_prefs_json = ?, avatar_url = ?, socials_json = ?, public_json = ?, links_json = ?, phone = ? WHERE id = ?')
-    .bind(displayName, focus, optIn, bio, reminderTime, handle, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, identities, city, area, lat, lng, timezone, currency, appPrefs, datePrefs, avatarUrl, socials, publicJson, links, phone, user.id)
+    .prepare('UPDATE users SET display_name = ?, creator_type = ?, leaderboard_opt_in = ?, bio = ?, reminder_time = ?, handle = ?, skills = ?, categories = ?, goals = ?, experience_level = ?, availability = ?, location = ?, open_to_intros = ?, interests = ?, identities = ?, city = ?, area = ?, lat = ?, lng = ?, timezone = ?, currency = ?, app_prefs_json = ?, date_prefs_json = ?, daily_view_json = ?, avatar_url = ?, socials_json = ?, public_json = ?, links_json = ?, phone = ? WHERE id = ?')
+    .bind(displayName, focus, optIn, bio, reminderTime, handle, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, identities, city, area, lat, lng, timezone, currency, appPrefs, datePrefs, dailyView, avatarUrl, socials, publicJson, links, phone, user.id)
     .run();
   if (handle && isAutoHandle(user.handle) && !isAutoHandle(handle)) await track(db, user.id, 'profile_published', { minutesSinceSignup: Math.round((Date.now() - new Date(user.created_at).getTime()) / 60_000) });
   // Picking the Life coach tag on Profile asks to become one, as the setup chat does (askToCoach tells the admins once).

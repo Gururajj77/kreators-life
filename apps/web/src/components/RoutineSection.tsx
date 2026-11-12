@@ -1,5 +1,6 @@
-import { minutesLabel, stepsMinutes, type DayType } from '@kreators/shared';
+import { minutesLabel, stepsMinutes, type DayType, type SessionResponse } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRef } from 'react';
 import { Link } from 'react-router';
 import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
@@ -17,11 +18,44 @@ import { clockOf } from '../lib/date';
  */
 export function RoutineSection({ date }: { date: string }) {
   const qc = useQueryClient();
-  const q = useAuthed(['session', date], () => api.session(date));
+  const key = ['session', date];
+  const q = useAuthed(key, () => api.session(date));
+  // A tick shows at once and every row stays tappable while it saves (2026-11-12: one shared busy flag locked all the rows, and a tick
+  // sent before the last save came back carried the old set and undid it). Each save sends the whole set as it stands, the saves go out
+  // one after another so the server ends on the last one, and only the answer to the newest save is written back.
+  const chain = useRef<Promise<unknown>>(Promise.resolve());
+  const latest = useRef(0);
   const mark = useMutation({
-    mutationFn: (body: { dayType: DayType; steps: string[] }) => api.markRoutineDay({ date, ...body }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['session'] }),
+    mutationFn: (body: { dayType: DayType; steps: string[]; n: number }) => {
+      const send = chain.current.catch(() => undefined).then(() => api.markRoutineDay({ date, dayType: body.dayType, steps: body.steps }));
+      chain.current = send;
+      return send;
+    },
+    onMutate: async (body) => {
+      await qc.cancelQueries({ queryKey: key });
+      const before = qc.getQueryData<SessionResponse>(key);
+      if (before?.routine) {
+        const morning = (body.dayType === 'general' ? before.routine.general : before.routine.exceptional).find((b) => b.key === 'morning')?.steps ?? [];
+        const done = morning.length > 0 && morning.every((s) => body.steps.includes(s));
+        qc.setQueryData<SessionResponse>(key, { ...before, today: { day: date, dayType: body.dayType, steps: body.steps, done } });
+      }
+      return { before };
+    },
+    onSuccess: (res, body) => {
+      if (body.n === latest.current) qc.setQueryData(key, res);
+    },
+    onError: (_e, body, ctx) => {
+      if (body.n === latest.current) {
+        if (ctx?.before) qc.setQueryData(key, ctx.before);
+        void qc.invalidateQueries({ queryKey: ['session'] });
+      }
+    },
+    onSettled: (_r, _e, body) => {
+      // Other screens that read the session (the life map, Pillars) catch up once the last save is in.
+      if (body.n === latest.current) void qc.invalidateQueries({ queryKey: ['session'], predicate: (x) => x.queryKey[1] !== date });
+    },
   });
+  const save = (dayType: DayType, steps: string[]) => mark.mutate({ dayType, steps, n: ++latest.current });
   const d = q.data;
   // While /session loads, a title and a row of the no-routine card's size keep the place, so the small act below does not move.
   if (q.isPending) {
@@ -59,7 +93,7 @@ export function RoutineSection({ date }: { date: string }) {
     const next = new Set(ticked);
     if (next.has(step)) next.delete(step);
     else next.add(step);
-    mark.mutate({ dayType, steps: [...next] });
+    save(dayType, [...next]);
   };
   const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   return (
@@ -82,7 +116,7 @@ export function RoutineSection({ date }: { date: string }) {
       {d.routine.practices.affirmation && <p className="mt-sm m-0 rounded-tile bg-paper p-sm text-subhead font-semibold">“{d.routine.practices.affirmation}”</p>}
       <div className="mt-sm flex gap-xs">
         {(['general', 'exceptional'] as const).map((t) => (
-          <button key={t} type="button" className={chip(dayType === t)} onClick={() => mark.mutate({ dayType: t, steps: [...ticked] })} disabled={mark.isPending}>
+          <button key={t} type="button" className={chip(dayType === t)} onClick={() => save(t, [...ticked])} aria-pressed={dayType === t}>
             {t === 'general' ? 'Normal day' : 'Exceptional day'}
           </button>
         ))}
@@ -95,7 +129,7 @@ export function RoutineSection({ date }: { date: string }) {
             {d.today?.done ? '. Done.' : ''}
           </p>
           {morning.steps.map((step, i) => (
-            <CheckRow key={step} checked={ticked.has(step)} onToggle={() => toggle(step)} title={step} subtitle={morning.minutes?.[i] ? minutesLabel(morning.minutes[i]!) : undefined} busy={mark.isPending} />
+            <CheckRow key={step} checked={ticked.has(step)} onToggle={() => toggle(step)} title={step} subtitle={morning.minutes?.[i] ? minutesLabel(morning.minutes[i]!) : undefined} />
           ))}
         </div>
       )}

@@ -26,6 +26,7 @@ import { evenGrid, evenTile } from '../lib/bento';
 import { lazyNamed } from '../lib/lazy';
 import { useRise } from './useRise';
 import { FollowStart } from './FollowStart';
+import { usePageMeta } from '../lib/usePageMeta';
 
 /** The seven pillars stacked, each with its character on top: red at the bottom, violet at the top. */
 export function Tower() {
@@ -236,6 +237,7 @@ function Explorer({ picks, value, onPick, label }: { picks: Choice[]; value: str
  * same seven read as the five areas of life. One story shows at a time; the rest are a tap away.
  */
 export function SevenRP() {
+  usePageMeta('/7rp');
   const [params, setParams] = useSearchParams();
   const view = params.get('view') === 'five' ? 'five' : 'seven';
   // The view and the pick change in one write: two writes in one tap each start from the same old URL, so the second

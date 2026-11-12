@@ -16,7 +16,8 @@ import { SpotlightCard } from '../components/fx/SpotlightCard';
 import { TextReveal } from '../components/fx/TextReveal';
 import { publicApi } from '../lib/api';
 import { useSession } from '../lib/store';
-import { BRAND_PITCH, FEATURES, INVITE_FAQ, SITE_FAQ, SITE_FEATURES } from './content';
+import { BRAND_PITCH, FEATURES, SITE_FEATURES } from './content';
+import { usePageMeta, useSiteMeta } from '../lib/usePageMeta';
 import { useRise } from './useRise';
 import { SiteLayout, useAppEntry } from './SiteLayout';
 import { ArrowDown, ArrowUpRight, BatteryLow, Check, Hourglass, MessageSquareDashed, Puzzle, ShieldCheck, Sprout, ToggleRight, Tornado, X } from 'lucide-react';
@@ -223,7 +224,11 @@ export function Home() {
   const members = stats.data?.members ?? 0;
   // While joining is by invite, the questions say so (second, after the catch); with the switch off, or before it answers, they do not.
   const join = useQuery({ queryKey: ['site', 'join'], queryFn: publicApi.join, staleTime: 5 * 60_000 });
-  const faq = join.data?.inviteOnly ? [...SITE_FAQ.slice(0, 1), INVITE_FAQ, ...SITE_FAQ.slice(1)] : SITE_FAQ;
+  // The questions are words from `@kreators/shared/siteMeta`, the list the Worker's FAQPage block reads too, fetched after the first
+  // paint (its own chunk) so they stay out of the first download; the section is far down the page.
+  const site = useSiteMeta();
+  const faq = site ? site.siteFaq(Boolean(join.data?.inviteOnly)) : [];
+  usePageMeta('/');
 
   return (
     <SiteLayout>
@@ -651,21 +656,24 @@ export function Home() {
         </motion.div>
       </section>
 
-      <section className="mt-2xl" aria-labelledby="faq-heading">
-        <motion.div {...rise}>
-          <h2 id="faq-heading" className="type-hook text-display-3">
-            Fair questions
-          </h2>
-        </motion.div>
-        {/* An odd last question takes both columns, so it is never a lone fold. */}
-        <div className="mt-md grid gap-xs md:grid-cols-2 md:[&>*:last-child:nth-child(odd)]:col-span-2">
-          {faq.map((f) => (
-            <Fold key={f.q} title={f.q}>
-              <p className="prose-long m-0 px-sm pb-sm text-prose text-ink-soft">{f.a}</p>
-            </Fold>
-          ))}
-        </div>
-      </section>
+      {/* Drawn once the questions are in: a heading over nothing is never shown, even when their chunk could not load. */}
+      {faq.length > 0 && (
+        <section className="mt-2xl" aria-labelledby="faq-heading">
+          <motion.div {...rise}>
+            <h2 id="faq-heading" className="type-hook text-display-3">
+              Fair questions
+            </h2>
+          </motion.div>
+          {/* An odd last question takes both columns, so it is never a lone fold. */}
+          <div className="mt-md grid gap-xs md:grid-cols-2 md:[&>*:last-child:nth-child(odd)]:col-span-2">
+            {faq.map((f) => (
+              <Fold key={f.q} title={f.q}>
+                <p className="prose-long m-0 px-sm pb-sm text-prose text-ink-soft">{f.a}</p>
+              </Fold>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* R: the response. One thing to do next. */}
       <section className="mt-2xl" aria-labelledby="start-heading">

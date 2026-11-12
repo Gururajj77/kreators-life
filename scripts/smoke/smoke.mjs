@@ -7,7 +7,7 @@ import { LEGAL_VERSION } from '../../packages/shared/src/index.ts';
 import { CONTRACT_VARS, contractAsText, contractVarsUsed, invoiceAsText, money } from '../../packages/shared/src/index.ts';
 import { ATTENDEE_CLAIMS_PER_DAY, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, PLANS } from '../../packages/shared/src/index.ts';
 import { cohortTalkPrivateLabel } from '../../packages/shared/src/index.ts';
-import { MAX_DAY_TEMPLATES, MAX_TIME_BLOCKS } from '../../packages/shared/src/index.ts';
+import { MAX_DAY_TEMPLATES, MAX_TIME_BLOCKS, STARTING_BLOCKS, STARTING_TEMPLATES } from '../../packages/shared/src/index.ts';
 import { gratitudePromptsForDay } from '../../packages/shared/src/gratitude.ts';
 import { ATTENDEE_APPS, attendeeMayOpen } from '../../packages/shared/src/eventJoin.ts';
 import { CONNECT_REWARD, INVITE_ACTIVE_DAYS, INVITE_REWARD } from '../../packages/shared/src/index.ts';
@@ -7003,9 +7003,9 @@ section('Time blocks');
   const weekday = ((new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
 
   const first = await api('GET', `/time-blocks?day=${today}`, undefined, T.token);
-  check('blocks: the first read shows the starting set, 14 blocks and 14 day templates', first.status === 200 && first.json.blocks?.length === 14 && first.json.templates?.length === 14, [first.status, first.json.blocks?.length, first.json.templates?.length]);
+  check(`blocks: the first read shows the starting set, ${STARTING_BLOCKS.length} blocks and ${STARTING_TEMPLATES.length} day templates`, first.status === 200 && first.json.blocks?.length === STARTING_BLOCKS.length && first.json.templates?.length === STARTING_TEMPLATES.length, [first.status, first.json.blocks?.length, first.json.templates?.length]);
   const second = await api('GET', `/time-blocks?day=${today}`, undefined, T.token);
-  check('blocks: a second read adds nothing', second.json.blocks?.length === 14 && second.json.templates?.length === 14 && JSON.stringify(second.json.blocks?.map((b) => b.id)) === JSON.stringify(first.json.blocks?.map((b) => b.id)), second.json.blocks?.length);
+  check('blocks: a second read adds nothing', second.json.blocks?.length === STARTING_BLOCKS.length && second.json.templates?.length === STARTING_TEMPLATES.length && JSON.stringify(second.json.blocks?.map((b) => b.id)) === JSON.stringify(first.json.blocks?.map((b) => b.id)), second.json.blocks?.length);
   check('blocks: the week is seven days from its Monday', second.json.days?.length === 7 && second.json.days?.[0]?.weekday === 1 && second.json.week === second.json.days?.[0]?.date, second.json.days?.map((d) => d.date));
   const blockOf = (seed) => second.json.blocks?.find((b) => b.seed === seed);
   const tplOf = (seed) => second.json.templates?.find((t) => t.seed === seed);
@@ -7069,7 +7069,7 @@ section('Time blocks');
 
   // The weekly pattern and single dates.
   const plainDay = await api('GET', `/today?date=${today}`, undefined, T.token);
-  check('blocks: Daily carries the day’s plan', plainDay.status === 200 && plainDay.json.day?.template?.id === everyday?.id && plainDay.json.day?.from === 'default' && plainDay.json.day?.slots?.length === 10 && plainDay.json.day?.blocks?.length === 15, plainDay.json.day);
+  check('blocks: Daily carries the day’s plan', plainDay.status === 200 && plainDay.json.day?.template?.id === everyday?.id && plainDay.json.day?.from === 'default' && plainDay.json.day?.slots?.length === 10 && plainDay.json.day?.blocks?.length === STARTING_BLOCKS.length + 1, plainDay.json.day);
   const pattern = await api('PUT', '/time-blocks/pattern', { weekdays: [weekday], templateId: tplOf('deep')?.id }, T.token);
   check('blocks: the pattern gives a weekday a template and says what it had', pattern.status === 200 && pattern.json.pattern?.[weekday - 1] === tplOf('deep')?.id && pattern.json.previous?.[0]?.templateId === null, pattern.json);
   const weekDay = await api('GET', `/today?date=${today}`, undefined, T.token);
@@ -7207,7 +7207,7 @@ section('Starting blocks from code');
   const proj = (built.json.nodes ?? []).find((n) => n.kind === 'project');
   const open = await api('GET', `/time-blocks?day=${today}`, undefined, L.token);
   const daily = await api('GET', `/today?date=${today}`, undefined, L.token);
-  check('lazy blocks: the first reads show the whole set and write nothing', open.status === 200 && open.json.blocks?.length === 14 && open.json.templates?.length === 14 && wrote(open) === 0 && daily.status === 200 && wrote(daily) === 0 && daily.json.day?.template?.name === 'Everyday' && daily.json.day?.slots?.length === 10, [wrote(open), wrote(daily)]);
+  check('lazy blocks: the first reads show the whole set and write nothing', open.status === 200 && open.json.blocks?.length === STARTING_BLOCKS.length && open.json.templates?.length === STARTING_TEMPLATES.length && wrote(open) === 0 && daily.status === 200 && wrote(daily) === 0 && daily.json.day?.template?.name === 'Everyday' && daily.json.day?.slots?.length === 10, [wrote(open), wrote(daily)]);
   check('lazy blocks: the ids are the fixed ones', open.json.blocks?.every((b) => b.id === `b-${b.seed}-${uid}`) && open.json.templates?.every((t) => t.id === `t-${t.seed}-${uid}`), open.json.blocks?.[0]);
   const none = await rowsOf(L.token);
   check('lazy blocks: no rows yet, and the export says so plainly', none.blocks === 0 && none.templates === 0 && none.slots === 0 && none.at === null && /starting set/.test(none.note ?? ''), none);
@@ -7248,7 +7248,7 @@ section('Starting blocks from code');
   check('lazy blocks: after the first change every read says the same, but for the change', renamed.status === 200 && renamed.json.block?.id === deepId && renamed.json.block?.name === 'Deep focus' && JSON.stringify(asThen) === JSON.stringify(beforeChange.json), renamed.json);
   check('lazy blocks: a real first change takes under 45 round trips', Number(renamed.headers.get('x-d1-round-trips') ?? 0) <= 45, renamed.headers.get('x-d1-round-trips'));
   const written = await rowsOf(L.token);
-  check('lazy blocks: the rows are written then, all of them, and the note goes', written.blocks === 14 && written.templates === 14 && written.slots > 100 && written.at && !written.note, written);
+  check('lazy blocks: the rows are written then, all of them, and the note goes', written.blocks === STARTING_BLOCKS.length && written.templates === STARTING_TEMPLATES.length && written.slots > 100 && written.at && !written.note, written);
   const dailyAfter = await api('GET', `/today?date=${today}`, undefined, L.token);
   check('lazy blocks: the task and the date still point at the same block and template', dailyAfter.json.day?.template?.id === `t-deep-${uid}` && dailyAfter.json.tasks?.some((t) => t.id === byId.json.node?.id && t.timeBlockId === deepId) && dailyAfter.json.day?.blocks?.find((b) => b.id === deepId)?.name === 'Deep focus', dailyAfter.json.day?.template);
 
@@ -7259,7 +7259,7 @@ section('Starting blocks from code');
   const afterGone = await api('GET', `/time-blocks?day=${today}`, undefined, L.token);
   const erased = await api('POST', '/me/reset', {}, L.token);
   const afterErase = await api('GET', `/time-blocks?day=${today}`, undefined, L.token);
-  check('lazy blocks: a deleted starting template does not come back, even after an erase of progress', gone.status === 200 && afterGone.json.templates?.length === 13 && !afterGone.json.templates?.some((t) => t.seed === 'travel') && erased.status === 200 && afterErase.json.templates?.length === 13, [afterGone.json.templates?.length, erased.status, afterErase.json.templates?.length]);
+  check('lazy blocks: a deleted starting template does not come back, even after an erase of progress', gone.status === 200 && afterGone.json.templates?.length === STARTING_TEMPLATES.length - 1 && !afterGone.json.templates?.some((t) => t.seed === 'travel') && erased.status === 200 && afterErase.json.templates?.length === STARTING_TEMPLATES.length - 1, [afterGone.json.templates?.length, erased.status, afterErase.json.templates?.length]);
   const back = await api('POST', '/time-blocks/restore', {}, L.token);
   check('lazy blocks: bringing back the starting set returns it', back.json.added?.templates === 1 && (await api('GET', `/time-blocks?day=${today}`, undefined, L.token)).json.templates?.some((t) => t.seed === 'travel'), back.json);
 
@@ -7276,28 +7276,28 @@ section('Starting blocks from code');
   const tabs = await api('GET', `/time-blocks?day=${today}`, undefined, P.token);
   await api('PATCH', `/time-blocks/blocks/b-fun-${pid}`, { name: 'Later' }, P.token);
   const tabsLater = await api('GET', `/time-blocks?day=${today}`, undefined, P.token);
-  check('lazy blocks: first changes at once all land, nothing doubled or brought back', atOnce.every((r) => r.status < 300) && tabs.json.blocks?.length === 15 && tabs.json.templates?.length === 12 && tabs.json.blocks?.find((b) => b.id === `b-deep-${pid}`)?.name === 'Tab one' && tabs.json.blocks?.find((b) => b.id === `b-busy-${pid}`)?.name === 'Tab two' && !tabsLater.json.templates?.some((t) => ['travel', 'date'].includes(t.seed)) && tabsLater.json.templates?.filter((t) => t.isDefault).length === 1, [atOnce.map((r) => r.status), tabs.json.blocks?.length, tabs.json.templates?.length]);
+  check('lazy blocks: first changes at once all land, nothing doubled or brought back', atOnce.every((r) => r.status < 300) && tabs.json.blocks?.length === STARTING_BLOCKS.length + 1 && tabs.json.templates?.length === STARTING_TEMPLATES.length - 2 && tabs.json.blocks?.find((b) => b.id === `b-deep-${pid}`)?.name === 'Tab one' && tabs.json.blocks?.find((b) => b.id === `b-busy-${pid}`)?.name === 'Tab two' && !tabsLater.json.templates?.some((t) => ['travel', 'date'].includes(t.seed)) && tabsLater.json.templates?.filter((t) => t.isDefault).length === 1, [atOnce.map((r) => r.status), tabs.json.blocks?.length, tabs.json.templates?.length]);
 
   // The most a person may keep counts the starting ones, rows or not.
   const M = await signup(`lazymost-${stamp}@smoke.test`, 'Lazyblocks-smoke-ok-3', 'Lazy Most');
   const madeAll = [];
-  for (let i = 0; i < MAX_DAY_TEMPLATES - 14; i++) madeAll.push(await api('POST', '/time-blocks/templates', { name: `Mine ${i}`, ...(i === 0 ? { fromId: `t-everyday-${M.user.id}` } : { lead: 'self' }) }, M.token));
+  for (let i = 0; i < MAX_DAY_TEMPLATES - STARTING_TEMPLATES.length; i++) madeAll.push(await api('POST', '/time-blocks/templates', { name: `Mine ${i}`, ...(i === 0 ? { fromId: `t-everyday-${M.user.id}` } : { lead: 'self' }) }, M.token));
   const oneTooMany = await api('POST', '/time-blocks/templates', { name: 'One too many', lead: 'self' }, M.token);
   const blocksMade = [];
-  for (let i = 0; i < MAX_TIME_BLOCKS - 14; i++) blocksMade.push(await api('POST', '/time-blocks/blocks', { name: `Mine ${i}`, color: 'teal' }, M.token));
+  for (let i = 0; i < MAX_TIME_BLOCKS - STARTING_BLOCKS.length; i++) blocksMade.push(await api('POST', '/time-blocks/blocks', { name: `Mine ${i}`, color: 'teal' }, M.token));
   const blockTooMany = await api('POST', '/time-blocks/blocks', { name: 'One too many', color: 'teal' }, M.token);
   check('lazy blocks: the most templates and blocks still count the starting ones', madeAll.every((r) => r.status === 201) && oneTooMany.status === 409 && blocksMade.every((r) => r.status === 201) && blockTooMany.status === 409, [madeAll.map((r) => r.status), oneTooMany.status, blockTooMany.status]);
   const F = await signup(`lazyfirst-${stamp}@smoke.test`, 'Lazyblocks-smoke-ok-4', 'Lazy First');
   const firstCopy = await api('POST', '/time-blocks/templates', { name: 'My copy', fromId: `t-deep-${F.user.id}` }, F.token);
   const deepSlots = open.json.templates?.find((t) => t.seed === 'deep')?.slots;
-  check('lazy blocks: copying a starting template as the first change keeps its slots and takes the next colour', firstCopy.status === 201 && firstCopy.json.template?.slots?.length === deepSlots?.length && firstCopy.json.template?.sort === 14 && firstCopy.json.template?.lead === 'servant_leader' && firstCopy.json.template?.slots?.every((s) => s.blockId.endsWith(F.user.id)), firstCopy.json);
+  check('lazy blocks: copying a starting template as the first change keeps its slots and takes the next colour', firstCopy.status === 201 && firstCopy.json.template?.slots?.length === deepSlots?.length && firstCopy.json.template?.sort === STARTING_TEMPLATES.length && firstCopy.json.template?.lead === 'servant_leader' && firstCopy.json.template?.slots?.every((s) => s.blockId.endsWith(F.user.id)), firstCopy.json);
 
   // An erase and the account's delete, with no rows.
   const E = await signup(`lazyerase-${stamp}@smoke.test`, 'Lazyblocks-smoke-ok-5', 'Lazy Erase');
   const eErased = await api('POST', '/me/reset', {}, E.token);
   const eAfter = await api('GET', `/time-blocks?day=${today}`, undefined, E.token);
   const eDel = await api('DELETE', '/me', { confirm: 'DELETE' }, E.token);
-  check('lazy blocks: an erase leaves the starting set, and an account with no rows can be deleted', eErased.status === 200 && eAfter.json.templates?.length === 14 && eDel.status === 200, [eErased.status, eAfter.json.templates?.length, eDel.status]);
+  check('lazy blocks: an erase leaves the starting set, and an account with no rows can be deleted', eErased.status === 200 && eAfter.json.templates?.length === STARTING_TEMPLATES.length && eDel.status === 200, [eErased.status, eAfter.json.templates?.length, eDel.status]);
 
   // Two tabs, one moment (2026-11-07): a copy, a slot change and a task against a delete of the block they use. Before, the foreign key made some of these a 500.
   const raced = [];
@@ -7388,6 +7388,161 @@ section('Kinds of day progress');
   const kindsCard = ins.json.insights?.find((i) => i.key === 'daytype-done');
   check('kinds: Your kinds of day watches while no past day has a kind', ins.status === 200 && kindsCard?.state === 'watching' && kindsCard?.text === 'Your kinds of day' && /Give a day a kind/.test(kindsCard?.need ?? ''), kindsCard);
   check('kinds: the card shows on Daily, Reviews and Emerging, and says nothing of causes', ['today', 'reviews', 'insights'].every((a) => kindsCard?.apps?.includes(a)) && !/because|caused|leads to|due to|makes you/i.test(`${kindsCard?.text} ${kindsCard?.need}`), kindsCard?.apps);
+}
+
+// ---------------------------------------------------------------- Daily's tabs, View, Place my day and content days (2026-11-12)
+import { addDays as tabsAddDays, MAX_DAY_TEMPLATES as TABS_MAX_TEMPLATES, MAX_TIME_BLOCKS as TABS_MAX_BLOCKS } from '../../packages/shared/src/index.ts';
+section('Daily tabs, View, Place my day and content days');
+{
+  const D = await signup(`dailytabs-${stamp}@smoke.test`, 'Dailytabs-smoke-ok-1', 'Daily Tabs');
+  const uid = D.user.id;
+  const built = await api('POST', '/onboarding/build', { relationships: ['self', 'servant_leader'], date: today, picks: { self: { project: 'Tabs self project' }, servant_leader: { project: 'Tabs work project' } } }, D.token);
+  const selfProj = (built.json.nodes ?? []).find((n) => n.kind === 'project' && n.relationship === 'self');
+  const workProj = (built.json.nodes ?? []).find((n) => n.kind === 'project' && n.relationship === 'servant_leader');
+  check('tabs: two pyramids to hang tasks on', built.status === 201 && Boolean(selfProj?.id) && Boolean(workProj?.id), built.status);
+  // The pyramids come with their own first tasks; they are let go here, so the counts below are this section's own.
+  for (const n of (built.json.nodes ?? []).filter((x) => x.kind === 'task')) await api('PATCH', `/nodes/${n.id}`, { status: 'archived' }, D.token);
+  const add = (title, b = {}) => api('POST', '/nodes', { kind: 'task', parentId: selfProj?.id, relationship: 'self', title, ...b }, D.token);
+  const yesterday = tabsAddDays(today, -1);
+  const tomorrow = tabsAddDays(today, 1);
+  const t1 = (await add('Tabs today one', { doDate: today })).json.node;
+  const t2 = (await add('Tabs today two', { doDate: today })).json.node;
+  const t3 = (await add('Tabs today three', { doDate: today })).json.node;
+  const late = (await add('Tabs past due', { doDate: yesterday })).json.node;
+  const ups = [];
+  for (let i = 1; i <= 11; i += 1) ups.push((await add(`Tabs upcoming ${i}`, { doDate: tabsAddDays(today, i), ...(i === 3 ? { lifeArea: 'financial' } : {}) })).json.node);
+  const undated = (await add('Tabs undated')).json.node;
+  check('tabs: the tasks were made', [t1, t2, t3, late, undated, ...ups].every((n) => n?.id), '');
+
+  // The counts come with the day's own read, and the Today tab cuts the six to today's.
+  const tday = await api('GET', `/today?date=${today}&tab=today`, undefined, D.token);
+  const todayIds = new Set([t1.id, t2.id, t3.id]);
+  check('tabs: the Today tab lists only today’s tasks', tday.status === 200 && tday.json.tab === 'today' && tday.json.tasks?.length === 3 && tday.json.tasks.every((t) => todayIds.has(t.id)), tday.json.tasks?.map((t) => t.title));
+  check('tabs: the counts say 3 today, 1 past due, 11 upcoming', tday.json.todayTotal === 3 && tday.json.tasksTotal === 3 && tday.json.pastDueTotal === 1 && tday.json.upcomingTotal === 11, [tday.json.todayTotal, tday.json.tasksTotal, tday.json.pastDueTotal, tday.json.upcomingTotal]);
+  check('tabs: the late count still reads 1', tday.json.tasksLate === 1, tday.json.tasksLate);
+  check('tabs: the undated task stays in Not scheduled yet', !tday.json.tasks?.some((t) => t.id === undated.id) && tday.json.backlog?.some((t) => t.id === undated.id), '');
+  check('tabs: the day’s read stays at its round trips', Number(tday.headers.get('x-d1-round-trips') ?? 0) <= 8, tday.headers.get('x-d1-round-trips'));
+  const noTab = await api('GET', `/today?date=${today}`, undefined, D.token);
+  check('tabs: with no tab the day still includes the late task (the assistant and older tabs)', noTab.status === 200 && noTab.json.tab == null && noTab.json.tasks?.some((t) => t.id === late.id), noTab.json.tasks?.map((t) => t.title));
+  const openAny = await api('GET', `/today?date=${today}&tab=today&open=any`, undefined, D.token);
+  check('tabs: the Bottlenecks view is never cut by a tab', openAny.status === 200 && openAny.json.tab == null, openAny.json.tab);
+  const waitingToday = await api('GET', `/today/waiting?date=${today}&tab=today`, undefined, D.token);
+  check('tabs: more waiting follows the Today tab', waitingToday.status === 200 && !(waitingToday.json.tasks ?? []).some((t) => !todayIds.has(t.id)), waitingToday.json.tasks?.map((t) => t.title));
+
+  const past = await api('GET', `/today/past-due?date=${today}`, undefined, D.token);
+  check('tabs: Past due lists the late task', past.status === 200 && past.json.tab === 'pastdue' && past.json.total === 1 && past.json.tasks?.length === 1 && past.json.tasks[0].id === late.id, past.json);
+  check('tabs: Past due is read in a few round trips', Number(past.headers.get('x-d1-round-trips') ?? 0) <= 4, past.headers.get('x-d1-round-trips'));
+  const up1 = await api('GET', `/today/upcoming?date=${today}&ucsize=10`, undefined, D.token);
+  check('tabs: Upcoming is ten a page, soonest first', up1.status === 200 && up1.json.tab === 'upcoming' && up1.json.total === 11 && up1.json.tasks?.length === 10 && up1.json.page?.more === true && up1.json.tasks[0].id === ups[0].id && up1.json.tasks[0].doDate === tomorrow, [up1.json.total, up1.json.tasks?.length, up1.json.page]);
+  check('tabs: Upcoming is read in a few round trips', Number(up1.headers.get('x-d1-round-trips') ?? 0) <= 4, up1.headers.get('x-d1-round-trips'));
+  const up2 = await api('GET', `/today/upcoming?date=${today}&ucsize=10&ucpage=2`, undefined, D.token);
+  check('tabs: the second page holds the last one', up2.status === 200 && up2.json.tasks?.length === 1 && up2.json.tasks[0].id === ups[10].id && up2.json.page?.more === false, up2.json.page);
+  const up3 = await api('GET', `/today/upcoming?date=${today}&ucpage=3`, undefined, D.token);
+  check('tabs: a page past the end says so', up3.status === 200 && up3.json.tasks?.length === 0 && up3.json.page?.empty === true, up3.json.page);
+  const upArea = await api('GET', `/today/upcoming?date=${today}&area=financial`, undefined, D.token);
+  check('tabs: the Area filter cuts Upcoming', upArea.status === 200 && upArea.json.total === 1 && upArea.json.tasks?.[0]?.id === ups[2].id, upArea.json.total);
+  check('tabs: a day that is not real is refused', (await api('GET', '/today/upcoming?date=2026-11-31', undefined, D.token)).status === 400 && (await api('GET', '/today/past-due?date=2026-11-31', undefined, D.token)).status === 400);
+  check('tabs: the lists need a session', (await api('GET', `/today/upcoming?date=${today}`)).status === 401);
+  const early = await api('POST', `/nodes/${ups[0].id}/complete`, { date: today }, D.token);
+  check('tabs: an upcoming task cannot be ticked before its day', early.status === 400 && /Tick it on the day/.test(early.json.error ?? ''), early.json);
+
+  // View: the sections Daily hides, kept on the account.
+  const hide = await api('PATCH', '/me', { dailyView: { hidden: ['patterns', 'done'] } }, D.token);
+  const meView = await api('GET', '/me', undefined, D.token);
+  check('view: the hidden sections are saved in their own order', hide.status === 200 && JSON.stringify(meView.json.user?.dailyView?.hidden) === JSON.stringify(['done', 'patterns']), meView.json.user?.dailyView);
+  check('view: an unknown section is refused in words', (await api('PATCH', '/me', { dailyView: { hidden: ['nope'] } }, D.token)).status === 400);
+  const twice = await api('PATCH', '/me', { dailyView: { hidden: ['done', 'done'] } }, D.token);
+  check('view: a section listed twice is refused', twice.status === 400 && typeof twice.json.error === 'string', twice.json);
+  check('view: a bad shape is refused', (await api('PATCH', '/me', { dailyView: 'all' }, D.token)).status === 400);
+  const viewExport = await api('GET', '/me/export', undefined, D.token);
+  check('view: the export carries it', viewExport.status === 200 && JSON.stringify(viewExport.json.user?.dailyView?.hidden) === JSON.stringify(['done', 'patterns']), viewExport.json.user?.dailyView);
+  await api('PATCH', '/me', { dailyView: { hidden: [] } }, D.token);
+  check('view: an empty list shows everything again', JSON.stringify((await api('GET', '/me', undefined, D.token)).json.user?.dailyView) === JSON.stringify({ hidden: [] }));
+
+  // Place my day: one request, each row guarded; a task given a time in the meantime is left as it is.
+  const O = await signup(`dailytabs-other-${stamp}@smoke.test`, 'Dailytabs-smoke-ok-2', 'Daily Other');
+  const oBuilt = await api('POST', '/onboarding/build', { relationships: ['self'], date: today, picks: { self: { project: 'Other project' } } }, O.token);
+  const oProj = (oBuilt.json.nodes ?? []).find((n) => n.kind === 'project');
+  const oTask = (await api('POST', '/nodes', { kind: 'task', parentId: oProj?.id, relationship: 'self', title: 'Not yours', doDate: today }, O.token)).json.node;
+  const readyBefore = (await api('GET', `/nodes/${t1.id}`, undefined, D.token)).json.node?.readyAt;
+  await api('PATCH', `/nodes/${t3.id}`, { dueTime: '10:00' }, D.token);
+  const placed = await api('POST', '/nodes/place', { date: today, items: [{ id: t1.id, dueTime: '16:00' }, { id: t2.id, dueTime: '16:30' }, { id: t3.id, dueTime: '17:00' }, { id: oTask?.id, dueTime: '17:30' }] }, D.token);
+  const skippedOf = (id) => placed.json.skipped?.find((s) => s.id === id)?.reason;
+  check('place: two are saved, one changed meanwhile, one not yours', placed.status === 200 && placed.json.saved === 2 && skippedOf(t3.id) === 'changed' && skippedOf(oTask?.id) === 'gone', placed.json);
+  check('place: one request costs at most 5 round trips', Number(placed.headers.get('x-d1-round-trips') ?? 0) <= 5, placed.headers.get('x-d1-round-trips'));
+  const t1After = (await api('GET', `/nodes/${t1.id}`, undefined, D.token)).json.node;
+  const t3After = (await api('GET', `/nodes/${t3.id}`, undefined, D.token)).json.node;
+  const oAfter = (await api('GET', `/nodes/${oTask?.id}`, undefined, O.token)).json.node;
+  check('place: the start time is saved as the task’s time, and its wait is untouched', t1After?.dueTime === '16:00' && t1After?.readyAt === readyBefore, [t1After?.dueTime, t1After?.readyAt, readyBefore]);
+  check('place: a task given a time keeps its own', t3After?.dueTime === '10:00', t3After?.dueTime);
+  check('place: another person’s task is never touched', oAfter?.dueTime == null, oAfter?.dueTime);
+  const placeBad = await Promise.all([
+    api('POST', '/nodes/place', { date: '2026-11-31', items: [{ id: t2.id, dueTime: '09:00' }] }, D.token),
+    api('POST', '/nodes/place', { date: today, items: [] }, D.token),
+    api('POST', '/nodes/place', { date: today, items: [{ id: t2.id, dueTime: '09:00' }, { id: t2.id, dueTime: '10:00' }] }, D.token),
+    api('POST', '/nodes/place', { date: today, items: [{ id: t2.id, dueTime: '25:00' }] }, D.token),
+  ]);
+  check('place: a bad day, no items, an id twice and a time that is not real are refused', placeBad.every((r) => r.status === 400), placeBad.map((r) => r.status));
+  check('place: it needs a session', (await api('POST', '/nodes/place', { date: today, items: [{ id: t2.id, dueTime: '09:00' }] })).status === 401);
+
+  // Content days: the three starting templates and their blocks, for a new account straight from code.
+  const blocks0 = await api('GET', `/time-blocks?day=${today}`, undefined, D.token);
+  const seeds = (blocks0.json.templates ?? []).map((t) => t.seed);
+  check('content days: Edit day, Shoot day and Plan and post day are in the starting set', ['editday', 'shootday', 'postday'].every((s) => seeds.includes(s)) && ['shoot', 'edit', 'plan', 'post'].every((s) => blocks0.json.blocks?.some((b) => b.seed === s)), seeds);
+  const shoot = (blocks0.json.templates ?? []).find((t) => t.seed === 'shootday');
+  check('content days: Shoot day is named in plain words', shoot?.name === 'Shoot day', shoot?.name);
+
+  // A breakdown: one task in the block on the day, with the block's steps as subtasks.
+  const setDay = await api('PUT', '/time-blocks/days', { dates: [today], templateId: `t-shootday-${uid}` }, D.token);
+  check('breakdown: today is set to Shoot day', setDay.status < 300, setDay.json);
+  const bd = await api('POST', '/nodes/breakdown', { date: today, templateSeed: 'shootday', blockSeed: 'shoot', projectId: workProj?.id }, D.token);
+  const bn = bd.json.node;
+  check('breakdown: one task for the block, on the day, in the block', bd.status === 201 && bn?.breakdown?.templateSeed === 'shootday' && bn?.breakdown?.blockSeed === 'shoot' && bn?.timeBlockId === `b-shoot-${uid}` && bn?.doDate === today && bn?.parentId === workProj?.id, bn);
+  check('breakdown: the steps are its subtasks, the block’s minutes its length', bn?.subtaskTotal === 5 && bn?.estimateMin === 300 && bn?.lifeArea === 'financial', [bn?.subtaskTotal, bn?.estimateMin, bn?.lifeArea]);
+  const subs = await api('GET', `/nodes/${bn?.id}/subtasks`, undefined, D.token);
+  check('breakdown: the subtasks are the list, in order', subs.status === 200 && subs.json.subtasks?.length === 5 && subs.json.subtasks[0].title === 'Set up, then test the sound and the light.', subs.json.subtasks?.map((s) => s.title));
+  const dayAfter = await api('GET', `/today?date=${today}&tab=today`, undefined, D.token);
+  check('breakdown: Daily knows it was added', dayAfter.json.breakdowns?.some((b) => b.templateSeed === 'shootday' && b.blockSeed === 'shoot' && b.nodeId === bn?.id), dayAfter.json.breakdowns);
+  check('breakdown: Daily carries the template’s seed for its steps', dayAfter.json.day?.template?.seed === 'shootday', dayAfter.json.day?.template);
+  const again = await api('POST', '/nodes/breakdown', { date: today, templateSeed: 'shootday', blockSeed: 'shoot', projectId: workProj?.id }, D.token);
+  check('breakdown: a second one the same day answers 409 with the first', again.status === 409 && again.json.existed === true && again.json.node?.id === bn?.id, [again.status, again.json.node?.id]);
+  const refusals = await Promise.all([
+    api('POST', '/nodes/breakdown', { date: today, templateSeed: 'shootday', blockSeed: 'plan', projectId: selfProj?.id }, D.token),
+    api('POST', '/nodes/breakdown', { date: today, templateSeed: 'shootday', blockSeed: 'plan', projectId: oProj?.id }, D.token),
+    api('POST', '/nodes/breakdown', { date: tomorrow, templateSeed: 'shootday', blockSeed: 'plan', projectId: workProj?.id }, D.token),
+    api('POST', '/nodes/breakdown', { date: today, templateSeed: 'shootday', blockSeed: 'edit', projectId: workProj?.id }, D.token),
+    api('POST', '/nodes/breakdown', { date: '2026-11-31', templateSeed: 'shootday', blockSeed: 'plan', projectId: workProj?.id }, D.token),
+  ]);
+  check('breakdown: another pillar’s project, someone else’s project, another kind of day, a block with no list and a day that is not real are refused', refusals.every((r) => r.status === 400), refusals.map((r) => r.status));
+  await api('PATCH', `/nodes/${bn?.id}`, { status: 'archived' }, D.token);
+  const afterLetGo = await api('POST', '/nodes/breakdown', { date: today, templateSeed: 'shootday', blockSeed: 'shoot', projectId: workProj?.id }, D.token);
+  check('breakdown: once it is let go, it can be added again', afterLetGo.status === 201 && afterLetGo.json.node?.id !== bn?.id, afterLetGo.status);
+
+  // Bring back the starting set: a seeded account gets the content days back, and never past the most it may keep.
+  const R = await signup(`dailytabs-restore-${stamp}@smoke.test`, 'Dailytabs-smoke-ok-3', 'Daily Restore');
+  const rid = R.user.id;
+  await api('PATCH', `/time-blocks/blocks/b-busy-${rid}`, { name: 'Busy work, mine' }, R.token);
+  for (const s of ['editday', 'shootday', 'postday']) await api('DELETE', `/time-blocks/templates/t-${s}-${rid}`, undefined, R.token);
+  const cut = await api('GET', `/time-blocks?day=${today}`, undefined, R.token);
+  const back = await api('POST', '/time-blocks/restore', {}, R.token);
+  const backAfter = await api('GET', `/time-blocks?day=${today}`, undefined, R.token);
+  check('restore: a seeded account without the content days gets all three back', cut.json.templates?.length === STARTING_TEMPLATES.length - 3 && back.status === 200 && back.json.added?.templates === 3 && ['editday', 'shootday', 'postday'].every((s) => backAfter.json.templates?.some((t) => t.seed === s)), [cut.json.templates?.length, back.json]);
+  await api('DELETE', `/time-blocks/templates/t-shootday-${rid}`, undefined, R.token);
+  const fill = [];
+  for (let i = backAfter.json.templates.length - 1; i < TABS_MAX_TEMPLATES; i += 1) fill.push(await api('POST', '/time-blocks/templates', { name: `Restore fill ${i}`, lead: 'self' }, R.token));
+  const full = await api('POST', '/time-blocks/restore', {}, R.token);
+  const fullAfter = await api('GET', `/time-blocks?day=${today}`, undefined, R.token);
+  check('restore: at the most templates, Bring back adds none', fill.every((r) => r.status === 201) && full.status === 200 && full.json.added?.templates === 0 && fullAfter.json.templates?.length === TABS_MAX_TEMPLATES, [fill.map((r) => r.status), full.json, fullAfter.json.templates?.length]);
+  // Blocks: take one starting block away, fill the blocks to the most, and Bring back adds no block past it.
+  await api('DELETE', `/time-blocks/blocks/b-post-${rid}`, undefined, R.token);
+  const bNow = (await api('GET', `/time-blocks?day=${today}`, undefined, R.token)).json.blocks?.length ?? 0;
+  const bFill = [];
+  for (let i = bNow; i < TABS_MAX_BLOCKS; i += 1) bFill.push(await api('POST', '/time-blocks/blocks', { name: `Restore block ${i}`, color: 'teal' }, R.token));
+  const bFull = await api('POST', '/time-blocks/restore', {}, R.token);
+  const bAfter = await api('GET', `/time-blocks?day=${today}`, undefined, R.token);
+  check('restore: at the most blocks, Bring back adds none', bFill.every((r) => r.status === 201) && bFull.status === 200 && bFull.json.added?.blocks === 0 && bAfter.json.blocks?.length === TABS_MAX_BLOCKS, [bFill.map((r) => r.status), bFull.json, bAfter.json.blocks?.length]);
+  await api('DELETE', '/me', { confirm: 'DELETE' }, R.token);
+  await api('DELETE', '/me', { confirm: 'DELETE' }, O.token);
 }
 
 // ---------------------------------------------------------------- the export and the delete cover what a person wrote (2026-11-07)
@@ -9233,6 +9388,79 @@ section('Connect people by rank, place and pay');
   for (let n = 0; n <= LIMITS.connect.max; n++) last = await api('POST', '/manage/connect', { kind: 'nope' }, P.limit.token, { 'CF-Connecting-IP': `10.${((seed >> 16) + 94) & 255}.${(n >> 8) & 255}.${n & 255}` });
   check(`one staff member is stopped after ${LIMITS.connect.max} tries, from any address`, last?.status === 429, last?.status);
   check('another staff member still has tries', (await api('POST', '/manage/connect', { kind: 'nope' }, P.mod2.token, { 'CF-Connecting-IP': `10.${((seed >> 16) + 94) & 255}.250.1` })).status === 400);
+}
+
+section('Search and answer engines');
+{
+  // The build writes robots.txt and the two llms files into dist with the origin; the Worker writes the head of /, /events and each event,
+  // and the sitemap. On 8788 PUBLIC_URL is unset, so every absolute address is the production fallback.
+  const SITE = (process.env.SMOKE_PUBLIC_URL ?? 'https://kreators.app').replace(/\/+$/, '');
+  const at = { 'CF-Connecting-IP': ADDRESS };
+  const page = async (path) => {
+    const r = await fetch(`${ORIGIN}${path}`, { headers: at });
+    return { status: r.status, type: r.headers.get('content-type') ?? '', trips: r.headers.get('x-d1-round-trips'), robots: r.headers.get('x-robots-tag'), body: await r.text() };
+  };
+  const ldBlocks = (html) => [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+  const parses = (blocks) => blocks.every((b) => { try { JSON.parse(b); return true; } catch { return false; } });
+  for (const path of ['/robots.txt', '/llms.txt', '/llms-full.txt']) {
+    const r = await page(path);
+    check(`${path} answers plain text, not the app shell`, r.status === 200 && r.type.startsWith('text/plain') && !/<html|<!doctype/i.test(r.body) && r.body.length > 100, [r.status, r.type, r.body.slice(0, 80)]);
+    if (path === '/robots.txt') check('robots.txt names the sitemap on the site origin', r.body.includes(`Sitemap: ${SITE}/sitemap.xml`), r.body.match(/Sitemap:.*/)?.[0]);
+  }
+  // A public event this run made, with a title that would close a script tag, and a seller whose page is on, then off.
+  const SE = await signup(`seo-${stamp}@smoke.test`, `seo-pass-${stamp}-ok`, 'Seo Host');
+  const handle = `aaseo_${stamp}`.slice(0, 20);
+  await api('PATCH', '/me', { handle, publicSettings: { pagePublic: true } }, SE.token);
+  const product = await api('POST', '/studio/products', { kind: 'digital', title: `Seo download ${stamp}`, pricePoints: 0, status: 'live', url: 'https://example.com/seo' }, SE.token);
+  const nasty = '</script><b>x';
+  const ev = (await api('POST', '/party/events', { title: nasty, description: 'Bring <tea> & "snacks" for \'all\'.', venue: 'Lake gate', startsAt: new Date(Date.now() + 30 * 60_000).toISOString(), minutes: 60, visibility: 'public' }, SE.token)).json.event;
+  check('the run made its public event and live product', Boolean(ev?.id) && product.status === 201, [ev?.id, product.status]);
+  const sm = await page('/sitemap.xml');
+  const locs = [...sm.body.matchAll(/<loc>([^<]*)<\/loc>/g)].map((m) => m[1]);
+  check('the sitemap is XML, one urlset', sm.status === 200 && sm.type.includes('xml') && sm.body.includes('<urlset'), [sm.status, sm.type]);
+  check('the sitemap holds the feature pages and the books', locs.includes(`${SITE}/features/books`) && locs.includes(`${SITE}/features/agency`), locs.length);
+  check('the sitemap names no Dev Tools page', !locs.some((l) => l.includes('/features/observability')), '');
+  check('every sitemap address is on the site origin', locs.length > 50 && locs.every((l) => l.startsWith(`${SITE}/`)), locs.find((l) => !l.startsWith(`${SITE}/`)));
+  check('the sitemap lists the public event this run made', locs.includes(`${SITE}/events/${ev?.id}`), ev?.id);
+  check('and the page of a member with a live product', locs.includes(`${SITE}/u/${handle}`), handle);
+  check('the sitemap costs at most 3 D1 round trips', sm.trips === null || Number(sm.trips) <= 3, sm.trips);
+  await api('PATCH', '/me', { publicSettings: { pagePublic: false } }, SE.token);
+  const smOff = await page('/sitemap.xml');
+  check('a page switched off leaves the sitemap', smOff.status === 200 && !smOff.body.includes(`/u/${handle}<`), '');
+  // The home: its canonical and its structured data, written by the Worker.
+  const home = await page('/');
+  const homeLd = ldBlocks(home.body);
+  check('the home carries a canonical on the site origin', home.body.includes(`<link rel="canonical" href="${SITE}/"`), home.body.match(/<link rel="canonical"[^>]*>/)?.[0]);
+  check('the home carries at least three JSON-LD blocks that all parse', homeLd.length >= 3 && parses(homeLd), homeLd.length);
+  check('the home has one meta description', (home.body.match(/<meta name="description"/g) ?? []).length === 1, '');
+  // A feature page is a static file with its own head.
+  const ag = await page('/features/agency');
+  check('/features/agency is served with its own title and canonical', ag.status === 200 && /<title>[^<]*Agency[^<]*<\/title>/.test(ag.body) && ag.body.includes(`<link rel="canonical" href="${SITE}/features/agency"`), ag.body.match(/<title>[^<]*<\/title>/)?.[0]);
+  check('its structured data parses', parses(ldBlocks(ag.body)) && ldBlocks(ag.body).length >= 1, ldBlocks(ag.body).length);
+  // The event's page: its data parses, and the title that would close a script tag is never written raw.
+  const evp = await page(`/events/${ev?.id}`);
+  const evLd = ldBlocks(evp.body);
+  const evObj = evLd.map((b) => { try { return JSON.parse(b); } catch { return null; } }).find((o) => o?.['@type'] === 'Event');
+  check('an event page carries JSON-LD that parses, with the title as typed', evp.status === 200 && evLd.length >= 1 && parses(evLd) && evObj?.name === nasty, [evp.status, evLd.length, evObj?.name]);
+  check('the title that would close a script tag is never written raw', !evp.body.includes(nasty) && evp.body.includes('&lt;/script&gt;&lt;b&gt;x'), evp.body.match(/<title>[^<]*<\/title>/)?.[0]);
+  check('a public event page is not marked noindex', !/<meta name="robots" content="noindex"/.test(evp.body), '');
+  check('an event page costs at most 3 D1 round trips', evp.trips === null || Number(evp.trips) <= 3, evp.trips);
+  // A long title is held to 60 characters in the tab, whole in og:title; an event in person with no place typed carries no Event block.
+  const longTitle = `Seo long ${stamp} ${'evening of good talk and tea '.repeat(3)}`.trim();
+  const ev2 = (await api('POST', '/party/events', { title: longTitle, description: 'Somewhere soon.', venue: '', startsAt: new Date(Date.now() + 40 * 60_000).toISOString(), minutes: 60, visibility: 'public' }, SE.token)).json.event;
+  const evp2 = await page(`/events/${ev2?.id}`);
+  const tabTitle = (evp2.body.match(/<title>([^<]*)<\/title>/)?.[1] ?? '').replace(/&amp;/g, '&');
+  const ld2 = ldBlocks(evp2.body).map((b) => { try { return JSON.parse(b); } catch { return null; } });
+  check('a long event title is held to 60 characters in the tab', Boolean(ev2?.id) && tabTitle.length <= 60 && tabTitle.endsWith(' | kreators.app'), [tabTitle.length, tabTitle]);
+  check('and kept whole in og:title', evp2.body.includes(`<meta property="og:title" content="${longTitle} | kreators.app">`), evp2.body.match(/<meta property="og:title"[^>]*>/)?.[0]);
+  check('an event in person with no place typed has no Event block, only its trail', ld2.length >= 1 && !ld2.some((o) => o?.['@type'] === 'Event') && ld2.some((o) => o?.['@type'] === 'BreadcrumbList'), ld2.map((o) => o?.['@type']));
+  const unknown = await page(`/events/no-such-${stamp}`);
+  check('an unknown event page answers with robots noindex and no structured data', unknown.status === 200 && /<meta name="robots" content="noindex"/.test(unknown.body) && ldBlocks(unknown.body).length === 0, unknown.status);
+  check('an unknown event page costs at most 3 D1 round trips', unknown.trips === null || Number(unknown.trips) <= 3, unknown.trips);
+  const list = await page('/events');
+  check('the events list carries its canonical and parsing data', list.status === 200 && list.body.includes(`<link rel="canonical" href="${SITE}/events"`) && parses(ldBlocks(list.body)), list.status);
+  check('the 8788 server is not marked noindex by host (PUBLIC_URL unset)', home.robots === null, home.robots);
+  await api('PATCH', '/me', { publicSettings: { pagePublic: true } }, SE.token);
 }
 
 // The run's own admin goes back to a user once every section that needs it is done (the Pages section makes a program as it, Dev Tools reads as it).

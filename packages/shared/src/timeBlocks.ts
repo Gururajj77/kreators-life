@@ -147,7 +147,9 @@ export interface TimeBlocksResponse {
 /** The day's plan, on GET /today and inside the week plan. */
 export interface DayPlan {
   date: string;
-  template: { id: string; name: string; lead: RelationshipKey; second: RelationshipKey | null; why: string | null; source: string | null };
+  /** `seed` (2026-11-12, optional so older answers still read): the starting template's key when the app made it, so Daily can show a
+   * content day's steps (`stepsFor` in `@kreators/shared/contentDays`); null for the person's own. */
+  template: { id: string; name: string; lead: RelationshipKey; second: RelationshipKey | null; why: string | null; source: string | null; seed?: string | null };
   from: DayFrom;
   /** In clock order (`slotOrder`). */
   slots: TemplateSlot[];
@@ -200,6 +202,12 @@ export const STARTING_BLOCKS: readonly StartingBlock[] = [
   { seed: 'family', name: 'Family time', tag: 'Social', color: 'amber', area: 'emotional', pillar: 'parent_child' },
   { seed: 'date', name: 'Date', tag: 'Social', color: 'magenta', area: 'emotional', pillar: 'lover_partner' },
   { seed: 'reflect', name: 'Reflection', tag: 'Self care', color: 'purple', area: 'mental', pillar: 'self' },
+  // Content days (2026-11-12, the founder): four blocks for making content, used only by Edit day, Shoot day and Plan and post day. Servitude's
+  // work, so the financial area and the servant_leader pillar; filming and editing are Focus, so a P0 or P1 lands there first.
+  { seed: 'shoot', name: 'Shoot', tag: 'Focus', color: 'amber', area: 'financial', pillar: 'servant_leader' },
+  { seed: 'edit', name: 'Edit', tag: 'Focus', color: 'red', area: 'financial', pillar: 'servant_leader' },
+  { seed: 'plan', name: 'Plan and prep', tag: 'Admin', color: 'blue', area: 'financial', pillar: 'servant_leader' },
+  { seed: 'post', name: 'Post', tag: 'Social', color: 'teal', area: 'financial', pillar: 'servant_leader' },
 ];
 
 type SlotSpec = [block: string, start: string, end: string];
@@ -232,6 +240,12 @@ function fromKind(seed: string, name: string, kind: DayTypeKey, color: BlockColo
   const k = dayTypeOf(kind);
   if (!k) throw new Error(`unknown kind of day ${kind}`);
   return { seed, name, sourceKind: kind, lead: k.lead, second: k.second, why: k.why, source: k.source, isDefault: false, color, slots: slotsOf(slots) };
+}
+/** A content day (2026-11-12): the Create kind's pillars and exactly its pages, with no `sourceKind`, so the kind still finds Create day alone. */
+function contentDay(seed: string, name: string, why: string, color: BlockColor, slots: SlotSpec[]): StartingTemplate {
+  const k = dayTypeOf('create');
+  if (!k) throw new Error('unknown kind of day create');
+  return { seed, name, sourceKind: null, lead: k.lead, second: k.second, why, source: k.source, isDefault: false, color, slots: slotsOf(slots) };
 }
 
 export const STARTING_TEMPLATES: readonly StartingTemplate[] = [
@@ -382,7 +396,91 @@ export const STARTING_TEMPLATES: readonly StartingTemplate[] = [
       ['sleep', '22:00', '06:00'],
     ]),
   },
+  // Content days (2026-11-12, the founder, "for everyone"). Their one idea, to film, edit and post on different days and never post what you
+  // made that day, is the Create kind's (DAY_TYPES `create`), so they cite exactly its pages. No `sourceKind`: the kind `create` still maps to
+  // Create day alone. Each content block carries a ready list of steps (`CONTENT_STEPS` in `@kreators/shared/contentDays`).
+  contentDay('editday', 'Edit day', 'Your own craft comes first. Edit today, on a day you do not film or post.', 'red', [
+    ['hygiene', '07:00', '08:00'],
+    ['routine', '08:00', '09:00'],
+    ['edit', '09:00', '13:00'],
+    ['recovery', '13:00', '14:00'],
+    ['edit', '14:00', '16:00'],
+    ['busy', '16:00', '17:00'],
+    ['social', '17:00', '19:00'],
+    ['fun', '19:00', '21:00'],
+    ['learn', '21:00', '22:00'],
+    ['selflove', '22:00', '23:00'],
+    ['sleep', '23:00', '07:00'],
+  ]),
+  contentDay('shootday', 'Shoot day', 'Your own craft comes first. Film today, and leave the edit for another day.', 'amber', [
+    ['hygiene', '07:00', '08:00'],
+    ['plan', '08:00', '10:00'],
+    ['shoot', '10:00', '13:00'],
+    ['recovery', '13:00', '14:00'],
+    ['shoot', '14:00', '16:00'],
+    ['busy', '16:00', '17:00'],
+    ['reflect', '17:00', '18:00'],
+    ['social', '18:00', '19:00'],
+    ['fun', '19:00', '21:00'],
+    ['learn', '21:00', '22:00'],
+    ['selflove', '22:00', '23:00'],
+    ['sleep', '23:00', '07:00'],
+  ]),
+  contentDay('postday', 'Plan and post day', 'Your own craft comes first. Plan what comes next, and post only what you made on another day.', 'orange', [
+    ['hygiene', '07:00', '08:00'],
+    ['routine', '08:00', '09:00'],
+    ['plan', '09:00', '12:00'],
+    ['recovery', '12:00', '14:00'],
+    ['post', '14:00', '16:00'],
+    ['busy', '16:00', '17:00'],
+    ['social', '17:00', '19:00'],
+    ['fun', '19:00', '21:00'],
+    ['learn', '21:00', '22:00'],
+    ['selflove', '22:00', '23:00'],
+    ['sleep', '23:00', '07:00'],
+  ]),
 ];
+
+/** The starting templates for making content (2026-11-12): Edit day, Shoot day, Plan and post day, in that order. */
+export const CONTENT_DAY_SEEDS = ['editday', 'shootday', 'postday'] as const;
+export type ContentDaySeed = (typeof CONTENT_DAY_SEEDS)[number];
+/** The content blocks those days are built on. */
+export const CONTENT_BLOCK_SEEDS = ['shoot', 'edit', 'plan', 'post'] as const;
+
+/**
+ * Which starting blocks and templates a restore may add back (`restoreStartingSet`, "Bring back the starting set"), within MAX_TIME_BLOCKS and
+ * MAX_DAY_TEMPLATES. Rules only. Templates first, in the starting order: one is added only when it and every starting block it uses that the
+ * person lacks still fit, so a template is never added without its blocks; then any other missing starting block, while there is room.
+ * `haveBlocks` and `haveTemplates` are the seeds the person has; `blockCount` and `templateCount` are every row they have, their own included.
+ */
+export function startingToRestore(
+  have: { blocks: ReadonlySet<string>; templates: ReadonlySet<string> },
+  counts: { blocks: number; templates: number },
+): { blocks: string[]; templates: string[]; leftOut: { blocks: string[]; templates: string[] } } {
+  const addB: string[] = [];
+  const addT: string[] = [];
+  const skipT: string[] = [];
+  const hasB = (s: string) => have.blocks.has(s) || addB.includes(s);
+  for (const t of STARTING_TEMPLATES) {
+    if (have.templates.has(t.seed)) continue;
+    const need = [...new Set(t.slots.map((s) => s.block))].filter((s) => !hasB(s));
+    if (counts.templates + addT.length + 1 > MAX_DAY_TEMPLATES || counts.blocks + addB.length + need.length > MAX_TIME_BLOCKS) {
+      skipT.push(t.seed);
+      continue;
+    }
+    addT.push(t.seed);
+    addB.push(...need);
+  }
+  const skipB: string[] = [];
+  for (const b of STARTING_BLOCKS) {
+    if (hasB(b.seed)) continue;
+    if (counts.blocks + addB.length + 1 > MAX_TIME_BLOCKS) skipB.push(b.seed);
+    else addB.push(b.seed);
+  }
+  // Each list in the starting order, so the new rows' sort follows it.
+  const order = (list: string[], all: readonly { seed: string }[]) => all.map((x) => x.seed).filter((s) => list.includes(s));
+  return { blocks: order(addB, STARTING_BLOCKS), templates: order(addT, STARTING_TEMPLATES), leftOut: { blocks: skipB, templates: skipT } };
+}
 
 /** The starting template made from an old kind of day. Every kind has one (tested). */
 export function startingTemplateFor(kind: DayTypeKey): StartingTemplate {

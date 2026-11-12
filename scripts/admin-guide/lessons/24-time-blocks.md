@@ -22,8 +22,8 @@ Riya reaches it three ways:
 
 The first time Riya opens Daily or the page, the app gives her a starting set, once:
 
-- **14 blocks.** Ten make up a normal day, from Morning hygiene at 7 am to Sleep at 11 pm. Travel, Family time, Date and Reflection are used by some templates.
-- **14 day templates.** Everyday is the default. The rest are Deep work day, Create day, Learning day, Money day, Admin day, Family day, Recovery day, Social day, Date day, Reflection day, Low energy day, Self love day and Travel day.
+- **18 blocks.** Ten make up a normal day, from Morning hygiene at 7 am to Sleep at 11 pm. Travel, Family time, Date, Reflection, Shoot, Edit, Plan and prep, and Post are used by some templates.
+- **17 day templates.** Everyday is the default. The rest are Deep work day, Create day, Learning day, Money day, Admin day, Family day, Recovery day, Social day, Date day, Reflection day, Low energy day, Self love day, Travel day, Edit day, Shoot day and Plan and post day. The last three carry a list of steps in each content block, which Daily shows, and **Add to my tasks** turns one list into one task with subtasks. Someone set up before them gets them with **Bring back the starting set**, which never goes past 24 blocks or 24 templates.
 
 Every one is hers to change. The page says so above the templates: "The starting ones are yours to change."
 

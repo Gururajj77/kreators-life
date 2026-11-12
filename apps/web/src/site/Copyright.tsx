@@ -5,6 +5,7 @@ import { Bullets, Fact, Grievance, H, LegalPage, Mail, NOT_SET, P, Strong, conta
 import { Link } from 'react-router';
 import { FIELD } from '../lib/ui';
 import { SITE_LINK } from './buttons';
+import { usePageMeta } from '../lib/usePageMeta';
 
 
 interface Blank {
@@ -119,6 +120,7 @@ function NoticeForm({ kind }: { kind: 'notice' | 'counter' }) {
 
 /** The copyright policy: what we do with a notice, how to send one or answer one, and who the designated agent is. */
 export function Copyright() {
+  usePageMeta('/copyright');
   const { business, loading } = useBusiness();
   const email = contactEmail(business);
   const agent = business?.dmcaAgent ?? '';

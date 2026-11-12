@@ -15,6 +15,7 @@ import { BookShelf } from '../components/BookShelf';
 import { evenGrid, evenTile } from '../lib/bento';
 import { SITE_LINK_INLINE, SITE_PRIMARY_ON_GLASS } from './buttons';
 import { FollowStart } from './FollowStart';
+import { usePageMeta } from '../lib/usePageMeta';
 
 /**
  * One column on a phone, two on a tablet and four on a laptop, in even rows (lib/bento.ts), so a group never ends with a hole or a lone card.
@@ -25,6 +26,7 @@ const CARD_COLS = { base: 1, sm: 2, lg: 4 } as const;
 
 /** Everything a creator needs, by group: every app, each opening into its own page. */
 export function Features() {
+  usePageMeta('/features');
   const entry = useAppEntry();
   // The one group order everywhere; the team's own Operations group is not on the public site.
   const groups: ModuleGroup[] = inGroupOrder(['earn', 'wellbeing', 'community', 'creator', 'core']);

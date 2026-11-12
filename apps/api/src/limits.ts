@@ -168,7 +168,7 @@ export const ROUTE_LIMITS: readonly {
   /** Count the address instead of the person. */
   by?: 'address';
   /** Count only a request whose body carries a discount code, so an ordinary checkout, enrolment or RSVP never spends the code budget. `adminKey` counts only a wrong key. */
-  when?: 'discountCode' | 'appPrefs' | 'datePrefs' | 'adminKey' | 'session';
+  when?: 'discountCode' | 'appPrefs' | 'datePrefs' | 'dailyView' | 'adminKey' | 'session';
 }[] = [
   ...CHANNEL_DOORS,
   ...(['GET', 'POST', 'PATCH', 'PUT', 'DELETE'] as const).map((method) => ({ method, path: '/admin/*', limit: 'adminKey' as const, by: 'address' as const, when: 'adminKey' as const })),
@@ -398,6 +398,11 @@ export const ROUTE_LIMITS: readonly {
   { method: 'PATCH', path: '/me', limit: 'prefs', when: 'appPrefs' },
   // The date and time format (Profile): likewise.
   { method: 'PATCH', path: '/me', limit: 'prefs', when: 'datePrefs' },
+  // Daily's View menu (the sections hidden, 2026-11-12): likewise.
+  { method: 'PATCH', path: '/me', limit: 'prefs', when: 'dailyView' },
+  // Daily's Place my day (one write for the whole plan) and a content day's Add to my tasks (one task and its steps), 2026-11-12.
+  { method: 'POST', path: '/nodes/place', limit: 'prefs' },
+  { method: 'POST', path: '/nodes/breakdown', limit: 'create' },
   // Hiding and showing your own apps, one at a time or several in one write.
   { method: 'PATCH', path: '/me/modules', limit: 'prefs' },
   // The rest of Agency's writes: everyday work under `agency`, the heavy ones (a fresh client link ends every session, an

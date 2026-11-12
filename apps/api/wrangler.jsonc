@@ -11,7 +11,8 @@
   "triggers": { "crons": ["*/15 * * * *"] },
   // The built web app is served as static assets by the same Worker.
   // Any /api/* request runs the Worker; everything else is a file or the SPA shell.
-  // The site home ("/") also runs the Worker, which fills in the absolute share-image URL for link previews.
+  // The site home ("/"), the events list and each public event ("/events", "/events/*") also run the Worker, which writes their head
+  // (title, share tags, canonical, JSON-LD, a <noscript> summary) from the database and @kreators/shared/siteMeta (routes/go.ts).
   "assets": {
     "directory": "../web/dist",
     "binding": "ASSETS",
@@ -19,7 +20,7 @@
     // The second list sends paths that should hold nothing (hidden files, backups, dumps, config) to the Worker, which answers 404
     // instead of the app shell (see blockedPath in src/headers.ts, the real rule; keep the two in step). /.well-known/ is left alone.
     "run_worker_first": [
-      "/", "/api/*", "/go/*", "/out/*", "/__scheduled", "/sitemap.xml",
+      "/", "/api/*", "/go/*", "/out/*", "/__scheduled", "/sitemap.xml", "/events", "/events/*",
       "!/.well-known/*",
       "/.*", "/*/.*", "/*.map", "/*.sql", "/*.bak", "/*.zip", "/*.tar", "/*.tar.gz", "/*.tgz", "/*.php", "/*.log", "/*.pem", "/*.key", "/*.env",
       "/backup*", "/db.*", "/dump.*", "/database.*", "/config.*", "/configuration.*", "/settings.json", "/secret*", "/credentials.*",

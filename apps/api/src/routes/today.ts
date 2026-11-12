@@ -1,5 +1,6 @@
-import { Hono } from 'hono';
-import { DAILY_GROUPED_MAX, dayTypeOf, slotIndexOfTask, slotOrder, PLAN_DEFAULT_MINUTES, startingTemplateFor, weekDates, type DayPlan, type DayTypeResponse, type TemplateSlot, MONTH_RE, MONTH_TASKS_MAX, monthShift, repeatLabel, type MonthProject, type MonthTask, type TodayMonthResponse, PLAN_DAY_MINUTES, planWeek, type PlanTask, MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, notToDoStreak, notToDoWeek, POINTS, RELATIONSHIPS, sparkFor, XP, zonedToUtc, type CheckinResponse, type NotToDo, type NotToDoStatus, type RelationshipKey, TODAY_AGENCY_MAX, type TodayAgency, type TodayEvent, type TodayResponse, type TodayWaitingResponse, parseLifeArea, isTaskSort, isOpenFilter, DONE_PAGE_SIZE, DONE_PAGE_SIZES, OPEN_KINDS, type DoneTasksResponse } from '@kreators/shared';
+import { Hono, type Context } from 'hono';
+import { DAILY_GROUPED_MAX, dayTypeOf, slotIndexOfTask, slotOrder, PLAN_DEFAULT_MINUTES, startingTemplateFor, weekDates, type DayPlan, type DayTypeResponse, type TemplateSlot, MONTH_RE, MONTH_TASKS_MAX, monthShift, repeatLabel, type MonthProject, type MonthTask, type TodayMonthResponse, PLAN_DAY_MINUTES, planWeek, type PlanTask, MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, notToDoStreak, notToDoWeek, POINTS, RELATIONSHIPS, sparkFor, XP, zonedToUtc, type CheckinResponse, type NotToDo, type NotToDoStatus, type RelationshipKey, TODAY_AGENCY_MAX, type TodayAgency, type TodayEvent, type TodayResponse, type TodayWaitingResponse, parseLifeArea, isTaskSort, isOpenFilter, DONE_PAGE_SIZE, DONE_PAGE_SIZES, OPEN_KINDS, type DoneTasksResponse, isTaskTab, TASK_TAB_CMP, TASK_TAB_PAGE_SIZES, TASK_TAB_PAGE_SIZE, taskTabSort, type TaskTab, type TodayTabResponse } from '@kreators/shared';
+import { breakdownOfOrigin } from '@kreators/shared/contentDays';
 import type { AppEnv } from '../env';
 import { resolveAccess } from '../access';
 import { DATE_RE, dateNearToday, getUser, newId, noteStmt, nowIso, pageOf, paged, shiftDate, streakNow, toNode, type NodeRow, taskGate, withSubtasks } from '../db';
@@ -177,15 +178,28 @@ function blockFilterSql(block: string | null, slots: readonly TemplateSlot[], pr
 
 /**
  * Daily's open tasks: every open task whose day (do date, else due date) has come, late ones included. `cut` is the Area and block cuts,
- * written from fixed keys only. ?1 is the person, ?2 their day.
+ * written from fixed keys only. ?1 is the person, ?2 their day. `cmp` compares the task's day with ?2: `<=` (the day and before, the old
+ * cut, kept for the assistant and older tabs), or a tab's own from TASK_TAB_CMP (`=` Today, `<` Past due, `>` Upcoming): fixed strings, never typed.
  */
-const openTasksWhere = (cut: string) =>
-  `n.user_id = ?1 AND n.kind = 'task' AND n.status = 'active' AND COALESCE(n.do_date, n.due_date) IS NOT NULL AND COALESCE(n.do_date, n.due_date) <= ?2${cut}`;
+type DayCmp = '<=' | '=' | '<' | '>';
+const openTasksWhere = (cut: string, cmp: DayCmp = '<=') =>
+  `n.user_id = ?1 AND n.kind = 'task' AND n.status = 'active' AND COALESCE(n.do_date, n.due_date) IS NOT NULL AND COALESCE(n.do_date, n.due_date) ${cmp} ?2${cut}`;
+/**
+ * The cut the main list and "N more waiting" read under (2026-11-12, Daily's tabs): `?tab=today` is the day alone; with no tab the day and
+ * before it. The Bottlenecks view (`?open=`) stands apart: it lists all open business whose day has come, whatever tab is picked.
+ */
+function listCut(c: { req: { query: (k: string) => string | undefined } }, open: string | null): { tab: TaskTab | null; cmp: DayCmp } {
+  const ask = c.req.query('tab');
+  const tab = !open && isTaskTab(ask) ? ask : null;
+  return { tab, cmp: tab ? TASK_TAB_CMP[tab] : '<=' };
+}
 /** A task's open business as a rank, the order `openRank` gives in shared: none 0, then Unfinished, Unresolved, Undecided. */
 const OPEN_RANK_SQL = `CASE n.open_kind WHEN 'unfinished' THEN 1 WHEN 'unresolved' THEN 2 WHEN 'undecided' THEN 3 ELSE 0 END`;
 /** The open-business cut (`?open=`, Daily's Unfinished business view) as SQL: any of the three kinds, or one. The value is read only
  *  through `isOpenFilter`, so it is one of four fixed words, written into the query as text. */
 const openFilterSql = (open: string | null, col: string): string => (open === 'any' ? ` AND ${col} IN (${OPEN_KINDS.map((k) => `'${k}'`).join(', ')})` : open ? ` AND ${col} = '${open}'` : '');
+/** The same cut as an expression, for a count that also counts what it leaves out (the tabs' counts). */
+const openFilterExpr = (open: string | null, col: string): string => (open === 'any' ? `${col} IN (${OPEN_KINDS.map((k) => `'${k}'`).join(', ')})` : open ? `${col} = '${open}'` : '1');
 
 /**
  * Which come first, the same order as the sort the person picked (`sortTasks`), so the six shown are the top six of it: ?3 = 0 by day;
@@ -239,11 +253,14 @@ today.get('/', async (c) => {
   const useContext = contextApplies(day, blocking.defaultId) ? 1 : 0;
   const shownMax = grouped ? DAILY_GROUPED_MAX : 6;
   const order = openOrderArgs(c.req.query('sort'), grouped, useContext, day);
-  const openWhere = openTasksWhere(`${areaSql('n.life_area')}${openSql('n.open_kind')}${blockSql('n.')}`);
+  // Daily's tabs (2026-11-12): `?tab=today` cuts the six, their count and "N more waiting" to the tasks whose day is the day itself.
+  const { tab, cmp } = listCut(c, open);
+  const openWhere = openTasksWhere(`${areaSql('n.life_area')}${openSql('n.open_kind')}${blockSql('n.')}`, cmp);
+  const dayOf = 'COALESCE(n.do_date, n.due_date)';
 
   // None of these reads waits on another, so they run together: one round trip of waiting instead of a dozen.
   const [dayStart, dayEnd] = dayBounds(date, user.timezone);
-  const [due, openCount, loose, plan, back, backTotal, doneToday, recent, gate, relationship, sparkDone, notToDo, events, access, areasUsedRow, slotRows] = await Promise.all([
+  const [due, openCount, loose, plan, back, backTotal, doneToday, recent, gate, relationship, sparkDone, notToDo, events, access, areasUsedRow, slotRows, , made] = await Promise.all([
     // Which six are shown: by day on a plain day; on a day whose template was picked (a date change, or a weekday of the pattern that is not
     // the default) by context, the same order as `sortTasks` 'context' (priority, then the template's lead pillar, then its second), so a P0
     // is never left out behind a P2. Grouped (`?group=1`): up to DAILY_GROUPED_MAX by priority, then day, and the boxes sort them.
@@ -251,12 +268,21 @@ today.get('/', async (c) => {
       .prepare(`SELECT n.* FROM nodes n WHERE ${openWhere} ${OPEN_TASKS_ORDER} LIMIT ?6`)
       .bind(user.id, date, ...order, shownMax + 1)
       .all<NodeRow>(),
-    // The true count of what waits (2026-11-06): every open task whose day has come, under the same cuts, and how many of them are late
+    // The true count of what waits (2026-11-06): every open task the list's cut holds, under the same cuts, and how many open tasks are late
     // (their day is before this one, the rule Plan my week counts), so the heading says "6 of 14 waiting, 2 late" instead of stopping at six.
+    // The three tabs' counts ride in the same read (2026-11-12), under the Area cut only: the day, before it, after it. So the read walks the
+    // person's open dated tasks once, as it did, with no date cut in its WHERE.
     db
-      .prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN COALESCE(n.do_date, n.due_date) < ?2 THEN 1 ELSE 0 END), 0) AS late FROM nodes n WHERE ${openWhere}`)
+      .prepare(
+        `SELECT COALESCE(SUM(CASE WHEN ${openFilterExpr(open, 'n.open_kind')} AND ${dayOf} ${cmp} ?2 THEN 1 ELSE 0 END), 0) AS n,
+        COALESCE(SUM(CASE WHEN ${openFilterExpr(open, 'n.open_kind')} AND ${dayOf} < ?2 THEN 1 ELSE 0 END), 0) AS late,
+        COALESCE(SUM(CASE WHEN ${dayOf} = ?2 THEN 1 ELSE 0 END), 0) AS today_n,
+        COALESCE(SUM(CASE WHEN ${dayOf} < ?2 THEN 1 ELSE 0 END), 0) AS past_n,
+        COALESCE(SUM(CASE WHEN ${dayOf} > ?2 THEN 1 ELSE 0 END), 0) AS up_n
+       FROM nodes n WHERE n.user_id = ?1 AND n.kind = 'task' AND n.status = 'active' AND ${dayOf} IS NOT NULL${areaSql('n.life_area')}${blockSql('n.')}`,
+      )
       .bind(user.id, date)
-      .first<{ n: number; late: number }>(),
+      .first<{ n: number; late: number; today_n: number; past_n: number; up_n: number }>(),
     // "Your day": every open task that opens on the day with no block and no time, whatever the six shown or the Area cut, so its line names
     // each one (the room in each block is counted the same way, below). The count is over all of them; up to 50 are listed.
     db
@@ -335,6 +361,17 @@ today.get('/', async (c) => {
         if (!already) await noteStmt(db, { id: `daily-${user.id}-${date}`, userId: user.id, kind: 'reminder', title: 'Your daily three are waiting', body: 'Check in, do your small act, tick a task.', link: '/today' }, 'once').run();
       }
     })(),
+    // Content days (2026-11-12): the tasks "Add to my tasks" made for this day, open or ticked (never one let go), so Daily says "Added"
+    // instead of offering the list again. Two narrow reads: open ones through the day index, ticked ones through the done index since the
+    // day before began (a task cannot be ticked before its do date), never every task.
+    db
+      .prepare(
+        `SELECT id, origin FROM nodes INDEXED BY idx_nodes_user_open_day WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) = ?2 AND do_date = ?2 AND origin LIKE 'breakdown:%'
+       UNION ALL SELECT id, origin FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'done' AND completed_at >= ?3 AND do_date = ?2 AND origin LIKE 'breakdown:%'
+       LIMIT 40`,
+      )
+      .bind(user.id, date, dayBounds(shiftDate(date, -1), user.timezone)[0])
+      .all<{ id: string; origin: string }>(),
   ]);
   const tasksMore = due.results.length > shownMax;
   const tasks = due.results.slice(0, shownMax);
@@ -375,6 +412,14 @@ today.get('/', async (c) => {
     block,
     looseTasks: loose.results.map((t) => toNode(t, gate)),
     looseTotal: Number(loose.results[0]?.loose_total ?? 0),
+    tab,
+    todayTotal: Number(openCount?.today_n ?? 0),
+    pastDueTotal: Number(openCount?.past_n ?? 0),
+    upcomingTotal: Number(openCount?.up_n ?? 0),
+    breakdowns: made.results.flatMap((r) => {
+      const from = breakdownOfOrigin(r.origin);
+      return from ? [{ ...from, nodeId: r.id }] : [];
+    }),
   };
   if (grouped) res.tasksMore = tasksMore;
   // Agency's work for the day is read only while Agency is on for the person; with it off the field is absent.
@@ -391,7 +436,10 @@ today.get('/waiting', async (c) => {
   const areaAsk = c.req.query('area');
   const area = areaAsk === 'none' ? 'none' : parseLifeArea(areaAsk);
   const openAsk = c.req.query('open');
-  const cut = (area === 'none' ? ' AND n.life_area IS NULL' : area ? ` AND n.life_area = '${area}'` : '') + openFilterSql(isOpenFilter(openAsk) ? openAsk : null, 'n.open_kind');
+  const open = isOpenFilter(openAsk) ? openAsk : null;
+  const cut = (area === 'none' ? ' AND n.life_area IS NULL' : area ? ` AND n.life_area = '${area}'` : '') + openFilterSql(open, 'n.open_kind');
+  // Follows GET /today's tab (2026-11-12): `?tab=today` reads past the six of the day alone.
+  const { cmp } = listCut(c, open);
   const grouped = c.req.query('group') === '1';
   const blocking = await loadBlocking(db, user.id, [date]);
   const day = dayPlan(blocking, date);
@@ -400,7 +448,7 @@ today.get('/waiting', async (c) => {
   const ask = pageOf(c, 'w');
   const skip = (grouped ? DAILY_GROUPED_MAX : 6) + ask.offset;
   const rows = await db
-    .prepare(`SELECT n.* FROM nodes n WHERE ${openTasksWhere(cut)} ${OPEN_TASKS_ORDER} LIMIT ?6 OFFSET ?7`)
+    .prepare(`SELECT n.* FROM nodes n WHERE ${openTasksWhere(cut, cmp)} ${OPEN_TASKS_ORDER} LIMIT ?6 OFFSET ?7`)
     .bind(user.id, date, ...order, ask.limit, skip)
     .all<NodeRow>();
   const { items, page } = paged(rows.results, ask);
@@ -408,6 +456,42 @@ today.get('/waiting', async (c) => {
   const res: TodayWaitingResponse = { tasks: await withSubtasks(db, user.id, items.map((t) => toNode(t, gate))), page };
   return c.json(res);
 });
+
+/**
+ * Daily's Past due and Upcoming tabs (2026-11-12, the founder): the open tasks whose day (do date, else due date) is before the person's day,
+ * or after it, a page at a time (10, 25 or 50, ten by default; prefixes `pd` and `uc`), with the true count, under Daily's Area cut. Owner only;
+ * writes nothing. Both read through idx_nodes_user_open_day (migration 0133), a range on the person's open tasks by day, so a page never visits
+ * every task. Past due sorts by `taskTabSort` (day, oldest first, else priority or due date, the six's own order); Upcoming is by day,
+ * soonest first, then time and priority. An Upcoming task's tick stays locked until its day (`POST /nodes/:id/complete`).
+ */
+async function tabList(c: Context<AppEnv>, tab: Exclude<TaskTab, 'today'>) {
+  const db = c.env.DB;
+  const user = c.get('user');
+  // A day sent that is not on the calendar is refused in words (the house rule for a typed or sent day), never read as today.
+  const asked = c.req.query('date');
+  if (asked !== undefined && !DATE_RE.test(asked)) return c.json({ error: 'That is not a real day.' }, 400);
+  const date = dateParam(asked);
+  const areaAsk = c.req.query('area');
+  const area = areaAsk === 'none' ? 'none' : parseLifeArea(areaAsk);
+  const cut = area === 'none' ? ' AND n.life_area IS NULL' : area ? ` AND n.life_area = '${area}'` : '';
+  const where = `n.user_id = ?1 AND n.kind = 'task' AND n.status = 'active' AND COALESCE(n.do_date, n.due_date) ${TASK_TAB_CMP[tab]} ?2${cut}`;
+  const from = 'FROM nodes n INDEXED BY idx_nodes_user_open_day';
+  const ask = pageOf(c, tab === 'pastdue' ? 'pd' : 'uc', { sizes: TASK_TAB_PAGE_SIZES, fallback: TASK_TAB_PAGE_SIZE });
+  // Past due takes the six's order (OPEN_TASKS_ORDER with ?3 day 0, priority 1, due 2 and no lead pillar); Upcoming its own, by day.
+  const sort = taskTabSort(tab, c.req.query('sort'));
+  const list =
+    tab === 'pastdue'
+      ? db.prepare(`SELECT n.* ${from} WHERE ${where} ${OPEN_TASKS_ORDER} LIMIT ?6 OFFSET ?7`).bind(user.id, date, sort === 'priority' ? 1 : sort === 'due' ? 2 : 0, '', '', ask.limit, ask.offset)
+      : db
+          .prepare(`SELECT n.* ${from} WHERE ${where} ORDER BY COALESCE(n.do_date, n.due_date) ASC, CASE WHEN n.due_time IS NULL THEN 1 ELSE 0 END, n.due_time ASC, COALESCE(n.priority, 4) ASC, n.created_at ASC LIMIT ?3 OFFSET ?4`)
+          .bind(user.id, date, ask.limit, ask.offset);
+  const [gate, rows, total] = await Promise.all([taskGate(db, user.id), list.all<NodeRow>(), db.prepare(`SELECT COUNT(*) AS n ${from} WHERE ${where}`).bind(user.id, date).first<{ n: number }>()]);
+  const { items, page } = paged(rows.results, ask);
+  const res: TodayTabResponse = { tab, tasks: await withSubtasks(db, user.id, items.map((t) => toNode(t, gate))), page, total: total?.n ?? 0 };
+  return c.json(res);
+}
+today.get('/past-due', (c) => tabList(c, 'pastdue'));
+today.get('/upcoming', (c) => tabList(c, 'upcoming'));
 
 // Done today, a page at a time (2026-11-07, the founder: "this can pile up with time"): the tasks ticked on the person's day in their zone,
 // newest first, 10, 25 or 50 a page, ten by default (prefix `d`), and how many in all. GET /today carries the first page; this reads the rest.

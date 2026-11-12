@@ -1,4 +1,5 @@
 import type { AppPrefs, ConsentChoices, DatePrefs, LiveCallAnswer, LiveCallRequest } from '@kreators/shared';
+import type { BreakdownRequest, BreakdownResponse, DailyView, PlaceDayRequest, PlaceDayResponse, TaskTab, TodayTabResponse } from '@kreators/shared';
 import type { AdminDiscountCode, DiscountArea, DiscountCheck } from '@kreators/shared';
 import type { ActivityYear, BadgesResponse, Page, Unlock } from '@kreators/shared';
 import type { Channel, ChannelLine, ChannelMember, ChannelScope } from '@kreators/shared';
@@ -357,6 +358,8 @@ export const api = {
     appPrefs?: AppPrefs;
     /** How dates and times read on their screens (Profile); checked by datePrefsProblem. */
     datePrefs?: Partial<DatePrefs>;
+    /** The sections of Daily the person hid with View (Daily's Tasks heading); the whole set, checked by dailyViewProblem. */
+    dailyView?: DailyView;
     avatarUrl?: string;
     socials?: Socials;
       publicSettings?: Partial<PublicSettings>;
@@ -416,11 +419,22 @@ export const api = {
   /** Daily. `area` (a `LIFE_AREAS` key or 'none') has the server cut the six, the backlog and its count to that area. */
   // `group` reads up to DAILY_GROUPED_MAX tasks for Daily's coloured boxes. (The server's `block` cut is left to other callers; Daily has no Block filter.)
   // `open` ('any' or one of the three kinds, Daily's Unfinished business view) cuts them to open business.
-  today: (date: string, area = '', opts: { group?: boolean; sort?: string; open?: string } = {}) =>
-    request<TodayResponse>(`/today?date=${date}${area ? `&area=${encodeURIComponent(area)}` : ''}${opts.group ? '&group=1' : ''}${opts.sort ? `&sort=${encodeURIComponent(opts.sort)}` : ''}${opts.open ? `&open=${encodeURIComponent(opts.open)}` : ''}`),
-  /** The open tasks past the ones `today` shows, in the same order (`pq` is `pageQuery(page, size, 'w')`). */
-  todayWaiting: (date: string, area = '', group = false, pq = '', sort = '', open = '') =>
-    request<TodayWaitingResponse>(`/today/waiting?date=${date}${area ? `&area=${encodeURIComponent(area)}` : ''}${group ? '&group=1' : ''}${sort ? `&sort=${encodeURIComponent(sort)}` : ''}${open ? `&open=${encodeURIComponent(open)}` : ''}${pq ? `&${pq}` : ''}`),
+  // `tab` ('today', Daily's tabs, 2026-11-12) cuts the six and their count to the tasks whose day is today; left out, the old cut (today and before).
+  today: (date: string, area = '', opts: { group?: boolean; sort?: string; open?: string; tab?: TaskTab } = {}) =>
+    request<TodayResponse>(`/today?date=${date}${area ? `&area=${encodeURIComponent(area)}` : ''}${opts.group ? '&group=1' : ''}${opts.sort ? `&sort=${encodeURIComponent(opts.sort)}` : ''}${opts.open ? `&open=${encodeURIComponent(opts.open)}` : ''}${opts.tab ? `&tab=${opts.tab}` : ''}`),
+  /** The open tasks past the ones `today` shows, in the same order (`pq` is `pageQuery(page, size, 'w')`); `tab` as on `today`. */
+  todayWaiting: (date: string, area = '', group = false, pq = '', sort = '', open = '', tab: TaskTab | '' = '') =>
+    request<TodayWaitingResponse>(`/today/waiting?date=${date}${area ? `&area=${encodeURIComponent(area)}` : ''}${group ? '&group=1' : ''}${sort ? `&sort=${encodeURIComponent(sort)}` : ''}${open ? `&open=${encodeURIComponent(open)}` : ''}${tab ? `&tab=${tab}` : ''}${pq ? `&${pq}` : ''}`),
+  /** Daily's Past due tab, ten a page (`pq` is `pageQuery(page, size, 'pd')`); `sort` day (oldest first), priority or due (`taskTabSort`). */
+  todayPastDue: (date: string, pq = '', area = '', sort = '') =>
+    request<TodayTabResponse>(`/today/past-due?date=${date}${area ? `&area=${encodeURIComponent(area)}` : ''}${sort ? `&sort=${encodeURIComponent(sort)}` : ''}${pq ? `&${pq}` : ''}`),
+  /** Daily's Upcoming tab, soonest first, ten a page (`pq` is `pageQuery(page, size, 'uc')`). */
+  todayUpcoming: (date: string, pq = '', area = '') =>
+    request<TodayTabResponse>(`/today/upcoming?date=${date}${area ? `&area=${encodeURIComponent(area)}` : ''}${pq ? `&${pq}` : ''}`),
+  /** Place my day: saves the start `autoPlace` gave each task as its time, in one request; nothing else on a task changes. */
+  placeDay: (body: PlaceDayRequest) => post<PlaceDayResponse>('/nodes/place', body),
+  /** Content days' Add to my tasks: one task in the block with the list's steps as its subtasks, under the project picked. */
+  breakdown: (body: BreakdownRequest) => post<BreakdownResponse>('/nodes/breakdown', body),
   /** Done today past the first page `today` carries (`pq` is `pageQuery(page, size, 'd')`). */
   todayDone: (date: string, pq: string, area = '', open = '') =>
     request<DoneTasksResponse>(`/today/done?date=${date}${area ? `&area=${encodeURIComponent(area)}` : ''}${open ? `&open=${encodeURIComponent(open)}` : ''}&${pq}`),

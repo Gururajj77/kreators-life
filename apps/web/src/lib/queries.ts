@@ -1,4 +1,4 @@
-import type { InboxShow, InboxTab } from '@kreators/shared';
+import type { InboxShow, InboxTab, TaskTab, TodayResponse } from '@kreators/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { FeedFilter, FeedSort, LeaderboardScope, LeaderboardSort, LogKind, RelationshipKey } from '@kreators/shared';
 import { api } from './api';
@@ -34,7 +34,7 @@ export function useNodes(relationship: RelationshipKey) {
  * Daily's day. With an area (Daily's Area filter) the server cuts the lists to it, and `group` reads the longer list Daily's coloured boxes
  * need; each is kept under its own key beneath `keys.today(date)`, so invalidating the day refreshes them all.
  */
-export function useToday(area = '', opts: { group?: boolean; sort?: string; open?: string } = {}) {
+export function useToday(area = '', opts: { group?: boolean; sort?: string; open?: string; tab?: TaskTab | '' } = {}) {
   const date = todayLocal();
   const token = useSession((s) => s.token);
   const group = opts.group === true;
@@ -42,8 +42,11 @@ export function useToday(area = '', opts: { group?: boolean; sort?: string; open
   const sort = group ? '' : (opts.sort ?? '');
   // The Unfinished business view's cut ('any'), on the server like the area.
   const open = opts.open ?? '';
+  // Daily's tab (2026-11-12): the Today tab's cut unless asked otherwise, so Daily and the not to do list share one answer; '' (the
+  // Bottlenecks view) sends none, since the tabs never cut it.
+  const tab = opts.tab ?? 'today';
   // Changing a filter keeps the last answer on screen (filtered on the device) until the new one lands, never the loading cards.
-  const q = useQuery({ queryKey: [...keys.today(date), area, group ? 'group' : '', sort, open], queryFn: () => api.today(date, area, { group, sort, open }), enabled: Boolean(token), placeholderData: (prev) => (prev?.date === date ? prev : undefined) });
+  const q = useQuery<TodayResponse>({ queryKey: [...keys.today(date), area, group ? 'group' : '', sort, open, tab], queryFn: () => api.today(date, area, { group, sort, open, tab: tab || undefined }), enabled: Boolean(token), placeholderData: (prev) => (prev?.date === date ? prev : undefined) });
   return { date, ...q };
 }
 

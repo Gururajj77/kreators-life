@@ -21,7 +21,9 @@
     "./insights": "./src/insights.ts",
     "./lifeDashboard": "./src/lifeDashboard.ts",
     "./connect": "./src/connect.ts",
-    "./invites": "./src/invites.ts"
+    "./invites": "./src/invites.ts",
+    "./siteMeta": "./src/siteMeta.ts",
+    "./contentDays": "./src/contentDays.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

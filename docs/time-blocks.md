@@ -158,6 +158,10 @@ The founder's ten come first, then Travel, then three blocks that only the start
 | family | Family time | Social | yellow | emotional | parent_child | none |
 | date | Date | Social | green | emotional | lover_partner | none |
 | reflect | Reflection | Self care | silver | mental | self | none |
+| shoot | Shoot | Focus | amber | financial | servant_leader | none (Shoot day; added 2026-11-12) |
+| edit | Edit | Focus | red | financial | servant_leader | none (Edit day) |
+| plan | Plan and prep | Admin | blue | financial | servant_leader | none (Shoot day, Plan and post day) |
+| post | Post | Social | teal | financial | servant_leader | none (Plan and post day) |
 
 Why the areas and pillars are set this way:
 - Hygiene, Recovery and Sleep are about the body, so they are physical and Yourself. The founder said Sleep's tag is Recovery.
@@ -168,11 +172,11 @@ Why the areas and pillars are set this way:
 - Learn/explore is learning, so it is mental and Teachers.
 - Self love is emotional and Yourself.
 - Travel has neither an area nor a pillar.
-- Colours follow the pillar's own colour where that helps (Servitude red, Friends orange, Teachers indigo, Faith purple). Otherwise every block gets a different swatch. Only Recovery and Date share green, because there are fourteen blocks and fourteen swatches minus the one Travel takes. Recovery and Date both mean rest from work, and a person can change either.
+- Colours follow the pillar's own colour where that helps (Servitude red, Friends orange, Teachers indigo, Faith purple). Otherwise every block gets a different swatch. Only Recovery and Date share green, because there are fourteen blocks and fourteen swatches minus the one Travel takes. Recovery and Date both mean rest from work, and a person can change either. The four content blocks of 2026-11-12 take the colours of the work they are closest to: Edit red like Deep work, Shoot amber, Plan and prep blue like Busy work, Post teal.
 
 ### The starting templates
 
-These are 14 templates, each labelled in the UI as a starting point the person can change. `source_kind` ties each one to an old `DAY_TYPES` kind. Each one's `lead`, `second`, `why` and `source` are copied from that kind word for word. Each template's slots never overlap. Gaps are allowed and show as free time.
+These are 17 templates (14 until 2026-11-12, when the three content days came), each labelled in the UI as a starting point the person can change. `source_kind` ties each one to an old `DAY_TYPES` kind. Each one's `lead`, `second`, `why` and `source` are copied from that kind word for word. Each template's slots never overlap. Gaps are allowed and show as free time.
 
 | seed | name | source_kind | lead / second | slots |
 |---|---|---|---|---|
@@ -190,6 +194,9 @@ These are 14 templates, each labelled in the UI as a starting point the person c
 | lowenergy | Low energy day | low_energy | from DAY_TYPES | sleep 22–08, hygiene 08–09, routine 09–10, deep 10–11, recovery 11–15, busy 15–16, social 16–18, fun 18–20, selflove 20–22 |
 | selflove | Self love day | none | self / divine; why "Your own tasks come first. Fill the day with what refills you."; source "The app's own" | hygiene 07–08, routine 08–10, selflove 10–13, recovery 13–15, learn 15–17, social 17–19, fun 19–21, selflove 21–23, sleep 23–07 |
 | travel | Travel day | none | self / friendship; why "Your own tasks come first. Keep the day light around the journey."; source "The app's own" | hygiene 06–07, travel 07–12, recovery 12–14, travel 14–18, social 18–20, selflove 20–22, sleep 22–06 |
+| editday | Edit day | none | self / servant_leader, the Create kind's pillars; why "Your own craft comes first. Edit today, on a day you do not film or post."; source the Create kind's pages | hygiene 07–08, routine 08–09, edit 09–13, recovery 13–14, edit 14–16, busy 16–17, social 17–19, fun 19–21, learn 21–22, selflove 22–23, sleep 23–07 |
+| shootday | Shoot day | none | as Edit day; why "Your own craft comes first. Film today, and leave the edit for another day." | hygiene 07–08, plan 08–10, shoot 10–13, recovery 13–14, shoot 14–16, busy 16–17, reflect 17–18, social 18–19, fun 19–21, learn 21–22, selflove 22–23, sleep 23–07 |
+| postday | Plan and post day | none | as Edit day; why "Your own craft comes first. Plan what comes next, and post only what you made on another day." | hygiene 07–08, routine 08–09, plan 09–12, recovery 12–14, post 14–16, busy 16–17, social 17–19, fun 19–21, learn 21–22, selflove 22–23, sleep 23–07 |
 
 All 11 book kinds are covered. Each template's `sort` is its place in this table.
 
@@ -199,7 +206,7 @@ All 11 book kinds are covered. Each template's `sort` is its place in this table
 
 `templateColor` in `dayKinds.ts` is the one rule: the template's own colour first; only with none (null), the colour of its longest block over the day, leaving out the slots that cross midnight. Every kinds-of-day view uses it: Emerging's "Your kinds of day" strip and rows, the month calendar's dot beside the date, the Time blocks page's This month line, the week strip and the template list (a dot beside the name), the day's Kind of day select there, Daily's Kind of day select (the stored colour), and the Reviews tile.
 
-The starting colours: no two kinds alike where the wheel allows. Fourteen templates over eleven colours means three share, and the pairs are the ones least likely to be mistaken for each other:
+The starting colours: no two kinds alike where the wheel allows. Fourteen templates over eleven colours meant three share (since 2026-11-12, seventeen and six pairs: the three content days take Deep work day's red, Family day's amber and Social day's orange, each the one it is least likely to be mistaken for on the same week), and the pairs are the ones least likely to be mistaken for each other:
 
 | template | colour | shares with |
 |---|---|---|
@@ -217,8 +224,11 @@ The starting colours: no two kinds alike where the wheel allows. Fourteen templa
 | Low energy day | indigo | Everyday |
 | Self love day | lime | Money day |
 | Travel day | vermilion | Create day |
+| Edit day | red | Deep work day: both are a day of focused making (2026-11-12) |
+| Shoot day | amber | Family day: a day out with the kit against a day with family |
+| Plan and post day | orange | Social day: both face other people |
 
-The migration gives every existing starting template its colour by `seed`, then a template made from an old kind without a seed by `source_kind`; anything else stays null and keeps the longest-block colour. A shared test checks that every wheel colour is used, that only these three pairs share, and that the migration's lines match `STARTING_TEMPLATES`.
+The migration gives every existing starting template its colour by `seed`, then a template made from an old kind without a seed by `source_kind`; anything else stays null and keeps the longest-block colour. A shared test checks that every wheel colour is used, that only these pairs share (six since 2026-11-12), and that the migration's lines match `STARTING_TEMPLATES`.
 
 ### How the starting set is created
 
@@ -729,7 +739,7 @@ One signal, kept cheap and honest. The rest is left for later.
 | D: web Daily | `screens/Today.tsx`, `TaskGroups.tsx`, `DayBlocks.tsx`, `TaskPlan.tsx` (`TaskPlanFields`, `TaskTags`), `WeekPlan.tsx` and `WeekPlanBody.tsx` |
 
 C and D build against the signatures in this doc. D imports `BlockTag`, `DayTemplateSelect` and `useTimeBlocks` from C by the paths named here. B's smoke checks:
-- the first `GET /time-blocks` shows 14 blocks and 14 templates from code and writes nothing, and the first change writes them with the same ids;
+- the first `GET /time-blocks` shows the starting set (18 blocks and 17 templates since 2026-11-12) from code and writes nothing, and the first change writes them with the same ids;
 - Everyday's slots;
 - an overlap answers 400;
 - deleting a block clears it from a task;
@@ -757,3 +767,12 @@ Run after building: `pnpm typecheck`, `pnpm --filter @kreators/shared test`, `ba
 - **Icons:** blocks have no icon; the colour and the name carry them.
 - **No model:** suggestions and sorts are rules.
 - **Admin guide:** the Admin guide lessons wait for the other workflow to finish.
+
+## Content days, their steps and Place my day (2026-11-12)
+
+The founder's decisions of 2026-11-12. Three starting templates for making content, for everyone: **Edit day**, **Shoot day** and **Plan and post day** (seeds `editday`, `shootday`, `postday`, `CONTENT_DAY_SEEDS`), over four new starting blocks (`shoot`, `edit`, `plan`, `post`, `CONTENT_BLOCK_SEEDS`; financial and Servitude) and the existing ones. They have no `sourceKind`, so the Create kind still maps to Create day; their lead and second and their source are the Create kind's (self, then Servitude; "The Relationship Method, p. 257 and 267; Dictionary of Mistakes for Creators, p. 44 and 180–182"), and each why restates its idea: make, edit and post on different days. An account seeded before them gets them with Bring back the starting set, which now goes through `startingToRestore`: templates first, in starting order, each only when it and its missing blocks fit under `MAX_DAY_TEMPLATES` and `MAX_TIME_BLOCKS`, then the other missing blocks while there is room. The first change's seeding writes about 41 rows more than before (4 blocks, 3 templates, 34 slots).
+
+**Steps.** `CONTENT_STEPS` in the leaf `@kreators/shared/contentDays` (chunk `shared-content-days`) holds a short list for each content block of each content day (Edit: make the cut, back up and hand it on; Shoot: get ready, run the shot list, offload and back up, a light review; Plan: the next round; Post: share what is ready), read with `stepsFor(templateSeed, blockSeed)` through no-prototype lookups. On a day whose template is one of them (`DayPlan.template.seed`), Daily draws the list inside that block (`components/BlockSteps.tsx`, lazy): a closed fold, numbered, to read and never to tick. Its outline **Add to my tasks** asks once for a project of the person's own in the block's pillar (a select in place, the last pick kept on the device under `breakdownProjectKey`; with none, "Tasks need a project" and a link to Pillars) and calls `POST /nodes/breakdown` `{date, templateSeed, blockSeed, projectId}` (limit `create`): one task (`breakdownTask`: the list's title, the steps as its subtasks up to `MAX_SUBTASKS`, the do date that day, the block as its `timeBlockId`, the block's minutes that day as its estimate, the block's area), `origin` `breakdown:<template>:<block>`, made with its subtasks in one guarded batch (no second one for the same list and day while one is not let go; a second tap answers 409 with the first). Daily then says Added with Open it (`TodayResponse.breakdowns`). It pays like any task. No assistant tool yet.
+
+**Place my day.** `autoPlace` in `@kreators/shared/blockHints` is the one placement rule, pure and tested: the Today tab's open tasks with no block and no time, ordered by priority (P0, P1, none, P2, P3), due date, from a pillar first, the longer estimate first, then id; each goes to the best live block of the day (an area match before a pillar match; P0 and P1 try Focus-tagged blocks first, P2 and P3 the others; never a block whose slots all cross midnight, never time already gone today), with room counted from the server's `slotPlannedMin` plus what the run placed, and a start in 15-minute steps (`moveStartIn`) that overlaps no timed task and no earlier placement; a task that fits nowhere is listed with why (`noRoomLine`). Daily shows the plan on read, in By time block and in Your day, each with a Placed tag and its start; nothing is written until the one outline **Place my day**, which sends it all to `POST /nodes/place` (limit `prefs`): one guarded `UPDATE … RETURNING` per call that sets only `due_time`, for rows still the person's, open, with no time, no block and the same day; the answer says how many were saved and which were skipped (`changed`, `gone`). One round trip whatever the count (up to `PLACE_DAY_MAX`, 60).
+

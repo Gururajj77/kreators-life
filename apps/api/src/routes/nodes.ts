@@ -4,7 +4,9 @@ import type { AppEnv } from '../env';
 import { TIME_RE } from '@kreators/shared';
 import { ancestorsOf, DATE_RE, diffBadges, getNode, newId, nowIso, pageOf, paged, readyFromNow, toNode, type NodeRow, taskGate, readyAtFor, withSubtasks, badgeState, getUser, keptStats, statsAfterTick, storeStats } from '../db';
 import { dateNearToday, shiftDate } from '../db';
-import { blockFromBody } from '../timeBlocks';
+import { blockFromBody, dayPlan, loadBlocking } from '../timeBlocks';
+import { blockDayMinutes, parsePlaceDay, type BreakdownResponse, type PlaceDayResponse } from '@kreators/shared';
+import { breakdownTask, parseBreakdown } from '@kreators/shared/contentDays';
 import { afterInviteActive, inviteActiveStmts } from '../invites';
 
 /** Whether a request names a block, by id or by name. */
@@ -258,6 +260,101 @@ async function spawnNext(db: D1Database, row: NodeRow, today: string): Promise<N
     .run();
   return getNode(db, row.user_id, id);
 }
+
+/**
+ * Place my day (2026-11-12, the founder): saves the plan Daily shows (`autoPlace` in `@kreators/shared/blockHints`, worked out on the
+ * screen from GET /today) in one request, each task's start written as its `dueTime` and nothing else (never `ready_at`, so no wait
+ * starts again). Owner only, limit `prefs`. Guarded per row in the one UPDATE: still the person's open task, still with no time and no
+ * block, and still on that day; a task another tab or a tap changed since is left alone and answered `changed`, one that is no longer
+ * an open task of the person's `gone`. One round trip: the read (as things stood) and the write go in one batch, one transaction.
+ */
+nodes.post('/place', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const ask = parsePlaceDay(await c.req.json().catch(() => null));
+  if ('problem' in ask) return c.json({ error: ask.problem }, 400);
+  const items = JSON.stringify(ask.items);
+  const ids = JSON.stringify(ask.items.map((i) => i.id));
+  const [open, saved] = await db.batch([
+    db.prepare("SELECT id FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND id IN (SELECT value FROM json_each(?2))").bind(user.id, ids),
+    db
+      .prepare(
+        `UPDATE nodes SET due_time = (SELECT json_extract(j.value, '$.dueTime') FROM json_each(?3) j WHERE json_extract(j.value, '$.id') = nodes.id), updated_at = ?4
+         WHERE user_id = ?1 AND id IN (SELECT json_extract(value, '$.id') FROM json_each(?3)) AND kind = 'task' AND status = 'active'
+           AND due_time IS NULL AND time_block_id IS NULL AND COALESCE(do_date, due_date) = ?2
+         RETURNING id`,
+      )
+      .bind(user.id, ask.date, items, nowIso()),
+  ]);
+  const there = new Set((open!.results as { id: string }[]).map((r) => r.id));
+  const done = new Set((saved!.results as { id: string }[]).map((r) => r.id));
+  const res: PlaceDayResponse = {
+    saved: done.size,
+    skipped: ask.items.filter((i) => !done.has(i.id)).map((i) => ({ id: i.id, reason: there.has(i.id) ? 'changed' : 'gone' })),
+  };
+  return c.json(res);
+});
+
+/**
+ * A content day's "Add to my tasks" (2026-11-12, the founder): ONE task in the block, its list's steps as the task's subtasks, for that day,
+ * under one of the person's own active projects in the block's pillar. The same rules as `createNode` (a task under a project of the same
+ * pillar, a title of 140 at most, the wait from now, the person's own block), plus `origin` `breakdown:<template>:<block>` so Daily says
+ * "Added" instead of offering it twice. The list must be that day's: the day's template is the content day, and the block has a slot in it.
+ * A second one for the same day and list (any state but let go) is refused, 409, with the task already there. Limit `create`. It pays like
+ * any task when ticked, nothing more. About three round trips: the reads together, the writes in one batch, the subtask count.
+ */
+nodes.post('/breakdown', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const ask = parseBreakdown(await c.req.json().catch(() => null));
+  if ('problem' in ask) return c.json({ error: ask.problem }, 400);
+  const origin = `breakdown:${ask.templateSeed}:${ask.blockSeed}`;
+  const already = (): Promise<NodeRow | null> =>
+    db.prepare("SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND origin = ? AND do_date = ? AND status != 'archived' ORDER BY created_at ASC LIMIT 1").bind(user.id, origin, ask.date).first<NodeRow>();
+  const [blocking, project, existing, gate] = await Promise.all([loadBlocking(db, user.id, [ask.date]), getNode(db, user.id, ask.projectId), already(), taskGate(db, user.id)]);
+  const answerExisting = async (row: NodeRow) => {
+    const [node] = await withSubtasks(db, user.id, [toNode(row, gate)]);
+    const res: BreakdownResponse & { error: string } = { error: 'You already added this list for that day.', node: node!, existed: true };
+    return c.json(res, 409);
+  };
+  if (existing) return answerExisting(existing);
+  const day = dayPlan(blocking, ask.date);
+  if (day.template.seed !== ask.templateSeed) return c.json({ error: 'That day is not that kind of day any more. Open Daily again.' }, 400);
+  const block = blocking.blocks.find((b) => b.seed === ask.blockSeed);
+  const minutes = block ? blockDayMinutes(block.id, day.slots) : 0;
+  if (!block || minutes <= 0) return c.json({ error: 'That block is not on this day any more. Open Daily again.' }, 400);
+  if (!project || project.kind !== 'project' || project.status !== 'active') return c.json({ error: 'Pick one of your open projects.' }, 400);
+  if (block.pillar && project.relationship !== block.pillar) return c.json({ error: 'Pick a project in the same pillar as the block.' }, 400);
+  const task = breakdownTask(ask, { id: block.id, area: block.area, minutes });
+  if (!task) return c.json({ error: 'That block has no list of steps.' }, 400);
+
+  const id = newId();
+  const now = nowIso();
+  // One batch, one transaction: the task (only while no other tab has just made the same one), then its steps (only while the task is there).
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO nodes (id, user_id, kind, parent_id, relationship, title, note, status, xp, due_date, completed_at, ready_at, sort_order, created_at, updated_at, due_time, estimate_min, added_by, do_date, life_area, time_block_id, origin)
+         SELECT ?1, ?2, 'task', ?3, ?4, ?5, '', 'active', 0, NULL, NULL, ?6, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM nodes WHERE user_id = ?2 AND kind = 'task' AND relationship = ?4), ?7, ?7, NULL, ?8, NULL, ?9, ?10, ?11, ?12
+         WHERE NOT EXISTS (SELECT 1 FROM nodes WHERE user_id = ?2 AND kind = 'task' AND origin = ?12 AND do_date = ?9 AND status != 'archived')`,
+      )
+      .bind(id, user.id, project.id, project.relationship, task.title, readyFromNow(), now, task.estimateMin, task.doDate, task.lifeArea, task.timeBlockId, task.origin),
+    db
+      .prepare(
+        `INSERT INTO subtasks (id, user_id, task_id, title, done_at, sort_order, created_at)
+         SELECT lower(hex(randomblob(16))), ?1, ?2, value, NULL, CAST(key AS INTEGER), ?3 FROM json_each(?4) WHERE EXISTS (SELECT 1 FROM nodes WHERE id = ?2 AND user_id = ?1)`,
+      )
+      .bind(user.id, id, now, JSON.stringify(task.subtasks.slice(0, MAX_SUBTASKS))),
+  ]);
+  const row = await getNode(db, user.id, id);
+  if (!row) {
+    const other = await already();
+    return other ? answerExisting(other) : c.json({ error: 'not found' }, 404);
+  }
+  const [node] = await withSubtasks(db, user.id, [toNode(row, gate)]);
+  const res: BreakdownResponse = { node: node! };
+  return c.json(res, 201);
+});
 
 nodes.post('/', async (c) => {
   const body = await c.req.json<NodeBody>().catch(() => ({}) as NodeBody);

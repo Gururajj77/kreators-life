@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { LOCALE } from '@kreators/shared';
 import { Fold } from '../components/Fold';
 import { H, LegalPage, P } from './legalBits';
+import { usePageMeta } from '../lib/usePageMeta';
 
 interface Pkg {
   name: string;
@@ -21,6 +22,7 @@ const licenceName = (raw: string): string => raw.replace(/[:\s]*https?:\/\/\S+/g
 
 /** The open-source packages that ship with the web app, read at run time from the list `node scripts/licences.mjs` writes. */
 export function Licences() {
+  usePageMeta('/licences');
   const [data, setData] = useState<Licences | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {

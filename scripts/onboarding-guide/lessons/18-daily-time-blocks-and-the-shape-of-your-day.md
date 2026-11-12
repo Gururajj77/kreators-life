@@ -22,7 +22,7 @@ A time block is a named stretch of your day, like Deep work or Sleep. Each block
 - **A colour.** Its boxes and bands on Daily wear it.
 - **An area of life and a pillar**, if you like. They help the app suggest a block for a task.
 
-You start with 14 blocks. Ten of them make up a normal day, from Morning hygiene at 7 am to Sleep at 11 pm. Four more, Travel, Family time, Date and Reflection, are used by some of the day templates. You can keep up to 24.
+You start with 18 blocks. Ten of them make up a normal day, from Morning hygiene at 7 am to Sleep at 11 pm. Eight more are used by some of the day templates: Travel, Family time, Date, Reflection, and four for making content, Shoot, Edit, Plan and prep, and Post. You can keep up to 24.
 
 Under **Blocks**, tap a block to change it, then tap **Save**. **Add a block** makes a new one. **Arrange** lets you change their order. To delete a block, open it and tap the bin beside **Save**. It asks first. Your tasks stay; they just lose that block.
 
@@ -40,7 +40,9 @@ Tap the pipette again any time to change it.
 
 A day template lays your blocks on the clock. Deep work from 10 am to 1 pm, Recovery from 1 pm to 3 pm, and so on. It also names the pillar that leads the day, and a second one.
 
-A day template is your kind of day. You start with 14, like Everyday, Deep work day, Family day, Recovery day, Low energy day and Travel day. Each one is a starting point. Change anything.
+A day template is your kind of day. You start with 17, like Everyday, Deep work day, Family day, Recovery day, Low energy day and Travel day. Each one is a starting point. Change anything.
+
+Three of them are for making content: **Edit day**, **Shoot day** and **Plan and post day**. You make, edit and post on different days. On a day set to one of them, Daily shows a short list of steps inside each of its content blocks, like "Write the shot list" and "Charge every battery". The list is there to read, not to tick. **Add to my tasks** under it makes one task for that block, on that day, with the steps as its subtasks. Pick the project it goes under once; the app remembers your pick.
 
 Tap a template under **Day templates** to open it.
 

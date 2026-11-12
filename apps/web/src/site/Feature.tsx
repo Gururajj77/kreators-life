@@ -19,6 +19,7 @@ import { Fold } from '../components/Fold';
 import { Books } from './Books';
 import { SiteArrow, SITE_CHIP, SITE_CHIP_BASE, SITE_LINK, SITE_PRIMARY, SITE_SECONDARY } from './buttons';
 import { evenGrid, evenTile } from '../lib/bento';
+import { usePageMeta } from '../lib/usePageMeta';
 
 /** The rest of a feature's story: one short fact a line, as a list (CopyOS: lists for features, paragraphs only for a story). */
 function MoreList({ items }: { items: string[] }) {
@@ -37,6 +38,8 @@ function MoreList({ items }: { items: string[] }) {
  */
 export function Feature() {
   const { key = '' } = useParams();
+  // Its words from the site's one list (the books' page too); a slug the list does not hold sets nothing and goes home below.
+  usePageMeta(`/features/${key}`);
   return key === 'books' ? <Books /> : <FeaturePage />;
 }
 

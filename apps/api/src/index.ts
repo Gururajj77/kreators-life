@@ -329,6 +329,14 @@ root.route('/', go);
 root.route('/', app);
 // A route that does not exist answers with one plain JSON line, like the rest of the API (the sub-app's own notFound is not inherited when it is mounted).
 root.notFound((c) => c.json({ error: 'not found' }, 404));
+// The Worker's own pages outside /api (the sitemap, a short link, a page head that failed past its own fallback) answer an error as the
+// API does: a plain line and an id to quote, never the error's text (the sub-app's onError covers only /api).
+root.onError((err, c) => {
+  if (err instanceof HTTPException) return err.getResponse();
+  const requestId = Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) => b.toString(16).padStart(2, '0')).join('');
+  console.error(requestId, err);
+  return c.json({ error: 'something broke on our side', requestId }, 500, { 'X-Request-Id': requestId, 'Cache-Control': 'no-store' });
+});
 
 /** The words the Worker itself answers with for a page (not an API answer): the same headers as the static files get from _headers. */
 function withPageHeaders(res: Response): Response {
@@ -336,7 +344,7 @@ function withPageHeaders(res: Response): Response {
   for (const [k, v] of Object.entries(PAGE_HEADERS)) out.headers.set(k, v);
   return out;
 }
-const GO_PATHS = /^\/(?:go\/|out\/|__scheduled)|^\/$|^\/sitemap\.xml$/;
+const GO_PATHS = /^\/(?:go\/|out\/|__scheduled)|^\/$|^\/sitemap\.xml$|^\/events(?:\/[^/]+)?$/;
 
 /**
  * Everything the Worker sees. /api/* is the API (its own headers). A path that holds nothing (hidden files, backups, dumps, config) answers 404

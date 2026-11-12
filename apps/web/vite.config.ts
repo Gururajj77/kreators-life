@@ -2,8 +2,12 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { siteUrl } from '../../packages/shared/src/siteMeta.ts';
 
 export default defineConfig({
+  // The production origin a public page's canonical names (lib/usePageMeta.ts), the same one scripts/seo/build-static.mjs writes into the
+  // built pages: SITE_URL at build time, else https://kreators.app. Never the host the page happens to be open on.
+  define: { __SITE_URL__: JSON.stringify(siteUrl(process.env.SITE_URL)) },
   plugins: [
     react(),
     tailwindcss(),
@@ -13,7 +17,7 @@ export default defineConfig({
       manifest: {
         name: 'kreators.app',
         short_name: 'kreators',
-        description: 'A daily game for the seven relationships that make a life. Seven areas, a few boxes to tick every day.',
+        description: 'A daily game for the seven relationships, with a creator\'s tools built in.',
         theme_color: '#262626',
         background_color: '#F4F4F4',
         display: 'standalone',
@@ -32,7 +36,9 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         // The main script is close to 2 MiB; a little room so one more screen does not stop the build.
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
-        navigateFallbackDenylist: [/^\/api\//],
+        // The service worker never answers these with the app shell: the API, the Worker's redirects, /.well-known, and the files written
+        // for crawlers (robots.txt, llms.txt, llms-full.txt, sitemap.xml), which must reach the network as themselves.
+        navigateFallbackDenylist: [/^\/api\//, /^\/(?:go|out)\//, /^\/\.well-known\//, /\.(?:txt|xml|md)$/],
         // The fonts are ours (public/fonts), so they are precached with the rest and work offline.
         globPatterns: ['**/*.{js,css,html,woff2}'],
       },
@@ -55,6 +61,8 @@ export default defineConfig({
           // Daily's block hints (a subpath export: a suggestion inside a block and the quiet mismatch line), read only by the grouped view
           // and the task form, both lazy; it imports the rest of shared and shared never imports it, so no cycle.
           if (id.includes('/packages/shared/src/blockHints')) return 'block-hints';
+          // Content days' step lists and the breakdown rule (2026-11-12; a subpath export that imports the rest of shared and that nothing in the barrel imports, like blockHints), read by Daily's blocks.
+          if (id.includes('/packages/shared/src/contentDays.ts')) return 'shared-content-days';
           // How each app works (HOW_TO, about 40 kB of text) left the barrel on 2026-11-07: help.ts is the subpath export
           // `@kreators/shared/help`, read only by the How it works card (components/HowItWorksPanel.tsx, fetched the first time a screen
           // shows the section) and the tests. It imports the rest of shared and nothing in the barrel imports it, so no cycle; the glossary
@@ -75,6 +83,10 @@ export default defineConfig({
           if (id.includes('/packages/shared/src/connect.ts')) return 'shared-connect';
           // Joining by invite's words and readers (a subpath export and a leaf: it imports only types), read by Welcome's gate, /join, Admin's Invites and Profile, all lazy.
           if (id.includes('/packages/shared/src/invites.ts')) return 'shared-invites';
+          // The public site's words for search engines (every page's title, description and opening, the fair questions, the JSON-LD
+          // builders; a subpath export that imports the rest of shared and that nothing in the barrel imports, like blockHints, so no
+          // cycle), read through import() by lib/usePageMeta.ts, so it loads after the first paint and never with the shared chunk.
+          if (id.includes('/packages/shared/src/siteMeta.ts')) return 'shared-site-meta';
           // The line of the day (a long list of text) is a chunk of its own, which keeps the shared chunk under the 400 kB a chunk may
           // be. It must stay a leaf (lines.ts imports nothing): a split-off file that imports the rest of shared makes a cycle between
           // the two chunks and the app stops at "Cannot access before initialization" (design.ts did, 2026-11-04).

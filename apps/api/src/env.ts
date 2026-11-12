@@ -110,6 +110,8 @@ export interface UserRow {
   app_prefs_json?: string | null;
   /** JSON: the date format and time format this person's screens use (migration 0109), read through parseDatePrefs; NULL is the default. */
   date_prefs_json?: string | null;
+  /** JSON: the sections of Daily the person hid with View (migration 0134), read through parseDailyView; NULL hides nothing. */
+  daily_view_json?: string | null;
   fee_bps: number;
   streak: number;
   best_streak: number;

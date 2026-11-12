@@ -13,7 +13,8 @@ import { seatsTaken } from './party';
  */
 export const eventsPublic = new Hono<AppEnv>();
 
-interface Row {
+/** One event row as the public side reads it. Exported for the Worker's own pages (/events, /events/:id, the sitemap in routes/go.ts). */
+export interface PublicEventRow {
   id: string;
   title: string;
   description: string;
@@ -31,11 +32,13 @@ interface Row {
   taken: number;
 }
 
-const SELECT = `SELECT e.id, e.title, e.description, e.event_type, e.venue, e.online_url, e.timezone, e.starts_at, e.ends_at, e.capacity, e.price_points, e.status, e.featured,
+/** The one public read of an event, shared with routes/go.ts so the landing page's head says what this answer says. */
+export const PUBLIC_EVENT_SELECT = `SELECT e.id, e.title, e.description, e.event_type, e.venue, e.online_url, e.timezone, e.starts_at, e.ends_at, e.capacity, e.price_points, e.status, e.featured,
   u.display_name AS host_name, ${seatsTaken('e.id')} AS taken
   FROM events e JOIN users u ON u.id = e.host_user_id`;
 
-const toPublic = (r: Row): PublicEvent => ({
+/** What a visitor may see of an event: never a guest, the host's id or the room link. */
+export const toPublicEvent = (r: PublicEventRow): PublicEvent => ({
   id: r.id,
   title: r.title,
   description: r.description,
@@ -53,16 +56,23 @@ const toPublic = (r: Row): PublicEvent => ({
   featured: r.featured === 1,
 });
 
+/** A public, published event that has not ended yet; binds one value, the instant now. */
+export const UPCOMING_PUBLIC_WHERE = "e.visibility = 'public' AND e.status = 'published' AND e.ends_at >= ?";
+/** The list's own order: featured first, then the soonest. */
+export const UPCOMING_PUBLIC_ORDER = 'e.featured DESC, e.starts_at, e.id';
+/** One event a visitor may open: any public one, a cancelled or finished one too, so an old link says what happened. Binds the id. */
+export const PUBLIC_EVENT_BY_ID = "e.id = ? AND e.visibility = 'public'";
+
 // Every public event still to come, featured first, then the soonest. One read and the covers, a page at a time.
 eventsPublic.get('/', async (c) => {
   const db = c.env.DB;
   const ask = pageOf(c);
   const rows = await db
-    .prepare(`${SELECT} WHERE e.visibility = 'public' AND e.status = 'published' AND e.ends_at >= ? ORDER BY e.featured DESC, e.starts_at, e.id LIMIT ? OFFSET ?`)
+    .prepare(`${PUBLIC_EVENT_SELECT} WHERE ${UPCOMING_PUBLIC_WHERE} ORDER BY ${UPCOMING_PUBLIC_ORDER} LIMIT ? OFFSET ?`)
     .bind(nowIso(), ask.limit, ask.offset)
-    .all<Row>();
+    .all<PublicEventRow>();
   const pg = paged(rows.results, ask);
-  const events = pg.items.map(toPublic);
+  const events = pg.items.map(toPublicEvent);
   const media = await mediaForListings(db, events.map((e) => ({ type: 'event' as const, id: e.id })));
   for (const e of events) {
     const m = media.get(`event:${e.id}`);
@@ -75,9 +85,9 @@ eventsPublic.get('/', async (c) => {
 // Club-only one answers like a missing one.
 eventsPublic.get('/:id', async (c) => {
   const db = c.env.DB;
-  const row = await db.prepare(`${SELECT} WHERE e.id = ? AND e.visibility = 'public'`).bind(c.req.param('id')).first<Row>();
+  const row = await db.prepare(`${PUBLIC_EVENT_SELECT} WHERE ${PUBLIC_EVENT_BY_ID}`).bind(c.req.param('id')).first<PublicEventRow>();
   if (!row) return c.json({ error: 'not found' }, 404);
-  const event = toPublic(row);
+  const event = toPublicEvent(row);
   const media = await mediaForListings(db, [{ type: 'event', id: event.id }]);
   const m = media.get(`event:${event.id}`);
   if (m) event.media = m;

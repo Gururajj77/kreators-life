@@ -2,6 +2,7 @@ import { AFFILIATE_SHARE, CONSENT_PURPOSES, LEGAL_VERSION, LIVE_CALL_CENTS, MIN_
 import { useQuery } from '@tanstack/react-query';
 import { publicApi } from '../lib/api';
 import { A, ActionLink, StartLink, Bullets, Fact, Grid, Grievance, H, LegalPage, Mail, NOT_SET, P, Strong, contactEmail, useBusiness, versionDate } from './legalBits';
+import { usePageMeta } from '../lib/usePageMeta';
 
 type Kind = 'terms' | 'privacy' | 'refunds' | 'contact' | 'pricing';
 
@@ -39,6 +40,7 @@ const BASES: [string, string, string, string][] = [
 
 /** Policy and information pages the payment provider and the app stores ask for before launch. */
 export function Policy({ kind }: { kind: Kind }) {
+  usePageMeta(`/${kind}`);
   const t = TITLES[kind];
   const { business, loading } = useBusiness();
   const email = contactEmail(business);

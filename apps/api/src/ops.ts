@@ -93,7 +93,7 @@ export async function limitKey(env: { CLICK_SALT?: string }, raw: string): Promi
 }
 
 /** Middleware: the named limit from limits.ts, per address, or per person once there is a session. */
-export function rateLimit(name: LimitName, by?: 'address', when?: 'discountCode' | 'appPrefs' | 'datePrefs' | 'adminKey' | 'session') {
+export function rateLimit(name: LimitName, by?: 'address', when?: 'discountCode' | 'appPrefs' | 'datePrefs' | 'dailyView' | 'adminKey' | 'session') {
   const { max, windowSec } = LIMITS[name];
   return async (c: Context<AppEnv>, next: Next) => {
     if (when === 'adminKey') return adminKeyDoor(c, next, `${name}:ip:${await limitKey(c.env, ipOf(c))}`, max, windowSec);
@@ -111,6 +111,11 @@ export function rateLimit(name: LimitName, by?: 'address', when?: 'discountCode'
     if (when === 'datePrefs') {
       const body = await c.req.json<{ datePrefs?: unknown }>().catch(() => null);
       if (!body || body.datePrefs === undefined) return next();
+    }
+    // And Daily's View menu (the sections hidden): counted only when a save carries it.
+    if (when === 'dailyView') {
+      const body = await c.req.json<{ dailyView?: unknown }>().catch(() => null);
+      if (!body || body.dailyView === undefined) return next();
     }
     // `by: 'address'` counts the address even for a signed-in person, so one address cannot try codes through many accounts. A door that
     // runs before the session check (`session`, /admin/connect) reads the session itself, so a signed-in person is counted as themself.

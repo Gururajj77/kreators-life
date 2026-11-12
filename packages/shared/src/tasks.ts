@@ -1,8 +1,8 @@
-import { LOCALE, RELATIONSHIP_BY_KEY } from './core.ts';
+import { byKey, LOCALE, RELATIONSHIP_BY_KEY } from './core.ts';
 import type { PageSize, RelationshipKey } from './core.ts';
 import type { LifeAreaKey } from './life.ts';
 import { LIFE_AREA_ORDER, LIFE_AREAS } from './life.ts';
-import { blockDayMinutes, blockOfTask, blocksInDay, slotOrder, suggestBlock, TASK_GROUP_NONE } from './timeBlocks.ts';
+import { blockDayMinutes, blockOfTask, blocksInDay, hhmm, minuteOf, slotOrder, suggestBlock, TASK_GROUP_NONE } from './timeBlocks.ts';
 import type { BlockColor, GroupableTask, TaskGroup, TemplateSlot, TimeBlock } from './timeBlocks.ts';
 import type { KindDay } from './dayKinds.ts';
 import { addDays, asDay, DATE_PATTERN, daysBetween, daysInMonth, fromDay, isoWeekday, zonedToUtc } from './dates.ts';
@@ -257,6 +257,148 @@ export const TASK_SORTS = [
 ] as const;
 export type TaskSort = (typeof TASK_SORTS)[number]['key'];
 export const isTaskSort = (v: unknown): v is TaskSort => TASK_SORTS.some((s) => s.key === v);
+
+// ---------------------------------------------------------------------------
+// Daily's task tabs (2026-11-12, the founder): Today, Past due and Upcoming, each with its count, kept in the URL as `taskTab`.
+// A task's day is `openDay` (the do date, else the due date). Undated tasks belong to no tab: they stay in To remember and Not
+// scheduled yet. The Bottlenecks view (`taskSort=open`) stands apart: while it is on, the tabs do not cut its list.
+// ---------------------------------------------------------------------------
+
+export const TASK_TABS = [
+  { key: 'today', name: 'Today', blurb: 'Open tasks whose day is today.' },
+  { key: 'pastdue', name: 'Past due', blurb: 'Open tasks whose day has gone, the oldest first.' },
+  { key: 'upcoming', name: 'Upcoming', blurb: 'Open tasks whose day is still to come, the soonest first.' },
+] as const;
+export type TaskTab = (typeof TASK_TABS)[number]['key'];
+export const TASK_TAB_DEFAULT: TaskTab = 'today';
+const TASK_TAB_BY_KEY: Record<string, TaskTab> = byKey(TASK_TABS.map((t) => [t.key, t.key]));
+export const isTaskTab = (v: unknown): v is TaskTab => typeof v === 'string' && TASK_TAB_BY_KEY[v] !== undefined;
+/** The one reader of `?taskTab=` / `?tab=`: a known tab, else Today. */
+export const parseTaskTab = (v: unknown): TaskTab => (isTaskTab(v) ? v : TASK_TAB_DEFAULT);
+/**
+ * How each tab compares a task's day, `COALESCE(do_date, due_date)`, with the person's day. Fixed strings the server pastes into its SQL
+ * (never a value from the request): Today is `=`, Past due `<` (the same rule as GET /today's `tasksLate`), Upcoming `>`.
+ */
+export const TASK_TAB_CMP: Readonly<Record<TaskTab, '=' | '<' | '>'>> = { today: '=', pastdue: '<', upcoming: '>' };
+/** Which tab an open task sits in on `day`; null for a task with no date (To remember, Not scheduled yet). */
+export function taskTabOf(t: { doDate: string | null; dueDate: string | null }, day: string): TaskTab | null {
+  const d = openDay(t);
+  if (!d) return null;
+  return d === day ? 'today' : d < day ? 'pastdue' : 'upcoming';
+}
+/** Past due and Upcoming are paged lists, ten by default (10, 25 or 50), each with its own prefix. Today keeps the six and "N more waiting" (`w`). */
+export const TASK_TAB_PAGE_SIZES = [10, 25, 50] as const;
+export const TASK_TAB_PAGE_SIZE: PageSize = 10;
+export const TASK_TAB_PREFIX: Readonly<Record<Exclude<TaskTab, 'today'>, string>> = { pastdue: 'pd', upcoming: 'uc' };
+/** The sorts a tab offers: Today all of them (and Bottlenecks); Past due the day (oldest first), priority and due date; Upcoming the day only. */
+export const TASK_TAB_SORTS: Readonly<Record<TaskTab, readonly TaskSort[]>> = {
+  today: TASK_SORTS.map((s) => s.key),
+  pastdue: ['day', 'priority', 'due'],
+  upcoming: ['day'],
+};
+/** The order a tab's list is read in: the sort asked when the tab offers it, else the day. */
+export function taskTabSort(tab: TaskTab, asked: unknown): TaskSort {
+  return isTaskSort(asked) && TASK_TAB_SORTS[tab].includes(asked) ? asked : 'day';
+}
+
+// ---------------------------------------------------------------------------
+// Daily's View menu (2026-11-12, the founder): a person hides sections of Daily, kept on the account (`users.daily_view_json`,
+// migration 0134; PATCH /me {dailyView}). Rules only. A link or an inbox note that lands on a hidden section's heading still shows
+// it for that visit (`dailySectionOfAnchor`).
+// ---------------------------------------------------------------------------
+
+export const DAILY_SECTIONS = [
+  { key: 'done', name: 'Done today', anchors: ['done-heading'] },
+  { key: 'remember', name: 'To remember', anchors: ['remember-heading'] },
+  { key: 'backlog', name: 'Not scheduled yet', anchors: ['backlog-heading'] },
+  { key: 'yourDay', name: 'Your day', anchors: ['your-day'] },
+  { key: 'month', name: 'Month calendar', anchors: ['month-calendar'] },
+  { key: 'habits', name: 'Habits', anchors: ['habits-today'] },
+  { key: 'notToDo', name: 'Not to do', anchors: ['ntd-heading'] },
+  { key: 'patterns', name: 'Patterns', anchors: ['emerging-today', 'kinds-of-day'] },
+] as const;
+export type DailySectionKey = (typeof DAILY_SECTIONS)[number]['key'];
+export interface DailyView {
+  /** The sections the person hid, each once, in `DAILY_SECTIONS` order. Empty hides nothing. */
+  hidden: DailySectionKey[];
+}
+export const DAILY_VIEW_DEFAULT: DailyView = { hidden: [] };
+const DAILY_SECTION_BY_KEY: Record<string, DailySectionKey> = byKey(DAILY_SECTIONS.map((s) => [s.key, s.key]));
+const DAILY_SECTION_BY_ANCHOR: Record<string, DailySectionKey> = byKey(DAILY_SECTIONS.flatMap((s) => s.anchors.map((a) => [a, s.key] as const)));
+export const isDailySection = (v: unknown): v is DailySectionKey => typeof v === 'string' && DAILY_SECTION_BY_KEY[v] !== undefined;
+
+/** The one reader of a Daily view (stored JSON or a parsed object): keeps the known keys once, in the sections' order; never throws. */
+export function parseDailyView(raw: unknown): DailyView {
+  let v = raw;
+  if (typeof v === 'string') {
+    try {
+      v = JSON.parse(v);
+    } catch {
+      v = null;
+    }
+  }
+  const list = v && typeof v === 'object' && !Array.isArray(v) ? (v as { hidden?: unknown }).hidden : null;
+  if (!Array.isArray(list)) return { hidden: [] };
+  const want = new Set(list.filter(isDailySection));
+  return { hidden: DAILY_SECTIONS.map((s) => s.key).filter((k) => want.has(k)) };
+}
+/** What is wrong with a Daily view sent to PATCH /me, in plain words; null when it is fine. */
+export function dailyViewProblem(raw: unknown): string | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return 'send the sections to hide as a list';
+  const list = (raw as { hidden?: unknown }).hidden;
+  if (!Array.isArray(list)) return 'send the sections to hide as a list';
+  const seen = new Set<string>();
+  for (const k of list) {
+    if (!isDailySection(k)) return 'that is not one of Daily’s sections';
+    if (seen.has(k)) return 'a section is listed twice';
+    seen.add(k);
+  }
+  return null;
+}
+export const isDailySectionHidden = (view: DailyView | null | undefined, key: DailySectionKey): boolean => Boolean(view?.hidden.includes(key));
+/** The section a hash names (`#done-heading`, with or without the #), so a link to a hidden section shows it for that visit; null for any other. */
+export function dailySectionOfAnchor(hash: string | null | undefined): DailySectionKey | null {
+  if (!hash) return null;
+  return DAILY_SECTION_BY_ANCHOR[hash.replace(/^#/, '')] ?? null;
+}
+/** The quiet line while any are hidden: "1 section hidden", "3 sections hidden"; empty for none. */
+export const dailyHiddenLine = (n: number): string => (n <= 0 ? '' : `${n} ${n === 1 ? 'section' : 'sections'} hidden`);
+
+// ---------------------------------------------------------------------------
+// Place my day (2026-11-12): POST /nodes/place saves the plan `autoPlace` (`@kreators/shared/blockHints`) shows, one time per task.
+// ---------------------------------------------------------------------------
+
+/** The most tasks one Place my day saves (Daily's grouped read holds DAILY_GROUPED_MAX, 60). */
+export const PLACE_DAY_MAX = 60;
+export interface PlaceDayItem {
+  id: string;
+  /** "HH:MM": the start `autoPlace` gave, written as the task's `dueTime`. */
+  dueTime: string;
+}
+/** Why a task was not saved: it has a time or a block now (another tab, or a tap), or it is no longer an open task of yours. */
+export type PlaceSkipReason = 'changed' | 'gone';
+/** The one reader of POST /nodes/place: a real day and up to PLACE_DAY_MAX tasks, each once, each with a real clock time. */
+export function parsePlaceDay(body: unknown): { date: string; items: PlaceDayItem[] } | { problem: string } {
+  const o = body && typeof body === 'object' && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
+  if (!o) return { problem: 'Send the day and the tasks to place.' };
+  const date = o.date;
+  if (typeof date !== 'string' || !DATE_PATTERN.test(date) || fromDay(asDay(date)) !== date) return { problem: 'Pick a real day.' };
+  if (!Array.isArray(o.items) || o.items.length === 0) return { problem: 'There is nothing to place.' };
+  if (o.items.length > PLACE_DAY_MAX) return { problem: `Place up to ${PLACE_DAY_MAX} tasks at once.` };
+  const seen = new Set<string>();
+  const items: PlaceDayItem[] = [];
+  for (const raw of o.items) {
+    const it = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
+    const id = it && typeof it.id === 'string' ? it.id.trim() : '';
+    if (!id || id.length > 64) return { problem: 'Each task needs its id.' };
+    if (seen.has(id)) return { problem: 'A task is listed twice.' };
+    const m = minuteOf(it!.dueTime);
+    if (m === null) return { problem: 'Each task needs a time, like 10:00.' };
+    seen.add(id);
+    items.push({ id, dueTime: hhmm(m) });
+  }
+  return { date, items };
+}
 
 /** The pillars a kind of day puts first (`DAY_TYPES` in dayTypes.ts): the lead, then the second. */
 export interface TaskContext {

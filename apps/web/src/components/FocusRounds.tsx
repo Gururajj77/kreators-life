@@ -30,6 +30,7 @@ import { AnimatedIcon } from './AnimatedIcon';
 import { EighthNotes, Play, Square, Target } from 'lucide-react';
 import { Fold } from './Fold';
 import { StickyAction } from './StickyAction';
+import { PAGE_TITLE_EVENT } from '../lib/usePageMeta';
 
 type Phase = 'focus' | 'short' | 'long';
 type Mode = 'breathe' | 'timer' | 'pomodoro' | 'stopwatch';
@@ -926,16 +927,28 @@ export function FocusRounds({
   const paused = mode === 'breathe' ? !breathe.atFull && !breathe.running : mode === 'timer' ? !timer.atFull && !timer.running : mode === 'stopwatch' ? stopwatch.ms > 0 && !stopwatch.running : leftMs < partMs - 500 && !running;
   // On every page, since this clock is mounted for the whole visit: the page's own title is kept aside while a clock runs or waits paused,
   // and put back when it stops. While a print dialog is open the title is the document's file name (lib/printDoc.ts), so it is left alone.
+  // A page that names itself while a clock holds the title (usePageMeta, on a move to another page) is heard through PAGE_TITLE_EVENT:
+  // its title is the one kept aside, so a stop brings back the page the person is on now, never the one the clock started on, and the
+  // clock's own title goes straight back on, so it looks as it did.
   const pageTitle = useRef<string | null>(null);
+  const clockTitle = useRef<string | null>(null);
   const printing = useRef(false);
   useEffect(() => {
     const before = () => (printing.current = true);
     const after = () => (printing.current = false);
+    const named = (ev: Event) => {
+      const title = (ev as CustomEvent<unknown>).detail;
+      if (pageTitle.current === null || typeof title !== 'string') return;
+      pageTitle.current = title;
+      if (clockTitle.current !== null && !printing.current) document.title = clockTitle.current;
+    };
     window.addEventListener('beforeprint', before);
     window.addEventListener('afterprint', after);
+    window.addEventListener(PAGE_TITLE_EVENT, named);
     return () => {
       window.removeEventListener('beforeprint', before);
       window.removeEventListener('afterprint', after);
+      window.removeEventListener(PAGE_TITLE_EVENT, named);
       if (pageTitle.current !== null) document.title = pageTitle.current;
     };
   }, []);
@@ -944,10 +957,12 @@ export function FocusRounds({
     if (anyRunning || paused) {
       if (pageTitle.current === null) pageTitle.current = document.title;
       // With a task picked, the task is in the title: "18:20 · Edit vlog intro · kreators.app".
-      document.title = picked ? `${anyRunning ? '' : 'Paused '}${tabTime} · ${picked.title} · kreators.app` : `${anyRunning ? '' : 'Paused '}${tabTime} ${tabName} · kreators.app`;
+      clockTitle.current = picked ? `${anyRunning ? '' : 'Paused '}${tabTime} · ${picked.title} · kreators.app` : `${anyRunning ? '' : 'Paused '}${tabTime} ${tabName} · kreators.app`;
+      document.title = clockTitle.current;
     } else if (pageTitle.current !== null) {
       document.title = pageTitle.current;
       pageTitle.current = null;
+      clockTitle.current = null;
     }
   }, [anyRunning, paused, tabTime, tabName, picked?.title]);
 

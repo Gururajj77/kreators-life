@@ -11,6 +11,7 @@ import { LISTING_COLS, ListingCard } from './ListingCard';
 import { SiteLayout } from './SiteLayout';
 import { TabRow } from '../components/TabRow';
 import { evenGrid, evenTile } from '../lib/bento';
+import { usePageMeta } from '../lib/usePageMeta';
 
 const TYPE_ITEMS: { key: ListingType | 'all'; label: ReactNode; name: string }[] = [
   { key: 'all', label: 'Everything', name: 'Everything' },
@@ -30,6 +31,7 @@ const isType = (v: string | null): v is ListingType => Boolean(v && (LISTING_TYP
 
 /** Everything on offer, searchable without an account. */
 export function Explore() {
+  usePageMeta('/explore');
   const [params, setParams] = useSearchParams();
   const type = isType(params.get('type')) ? (params.get('type') as ListingType) : undefined;
   const [q, setQ] = useState(params.get('q') ?? '');

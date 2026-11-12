@@ -1,8 +1,10 @@
 import { LEGAL_VERSION, SUBPROCESSORS } from '@kreators/shared';
 import { ActionLink, Grid, H, LegalPage, Mail, P, contactEmail, useBusiness, versionDate } from './legalBits';
+import { usePageMeta } from '../lib/usePageMeta';
 
 /** Everyone who handles personal data for us. The list is in the shared package, so this page, the privacy page and the docs never disagree. */
 export function Subprocessors() {
+  usePageMeta('/subprocessors');
   const { business } = useBusiness();
   const email = contactEmail(business);
   return (

@@ -21,6 +21,7 @@ import { SiteLayout } from './SiteLayout';
 import { StickyAction } from '../components/StickyAction';
 import { InviteCodeField } from '../components/InviteGate';
 import { inviteRefusal, keepInvite, keptInvite } from '../lib/invite';
+import { clipDescription, pageTitle, usePageMeta } from '../lib/usePageMeta';
 
 /** The kind of event in words ("Meetup"), from its stored key. */
 const kindOf = (e: PublicEvent): string => EVENT_TYPE_META[e.eventType as EventType]?.name ?? 'Event';
@@ -63,6 +64,7 @@ function toListing(e: PublicEvent): Listing {
  * this page is only events, with the seats left on each card, and each card opens the event's own page, where a visitor joins and signs up.
  */
 export function EventsList() {
+  usePageMeta('/events');
   const pg = usePage();
   const q = useQuery({ queryKey: ['public-events', pg.query], queryFn: () => publicApi.events(pg.query) });
   const list = q.data?.events ?? [];
@@ -140,6 +142,8 @@ export function EventLanding() {
   const checking = Boolean(token) && me.isPending && !madeHere;
 
   const e = q.data?.event;
+  // A live page the site's list does not hold: its own title and words, once the event is in (a page that is not public names nothing).
+  usePageMeta(e ? `/events/${id}` : null, e ? { title: pageTitle(e.title), description: clipDescription(e.description || `${e.title}, an event on kreators.app.`), canonical: `/events/${id}` } : undefined);
   const paid = Boolean(e && e.pricePoints > 0);
   const join = useMutation({
     mutationFn: async () => {

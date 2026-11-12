@@ -230,7 +230,7 @@ A new account used to write 769 of its 1,076 rows on its first open of Daily: 14
 | First open of Daily | 712 rows read, 769 written | 235 read, 0 written |
 | Each read of a person's blocks | 317 rows | none with no rows; one more row with rows |
 | A new account's ordinary day | 8,159 rows read | 3,885 |
-| The first change, once | | about 780 rows written, 7 or 8 trips (777 to 835 measured, the top when the change itself adds slots) |
+| The first change, once | | about 780 rows written until 2026-11-12, about 821 since (the three content days add 4 blocks, 3 templates and 34 slots), 7 or 8 trips (777 to 835 measured before, the top when the change itself adds slots) |
 
 The 325 assumes nobody changes a block on their first day. Every person who does adds that one 780 back, so a launch where everyone did would be back near 90. Picking a kind of day, a weekly pattern or a block for a task writes only its own row.
 

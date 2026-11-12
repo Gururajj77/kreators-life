@@ -1,16 +1,17 @@
-import { DONE_PAGE_SIZE, DONE_PAGE_SIZES, LIFE_AREAS, OPEN_KINDS, RELATIONSHIP_BY_KEY, groupTasks, openDay, spanLabel, type BlockColor, type Node, type OpenKind, type RelationshipKey, type TemplateSlot, type TimeBlock } from '@kreators/shared';
+import { CONTENT_DAY_SEEDS, DONE_PAGE_SIZE, DONE_PAGE_SIZES, LIFE_AREAS, OPEN_KINDS, PLAN_DEFAULT_MINUTES, RELATIONSHIP_BY_KEY, TASK_GROUP_NONE, groupTasks, openDay, spanLabel, type BlockColor, type Node, type OpenKind, type RelationshipKey, type TemplateSlot, type TimeBlock } from '@kreators/shared';
 import { blockMismatch, blockMismatchLine, blockUsedMin, groupWithSuggestions, suggestLine, suggestWhy, type BlockMismatch, type SuggestedGroup } from '@kreators/shared/blockHints';
 import { OPEN_KIND_META } from '@kreators/shared/openBusiness';
 import { useMutation } from '@tanstack/react-query';
 import { tbClass, tbStyle } from '../lib/blockColor';
 import gsap from 'gsap';
-import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { Suspense, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from '../lib/api';
-import { todayLocal, slotRange } from '../lib/date';
+import { slotRange } from '../lib/date';
+import { lazyNamed } from '../lib/lazy';
 import { useNow } from '../lib/useNow';
 import { useKept } from '../lib/kept';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
-import { useSearchParams } from 'react-router';
+import { Link, useLocation, useSearchParams } from 'react-router';
 import { Fold } from './Fold';
 import { AppIcon } from './AppIcon';
 import { Button } from './Button';
@@ -19,6 +20,12 @@ import { Pager, usePage } from './Pager';
 import { SkeletonList } from './Skeleton';
 import { StatusTag } from './StatusTag';
 import { ToggleChevron } from './ToggleMark';
+import { dayPlacement, placedRange, type DayPlacement } from './PlaceMyDay';
+import { minuteNowOn, useDailyAnswer } from './useDailyAnswer';
+
+// A content day's steps (their words are their own chunk), fetched only on a day whose template carries them.
+const BlockSteps = lazyNamed(() => import('./BlockSteps'), 'BlockSteps');
+const CONTENT_SEEDS: ReadonlySet<string> = new Set(CONTENT_DAY_SEEDS);
 
 /** What the grouping reads: the day's slots and blocks, its lead and second pillar, and the server's minutes planned in each slot. */
 export interface GroupContext {
@@ -31,17 +38,11 @@ export interface GroupContext {
   day: string;
 }
 
-/** The minute of the device's day it is now, when `day` is today; null for any other day. */
-function minuteNowOn(day: string, now: number): number | null {
-  if (day !== todayLocal()) return null;
-  const d = new Date(now);
-  return d.getHours() * 60 + d.getMinutes();
-}
-
 /** How Daily's boxes are drawn: by time block, by area of life, or by kind of open business. */
 export type GroupBy = 'block' | 'area' | 'open';
-/** A box: a block, an area or a kind of open business (which says its one question in `note`). */
-type Group = SuggestedGroup<Node> & { note?: string };
+/** A box: a block, an area or a kind of open business (which says its one question in `note`). `placed` are the tasks Place my day's
+ *  plan puts in this block, not saved yet (each also in `tasks`, after the block's own). */
+type Group = SuggestedGroup<Node> & { note?: string; placed?: Node[] };
 
 /**
  * Each kind of open business wears one colour of the time-block wheel (2026-11-07), told apart from each other and from the priority
@@ -54,7 +55,7 @@ function openGroups(tasks: Node[]): Group[] {
   return OPEN_KINDS.flatMap((k) => {
     const here = tasks.filter((t) => t.openKind === k);
     if (here.length === 0) return [];
-    return [{ key: `open-${k}`, kind: 'block' as const, name: OPEN_KIND_META[k].name, color: OPEN_SWATCH[k], area: null, ranges: [], inDay: false, minutes: 0, plannedMin: 0, tasks: here, suggested: [], note: OPEN_KIND_META[k].question }];
+    return [{ key: `open-${k}`, kind: 'block' as const, name: OPEN_KIND_META[k].name, color: OPEN_SWATCH[k], area: null, ranges: [], inDay: false, minutes: 0, plannedMin: 0, tasks: here, suggested: [], placed: [], note: OPEN_KIND_META[k].question }];
   });
 }
 
@@ -71,22 +72,57 @@ function openGroups(tasks: Node[]): Group[] {
  * By time block, a task with no block and no time sits in the block `suggestBlock` picks for it, after the placed ones, marked Suggested
  * with one Keep here; a task whose time put it in a block meant for another area or pillar gets one quiet line with Move it and Keep here
  * (`blockMismatch`). Nothing is written until one of those is tapped, through the ordinary PATCH /nodes/:id.
+ *
+ * Place my day (2026-11-12): a task the day's plan places (`dayPlacement`, the same answer and rule as Your day) sits in its block after the
+ * block's own tasks, marked Placed with its time, in place of the old Suggested hint; one line above the boxes points to Your day's one
+ * Place my day button. What the plan leaves out keeps the Suggested, Keep here and Move it hints. A content day's block also shows its steps.
  */
 export function TaskGroups({ tasks, context, renderTask, more = false, by }: { tasks: Node[]; context: GroupContext; renderTask: (t: Node, below?: ReactNode) => ReactNode; /** More tasks wait past the ones sent (`tasksMore`). */ more?: boolean; by: GroupBy }) {
   const me = useMe();
+  const { pathname, search } = useLocation();
   const after = minuteNowOn(context.day, useNow(60_000));
-  const used = by === 'block' ? blockUsedMin(context.slots, context.slotPlannedMin) : undefined;
-  const groups: Group[] = by === 'block' ? groupWithSuggestions(tasks, { ...context, used, after }) : by === 'open' ? openGroups(tasks) : groupTasks(tasks, 'area', context).map((g) => ({ ...g, suggested: [] }));
-  // The day's other timed tasks, which a Move it never lands on (late ones from other days are not on this day's clock).
-  const timed = tasks.filter((x) => x.dueTime && openDay(x) === context.day);
-  // The line under a task: a suggestion's Keep here, or the quiet mismatch prompt for one its time put in a block meant for others.
+  const answer = useDailyAnswer(context.day);
+  const plan: DayPlacement | null = useMemo(() => (by === 'block' && answer && answer.date === context.day ? dayPlacement(answer, after) : null), [by, answer, after, context.day]);
+  const seed = answer?.day.template.seed ?? null;
+  const contentDay = by === 'block' && Boolean(seed && CONTENT_SEEDS.has(seed));
+  const base = by === 'block' ? blockUsedMin(context.slots, context.slotPlannedMin) : undefined;
+  // What the plan placed counts as used, so a suggestion or a Move it never lands where the plan already put a task.
+  const used = useMemo(() => {
+    if (!base || !plan?.placed.length) return base;
+    const out: Record<string, number> = Object.assign(Object.create(null) as Record<string, number>, base);
+    const estOf = new Map((answer?.looseTasks ?? []).map((t) => [t.id, t.estimateMin ?? PLAN_DEFAULT_MINUTES]));
+    for (const p of plan.placed) out[p.blockId] = (out[p.blockId] ?? 0) + (estOf.get(p.taskId) ?? PLAN_DEFAULT_MINUTES);
+    return out;
+  }, [base, plan, answer]);
+  const groups: Group[] = by === 'block' ? withPlan(tasks, plan, groupWithSuggestions(tasks.filter((t) => !plan?.byId.has(t.id)), { ...context, used, after })) : by === 'open' ? openGroups(tasks) : groupTasks(tasks, 'area', context).map((g) => ({ ...g, suggested: [] }));
+  // The day's other timed tasks, which a Move it never lands on (late ones from other days are not on this day's clock), and the plan's.
+  const timed = [...tasks.filter((x) => x.dueTime && openDay(x) === context.day), ...(plan?.placed ?? []).map((p) => ({ id: p.taskId, dueTime: p.start, estimateMin: answer?.looseTasks?.find((t) => t.id === p.taskId)?.estimateMin ?? null }))];
+  const placedHere = groups.reduce((n, g) => n + (g.placed?.length ?? 0), 0);
+  // The line under a task: the plan's Placed and time, a suggestion's Keep here, the quiet mismatch prompt for one its time put in a
+  // block meant for others, or (in No block yet) why the plan found no room for it.
   const below = (g: Group, t: Node): ReactNode => {
-    if (by === 'open' || g.kind !== 'block' || !g.inDay) return null;
+    if (by !== 'block') return null;
+    if (g.key === TASK_GROUP_NONE) {
+      const miss = plan?.missById.get(t.id);
+      return miss ? <NoRoomLine line={miss.line} /> : null;
+    }
+    if (g.kind !== 'block' || !g.inDay) return null;
     const block = context.blocks.find((b) => b.id === g.key);
     if (!block) return null;
+    const p = plan?.byId.get(t.id);
+    if (p && g.placed?.includes(t)) return <PlacedLine range={placedRange(p)} />;
     if (g.suggested.includes(t)) return <SuggestLine task={t} block={block} />;
     const m = blockMismatch(t, context.slots, context.blocks, { used, after, taken: timed.filter((x) => x.id !== t.id) });
     return m ? <MismatchLine task={t} m={m} /> : null;
+  };
+  const steps = (g: Group): ReactNode => {
+    if (!contentDay || g.kind !== 'block' || !g.inDay) return null;
+    const block = context.blocks.find((b) => b.id === g.key);
+    return block ? (
+      <Suspense fallback={null}>
+        <BlockSteps date={context.day} templateSeed={seed} block={block} />
+      </Suspense>
+    ) : null;
   };
   const [shut, setShut] = useKept<Record<string, boolean>>(`taskgroups:${me.data?.user.id ?? 'anon'}`, by, {});
   const openAll = () => setShut({});
@@ -107,9 +143,17 @@ export function TaskGroups({ tasks, context, renderTask, more = false, by }: { t
           </Button>
         </div>
       </div>
+      {placedHere > 0 && (
+        <p className="mt-xs m-0 text-caption text-ink-soft">
+          {placedHere === 1 ? '1 task is placed for you, not saved yet. ' : `${placedHere} tasks are placed for you, not saved yet. `}
+          <Link to={{ pathname, search, hash: '#your-day' }} className="relative whitespace-nowrap font-semibold text-ink underline underline-offset-4 after:absolute after:inset-x-0 after:top-1/2 after:h-[44px] after:-translate-y-1/2 after:content-['']">
+            Place my day
+          </Link>
+        </p>
+      )}
       <div className="mt-xs flex flex-col gap-xs">
         {groups.map((g) => (
-          <Box key={g.key} g={g} open={!shut[g.key]} onToggle={() => setShut((s) => ({ ...s, [g.key]: !s[g.key] }))} renderTask={(t) => renderTask(t, below(g, t))} by={by} />
+          <Box key={g.key} g={g} open={!shut[g.key]} onToggle={() => setShut((s) => ({ ...s, [g.key]: !s[g.key] }))} renderTask={(t) => renderTask(t, below(g, t))} by={by} extra={steps(g)} />
         ))}
       </div>
       {more && <p className="mt-xs m-0 text-caption text-ink-soft">Showing the first 60.</p>}
@@ -119,14 +163,15 @@ export function TaskGroups({ tasks, context, renderTask, more = false, by }: { t
 
 /** "3 tasks · 1 h 30 of 3 h": the placed tasks, and for a block of the day the minutes placed in it against its length; a box that holds
  *  only suggestions says "2 suggested" (each suggested row carries its own mark, so the pill stays short on a phone). */
-function countLine(g: SuggestedGroup<unknown>): string {
-  const placed = g.tasks.length - g.suggested.length;
-  const n = placed === 0 && g.suggested.length > 0 ? `${g.suggested.length} suggested` : placed === 1 ? '1 task' : `${placed} tasks`;
+function countLine(g: Group): string {
+  const planned = g.placed?.length ?? 0;
+  const placed = g.tasks.length - g.suggested.length - planned;
+  const n = placed === 0 && planned > 0 ? `${planned} placed` : placed === 0 && g.suggested.length > 0 ? `${g.suggested.length} suggested` : placed === 1 ? '1 task' : `${placed} tasks`;
   if (g.kind !== 'block' || !g.inDay || g.minutes === 0 || placed === 0) return n;
   return `${n} · ${spanLabel(g.plannedMin)} of ${spanLabel(g.minutes)}`;
 }
 
-function Box({ g, open, onToggle, renderTask, by }: { g: Group; open: boolean; onToggle: () => void; renderTask: (t: Node) => ReactNode; by: GroupBy }) {
+function Box({ g, open, onToggle, renderTask, by, extra }: { g: Group; open: boolean; onToggle: () => void; renderTask: (t: Node) => ReactNode; by: GroupBy; /** Under the tasks: a content day's steps for this block. */ extra?: ReactNode }) {
   const body = useRef<HTMLDivElement>(null);
   const id = useId();
   const area = g.area ? LIFE_AREAS[g.area] : null;
@@ -206,10 +251,11 @@ function Box({ g, open, onToggle, renderTask, by }: { g: Group; open: boolean; o
       <div ref={body} id={`${id}-b`} className="overflow-hidden">
         <div className="pt-xs">
           {g.tasks.length === 0 ? (
-            <p className="m-0 px-md pb-md text-subhead text-ink-soft">Nothing here yet.</p>
+            <p className={`m-0 px-md text-subhead text-ink-soft ${extra ? '' : 'pb-md'}`}>Nothing here yet.</p>
           ) : (
-            <ul className="m-0 flex list-none flex-col gap-xs px-sm pb-sm">{g.tasks.map((t) => renderTask(t))}</ul>
+            <ul className={`m-0 flex list-none flex-col gap-xs px-sm ${extra ? '' : 'pb-sm'}`}>{g.tasks.map((t) => renderTask(t))}</ul>
           )}
+          {extra ? <div className="px-sm pb-sm">{extra}</div> : null}
         </div>
       </div>
     </section>
@@ -259,6 +305,57 @@ function HintLine({ words, more, mark, children, failed, data }: { words?: strin
       )}
     </div>
   );
+}
+
+/** A task the day's plan places: Placed and its time, saved with the one Place my day in Your day (nothing to tap on the row). */
+function PlacedLine({ range }: { range: string }) {
+  return (
+    <div className="mt-xs px-sm" data-block-placed="">
+      <p className="m-0 flex flex-wrap items-center gap-xs text-caption text-ink-soft">
+        <StatusTag tone="calm">Placed</StatusTag>
+        <span className="whitespace-nowrap">{range}</span>
+      </p>
+    </div>
+  );
+}
+/** A task the plan found no room for: No room today, and why. */
+function NoRoomLine({ line }: { line: string }) {
+  return (
+    <div className="mt-xs px-sm" data-no-room="">
+      <p className="m-0 flex flex-wrap items-center gap-xs text-caption text-ink-soft">
+        <StatusTag tone="neutral">No room today</StatusTag>
+        <span>{line}</span>
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The plan's tasks into their blocks' boxes: each one this list holds goes into the box of the block the plan put it in, after the box's
+ * own tasks and before its suggestions, in the order of its time. A task whose block has no box (never, since the plan only uses the day's
+ * blocks) goes to No block yet, so no task is ever dropped.
+ */
+function withPlan(tasks: Node[], plan: DayPlacement | null, groups: SuggestedGroup<Node>[]): Group[] {
+  if (!plan || plan.placed.length === 0) return groups;
+  const out: Group[] = groups.map((g) => ({ ...g, placed: [] }));
+  const mine = tasks.filter((t) => plan.byId.has(t.id)).sort((a, b) => plan.byId.get(a.id)!.start.localeCompare(plan.byId.get(b.id)!.start));
+  const lost: Node[] = [];
+  for (const t of mine) {
+    const g = out.find((x) => x.kind === 'block' && x.inDay && x.key === plan.byId.get(t.id)!.blockId);
+    if (g) g.placed!.push(t);
+    else lost.push(t);
+  }
+  for (const g of out) {
+    if (!g.placed?.length) continue;
+    const own = g.tasks.filter((t) => !g.suggested.includes(t));
+    g.tasks = [...own, ...g.placed, ...g.suggested];
+  }
+  if (lost.length) {
+    const none = out.find((g) => g.key === TASK_GROUP_NONE);
+    if (none) none.tasks = [...none.tasks, ...lost];
+    else out.push({ key: TASK_GROUP_NONE, kind: 'none', name: 'No block yet', color: null, area: null, ranges: [], inDay: true, minutes: 0, plannedMin: 0, tasks: lost, suggested: [], placed: [] });
+  }
+  return out;
 }
 
 /** A task with no block and no time, shown in the block suggested for it: Suggested, why, and Keep here (its block from now on). */
