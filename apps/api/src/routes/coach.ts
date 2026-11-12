@@ -4,7 +4,7 @@ import { COACH_ABOUT_MAX, COACH_ASK_AGAIN_DAYS, COACH_NOTE_MAX, COACH_SHARE_PART
 import type { AppEnv, UserRow } from '../env';
 import { LIMITS } from '../limits';
 import { blockedByName, blockedEither, DATE_RE, getNode, liveUser, nameOf, newId, notify, nowIso, pageOf, paged, personBy, randomCode, str, toNode } from '../db';
-import { activeLink, askToCoach, endLink, isCoach, LINK, linkById, logCoach, logPage, notePage, rosterRow, shareChange, studentView, toLink, toPerson, type LinkRow } from '../coaching';
+import { activeLink, askToCoach, coachNode, endLink, isCoach, LINK, linkById, logCoach, logPage, notePage, rosterRow, shareChange, studentView, toLink, toPerson, type LinkRow } from '../coaching';
 import { coachPatterns, coachReport } from '../coachReport';
 import { emailProblem, maskEmail, publicUrl } from '../agencyPaper';
 import { limited, sendEmail, sha } from '../ops';
@@ -481,7 +481,7 @@ coach.patch('/students/:id/tasks/:taskId', async (c) => {
     });
     await notify(db, link.student_id, 'coach', `${nameOf(user)} changed a task: ${fresh.title}`, `Changed ${changes.join(', ')}.`, `/realm/${fresh.relationship}`);
   }
-  return c.json({ node: toNode(fresh) });
+  return c.json({ node: coachNode(fresh) });
 });
 
 // ---- the student's side, and answers from either side

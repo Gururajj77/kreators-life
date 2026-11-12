@@ -50,10 +50,10 @@ const dayOf = (v: unknown): string | null => (typeof v === 'string' && DATE_RE.t
 
 async function all(db: D1Database, userId: string, day: string): Promise<RemindersResponse> {
   const rows = await db.prepare('SELECT id, title, time, days_json, enabled FROM custom_reminders WHERE user_id = ? ORDER BY time, created_at').bind(userId).all<CustomRow>();
-  // Tasks from Daily tagged Remember, the dated ones first.
+  // Tasks from Daily tagged Remember, the dated ones first; one hidden on the day (2026-11-12) stays out, as on Daily.
   const tasks = await db
-    .prepare("SELECT id, title, COALESCE(do_date, due_date) AS day, due_time FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND remind = 1 ORDER BY COALESCE(do_date, due_date) IS NULL, COALESCE(do_date, due_date), created_at LIMIT 20")
-    .bind(userId)
+    .prepare("SELECT id, title, COALESCE(do_date, due_date) AS day, due_time FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND remind = 1 AND (hidden_until IS NULL OR hidden_until < ?) ORDER BY COALESCE(do_date, due_date) IS NULL, COALESCE(do_date, due_date), created_at LIMIT 20")
+    .bind(userId, day)
     .all<{ id: string; title: string; day: string | null; due_time: string | null }>();
   return { water: await waterFor(db, userId, day), custom: rows.results.map(toCustom), tasks: tasks.results.map((t) => ({ id: t.id, title: t.title, day: t.day, time: t.due_time })) };
 }

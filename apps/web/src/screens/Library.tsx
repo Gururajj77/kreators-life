@@ -386,7 +386,7 @@ function Owned({ id }: { id: string }) {
                       strike
                       color="var(--color-r4)"
                       deep="var(--deep-lover_partner)"
-                      text="var(--color-ink-fixed)"
+                      text="var(--color-on-fill)"
                       aside={
                         l.unlocked && l.videoUrl ? (
                           <a href={l.videoUrl} target="_blank" rel="noreferrer" className="toy toy-soft flex w-[48px] shrink-0 items-center justify-center rounded-tile bg-card" aria-label={`Watch ${l.title}`}>

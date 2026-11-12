@@ -809,11 +809,18 @@
     box-shadow: none;
     background-color: var(--color-line);
   }
-  /* Hovering a checkbox row shows a faint tick where it will land. */
-  .check-row:hover:not(:disabled) .check-box {
+  /* Hovering a checkbox shows a faint tick where it will land. CheckRow's box stands outside its card (`.check-line`, 2026-11-12): the
+     box's own hit area always shows it, and so does the card while its words tick too; a card whose words open something (a task's
+     plan, `data-opens`) keeps only its toy lift, since the box alone ticks there. A row that holds its box inside (the Apps page's
+     Select rows, `.check-row`) shows it on the whole row. */
+  .check-hit:hover .check-box,
+  .check-line:not([data-opens]):has(> .check-row:hover) .check-box,
+  .check-row:hover .check-box {
     background-color: color-mix(in oklab, var(--check-color) 14%, white);
   }
-  .check-row:hover:not(:disabled) .check-preview {
+  .check-hit:hover .check-preview,
+  .check-line:not([data-opens]):has(> .check-row:hover) .check-preview,
+  .check-row:hover .check-preview {
     opacity: 0.45;
     transform: scale(1);
   }
@@ -832,6 +839,12 @@
   transition:
     background-color 120ms ease,
     border-color 120ms ease;
+}
+/* The box is its own control outside the card, at its left (2026-11-12, the founder: "why is the checkbox not seperate and out of the
+   clickable task card itself?"): the keyboard's ring goes round the box, the card's open control rings the card (CheckRow). */
+.check-hit:has(input:focus-visible) .check-box {
+  outline: 3px solid var(--color-ink);
+  outline-offset: 2px;
 }
 .check-preview {
   opacity: 0;
@@ -1568,14 +1581,14 @@ nav .bg-card {
 .dialog-rail .more-trigger:not(:hover) {
   background-color: var(--card-strong);
 }
-/* A rail button's name shows to its left, over the panel, where there is always room. */
-.dialog-rail .mf-round[data-at]::after,
-.dialog-rail .rail-tip::after {
-  top: 50%;
-  right: calc(100% + var(--spacing-xs));
-  bottom: auto;
-  left: auto;
-  transform: translateY(-50%);
+/* A rail button's name is the smart tip (lib/smartTip.ts, 2026-11-12), placed outside the panel over the scrim, beside the rail where the
+   window has room: no spot drawn by CSS alone is both off the panel and inside the window (at 768 a 600px sheet leaves 32px beside the rail).
+   So in a rail there is no CSS name, and the water card's words do not slide out over the panel. */
+.dialog-rail :is(.mf-round, .rail-tip)::after {
+  content: none;
+}
+.dialog-rail .expand-btn-words {
+  display: none;
 }
 @media (width < 37.5rem) {
   .sheet-frame {
@@ -1589,13 +1602,6 @@ nav .bg-card {
   }
   .sheet-frame > .sheet-panel {
     max-height: min(90dvh, calc(100dvh - 44px - var(--spacing-md) - env(safe-area-inset-top)));
-  }
-  /* Up there the name drops below the button, over the panel. */
-  .sheet-frame > .dialog-rail .mf-round[data-at]::after,
-  .sheet-frame > .dialog-rail .rail-tip::after {
-    top: calc(100% + var(--spacing-xs));
-    right: 0;
-    transform: none;
   }
 }
 /* The assistant's panel sits against the laptop's right edge, so its rail is on its left; a phone's fills the width, so its rail is above it, in the
@@ -3436,7 +3442,7 @@ select.inv-edit { appearance: none; cursor: pointer; }
 .mf-round::after,
 .app-eye::after,
 .rail-tip::after {
-  content: attr(data-tip);
+  content: attr(data-tip); /* tip fallback */
   position: absolute;
   bottom: calc(100% + var(--spacing-xs));
   left: 50%;
@@ -3484,27 +3490,90 @@ select.inv-edit { appearance: none; cursor: pointer; }
   left: auto;
   transform: translateY(-50%);
 }
-/* A round button lifts a little on hover (the toy transform), which makes it a layer of its own, so its name could not rise over what
+/* The CSS name above is the stand-in until the smart tips load (Root starts lib/smartTip.ts after the first paint and marks the page
+   `data-smart-tips`); from then on every name is the one floating tip, so these show only before it.
+   A round button lifts a little on hover (the toy transform), which makes it a layer of its own, so its name could not rise over what
    comes after it on the page (the water panel under the water block's buttons hid them, 2026-11-06). While its name shows, the button
    itself sits above its neighbours. */
-.mf-round:hover,
-.mf-round:focus-visible,
-.app-eye:hover,
-.app-eye:focus-visible,
-.rail-tip:hover,
-.rail-tip:focus-visible {
+html:not([data-smart-tips]) :is(.mf-round, .app-eye, .rail-tip):is(:hover, :focus-visible) {
   z-index: 30;
 }
 /* Not Sheet's Close (.rail-tip): a popup opens with focus on it, and its name would then sit over the title every time. */
-.mf-round:focus-visible::after,
-.app-eye:focus-visible::after {
+html:not([data-smart-tips]) :is(.mf-round, .app-eye):focus-visible::after {
   opacity: 1;
 }
 @media (hover: hover) and (pointer: fine) {
-  .mf-round:hover::after,
-  .app-eye:hover::after,
-  .rail-tip:hover::after {
+  html:not([data-smart-tips]) :is(.mf-round, .app-eye, .rail-tip):hover::after {
     opacity: 1;
+  }
+}
+html[data-smart-tips] :is(.mf-round, .app-eye, .rail-tip)::after {
+  content: none;
+}
+/* A disabled button may get no pointer events in a browser, so the smart tip never hears of it: its CSS name stays for a mouse, unless the
+   smart tip did show (data-tip-on). Never in a rail, where no CSS spot is off the panel. */
+@media (hover: hover) and (pointer: fine) {
+  html[data-smart-tips] :is(.mf-round, .app-eye):disabled:not([data-tip-on], .dialog-rail *):hover {
+    z-index: 30;
+  }
+  html[data-smart-tips] :is(.mf-round, .app-eye):disabled:not([data-tip-on], .dialog-rail *):hover::after {
+    content: attr(data-tip); /* tip fallback */
+    opacity: 1;
+  }
+}
+
+/* Smart tips (lib/smartTip.ts with lib/tipGeometry.ts and `pickTipSpot` in @kreators/shared/tipPlace; the founder, 2026-11-12: "all the
+   helper tooltips should appear in places that have no pre-existing text, like outside the popups"): one floating name for every
+   `data-tip` trigger, in the top layer (a popover), placed in the empty room nearest its trigger, outside a popup's panel where the
+   window has room. The look of the CSS name it replaces: the strong card over the page's own base, a hairline ring, caption size. */
+.smart-tip {
+  position: fixed;
+  top: 0;
+  right: auto;
+  bottom: auto;
+  left: 0;
+  z-index: 80;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(240px, calc(100vw - 16px));
+  margin: 0;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  overflow: visible;
+  border: 0;
+  border-radius: var(--radius-inner);
+  background: linear-gradient(var(--card-strong), var(--card-strong)), var(--page-base-a);
+  color: var(--color-ink);
+  box-shadow: 0 0 0 1px var(--line);
+  font-size: var(--text-caption);
+  line-height: var(--text-caption--line-height);
+  font-weight: var(--font-weight-semibold);
+  text-align: left;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+.smart-tip[popover] {
+  inset: auto;
+  top: 0;
+  left: 0;
+}
+.smart-tip[data-wrap] {
+  white-space: normal;
+}
+.smart-tip[data-on] {
+  opacity: 1;
+}
+/* A glossary word's card (components/Tip.tsx), placed by the same rule; it keeps the pale purple of every tip. */
+.smart-tip-card {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 80;
+}
+@media (forced-colors: active) {
+  .smart-tip {
+    border: 1px solid CanvasText;
   }
 }
 /* The panel is the full width of the column on every screen, like the boxes above it; its four round buttons sit in one row under it. */
@@ -3514,6 +3583,7 @@ select.inv-edit { appearance: none; cursor: pointer; }
   .mf-round::after,
   .app-eye::after,
   .rail-tip::after,
+  .smart-tip,
   .mf-secs > i,
   .mf-tabs > button {
     transition: none !important;

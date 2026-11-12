@@ -11,7 +11,7 @@ export function RoleBadge({ role, size = 24, className = '' }: { role: BadgeRole
   const meta = BADGE_META[role];
   const rel = RELATIONSHIP_BY_KEY[meta.accent];
   return (
-    <span role="img" aria-label={meta.name} title={meta.name} className={`inline-flex shrink-0 items-center justify-center rounded-pill bg-card ${className}`} style={{ width: size, height: size, color: rel.color, boxShadow: `0 0 0 2px ${rel.color}` }}>
+    <span role="img" aria-label={meta.name} data-tip={meta.name} className={`inline-flex shrink-0 items-center justify-center rounded-pill bg-card ${className}`} style={{ width: size, height: size, color: rel.color, boxShadow: `0 0 0 2px ${rel.color}` }}>
       <AppIcon name={meta.icon} size={Math.round(size * 0.58)} />
     </span>
   );

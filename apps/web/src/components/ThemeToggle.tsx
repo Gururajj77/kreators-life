@@ -19,7 +19,7 @@ export function ThemeToggle({ className = '', floating = false }: { className?: 
       type="button"
       onClick={() => setMode(NEXT[mode])}
       aria-label={LABEL[mode]}
-      title={LABEL[mode]}
+      data-tip={LABEL[mode]}
       className={`toy toy-soft flex size-[44px] items-center justify-center rounded-pill bg-card-strong text-ink-soft hover:text-ink ${floating ? 'safe-top fixed top-sm right-md z-30' : ''} ${className}`}
     >
       <Icon mode={mode} />

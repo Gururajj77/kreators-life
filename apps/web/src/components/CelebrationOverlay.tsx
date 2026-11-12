@@ -3,6 +3,7 @@ import { m as motion, useReducedMotion } from 'motion/react';
 import { useMemo } from 'react';
 import { BadgeMedal } from './BadgeArt';
 import type { Celebration } from './Celebration';
+import { fillFor, ON_FILL } from '../lib/relFill';
 
 // The celebration's overlay, out of Celebration.tsx (2026-11-07): the provider stays in the first download, this loads after it.
 const PALETTE = RELATIONSHIPS.map((r) => r.color);
@@ -42,6 +43,10 @@ export function CelebrationOverlay({ c }: { c: Celebration }) {
   const reduce = useReducedMotion();
   // Show the ripple climbing: task at the bottom, pillar at the top.
   const climb = [...c.ripple];
+  // The pillar's colour as a pill of its tuned fill with the text that reads on it (2026-11-12, the founder: the yellow "+N" could not be
+  // read on the card, which is cream in dark mode). Words in the pillar's own colour vanished there; a fill carries its own ground, and
+  // orange and yellow take the dark ink by app.css's on-fill rule.
+  const pill = { background: fillFor(c.color), color: ON_FILL };
   return (
     <motion.div
       className="pointer-events-none fixed inset-0 z-[60]"
@@ -62,7 +67,7 @@ export function CelebrationOverlay({ c }: { c: Celebration }) {
             <span className="text-title2">{c.title}</span>
             <span className="flex shrink-0 gap-xs">
               {c.totalXp > 0 && (
-                <span className="rounded-pill px-sm py-xs text-subhead font-medium text-ink-fixed" style={{ background: c.color }}>
+                <span className="rounded-pill px-sm py-xs text-subhead font-medium" style={pill}>
                   +{c.totalXp} xp
                 </span>
               )}
@@ -83,7 +88,7 @@ export function CelebrationOverlay({ c }: { c: Celebration }) {
                     <span className="font-semibold">{KIND_META[e.kind].label}</span>
                     <span className="text-on-ink/70"> {e.title}</span>
                   </span>
-                  <span className="shrink-0 font-bold" style={{ color: c.color }}>
+                  <span className="shrink-0 rounded-pill px-xs font-semibold" style={pill}>
                     +{e.amount}
                   </span>
                 </motion.li>

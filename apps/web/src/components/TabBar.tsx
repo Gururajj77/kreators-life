@@ -70,7 +70,7 @@ function UnreadTag({ n }: { n: number }) {
 function BellLink({ unread }: { unread: number }) {
   const label = unread > 0 ? `Inbox, ${unread} unread` : 'Inbox';
   return (
-    <NavLink to="/inbox" aria-label={label} title={label} className="toy toy-soft relative flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-card-strong text-ink-soft hover:text-ink">
+    <NavLink to="/inbox" aria-label={label} data-tip={label} className="toy toy-soft relative flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-card-strong text-ink-soft hover:text-ink">
       <Icon icon={Bell} size={22} />
       {unread > 0 && (
         <span aria-hidden="true" className="absolute -top-[2px] -right-[2px] flex min-w-[18px] items-center justify-center rounded-pill bg-r1 px-[4px] text-caption2 font-semibold leading-[18px] text-on-fill">
@@ -283,7 +283,7 @@ export function TabBar() {
         <ul ref={side.ref} className="fx-slide mt-md flex list-none flex-col gap-xs p-0 m-0">
           {TABS.map((t) => (
             <li key={t.to}>
-              <NavLink to={t.to} aria-label={mini ? t.label : undefined} title={mini ? t.label : undefined} className={({ isActive }) => `tab relative flex min-h-[48px] items-center gap-sm rounded-pill text-callout font-medium transition-colors ${mini ? 'justify-center px-0' : 'px-sm'} ${isActive ? (side.ready ? 'text-on-ink' : 'bg-ink text-on-ink') : 'text-ink-soft hover:bg-paper hover:text-ink'}`}>
+              <NavLink to={t.to} aria-label={mini ? t.label : undefined} data-tip={mini ? t.label : undefined} data-tip-at="right" className={({ isActive }) => `tab relative flex min-h-[48px] items-center gap-sm rounded-pill text-callout font-medium transition-colors ${mini ? 'justify-center px-0' : 'px-sm'} ${isActive ? (side.ready ? 'text-on-ink' : 'bg-ink text-on-ink') : 'text-ink-soft hover:bg-paper hover:text-ink'}`}>
                 {({ isActive }) => (
                   <>
                     <span className="relative flex size-[28px] items-center justify-center">{t.icon(isActive, 24)}</span>
@@ -339,7 +339,7 @@ export function TabBar() {
       </nav>
       {/* Fold the sidebar to its main tabs, or open it again (kept on this device): a round button half over the sidebar's edge, at the
           top while it is open and at the foot while it is folded. */}
-      <button type="button" onClick={() => setMini(!mini)} aria-pressed={mini} aria-label={mini ? 'Open the sidebar' : 'Fold the sidebar'} title={mini ? 'Open the sidebar' : 'Fold the sidebar'} data-mini={mini || undefined} className="nav-fold toy toy-soft fixed z-40 hidden size-[36px] items-center justify-center rounded-pill border border-line bg-card-strong text-ink-soft hover:text-ink md:flex">
+      <button type="button" onClick={() => setMini(!mini)} aria-pressed={mini} aria-label={mini ? 'Open the sidebar' : 'Fold the sidebar'} data-tip={mini ? 'Open the sidebar' : 'Fold the sidebar'} data-tip-at="right" data-mini={mini || undefined} className="nav-fold toy toy-soft fixed z-40 hidden size-[36px] items-center justify-center rounded-pill border border-line bg-card-strong text-ink-soft hover:text-ink md:flex">
         <Icon icon={mini ? PanelLeftOpen : PanelLeftClose} size={18} className="nav-fold-icon" />
       </button>
     </>

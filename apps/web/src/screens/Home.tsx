@@ -780,7 +780,7 @@ export function Home() {
             action={
               <div className="flex items-center gap-xs">
                 {(hiddenApps > 0 || showHidden) && (
-                  <button type="button" className="mf-round toy shrink-0" data-at="tr" data-tip={hiddenLabel} aria-label={hiddenLabel} title={hiddenLabel} aria-expanded={showHidden} aria-controls={hiddenPanel} onClick={() => setShowHidden((v) => !v)}>
+                  <button type="button" className="mf-round toy shrink-0" data-at="tr" data-tip={hiddenLabel} aria-label={hiddenLabel} aria-expanded={showHidden} aria-controls={hiddenPanel} onClick={() => setShowHidden((v) => !v)}>
                     <ToggleIcon open={showHidden} icon={EyeOff} />
                   </button>
                 )}

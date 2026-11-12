@@ -1,6 +1,7 @@
 import { MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, RELATIONSHIP_BY_KEY, RELATIONSHIPS, shiftDay, WAIT, type NotToDo, type NotToDoStatus, type RelationshipKey } from '@kreators/shared';
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { api, ApiError } from '../lib/api';
+import { pillarTick } from '../lib/relFill';
 import { useRefreshAll, useRefreshInsights, useToday } from '../lib/queries';
 import { useActionQueue } from '../lib/useActionQueue';
 import { Button } from './Button';
@@ -121,9 +122,7 @@ export function NotToDoList({ items, date, queue }: Props) {
                   onToggle={() => mark(item, item.today === 'kept' ? null : 'kept')}
                   title={item.title}
                   subtitle={subtitle}
-                  color={color}
-                  deep={rel ? `var(--deep-${rel.key})` : 'var(--color-shadow)'}
-                  text={rel?.text ?? 'var(--color-on-ink)'}
+                  {...(rel ? pillarTick(rel) : { color, deep: 'var(--color-shadow)', text: 'var(--color-on-ink)' })}
                   busy={queue.isPending(`ntd-${item.id}`)}
                   hint={queue.hint(`ntd-${item.id}`)}
                   badge={<WeekDots days={item.week.map((d) => d === 'kept')} color={color} label={`Last seven days, ${kept} kept`} />}

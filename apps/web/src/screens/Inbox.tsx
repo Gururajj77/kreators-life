@@ -208,15 +208,15 @@ export function Inbox() {
                 </button>
               ))}
             </div>
-            {/* The action keeps a 44px slot in the row and its words slide out over the kinds beside it on a solid card, so pointing at it
-                never pushes the kinds about. */}
+            {/* The action keeps a 44px slot in the row. Its words no longer slide out over the kinds beside it (the founder, 2026-11-12: a
+                helper's words never cover others): its name is the smart tip, in the empty room by it. */}
             {((show !== 'archived' && list.some((n) => n.readAt)) || (show === 'archived' && list.length > 0)) && (
               <span className="relative block size-[44px] shrink-0">
                 <span className="absolute top-0 left-0 z-10 [&>.expand-btn:focus-visible]:bg-card-strong [&>.expand-btn:hover]:bg-card-strong">
                   {show !== 'archived' ? (
-                    <ExpandButton icon={Archive} anim={archiveRead.isPending ? 'loading' : 'archive'} label="Archive read items" disabled={archiveRead.isPending} onClick={() => archiveRead.mutate()} />
+                    <ExpandButton icon={Archive} anim={archiveRead.isPending ? 'loading' : 'archive'} label="Archive read items" slide={false} disabled={archiveRead.isPending} onClick={() => archiveRead.mutate()} />
                   ) : (
-                    <ExpandButton icon={Trash2} anim="trash" label="Delete all archived" onClick={() => {
+                    <ExpandButton icon={Trash2} anim="trash" label="Delete all archived" slide={false} onClick={() => {
                       setUndo(null);
                       setToDelete('all');
                     }} />
@@ -307,7 +307,7 @@ export function Inbox() {
                   onClick={() => archive.mutate({ id: n.id, archived: !n.archivedAt, unread: !n.readAt })}
                   disabled={archive.isPending}
                   aria-label={n.archivedAt ? `Bring back "${n.title}"` : `Archive "${n.title}"`}
-                  title={n.archivedAt ? 'Bring back' : 'Archive'}
+                  data-tip={n.archivedAt ? 'Bring back' : 'Archive'}
                   className="toy toy-soft flex w-[48px] shrink-0 flex-col items-center justify-center gap-xs rounded-tile bg-card text-ink-soft hover:text-ink"
                 >
                   {n.archivedAt ? <Icon icon={ArchiveRestore} size={20} /> : <AnimatedIcon name="archive" size={20} />}
@@ -321,7 +321,7 @@ export function Inbox() {
                       setToDelete(n.id);
                     }}
                     aria-label={`Delete "${n.title}" for good`}
-                    title="Delete for good"
+                    data-tip="Delete for good"
                     className="toy toy-soft flex w-[48px] shrink-0 flex-col items-center justify-center gap-xs rounded-tile border-2 border-r1/40 bg-card text-r1 hover:bg-r1/10"
                   >
                     <AnimatedIcon name="trash" size={20} />

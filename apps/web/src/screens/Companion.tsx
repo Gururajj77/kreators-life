@@ -149,7 +149,7 @@ export function Companion() {
             <p className="m-0 text-caption text-ink-soft">{credits}</p>
           </div>
           {messages.length > 0 && (
-            <button type="button" onClick={() => setAsking(true)} disabled={running} aria-label="Clear this conversation" title="Clear" className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1 disabled:opacity-50">
+            <button type="button" onClick={() => setAsking(true)} disabled={running} aria-label="Clear this conversation" data-tip="Clear" className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1 disabled:opacity-50">
               <AnimatedIcon name="trash" size={20} />
             </button>
           )}

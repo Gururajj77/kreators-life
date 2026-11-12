@@ -30,6 +30,8 @@ export interface NodeRow {
   time_block_id?: string | null;
   /** The kind of open business it carries (migration 0120), read through `parseOpenKind`, or null. */
   open_kind?: string | null;
+  /** Hidden tasks (migration 0137): the last day it stays hidden, '9999-12-31' for until unhidden, or null when shown. */
+  hidden_until?: string | null;
   do_date?: string | null;
   repeat_json?: string | null;
   spawned_from?: string | null;
@@ -438,6 +440,7 @@ export function toNode(r: NodeRow, gate?: TaskGate): Node {
     lifeArea: parseLifeArea(r.life_area),
     timeBlockId: r.time_block_id ?? null,
     openKind: parseOpenKind(r.open_kind),
+    ...(r.kind === 'task' ? { hiddenUntil: r.hidden_until ?? null } : {}),
     dueTime: r.due_time ?? null,
     estimateMin: r.estimate_min ?? null,
     completedAt: r.completed_at,

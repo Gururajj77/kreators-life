@@ -1,9 +1,9 @@
 import { Hono, type Context } from 'hono';
-import { DAILY_GROUPED_MAX, dayTypeOf, slotIndexOfTask, slotOrder, PLAN_DEFAULT_MINUTES, startingTemplateFor, weekDates, type DayPlan, type DayTypeResponse, type TemplateSlot, MONTH_RE, MONTH_TASKS_MAX, monthShift, repeatLabel, type MonthProject, type MonthTask, type TodayMonthResponse, PLAN_DAY_MINUTES, planWeek, type PlanTask, MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, notToDoStreak, notToDoWeek, POINTS, RELATIONSHIPS, sparkFor, XP, zonedToUtc, type CheckinResponse, type NotToDo, type NotToDoStatus, type RelationshipKey, TODAY_AGENCY_MAX, type TodayAgency, type TodayEvent, type TodayResponse, type TodayWaitingResponse, parseLifeArea, isTaskSort, isOpenFilter, DONE_PAGE_SIZE, DONE_PAGE_SIZES, OPEN_KINDS, type DoneTasksResponse, isTaskTab, TASK_TAB_CMP, TASK_TAB_PAGE_SIZES, TASK_TAB_PAGE_SIZE, taskTabSort, type TaskTab, type TodayTabResponse } from '@kreators/shared';
+import { DAILY_GROUPED_MAX, dayTypeOf, slotIndexOfTask, slotOrder, PLAN_DEFAULT_MINUTES, startingTemplateFor, weekDates, type DayPlan, type DayTypeResponse, type TemplateSlot, MONTH_RE, MONTH_TASKS_MAX, monthShift, repeatLabel, type MonthProject, type MonthTask, type TodayMonthResponse, PLAN_DAY_MINUTES, planWeek, type PlanTask, MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, notToDoStreak, notToDoWeek, POINTS, RELATIONSHIPS, sparkFor, XP, zonedToUtc, type CheckinResponse, type NotToDo, type NotToDoStatus, type RelationshipKey, TODAY_AGENCY_MAX, type TodayAgency, type TodayEvent, type TodayResponse, type TodayWaitingResponse, parseLifeArea, isTaskSort, isOpenFilter, DONE_PAGE_SIZE, DONE_PAGE_SIZES, OPEN_KINDS, type DoneTasksResponse, isTaskTab, TASK_TAB_CMP, TASK_TAB_PAGE_SIZES, TASK_TAB_PAGE_SIZE, taskTabSort, type TaskTab, type TodayTabResponse, HIDDEN_PAGE_PREFIX, taskHiddenOn, type HiddenTasksResponse } from '@kreators/shared';
 import { breakdownOfOrigin } from '@kreators/shared/contentDays';
 import type { AppEnv } from '../env';
 import { resolveAccess } from '../access';
-import { DATE_RE, dateNearToday, dayInZone, getUser, newId, noteStmt, nowIso, pageOf, paged, shiftDate, streakNow, toNode, type NodeRow, taskGate, withSubtasks } from '../db';
+import { DATE_RE, dateNearToday, dayInZone, getUser, newId, noteStmt, nowIso, pageOf, paged, shiftDate, streakNow, TEN_A_PAGE, toNode, type NodeRow, taskGate, withSubtasks } from '../db';
 import { dayPlan, kindsBetween, loadBlocking } from '../timeBlocks';
 import { afterInviteActive, inviteActiveStmts } from '../invites';
 
@@ -182,8 +182,14 @@ function blockFilterSql(block: string | null, slots: readonly TemplateSlot[], pr
  * cut, kept for the assistant and older tabs), or a tab's own from TASK_TAB_CMP (`=` Today, `<` Past due, `>` Upcoming): fixed strings, never typed.
  */
 type DayCmp = '<=' | '=' | '<' | '>';
+/**
+ * Hidden tasks (2026-11-12, migration 0137): shown on the day `day` names unless hidden through it. Every Daily read but GET /today/hidden
+ * adds it, so a hidden task leaves the tabs, their counts, the six, the waiting list, Not scheduled yet, To remember, Your day and the time
+ * plan (a hidden timed task holds no time: Place my day and Move it may use its time while it is hidden). `day` is a bound parameter, never text.
+ */
+const shownOn = (prefix: string, day: string) => ` AND (${prefix}hidden_until IS NULL OR ${prefix}hidden_until < ${day})`;
 const openTasksWhere = (cut: string, cmp: DayCmp = '<=') =>
-  `n.user_id = ?1 AND n.kind = 'task' AND n.status = 'active' AND COALESCE(n.do_date, n.due_date) IS NOT NULL AND COALESCE(n.do_date, n.due_date) ${cmp} ?2${cut}`;
+  `n.user_id = ?1 AND n.kind = 'task' AND n.status = 'active' AND COALESCE(n.do_date, n.due_date) IS NOT NULL AND COALESCE(n.do_date, n.due_date) ${cmp} ?2${shownOn('n.', '?2')}${cut}`;
 /**
  * The cut the main list and "N more waiting" read under (2026-11-12, Daily's tabs): `?tab=today` is the day alone; with no tab the day and
  * before it. The Bottlenecks view (`?open=`) stands apart: it lists all open business whose day has come, whatever tab is picked.
@@ -279,7 +285,7 @@ today.get('/', async (c) => {
         COALESCE(SUM(CASE WHEN ${dayOf} = ?2 THEN 1 ELSE 0 END), 0) AS today_n,
         COALESCE(SUM(CASE WHEN ${dayOf} < ?2 THEN 1 ELSE 0 END), 0) AS past_n,
         COALESCE(SUM(CASE WHEN ${dayOf} > ?2 THEN 1 ELSE 0 END), 0) AS up_n
-       FROM nodes n INDEXED BY idx_nodes_user_open_day WHERE n.user_id = ?1 AND n.kind = 'task' AND n.status = 'active' AND ${dayOf} > ''${areaSql('n.life_area')}${blockSql('n.')}`,
+       FROM nodes n INDEXED BY idx_nodes_user_open_day WHERE n.user_id = ?1 AND n.kind = 'task' AND n.status = 'active' AND ${dayOf} > ''${shownOn('n.', '?2')}${areaSql('n.life_area')}${blockSql('n.')}`,
       )
       .bind(user.id, date)
       .first<{ n: number; late: number; today_n: number; past_n: number; up_n: number }>(),
@@ -290,7 +296,7 @@ today.get('/', async (c) => {
     db
       .prepare(
         `SELECT n.*, COUNT(*) OVER () AS loose_total FROM nodes n INDEXED BY idx_nodes_user_open_day
-       WHERE n.user_id = ?1 AND n.kind = 'task' AND n.status = 'active' AND COALESCE(n.do_date, n.due_date) = ?2 AND n.time_block_id IS NULL AND n.due_time IS NULL
+       WHERE n.user_id = ?1 AND n.kind = 'task' AND n.status = 'active' AND COALESCE(n.do_date, n.due_date) = ?2 AND n.time_block_id IS NULL AND n.due_time IS NULL${shownOn('n.', '?2')}
        ORDER BY CASE WHEN n.priority IS NULL THEN 2 WHEN n.priority <= 1 THEN n.priority ELSE n.priority + 1 END ASC, COALESCE(n.due_date, '9999-99-99') ASC,
          CASE WHEN n.origin = 'build' THEN 0 ELSE 1 END ASC, COALESCE(n.estimate_min, ?3) DESC, n.id ASC LIMIT 50`,
       )
@@ -300,23 +306,23 @@ today.get('/', async (c) => {
     db
       .prepare(
         `SELECT
-        (SELECT COALESCE(SUM(estimate_min), 0) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) <= ?2 AND estimate_min IS NOT NULL) AS planned,
+        (SELECT COALESCE(SUM(estimate_min), 0) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) <= ?2 AND estimate_min IS NOT NULL${shownOn('', '?2')}) AS planned,
         (SELECT COALESCE(SUM(estimate_min), 0) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'done' AND completed_at >= ?3 AND completed_at < ?4 AND estimate_min IS NOT NULL) AS done,
-        (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) <= ?2 AND due_time IS NOT NULL) AS timed`,
+        (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) <= ?2 AND due_time IS NOT NULL${shownOn('', '?2')}) AS timed`,
       )
       .bind(user.id, date, date, shiftDate(date, 1))
       .first<{ planned: number; done: number; timed: number }>(),
     // The main list is only what has a day that has come. A task with no date at all (no do date and no due date) waits in the not scheduled list below it until either is picked.
     db
       .prepare(
-        `SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND do_date IS NULL AND due_date IS NULL${areaSql('life_area')}${openSql('open_kind')}${blockSql('')}
+        `SELECT * FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND do_date IS NULL AND due_date IS NULL${shownOn('', '?2')}${areaSql('life_area')}${openSql('open_kind')}${blockSql('')}
        ORDER BY remind DESC, created_at DESC LIMIT 60`,
       )
-      .bind(user.id)
+      .bind(user.id, date)
       .all<NodeRow>(),
     db
-      .prepare(`SELECT COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND do_date IS NULL AND due_date IS NULL${areaSql('life_area')}${openSql('open_kind')}${blockSql('')}`)
-      .bind(user.id)
+      .prepare(`SELECT COUNT(*) AS n FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND do_date IS NULL AND due_date IS NULL${shownOn('', '?2')}${areaSql('life_area')}${openSql('open_kind')}${blockSql('')}`)
+      .bind(user.id, date)
       .first<{ n: number }>(),
     // What was ticked today stays in sight under the tasks still waiting, so a tick can be seen and undone: the first page, ten, with the
     // true count beside it (2026-11-07); the next pages come from GET /today/done.
@@ -337,21 +343,23 @@ today.get('/', async (c) => {
     notToDoList(db, user.id, date),
     eventsOnDay(db, user.id, dayStart, dayEnd),
     resolveAccess(db, user).then((r) => r.access),
-    // Whether any of the person's open tasks carries an area, so Daily shows the Area filter only once it means something; and how many
-    // tasks were let go (archived, 2026-11-07), so the Unfinished business view offers its Let go list only when there is one.
+    // Whether any of the person's open tasks carries an area, so Daily shows the Area filter only once it means something; how many
+    // tasks were let go (archived, 2026-11-07), so the Unfinished business view offers its Let go list only when there is one; and how
+    // many are hidden on the day (2026-11-12), for the Hidden tasks fold, through the small hidden index (migration 0138), whole.
     db
       .prepare(
         `SELECT EXISTS (SELECT 1 FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND life_area IS NOT NULL) AS one,
-        (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'archived') AS let_go`,
+        (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'archived') AS let_go,
+        (SELECT COUNT(*) FROM nodes INDEXED BY idx_nodes_user_hidden WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND hidden_until IS NOT NULL AND hidden_until >= ?2) AS hidden`,
       )
-      .bind(user.id)
-      .first<{ one: number; let_go: number }>(),
+      .bind(user.id, date)
+      .first<{ one: number; let_go: number; hidden: number }>(),
     // Every open task that opens on the day and has a block or a time, summed by block and time, so "Your day" counts a slot's room from
     // all of them, never from the six shown or the Area filter's cut.
     db
       .prepare(
         `SELECT time_block_id, due_time, SUM(COALESCE(estimate_min, ?3)) AS min FROM nodes
-       WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) = ?2 AND (time_block_id IS NOT NULL OR due_time IS NOT NULL)
+       WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) = ?2 AND (time_block_id IS NOT NULL OR due_time IS NOT NULL)${shownOn('', '?2')}
        GROUP BY time_block_id, due_time LIMIT 2000`,
       )
       .bind(user.id, date, PLAN_DEFAULT_MINUTES)
@@ -402,6 +410,7 @@ today.get('/', async (c) => {
     doneTotal: Number(doneToday.results[0]?.done_total ?? 0),
     open,
     letGoTotal: Number(areasUsedRow?.let_go ?? 0),
+    hiddenTotal: Number(areasUsedRow?.hidden ?? 0),
     doneRecently: recent?.n ?? 0,
     timePlan: { plannedMin: plan?.planned ?? 0, doneMin: plan?.done ?? 0, timed: plan?.timed ?? 0 },
     spark: {
@@ -479,7 +488,7 @@ async function tabList(c: Context<AppEnv>, tab: Exclude<TaskTab, 'today'>) {
   const areaAsk = c.req.query('area');
   const area = areaAsk === 'none' ? 'none' : parseLifeArea(areaAsk);
   const cut = area === 'none' ? ' AND n.life_area IS NULL' : area ? ` AND n.life_area = '${area}'` : '';
-  const where = `n.user_id = ?1 AND n.kind = 'task' AND n.status = 'active' AND COALESCE(n.do_date, n.due_date) ${TASK_TAB_CMP[tab]} ?2${cut}`;
+  const where = `n.user_id = ?1 AND n.kind = 'task' AND n.status = 'active' AND COALESCE(n.do_date, n.due_date) ${TASK_TAB_CMP[tab]} ?2${shownOn('n.', '?2')}${cut}`;
   const from = 'FROM nodes n INDEXED BY idx_nodes_user_open_day';
   const ask = pageOf(c, tab === 'pastdue' ? 'pd' : 'uc', { sizes: TASK_TAB_PAGE_SIZES, fallback: TASK_TAB_PAGE_SIZE });
   // Past due by priority or due date takes the six's order (OPEN_TASKS_ORDER with ?3 priority 1 or due 2 and no lead pillar). By day, oldest
@@ -543,6 +552,31 @@ today.get('/let-go', async (c) => {
   return c.json(res);
 });
 
+/**
+ * Hidden tasks (2026-11-12, the founder): the person's open tasks hidden on their day, dated or not, a page at a time (prefix `hd`, 10, 25
+ * or 50, ten by default), Until tomorrow first and then Until I unhide it, with how many in all. Whole: Daily's Area cut and Bottlenecks
+ * view never cut it. Owner only; writes nothing. Both reads go through idx_nodes_user_hidden (migration 0138), which holds only open tasks
+ * that carry a hide, so a page never visits the person's other tasks. A day sent that is not on the calendar is refused; with none, the
+ * person's own today in their zone. A tick from here pays and counts like any task's (POST /nodes/:id/complete, the do-date lock kept).
+ */
+today.get('/hidden', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const asked = c.req.query('date');
+  if (asked !== undefined && !DATE_RE.test(asked)) return c.json({ error: 'That is not a real day.' }, 400);
+  const date = asked ?? dayInZone(user.timezone);
+  const ask = pageOf(c, HIDDEN_PAGE_PREFIX, TEN_A_PAGE);
+  const where = "user_id = ?1 AND kind = 'task' AND status = 'active' AND hidden_until IS NOT NULL AND hidden_until >= ?2";
+  const [gate, rows, total] = await Promise.all([
+    taskGate(db, user.id),
+    db.prepare(`SELECT * FROM nodes INDEXED BY idx_nodes_user_hidden WHERE ${where} ORDER BY hidden_until ASC, id ASC LIMIT ?3 OFFSET ?4`).bind(user.id, date, ask.limit, ask.offset).all<NodeRow>(),
+    db.prepare(`SELECT COUNT(*) AS n FROM nodes INDEXED BY idx_nodes_user_hidden WHERE ${where}`).bind(user.id, date).first<{ n: number }>(),
+  ]);
+  const { items, page } = paged(rows.results, ask);
+  const res: HiddenTasksResponse = { tasks: await withSubtasks(db, user.id, items.map((t) => toNode(t, gate))), page, total: total?.n ?? 0 };
+  return c.json(res);
+});
+
 // The week ahead, planned from the open tasks: a suggested day for each task that has none, how strong the plan is, and a few plain notes.
 // It writes nothing. The screen keeps what the person keeps, one task at a time, through the ordinary edit.
 today.get('/week-plan', async (c) => {
@@ -553,8 +587,8 @@ today.get('/week-plan', async (c) => {
   const dates = weekDates(date).slice(0, 7);
   const [rows, blocking] = await Promise.all([
     db
-      .prepare("SELECT id, title, relationship, estimate_min, priority, do_date, due_date, origin, time_block_id, life_area, due_time FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' ORDER BY created_at LIMIT 600")
-      .bind(user.id)
+      .prepare(`SELECT id, title, relationship, estimate_min, priority, do_date, due_date, origin, time_block_id, life_area, due_time FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active'${shownOn('', '?2')} ORDER BY created_at LIMIT 600`)
+      .bind(user.id, date)
       .all<{ id: string; title: string; relationship: RelationshipKey; estimate_min: number | null; priority: number | null; do_date: string | null; due_date: string | null; origin: string | null; time_block_id: string | null; life_area: string | null; due_time: string | null }>(),
     loadBlocking(db, user.id, dates),
   ]);
@@ -605,6 +639,8 @@ today.get('/month', async (c) => {
     kindsBetween(db, user, start, shiftDate(end, -1)),
   ]);
   const more = rows.results.length > MONTH_TASKS_MAX;
+  // The day the hidden marks are read on: the device's day the screen sent, else the person's own in their zone.
+  const asOf = dayAsked ?? dayInZone(user.timezone);
   const tasks: MonthTask[] = rows.results.slice(0, MONTH_TASKS_MAX).map((r) => {
     const n = toNode(r, gate);
     const day = n.doDate ?? n.dueDate ?? start;
@@ -619,6 +655,8 @@ today.get('/month', async (c) => {
       priority: n.priority,
       lifeArea: n.lifeArea,
       openKind: n.openKind ?? null,
+      // Hidden on the screen's day (2026-11-12): still on the calendar, with a quiet mark; a ticked one keeps no mark.
+      ...(n.status === 'active' && taskHiddenOn(n.hiddenUntil, asOf) ? { hidden: true } : {}),
       time: n.dueTime,
       estimateMin: n.estimateMin,
       repeat: n.repeat ? repeatLabel(n.repeat, day) : null,

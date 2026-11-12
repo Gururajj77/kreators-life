@@ -153,7 +153,7 @@ export function Wellbeing() {
                 {trackersOn} of {switchable.length} trackers on
               </p>
               {(hiddenRows.length > 0 || showHidden) && (
-                <button type="button" className="mf-round toy shrink-0" data-at="br" data-tip={hiddenLabel} aria-label={hiddenLabel} title={hiddenLabel} aria-expanded={showHidden} aria-controls={panel} onClick={() => setShowHidden((v) => !v)}>
+                <button type="button" className="mf-round toy shrink-0" data-at="br" data-tip={hiddenLabel} aria-label={hiddenLabel} aria-expanded={showHidden} aria-controls={panel} onClick={() => setShowHidden((v) => !v)}>
                   <ToggleIcon open={showHidden} icon={EyeOff} />
                 </button>
               )}

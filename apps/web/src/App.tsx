@@ -261,6 +261,18 @@ function Root() {
       stop?.();
     };
   }, []);
+  // Every helper tooltip in the empty room by its trigger, outside a popup's panel (the smart tips, 2026-11-12), after the first paint too.
+  useEffect(() => {
+    let stop: (() => void) | undefined;
+    let gone = false;
+    void import('./lib/smartTip').then((m) => {
+      if (!gone) stop = m.startSmartTips();
+    });
+    return () => {
+      gone = true;
+      stop?.();
+    };
+  }, []);
   return (
     <>
       <ScrollRestoration />

@@ -264,7 +264,7 @@ function Box({ g, open, onToggle, renderTask, by, extra }: { g: Group; open: boo
 
 /**
  * One PATCH /nodes/:id from a hint, then the day is read again. The hint line goes away with the save (and Move it takes the row to
- * another box), so focus moves to the task's own Plan button where it now sits, else to its box's header, never back to the page top.
+ * another box), so focus moves to the task itself (its row's open control, which opens its plan) where it now sits, else to its box's header, never back to the page top.
  */
 function useHintSave(task: Node) {
   const refresh = useRefreshAll();
@@ -274,7 +274,7 @@ function useHintSave(task: Node) {
       refresh().then(() =>
         requestAnimationFrame(() => {
           const row = document.querySelector<HTMLElement>(`li[data-task-id="${CSS.escape(task.id)}"]`);
-          const plan = row?.querySelector<HTMLElement>('button[aria-label^="Plan "], button[aria-label^="Close the plan"]');
+          const plan = row?.querySelector<HTMLElement>('[data-row-open]');
           const header = document.querySelector<HTMLElement>(`section[data-group-key="${CSS.escape(body.to)}"] > button`);
           const target = plan && plan.offsetParent !== null ? plan : header;
           target?.focus();

@@ -104,6 +104,9 @@ export default defineConfig({
           // joined the same day, when the year in Reviews, gratitude and Fitness took it to 400.1 kB.
           // Each must stay a leaf, for the reason above.
           if (id.includes('/packages/shared/src/focusRun.ts')) return 'shared-focus-run';
+          // Where a helper tooltip goes (2026-11-12; a subpath export and a leaf: it imports nothing), read only by lib/tipGeometry.ts, which the smart
+          // tips, a glossary word's card and the assistant's bubble load after the first paint.
+          if (id.includes('/packages/shared/src/tipPlace.ts')) return 'tip-place';
           // eventJoin (an event attendee's paths and the public event's type, importing only a type) joined on 2026-11-07, since Shell reads it.
           if (/\/packages\/shared\/src\/(core|dates|books|store|activity|circles|dayKinds|dayTypes|money|eventJoin)\.ts$/.test(id)) return 'shared-base';
           if (id.includes('/packages/shared/src/')) return 'shared';

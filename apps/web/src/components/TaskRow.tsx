@@ -1,7 +1,7 @@
 import { RELATIONSHIP_BY_KEY, mondayOf, taskIsHabit, type Node } from '@kreators/shared';
 import { m as motion, useReducedMotion } from 'motion/react';
 import type { ReactNode } from 'react';
-import { ListChecks, Pencil } from 'lucide-react';
+import { ListChecks } from 'lucide-react';
 import { dueLabel, todayLocal, clockOf } from '../lib/date';
 import { useTimeBlocks } from '../lib/useTimeBlocks';
 import { minutesUntil, useNow } from '../lib/useNow';
@@ -10,7 +10,7 @@ import { Icon } from './Icon';
 import { PriorityChip, TaskTags } from './TaskMarks';
 import { FactTag, IconTag } from './FactTag';
 import { StatusTag } from './StatusTag';
-import { ToggleIcon } from './ToggleMark';
+import { pillarTick } from '../lib/relFill';
 
 interface Props {
   task: Node;
@@ -19,14 +19,17 @@ interface Props {
   subtitle?: string;
   busy?: boolean;
   hint?: string | null;
+  /** Ticks or unticks the task: the box in front of the row. */
   onToggle: () => void;
+  /** What tapping the task itself opens (its plan in place, or the edit sheet). The card's small edit button at its top right does the
+   *  same. Leave it off and the words tick like the box (Done today). */
   onEdit?: () => void;
   /** Opened under the row: the task's plan, its subtasks and its focus button. */
   panel?: ReactNode;
-  /** Text for the edit button, when it opens a panel. */
+  /** The open control's words before the title ("Plan", "Close the plan for"); "Edit" when left off. */
   editLabel?: string;
-  /** The edit button opens `panel` in place: whether it is open now. The pencil then turns into a cross while open (`ToggleIcon`)
-   *  and the button carries `aria-expanded`. Leave it off when the pencil opens a Sheet, which has its own close. */
+  /** Tapping the task opens `panel` in place: whether it is open now. The control then carries `aria-expanded` and the small edit
+   *  button's pencil turns into a cross while open (`ToggleIcon`). Leave it off when it opens a Sheet, which has its own close. */
   editOpen?: boolean;
   /** The id of the opened panel, for `aria-controls`. */
   editControls?: string;
@@ -78,9 +81,8 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
         onToggle={onToggle}
         title={task.title}
         subtitle={subtitle}
-        color={rel.color}
-        deep={`var(--deep-${rel.key})`}
-        text={rel.text}
+        // The box in the pillar's own colour, from the tuned tokens (orange and yellow take the dark tick, and their empty edge their deep colour).
+        {...pillarTick(rel)}
         busy={busy}
         strike
         hint={hint}
@@ -103,20 +105,7 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
             </span>
           ) : null
         }
-        aside={
-          onEdit ? (
-            <button
-              type="button"
-              onClick={onEdit}
-              aria-label={`${editLabel ?? 'Edit'} "${task.title}"`}
-              aria-expanded={editOpen}
-              aria-controls={editOpen ? editControls : undefined}
-              className="toy toy-soft flex w-[48px] shrink-0 items-center justify-center rounded-tile bg-card text-ink-soft hover:text-ink"
-            >
-              {editOpen === undefined ? <Icon icon={Pencil} size={20} strokeWidth={2.6} /> : <ToggleIcon open={editOpen} icon={Pencil} size={20} strokeWidth={2.6} />}
-            </button>
-          ) : undefined
-        }
+        open={onEdit ? { onOpen: onEdit, label: editLabel ?? 'Edit', expanded: editOpen, controls: editControls } : undefined}
       />
       {panel}
     </motion.li>

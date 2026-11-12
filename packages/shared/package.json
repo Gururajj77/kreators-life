@@ -23,7 +23,8 @@
     "./connect": "./src/connect.ts",
     "./invites": "./src/invites.ts",
     "./siteMeta": "./src/siteMeta.ts",
-    "./contentDays": "./src/contentDays.ts"
+    "./contentDays": "./src/contentDays.ts",
+    "./tipPlace": "./src/tipPlace.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

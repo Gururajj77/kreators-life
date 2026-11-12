@@ -563,33 +563,18 @@ function Landed({ meta }: { meta: FlowMeta }) {
 }
 
 /**
- * The panel's close: a round ×. Pointed at with a mouse, or reached with the keyboard, it opens out to
- * "Close" beside the ×, so you see what it does before you click. A tap on a phone closes it straight away.
+ * The panel's close: a round ×, in the rail outside the card. Its name is the smart tip (2026-11-12), shown where nothing is drawn: off
+ * the card and the page's words, never over the phone's top-right buttons. A tap on a phone closes it straight away.
  */
 function CloseButton({ onClose }: { onClose: () => void }) {
-  const reduce = useReducedMotion();
-  const label = useRef<HTMLSpanElement>(null);
-  const show = (on: boolean) => {
-    const el = label.current;
-    if (!el) return;
-    const to = { width: on ? 'auto' : 0, opacity: on ? 1 : 0, marginRight: on ? 8 : 0 };
-    if (reduce) gsap.set(el, to);
-    else gsap.to(el, { ...to, duration: 0.2, ease: 'power2.out', overwrite: true });
-  };
   return (
     <button
       type="button"
       onClick={onClose}
-      onPointerEnter={(e) => e.pointerType === 'mouse' && show(true)}
-      onPointerLeave={() => show(false)}
-      onFocus={(e) => e.currentTarget.matches(':focus-visible') && show(true)}
-      onBlur={() => show(false)}
       aria-label="Close"
+      data-tip="Close"
       className="toy toy-soft inline-flex h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-pill bg-card px-sm text-ink-soft hover:text-ink"
     >
-      <span ref={label} className="block overflow-hidden whitespace-nowrap text-subhead font-semibold" style={{ width: 0, opacity: 0 }}>
-        Close
-      </span>
       <Icon icon={X} size={16} strokeWidth={2.8} />
     </button>
   );

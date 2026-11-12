@@ -457,7 +457,7 @@ function FocusButton({ on, onClick }: { on: boolean; onClick: () => void }) {
       onClick={onClick}
       aria-pressed={on}
       aria-label={on ? 'Leave focus mode' : 'Focus mode: hide the menu and the assistant'}
-      title={on ? 'Leave focus mode (Esc)' : 'Focus mode'}
+      data-tip={on ? 'Leave focus mode (Esc)' : 'Focus mode'}
       className="toy toy-soft flex min-h-[44px] min-w-[44px] items-center justify-center gap-xs rounded-pill border border-line bg-card-strong px-sm text-subhead font-medium text-ink"
     >
       {/* The animated maximize/minimize icon: corners out to enter, in to leave (the still lucide glyph until it loads). */}

@@ -227,9 +227,10 @@ export function WaterBlock({ tasks = true, summary = true, heading = true, onClo
   const leave = () => go(0);
 
   const railed = railIn !== undefined;
-  // Close says what it does by sliding its word out on hover or keyboard focus (the ExpandButton look, slowed like the card's icons).
+  // Close says what it does by sliding its word out on hover or keyboard focus (the ExpandButton look, slowed like the card's icons). In a popup's
+  // rail the words stay folded and its name is the smart tip, outside the panel (2026-11-12).
   const close = onClose && (
-    <button type="button" onClick={onClose} aria-label="Close water and reminders" className="water-close expand-btn toy toy-soft ml-auto inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-pill border-2 border-line bg-card px-xs text-subhead font-medium text-ink">
+    <button type="button" onClick={onClose} aria-label="Close water and reminders" data-tip="Close" className="water-close expand-btn toy toy-soft ml-auto inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-pill border-2 border-line bg-card px-xs text-subhead font-medium text-ink">
       <Icon icon={X} size={20} />
       <span className="expand-btn-words" aria-hidden="true">
         Close
@@ -241,8 +242,9 @@ export function WaterBlock({ tasks = true, summary = true, heading = true, onClo
     <div className="water-tabs" data-center={onClose ? '' : undefined}>
       <div role="tablist" aria-label="Water" className="contents">
         {WATER_PANES.map((p, i) => (
-          // Icons only; the name slides out on hover or keyboard focus (the ExpandButton look), and is the tab's name for screen readers.
-          <button key={p.key} type="button" role="tab" id={`${id}-t${i}`} aria-selected={pane === i} aria-controls={`${id}-p${i}`} aria-label={p.name} title={p.name} onClick={() => go(i)} className="water-tab expand-btn toy">
+          // Icons only; the name slides out on hover or keyboard focus (the ExpandButton look), and is the tab's name for screen readers. In a
+          // popup's rail it does not slide out over the panel: the smart tip names it, outside the panel.
+          <button key={p.key} type="button" role="tab" id={`${id}-t${i}`} aria-selected={pane === i} aria-controls={`${id}-p${i}`} aria-label={p.name} data-tip={p.name} onClick={() => go(i)} className="water-tab expand-btn toy">
             {p.key === 'today' ? <Drop size={20} /> : <AnimatedIcon name={p.key === 'settings' ? 'settings' : 'calendar'} size={20} />}
             <span className="expand-btn-words" aria-hidden="true">
               {p.name}
@@ -252,7 +254,7 @@ export function WaterBlock({ tasks = true, summary = true, heading = true, onClo
       </div>
       {undoInRow && (
         // Not a tab: it takes back the last glass, in the same look, its word sliding out on hover or keyboard focus.
-        <button type="button" aria-label="Undo the last glass" title="Undo the last glass" onClick={() => undo.mutate()} disabled={undo.isPending || w.ml === 0} className="water-tab expand-btn toy disabled:opacity-50">
+        <button type="button" aria-label="Undo the last glass" data-tip="Undo the last glass" onClick={() => undo.mutate()} disabled={undo.isPending || w.ml === 0} className="water-tab expand-btn toy disabled:opacity-50">
           <Icon icon={Undo2} size={20} />
           <span className="expand-btn-words" aria-hidden="true">
             Undo

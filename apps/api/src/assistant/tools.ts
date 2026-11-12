@@ -344,6 +344,8 @@ export const TOOLS: readonly Tool[] = [
             return { id: n.id, title: n.title, pillar: pillarName(n.relationship), doDate: n.doDate, due: n.dueDate, priority: n.priority === null ? null : `P${n.priority}`, remember: n.remind, repeats: n.repeat ? repeatLabel(n.repeat, openDay(n)) : null, habit: taskIsHabit(n), area: areaName(n.lifeArea), openBusiness: n.openKind ?? null, block: blockName(t.day?.blocks, blockOfTask(n, t.day?.slots ?? [])?.blockId), time: n.dueTime, minutes: n.estimateMin, canTickNow: !later && wait <= 0, ...(later ? { waitsForDay: n.doDate } : wait > 0 ? { readyInMinutes: wait } : {}) };
           }),
           notScheduled: t.backlogTotal,
+          // Tasks the person hid on Daily (2026-11-12): left out of every list above, counted only, so a question about one can be answered.
+          hiddenTasks: t.hiddenTotal ?? 0,
           notToDo: t.notToDo.map((i) => ({ id: i.id, title: i.title, today: i.today, yesterday: i.week[5] ?? null, streak: i.streak })),
           doneToday: t.done.map((n) => ({ id: n.id, title: n.title, pillar: pillarName(n.relationship) })),
         },

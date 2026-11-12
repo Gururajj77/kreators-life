@@ -169,7 +169,7 @@ export function Stress() {
                 type="button"
                 onClick={() => setToDelete({ id: l.id, label: `${STRESS_LEVELS[Math.round(l.value) - 1] ?? 'This day'} on ${dayLabel(l.date)}` })}
                 aria-label={`Delete the day of ${dayLabel(l.date)}`}
-                title="Delete"
+                data-tip="Delete"
                 className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1"
               >
                 <AnimatedIcon name="trash" size={20} />

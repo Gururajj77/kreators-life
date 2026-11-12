@@ -15,3 +15,12 @@ export function fillFor(color: string): string {
 export const fillVar = (r: { floor: number }) => `var(--color-r${r.floor})`;
 /** The foreground to put on {@link fillVar}. */
 export const ON_FILL = 'var(--color-on-fill)';
+
+/**
+ * A tick box in one of the seven's colours (2026-11-12): the fill and the tick from the tokens above, the hard shadow in its deep colour,
+ * and for orange and yellow, whose fill is under 3:1 on glass, the empty box's edge in that deep colour too.
+ */
+export function pillarTick(r: { key: string; floor: number }) {
+  const deep = `var(--deep-${r.key})`;
+  return { color: fillVar(r), deep, text: ON_FILL, edge: r.floor === 2 || r.floor === 3 ? deep : undefined };
+}

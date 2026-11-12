@@ -2,6 +2,7 @@ import { LIFE_AREA_ORDER, LIFE_AREAS, RELATIONSHIP_BY_KEY, TASK_SORTS, TASK_TAB_
 import { useMutation } from '@tanstack/react-query';
 import { Suspense, useEffect, useId, useRef, useState } from 'react';
 import { WATER_LANE } from '../lib/ui';
+import { ON_FILL, pillarTick } from '../lib/relFill';
 import { AnimatePresence } from 'motion/react';
 import { Link, useSearchParams } from 'react-router';
 import { useModule } from '../lib/modules';
@@ -386,7 +387,8 @@ export function Today() {
                   data.checkedIn ? (
                     <>
                       Points banked.{' '}
-                      <Link to="/rewards" className="underline underline-offset-4">
+                      {/* Raised above the row's stretched label, so the link is its own tap and not a tick. */}
+                      <Link to="/rewards" className="relative z-[1] underline underline-offset-4">
                         See rewards
                       </Link>
                     </>
@@ -394,9 +396,9 @@ export function Today() {
                     '+10 xp and +10 points. Fifty bonus points every seventh day in a row.'
                   )
                 }
-                color="#9BB068"
-                deep="#5A6B38"
-                text="#262626"
+                color="var(--color-r4)"
+                deep="var(--deep-lover_partner)"
+                text={ON_FILL}
                 busy={queue.isPending('checkin')}
                 hint={queue.hint('checkin')}
                 lockedMessage={data.checkedIn ? 'Already checked in today. Come back tomorrow.' : null}
@@ -420,9 +422,7 @@ export function Today() {
                 onToggle={doSpark}
                 title={data.spark.text}
                 subtitle={data.spark.done ? `Done. ${rel.character} is glowing.` : `${rel.character} is your ${rel.role}. Two minutes, +15 xp.`}
-                color={rel.color}
-                deep={`var(--deep-${rel.key})`}
-                text={rel.text}
+                {...pillarTick(rel)}
                 busy={queue.isPending('spark')}
                 hint={queue.hint('spark')}
                 lockedMessage={data.spark.done ? 'Done for today. A new small act comes tomorrow.' : null}

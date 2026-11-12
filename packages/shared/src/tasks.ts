@@ -163,6 +163,8 @@ export interface MonthTask {
   lifeArea: LifeAreaKey | null;
   /** The kind of open business it carries, or null (a tag like any other). */
   openKind?: OpenKind | null;
+  /** Hidden on the day the screen sent (2026-11-12): the calendar still shows it, with a quiet "Hidden" mark. */
+  hidden?: boolean;
   /** HH:MM, when the task has a time. */
   time: string | null;
   estimateMin: number | null;
@@ -300,6 +302,50 @@ export const TASK_TAB_SORTS: Readonly<Record<TaskTab, readonly TaskSort[]>> = {
 export function taskTabSort(tab: TaskTab, asked: unknown): TaskSort {
   return isTaskSort(asked) && TASK_TAB_SORTS[tab].includes(asked) ? asked : 'day';
 }
+
+// ---------------------------------------------------------------------------
+// Hidden tasks (2026-11-12, the founder: "tasks that go under a toggle tab below called hidden tasks"; "let me pick each time"; "quiet,
+// still counts"). A task can be hidden until tomorrow or until the person unhides it (`nodes.hidden_until`, migration 0137): a day
+// 'YYYY-MM-DD' is the last day it stays hidden (Until tomorrow writes the person's today, so it is back on their next day, by their own
+// day, never the server's), `HIDDEN_ALWAYS` is Until I unhide it, NULL is shown. A hidden task leaves Daily's tabs, their counts, the six,
+// the waiting list, Not scheduled yet, To remember, Your day and Place my day, and sends no reminder note; it keeps its dates, and a tick
+// from Hidden tasks pays and counts like any task's. Rules only; the server and the screen both read these.
+// ---------------------------------------------------------------------------
+
+export const TASK_HIDES = [
+  { key: 'tomorrow', name: 'Until tomorrow', state: 'Until tomorrow', blurb: 'It comes back by itself tomorrow.' },
+  { key: 'always', name: 'Until I unhide it', state: 'Until you unhide it', blurb: 'It waits under Hidden tasks until you bring it back.' },
+] as const;
+export type TaskHide = (typeof TASK_HIDES)[number]['key'];
+/** The stored day for Until I unhide it: later than any real day, so `hidden_until >= day` holds for good. */
+export const HIDDEN_ALWAYS = '9999-12-31';
+/** Hidden tasks on Daily are paged: ten by default (10, 25 or 50), prefix `hd`. */
+export const HIDDEN_PAGE_PREFIX = 'hd';
+const TASK_HIDE_BY_KEY: Record<string, TaskHide> = byKey(TASK_HIDES.map((h) => [h.key, h.key]));
+const SHOW_WORDS: Record<string, true> = byKey([['none', true], ['show', true], ['', true]]);
+/** The one reader of a hide choice: 'tomorrow' or 'always' (any case), else null (null, '', "none" and "show" mean shown). A caller that must refuse an unknown value checks `taskHideProblem` first. */
+export function parseTaskHide(v: unknown): TaskHide | null {
+  return typeof v === 'string' ? (TASK_HIDE_BY_KEY[v.trim().toLowerCase()] ?? null) : null;
+}
+export const TASK_HIDE_PROBLEM = 'Hide it until tomorrow or until you unhide it, or send none to show it.';
+/** What is wrong with a hide choice sent to PATCH /nodes/:id, in plain words; null when it is fine (a choice, or null, '', "none", "show"). */
+export function taskHideProblem(v: unknown): string | null {
+  if (v === null) return null;
+  if (typeof v !== 'string') return TASK_HIDE_PROBLEM;
+  const k = v.trim().toLowerCase();
+  return TASK_HIDE_BY_KEY[k] !== undefined || SHOW_WORDS[k] ? null : TASK_HIDE_PROBLEM;
+}
+/** The column a hide choice writes on the person's `today`: their today for Until tomorrow, `HIDDEN_ALWAYS` for Until I unhide it, null to show it. */
+export const hiddenUntilFor = (hide: TaskHide | null, today: string): string | null => (hide === 'always' ? HIDDEN_ALWAYS : hide === 'tomorrow' ? today : null);
+/** Whether a task is hidden on the person's `day`: its stored last hidden day is that day or later. */
+export const taskHiddenOn = (hiddenUntil: string | null | undefined, day: string): boolean => typeof hiddenUntil === 'string' && hiddenUntil !== '' && hiddenUntil >= day;
+/** Which hide holds on `day`, or null when the task shows. A day before it means Until tomorrow (it is back on the next day). */
+export function taskHideOf(hiddenUntil: string | null | undefined, day: string): TaskHide | null {
+  if (!taskHiddenOn(hiddenUntil, day)) return null;
+  return hiddenUntil === HIDDEN_ALWAYS ? 'always' : 'tomorrow';
+}
+/** The words beside a hidden task: "Until tomorrow" or "Until you unhide it". */
+export const taskHideState = (hide: TaskHide): string => TASK_HIDES.find((h) => h.key === hide)!.state;
 
 // ---------------------------------------------------------------------------
 // Daily's View menu (2026-11-12, the founder): a person hides sections of Daily, kept on the account (`users.daily_view_json`,

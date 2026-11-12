@@ -7,7 +7,7 @@ import { Icon } from './Icon';
  */
 export function CloseButton({ onClick, label = 'Close' }: { onClick: () => void; label?: string }) {
   return (
-    <button type="button" onClick={onClick} aria-label={label} title={label} className="close-btn toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill border border-line bg-card-strong text-ink-soft hover:text-ink">
+    <button type="button" onClick={onClick} aria-label={label} data-tip={label} className="close-btn toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill border border-line bg-card-strong text-ink-soft hover:text-ink">
       <Icon icon={X} size={20} strokeWidth={2.4} className="close-btn-x" />
     </button>
   );

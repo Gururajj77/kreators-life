@@ -71,7 +71,7 @@ export function FocusPill({ compact = false, dot = false }: { compact?: boolean;
     const minutes = counting ? Math.floor(ms / 60_000) : Math.ceil(ms / 60_000);
     const sec = Math.floor(ms / 1000);
     return (
-      <Link to={back} aria-label={aria.replace(/\s+/g, ' ').trim()} title={shown} data-rect-quiet="" className={`focus-dot toy relative flex size-[44px] items-center justify-center rounded-pill text-on-fill ${fill} ${paused ? 'is-paused' : ''}`} data-urgent={urgent && !paused ? '' : undefined}>
+      <Link to={back} aria-label={aria.replace(/\s+/g, ' ').trim()} data-tip={shown} data-rect-quiet="" className={`focus-dot toy relative flex size-[44px] items-center justify-center rounded-pill text-on-fill ${fill} ${paused ? 'is-paused' : ''}`} data-urgent={urgent && !paused ? '' : undefined}>
         {!paused && <span key={sec} className="focus-dot-ripple" aria-hidden="true" />}
         {paused ? <Icon icon={Pause} size={16} /> : <span className="relative text-headline tabular-nums">{minutes}</span>}
       </Link>
@@ -107,13 +107,13 @@ export function FocusPill({ compact = false, dot = false }: { compact?: boolean;
       )}
       {!asking && (
       <span className="focus-pill-ctl items-center" role="group" aria-label="Clock controls">
-        <button type="button" className={control} onClick={() => send('restart')} aria-label="Restart this part" title="Restart">
+        <button type="button" className={control} onClick={() => send('restart')} aria-label="Restart this part" data-tip="Restart">
           <Icon icon={RotateCcw} size={16} />
         </button>
-        <button type="button" className={control} onClick={stop} aria-label={counting ? 'Stop and keep the whole minutes' : 'Stop'} title="Stop">
+        <button type="button" className={control} onClick={stop} aria-label={counting ? 'Stop and keep the whole minutes' : 'Stop'} data-tip="Stop">
           <Icon icon={Square} size={14} filled />
         </button>
-        <button type="button" className={control} onClick={() => send('toggle')} aria-label={snap.running ? 'Pause' : 'Resume'} title={snap.running ? 'Pause' : 'Resume'}>
+        <button type="button" className={control} onClick={() => send('toggle')} aria-label={snap.running ? 'Pause' : 'Resume'} data-tip={snap.running ? 'Pause' : 'Resume'}>
           <Icon icon={snap.running ? Pause : Play} size={16} filled={!snap.running} />
         </button>
       </span>

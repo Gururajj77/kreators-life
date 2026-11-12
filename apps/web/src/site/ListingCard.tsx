@@ -61,7 +61,7 @@ export function ListingCard({ listing, showFeature = true, maxFacts = 3, classNa
   const tileStyle = { background: accent ? `var(--soft-${accent})` : 'var(--color-line)' };
   const lead =
     showFeature && module ? (
-      <Link to={`/features/${module.key}`} aria-label={`About ${module.name}`} title={`About ${module.name}`} className={`relative z-[1] ${tileLook}`} style={tileStyle}>
+      <Link to={`/features/${module.key}`} aria-label={`About ${module.name}`} data-tip={`About ${module.name}`} className={`relative z-[1] ${tileLook}`} style={tileStyle}>
         <AppIcon name={meta.icon} size={20} />
       </Link>
     ) : (

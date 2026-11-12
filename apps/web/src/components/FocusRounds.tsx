@@ -135,7 +135,7 @@ function RoundGlyph({ name, active = false }: { name: 'gear' | 'sound' | 'mute' 
 }
 
 /** A round glass button that floats by the panel: a name for screen readers, and the same name as a tooltip on hover and keyboard focus. */
-function RoundButton({ at, label, icon, onClick, opens = false, pressed }: { at: 'tl' | 'tr' | 'br' | 'bc'; label: string; icon: 'gear' | 'sound' | 'mute' | 'music' | 'task' | 'full'; onClick: () => void; /** It opens a dialog. */ opens?: boolean; /** A switch that stays on (full screen). */ pressed?: boolean }) {
+function RoundButton({ at, label, icon, onClick, opens = false, pressed }: { /** Which way its name leans when nothing tells the places apart (none: centred above). */ at?: 'tl' | 'tr' | 'br'; label: string; icon: 'gear' | 'sound' | 'mute' | 'music' | 'task' | 'full'; onClick: () => void; /** It opens a dialog. */ opens?: boolean; /** A switch that stays on (full screen). */ pressed?: boolean }) {
   return (
     <RoundButtonBase at={at} label={label} onClick={onClick} opens={opens} pressed={pressed}>
       <RoundGlyph name={icon} active={pressed} />
@@ -1201,9 +1201,9 @@ export function FocusRounds({
           </p>
         </div>
         <div ref={toolsRef} className="mf-rounds ml-auto" role="group" aria-label="Focus tools">
-          <RoundButton at="bc" label="Focus on a task" icon="task" opens onClick={() => setSheet('task')} />
-          <RoundButton at="bc" label="Timer settings" icon="gear" opens onClick={() => setSheet('settings')} />
-          <RoundButton at="bc" label={settings.sound ? 'Sounds are on. Turn them off' : 'Sounds are off. Turn them on'} icon={settings.sound ? 'sound' : 'mute'} onClick={() => save({ ...settings, sound: !settings.sound })} />
+          <RoundButton label="Focus on a task" icon="task" opens onClick={() => setSheet('task')} />
+          <RoundButton label="Timer settings" icon="gear" opens onClick={() => setSheet('settings')} />
+          <RoundButton label={settings.sound ? 'Sounds are on. Turn them off' : 'Sounds are off. Turn them on'} icon={settings.sound ? 'sound' : 'mute'} onClick={() => save({ ...settings, sound: !settings.sound })} />
           <RoundButton at="tr" label="Background music" icon="music" pressed={musicOpen} onClick={() => (musicOpen ? closeMusic() : setMusicOpen(true))} />
           <RoundButton at="tr" label={fullOn ? 'Leave full screen' : 'Full screen'} icon="full" pressed={fullOn} onClick={() => setFullScreen(!fullOn)} />
         </div>

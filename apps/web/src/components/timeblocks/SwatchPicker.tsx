@@ -103,7 +103,7 @@ export function SwatchPicker({ value, onChange, label = 'Colour' }: { value: Blo
             role="radio"
             aria-checked={k === value}
             aria-label={SWATCH_META[k].name}
-            title={SWATCH_META[k].name}
+            data-tip={SWATCH_META[k].name}
             tabIndex={k === value ? 0 : -1}
             onClick={() => onChange(k)}
             className={`tb-swatch tb-${k}`}
@@ -121,7 +121,7 @@ export function SwatchPicker({ value, onChange, label = 'Colour' }: { value: Blo
           aria-expanded={typing}
           aria-controls={`${id}-own`}
           aria-label={ownName ? `Your own colour, ${ownName}. Change it` : 'Your own colour'}
-          title={ownName ? `Your own colour: ${ownName}` : 'Your own colour'}
+          data-tip={ownName ? `Your own colour: ${ownName}` : 'Your own colour'}
           tabIndex={own !== null ? 0 : -1}
           onClick={openOwn}
           className={`tb-swatch tb-swatch-own ${own && isSwatch(own) ? `tb-${own}` : ''}`}

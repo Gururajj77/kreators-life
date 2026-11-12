@@ -23,7 +23,7 @@ export function PasswordField({ label, value, onChange, autoComplete, hint }: { 
       <span className="block text-subhead font-semibold">{label}</span>
       <span className="relative block">
         <input type={shown ? 'text' : 'password'} required value={value} onChange={(e) => onChange(e.target.value)} autoComplete={autoComplete} maxLength={128} className={`${FIELD_CARD} pr-xl`} />
-        <button type="button" onClick={() => setShown((s) => !s)} aria-pressed={shown} aria-label="Show password" title={shown ? 'Hide password' : 'Show password'} className="absolute top-1/2 right-xs inline-flex size-[44px] -translate-y-1/2 items-center justify-center rounded-pill text-ink-soft hover:text-ink">
+        <button type="button" onClick={() => setShown((s) => !s)} aria-pressed={shown} aria-label="Show password" data-tip={shown ? 'Hide password' : 'Show password'} className="absolute top-1/2 right-xs inline-flex size-[44px] -translate-y-1/2 items-center justify-center rounded-pill text-ink-soft hover:text-ink">
           <AnimatedIcon name="visibility" size={20} active={shown} interaction="click-toggle" />
         </button>
       </span>

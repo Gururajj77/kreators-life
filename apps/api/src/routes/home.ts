@@ -38,8 +38,9 @@ home.get('/', async (c) => {
     db.prepare('SELECT relationship FROM spark_completions WHERE user_id = ? AND date = ?').bind(user.id, date).first<{ relationship: RelationshipKey }>(),
     // The tasks waiting, and the open business (2026-11-07) for the count on Close the unfinished, in one read. The open count is what
     // Daily's Unfinished view lists: a kind, and a day that has come or no day at all (four-check: one given a later day had kept counting).
+    // A task hidden on the day (2026-11-12) counts in neither, as on Daily.
     db
-      .prepare("SELECT COALESCE(SUM(CASE WHEN do_date IS NULL OR do_date <= ?1 THEN 1 ELSE 0 END), 0) AS n, COALESCE(SUM(CASE WHEN open_kind IN ('unfinished', 'unresolved', 'undecided') AND (COALESCE(do_date, due_date) IS NULL OR COALESCE(do_date, due_date) <= ?1) THEN 1 ELSE 0 END), 0) AS open FROM nodes WHERE user_id = ?2 AND kind = 'task' AND status = 'active'")
+      .prepare("SELECT COALESCE(SUM(CASE WHEN do_date IS NULL OR do_date <= ?1 THEN 1 ELSE 0 END), 0) AS n, COALESCE(SUM(CASE WHEN open_kind IN ('unfinished', 'unresolved', 'undecided') AND (COALESCE(do_date, due_date) IS NULL OR COALESCE(do_date, due_date) <= ?1) THEN 1 ELSE 0 END), 0) AS open FROM nodes WHERE user_id = ?2 AND kind = 'task' AND status = 'active' AND (hidden_until IS NULL OR hidden_until < ?1)")
       .bind(date, user.id)
       .first<{ n: number; open: number }>(),
     db.prepare("SELECT COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ?").bind(user.id, new Date(Date.now() - 86_400_000).toISOString()).first<{ n: number }>(),
@@ -224,8 +225,8 @@ home.get('/brief', async (c) => {
     db
       .prepare(
         `SELECT
-          (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) = ?2) AS due,
-          (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND (COALESCE(do_date, due_date) < ?2 OR due_date < ?2)) AS overdue,
+          (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) = ?2 AND (hidden_until IS NULL OR hidden_until < ?2)) AS due,
+          (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND (COALESCE(do_date, due_date) < ?2 OR due_date < ?2) AND (hidden_until IS NULL OR hidden_until < ?2)) AS overdue,
           (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'done' AND completed_at >= ?3) AS done_week,
           (SELECT COUNT(*) FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'done' AND completed_at >= ?4 AND completed_at < ?3) AS done_before,
           (SELECT COUNT(*) FROM spark_completions WHERE user_id = ?1 AND date = ?2) AS act,

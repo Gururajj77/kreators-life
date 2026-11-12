@@ -58,7 +58,7 @@ export function RunMoveTool() {
                   <span className="block text-card-title">{moveLine(m)}</span>
                   <span className="block truncate text-card-note text-ink-soft">{[dayLabel(m.date), m.effort ? EFFORT_LEVELS[m.effort - 1] : '', m.note].filter(Boolean).join(' · ')}</span>
                 </span>
-                <button type="button" onClick={() => setToDelete(m)} aria-label={`Remove ${moveLine(m)} on ${dayLabel(m.date)}`} title="Remove" className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1">
+                <button type="button" onClick={() => setToDelete(m)} aria-label={`Remove ${moveLine(m)} on ${dayLabel(m.date)}`} data-tip="Remove" className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1">
                   <AnimatedIcon name="trash" size={20} />
                 </button>
               </li>

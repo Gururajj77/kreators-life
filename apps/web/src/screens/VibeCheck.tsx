@@ -32,6 +32,7 @@ import { OnboardingTroupe } from '../components/OnboardingTroupe';
 import { Pyramid } from '../components/Pyramid';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
+import { pillarTick } from '../lib/relFill';
 import { todayLocal } from '../lib/date';
 import { useMe, useRefreshAll } from '../lib/queries';
 import { useSeedOnce } from '../lib/useSeed';
@@ -262,9 +263,7 @@ function PickFloors({ chosen, onChange, onBack, onNext }: { chosen: Relationship
                 onToggle={() => onChange(on ? chosen.filter((k) => k !== r.key) : [...chosen, r.key])}
                 title={r.name}
                 subtitle={`${r.character}, your ${r.role}, asks three questions.`}
-                color={r.color}
-                deep={`var(--deep-${r.key})`}
-                text={r.text}
+                {...pillarTick(r)}
                 aside={<Avatar relationship={r.key} size={44} mood={on ? 'excited' : 'sleepy'} decorative className="self-center" />}
               />
             </li>
@@ -556,9 +555,7 @@ function Ladders({ result, floors: asked, onDone }: { result: OnboardingResponse
                   onToggle={() => setChosen((a) => (on ? a.filter((k) => k !== r.key) : [...a, r.key]))}
                   title={`Set up ${r.character}’s pillar`}
                   subtitle={on ? 'Ticked. It will be set up.' : 'Tick to set it up too.'}
-                  color={r.color}
-                  deep={`var(--deep-${r.key})`}
-                  text={r.text}
+                  {...pillarTick(r)}
                 />
               </div>
             </li>

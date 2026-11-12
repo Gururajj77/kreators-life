@@ -236,7 +236,7 @@ export function Fitness() {
                 </span>
                 {m.source === 'club' && <StatusTag tone="calm">Club run</StatusTag>}
               </button>
-              <button type="button" onClick={() => setToDelete(m)} aria-label={`Remove ${moveLine(m)} on ${dayLabel(m.date)}`} title="Remove" className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1">
+              <button type="button" onClick={() => setToDelete(m)} aria-label={`Remove ${moveLine(m)} on ${dayLabel(m.date)}`} data-tip="Remove" className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1">
                 <AnimatedIcon name="trash" size={20} />
               </button>
             </li>
@@ -295,7 +295,7 @@ function DaySheet({ date, loading, moves, eat, proteinGoal, near, onClose, onCha
                       {editing === m.id ? 'Close' : 'Change'}
                     </button>
                   )}
-                  <button type="button" onClick={() => setGone({ kind: 'move', id: m.id, label: moveLine(m) })} aria-label={`Remove ${moveLine(m)}`} title="Remove" className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1">
+                  <button type="button" onClick={() => setGone({ kind: 'move', id: m.id, label: moveLine(m) })} aria-label={`Remove ${moveLine(m)}`} data-tip="Remove" className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1">
                     <AnimatedIcon name="trash" size={20} />
                   </button>
                 </div>
@@ -337,7 +337,7 @@ function DaySheet({ date, loading, moves, eat, proteinGoal, near, onClose, onCha
                   {eatOpen ? 'Close' : 'Change'}
                 </button>
               )}
-              <button type="button" onClick={() => setGone({ kind: 'eat', id: eat.id, label: 'the eating check-in' })} aria-label="Remove this day’s eating check-in" title="Remove" className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1">
+              <button type="button" onClick={() => setGone({ kind: 'eat', id: eat.id, label: 'the eating check-in' })} aria-label="Remove this day’s eating check-in" data-tip="Remove" className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1">
                 <AnimatedIcon name="trash" size={20} />
               </button>
             </div>

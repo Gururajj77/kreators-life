@@ -198,7 +198,7 @@ export function Apps() {
           </p>
           <div className={selecting ? BUTTONS_SELECTING : BUTTONS_REST}>
             {!selecting && roundShown && (
-              <button type="button" className="mf-round toy shrink-0" data-at="br" data-tip={label} aria-label={label} title={label} aria-expanded={showHidden} aria-controls={panel} onClick={() => setShowHidden((v) => !v)}>
+              <button type="button" className="mf-round toy shrink-0" data-at="br" data-tip={label} aria-label={label} aria-expanded={showHidden} aria-controls={panel} onClick={() => setShowHidden((v) => !v)}>
                 <ToggleIcon open={showHidden} icon={EyeOff} />
               </button>
             )}

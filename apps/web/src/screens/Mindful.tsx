@@ -125,7 +125,7 @@ export function Mindful() {
                 type="button"
                 onClick={() => setToDelete({ id: l.id, label: `${l.value} ${l.value === 1 ? 'minute' : 'minutes'}, ${when(l.createdAt)}` })}
                 aria-label={`Delete the session of ${l.value} ${l.value === 1 ? 'minute' : 'minutes'} on ${when(l.createdAt)}`}
-                title="Delete"
+                data-tip="Delete"
                 className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1"
               >
                 <AnimatedIcon name="trash" size={20} />

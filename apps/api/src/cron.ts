@@ -340,7 +340,8 @@ async function sendCustomReminders(when: When, turn: Turn): Promise<number> {
 /**
  * Tasks tagged Remember: one inbox line on the task's day (its do date, or its due date when it has none), at the task's time
  * (09:00 when it has none), within the hour after, in the person's zone. One per task per day (the id says so), never for a task
- * that is done or put away. The line names the task and its priority; nothing else leaves the pyramid.
+ * that is done or put away, nor one hidden on that day (2026-11-12, migration 0137: hidden through its own day, which is the day the
+ * note would go, so the rule needs no zone). The line names the task and its priority; nothing else leaves the pyramid.
  */
 async function sendTaskReminders({ db, now, windowMin }: When, turn: Turn): Promise<number> {
   const rows = await db
@@ -348,6 +349,7 @@ async function sendTaskReminders({ db, now, windowMin }: When, turn: Turn): Prom
       `SELECT n.id, n.user_id, n.title, n.priority, n.do_date, n.due_date, n.due_time, u.timezone
        FROM nodes n JOIN users u ON u.id = n.user_id
        WHERE n.kind = 'task' AND n.status = 'active' AND n.remind = 1 AND COALESCE(n.do_date, n.due_date) BETWEEN ? AND ?
+         AND (n.hidden_until IS NULL OR n.hidden_until < COALESCE(n.do_date, n.due_date))
          AND NOT EXISTS (SELECT 1 FROM notifications x WHERE x.id = 'task-' || n.id || '-' || COALESCE(n.do_date, n.due_date))
        LIMIT 2000`,
     )

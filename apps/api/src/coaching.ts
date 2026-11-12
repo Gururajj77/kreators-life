@@ -309,8 +309,11 @@ function toCoachReview(r: ReviewRow, share: CoachShare): CoachReview {
   return { ...full, snapshot: null, name: own ? full.templateName : reviewNameFor({ kind: r.kind, start: r.period_start }), layer: share.pillars ? (full.snapshot?.layer ?? null) : null };
 }
 
-/** A task or layer as a coach reads it. Which time block a task sits in stays the student's own. */
-const coachNode = (r: NodeRow, gate?: TaskGate): Node => ({ ...toNode(r, gate), timeBlockId: null });
+/** A task or layer as a coach reads it. Which time block a task sits in stays the student's own, and so does a hide (2026-11-12): it is their own view of their Daily. */
+export const coachNode = (r: NodeRow, gate?: TaskGate): Node => {
+  const { hiddenUntil: _hidden, ...node } = toNode(r, gate);
+  return { ...node, timeBlockId: null };
+};
 
 /**
  * What a coach sees of one student, part by part, each only when the student shares it, read for the student's
@@ -332,7 +335,8 @@ export async function studentView(db: D1Database, link: LinkRow, student: UserRo
     const [checkins, ticks, due, done, act, ntd] = await Promise.all([
       db.prepare("SELECT source_id AS d FROM xp_events WHERE user_id = ? AND source = 'checkin' AND source_id >= ? AND source_id <= ?").bind(id, from, date).all<{ d: string }>(),
       db.prepare("SELECT substr(completed_at, 1, 10) AS d, COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? GROUP BY d").bind(id, `${from}T00:00:00`).all<{ d: string; n: number }>(),
-      db.prepare("SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) IS NOT NULL AND COALESCE(do_date, due_date) <= ? ORDER BY COALESCE(do_date, due_date) ASC, CASE WHEN due_time IS NULL THEN 1 ELSE 0 END, due_time ASC LIMIT 20").bind(id, date).all<NodeRow>(),
+      // A task the student hid on the day (2026-11-12) stays out of the coach's view of it, as it is out of the student's Daily.
+      db.prepare("SELECT * FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) IS NOT NULL AND COALESCE(do_date, due_date) <= ?2 AND (hidden_until IS NULL OR hidden_until < ?2) ORDER BY COALESCE(do_date, due_date) ASC, CASE WHEN due_time IS NULL THEN 1 ELSE 0 END, due_time ASC LIMIT 20").bind(id, date).all<NodeRow>(),
       db.prepare("SELECT *, COUNT(*) OVER () AS done_total FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? AND completed_at < ? ORDER BY completed_at DESC, id ASC LIMIT ? OFFSET ?").bind(id, dayStart, dayEnd, doneAsk.limit, doneAsk.offset).all<NodeRow & { done_total: number }>(),
       db.prepare('SELECT relationship FROM spark_completions WHERE user_id = ? AND date = ?').bind(id, date).first<{ relationship: RelationshipKey }>(),
       notToDoList(db, id, date),

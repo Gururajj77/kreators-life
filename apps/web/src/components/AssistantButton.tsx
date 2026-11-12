@@ -20,6 +20,18 @@ const loadPanel = () => {
 };
 const AssistantPanel = lazy(() => loadPanelModule().then((m) => ({ default: m.AssistantPanel })));
 
+/** The smart tips' placement (lib/tipGeometry.ts), fetched the first time the bubble shows, so the first download never carries it. */
+type Geometry = typeof import('../lib/tipGeometry');
+let geometry: Geometry | null = null;
+let geometryLoading: Promise<Geometry | null> | null = null;
+const loadGeometry = () =>
+  (geometryLoading ??= import('../lib/tipGeometry')
+    .then((m) => (geometry = m))
+    .catch(() => {
+      geometryLoading = null;
+      return null;
+    }));
+
 /**
  * The round button at the bottom right, on every screen inside the app: above the tab bar on a phone, in the
  * corner on a laptop. Bumling sits in it, bobbing and blinking, and gives a small hop every few seconds; pointing at
@@ -38,6 +50,8 @@ export function Assistant() {
   const byButton = useRef(false);
   const body = useRef<HTMLSpanElement>(null);
   const tip = useRef<HTMLSpanElement>(null);
+  const arrow = useRef<HTMLSpanElement>(null);
+  const pointing = useRef(false);
   const [eager, setEager] = useState(false);
   const reduce = useReducedMotion();
 
@@ -81,12 +95,44 @@ export function Assistant() {
     };
   }, [open, reduce]);
 
-  /** The bubble above the button, and his jump, when a mouse points at it or the keyboard reaches it. */
+  /**
+   * The bubble goes in the empty room by the button (the smart tips' rule, 2026-11-12): above it, its right end level with the
+   * button's, unless something is drawn there, then at its left. Until the rule has loaded it keeps its old place above.
+   */
+  const placeBubble = (m: Geometry) => {
+    const t = tip.current;
+    const b = button.current;
+    if (!t || !b) return;
+    t.style.right = 'auto';
+    t.style.bottom = 'auto';
+    t.style.margin = '0';
+    const spot = m.placeTip(
+      b,
+      t,
+      [
+        ['top', 'end'],
+        ['left', 'center'],
+      ],
+      t.offsetParent,
+    );
+    // The little point under the bubble aims at the button only from where it always stood.
+    if (arrow.current) arrow.current.hidden = !(spot.side === 'top' && spot.align === 'end');
+  };
+
+  /** The bubble by the button, and his jump, when a mouse points at it or the keyboard reaches it. */
   const point = (on: boolean) => {
     setEager(on);
+    pointing.current = on;
     const t = tip.current;
     const him = body.current;
     if (!t || !him) return;
+    if (on) {
+      if (geometry) placeBubble(geometry);
+      else
+        void loadGeometry().then((m) => {
+          if (m && pointing.current) placeBubble(m);
+        });
+    }
     if (reduce) {
       gsap.set(t, { autoAlpha: on ? 1 : 0, y: 0 });
       return;
@@ -113,7 +159,7 @@ export function Assistant() {
         style={{ opacity: 0, visibility: 'hidden' }}
       >
         Chat with AI assistant
-        <span aria-hidden="true" className="tip-card absolute top-full right-[22px] -mt-[5px] size-[10px] rotate-45 border-r border-b border-line" />
+        <span ref={arrow} aria-hidden="true" className="tip-card absolute top-full right-[22px] -mt-[5px] size-[10px] rotate-45 border-r border-b border-line" />
       </span>
       <button
         ref={button}

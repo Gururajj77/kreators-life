@@ -97,6 +97,12 @@ echo "dates: an instant is never cut to its UTC day before a date helper shows i
 out=$(grep -rnE "\b(prettyDate|shortDay|shortDate|longDate|dayLabel|fullDay|monthYear)\([^()]*[A-Za-z]+(At|Until)\.slice\(0, 10\)\)" "$ROOT/apps/web/src" 2>/dev/null)
 if [ -n "$out" ]; then echo "$out"; hits=$((hits + $(echo "$out" | wc -l | tr -d ' '))); fi
 
+echo "tooltips: a control with a label takes data-tip for its name, never a native title the browser draws over the page (lib/smartTip.ts; 2026-11-12)"
+out=$(grep -rnE --include='*.tsx' '<[A-Za-z][^>]*aria-label=[^>]*[[:space:]]title=|<[A-Za-z][^>]*[[:space:]]title=[^>]*aria-label=' screens site components App.tsx | sed 's/$/  (use data-tip, not title, beside aria-label)/' || true)
+if [ -n "$out" ]; then echo "$out"; hits=$((hits + $(echo "$out" | wc -l | tr -d ' '))); fi
+out=$(grep -nE "attr\(data-tip\)" app.css | grep -v "tip fallback" | sed 's/$/  (a CSS name only in the stand-in rules marked tip fallback)/' || true)
+if [ -n "$out" ]; then echo "$out"; hits=$((hits + $(echo "$out" | wc -l | tr -d ' '))); fi
+
 if [ "$hits" = "0" ]; then echo "clean"; exit 0; fi
 echo "$hits hit(s)"
 exit 1

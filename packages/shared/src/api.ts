@@ -236,6 +236,11 @@ export interface Node {
   timeBlockId?: string | null;
   /** Tasks only, optional: the kind of open business it carries (Unfinished, Unresolved, Undecided), or null. A tag and Daily's Unfinished business view; it never changes what a tick pays. */
   openKind?: OpenKind | null;
+  /**
+   * Tasks only (2026-11-12, migration 0137): the last day it stays hidden ('YYYY-MM-DD', `HIDDEN_ALWAYS` for Until I unhide it), or null
+   * when shown. Read through `taskHideOf(hiddenUntil, day)` against the person's day; a day already gone means it is shown again.
+   */
+  hiddenUntil?: string | null;
   /** Tasks only, optional: a time of day (HH:MM) and how long it should take, to plan the day. */
   dueTime: string | null;
   estimateMin: number | null;
@@ -333,6 +338,11 @@ export interface TodayResponse {
    * tabs. `?open=` (Bottlenecks) is never cut by a tab. Echoes the tab the lists were cut to, or null.
    */
   tab?: TaskTab | null;
+  /**
+   * Hidden tasks (2026-11-12): how many open tasks are hidden on the day, dated or not, whatever the Area or Bottlenecks cut. Every list
+   * and count here leaves them out; Daily lists them under its Hidden tasks fold (GET /today/hidden).
+   */
+  hiddenTotal?: number;
   /** The three tabs' counts, under the same Area cut as the lists, from the one count read: open tasks whose day is the day, before it, after it. */
   todayTotal?: number;
   pastDueTotal?: number;
@@ -389,6 +399,8 @@ export interface DoneTasksResponse {
   page: Page;
   total: number;
 }
+/** GET /today/hidden (2026-11-12): the tasks hidden on the person's day, Until tomorrow first, ten a page (prefix `hd`), with the true count. */
+export type HiddenTasksResponse = DoneTasksResponse;
 
 /** GET /today/waiting: the open tasks past the ones GET /today shows, in the same order, a page at a time (prefix `w`). */
 export interface TodayWaitingResponse {

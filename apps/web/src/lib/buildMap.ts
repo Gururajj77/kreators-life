@@ -92,6 +92,7 @@ export const BUILD_SECTIONS: readonly BuildSection[] = [
           ['A public page keeps its main action in a bar at the foot', 'test', 'Tried in Chrome by hand; no drive kept'],
           ['Room at every screen\'s foot for the assistant\'s button', 'test', 'Measured by hand at the last gate'],
           ['Titles step down under 360px', 'test', 'Measured by hand at 320'],
+          ['Helper names in empty room, outside a popup\'s panel, never over words', 'test', 'scripts/smoke/drive-tips.mjs, to run once the build is in'],
         ],
         files: [
           'apps/web/src/components/TabRow.tsx',
@@ -100,8 +101,11 @@ export const BUILD_SECTIONS: readonly BuildSection[] = [
           'apps/web/src/site/FollowStart.tsx',
           'apps/web/src/components/PageContents.tsx',
           'apps/web/src/lib/rectText.ts',
+          'apps/web/src/lib/smartTip.ts',
+          'apps/web/src/lib/tipGeometry.ts',
+          'packages/shared/src/tipPlace.ts',
         ],
-        checks: ['scripts/smoke/cut-probe.js', 'scripts/smoke/target-probe.js', 'scripts/smoke/spacing-probe.js', 'scripts/smoke/rag-probe.js', 'scripts/smoke/drive-contents.mjs', 'scripts/smoke/drive-headings.mjs'],
+        checks: ['scripts/smoke/cut-probe.js', 'scripts/smoke/target-probe.js', 'scripts/smoke/spacing-probe.js', 'scripts/smoke/rag-probe.js', 'scripts/smoke/drive-contents.mjs', 'scripts/smoke/drive-headings.mjs', 'scripts/smoke/drive-tips.mjs'],
       },
       {
         title: 'Probes and drives',

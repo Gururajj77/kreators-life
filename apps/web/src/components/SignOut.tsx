@@ -40,7 +40,7 @@ export function SignOut({ compact = false, iconOnly = false, className = '' }: {
         onClick={() => setAsking(true)}
         disabled={signout.isPending}
         aria-label={iconOnly ? 'Sign out' : undefined}
-        title={iconOnly ? 'Sign out' : undefined}
+        data-tip={iconOnly ? 'Sign out' : undefined}
         className={`toy inline-flex items-center justify-center gap-xs rounded-pill border-2 border-r1/40 bg-transparent font-semibold text-r1 hover:bg-r1/10 disabled:opacity-50 ${iconOnly ? 'size-[44px]' : compact ? 'min-h-[36px] md:min-h-[44px] tap-pad px-sm text-subhead' : 'min-h-[40px] md:min-h-[48px] tap-pad px-md text-callout'} ${className}`}
         style={{ '--toy-color': 'var(--color-r1)' } as CSSProperties}
       >

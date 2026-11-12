@@ -3,7 +3,8 @@ import { addDays, daysBetween, DONE_PAGE_SIZE, DONE_PAGE_SIZES, isNodeKind, isRe
 import type { AppEnv } from '../env';
 import { TIME_RE } from '@kreators/shared';
 import { ancestorsOf, DATE_RE, diffBadges, getNode, newId, nowIso, pageOf, paged, readyFromNow, toNode, type NodeRow, taskGate, readyAtFor, withSubtasks, badgeState, getUser, keptStats, statsAfterTick, storeStats } from '../db';
-import { dateNearToday, shiftDate } from '../db';
+import { dateNearToday, personDay, shiftDate } from '../db';
+import { hiddenUntilFor, parseTaskHide, taskHideProblem } from '@kreators/shared';
 import { blockFromBody, dayPlan, loadBlocking } from '../timeBlocks';
 import { blockDayMinutes, parsePlaceDay, type BreakdownResponse, type PlaceDayResponse } from '@kreators/shared';
 import { breakdownTask, parseBreakdown } from '@kreators/shared/contentDays';
@@ -97,6 +98,13 @@ export interface NodeBody {
   timeBlock?: unknown;
   /** Open business (migration 0120): 'unfinished', 'unresolved', 'undecided', or null (or "none") for none. Anything else is refused. */
   openKind?: unknown;
+  /**
+   * Hidden tasks (migration 0137): 'tomorrow' (Until tomorrow), 'always' (Until I unhide it), or null (or "none", "show") to show it again.
+   * Read only by PATCH /nodes/:id, the person's own tap; a coach's edit never carries it.
+   */
+  hide?: unknown;
+  /** The person's today from their device, for Until tomorrow (checked by `personDay`: a day further than one from their zone's is not taken). */
+  today?: unknown;
   dueTime?: unknown;
   estimateMin?: unknown;
   status?: unknown;
@@ -178,7 +186,7 @@ export async function createNode(db: D1Database, ownerId: string, body: NodeBody
  * Change a layer's words, date and plan, or archive it and bring it back. The one rule, for the person and for a
  * life coach changing a task (who never sends a status). Returns the row as it is now.
  */
-export async function editNode(db: D1Database, row: NodeRow, body: NodeBody): Promise<NodeRow> {
+export async function editNode(db: D1Database, row: NodeRow, body: NodeBody, own: { hideDay?: string } = {}): Promise<NodeRow> {
   const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim().slice(0, 140) : row.title;
   const note = typeof body.note === 'string' ? body.note.trim().slice(0, 500) : row.note;
   const dueDate = body.dueDate === null ? null : typeof body.dueDate === 'string' && DATE_RE.test(body.dueDate) ? body.dueDate : row.due_date;
@@ -220,6 +228,11 @@ export async function editNode(db: D1Database, row: NodeRow, body: NodeBody): Pr
   if (row.kind === 'task' && namesBlock(body)) {
     const picked = await blockFromBody(db, row.user_id, body);
     if (picked && !('error' in picked)) await db.prepare('UPDATE nodes SET time_block_id = ? WHERE id = ? AND user_id = ?').bind(picked.id, row.id, row.user_id).run();
+  }
+  // Hide it (2026-11-12): only the person's own PATCH passes their day (`own.hideDay`), so a coach's edit never hides or shows a task.
+  // Until tomorrow writes that day as the last hidden one; Until I unhide it writes HIDDEN_ALWAYS; showing it clears the column.
+  if (row.kind === 'task' && own.hideDay && 'hide' in body && !taskHideProblem(body.hide)) {
+    await db.prepare('UPDATE nodes SET hidden_until = ? WHERE id = ? AND user_id = ?').bind(hiddenUntilFor(parseTaskHide(body.hide), own.hideDay), row.id, row.user_id).run();
   }
   return (await getNode(db, row.user_id, row.id)) ?? row;
 }
@@ -284,7 +297,7 @@ nodes.post('/place', async (c) => {
       .prepare(
         `UPDATE nodes INDEXED BY idx_nodes_user_open_day SET due_time = (SELECT json_extract(j.value, '$.dueTime') FROM json_each(?3) j WHERE json_extract(j.value, '$.id') = nodes.id), updated_at = ?4
          WHERE user_id = ?1 AND COALESCE(do_date, due_date) = ?2 AND kind = 'task' AND status = 'active' AND id IN (SELECT json_extract(value, '$.id') FROM json_each(?3))
-           AND due_time IS NULL AND time_block_id IS NULL AND repeat_json IS NULL
+           AND due_time IS NULL AND time_block_id IS NULL AND repeat_json IS NULL AND (hidden_until IS NULL OR hidden_until < ?2)
          RETURNING id`,
       )
       .bind(user.id, ask.date, items, nowIso()),
@@ -392,6 +405,12 @@ nodes.patch('/:id', async (c) => {
       const openProblem = openKindProblem(body.openKind);
       if (openProblem) return c.json({ error: openProblem }, 400);
     }
+    // Hidden tasks: a known choice, and only an open task is hidden (showing one again works whatever its state).
+    if ('hide' in body) {
+      const hideProblem = taskHideProblem(body.hide);
+      if (hideProblem) return c.json({ error: hideProblem }, 400);
+      if (parseTaskHide(body.hide) && row.status !== 'active') return c.json({ error: 'Only an open task can be hidden.' }, 400);
+    }
     if (namesBlock(body)) {
       const picked = await blockFromBody(db, user.id, body);
       if (picked && 'error' in picked) return c.json({ error: picked.error }, 400);
@@ -406,7 +425,9 @@ nodes.patch('/:id', async (c) => {
     }
   }
   const moved = (await getNode(db, user.id, row.id)) ?? row;
-  return c.json({ node: toNode(await editNode(db, moved, body)) });
+  // The person's own day, for Until tomorrow: their device's when it is within a day of their zone's today, else their zone's.
+  const hideDay = personDay(typeof body.today === 'string' ? body.today : null, user.timezone);
+  return c.json({ node: toNode(await editNode(db, moved, body, { hideDay })) });
 });
 
 /** A task's checklist. Owner only; it pays nothing and never blocks ticking the task. */

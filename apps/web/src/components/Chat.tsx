@@ -230,7 +230,7 @@ export function ChatComposer({
         className="min-h-[48px] flex-1 resize-none rounded-card border-2 border-line bg-card px-md py-sm text-body"
       />
       {onStop ? (
-        <button type="button" aria-label={stopping ? 'Stopping' : 'Stop'} title={stopping ? 'Stopping' : 'Stop'} onClick={onStop} disabled={stopping} className="toy flex size-[48px] shrink-0 items-center justify-center rounded-pill bg-ink text-on-ink disabled:opacity-40">
+        <button type="button" aria-label={stopping ? 'Stopping' : 'Stop'} data-tip={stopping ? 'Stopping' : 'Stop'} onClick={onStop} disabled={stopping} className="toy flex size-[48px] shrink-0 items-center justify-center rounded-pill bg-ink text-on-ink disabled:opacity-40">
           <Icon icon={Square} size={18} filled />
         </button>
       ) : (

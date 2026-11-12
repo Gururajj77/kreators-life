@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { Link } from 'react-router';
 import { Check, Repeat as RepeatIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '../lib/api';
+import { pillarTick } from '../lib/relFill';
 import { dueLabel, prettyDate, weekday, clockOf } from '../lib/date';
 import { printAs } from '../lib/printDoc';
 import { useAuthed, useRefreshAll } from '../lib/queries';
@@ -187,9 +188,7 @@ function DayTask({ t, today, queue }: { t: MonthTask; today: string; queue: Retu
         onToggle={tick}
         title={t.title}
         subtitle={rel.name}
-        color={rel.color}
-        deep={`var(--deep-${rel.key})`}
-        text={rel.text}
+        {...pillarTick(rel)}
         busy={queue.isPending(t.id)}
         hint={queue.hint(t.id)}
         strike

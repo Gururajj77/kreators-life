@@ -218,7 +218,7 @@ function OwnTag({ tag, onRemove }: { tag: string; onRemove: () => void }) {
       <button
         type="button"
         aria-label={armed ? `Tap again to remove ${tag}` : `Remove ${tag}`}
-        title={armed ? 'Tap again to remove' : 'Remove'}
+        data-tip={armed ? 'Tap again to remove' : 'Remove'}
         onClick={() => {
           if (!armed) return setArmed(true);
           setArmed(false);
@@ -255,7 +255,7 @@ function AddOwn({ onAdd }: { onAdd: (raw: string) => boolean }) {
         autoComplete="off"
         className="min-h-[44px] w-[168px] min-w-0 rounded-pill border-2 border-line bg-paper px-sm text-subhead"
       />
-      <button type="submit" disabled={!text.trim()} aria-label="Add this tag" title="Add" className="toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-card text-ink-soft hover:text-ink disabled:opacity-70">
+      <button type="submit" disabled={!text.trim()} aria-label="Add this tag" data-tip="Add" className="toy toy-soft flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-card text-ink-soft hover:text-ink disabled:opacity-70">
         <Icon icon={Plus} size={18} />
       </button>
     </form>
