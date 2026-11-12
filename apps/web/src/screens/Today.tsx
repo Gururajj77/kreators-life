@@ -37,7 +37,6 @@ import { Pager, usePage } from '../components/Pager';
 import { useActionQueue } from '../lib/useActionQueue';
 import { useParamState, writeParams } from '../lib/useParamState';
 import { DayTemplateSelect, DayTypeNote, useDayTemplate } from '../components/DayTypePicker';
-import { TabRow } from '../components/TabRow';
 import { FilterSelect } from '../components/FilterSelect';
 
 /** Daily's Area filter: every area, one of the five in their one order, or tasks with no area. Kept in the URL as `area`. */
@@ -156,10 +155,9 @@ export function Today() {
   const area = readArea(areaRaw);
   // The sort picks the grouped view (By time block, By area), which reads the longer list the boxes need.
   const [sortRaw, setSortOnly] = useParamState('taskSort', '');
-  const setSort = (k: string) => {
-    setSortOnly(k);
-    firstPages();
-  };
+  // Past due keeps its own order in its own key (`pdSort`, 2026-11-12), so a sort picked there never changes the Today tab's, and a grouped
+  // view picked on Today never reads as Day there.
+  const [pdSortRaw, setPdSortOnly] = useParamState('pdSort', '');
   const ownSort = isTaskSort(sortRaw) ? sortRaw : null;
   // Unfinished business (2026-11-07) is one more view in the same row: only the tasks with a kind, in their three boxes. The server cuts
   // the lists to them (`open=any`) and reads the longer list the boxes need, like By time block.
@@ -173,6 +171,11 @@ export function Today() {
   const tab: TaskTab = openView ? 'today' : parseTaskTab(tabRaw);
   const pickTab = (k: TaskTab) => {
     setTabOnly(k);
+    firstPages();
+  };
+  const setSort = (k: string) => {
+    if (tab === 'pastdue') setPdSortOnly(k);
+    else setSortOnly(k);
     firstPages();
   };
   const { date, data, isPending, isError, refetch } = useToday(area, { group: openView || (tab === 'today' && ownSort !== null && isGrouped(ownSort)), sort: tab === 'today' ? (ownSort ?? '') : '', open: openPick, tab: openView ? '' : 'today' });
@@ -268,7 +271,7 @@ export function Today() {
   const showTabs = !openView && Boolean(data) && (data?.todayTotal !== undefined || tab !== 'today');
   // The Sort row follows the tab: every sort and Bottlenecks on Today, the day, priority and due date on Past due, none on Upcoming.
   const sortItems = tab === 'today' ? VIEWS : TASK_SORTS.filter((s) => TASK_TAB_SORTS[tab].includes(s.key)).map((s) => ({ key: s.key, label: s.name }));
-  const tabSort = taskTabSort(tab, sortRaw);
+  const tabSort = taskTabSort(tab, tab === 'pastdue' ? pdSortRaw : '');
   const showSort = tab === 'today' ? allTasks.length > 1 || (data?.backlog.length ?? 0) > 1 || grouped !== null || openView : tab === 'pastdue' && (tabCount.pastdue ?? 2) > 1;
   // A Remember note opens Daily on its task (`?task=<id>`). When that task is not among today's six, its own day says which tab holds it.
   const focusOffList = Boolean(focusTask) && Boolean(data) && cutHere && !openView && !tasks.some((t) => t.id === focusTask);
@@ -465,25 +468,30 @@ export function Today() {
               </div>
             </div>
             {viewOpen ? <DailyViewPanel id={viewPanelId} state={view} onClose={() => setViewOpen(false)} button={viewButton} /> : <DailyHiddenLine state={view} />}
-            {/* The tabs at the left and the Area filter at the right of the same line (2026-11-12, the founder: "put area dropdown right aligned
-                to the line of today"); under a 34rem column each takes the full width, the tabs in equal parts, the filter under them. The
-                Bottlenecks view stands apart from the tabs. The sort is the next line, at the right. There is no Block filter: By time block
-                draws the blocks as boxes that fold (the founder, 2026-11-06). */}
-            {(showTabs || showArea) && (
+            {/* One line (2026-11-12, the founder): the tabs at the left, then Area and Sort as two dropdowns at the right, Sort after Area
+                ("instead of sort by call it sort and make it right aligned to area dropdown in same line"). Where the line is too short for all
+                three, the two dropdowns move to the next line together, still at the right; under a 34rem column each takes the full width,
+                the tabs in equal parts and the dropdowns one per line with their labels lined up. The Bottlenecks view (a choice in Sort)
+                stands apart from the tabs. There is no Block filter: By time block draws the blocks as boxes that fold (the founder, 2026-11-06). */}
+            {(showTabs || showArea || showSort) && (
               <div className="@container mt-sm">
-                <div className="flex flex-col gap-xs @min-[34rem]:flex-row @min-[34rem]:items-center @min-[34rem]:gap-md">
+                <div className="flex flex-col gap-xs @min-[34rem]:flex-row @min-[34rem]:flex-wrap @min-[34rem]:items-center @min-[34rem]:gap-x-md @min-[34rem]:gap-y-sm">
                   {showTabs && <Segmented<TaskTab> label="Which tasks" value={tab} onChange={pickTab} options={tabOptions} className="@max-[34rem]:grid! @max-[34rem]:w-full @max-[34rem]:grid-flow-col @max-[34rem]:auto-cols-fr @max-[34rem]:[&>button]:px-xs!" />}
-                  {showArea && (
-                    <div className="min-w-0 @min-[34rem]:ml-auto @min-[34rem]:w-[220px] @min-[34rem]:flex-none">
-                      <FilterSelect label="Area" value={area} items={AREA_PICKS} onChange={(k) => setAreaRaw(k)} />
+                  {(showArea || showSort) && (
+                    <div role="group" aria-label="Filter and sort tasks" className="flex min-w-0 flex-col gap-xs @min-[34rem]:ml-auto @min-[34rem]:flex-row @min-[34rem]:items-center @min-[34rem]:gap-md">
+                      {showArea && (
+                        <div className="min-w-0 @min-[34rem]:w-[200px] @min-[34rem]:flex-none">
+                          <FilterSelect label="Area" value={area} items={AREA_PICKS} onChange={(k) => setAreaRaw(k)} />
+                        </div>
+                      )}
+                      {showSort && (
+                        <div className="min-w-0 @min-[34rem]:w-[200px] @min-[34rem]:flex-none">
+                          <FilterSelect label="Sort" value={openView ? 'open' : tab === 'today' ? sort : tabSort} items={sortItems} onChange={setSort} />
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              </div>
-            )}
-            {showSort && (
-              <div className="mt-sm">
-                <TabRow lead="Sort by" align="end" label="Sort tasks by" items={sortItems} value={openView ? 'open' : tab === 'today' ? sort : tabSort} onChange={setSort} />
               </div>
             )}
             {/* The Unfinished view is a filter, not a sort (its boxes go by priority), so the note says only the kind of day while it is on. */}
@@ -631,7 +639,9 @@ export function Today() {
               </div>
             )}
             {!openView && view.shows('backlog') && waiting > 0 && (
-              <Fold id="backlog-heading" className="mt-md" title="Not scheduled yet" hint={String(waiting)}>
+              // Right under the tasks' own folds (Add a task) it keeps their 8px; after To remember's list it takes a section's 16px, as
+              // To remember and Done today do, so it never reads as a row of that list.
+              <Fold id="backlog-heading" className={view.shows('remember') && (remembered.length > 0 || rememberHidden) ? 'mt-md' : 'mt-xs'} title="Not scheduled yet" hint={String(waiting)}>
                 <p className="mt-xs m-0 text-subhead text-ink-soft">Pick a do date or a due date to move one into Tasks.</p>
                 <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                   {backlog.map((t) => (

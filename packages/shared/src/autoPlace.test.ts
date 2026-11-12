@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { STARTING_BLOCKS, STARTING_TEMPLATES, minuteOf, slotOrder, suggestBlock, type Priority, type TemplateSlot, type TimeBlock } from './index';
-import { autoPlace, autoPlaceOrder, groupWithSuggestions, noRoomLine, type AutoPlaceTask } from './blockHints';
+import { autoPlace, autoPlaceOrder, blockUsedMin, groupWithSuggestions, noRoomLine, type AutoPlaceTask } from './blockHints';
 
 // The starting set as a person's rows: a block's id is its seed, so the tests read plainly.
 const BLOCKS: TimeBlock[] = STARTING_BLOCKS.map((b, i) => ({ id: b.seed, seed: b.seed, name: b.name, tag: b.tag, color: b.color, area: b.area, pillar: b.pillar, sort: i }));
@@ -148,5 +148,37 @@ describe('Place my day', () => {
     expect(noRoomLine('full', 'Shoot')).toBe('Shoot is full today.');
     expect(noRoomLine('full')).toBe('Its blocks are full today.');
     expect(noRoomLine('busy', 'Edit')).toBe('Timed tasks fill Edit today.');
+  });
+});
+
+describe('Place my day, later in the day and with a repeat', () => {
+  // A financial block with a morning slot and an afternoon slot: the morning was full, the afternoon is empty.
+  const two: TimeBlock[] = [{ id: 'E', seed: null, name: 'Edit', tag: 'Focus', color: 'red', area: 'financial', pillar: null, sort: 0 }];
+  const slots: TemplateSlot[] = [
+    { blockId: 'E', start: hm('09:00'), end: hm('13:00') },
+    { blockId: 'E', start: hm('14:00'), end: hm('16:00') },
+  ];
+  it('counts room only in the slots still to come, so a busy morning never makes an empty afternoon read as full', () => {
+    // Three timed hours from 09:00 in the morning slot, none in the afternoon one.
+    const now = hm('14:00');
+    const used = blockUsedMin(slots, [180, 0], now);
+    expect(used).toEqual({ E: 0 });
+    expect(blockUsedMin(slots, [180, 0])).toEqual({ E: 180 });
+    const plan = autoPlace([t('cut', { lifeArea: 'financial', estimateMin: 30 })], { slots, blocks: two, used, taken: [{ dueTime: '09:00', estimateMin: 180 }], after: now });
+    expect(at(plan, 'cut')).toMatchObject({ blockId: 'E', start: '14:00', end: '14:30' });
+    expect(plan.noRoom).toEqual([]);
+  });
+  it('keeps the minutes of a slot under way', () => {
+    expect(blockUsedMin(slots, [180, 60], hm('15:00'))).toEqual({ E: 60 });
+  });
+  it('never places a task that repeats, and says why', () => {
+    const plan = autoPlace([t('habit', { lifeArea: 'financial', repeats: true }), t('once', { lifeArea: 'financial' })], { slots, blocks: two });
+    expect(at(plan, 'habit')).toBeUndefined();
+    expect(at(plan, 'once')).toMatchObject({ start: '09:00' });
+    expect(plan.noRoom).toEqual([{ taskId: 'habit', reason: 'repeats', blockId: null, line: noRoomLine('repeats') }]);
+  });
+  it('never lands on a timed task it was only told about', () => {
+    const plan = autoPlace([t('cut', { lifeArea: 'financial', estimateMin: 30 })], { slots, blocks: two, used: { E: 60 }, taken: [{ dueTime: '09:00', estimateMin: 60 }] });
+    expect(at(plan, 'cut')).toMatchObject({ start: '10:00', end: '10:30' });
   });
 });

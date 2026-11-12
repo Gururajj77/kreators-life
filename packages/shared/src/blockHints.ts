@@ -35,12 +35,21 @@ export function blockIsFor(block: Pick<TimeBlock, 'area' | 'pillar'>): string | 
   return null;
 }
 
-/** The minutes already planned in each block that day, from the server's per-slot sums (`DayPlan.slotPlannedMin`, in clock order). */
-export function blockUsedMin(slots: readonly TemplateSlot[], slotPlannedMin?: readonly number[]): Record<string, number> | undefined {
+/**
+ * The minutes already planned in each block that day, from the server's per-slot sums (`DayPlan.slotPlannedMin`, in clock order). With
+ * `after` (today: the minute it is now) a slot that has ended counts for nothing, since room is then counted only in the slots still to
+ * come (`slotsLeft`); one under way keeps its minutes, and one that runs past midnight is always counted. So a busy morning never makes an
+ * empty afternoon slot of the same block read as full (2026-11-12).
+ */
+export function blockUsedMin(slots: readonly TemplateSlot[], slotPlannedMin?: readonly number[], after?: number | null): Record<string, number> | undefined {
   const ordered = slotOrder(slots);
   if (!slotPlannedMin || slotPlannedMin.length !== ordered.length) return undefined;
+  const from = fromOf(after);
   const used: Record<string, number> = Object.create(null);
-  ordered.forEach((s, i) => (used[s.blockId] = (used[s.blockId] ?? 0) + (slotPlannedMin[i] ?? 0)));
+  ordered.forEach((s, i) => {
+    const over = from !== null && !slotCrossesMidnight(s) && (s.end === 0 ? 1440 : s.end) <= from;
+    used[s.blockId] = (used[s.blockId] ?? 0) + (over ? 0 : (slotPlannedMin[i] ?? 0));
+  });
   return used;
 }
 
@@ -207,6 +216,8 @@ export interface AutoPlaceTask {
   estimateMin?: number | null;
   lifeArea?: LifeAreaKey | null;
   relationship?: RelationshipKey;
+  /** It repeats. Place my day leaves it alone: its time would be carried to every next one (`spawnNext`), pinning the habit to one day's room. */
+  repeats?: boolean;
 }
 export interface AutoPlaceContext {
   /** The day's template slots (`DayPlan.slots`) and every block of the person's (`DayPlan.blocks`). */
@@ -229,8 +240,11 @@ export interface AutoPlaced {
   /** Why this block: its area, its pillar, or (a P0 or P1 that fits no block) a Focus block. */
   why: SuggestWhy;
 }
-/** Why a task did not fit: the day's blocks are over (today), no block fits it, its blocks have no minutes left, or timed tasks fill them. */
-export type NoRoomReason = 'dayOver' | 'noMatch' | 'full' | 'busy';
+/**
+ * Why a task was not placed: the day's blocks are over (today), no block fits it, its blocks have no minutes left, timed tasks fill them, or
+ * it repeats (a time given to it would go to every next one, so the person gives it one).
+ */
+export type NoRoomReason = 'dayOver' | 'noMatch' | 'full' | 'busy' | 'repeats';
 export interface AutoNoRoom {
   taskId: string;
   reason: NoRoomReason;
@@ -266,6 +280,7 @@ export function autoPlaceOrder<T extends AutoPlaceTask>(tasks: readonly T[]): T[
 
 /** The line under "No room today". */
 export function noRoomLine(reason: NoRoomReason, blockName?: string | null): string {
+  if (reason === 'repeats') return 'It repeats, so a time would carry to the next ones. Give it one yourself.';
   if (reason === 'dayOver') return 'The day’s blocks are over.';
   if (reason === 'noMatch') return 'No block today fits its area or pillar.';
   if (reason === 'busy') return `Timed tasks fill ${blockName ?? 'its blocks'} today.`;
@@ -285,7 +300,8 @@ const focusy = (b: TimeBlock): boolean => b.tag.trim().toLowerCase() === FOCUS_T
  * 4. Start: `moveStartIn`, the first start in 15-minute steps from the slot's start (from now, for today) that overlaps no timed task of the
  *    day and nothing placed before it, in a slot the whole task fits in (any slot of the block only when none is long enough). A block with
  *    minutes but no free start tries the next match.
- * A task that fits nowhere is in `noRoom` with why. Nothing is written: Place my day saves `start` as each task's time.
+ * A task that fits nowhere is in `noRoom` with why, and so is one that repeats (never placed: `spawnNext` carries a time to every next
+ * one). Nothing is written: Place my day saves `start` as each task's time.
  */
 export function autoPlace(tasks: readonly AutoPlaceTask[], ctx: AutoPlaceContext): AutoPlan {
   const timed = (t: AutoPlaceTask) => minuteOf(t.dueTime) !== null;
@@ -311,6 +327,10 @@ export function autoPlace(tasks: readonly AutoPlaceTask[], ctx: AutoPlaceContext
   const miss = (taskId: string, reason: NoRoomReason, blockId: string | null) => noRoom.push({ taskId, reason, blockId, line: noRoomLine(reason, nameOf(blockId)) });
 
   for (const t of autoPlaceOrder(tasks.filter((x) => !x.timeBlockId && !timed(x)))) {
+    if (t.repeats) {
+      miss(t.id, 'repeats', null);
+      continue;
+    }
     if (day.length === 0) {
       miss(t.id, anyBlock && ctx.after !== null && ctx.after !== undefined ? 'dayOver' : 'noMatch', null);
       continue;

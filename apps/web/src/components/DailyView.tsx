@@ -1,10 +1,11 @@
 import { DAILY_SECTIONS, DAILY_VIEW_DEFAULT, dailyHiddenLine, dailySectionOfAnchor, parseDailyView, type DailySectionKey, type DailyView, type MeResponse } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Eye } from 'lucide-react';
-import { useEffect, useState, type KeyboardEvent, type Ref, type RefObject } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type Ref, type RefObject } from 'react';
 import { useLocation } from 'react-router';
 import { api } from '../lib/api';
 import { errorText } from '../lib/errors';
+import { focusHeadingAfter } from '../lib/focusHeading';
 import { keys, useMe } from '../lib/queries';
 import { Button } from './Button';
 import { Toggle } from './Toggle';
@@ -80,14 +81,17 @@ export function DailyViewButton({ ref, open, onToggle, controls, hidden }: { ref
       aria-controls={controls}
       aria-label={label}
       data-tip={label}
-      className="app-eye toy toy-ink btn-outline inline-flex size-[36px] md:size-[44px] tap-pad flex-none! items-center justify-center rounded-pill border border-ink/30 bg-card-strong p-0 text-ink"
+      className="app-eye toy toy-ink btn-outline inline-flex size-[44px] flex-none! items-center justify-center rounded-pill border border-ink/30 bg-card-strong p-0 text-ink"
     >
       <ToggleIcon open={open} icon={Eye} size={18} />
     </button>
   );
 }
 
-/** The quiet line while any section is hidden and the panel is closed: "2 sections hidden. Show all". */
+/**
+ * The quiet line while any section is hidden and the panel is closed: "2 sections hidden. Show all". Show all takes the line away with it,
+ * so the keyboard's place moves to the Tasks heading (`focusHeadingAfter`), never to the page's top.
+ */
 export function DailyHiddenLine({ state }: { state: DailyViewState }) {
   if (state.hiddenCount === 0) return null;
   return (
@@ -95,7 +99,10 @@ export function DailyHiddenLine({ state }: { state: DailyViewState }) {
       {dailyHiddenLine(state.hiddenCount)}.{' '}
       <button
         type="button"
-        onClick={state.showAll}
+        onClick={() => {
+          state.showAll();
+          focusHeadingAfter('tasks-heading');
+        }}
         disabled={state.saving}
         className="relative underline underline-offset-4 hover:text-ink after:absolute after:left-1/2 after:top-1/2 after:h-[44px] after:w-[max(100%,44px)] after:-translate-x-1/2 after:-translate-y-1/2 after:content-['']"
       >
@@ -110,6 +117,8 @@ export function DailyHiddenLine({ state }: { state: DailyViewState }) {
  * folds it and hands the keyboard back to the View button.
  */
 export function DailyViewPanel({ id, state, onClose, button }: { id: string; state: DailyViewState; onClose: () => void; button: RefObject<HTMLButtonElement | null> }) {
+  // Show all goes once nothing is hidden, so the keyboard's place moves to the status line that says what it did.
+  const status = useRef<HTMLParagraphElement>(null);
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'Escape') return;
     e.stopPropagation();
@@ -128,11 +137,19 @@ export function DailyViewPanel({ id, state, onClose, button }: { id: string; sta
       </ul>
       {(state.said || state.hiddenCount > 0) && (
         <div className="mt-xs flex flex-wrap-reverse items-center justify-between gap-sm">
-          <p role="status" className="m-0 min-w-0 flex-1 basis-[60%] text-subhead text-ink-soft">
+          <p ref={status} tabIndex={-1} role="status" className="m-0 min-w-0 flex-1 basis-[60%] text-subhead text-ink-soft outline-none">
             {[state.hiddenCount > 0 ? `${dailyHiddenLine(state.hiddenCount)}.` : '', state.said].filter(Boolean).join(' ')}
           </p>
           {state.hiddenCount > 0 && (
-            <Button variant="outline" size="sm" onClick={state.showAll} disabled={state.saving}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                state.showAll();
+                requestAnimationFrame(() => status.current?.focus());
+              }}
+              disabled={state.saving}
+            >
               Show all
             </Button>
           )}

@@ -45,7 +45,7 @@ Riya plans "Edit the brand reel": do date Thursday, due Friday, P1, Financial, 9
 
 - **Kind of day:** a dropdown of her day templates. It starts on **Follow your week**, with the template her week gives that day, like Everyday. Riya picks Deep work day on edit days, and only that date changes. The next lesson covers day templates and her usual week.
 - **Area:** once a task has an area, a filter shows every area, one area, or No area.
-- **Sort by:** Day, Priority, Due date, By context, By time block or By area. By context keeps P0 first, and inside each priority puts the pillars her day template leads with first.
+- **Sort:** Day, Priority, Due date, By context, By time block or By area, at the right beside **Area**. By context keeps P0 first, and inside each priority puts the pillars her day template leads with first. Above the list sit three tabs, **Today**, **Past due** and **Upcoming**, each with its count; **Past due** keeps its own sort, and the eye, **View**, hides the parts of Daily she does not use.
 - **By time block** and **By area** draw her tasks in coloured boxes that open and fold, with P0 first in each box.
 
 ## Step five: the month and the week
@@ -66,7 +66,7 @@ Riya plans "Edit the brand reel": do date Thursday, due Friday, P1, Financial, 9
 Riya keeps thinking about a course she stopped and a talk she put off with her sister. Both are tasks already, so she marks them.
 
 1. She taps the pencil on "Finish the colour course" and picks **Unfinished** under **Bottleneck**, then **Save plan**. "Talk to Meera about Diwali" gets **Unresolved**. A third kind, **Undecided**, is for a choice she keeps turning over.
-2. On Home she taps **Close the unfinished**, which shows on the Daily card while a marked task is open. Daily opens with **Bottlenecks** picked in **Sort by**: only the marked tasks, one coloured box for each kind, each with its one question.
+2. On Home she taps **Close the unfinished**, which shows on the Daily card while a marked task is open. Daily opens with **Bottlenecks** picked in **Sort**: only the marked tasks, one coloured box for each kind, each with its one question.
 3. She ends each one from its panel, under **End it**. The course: **Give it a time and date**, Saturday at 10:00, which turns Remember on, so a note comes that day. The talk: **Do it**, which puts it on today. An old guitar plan: **Let it go**, on a second tap. It leaves her lists and reminders and waits under **Let go**, below the boxes, where **Bring back** returns it.
 
 The kind is a tag like the area: it never changes what a tick pays, and **By context** puts these tasks after every priority. Letting go is the archive a task already had, so nothing new is stored but the kind.

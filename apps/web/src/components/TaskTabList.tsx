@@ -1,9 +1,9 @@
-import { TASK_TAB_PAGE_SIZE, TASK_TAB_PAGE_SIZES, TASK_TAB_PREFIX, addDays, openDay, type Node, type TaskSort, type TodayTabResponse } from '@kreators/shared';
+import { TASK_TAB_PAGE_SIZE, TASK_TAB_PAGE_SIZES, TASK_TAB_PREFIX, addDays, openDay, taskTabOf, type Node, type TaskSort, type TodayTabResponse } from '@kreators/shared';
 import { useQuery } from '@tanstack/react-query';
 import { AnimatePresence } from 'motion/react';
 import { api } from '../lib/api';
 import { dayLabel } from '../lib/date';
-import { keys } from '../lib/queries';
+import { keys, useAuthed } from '../lib/queries';
 import { useSession } from '../lib/store';
 import type { useActionQueue } from '../lib/useActionQueue';
 import { Button } from './Button';
@@ -22,6 +22,8 @@ function dayName(day: string, today: string): string {
   if (day === addDays(today, -1)) return 'Yesterday';
   return dayLabel(day);
 }
+/** The same inside a sentence ("From yesterday"), where a relative day is not a name. */
+const dayInLine = (day: string, today: string): string => (day === addDays(today, 1) || day === addDays(today, -1) ? dayName(day, today).toLowerCase() : dayLabel(day));
 
 /** Runs of tasks on the same day, in the order the server sent them. */
 function byDay(rows: readonly Node[]): { day: string; rows: Node[] }[] {
@@ -81,6 +83,11 @@ export function TaskTabList({
     placeholderData: (prev) => (prev?.tab === tab ? prev : undefined),
   });
   const label = tab === 'pastdue' ? 'past due tasks' : 'upcoming tasks';
+  // A link to one task (`?task=<id>`, a Remember note or a content day's Open it) whose day puts it on this tab but not on the page shown:
+  // read it alone and show it first, so it is never lost on a later page.
+  const onPage = Boolean(focusTask) && Boolean(q.data?.tasks.some((t) => t.id === focusTask));
+  const focusQ = useAuthed(['node', focusTask], () => api.node(focusTask!), Boolean(focusTask) && Boolean(q.data) && !onPage);
+  const pinned = !onPage && focusQ.data?.node.status === 'active' && taskTabOf(focusQ.data.node, date) === tab ? focusQ.data.node : null;
 
   if (q.isPending) return <SkeletonList className="mt-sm" count={3} lines={2} label={`Loading ${label}`} />;
   if (q.isError || !q.data)
@@ -94,7 +101,7 @@ export function TaskTabList({
     );
 
   const rows = q.data.tasks;
-  if (rows.length === 0 && pg.page === 1) {
+  if (rows.length === 0 && pg.page === 1 && !pinned) {
     const words = area
       ? tab === 'pastdue'
         ? `Nothing past due ${areaName}.`
@@ -119,8 +126,17 @@ export function TaskTabList({
   }
 
   const row = (t: Node, subtitle?: string) => <DailyTask key={t.id} t={t} date={date} queue={queue} focus={t.id === focusTask} subtitle={subtitle} onToggle={() => onToggle(t.id)} />;
+  const pinId = `${prefix}-opened`;
   return (
     <>
+      {pinned && (
+        <div role="group" aria-labelledby={pinId} className="mt-sm">
+          <p id={pinId} className="m-0 text-eyebrow uppercase text-ink-soft">
+            The task you opened
+          </p>
+          <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">{row(pinned, openDay(pinned) ? `From ${dayInLine(openDay(pinned)!, date)}` : undefined)}</ul>
+        </div>
+      )}
       {order === 'day' ? (
         <div className="mt-sm flex flex-col gap-sm">
           {byDay(rows).map((g) => {
@@ -140,7 +156,7 @@ export function TaskTabList({
       ) : (
         // In another order the day is said on each row, since rows of one day no longer sit together.
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
-          <AnimatePresence initial={false}>{rows.map((t) => row(t, openDay(t) ? `From ${dayName(openDay(t)!, date)}` : undefined))}</AnimatePresence>
+          <AnimatePresence initial={false}>{rows.map((t) => row(t, openDay(t) ? `From ${dayInLine(openDay(t)!, date)}` : undefined))}</AnimatePresence>
         </ul>
       )}
       <Pager page={q.data.page} prefix={prefix} label={label} only={TAB_PAGES} />

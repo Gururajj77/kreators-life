@@ -85,7 +85,7 @@ export function TaskGroups({ tasks, context, renderTask, more = false, by }: { t
   const plan: DayPlacement | null = useMemo(() => (by === 'block' && answer && answer.date === context.day ? dayPlacement(answer, after) : null), [by, answer, after, context.day]);
   const seed = answer?.day.template.seed ?? null;
   const contentDay = by === 'block' && Boolean(seed && CONTENT_SEEDS.has(seed));
-  const base = by === 'block' ? blockUsedMin(context.slots, context.slotPlannedMin) : undefined;
+  const base = by === 'block' ? blockUsedMin(context.slots, context.slotPlannedMin, after) : undefined;
   // What the plan placed counts as used, so a suggestion or a Move it never lands where the plan already put a task.
   const used = useMemo(() => {
     if (!base || !plan?.placed.length) return base;
@@ -104,7 +104,7 @@ export function TaskGroups({ tasks, context, renderTask, more = false, by }: { t
     if (by !== 'block') return null;
     if (g.key === TASK_GROUP_NONE) {
       const miss = plan?.missById.get(t.id);
-      return miss ? <NoRoomLine line={miss.line} /> : null;
+      return miss ? <NoRoomLine line={miss.line} repeats={miss.reason === 'repeats'} /> : null;
     }
     if (g.kind !== 'block' || !g.inDay) return null;
     const block = context.blocks.find((b) => b.id === g.key);
@@ -319,11 +319,11 @@ function PlacedLine({ range }: { range: string }) {
   );
 }
 /** A task the plan found no room for: No room today, and why. */
-function NoRoomLine({ line }: { line: string }) {
+function NoRoomLine({ line, repeats = false }: { line: string; repeats?: boolean }) {
   return (
     <div className="mt-xs px-sm" data-no-room="">
       <p className="m-0 flex flex-wrap items-center gap-xs text-caption text-ink-soft">
-        <StatusTag tone="neutral">No room today</StatusTag>
+        <StatusTag tone="neutral">{repeats ? 'Not placed' : 'No room today'}</StatusTag>
         <span>{line}</span>
       </p>
     </div>

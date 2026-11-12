@@ -66,7 +66,7 @@ A task finds its block in one of four ways:
 
 A timed task in a block meant for something else gets one quiet line, with **Move it** or **Keep here**. The task's form says the same under its time.
 
-On Daily, **Sort by** has **By time block** and **By area**. Each draws her tasks in coloured boxes, up to 60 tasks, with P0 first in every box. **By context** reads the pillar her day template leads with. **Your day**, a fold above the list, shows each block as a band with "45 min free" or "Over by 30 min".
+On Daily, **Sort** has **By time block** and **By area**. Each draws her tasks in coloured boxes, up to 60 tasks, with P0 first in every box. **By context** reads the pillar her day template leads with. **Your day**, a fold above the list, shows each block as a band with "45 min free" or "Over by 30 min".
 
 In Plan my week, each suggestion shows its block, with a select to change it. **Worth a look** says when a block holds too much on a day, or when a Focus block is empty. Nothing changes until she taps **Keep what fits**.
 

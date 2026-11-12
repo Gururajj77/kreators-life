@@ -53,6 +53,15 @@ const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const WEEK_COLS = { base: 1, md: 4, lg: 7 } as const;
 const APPLY_COLS = { base: 1, sm: 2 } as const;
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+/** "Shoot day and Plan and post day", "Edit, Shoot and Post". */
+const andList = (xs: readonly string[]) => (xs.length <= 1 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+/** What Bring back the starting set did, in words, and plainly which ones did not fit under the most you can keep, and why. */
+function restoreLine(added: { blocks: number; templates: number; leftOut?: { blocks: string[]; templates: string[] } }): string {
+  const out = [...(added.leftOut?.templates ?? []), ...(added.leftOut?.blocks ?? [])];
+  const head = added.blocks + added.templates === 0 ? (out.length ? 'Nothing came back.' : 'Nothing was missing from the starting set.') : `Brought back ${plural(added.blocks, 'block')} and ${plural(added.templates, 'template')}.`;
+  if (out.length === 0) return head;
+  return `${head} ${andList(out)} did not fit: you can keep up to ${MAX_TIME_BLOCKS} blocks and ${MAX_DAY_TEMPLATES} templates. Delete one to make room.`;
+}
 /** A name the person does not have yet: "My day", then "My day 2" and on. */
 function freeName(base: string, taken: readonly string[]): string {
   const have = new Set(taken.map((t) => t.trim().toLowerCase()));
@@ -219,8 +228,7 @@ function Loaded({
     mutationFn: () => api.restoreTimeBlocks(),
     onSuccess: (r) => {
       refresh();
-      const { blocks: b, templates: t } = r.added;
-      setNote(b + t === 0 ? 'Nothing was missing from the starting set.' : `Brought back ${plural(b, 'block')} and ${plural(t, 'template')}.`);
+      setNote(restoreLine(r.added));
     },
   });
 
@@ -570,9 +578,7 @@ function Loaded({
         <p className="m-0 text-caption text-ink-soft">Adds back any starting block or template you deleted. Yours stay as they are.</p>
         {restore.data && (
           <p className="m-0 text-subhead text-ink-soft" aria-live="polite">
-            {restore.data.added.blocks + restore.data.added.templates === 0
-              ? 'Nothing was missing from the starting set.'
-              : `Brought back ${plural(restore.data.added.blocks, 'block')} and ${plural(restore.data.added.templates, 'template')}.`}
+            {restoreLine(restore.data.added)}
           </p>
         )}
         {restore.error ? <ErrorLine e={restore.error} /> : null}

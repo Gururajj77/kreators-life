@@ -313,10 +313,20 @@ export interface TodayResponse {
   tasksMore?: boolean;
   /** The time block the lists were cut to (`?block=`, a block id or 'none'); absent or null for every block. */
   block?: string | null;
-  /** "Your day": open tasks that open on the day with no block and no time, whatever the six shown or the Area cut (up to 50, oldest first). */
+  /**
+   * "Your day": open tasks that open on the day with no block and no time, whatever the six shown or the Area cut: up to 50, in the order
+   * Place my day takes them (`autoPlaceOrder`: P0, P1, none, P2, P3, then the due date, from a pillar, the longest, the id), so the 50 sent are
+   * the ones that matter most to it.
+   */
   looseTasks?: Node[];
   /** How many such tasks there are in all. */
   looseTotal?: number;
+  /**
+   * Every timed open task of the day, whatever the six shown or the Area cut (2026-11-12): its time and minutes (its estimate, else 30;
+   * tasks at the same time and block summed), from the read that counts each slot's room. Place my day and Move it never land on one, and
+   * every cut of the day gives the same plan.
+   */
+  timedSpans?: { dueTime: string; min: number }[];
   /**
    * Daily's task tabs (2026-11-12). With `?tab=today` the main list (`tasks`, `tasksTotal`, `looseTasks` aside) and GET /today/waiting are cut
    * to the open tasks whose day is the person's day; with no `tab` they keep the old cut, the day and before it, for the assistant and older

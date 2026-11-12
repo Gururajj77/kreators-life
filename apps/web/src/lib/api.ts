@@ -403,6 +403,8 @@ export const api = {
   build: (relationships: RelationshipKey[], date: string, picks?: LadderPicks) => post<{ nodes: Node[]; skipped: RelationshipKey[] }>('/onboarding/build', { relationships, date, picks }),
   acceptQuest: (relationship: RelationshipKey, date: string, picks?: LadderPicks) => post<{ nodes: Node[] }>('/onboarding/accept-quest', { relationship, date, picks }),
   nodes: (relationship?: RelationshipKey) => request<{ nodes: Node[] }>(`/nodes${relationship ? `?relationship=${relationship}` : ''}`),
+  /** The person's projects, in one pillar or all (a content day's Add to my tasks picks one): only the projects, never every task. */
+  projects: (relationship?: RelationshipKey | null) => request<{ nodes: Node[] }>(`/nodes?kind=project${relationship ? `&relationship=${relationship}` : ''}`),
   /** A pillar's done tasks, a page at a time (`pq` is `pageQuery(page, size, 'dn')`). */
   nodesDone: (relationship: RelationshipKey, pq: string) => request<DoneTasksResponse>(`/nodes/done?relationship=${relationship}&${pq}`),
   createNode: (body: { kind: NodeKind; parentId: string | null; relationship: RelationshipKey; title: string; note?: string } & TaskPlanBody) => post<{ node: Node }>('/nodes', body),
@@ -466,7 +468,7 @@ export const api = {
   deleteDayTemplate: (id: string) => del<{ ok: true; daysCleared: number; weekdaysReset: number }>(`/time-blocks/templates/${encodeURIComponent(id)}`),
   setWeekPattern: (weekdays: number[], templateId: string | null) => put<{ pattern: (string | null)[]; previous: { weekday: number; templateId: string | null }[] }>('/time-blocks/pattern', { weekdays, templateId }),
   setDayTemplates: (dates: string[], templateId: string | null) => put<{ days: { date: string; templateId: string | null; previous: string | null }[] }>('/time-blocks/days', { dates, templateId }),
-  restoreTimeBlocks: () => post<{ added: { blocks: number; templates: number } }>('/time-blocks/restore'),
+  restoreTimeBlocks: () => post<{ added: { blocks: number; templates: number; leftOut?: { blocks: string[]; templates: string[] } } }>('/time-blocks/restore'),
   reviews: (kind: PeriodKind, date: string) => request<ReviewsResponse>(`/reviews?kind=${kind}&date=${date}`),
   reviewSummary: (kind: PeriodKind, date: string) => request<ReviewSummary>(`/reviews/summary?kind=${kind}&date=${date}`),
   // The device's day rides along, so a daily review for the person's own today is never refused as "not started" (2026-11-07).

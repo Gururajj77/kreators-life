@@ -2161,6 +2161,21 @@ input[type='radio'] {
   background: var(--card-strong);
   box-shadow: 0 0 0 1px var(--edge);
 }
+/* A segment that can be picked answers a mouse (2026-11-12, the founder: "the tab selector doesnt show hover when clickable"): the outline
+   buttons' own hover, the pillar's tint at 12% and the full ink, under the thumb's layer; the chosen one, a touch and the look at rest are
+   unchanged. */
+.fx-seg > button {
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .fx-seg > button:not([aria-pressed='true']):not([aria-selected='true']):not(:disabled):hover {
+    color: var(--label);
+    background-color: color-mix(in oklab, var(--tint) 12%, transparent);
+  }
+}
 
 /* The switch: a 52 by 32 capsule, a 28 knob that springs across, the tint when on. */
 .fx-switch {

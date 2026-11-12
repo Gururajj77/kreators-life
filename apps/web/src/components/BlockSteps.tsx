@@ -1,7 +1,7 @@
 import { RELATIONSHIP_BY_KEY, type TimeBlock } from '@kreators/shared';
 import { breakdownProjectKey, stepsFor } from '@kreators/shared/contentDays';
 import { useMutation } from '@tanstack/react-query';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { api, ApiError } from '../lib/api';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
@@ -50,7 +50,7 @@ function keepPick(key: string | null, id: string) {
  * Content days (2026-11-12, the founder's decisions 4 and 5): the ready list of steps a block carries on a day whose template is Edit day,
  * Shoot day or Plan and post day (`stepsFor` in `@kreators/shared/contentDays`), in a closed fold inside the block's box (By time block)
  * and its band (Your day). The steps are a list to read, never ticked here. "Add to my tasks" opens a project picker in place (the person's
- * active projects in the block's pillar, the same read as Daily's Add a task form, the last pick remembered on this device per person and
+ * active projects in the block's pillar, read alone, the last pick remembered on this device per person and
  * pillar) and makes ONE task in this block for this day with the steps as its subtasks (POST /nodes/breakdown). Once made, the fold says
  * "Added" with a link to the task on Daily instead of offering it again, the same when the server finds it was already there. Draws nothing
  * when the block has no list on this template. Lazy: it brings the step words (their own chunk) only to a content day.
@@ -63,14 +63,16 @@ export function BlockSteps({ date, templateSeed, block }: { date: string; templa
   const id = useId();
   const [picking, setPicking] = useState(false);
   const [made, setMade] = useState<string | null>(null);
+  // After Add it, the form (and the button that had focus) goes: the keyboard's place moves to the Added line once it is drawn.
+  const [landAdded, setLandAdded] = useState(false);
+  const addedLine = useRef<HTMLParagraphElement>(null);
   const pillar = block.pillar;
   const pillarName = pillar ? RELATIONSHIP_BY_KEY[pillar].name : 'your pillars';
   const userId = me.data?.user.id ?? null;
   const pickKey = userId && pillar ? breakdownProjectKey(userId, pillar) : null;
-  // The same read as Daily's Add a task form (its projects), so it is cached once and asked only when the picker opens.
-  const month = date.slice(0, 7);
-  const projectsQ = useAuthed(['today', 'month', month, date], () => api.todayMonth(month, date), picking);
-  const projects = (projectsQ.data?.projects ?? []).filter((p) => !pillar || p.relationship === pillar);
+  // Only the person's projects in the block's pillar (GET /nodes?kind=project), asked only when the picker opens: never the month's tasks.
+  const projectsQ = useAuthed(['nodes', 'projects', pillar ?? 'all'], () => api.projects(pillar), picking);
+  const projects = (projectsQ.data?.nodes ?? []).filter((p) => p.kind === 'project' && p.status === 'active' && (!pillar || p.relationship === pillar));
   const [projectId, setProjectId] = useState('');
   useEffect(() => {
     if (!picking || projects.length === 0) return;
@@ -85,16 +87,25 @@ export function BlockSteps({ date, templateSeed, block }: { date: string; templa
       keepPick(pickKey, projectId);
       setMade(r.node.id);
       setPicking(false);
+      setLandAdded(true);
       void refresh();
     },
     onError: (e) => {
       // Made in another tab a moment ago: Daily is read again, and the answer's breakdowns then say "Added" with its link.
       if (e instanceof ApiError && e.status === 409) {
         setPicking(false);
+        setLandAdded(true);
         void refresh();
       }
     },
   });
+
+  const shownAdded = Boolean(made) || (add.error instanceof ApiError && add.error.status === 409);
+  useEffect(() => {
+    if (!landAdded || !shownAdded) return;
+    addedLine.current?.focus();
+    setLandAdded(false);
+  }, [landAdded, shownAdded]);
 
   if (!list || !templateSeed || !block.seed) return null;
   const fromAnswer = answer?.breakdowns?.find((b) => b.templateSeed === templateSeed && b.blockSeed === block.seed)?.nodeId ?? null;
@@ -111,8 +122,8 @@ export function BlockSteps({ date, templateSeed, block }: { date: string; templa
           ))}
         </ol>
         {nodeId || conflict ? (
-          <div className="mt-sm flex flex-wrap items-center justify-between gap-sm">
-            <p role="status" className="m-0 flex min-w-0 flex-[1_1_60%] flex-wrap items-center gap-xs text-subhead">
+          <div className="mt-sm flex flex-wrap-reverse items-center justify-between gap-sm">
+            <p ref={addedLine} tabIndex={-1} role="status" className="m-0 flex min-w-0 flex-[1_1_60%] flex-wrap items-center gap-xs text-subhead outline-none">
               <StatusTag tone="good">Added</StatusTag>
               <span className="text-ink-soft">{COPY.added}</span>
             </p>

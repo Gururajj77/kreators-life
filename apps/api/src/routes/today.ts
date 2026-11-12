@@ -3,7 +3,7 @@ import { DAILY_GROUPED_MAX, dayTypeOf, slotIndexOfTask, slotOrder, PLAN_DEFAULT_
 import { breakdownOfOrigin } from '@kreators/shared/contentDays';
 import type { AppEnv } from '../env';
 import { resolveAccess } from '../access';
-import { DATE_RE, dateNearToday, getUser, newId, noteStmt, nowIso, pageOf, paged, shiftDate, streakNow, toNode, type NodeRow, taskGate, withSubtasks } from '../db';
+import { DATE_RE, dateNearToday, dayInZone, getUser, newId, noteStmt, nowIso, pageOf, paged, shiftDate, streakNow, toNode, type NodeRow, taskGate, withSubtasks } from '../db';
 import { dayPlan, kindsBetween, loadBlocking } from '../timeBlocks';
 import { afterInviteActive, inviteActiveStmts } from '../invites';
 
@@ -270,8 +270,8 @@ today.get('/', async (c) => {
       .all<NodeRow>(),
     // The true count of what waits (2026-11-06): every open task the list's cut holds, under the same cuts, and how many open tasks are late
     // (their day is before this one, the rule Plan my week counts), so the heading says "6 of 14 waiting, 2 late" instead of stopping at six.
-    // The three tabs' counts ride in the same read (2026-11-12), under the Area cut only: the day, before it, after it. So the read walks the
-    // person's open dated tasks once, as it did, with no date cut in its WHERE.
+    // The three tabs' counts ride in the same read (2026-11-12), under the Area cut only: the day, before it, after it. It walks the
+    // person's open dated tasks once, through the day index (INDEXED BY: the dated range, so the undated backlog is never visited).
     db
       .prepare(
         `SELECT COALESCE(SUM(CASE WHEN ${openFilterExpr(open, 'n.open_kind')} AND ${dayOf} ${cmp} ?2 THEN 1 ELSE 0 END), 0) AS n,
@@ -279,19 +279,22 @@ today.get('/', async (c) => {
         COALESCE(SUM(CASE WHEN ${dayOf} = ?2 THEN 1 ELSE 0 END), 0) AS today_n,
         COALESCE(SUM(CASE WHEN ${dayOf} < ?2 THEN 1 ELSE 0 END), 0) AS past_n,
         COALESCE(SUM(CASE WHEN ${dayOf} > ?2 THEN 1 ELSE 0 END), 0) AS up_n
-       FROM nodes n WHERE n.user_id = ?1 AND n.kind = 'task' AND n.status = 'active' AND ${dayOf} IS NOT NULL${areaSql('n.life_area')}${blockSql('n.')}`,
+       FROM nodes n INDEXED BY idx_nodes_user_open_day WHERE n.user_id = ?1 AND n.kind = 'task' AND n.status = 'active' AND ${dayOf} > ''${areaSql('n.life_area')}${blockSql('n.')}`,
       )
       .bind(user.id, date)
       .first<{ n: number; late: number; today_n: number; past_n: number; up_n: number }>(),
     // "Your day": every open task that opens on the day with no block and no time, whatever the six shown or the Area cut, so its line names
-    // each one (the room in each block is counted the same way, below). The count is over all of them; up to 50 are listed.
+    // each one (the room in each block is counted the same way, below). The count is over all of them; up to 50 are listed, in the order
+    // Place my day takes them (`autoPlaceOrder` in shared: P0, P1, none, P2, P3, then the due date, none last, a pillar's own first, the
+    // longest, the id), so the plan always holds the 50 that matter most to it.
     db
       .prepare(
-        `SELECT n.*, COUNT(*) OVER () AS loose_total FROM nodes n
+        `SELECT n.*, COUNT(*) OVER () AS loose_total FROM nodes n INDEXED BY idx_nodes_user_open_day
        WHERE n.user_id = ?1 AND n.kind = 'task' AND n.status = 'active' AND COALESCE(n.do_date, n.due_date) = ?2 AND n.time_block_id IS NULL AND n.due_time IS NULL
-       ORDER BY n.created_at ASC LIMIT 50`,
+       ORDER BY CASE WHEN n.priority IS NULL THEN 2 WHEN n.priority <= 1 THEN n.priority ELSE n.priority + 1 END ASC, COALESCE(n.due_date, '9999-99-99') ASC,
+         CASE WHEN n.origin = 'build' THEN 0 ELSE 1 END ASC, COALESCE(n.estimate_min, ?3) DESC, n.id ASC LIMIT 50`,
       )
-      .bind(user.id, date)
+      .bind(user.id, date, PLAN_DEFAULT_MINUTES)
       .all<NodeRow & { loose_total: number }>(),
     // The day's time plan counts every timed task due today, not just the six shown.
     db
@@ -412,6 +415,7 @@ today.get('/', async (c) => {
     block,
     looseTasks: loose.results.map((t) => toNode(t, gate)),
     looseTotal: Number(loose.results[0]?.loose_total ?? 0),
+    timedSpans: slotRows.results.flatMap((r) => (r.due_time ? [{ dueTime: r.due_time, min: Number(r.min) }] : [])),
     tab,
     todayTotal: Number(openCount?.today_n ?? 0),
     pastDueTotal: Number(openCount?.past_n ?? 0),
@@ -470,21 +474,24 @@ async function tabList(c: Context<AppEnv>, tab: Exclude<TaskTab, 'today'>) {
   // A day sent that is not on the calendar is refused in words (the house rule for a typed or sent day), never read as today.
   const asked = c.req.query('date');
   if (asked !== undefined && !DATE_RE.test(asked)) return c.json({ error: 'That is not a real day.' }, 400);
-  const date = dateParam(asked);
+  // No day sent: the person's own today in their zone, never the server's UTC date (still yesterday in India until 05:30).
+  const date = asked ?? dayInZone(user.timezone);
   const areaAsk = c.req.query('area');
   const area = areaAsk === 'none' ? 'none' : parseLifeArea(areaAsk);
   const cut = area === 'none' ? ' AND n.life_area IS NULL' : area ? ` AND n.life_area = '${area}'` : '';
   const where = `n.user_id = ?1 AND n.kind = 'task' AND n.status = 'active' AND COALESCE(n.do_date, n.due_date) ${TASK_TAB_CMP[tab]} ?2${cut}`;
   const from = 'FROM nodes n INDEXED BY idx_nodes_user_open_day';
   const ask = pageOf(c, tab === 'pastdue' ? 'pd' : 'uc', { sizes: TASK_TAB_PAGE_SIZES, fallback: TASK_TAB_PAGE_SIZE });
-  // Past due takes the six's order (OPEN_TASKS_ORDER with ?3 day 0, priority 1, due 2 and no lead pillar); Upcoming its own, by day.
+  // Past due by priority or due date takes the six's order (OPEN_TASKS_ORDER with ?3 priority 1 or due 2 and no lead pillar). By day, oldest
+  // first, and Upcoming, soonest first, lead with the indexed day itself, so the index gives the order and a page stops at its LIMIT instead
+  // of sorting every past due task (a CASE first would sort them all for each page).
   const sort = taskTabSort(tab, c.req.query('sort'));
+  // Both start with the day, then the time (none last); Upcoming then puts the higher priority first inside a time, as it always did.
+  const byDay = `ORDER BY COALESCE(n.do_date, n.due_date) ASC, CASE WHEN n.due_time IS NULL THEN 1 ELSE 0 END, n.due_time ASC,${tab === 'upcoming' ? ' COALESCE(n.priority, 4) ASC,' : ''} n.created_at ASC LIMIT ?3 OFFSET ?4`;
   const list =
-    tab === 'pastdue'
-      ? db.prepare(`SELECT n.* ${from} WHERE ${where} ${OPEN_TASKS_ORDER} LIMIT ?6 OFFSET ?7`).bind(user.id, date, sort === 'priority' ? 1 : sort === 'due' ? 2 : 0, '', '', ask.limit, ask.offset)
-      : db
-          .prepare(`SELECT n.* ${from} WHERE ${where} ORDER BY COALESCE(n.do_date, n.due_date) ASC, CASE WHEN n.due_time IS NULL THEN 1 ELSE 0 END, n.due_time ASC, COALESCE(n.priority, 4) ASC, n.created_at ASC LIMIT ?3 OFFSET ?4`)
-          .bind(user.id, date, ask.limit, ask.offset);
+    tab === 'pastdue' && sort !== 'day'
+      ? db.prepare(`SELECT n.* ${from} WHERE ${where} ${OPEN_TASKS_ORDER} LIMIT ?6 OFFSET ?7`).bind(user.id, date, sort === 'priority' ? 1 : 2, '', '', ask.limit, ask.offset)
+      : db.prepare(`SELECT n.* ${from} WHERE ${where} ${byDay}`).bind(user.id, date, ask.limit, ask.offset);
   const [gate, rows, total] = await Promise.all([taskGate(db, user.id), list.all<NodeRow>(), db.prepare(`SELECT COUNT(*) AS n ${from} WHERE ${where}`).bind(user.id, date).first<{ n: number }>()]);
   const { items, page } = paged(rows.results, ask);
   const res: TodayTabResponse = { tab, tasks: await withSubtasks(db, user.id, items.map((t) => toNode(t, gate))), page, total: total?.n ?? 0 };

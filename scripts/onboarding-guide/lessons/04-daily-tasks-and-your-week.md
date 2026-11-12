@@ -16,7 +16,13 @@ Next is your guide's small act for today, like "Dew's small act for today". It i
 
 ## Your tasks
 
-Under **Tasks** you see what is open for today, from the pillars you set up. Six show at a time. The rest wait in a fold that says how many, like **8 more waiting**, and both follow **Sort by**. Tap the box to tick one. It pays 20 xp and sends a ripple up its pyramid.
+Under **Tasks** you see what is open for today, from the pillars you set up. Three tabs sit over the list, each with its count:
+
+- **Today:** what is set for today. Six show at a time. The rest wait in a fold that says how many, like **8 more waiting**.
+- **Past due:** open tasks from days gone by, oldest first, ten a page. Tick one, or give it a new day with **Plan my week**.
+- **Upcoming:** what is set for later, soonest first, ten a page, with the day over each run. One with a do date waits for its day.
+
+Tap the box to tick one. It pays 20 xp and sends a ripple up its pyramid.
 
 Your first three ticks have no wait. After that, a task must be ten minutes old, and ten minutes after your last tick. So you do the thing first, then tick it. Up to six tasks a day pay xp. The rest still count as done.
 
@@ -40,8 +46,13 @@ Tap **Save plan**. Once a task has minutes, **Start focus** opens Mindfulness wi
 
 - **Kind of day:** a dropdown that starts on **Follow your week**, with the day template your week gives today, like Everyday. Pick another, like Deep work day, Family day or Low energy day, to change today only. Your kind of day is a day template. Part three of Daily covers them.
 - **Area:** shows once a task has an area. Pick one area, every area, or No area.
-- **Sort by:** Day, Priority, Due date, By context, By time block or By area. By context keeps P0 on top. Inside each priority, it puts first the pillar your day template leads with.
+- **Sort:** Day, Priority, Due date, By context, By time block or By area, at the right beside **Area**. By context keeps P0 on top. Inside each priority, it puts first the pillar your day template leads with. **Past due** keeps its own sort.
 - **By time block** and **By area** show your tasks in coloured boxes you can open and fold, with P0 first in each box.
+- **View:** the eye at the end of the row. It hides parts of Daily you do not use, like **Habits** or **Month calendar**, on every device. A quiet line says how many are hidden, with **Show all**.
+
+## Place my day
+
+Under **Your day**, a line says how many of today's tasks with no block or time fit your blocks. **Place my day** gives each one a start in the block that fits, P0 first, never on top of a task that already has a time. Nothing is saved until you tap it. A task that repeats waits for a time from you, since its time would carry to the next ones.
 
 ## Adding a task
 
@@ -62,7 +73,7 @@ Things you left open tend to stay on your mind: a course you stopped, a talk you
 
 Once it has a kind, the same panel offers three ways to end it, under **End it**. **Do it** puts it on today; tick it when it is done. **Give it a time and date** picks a day and a time, with a reminder. **Let it go** takes a second tap. It leaves your lists and reminders.
 
-To see only these tasks, pick **Bottlenecks** in the **Sort by** row, or tap **Close the unfinished** on Home, which shows while one of these is open. Each kind sits in its own coloured box with its question. Under the boxes, **Let go** lists what you let go, with **Bring back**. A kind is a tag like the area, and **By context** puts these tasks after every priority.
+To see only these tasks, pick **Bottlenecks** in **Sort**, or tap **Close the unfinished** on Home, which shows while one of these is open. Each kind sits in its own coloured box with its question. Under the boxes, **Let go** lists what you let go, with **Bring back**. A kind is a tag like the area, and **By context** puts these tasks after every priority.
 
 ## The month calendar
 

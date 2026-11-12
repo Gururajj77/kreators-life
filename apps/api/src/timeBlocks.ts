@@ -224,15 +224,26 @@ export async function ensureTimeBlocks(db: D1Database, user: { id: string; time_
   user.time_blocks_seeded_at = claim;
 }
 
-/** Adds back any starting block or template whose seed the person no longer has. Never touches one that still exists, never the pattern. With no rows yet, none can be missing. */
-export async function restoreStartingSet(db: D1Database, userId: string): Promise<{ blocks: number; templates: number }> {
+/** What "Bring back the starting set" did: how many came back, and the names of those that did not fit under the most a person keeps. */
+export interface RestoreResult {
+  blocks: number;
+  templates: number;
+  leftOut: { blocks: string[]; templates: string[] };
+}
+/**
+ * Adds back any starting block or template whose seed the person no longer has. Never touches one that still exists, never the pattern. With
+ * no rows yet, none can be missing. What would pass MAX_TIME_BLOCKS or MAX_DAY_TEMPLATES stays out and is named in `leftOut`, so the screen
+ * can say which and why.
+ */
+export async function restoreStartingSet(db: D1Database, userId: string): Promise<RestoreResult> {
+  const none: RestoreResult = { blocks: 0, templates: 0, leftOut: { blocks: [], templates: [] } };
   const [written, b, t, any] = await db.batch([
     db.prepare('SELECT time_blocks_seeded_at AS at FROM users WHERE id = ?').bind(userId),
     db.prepare('SELECT seed, sort FROM time_blocks WHERE user_id = ?').bind(userId),
     db.prepare('SELECT seed, sort FROM day_templates WHERE user_id = ?').bind(userId),
     db.prepare('SELECT 1 AS one FROM day_templates WHERE user_id = ? AND is_default = 1').bind(userId),
   ]);
-  if (!(written!.results as { at: string | null }[])[0]?.at) return { blocks: 0, templates: 0 };
+  if (!(written!.results as { at: string | null }[])[0]?.at) return none;
   const haveB = new Set((b!.results as { seed: string | null }[]).map((r) => r.seed).filter((x): x is string => Boolean(x)));
   const haveT = new Set((t!.results as { seed: string | null }[]).map((r) => r.seed).filter((x): x is string => Boolean(x)));
   const maxB = Math.max(-1, ...(b!.results as { sort: number }[]).map((r) => r.sort));
@@ -243,9 +254,11 @@ export async function restoreStartingSet(db: D1Database, userId: string): Promis
   const pick = startingToRestore({ blocks: haveB, templates: haveT }, { blocks: b!.results.length, templates: t!.results.length });
   const wantT = new Set(pick.templates);
   const wantB = new Set(pick.blocks);
-  if (wantB.size === 0 && wantT.size === 0) return { blocks: 0, templates: 0 };
+  const nameOf = (list: readonly { seed: string; name: string }[], seeds: readonly string[]) => seeds.map((x) => list.find((y) => y.seed === x)?.name ?? x);
+  const leftOut = { blocks: nameOf(STARTING_BLOCKS, pick.leftOut.blocks), templates: nameOf(STARTING_TEMPLATES, pick.leftOut.templates) };
+  if (wantB.size === 0 && wantT.size === 0) return { ...none, leftOut };
   await db.batch(seedStatements(db, userId, wantB, wantT, { allowDefault: (any!.results as unknown[]).length === 0, blockSortFrom: maxB + 1, templateSortFrom: maxT + 1 }));
-  return { blocks: wantB.size, templates: wantT.size };
+  return { blocks: wantB.size, templates: wantT.size, leftOut };
 }
 
 export interface Blocking {

@@ -1,4 +1,4 @@
-import { minuteOf, openDay, type Node, type TimeBlock, type TodayResponse } from '@kreators/shared';
+import { formatCount, minuteOf, openDay, type Node, type TimeBlock, type TodayResponse } from '@kreators/shared';
 import { autoPlace, blockUsedMin, type AutoNoRoom, type AutoPlaced, type AutoPlan } from '@kreators/shared/blockHints';
 import { useMutation } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
@@ -11,6 +11,8 @@ import { StatusTag } from './StatusTag';
 
 /** The plan and quick ways into it: where each placed task goes and why the others do not fit. */
 export interface DayPlacement extends AutoPlan {
+  /** Loose tasks past the 50 GET /today sends, which this plan did not read (the 50 are the ones that matter most to it). */
+  beyond: number;
   byId: Map<string, AutoPlaced>;
   missById: Map<string, AutoNoRoom>;
 }
@@ -19,20 +21,25 @@ export interface DayPlacement extends AutoPlan {
  * Place my day (2026-11-12, the founder's decision 3): the plan `autoPlace` makes for the day's open tasks with no block and no time (GET
  * /today `looseTasks`), worked out on read and never written until "Place my day" is tapped. One rule for Daily's Your day and its By time
  * block view, read from the same answer (`useDailyAnswer`), so both show the same plan. Room is the server's minutes in each block
- * (`slotPlannedMin`) and what this plan placed; the timed tasks of the day in the answer are never overlapped; on today nothing goes in
- * time already gone (`after`). Null while there is no plan of the day to place into.
+ * (`slotPlannedMin`, only the slots still to come on today) and what this plan placed; every timed task of the day (`timedSpans`, whatever
+ * the six shown or the Area cut, so any cut of the day gives the same plan) is never overlapped; on today nothing goes in time already gone
+ * (`after`). A task that repeats is never placed. Null while there is no plan of the day to place into.
  */
 export function dayPlacement(a: TodayResponse | undefined, after: number | null): DayPlacement | null {
   if (!a?.day || a.day.slots.length === 0) return null;
   const loose = a.looseTasks ?? [];
-  const taken = a.tasks.filter((t) => t.status === 'active' && minuteOf(t.dueTime) !== null && openDay(t) === a.date).map((t) => ({ dueTime: t.dueTime, estimateMin: t.estimateMin }));
+  // An answer from before `timedSpans` (an older server for a moment around a deploy) falls back to the timed tasks it lists.
+  const taken = a.timedSpans
+    ? a.timedSpans.map((x) => ({ dueTime: x.dueTime, estimateMin: x.min }))
+    : a.tasks.filter((t) => t.status === 'active' && minuteOf(t.dueTime) !== null && openDay(t) === a.date).map((t) => ({ dueTime: t.dueTime, estimateMin: t.estimateMin }));
   const plan = loose.length
     ? autoPlace(
-        loose.map((t) => ({ id: t.id, priority: t.priority, dueDate: t.dueDate, dueTime: t.dueTime, timeBlockId: t.timeBlockId ?? null, fromPillar: t.fromPillar, estimateMin: t.estimateMin, lifeArea: t.lifeArea, relationship: t.relationship })),
-        { slots: a.day.slots, blocks: a.day.blocks, used: blockUsedMin(a.day.slots, a.day.slotPlannedMin), taken, after },
+        loose.map((t) => ({ id: t.id, priority: t.priority, dueDate: t.dueDate, dueTime: t.dueTime, timeBlockId: t.timeBlockId ?? null, fromPillar: t.fromPillar, estimateMin: t.estimateMin, lifeArea: t.lifeArea, relationship: t.relationship, repeats: Boolean(t.repeat) })),
+        { slots: a.day.slots, blocks: a.day.blocks, used: blockUsedMin(a.day.slots, a.day.slotPlannedMin, after), taken, after },
       )
     : { placed: [], noRoom: [] };
-  return { ...plan, byId: new Map(plan.placed.map((p) => [p.taskId, p])), missById: new Map(plan.noRoom.map((m) => [m.taskId, m])) };
+  const beyond = Math.max(0, (a.looseTotal ?? loose.length) - loose.length);
+  return { ...plan, beyond, byId: new Map(plan.placed.map((p) => [p.taskId, p])), missById: new Map(plan.noRoom.map((m) => [m.taskId, m])) };
 }
 
 /** "10:00 am to 10:30 am": a placed task's time on the clock, in the person's format. */
@@ -42,12 +49,16 @@ export function placedRange(p: Pick<AutoPlaced, 'start' | 'end'>): string {
 
 const tasksWord = (n: number) => (n === 1 ? '1 task' : `${n} tasks`);
 
-/** What the plan holds, in one line: "3 tasks fit your blocks. 1 has no room today." */
+/** What the plan holds, in one line: "3 tasks fit your blocks. 1 has no room today. 1 repeats, so it waits for a time from you." */
 function planLine(plan: DayPlacement): string {
   const fit = plan.placed.length;
-  const miss = plan.noRoom.length;
-  const first = fit === 0 ? 'No task fits your blocks today.' : `${tasksWord(fit)} ${fit === 1 ? 'fits' : 'fit'} your blocks.`;
-  return miss === 0 ? first : `${first} ${miss === 1 ? '1 has' : `${miss} have`} no room today.`;
+  const repeats = plan.noRoom.filter((m) => m.reason === 'repeats').length;
+  const miss = plan.noRoom.length - repeats;
+  const parts = [fit === 0 ? 'No task fits your blocks today.' : `${tasksWord(fit)} ${fit === 1 ? 'fits' : 'fit'} your blocks.`];
+  if (miss > 0) parts.push(`${miss === 1 ? '1 has' : `${miss} have`} no room today.`);
+  if (repeats > 0) parts.push(`${repeats === 1 ? '1 repeats, so it waits' : `${repeats} repeat, so they wait`} for a time from you.`);
+  if (plan.beyond > 0) parts.push(`${formatCount(plan.beyond)} more ${plan.beyond === 1 ? 'waits' : 'wait'} past the first 50.`);
+  return parts.join(' ');
 }
 
 /** What one Place my day did: "Placed 3 tasks in your day. 1 had changed elsewhere, so it was left as it is." */
@@ -117,7 +128,7 @@ export function PlacedNote({ t, plan, blocks }: { t: Node; plan: DayPlacement; b
   if (m)
     return (
       <span className="mt-xs flex flex-wrap items-center gap-xs text-caption text-ink-soft" data-no-room>
-        <StatusTag tone="neutral">No room today</StatusTag>
+        <StatusTag tone="neutral">{m.reason === 'repeats' ? 'Not placed' : 'No room today'}</StatusTag>
         <span>{m.line}</span>
       </span>
     );

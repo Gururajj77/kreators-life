@@ -81,7 +81,7 @@ A task finds its block in one of four ways.
 
 ## Seeing your day in blocks
 
-On Daily, **Sort by** now has six choices: Day, Priority, Due date, By context, By time block and By area.
+On Daily, **Sort** now has six choices: Day, Priority, Due date, By context, By time block and By area.
 
 - **By time block** shows your tasks in coloured boxes, one per block, in clock order. Each box shows its times and a count, like "3 tasks · 1 h 30 of 3 h". A task with no block and no time shows as **Suggested** inside the block that fits, with **Keep here**. Nothing is saved until you tap. It never suggests your night's sleep, a full block or a block already over. Tasks with no block sit in **No block yet**.
 - **A task in the wrong block:** a timed task in a block meant for something else gets one quiet line, with **Move it** or **Keep here**. The task's form says the same under its time.

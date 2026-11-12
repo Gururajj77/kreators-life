@@ -7443,6 +7443,8 @@ section('Daily tabs, View, Place my day and content days');
   check('tabs: the Area filter cuts Upcoming', upArea.status === 200 && upArea.json.total === 1 && upArea.json.tasks?.[0]?.id === ups[2].id, upArea.json.total);
   check('tabs: a day that is not real is refused', (await api('GET', '/today/upcoming?date=2026-11-31', undefined, D.token)).status === 400 && (await api('GET', '/today/past-due?date=2026-11-31', undefined, D.token)).status === 400);
   check('tabs: the lists need a session', (await api('GET', `/today/upcoming?date=${today}`)).status === 401);
+  const noDate = await api('GET', '/today/past-due', undefined, D.token);
+  check('tabs: with no day sent the list reads the person’s own day, never refused', noDate.status === 200 && noDate.json.tab === 'pastdue', noDate.status);
   const early = await api('POST', `/nodes/${ups[0].id}/complete`, { date: today }, D.token);
   check('tabs: an upcoming task cannot be ticked before its day', early.status === 400 && /Tick it on the day/.test(early.json.error ?? ''), early.json);
 
@@ -7466,9 +7468,14 @@ section('Daily tabs, View, Place my day and content days');
   const oTask = (await api('POST', '/nodes', { kind: 'task', parentId: oProj?.id, relationship: 'self', title: 'Not yours', doDate: today }, O.token)).json.node;
   const readyBefore = (await api('GET', `/nodes/${t1.id}`, undefined, D.token)).json.node?.readyAt;
   await api('PATCH', `/nodes/${t3.id}`, { dueTime: '10:00' }, D.token);
-  const placed = await api('POST', '/nodes/place', { date: today, items: [{ id: t1.id, dueTime: '16:00' }, { id: t2.id, dueTime: '16:30' }, { id: t3.id, dueTime: '17:00' }, { id: oTask?.id, dueTime: '17:30' }] }, D.token);
+  // A task that repeats is never placed: its time would carry to every next one (spawnNext).
+  const rep = (await add('Tabs repeats daily', { doDate: today, repeat: { kind: 'daily', every: 1, days: [], until: null } })).json.node;
+  const placed = await api('POST', '/nodes/place', { date: today, items: [{ id: t1.id, dueTime: '16:00' }, { id: t2.id, dueTime: '16:30' }, { id: t3.id, dueTime: '17:00' }, { id: oTask?.id, dueTime: '17:30' }, { id: rep?.id, dueTime: '18:00' }] }, D.token);
   const skippedOf = (id) => placed.json.skipped?.find((s) => s.id === id)?.reason;
   check('place: two are saved, one changed meanwhile, one not yours', placed.status === 200 && placed.json.saved === 2 && skippedOf(t3.id) === 'changed' && skippedOf(oTask?.id) === 'gone', placed.json);
+  check('place: a task that repeats is left without a time', skippedOf(rep?.id) === 'changed' && (await api('GET', `/nodes/${rep?.id}`, undefined, D.token)).json.node?.dueTime == null, skippedOf(rep?.id));
+  const spans = (await api('GET', `/today?date=${today}&tab=today&area=physical`, undefined, D.token)).json.timedSpans ?? [];
+  check('place: Daily sends every timed task of the day, whatever the Area cut', ['16:00', '16:30', '10:00'].every((x) => spans.some((sp) => sp.dueTime === x && sp.min > 0)), spans);
   check('place: one request costs at most 5 round trips', Number(placed.headers.get('x-d1-round-trips') ?? 0) <= 5, placed.headers.get('x-d1-round-trips'));
   const t1After = (await api('GET', `/nodes/${t1.id}`, undefined, D.token)).json.node;
   const t3After = (await api('GET', `/nodes/${t3.id}`, undefined, D.token)).json.node;
@@ -7533,6 +7540,7 @@ section('Daily tabs, View, Place my day and content days');
   const full = await api('POST', '/time-blocks/restore', {}, R.token);
   const fullAfter = await api('GET', `/time-blocks?day=${today}`, undefined, R.token);
   check('restore: at the most templates, Bring back adds none', fill.every((r) => r.status === 201) && full.status === 200 && full.json.added?.templates === 0 && fullAfter.json.templates?.length === TABS_MAX_TEMPLATES, [fill.map((r) => r.status), full.json, fullAfter.json.templates?.length]);
+  check('restore: it names what did not fit', JSON.stringify(full.json.added?.leftOut?.templates) === JSON.stringify(['Shoot day']), full.json.added?.leftOut);
   // Blocks: take one starting block away, fill the blocks to the most, and Bring back adds no block past it.
   await api('DELETE', `/time-blocks/blocks/b-post-${rid}`, undefined, R.token);
   const bNow = (await api('GET', `/time-blocks?day=${today}`, undefined, R.token)).json.blocks?.length ?? 0;
@@ -7541,6 +7549,7 @@ section('Daily tabs, View, Place my day and content days');
   const bFull = await api('POST', '/time-blocks/restore', {}, R.token);
   const bAfter = await api('GET', `/time-blocks?day=${today}`, undefined, R.token);
   check('restore: at the most blocks, Bring back adds none', bFill.every((r) => r.status === 201) && bFull.status === 200 && bFull.json.added?.blocks === 0 && bAfter.json.blocks?.length === TABS_MAX_BLOCKS, [bFill.map((r) => r.status), bFull.json, bAfter.json.blocks?.length]);
+  check('restore: it names the block that did not fit', (bFull.json.added?.leftOut?.blocks ?? []).length === 1, bFull.json.added?.leftOut);
   await api('DELETE', '/me', { confirm: 'DELETE' }, R.token);
   await api('DELETE', '/me', { confirm: 'DELETE' }, O.token);
 }

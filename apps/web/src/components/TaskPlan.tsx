@@ -100,10 +100,10 @@ function TimeFitHint({ plan, pillar, day, taskId, onUse, className = '' }: { pla
     .getQueriesData<TodayResponse>({ queryKey: ['today', day] })
     .map(([, d]) => d)
     .find((d) => d?.day?.date === day && d.day.slotPlannedMin);
-  const used = daily?.day ? blockUsedMin(daily.day.slots, daily.day.slotPlannedMin) : undefined;
-  const taken = (daily?.tasks ?? []).filter((x) => x.id !== taskId && x.dueTime && openDay(x) === day);
   const now = new Date();
   const after = day === todayLocal() ? now.getHours() * 60 + now.getMinutes() : null;
+  const used = daily?.day ? blockUsedMin(daily.day.slots, daily.day.slotPlannedMin, after) : undefined;
+  const taken = (daily?.tasks ?? []).filter((x) => x.id !== taskId && x.dueTime && openDay(x) === day);
   const m = blockMismatch({ timeBlockId: null, dueTime: plan.time, lifeArea: plan.lifeArea, relationship: pillar, priority: plan.priority, estimateMin: Number(plan.minutes) > 0 ? Number(plan.minutes) : null }, slots, [...inDay, ...other], { used, taken, after });
   if (!m) return null;
   return (

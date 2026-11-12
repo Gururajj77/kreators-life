@@ -8,6 +8,7 @@ import { blockFromBody, dayPlan, loadBlocking } from '../timeBlocks';
 import { blockDayMinutes, parsePlaceDay, type BreakdownResponse, type PlaceDayResponse } from '@kreators/shared';
 import { breakdownTask, parseBreakdown } from '@kreators/shared/contentDays';
 import { afterInviteActive, inviteActiveStmts } from '../invites';
+import { dayBounds } from './today';
 
 /** Whether a request names a block, by id or by name. */
 const namesBlock = (b: NodeBody): boolean => (b.timeBlockId !== undefined) || (b.timeBlock !== undefined);
@@ -265,8 +266,10 @@ async function spawnNext(db: D1Database, row: NodeRow, today: string): Promise<N
  * Place my day (2026-11-12, the founder): saves the plan Daily shows (`autoPlace` in `@kreators/shared/blockHints`, worked out on the
  * screen from GET /today) in one request, each task's start written as its `dueTime` and nothing else (never `ready_at`, so no wait
  * starts again). Owner only, limit `prefs`. Guarded per row in the one UPDATE: still the person's open task, still with no time and no
- * block, and still on that day; a task another tab or a tap changed since is left alone and answered `changed`, one that is no longer
- * an open task of the person's `gone`. One round trip: the read (as things stood) and the write go in one batch, one transaction.
+ * block, still on that day, and not one that repeats (a time would carry to every next one, so the plan never places it); a task another
+ * tab or a tap changed since is left alone and answered `changed`, one that is no longer an open task of the person's `gone`. One round
+ * trip: the read (as things stood) and the write go in one batch, one transaction. The read looks each sent id up by its key (at most 60),
+ * the write goes through the day index, so neither visits the person's other tasks.
  */
 nodes.post('/place', async (c) => {
   const db = c.env.DB;
@@ -276,12 +279,12 @@ nodes.post('/place', async (c) => {
   const items = JSON.stringify(ask.items);
   const ids = JSON.stringify(ask.items.map((i) => i.id));
   const [open, saved] = await db.batch([
-    db.prepare("SELECT id FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND id IN (SELECT value FROM json_each(?2))").bind(user.id, ids),
+    db.prepare("SELECT n.id FROM json_each(?2) j CROSS JOIN nodes n ON n.id = j.value WHERE n.user_id = ?1 AND n.kind = 'task' AND n.status = 'active'").bind(user.id, ids),
     db
       .prepare(
-        `UPDATE nodes SET due_time = (SELECT json_extract(j.value, '$.dueTime') FROM json_each(?3) j WHERE json_extract(j.value, '$.id') = nodes.id), updated_at = ?4
-         WHERE user_id = ?1 AND id IN (SELECT json_extract(value, '$.id') FROM json_each(?3)) AND kind = 'task' AND status = 'active'
-           AND due_time IS NULL AND time_block_id IS NULL AND COALESCE(do_date, due_date) = ?2
+        `UPDATE nodes INDEXED BY idx_nodes_user_open_day SET due_time = (SELECT json_extract(j.value, '$.dueTime') FROM json_each(?3) j WHERE json_extract(j.value, '$.id') = nodes.id), updated_at = ?4
+         WHERE user_id = ?1 AND COALESCE(do_date, due_date) = ?2 AND kind = 'task' AND status = 'active' AND id IN (SELECT json_extract(value, '$.id') FROM json_each(?3))
+           AND due_time IS NULL AND time_block_id IS NULL AND repeat_json IS NULL
          RETURNING id`,
       )
       .bind(user.id, ask.date, items, nowIso()),
@@ -309,8 +312,12 @@ nodes.post('/breakdown', async (c) => {
   const ask = parseBreakdown(await c.req.json().catch(() => null));
   if ('problem' in ask) return c.json({ error: ask.problem }, 400);
   const origin = `breakdown:${ask.templateSeed}:${ask.blockSeed}`;
-  const already = (): Promise<NodeRow | null> =>
-    db.prepare("SELECT * FROM nodes WHERE user_id = ? AND kind = 'task' AND origin = ? AND do_date = ? AND status != 'archived' ORDER BY created_at ASC LIMIT 1").bind(user.id, origin, ask.date).first<NodeRow>();
+  // The same list for the same day, open or ticked (never one let go), read the way GET /today reads it: open ones through the day index,
+  // ticked ones through the done index since the day before began (a task cannot be ticked before its do date). Never every task.
+  const since = dayBounds(shiftDate(ask.date, -1), user.timezone)[0];
+  const SAME_OPEN = "SELECT * FROM nodes INDEXED BY idx_nodes_user_open_day WHERE user_id = ?1 AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) = ?3 AND do_date = ?3 AND origin = ?2";
+  const SAME_DONE = "SELECT * FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'done' AND completed_at >= ?4 AND do_date = ?3 AND origin = ?2";
+  const already = (): Promise<NodeRow | null> => db.prepare(`${SAME_OPEN} UNION ALL ${SAME_DONE} LIMIT 1`).bind(user.id, origin, ask.date, since).first<NodeRow>();
   const [blocking, project, existing, gate] = await Promise.all([loadBlocking(db, user.id, [ask.date]), getNode(db, user.id, ask.projectId), already(), taskGate(db, user.id)]);
   const answerExisting = async (row: NodeRow) => {
     const [node] = await withSubtasks(db, user.id, [toNode(row, gate)]);
@@ -336,9 +343,10 @@ nodes.post('/breakdown', async (c) => {
       .prepare(
         `INSERT INTO nodes (id, user_id, kind, parent_id, relationship, title, note, status, xp, due_date, completed_at, ready_at, sort_order, created_at, updated_at, due_time, estimate_min, added_by, do_date, life_area, time_block_id, origin)
          SELECT ?1, ?2, 'task', ?3, ?4, ?5, '', 'active', 0, NULL, NULL, ?6, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM nodes WHERE user_id = ?2 AND kind = 'task' AND relationship = ?4), ?7, ?7, NULL, ?8, NULL, ?9, ?10, ?11, ?12
-         WHERE NOT EXISTS (SELECT 1 FROM nodes WHERE user_id = ?2 AND kind = 'task' AND origin = ?12 AND do_date = ?9 AND status != 'archived')`,
+         WHERE NOT EXISTS (SELECT 1 FROM nodes INDEXED BY idx_nodes_user_open_day WHERE user_id = ?2 AND kind = 'task' AND status = 'active' AND COALESCE(do_date, due_date) = ?9 AND do_date = ?9 AND origin = ?12)
+           AND NOT EXISTS (SELECT 1 FROM nodes WHERE user_id = ?2 AND kind = 'task' AND status = 'done' AND completed_at >= ?13 AND do_date = ?9 AND origin = ?12)`,
       )
-      .bind(id, user.id, project.id, project.relationship, task.title, readyFromNow(), now, task.estimateMin, task.doDate, task.lifeArea, task.timeBlockId, task.origin),
+      .bind(id, user.id, project.id, project.relationship, task.title, readyFromNow(), now, task.estimateMin, task.doDate, task.lifeArea, task.timeBlockId, task.origin, since),
     db
       .prepare(
         `INSERT INTO subtasks (id, user_id, task_id, title, done_at, sort_order, created_at)

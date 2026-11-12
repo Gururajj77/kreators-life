@@ -396,10 +396,11 @@ export const STARTING_TEMPLATES: readonly StartingTemplate[] = [
       ['sleep', '22:00', '06:00'],
     ]),
   },
-  // Content days (2026-11-12, the founder, "for everyone"). Their one idea, to film, edit and post on different days and never post what you
-  // made that day, is the Create kind's (DAY_TYPES `create`), so they cite exactly its pages. No `sourceKind`: the kind `create` still maps to
+  // Content days (2026-11-12, the founder, "for everyone"). Their one idea, to make, edit and publish on different days and never publish
+  // what you made that day, is the Create kind's (DAY_TYPES `create`), so they cite exactly its pages, and each why says only what that
+  // line says (its words: "Write, edit and publish on different days, and never publish the day you make it"). No `sourceKind`: the kind `create` still maps to
   // Create day alone. Each content block carries a ready list of steps (`CONTENT_STEPS` in `@kreators/shared/contentDays`).
-  contentDay('editday', 'Edit day', 'Your own craft comes first. Edit today, on a day you do not film or post.', 'red', [
+  contentDay('editday', 'Edit day', 'Your own craft comes first. Edit on a different day from the one you publish.', 'red', [
     ['hygiene', '07:00', '08:00'],
     ['routine', '08:00', '09:00'],
     ['edit', '09:00', '13:00'],
@@ -412,7 +413,7 @@ export const STARTING_TEMPLATES: readonly StartingTemplate[] = [
     ['selflove', '22:00', '23:00'],
     ['sleep', '23:00', '07:00'],
   ]),
-  contentDay('shootday', 'Shoot day', 'Your own craft comes first. Film today, and leave the edit for another day.', 'amber', [
+  contentDay('shootday', 'Shoot day', 'Your own craft comes first. Make it today, and publish it on a different day.', 'amber', [
     ['hygiene', '07:00', '08:00'],
     ['plan', '08:00', '10:00'],
     ['shoot', '10:00', '13:00'],
@@ -426,7 +427,7 @@ export const STARTING_TEMPLATES: readonly StartingTemplate[] = [
     ['selflove', '22:00', '23:00'],
     ['sleep', '23:00', '07:00'],
   ]),
-  contentDay('postday', 'Plan and post day', 'Your own craft comes first. Plan what comes next, and post only what you made on another day.', 'orange', [
+  contentDay('postday', 'Plan and post day', 'Your own craft comes first. Publish today, never what you made today.', 'orange', [
     ['hygiene', '07:00', '08:00'],
     ['routine', '08:00', '09:00'],
     ['plan', '09:00', '12:00'],
