@@ -64,26 +64,53 @@ export function FriendQr({ renew = true }: { /** False where the card is a quick
 
   if (!user) return null;
   const ready = qr?.for === url ? qr.src : null;
+  // The friend code as boxes, split in two halves with a dash between (the founder's reference, 2026-11-13: a code read out box by box).
+  const half = Math.ceil(code.length / 2);
+  const halves = [code.slice(0, half), code.slice(half)].filter(Boolean);
   return (
-    <div className="flex flex-col items-center gap-sm rounded-card bg-card p-md shadow-toy-soft">
-      {/* The code is always dark on white, in both themes, since a scanner needs that; the tile around it is the white. */}
-      <div className="flex size-[232px] max-w-full items-center justify-center rounded-tile bg-white p-xs">
-        {ready ? (
-          <img src={ready} width={224} height={224} alt={`QR code for your page, @${handle}`} className="block size-[224px] max-w-full" />
-        ) : qrError ? (
-          <p className="m-0 text-subhead text-ink-fixed">{qrError}</p>
-        ) : (
-          <p role="status" className="m-0 text-subhead text-ink-fixed">
-            Drawing the code
+    <div className="flex w-full flex-col gap-md rounded-card bg-card p-md shadow-toy-soft">
+      {/* The panel across the card's whole width (the founder, 2026-11-13: "full width on desktop too"), on a quiet wash with a hairline,
+          the code raised on its white tile in the middle, then the friend code under it. */}
+      <div className="flex flex-col items-center gap-md rounded-inner border border-line px-xs py-lg sm:px-md" style={{ background: 'var(--fill-2)' }}>
+        {/* The code is always dark on white, in both themes, since a scanner needs that; the tile around it is the white. */}
+        <div className="flex size-[240px] max-w-full items-center justify-center rounded-tile bg-white p-xs shadow-toy-soft lg:size-[288px]">
+          {ready ? (
+            <img src={ready} width={224} height={224} alt={`QR code for your page, @${handle}`} className="block size-[224px] max-w-full lg:size-[272px]" />
+          ) : qrError ? (
+            <p className="m-0 text-subhead text-ink-fixed">{qrError}</p>
+          ) : (
+            <p role="status" className="m-0 text-subhead text-ink-fixed">
+              Drawing the code
+            </p>
+          )}
+        </div>
+        <div className="flex flex-col items-center gap-xs text-center">
+          <p className="m-0 text-headline [overflow-wrap:anywhere]">@{handle}</p>
+          <p className="m-0 text-footnote text-ink-soft">A scan opens your page with Add friend. You still say yes.</p>
+        </div>
+        <div className="flex flex-col items-center gap-sm">
+          <p className="m-0 text-subhead font-semibold">Friend code</p>
+          {/* Read as one code; the boxes are drawn for the eye only. Smaller under sm, so all eight fit a 360px phone on one line. */}
+          <p className="m-0 flex flex-wrap items-center justify-center gap-xs">
+            <span className="sr-only">{code}</span>
+            {halves.map((part, h) => (
+              <span key={h} aria-hidden className="contents">
+                {h > 0 && <span className="block h-[2px] w-[12px] rounded-pill bg-ink-mute" />}
+                <span className="flex gap-xs">
+                  {[...part].map((ch, i) => (
+                    <span
+                      key={i}
+                      className="flex h-[36px] w-[24px] items-center justify-center rounded-[8px] border border-line bg-card font-mono text-headline type-figure shadow-toy-soft sm:h-[44px] sm:w-[36px] sm:rounded-[12px] sm:text-title3"
+                    >
+                      {ch}
+                    </span>
+                  ))}
+                </span>
+              </span>
+            ))}
           </p>
-        )}
+        </div>
       </div>
-      <div className="text-center">
-        <p className="m-0 text-headline [overflow-wrap:anywhere]">@{handle}</p>
-        <p className="mt-xs m-0 text-caption text-ink-soft">Friend code</p>
-        <p className="m-0 font-mono text-title3 type-figure tracking-widest">{code}</p>
-      </div>
-      <p className="m-0 text-center text-caption text-ink-soft">A scan opens your page with Add friend. You still say yes.</p>
       <div className="flex w-full items-center gap-xs">
         {/* Clipboard blocked: `said` says so, and the code and username are on screen to read out. */}
         <Button variant="outline" className="flex-1" onClick={() => void copy(url)}>

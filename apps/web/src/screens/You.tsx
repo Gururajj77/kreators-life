@@ -225,7 +225,7 @@ function YouView({ data }: { data: MeResponse }) {
           My QR code
         </h2>
         <p className="mt-xs m-0 text-subhead text-ink-soft">Show it to someone you meet. They scan it and can ask to be your friend.</p>
-        <div className="mt-sm sm:max-w-[400px]">
+        <div className="mt-sm">
           <FriendQr />
         </div>
       </section>
