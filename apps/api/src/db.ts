@@ -6,6 +6,7 @@ import type { UserRow } from './env';
 import { noteStmt } from './notes.ts';
 import { CONNECT_PAY_KEY, CONNECT_PAYS } from './connectPay.ts';
 import { breakdownOfOrigin } from '@kreators/shared/contentDays';
+import { parseAiTables } from '@kreators/shared/dataTables';
 
 export interface NodeRow {
   id: string;
@@ -192,6 +193,7 @@ export function toUser(r: UserRow): User {
     appPrefs: parseAppPrefs(r.app_prefs_json ?? null),
     datePrefs: parseDatePrefs(r.date_prefs_json ?? null),
     dailyView: parseDailyView(r.daily_view_json ?? null),
+    aiTables: parseAiTables(r.ai_tables_json ?? null),
     avatarUrl: r.avatar_url ?? '',
     socials: parseSocials(r.socials_json),
     links: linksOf(r),

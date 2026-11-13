@@ -69,7 +69,7 @@ export function SummaryTiles({ summary, parts, keep, whole }: { summary: ReviewS
       if (now.overdueAtEnd !== undefined && any(now.overdueAtEnd, before.overdueAtEnd))
         tiles.push({ label: 'Overdue', value: formatCount(now.overdueAtEnd), hint: `${soFar ? 'as of today' : 'as it ended'} · ${delta(now.overdueAtEnd, before.overdueAtEnd ?? null, prev)}`, to: '/today' });
       // The strategy session's routine: the days with every morning step ticked, only for someone who keeps one.
-      if (now.routineDays !== undefined && any(now.routineDays, before.routineDays)) tiles.push({ label: 'Routine', value: `${formatCount(now.routineDays)} of ${formatCount(now.days)}`, hint: delta(now.routineDays, before.routineDays ?? null, prev), to: '/today' });
+      if (now.routineDays !== undefined && any(now.routineDays, before.routineDays)) tiles.push({ label: 'Routine', value: `${formatCount(now.routineDays)} of ${formatCount(now.days)}`, hint: delta(now.routineDays, before.routineDays ?? null, prev), to: '/today#routine' });
     }
     if (part === 'kinds') {
       // Kinds of day (2026-11-06): the period's days so far with a kind (set for the date or given by the week; the default has none),

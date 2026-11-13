@@ -112,6 +112,8 @@ export interface UserRow {
   date_prefs_json?: string | null;
   /** JSON: the sections of Daily the person hid with View (migration 0134), read through parseDailyView; NULL hides nothing. */
   daily_view_json?: string | null;
+  /** The tables AI chat may read (migration 0153), a JSON list of table keys; NULL is none. */
+  ai_tables_json?: string | null;
   fee_bps: number;
   streak: number;
   best_streak: number;

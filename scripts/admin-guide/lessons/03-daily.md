@@ -13,7 +13,7 @@ In this lesson you'll learn:
 At the top of Daily is **Show up**.
 
 1. Riya taps **I showed up today**. That is her check-in. It pays 10 xp and 10 points and keeps her streak. Every seventh day in a row pays a bonus of 50 points.
-2. Under it is her morning routine from the strategy session. She ticks each step. A day counts only when every morning step is ticked.
+2. Under it is her morning routine from the strategy session, folded shut, with today's count of steps beside it. She taps it open and ticks each step. A day counts only when every morning step is ticked.
 
 ## Step two: the small act
 

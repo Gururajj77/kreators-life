@@ -462,7 +462,7 @@ describe('All tables: the query', () => {
   });
   it('refuses unknown sorts, filters, sizes, days, views and "constructor"', () => {
     const q = parseTableQuery(tasks, { page: '-2', size: '7', sort: 'constructor', dir: 'sideways', f_constructor: 'x', f_priority: '9', f_status: 'constructor', f_remember: 'maybe', f_doDate_from: '2026-11-31', f_timeBlock: '../x', view: 'everything' });
-    expect(q).toMatchObject({ page: 1, size: 25, sort: 'createdAt', dir: 'desc', q: '', view: 'active', count: false });
+    expect(q).toMatchObject({ page: 1, size: 10, sort: 'createdAt', dir: 'desc', q: '', view: 'active', count: false });
     expect(Object.keys(q.filters)).toEqual([]);
     expect(Object.keys(q.ranges)).toEqual([]);
     expect(Object.getPrototypeOf(q.filters)).toBeNull();

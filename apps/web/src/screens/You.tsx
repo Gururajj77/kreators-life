@@ -27,6 +27,7 @@ import { evenGrid, evenTile } from '../lib/bento';
 import { lazyNamed } from '../lib/lazy';
 import { CalendarLink } from '../components/CalendarLink';
 import { PrivacyChoices } from '../components/PrivacyChoices';
+import { AiChatTables } from '../components/AiChatTables';
 import { UserRound, WandSparkles } from 'lucide-react';
 import { TagPicker } from '../components/TagPicker';
 import { Icon } from '../components/Icon';
@@ -263,6 +264,7 @@ function YouView({ data }: { data: MeResponse }) {
 
       <CalendarLink />
       <PrivacyChoices />
+      <AiChatTables />
 
       <section className="mt-lg" aria-labelledby="account-heading">
         <h2 id="account-heading" className="text-title2">

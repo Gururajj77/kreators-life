@@ -17,8 +17,9 @@ export const TEN_A_PAGE: PageSizes = { sizes: [10, 25, 50], fallback: 10 };
 export const DOOR_SIZES: PageSizes = { sizes: PAGE_SIZES, fallback: 100 };
 const sizeIn = (v: unknown, only: PageSizes = LIST_SIZES): PageSize => (only.sizes.includes(Number(v) as PageSize) ? (Number(v) as PageSize) : only.fallback);
 
-/** Every size a list can take (10, 25, 50 or 100, 25 by default): All tables (2026-11-13), whose bar always shows. */
-export const ALL_SIZES: PageSizes = { sizes: PAGE_SIZES, fallback: DEFAULT_PAGE_SIZE };
+/** Every size a list can take (10, 25, 50 or 100, 10 by default: `TABLE_DEFAULT_SIZE` in dataTables.ts, the founder, 2026-11-14): All
+ * tables (2026-11-13), whose bar always shows. A literal, since importing the registry here would load it with every paged list. */
+export const ALL_SIZES: PageSizes = { sizes: PAGE_SIZES, fallback: 10 };
 
 /**
  * The bar under a paged list: how many rows a page holds (10, 25 or 50; the guest list also 100) and the way to the

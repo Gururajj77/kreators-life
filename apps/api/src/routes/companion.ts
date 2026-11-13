@@ -24,7 +24,7 @@ import { accountOf, creditAccount, spend, usedToday } from '../credits';
 import { summaryFor } from './wellbeing';
 import { ToolError } from '../assistant/dispatch';
 import { checkArgs, TOOL_BY_NAME, type Tool } from '../assistant/tools';
-import { chat, MAX_OUT, ModelError, modelOf, tokensOf, tokensOfMessages, type Message, type ModelConfig, type ToolCall, type ToolSpec } from '../assistant/model';
+import { chat, MAX_OUT, ModelError, modelKeepsNothing, modelOf, tokensOf, tokensOfMessages, type Message, type ModelConfig, type ToolCall, type ToolSpec } from '../assistant/model';
 import { closeRun, dateFrom, fit, ioFor, markStop, openRun, parseToolArgs, runIdOf, stopAsked, toolsOn, zoneFrom, type AppFetch, type Turn } from '../assistant/run';
 
 /**
@@ -39,7 +39,7 @@ import { closeRun, dateFrom, fit, ioFor, markStop, openRun, parseToolArgs, runId
  */
 
 /** The read tools the Companion may call: the day, and for a model that keeps nothing, the trackers and the journal. */
-export const COMPANION_TOOLS: ReadonlySet<string> = new Set(['get_daily', 'get_routine', 'get_reminders', 'get_week_plan', 'get_wellbeing', 'get_focus', 'read_journal']);
+export const COMPANION_TOOLS: ReadonlySet<string> = new Set(['get_daily', 'get_routine', 'get_reminders', 'get_week_plan', 'get_wellbeing', 'get_focus', 'read_journal', 'read_table']);
 for (const name of COMPANION_TOOLS) if (TOOL_BY_NAME[name]?.risk !== 'read') console.error(`companion: ${name} is not a read tool`);
 
 const ONLY_READS = 'The Companion only reads. Bumling can change things.';
@@ -166,7 +166,7 @@ What you know about them: ${plainLine(p.plain)}.${p.well ? ` ${wellLine(p.well)}
 }
 
 /** Wellbeing reaches a model only when nothing sent is kept: the host keeps nothing, and a listed model is a private one. */
-const keepsNothing = (cfg: ModelConfig) => cfg.private && (ASSISTANT_MODEL_BY_ID[cfg.model]?.private ?? true);
+const keepsNothing = (cfg: ModelConfig) => modelKeepsNothing(cfg);
 
 /** A crisis line found in a model's reply that has not already pointed to help gets the crisis line added. */
 const withCrisis = (reply: string) => (CRISIS_RE.test(reply) && !reply.includes('14416') ? `${reply}\n\n${CRISIS_LINE}` : reply);
@@ -279,7 +279,7 @@ export function companionRoutes(appFetch: AppFetch) {
     const fixed = tokensOf(system) + tokensOf(JSON.stringify(specs));
     const messages: Message[] = [{ role: 'system', content: system }, ...fit(turns, limit.contextTokens - fixed - MAX_OUT)];
 
-    const io = ioFor(c, date, appFetch);
+    const io = ioFor(c, date, appFetch, priv);
     const runId = runIdOf(body.runId);
     await openRun(db, user.id, runId);
     const tokens = { input: 0, output: 0 };

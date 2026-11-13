@@ -25,7 +25,7 @@ import { ToolError, type Req } from '../assistant/dispatch';
 import { closeRun, dateFrom, fit, ioFor as ioWith, markStop, openRun, parseToolArgs, runIdOf, stopAsked as stopMarked, toolsOn, zoneFrom, type AppFetch } from '../assistant/run';
 import { latestExtras, latestProfile, settingsOf } from './discover';
 import { checkArgs, TOOL_BY_NAME, type Args, type Tool } from '../assistant/tools';
-import { chat, MAX_OUT, ModelError, modelOf, tokensOf, tokensOfMessages, type Message, type ToolCall, type ToolSpec } from '../assistant/model';
+import { chat, MAX_OUT, ModelError, modelKeepsNothing, modelOf, tokensOf, tokensOfMessages, type Message, type ToolCall, type ToolSpec } from '../assistant/model';
 
 /**
  * The assistant: typing to a model that does things in the app as the person. It needs a plan and credits; the
@@ -147,7 +147,7 @@ export function assistantRoutes(appFetch: AppFetch) {
   const assistant = new Hono<AppEnv>();
 
   /** A caller as this person, through the whole app: session, switches, limits and all. */
-  const ioFor = (c: Context<AppEnv>, date: string) => ioWith(c, date, appFetch);
+  const ioFor = (c: Context<AppEnv>, date: string, priv = false) => ioWith(c, date, appFetch, priv);
 
   const refuse = (c: Context<AppEnv>, paywall: AssistantPaywall, error: string, status: 402 | 429) => c.json({ error, paywall }, status);
 
@@ -191,7 +191,8 @@ export function assistantRoutes(appFetch: AppFetch) {
     const fixed = tokensOf(system) + tokensOf(JSON.stringify(specs));
     const messages: Message[] = [{ role: 'system', content: system }, ...fit(turns, limit.contextTokens - fixed - MAX_OUT)];
 
-    const io = ioFor(c, date);
+    // `read_table` hands the journal, gratitude and the body and mind tables only to a model that keeps nothing by the list too.
+    const io = ioFor(c, date, modelKeepsNothing(cfg));
     // Stop: the browser names this run, and Stop marks it. A mark that came first (a fast tap) is kept, not reset.
     const runId = runIdOf(body.runId);
     await openRun(db, user.id, runId);

@@ -32,10 +32,11 @@ export const dateFrom = (v: unknown) => (typeof v === 'string' && DATE_RE.test(v
 export const zoneFrom = (v: unknown, fallback: string) => (typeof v === 'string' && /^[A-Za-z0-9_+\-/]{1,64}$/.test(v) ? v : fallback);
 
 /** A caller as this person, through the whole app: session, switches, limits and all. */
-export const ioFor = (c: Context<AppEnv>, date: string, appFetch: AppFetch): ToolIO => ({
+export const ioFor = (c: Context<AppEnv>, date: string, appFetch: AppFetch, priv = false): ToolIO => ({
   date,
   yesterday: shiftDate(date, -1),
   call: caller((req) => Promise.resolve(appFetch(req, c.env, ctxOf(c))), tokenOf(c)),
+  private: priv,
 });
 
 /** The tools whose apps are on for this person. */

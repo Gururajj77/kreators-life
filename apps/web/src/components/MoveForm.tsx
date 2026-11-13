@@ -113,7 +113,7 @@ export function MoveForm({ kinds, onSave, initial, solid = true, saveLabel = 'Sa
           ))}
         </div>
       </div>
-      <FieldLabel label="A note" hint="Optional. Private unless you share its table with a life coach.">
+      <FieldLabel label="A note" hint="Optional. Private unless you share its table with a life coach or AI chat.">
         <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} className={FIELD} />
       </FieldLabel>
       <ErrorLine e={save.error} />

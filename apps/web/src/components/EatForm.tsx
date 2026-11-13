@@ -227,7 +227,7 @@ export function EatForm({ day, existing, previous = null, solid = false, protein
           {meals.length > 0 && (
             <Stepper label="Meals without a screen" value={e.screenFree} max={meals.length} unit={['meal', 'meals']} onChange={(screenFree) => set({ screenFree })} />
           )}
-          <FieldLabel label="A note" hint="Optional. Private unless you share its table with a life coach.">
+          <FieldLabel label="A note" hint="Optional. Private unless you share its table with a life coach or AI chat.">
             <input value={e.note} onChange={(ev) => set({ note: ev.target.value })} maxLength={500} className={FIELD} />
           </FieldLabel>
         </div>

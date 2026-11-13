@@ -66,6 +66,8 @@ import { gratitudePromptByKey, gratitudePromptsForDay, GRATITUDE_LINE_MAX, GRATI
 import { EAT_FRUIT_MAX, EAT_FULLNESS, EAT_MOMENTS, EAT_PACKAGED, EAT_VEG_MAX, EFFORT_LEVELS, mealLabel, MOVE_KIND_META, MOVE_KINDS, MOVE_MINUTES_MAX, typedMetres, type EatLog, type FitnessResponse, type MoveLog } from '@kreators/shared/fitness';
 import { shiftDate } from '../db';
 import { must, seg, ToolError, type Answer, type Req } from './dispatch';
+import { aiPrivateOnly, cellText, DATA_TABLES, dataTableByKey, visibleColumns, type TablePageResponse, type TablesListResponse } from '@kreators/shared/dataTables';
+import { localStamp } from '@kreators/shared';
 
 /**
  * The assistant's tools: the app's own actions, described for a model. Each tool calls the same routes the screens
@@ -82,6 +84,8 @@ export interface ToolIO {
   date: string;
   yesterday: string;
   call: (req: Req) => Promise<Answer>;
+  /** The model keeps nothing (a zero-retention host). `read_table` gives the journal, gratitude and the body and mind tables only to such a model. */
+  private?: boolean;
 }
 
 export interface Outcome {
@@ -432,6 +436,92 @@ export const TOOLS: readonly Tool[] = [
           eating: f.eats.filter((e) => e.date >= since).map((e) => ({ date: e.date, fasting: e.fasting, meals: e.meals.map((m) => ({ meal: m.moment, felt: mealLabel(m) })), fruit: e.fruit, veg: e.veg, packaged: e.packaged === null ? null : EAT_PACKAGED[e.packaged], fullness: e.fullness === null ? null : EAT_FULLNESS[e.fullness], screenFree: e.screenFree, score: e.dayScore, note: e.note })),
         },
       };
+    },
+  },
+  {
+    // All tables for AI chat (2026-11-14, the founder: "give one toggle for ai chat access"): read only, and only the tables the person opened
+    // to AI chat; the route checks that too (`X-Kreators-Via: assistant`). A table only a model that keeps nothing may read (the journal,
+    // gratitude, every Body and mind table) is refused here to any other model, so a tool offered to every model never hands one of them over.
+    name: 'read_table',
+    risk: 'read',
+    needs: ['tables'],
+    refresh: [],
+    title: 'Read one of your tables',
+    description:
+      "One of the person's own tables from All tables (call it first with no table to see which are open, and their keys), read only, and only a table they opened to AI chat (Show to AI chat at the top of the table, or under AI chat on their Profile tab). With table: a page of rows (size 10 or 25, 10 by default; empty cells left out; times in their own zone), the total that match and whether more follow, narrowed by words in q, sorted by a sortable column's key if asked, a later page with page. If a table is not open to you, say they can switch on Show to AI chat at the top of it; never ask them to paste it in. The journal, gratitude and the body and mind tables are read only by a model that keeps nothing. Read the journal or gratitude only when they ask about it, and quote it only when they ask.",
+    params: {
+      type: 'object',
+      properties: {
+        // The keys only, no names beside them: the spec rides on every message, and a call with no table lists the open ones by name.
+        table: { type: 'string', enum: DATA_TABLES.map((t) => t.key) },
+        q: { type: 'string', maxLength: 80 },
+        sort: { type: 'string', maxLength: 40 },
+        dir: { type: 'string', enum: ['asc', 'desc'] },
+        size: { type: 'integer', enum: [10, 25] },
+        page: { type: 'integer', minimum: 1, maximum: 200 },
+      },
+    },
+    run: async (a, io) => {
+      const key = str(a.table);
+      if (!key) {
+        const list = must(await io.call({ method: 'GET', path: '/tables' })) as TablesListResponse;
+        const open = list.groups.flatMap((g) => g.tables.map((t) => ({ table: t.key, name: t.name, group: g.name, about: t.blurb, privateOnly: aiPrivateOnly(dataTableByKey[t.key]!) })));
+        const shut = open.filter((t) => t.privateOnly && !io.private).map((t) => t.name);
+        return {
+          data: {
+            tables: open.filter((t) => io.private || !t.privateOnly).map(({ table, name, group, about }) => ({ table, name, group, about })),
+            ...(shut.length ? { onlyForAModelThatKeepsNothing: shut } : {}),
+            ...(open.length ? {} : { why: 'They have not opened any table to AI chat. Each one has Show to AI chat at the top of it in All tables.' }),
+          },
+        };
+      }
+      const table = dataTableByKey[key];
+      if (!table) throw new ToolError('There is no table by that name.');
+      if (aiPrivateOnly(table) && !io.private) throw new ToolError(`This model may keep what it reads, so it cannot read ${table.name}. Pick a model that keeps nothing to read it.`);
+      const qs = new URLSearchParams({ size: a.size === 25 ? '25' : '10', count: '1' });
+      if (typeof a.page === 'number') qs.set('page', String(a.page));
+      if (str(a.q)) qs.set('q', str(a.q));
+      if (str(a.sort)) qs.set('sort', str(a.sort));
+      if (str(a.dir)) qs.set('dir', str(a.dir));
+      const p = must(await io.call({ method: 'GET', path: `/tables/${seg(table.key)}?${qs.toString()}` })) as TablePageResponse;
+      const cols = visibleColumns(table, 'owner').filter((col) => p.columns.includes(col.key));
+      const ctx = { options: p.options, currency: p.subject.currency };
+      const zone = p.subject.zone;
+      // A stamp is shown in the person's own zone (a journal entry at 1:30am IST is that day, never the UTC day before), as the screen shows it.
+      const text = (col: (typeof cols)[number], cells: TablePageResponse['rows'][number]['cells']) => {
+        const v = cells[col.key];
+        if (col.kind === 'datetime' && typeof v === 'string') {
+          const at = localStamp(v, zone);
+          if (at) return `${at.day} ${String(Math.floor(at.minutes / 60)).padStart(2, '0')}:${String(at.minutes % 60).padStart(2, '0')}`;
+        }
+        return cellText(col, cells, ctx).slice(0, 200);
+      };
+      // Empty cells are left out, so a wide table's page stays short.
+      const rows = p.rows.map((r) => Object.fromEntries(cols.map((col) => [col.label, text(col, r.cells)]).filter(([, v]) => v !== '')));
+      const data = {
+        table: table.name,
+        zone,
+        sortable: cols.filter((col) => col.sortable).map((col) => ({ key: col.key, label: col.label })),
+        rows,
+        page: p.page.page,
+        more: p.page.more,
+        total: p.total ?? null,
+      };
+      // Held under the smaller of the two chats' caps (the Companion reads 8,000 characters): the last rows go first, and it says exactly which
+      // rows were left out and where they are at size 10, since paging on at the same size would skip them for good (the review, 2026-11-14).
+      let cut = 0;
+      while (JSON.stringify(data).length > 7_000 && data.rows.length > 1) {
+        data.rows.pop();
+        cut += 1;
+      }
+      if (!cut) return { data };
+      const size = p.page.size;
+      const first = (p.page.page - 1) * size + data.rows.length + 1;
+      const last = (p.page.page - 1) * size + data.rows.length + cut;
+      const from = Math.ceil(first / 10);
+      const to = Math.ceil(last / 10);
+      const where = size === 10 ? 'Narrow it with q to read them.' : `Ask with size 10 and page ${from === to ? from : `${from} to ${to}`} to read them.`;
+      return { data: { ...data, sent: data.rows.length, cut: `Rows ${first} to ${last} of the list did not fit in this answer. ${where}` } };
     },
   },
   {

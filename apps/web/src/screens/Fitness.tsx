@@ -108,7 +108,7 @@ export function Fitness() {
       <header className="pt-lg">
         <BackLink to="/apps">Apps</BackLink>
         <h1 className="text-large-title">Fitness</h1>
-        <p className="mt-xs m-0 text-subhead text-ink-soft">Movement and eating, in a few taps. Only you see it, unless you share it with a life coach.</p>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">Movement and eating, in a few taps. Only you see it, unless you share it with a life coach or AI chat.</p>
       </header>
 
       {d && (

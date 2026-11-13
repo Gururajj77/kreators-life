@@ -5286,6 +5286,22 @@ li.sort-lifted {
     display: none;
   }
 }
+/* A table's Show to my coach and Show to AI chat (2026-11-14, the founder: "hero section button position on left on large screens and below
+   helper text on mobile", then "one toggle for ai chat access just next to coach button"): from the tablet up they are the cover's action,
+   side by side left of the helper line with one short line under them; on a phone they take a line of their own, which the row's
+   wrap-reverse puts under the helper, one switch under the other at the full width. */
+@media (max-width: 767.98px), (max-height: 479.98px) {
+  .app-cover-actions:has(> .cover-share-switches) {
+    flex-basis: 100%;
+  }
+  .cover-share-switches {
+    flex: 1 1 auto;
+  }
+  .cover-share-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
 /* On a phone the words of an app's header read from the left (the founder, 2026-11-08: "move all hero text inside apps to left
    alignment on mobile screens"): a cover's title and helper, and a plain header's title beside its back button and the lines under it.
    The laptop keeps them at the right. The cover's picture already fades out toward the left on a phone, so the words sit on less of it. */

@@ -73,6 +73,8 @@ export interface User {
   /** The sections of Daily the person hid with View (migration 0134, `parseDailyView`); none unless they hid some. GET /me always sends it
    * (`toUser`); optional only so an answer from before it still reads, as `user.dailyView ?? DAILY_VIEW_DEFAULT`. */
   dailyView?: DailyView;
+  /** The tables AI chat may read (All tables, `users.ai_tables_json`, `parseAiTables` in dataTables.ts); optional so an older answer still reads. */
+  aiTables?: string[];
   avatarUrl: string;
   socials: Socials;
   publicSettings: PublicSettings;

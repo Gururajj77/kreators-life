@@ -9,6 +9,7 @@ import { ErrorLine } from '../components/ErrorLine';
 import { Icon } from '../components/Icon';
 import { Screen } from '../components/Screen';
 import { SkeletonList } from '../components/Skeleton';
+import { useTableCoaches } from '../components/TableSwitches';
 import { ApiError } from '../lib/api';
 import { useMe } from '../lib/queries';
 import { useSession } from '../lib/store';
@@ -109,7 +110,7 @@ function TablesList({ subject }: { subject: TablesSubject }) {
       {q.isError && !notHere && <ErrorLine e={q.error} className="mt-lg" />}
       {subject.view === 'coach' && q.data && groups.length === 0 && (
         <p className="mt-lg m-0 text-body">
-          {name || 'Your student'} has not shared a table with you yet. They choose which ones under Your life coach on their Profile tab.
+          {name || 'Your student'} has not shared a table with you yet. They choose with Show to my coach at the top of each table, or under Your life coach on their Profile tab.
         </p>
       )}
       {groups.map((g) => (
@@ -121,6 +122,8 @@ function TablesList({ subject }: { subject: TablesSubject }) {
 
 /** The person's own tables (`/tables`). */
 export function Tables() {
+  // Reads the person's coaches ahead, so a table's Show to my coach is in its cover from the first paint, never added after it.
+  useTableCoaches(true);
   return <TablesList subject={{ view: 'owner' }} />;
 }
 

@@ -623,6 +623,12 @@ myCoach.patch('/links/:id/share', async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
   // All tables (2026-11-13): the whole tables this coach may open, read only, each the student's own yes. Known keys only; the list replaces the old one.
   if (body.tables !== undefined && (!Array.isArray(body.tables) || body.tables.length > 100)) return c.json({ error: 'Send the tables as a list of their names.' }, 400);
+  // One table switched from its own page (2026-11-14, the founder: "in each table give toggle to show it to coach or not"): `{ table, on }`,
+  // added to or taken from the list as it stands inside the guarded write below, so it never puts back a table another tab or Profile changed.
+  const one = body.table !== undefined || body.on !== undefined;
+  if (one && (typeof body.table !== 'string' || typeof body.on !== 'boolean' || body.tables !== undefined || sharedTables([body.table]).length !== 1)) {
+    return c.json({ error: 'Name one table and whether your coach may see it.' }, 400);
+  }
   // A part switch and a table switch can be saved at the same moment (MyCoach's six beside the tables', or two tabs): each write is guarded on
   // the share it read, so the later one never puts back what the earlier one changed; one that lost the race reads again and applies only its
   // own change, once. Two misses answer 409 and the screen reads the link again.
@@ -634,6 +640,7 @@ myCoach.patch('/links/:id/share', async (c) => {
     const after = { ...before, tables: sharedTables(before.tables) };
     for (const k of COACH_SHARE_PARTS) if (typeof body[k] === 'boolean') after[k] = body[k] as boolean;
     if (body.tables !== undefined) after.tables = sharedTables(body.tables);
+    if (one) after.tables = sharedTables(body.on ? [...after.tables, body.table] : after.tables.filter((k) => k !== body.table));
     const said = [shareChange(before, after), tablesChange(sharedTables(before.tables), after.tables)].filter(Boolean).join('; ');
     if (!said) return c.json({ link: toLink(link) });
     const res = await db.prepare('UPDATE coach_links SET share_json = ? WHERE id = ? AND share_json = ?').bind(JSON.stringify(after), link.id, link.share_json).run();

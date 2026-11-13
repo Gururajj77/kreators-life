@@ -38,7 +38,7 @@ Typing a line, like "move my edit task to Friday", needs a plan.
 4. Removing something, or settling money owed, waits for you to tap **Confirm**.
 5. While it works, the send arrow turns into a **Stop** square. What was already done stays, each with its Undo.
 
-It can also log movement, your eating check-in and the day's gratitude. It never reads your supplements.
+It can also log movement, your eating check-in and the day's gratitude. It reads your supplements only if you switch their table on with **Show to AI chat**, and then only on a model that keeps nothing.
 
 Each typed reply says **Answered by** and the model's name, so you always know it came from a model and not a built-in line.
 
@@ -47,6 +47,8 @@ Without a plan, you can still type a question about a word, like "what is a laye
 ## Privacy and the model
 
 When a model is connected, a model picker shows under the panel's header. Some models keep nothing you send. Only with one of those can the assistant read your journal and your trackers, and it reads the journal only when you ask about it. The panel tells you under the picker what the chosen model may read.
+
+It can also read a whole table from **All tables**, but only one you open to it. Switch on **Show to AI chat** at the top of the table, or under **AI chat** on the Profile tab. Each one starts off, and the assistant and the Companion can read it but never change it.
 
 If you took the Discover quiz, you choose whether the assistant learns from it. Find **Let your results help** on your Discover results.
 

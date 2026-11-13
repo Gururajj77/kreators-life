@@ -297,7 +297,7 @@ export function briefFor(f: BriefFacts): { signals: BriefLine[]; actions: BriefL
   if (f.stressAvg !== null && f.stressAvg >= 4) sig(85, 'stress', 'watch', 'Stress has been high most of this week.', on('stress') ? '/stress' : null);
   if (f.notToDoSlipped > 0) sig(55, 'slipped', 'watch', `You slipped on ${plural(f.notToDoSlipped, 'not to do item')} yesterday. Today is a fresh start.`, '/today#ntd-heading');
   if (f.routineWeek !== null && f.contractDays !== null)
-    sig(f.routineWeek < f.contractDays ? 58 : 35, 'routine', f.routineWeek < f.contractDays ? 'watch' : 'good', `Routine: ${f.routineWeek} of the last 7 days, against a deal of ${f.contractDays}.`, '/today');
+    sig(f.routineWeek < f.contractDays ? 58 : 35, 'routine', f.routineWeek < f.contractDays ? 'watch' : 'good', `Routine: ${f.routineWeek} of the last 7 days, against a deal of ${f.contractDays}.`, '/today#routine');
   if (f.nextEvent) sig(68, 'event', 'neutral', `${f.nextEvent.title} is ${f.nextEvent.when}.`, f.nextEvent.to);
   if (f.coachNotes > 0) sig(72, 'coach-note', 'neutral', f.coachNotes === 1 ? 'Your life coach left you a note.' : `Your life coach left you ${f.coachNotes} notes.`, on('coaching') ? '/coaching' : '/you#coach');
   if (f.coachAsks > 0) sig(74, 'coach-ask', 'neutral', f.coachAsks === 1 ? 'A life coach asked to work with you.' : `${f.coachAsks} life coaches asked to work with you.`, '/you#coach');

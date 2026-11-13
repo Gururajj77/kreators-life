@@ -15,6 +15,7 @@ import {
   type RelationshipKey,
   type RelationshipState,
 } from '@kreators/shared';
+import { knownTableKeys, parseAiTables } from '@kreators/shared/dataTables';
 import type { AppEnv } from '../env';
 import { badgeState, badgesFor, DELETED_NAME_PROBLEM, keptStats, getUser, honorKeys, httpUrl, isDeletedName, LINK_PROBLEM, newFriendCode, newId, nowIso, objectBody, parseModules, randomCode, str, toUser, publicOf } from '../db';
 import { resolveAccess } from '../access';
@@ -275,6 +276,32 @@ me.delete('/portfolio/:id', async (c) => {
 });
 
 // Everything we hold about you, as one JSON file.
+// AI chat's tables (2026-11-14, the founder: "give one toggle for ai chat access just next to coach button too and even in profile section"):
+// one table switched with { table, on } (Show to AI chat at the top of a table, or one switch under AI chat on the Profile tab), or the whole
+// list with { tables } (Share all, Share none). One table is applied to the list as it stands, inside a write guarded on the list it read, so
+// a tap in one place never puts back a table switched in another; a lost race reads again once, then answers 409.
+me.patch('/ai-tables', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  // A body that is not an object (null, a list) reads as empty and gets the plain 400 below, never a 500.
+  const body = await objectBody(c);
+  const one = body.table !== undefined || body.on !== undefined;
+  const bad = one
+    ? typeof body.table !== 'string' || typeof body.on !== 'boolean' || body.tables !== undefined || knownTableKeys([body.table]).length !== 1
+    : !Array.isArray(body.tables) || body.tables.length > 100;
+  if (bad) return c.json({ error: 'Name one table and whether AI chat may read it, or send the list of tables.' }, 400);
+  let stored = user.ai_tables_json ?? null;
+  for (let tries = 0; tries < 2; tries++) {
+    if (tries) stored = (await db.prepare('SELECT ai_tables_json FROM users WHERE id = ?').bind(user.id).first<{ ai_tables_json: string | null }>())?.ai_tables_json ?? null;
+    const before = parseAiTables(stored);
+    const after = one ? knownTableKeys(body.on ? [...before, body.table] : before.filter((k) => k !== body.table)) : knownTableKeys(body.tables);
+    if (after.join() === before.join()) return c.json({ aiTables: after });
+    const res = await db.prepare('UPDATE users SET ai_tables_json = ? WHERE id = ? AND ai_tables_json IS ?').bind(after.length ? JSON.stringify(after) : null, user.id, stored).run();
+    if ((res.meta.changes ?? 0) === 1) return c.json({ aiTables: after });
+  }
+  return c.json({ error: 'That changed somewhere else just now. Try again.' }, 409);
+});
+
 me.get('/export', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');

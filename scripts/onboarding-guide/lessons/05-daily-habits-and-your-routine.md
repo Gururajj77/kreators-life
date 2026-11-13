@@ -71,7 +71,7 @@ Water pays no xp. It is there to help you keep one simple goal. The app does not
 
 ## Your routine under Show up
 
-If you did the strategy session, **Your routine** sits right under Show up.
+If you did the strategy session, **Your routine** sits right under Show up. It starts folded, with today's count of morning steps beside it. Tap it to open it.
 
 - The dots show this week, and the line says how many days you kept against your deal.
 - Pick **Normal day** or **Exceptional day**, for days that do not follow the usual shape.

@@ -534,8 +534,9 @@ export function moveLine(m: Pick<MoveLog, 'kind' | 'minutes' | 'metres'>): strin
 // minerals, nootropics, those can also be a toggle in daily"). The person's own list, off until they switch on Track supplements (that
 // switch is the consent), and on Daily only when they also switch on Show on Daily. The app never suggests one, never gives an amount,
 // never checks a mix with medicines and never says what any supplement does: the only words about one are what the person typed. It
-// pays nothing, counts toward no streak or badge, and never reaches Emerging, the brief, the leaderboard or the assistant, nor a coach
-// but as its own tables (Supplements, Supplement days) when the person switches them on for that coach under All tables (2026-11-13).
+// pays nothing, counts toward no streak or badge, and never reaches Emerging, the brief or the leaderboard, nor a coach or AI chat but as
+// its own tables (Supplements, Supplement days) when the person switches them on for that coach under All tables (2026-11-13) or with Show
+// to AI chat (2026-11-14, read only by `read_table`, and only on a model that keeps nothing).
 // ---------------------------------------------------------------------------
 
 export const SUPPLEMENT_KINDS = ['vitamin', 'mineral', 'protein', 'omega3', 'herbal', 'probiotic', 'nootropic', 'other'] as const;
@@ -685,7 +686,7 @@ export function pastSupplementNote(id: string, today: string): boolean {
 }
 
 /** The caution lines, word for word from the design brief. Plain words, no claim, never about what a supplement does. */
-export const SUPPLEMENT_PRIVATE_LINE = 'Your list stays private. Only you see it, unless you share its table with a life coach.';
+export const SUPPLEMENT_PRIVATE_LINE = 'Your list stays private. Only you see it, unless you share its table with a life coach or AI chat.';
 export const SUPPLEMENT_CAUTION = 'The app does not check amounts or mixes. Ask a doctor or pharmacist before you start, stop or change one, more so if you take medicines or are pregnant.';
 export const SUPPLEMENT_BEFORE: readonly string[] = [
   'Natural does not mean safe.',

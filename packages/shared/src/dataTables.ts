@@ -45,7 +45,7 @@
 //
 // <query> is read by `parseTableQuery` and written by `tableQueryString` (the screen's address uses the same names):
 //   page=<n>        1 and up (default 1)
-//   size=<n>        10 | 25 | 50 | 100 (default 25)
+//   size=<n>        10 | 25 | 50 | 100 (default 10, the founder, 2026-11-14: "keep all tables at 10 shown by default")
 //   sort=<column>   a sortable column key (default the table's `defaultSort`)
 //   dir=asc|desc    (default the table's default direction; a new sort column starts at its own default)
 //   q=<words>       search over the searchable columns (trimmed, at most SEARCH_MAX characters)
@@ -443,7 +443,7 @@ export const BULK_MAX = 100;
 /** Characters of search. */
 export const SEARCH_MAX = 80;
 export const TABLE_PAGE_SIZES: readonly PageSize[] = PAGE_SIZES;
-export const TABLE_DEFAULT_SIZE: PageSize = 25;
+export const TABLE_DEFAULT_SIZE: PageSize = 10;
 /** Ids from a person's own list (a time block, a template, an item): a filter value must look like one. */
 export const TABLE_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
 const KEY_RE = /^[a-z][A-Za-z0-9]{0,39}$/;
@@ -1917,6 +1917,27 @@ export function knownTableKeys(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   const asked = new Set(raw.filter((v): v is string => typeof v === 'string'));
   return DATA_TABLE_KEYS.filter((k) => asked.has(k));
+}
+
+/**
+ * AI chat's tables (2026-11-14, the founder: "give one toggle for ai chat access just next to coach button too and even in profile section"):
+ * the tables a person opened to the assistant and the Companion, kept as `users.ai_tables_json` (migration 0153), each off until they switch it
+ * on with Show to AI chat at the top of the table or under AI chat on the Profile tab. Read only, through the assistant's `read_table` tool,
+ * which the tables route also checks (`X-Kreators-Via: assistant` reads only these, and never a download, an edit or an archive).
+ * The stored list read back: known keys only, each once, in registry order; anything else reads as none.
+ */
+export function parseAiTables(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    return knownTableKeys(JSON.parse(raw));
+  } catch {
+    return [];
+  }
+}
+
+/** A table AI chat reads only through a model that keeps nothing: the journal, gratitude and every Body and mind table, the ones an admin never sees. */
+export function aiPrivateOnly(table: DataTable): boolean {
+  return Boolean(table.adminHidden);
 }
 
 /** May this viewer open this table? `shared` is the coach's list from the student's link. */

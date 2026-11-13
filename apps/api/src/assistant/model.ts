@@ -50,6 +50,16 @@ export function modelOf(env: Env, picked?: unknown): ModelConfig | null {
   return { baseUrl, apiKey: env.ASSISTANT_API_KEY, model, price, openRouter, zdr, private: openRouter ? zdr : true, thinks: Boolean(listed?.thinks) };
 }
 
+/**
+ * A model that keeps nothing, by the host's promise and by the list: a host other than OpenRouter counts as private for the model's own reads
+ * (`private`), but a model the list marks as keeping data never does. The Companion's rule for mood and sleep, and `read_table`'s for the
+ * journal, gratitude and the body and mind tables (2026-11-14; the review found `cfg.private` alone let a listed data-keeping model read them
+ * on any other host).
+ */
+export function modelKeepsNothing(cfg: { private: boolean; model: string }): boolean {
+  return cfg.private && (ASSISTANT_MODEL_BY_ID[cfg.model]?.private ?? true);
+}
+
 export interface ToolCall {
   id: string;
   type: 'function';

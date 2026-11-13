@@ -2453,6 +2453,22 @@ section('Assistant and credits');
     const offered = (mockModel.last?.tools ?? []).map((t) => t.function.name);
     check('the model is offered only the tools for apps that are on', offered.includes('complete_task') && offered.includes('write_journal') && !offered.includes('add_money'), offered);
     check('every request asks the provider to keep nothing (zero retention)', mockModel.last?.provider === undefined || mockModel.last?.provider?.data_collection === 'deny', mockModel.last?.provider);
+    // read_table (2026-11-14): only a table switched on for AI chat, as words, and the journal, gratitude and body and mind tables only for a
+    // model that keeps nothing.
+    const { ASSISTANT_MODELS: AI_MODELS } = await import('../../packages/shared/src/index.ts');
+    const keepsData = AI_MODELS.find((m) => !m.private);
+    const keepsNothing = AI_MODELS.find((m) => m.private);
+    const sayWith = (text, model) => api('POST', '/assistant', { messages: [{ role: 'user', text }], model, context: { path: '/tables', date: today, timeZone: 'UTC' } }, E.token);
+    const shutTable = await sayWith(DO({ name: 'read_table', args: { table: 'tasks' } }), keepsData?.id);
+    check('read_table refuses a table not switched on for AI chat', shutTable.status === 200 && shutTable.json.calls?.[0]?.tool === 'read_table' && shutTable.json.calls[0].ok === false, shutTable.json.calls);
+    await api('PATCH', '/me/ai-tables', { tables: ['tasks', 'mood'] }, E.token);
+    const listed = await sayWith(DO({ name: 'read_table' }), keepsData?.id);
+    const readTasks = await sayWith(DO({ name: 'read_table', args: { table: 'tasks' } }), keepsData?.id);
+    check('read_table lists and reads a table switched on for AI chat, and changes nothing', listed.json.calls?.[0]?.ok === true && readTasks.status === 200 && readTasks.json.calls?.[0]?.ok === true && readTasks.json.receipts?.length === 0, [listed.json.calls, readTasks.json.calls]);
+    const moodKeeps = await sayWith(DO({ name: 'read_table', args: { table: 'mood' } }), keepsData?.id);
+    const moodNothing = keepsNothing ? await sayWith(DO({ name: 'read_table', args: { table: 'mood' } }), keepsNothing.id) : null;
+    check('read_table hands a body and mind table only to a model that keeps nothing', moodKeeps.json.calls?.[0]?.ok === false && (!moodNothing || moodNothing.json.calls?.[0]?.ok === true), [moodKeeps.json.calls, moodNothing?.json.calls]);
+    await api('PATCH', '/me/ai-tables', { tables: [] }, E.token);
     const before = (await api('GET', '/credits', undefined, E.token)).json.account;
     const tick = await say(DO({ name: 'complete_task', args: { taskId: mine[0]?.id } }));
     const receipt = tick.json.receipts?.[0];
@@ -2569,7 +2585,8 @@ section('Companion');
     check('with a plan the picked model answers, and the line keeps its id', hello.status === 200 && hello.json.messages?.[1]?.body === 'The mock heard you.' && hello.json.model === open.id && hello.json.messages[1].model === open.id, hello.json);
     check('the model is told it is the Companion, not Bumling', sys.includes('Companion') && !sys.includes('Bumling, the guide'), sys.slice(0, 120));
     check('a model that may keep data never gets mood, sleep or the wellbeing score', !/mood today|sleep last night|wellbeing \d/.test(sys), sys);
-    check('and is offered only the day’s read tools, never the journal or trackers', offered.length > 0 && offered.every((n) => ['get_daily', 'get_routine', 'get_reminders', 'get_week_plan'].includes(n)), offered);
+    // read_table (2026-11-14) is offered to every model: it reads only tables switched on with Show to AI chat, and refuses the journal, gratitude and the body and mind tables to a model that may keep data.
+    check('and is offered only the day’s read tools and the tables switched on for AI chat, never the journal or trackers', offered.length > 0 && offered.every((n) => ['get_daily', 'get_routine', 'get_reminders', 'get_week_plan', 'read_table'].includes(n)), offered);
     check('no temperature is sent', mockModel.last && !('temperature' in mockModel.last), mockModel.last?.temperature);
     const sent = JSON.stringify((mockModel.last?.messages ?? []).slice(1));
     check('nor an earlier built-in reply written from the sleep log (7.5 hours) or the score', !/7\.5 hours|wellbeing score/i.test(sent) && /I feel tired/.test(sent), sent.slice(0, 300));
@@ -9729,7 +9746,7 @@ section('All tables');
   const p0 = await tb(`/tasks?q=${q}&f_priority=0&count=1`, O.token);
   check('tables: a filter cuts the rows and the count', p0.status === 200 && p0.json.total === 1 && p0.json.rows?.[0]?.id === made[0]?.id, [p0.json.total, p0.json.rows?.map((r) => r.cells.title)]);
   const junk = await tb(`/tasks?q=${q}&f_priority=9&f_constructor=1&sort=constructor&size=7&count=1`, O.token);
-  check('tables: a value, a column or a size that is not the table’s is dropped, never an error', junk.status === 200 && junk.json.total === 12 && junk.json.query?.size === 25 && junk.json.query?.sort === 'createdAt', [junk.status, junk.json.total, junk.json.query?.sort]);
+  check('tables: a value, a column or a size that is not the table’s is dropped, never an error', junk.status === 200 && junk.json.total === 12 && junk.json.query?.size === 10 && junk.json.query?.sort === 'createdAt', [junk.status, junk.json.total, junk.json.query?.sort]);
   const wild = await tb(`/tasks?q=${encodeURIComponent('%_%')}&count=1`, O.token);
   check('tables: a search for % and _ matches them as letters', wild.status === 200 && wild.json.total === 0, wild.json.total);
 
@@ -9840,6 +9857,67 @@ section('All tables');
   ]);
   const raced = (await api('PATCH', `/me/coach/links/${linkId}/share`, {}, O.token)).json.link?.share;
   check('tables: a part and a table switched at once are both kept', raced?.routine === false && JSON.stringify(raced?.tables) === '["tasks","xpHistory","journal","friends"]', raced);
+  // One table switched from its own page (the cover's Show to my coach, 2026-11-14): added to or taken from the list as it stands.
+  const sameSet = (got, want) => JSON.stringify([...(got ?? [])].sort()) === JSON.stringify([...want].sort());
+  const oneOn = await api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'mood', on: true }, O.token);
+  check('tables: one table switched on from its page joins the list, the rest kept', oneOn.status === 200 && sameSet(oneOn.json.link?.share?.tables, ['tasks', 'xpHistory', 'journal', 'friends', 'mood']) && oneOn.json.link?.share?.routine === false, oneOn.json.link?.share);
+  check('tables: and the coach can open it at once', (await tb(`/coach/${O.user.id}/mood`, K.token)).status === 200, '');
+  await Promise.all([
+    api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'sleep', on: true }, O.token),
+    api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'stress', on: true }, O.token),
+  ]);
+  const twoPages = (await api('PATCH', `/me/coach/links/${linkId}/share`, {}, O.token)).json.link?.share;
+  check('tables: two tables switched on from two pages at once are both kept', sameSet(twoPages?.tables, ['tasks', 'xpHistory', 'journal', 'friends', 'mood', 'sleep', 'stress']), twoPages);
+  const oneOff = await api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'mood', on: false }, O.token);
+  check('tables: one table switched off from its page leaves the list, the rest kept, and is shut at once', oneOff.status === 200 && sameSet(oneOff.json.link?.share?.tables, ['tasks', 'xpHistory', 'journal', 'friends', 'sleep', 'stress']) && (await tb(`/coach/${O.user.id}/mood`, K.token)).status === 404, oneOff.json.link?.share);
+  const badOne = await Promise.all([
+    api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'nonsense', on: true }, O.token),
+    api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'constructor', on: true }, O.token),
+    api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'mood' }, O.token),
+    api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'mood', on: 'yes' }, O.token),
+    api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'mood', on: true, tables: [] }, O.token),
+    api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'mood', on: true }, K.token),
+  ]);
+  check('tables: a table switch names one known table and on or off, from the student only', badOne.slice(0, 5).every((r) => r.status === 400) && badOne[5].status === 404, badOne.map((r) => r.status));
+  await api('PATCH', `/me/coach/links/${linkId}/share`, { tables: ['tasks', 'journal', 'xpHistory', 'friends'] }, O.token);
+  // AI chat's tables (2026-11-14): off until switched on; the assistant's calls (marked X-Kreators-Via: assistant) read only those, never more.
+  const AI = { 'X-Kreators-Via': 'assistant' };
+  const aiNone = await api('GET', '/tables', undefined, O.token, AI);
+  check('tables: AI chat sees no table until one is switched on', aiNone.status === 200 && (aiNone.json.groups ?? []).length === 0 && (await api('GET', `/tables/tasks?q=${q}`, undefined, O.token, AI)).status === 403, aiNone.json.groups);
+  const [aiTasks, aiMood] = await Promise.all([
+    api('PATCH', '/me/ai-tables', { table: 'tasks', on: true }, O.token),
+    api('PATCH', '/me/ai-tables', { table: 'mood', on: true }, O.token),
+  ]);
+  const aiMe = await me(O.token);
+  check('tables: two tables switched on for AI chat at once are both kept, and /me says so', aiTasks.status === 200 && aiMood.status === 200 && sameSet(aiMe.aiTables, ['tasks', 'mood']), [aiTasks.status, aiMood.status, aiMe.aiTables]);
+  const aiList = await api('GET', '/tables', undefined, O.token, AI);
+  const aiKeys = (aiList.json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
+  check('tables: AI chat lists only the tables switched on', sameSet(aiKeys, ['tasks', 'mood']), aiKeys);
+  const aiPage = await api('GET', `/tables/tasks?q=${q}&count=1`, undefined, O.token, AI);
+  const aiShut = await api('GET', `/tables/journal`, undefined, O.token, AI);
+  check('tables: AI chat reads a switched-on table, and a table not switched on is refused in words naming the switch', aiPage.status === 200 && aiPage.json.total === 11 && aiShut.status === 403 && /Show to AI chat/.test(aiShut.json.error ?? ''), [aiPage.status, aiPage.json.total, aiShut.status]);
+  const aiNever = await Promise.all([
+    fetch(`${API}/tables/tasks/csv?q=${q}`, { headers: { authorization: `Bearer ${O.token}`, 'CF-Connecting-IP': ADDRESS, ...AI } }),
+    api('POST', '/tables/tasks/edit', { id: made[5]?.id, column: 'title', value: 'AI was here', today }, O.token, AI),
+    api('POST', '/tables/tasks/bulk', { action: 'archive', ids: [made[5]?.id] }, O.token, AI),
+    api('GET', `/tables/coach/${O.user.id}`, undefined, O.token, AI),
+  ]);
+  check('tables: AI chat never downloads, edits, archives or opens another view', aiNever.every((r) => r.status === 403), aiNever.map((r) => r.status));
+  check('tables: and the person’s own reads are untouched by AI chat’s switches', (await tb(`/journal`, O.token)).status === 200, '');
+  const aiBad = await Promise.all([
+    api('PATCH', '/me/ai-tables', { table: 'nonsense', on: true }, O.token),
+    api('PATCH', '/me/ai-tables', { table: 'tasks' }, O.token),
+    api('PATCH', '/me/ai-tables', { table: 'tasks', on: true, tables: [] }, O.token),
+    api('PATCH', '/me/ai-tables', { tables: 'tasks' }, O.token),
+  ]);
+  check('tables: an AI chat switch names one known table and on or off, or a list', aiBad.every((r) => r.status === 400), aiBad.map((r) => r.status));
+  const aiOff = await api('PATCH', '/me/ai-tables', { table: 'mood', on: false }, O.token);
+  check('tables: a table switched off for AI chat is shut at once', aiOff.status === 200 && sameSet(aiOff.json.aiTables, ['tasks']) && (await api('GET', '/tables/mood', undefined, O.token, AI)).status === 403, aiOff.json);
+  const aiAll = await api('PATCH', '/me/ai-tables', { tables: ['journal', 'nonsense', 'tasks', 'journal'] }, O.token);
+  check('tables: the whole list keeps known tables only, once each', aiAll.status === 200 && sameSet(aiAll.json.aiTables, ['tasks', 'journal']), aiAll.json);
+  const aiExport = await api('GET', '/me/export', undefined, O.token);
+  check('tables: AI chat’s tables come with the export', sameSet(aiExport.json.user?.aiTables, ['tasks', 'journal']), aiExport.json.user?.aiTables);
+  await api('PATCH', '/me/ai-tables', { tables: [] }, O.token);
   // A post's xp lands as it is written: a coach never reads a social xp, which would say who wrote an anonymous post.
   await api('PATCH', '/me/modules', { key: 'community', on: true }, O.token);
   const anonPost = await api('POST', '/community', { category: 'Stories', body: `Tables anon ${stamp}`, anonymous: true }, O.token);

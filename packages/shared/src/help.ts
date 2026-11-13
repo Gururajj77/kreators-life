@@ -23,7 +23,7 @@ export const HOW_TO: Record<string, HowTo> = {
       'Tap a flow to log something by answering a question or two: a check-in, a task, your sleep, money in or out. The flows are free for everyone.',
       'With a plan you can also type what you did, like “I edited the vlog and slept six hours”. It does it in the app as you, then lists each change with an Undo. It can also log movement, your eating check-in and the day’s gratitude. Removing things and settling money wait for your Confirm.',
       'Typing spends credits, and a typical message is about 12. Pro gives 10,000 credits a month, Pro Max 100,000 and Ultra 400,000. Each plan also caps what one message and one day can spend.',
-      'It earns the same xp and points as a tap, waits the same waits, and never sees anything that is not yours. It reads your journal only when you ask about it.',
+      'It earns the same xp and points as a tap, waits the same waits, and never sees anything that is not yours. It reads your journal only when you ask about it, and a whole table from All tables only when you switch on Show to AI chat for it.',
     ],
     terms: ['assistant', 'credits', 'top-up'],
   },
@@ -59,7 +59,7 @@ export const HOW_TO: Record<string, HowTo> = {
   },
   today: {
     steps: [
-      'Daily is three boxes a day: check in, do the small act, tick one task. Checking in pays 10 xp and 10 points and keeps your streak; every seventh day in a row pays 50 points more. The small act is a two-minute thing for your weakest pillar and pays 15 xp. Your routine from the strategy session sits under the first box.',
+      'Daily is three boxes a day: check in, do the small act, tick one task. Checking in pays 10 xp and 10 points and keeps your streak; every seventh day in a row pays 50 points more. The small act is a two-minute thing for your weakest pillar and pays 15 xp. Your routine from the strategy session sits folded under the first box; tap it to open.',
       'Tasks come from the pillars you set up. Each pays 20 xp and sends a ripple up its pyramid. A task has a do date, the day you will do it, and can have a due date, the deadline. It shows here from its do date and cannot be ticked before it. After its due date it says Overdue, but you can still tick it. A new task waits ten minutes before it can be ticked.',
       'Tick a task with the box at its left, and tap the task to plan it, rename it or delete it. Give it an area of life and a priority, P0 (do now) to P3 (whenever). Pick the kind of day, a day template like Deep work day, and the list sorts By context: P0 on top, then the pillar the day leads with. Sort By time block or By area for coloured boxes, or Bottlenecks for tasks marked Unfinished, Unresolved or Undecided; end those in the plan or let them go. Make a task repeat and it becomes a habit. Add subtasks, minutes and Remember, or start a focus session on it. Tap a tag on a task, like Remember or its pillar, to show only tasks with it; tap more to narrow it, and tap a chip’s cross above the list to take one off.',
       'Tasks has three tabs. Today holds what is set for today. Past due holds open tasks from days gone by, oldest first, and Upcoming what comes later, soonest first, ten a page. A task with no date waits under Not scheduled yet, and a Remember task with no day under To remember. The eye, View, hides parts of Daily you do not use, like Habits or Month calendar, on every device; a link to one still shows it. Plan my week suggests a day for each task with no day. Hide a task in its plan, until tomorrow or until you unhide it: it waits under Hidden tasks at the foot of the list, sends no reminder, and a tick there still counts.',
@@ -235,7 +235,7 @@ export const HOW_TO: Record<string, HowTo> = {
   mood: {
     steps: [
       'Pick a face for today. That is the whole ask.',
-      'Say why, if you like. Nobody else sees it, unless you share the Mood table with a life coach.',
+      'Say why, if you like. Nobody else sees it, unless you share the Mood table with a life coach or AI chat.',
       'The month shows as a grid of faces, so patterns are easy to spot.',
       'Mood feeds your wellbeing score and the emotional part of Life.',
     ],
@@ -256,7 +256,7 @@ export const HOW_TO: Record<string, HowTo> = {
       'Once a day, tick your meals and mark each one Good fuel, Tasty or both. Try half your plate as vegetables and fruit, a quarter grains, ideally whole, and a quarter protein. Five servings of fruit and veg is the mark.',
       'The score reads fruit and veg, packaged food and meals without a screen. What you leave out does not count, but a score needs your fruit and veg, even 0. Tasty and how full you felt never lower it, and a fasting day has none. On packaged food, check the label: flavours, colours or sweeteners mean it is highly processed.',
       'Open Protein to add up what you ate: tap a katori of dal, an egg, paneer or a scoop, or type a number from a label. The grams are rough amounts from India’s food tables, and protein is its own number, never part of the score. For a daily goal, type what you weigh once: ICMR-NIN gives adults about 0.83 g a day for each kg, and 1 g when most meals are rice or roti. Only the goal is kept. Check with a doctor if you have a kidney condition or are pregnant.',
-      'Track supplements stays off until you switch it on. It is for supplements you already take: the app does not suggest any and does not check them against medicines. A supplement adds to food, it does not replace it. All of Fitness pays nothing: no xp, no points, no badges. Only you see it, unless you share with a life coach. Reflection shows them the numbers. Your protein and supplements reach them only if you switch on the Eating or Supplements table for them.',
+      'Track supplements stays off until you switch it on. It is for supplements you already take: the app does not suggest any and does not check them against medicines. A supplement adds to food, it does not replace it. All of Fitness pays nothing: no xp, no points, no badges. Only you see it, unless you share with a life coach or AI chat. Reflection shows a coach the numbers. Your protein and supplements reach a coach only if you switch on the Eating or Supplements table for them, and AI chat only with Show to AI chat on that table.',
     ],
     terms: ['active minutes', 'eating check-in', 'eating moment', 'serving', 'protein goal', 'supplement', 'nootropic'],
   },
@@ -292,7 +292,7 @@ export const HOW_TO: Record<string, HowTo> = {
   coaching: {
     steps: [
       'A life coach is someone the team chose, with the Life coach badge. Find one under Coaching and ask, say yes when a coach asks you, or open a coach’s invite link. Nothing is shared until you say yes.',
-      `You pick what your coach sees, in six parts: Daily and streaks, pillars and pyramids, routine and contract, life map answers, reflection and patterns. Reflection is your mood, sleep, stress, mindful minutes, movement and how you ate, as numbers, and your saved reviews. The six parts never show your journal, gratitude, supplements, money or a note. You can also switch on whole tables for one coach, one by one: each starts off, and your coach can read it, never change it. Change it or end it any time on your Profile tab. Up to ${MAX_COACHES} coaches at once.`,
+      `You pick what your coach sees, in six parts: Daily and streaks, pillars and pyramids, routine and contract, life map answers, reflection and patterns. Reflection is your mood, sleep, stress, mindful minutes, movement and how you ate, as numbers, and your saved reviews. The six parts never show your journal, gratitude, supplements, money or a note. You can also switch on whole tables for one coach, one by one, on your Profile tab or with Show to my coach at the top of a table: each starts off, and your coach can read it, never change it. Change it or end it any time on your Profile tab. Up to ${MAX_COACHES} coaches at once.`,
       'Patterns are what the app finds in the parts you share, by plain rules, kept nowhere. They say what goes together, never why. On for a new coach, off for a coach you had before. A coach can ask once a week, and the choice stays yours.',
       'Your coach leaves notes and can add or edit tasks in your pyramids, marked From your coach: the dates, priority, repeat, length and whether it counts as a habit, never a time block. Only you tick them, and they pay the same xp as your own. Every ask, yes, note and task change is in the change log, for both of you.',
       'Are you a life coach? Say so in the setup chat, on your Profile or here, and the team checks first. Then add students by @username, friend code or email, or share your invite link; each one has to say yes. Each student has a report by day, week, month or quarter, and Show on this page hides any section.',
@@ -303,7 +303,7 @@ export const HOW_TO: Record<string, HowTo> = {
     steps: [
       'A chat that knows your day: your streak, your pillars, your tasks, your mood and your sleep.',
       'Say what is on your mind. It reflects and asks a better question back.',
-      'With a plan it answers with the model you pick. Without one, the built-in companion answers, free. Only a model that keeps nothing sees your mood and sleep.',
+      'With a plan it answers with the model you pick. Without one, the built-in companion answers, free. Only a model that keeps nothing sees your mood and sleep. It can read a whole table from All tables only when you switch on Show to AI chat for it.',
       'It is not a therapist and never pretends to be one. In danger, call your local emergency number or go to the nearest hospital.',
       'The chat stays with you alone.',
     ],
@@ -372,7 +372,7 @@ export const HOW_TO: Record<string, HowTo> = {
       'Dues track what you owe and what you are owed, with a date. Recurring entries post themselves each month.',
       'Settling a due with a tap books the money in or out for you.',
       'Budgets and goals show how the month is going. Pick a period to compare with the one before.',
-      'Nobody else sees it, unless you share its table with a life coach. A super admin can read it to help you, and each look is logged.',
+      'Nobody else sees it, unless you share its table with a life coach or AI chat. A super admin can read it to help you, and each look is logged.',
     ],
     terms: ['period'],
   },
@@ -501,11 +501,11 @@ export const HOW_TO: Record<string, HowTo> = {
   tables: {
     steps: [
       'All tables shows your own data as tables, in groups like the app: Daily, Pillars, Reviews, Body and mind, Journal, Money, Learning, People and your account. Open one to see its rows.',
-      'Tap a column’s name to sort by it. Pick a filter or type in the search box to narrow it down. Pick 10, 25, 50 or 100 rows a page at the bottom left, and move between pages at the bottom right.',
+      'Tap a column’s name to sort by it. Pick a filter or type in the search box to narrow it down. A page shows 10 rows at first. Pick 25, 50 or 100 at the bottom left, and move between pages at the bottom right.',
       // The number is CSV_MAX_ROWS in dataTables.ts (a test holds the two together; importing it would load the registry with this panel).
       'Tick rows to copy them or to download them as a CSV file. Download all gets every row that matches, up to 5,000 (fewer on a wide table), ten files a day.',
       'Where a cell can change, tap it, change it and press Enter. It saves the same way as the app’s own screen, so the same rules and waits apply. Records such as xp, points, orders, badges and signed paper stay as they are. Tasks and inbox notes can be archived, brought back, or deleted for good from the archive.',
-      'A life coach sees only the tables you switch on for them, under your coach on your Profile tab, and can never change them. An admin never sees your journal, gratitude or body and mind tables, and each table an admin opens is written in the audit log.',
+      'A life coach sees a table only when you switch on Show to my coach at the top of it, and the assistant and the Companion only with Show to AI chat beside it. Both lists are on your Profile tab too, and none of them can change a table. The journal, gratitude and body and mind tables reach AI chat only on a model that keeps nothing, and never an admin. Each table an admin opens is written in the audit log.',
     ],
     terms: ['table', 'life coach'],
   },

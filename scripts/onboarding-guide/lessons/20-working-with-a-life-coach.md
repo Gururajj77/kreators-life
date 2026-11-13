@@ -39,7 +39,7 @@ These six parts never show your journal, gratitude, supplements, money or a note
 
 ## Whole tables
 
-You can also share whole tables from **All tables** with one coach, one table at a time: your tasks, your money, your journal or any other. Open **Tables your coach can see** under **Your life coach** on the Profile tab and switch on the ones you want. Each one starts off. **Share all** and **Share none** change them all at once. A coach can read a table, but never change it, and the change log names the tables you switched, never what is in them.
+You can also share whole tables from **All tables** with one coach, one table at a time: your tasks, your money, your journal or any other. Open **Tables your coach can see** under **Your life coach** on the Profile tab and switch on the ones you want. Or open the table itself and switch on **Show to my coach** at the top. Each one starts off. **Share all** and **Share none** change them all at once. A coach can read a table, but never change it, and the change log names the tables you switched, never what is in them.
 
 > **Pro tip:** start with only the parts you want to talk about. You can turn on more once you trust them.
 

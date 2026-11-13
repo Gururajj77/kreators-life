@@ -1127,6 +1127,10 @@ export const api = {
   answerCoach: (linkId: string, yes: boolean) => post<{ link: CoachLink | null }>(`/me/coach/links/${linkId}/answer`, { yes }),
   endCoach: (linkId: string) => del<{ ok: true }>(`/me/coach/links/${linkId}`),
   shareWithCoach: (linkId: string, share: Partial<CoachShare>) => patch<{ link: CoachLink | null }>(`/me/coach/links/${linkId}/share`, share),
+  /** AI chat's tables: one table on or off (the switch at the top of a table, or one under AI chat on Profile), or the whole list. */
+  aiTables: (body: { table: string; on: boolean } | { tables: string[] }) => patch<{ aiTables: string[] }>('/me/ai-tables', body),
+  /** One table shown to one coach or not, from the table's own page: the server adds it to or takes it from the list as it stands. */
+  shareTableWithCoach: (linkId: string, table: string, on: boolean) => patch<{ link: CoachLink | null }>(`/me/coach/links/${linkId}/share`, { table, on }),
   manageOverview: () =>
     request<{
       permissions: Permission[];

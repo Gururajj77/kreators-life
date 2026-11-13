@@ -44,7 +44,7 @@ Typing what you want, like "move my edit task to Friday", needs a plan.
 4. Removing something, or settling money owed, waits for her to tap **Confirm** or **Cancel**.
 5. While it works, the send arrow turns into a **Stop** square. What was done before the stop stays, each with Undo.
 
-It can also log movement, the eating check-in and the day's gratitude. It never reads supplements.
+It can also log movement, the eating check-in and the day's gratitude. It reads supplements only if Riya switches their table on with **Show to AI chat**, and then only on a model that keeps nothing.
 
 Each reply says **Answered by** and the model's name, so it is never mixed up with a built-in line.
 
@@ -57,6 +57,7 @@ When a model is connected on the server, a model picker shows under the panel's 
 - **A free model costs no credits**, but typing still needs a plan.
 - **Some models keep nothing.** Only with one of those can the assistant read the journal and the trackers.
 - **The journal is read only when asked.** The assistant reads it only when Riya asks about it.
+- **A whole table only when she opens it.** The assistant and the Companion read a table from All tables only when Riya switches on **Show to AI chat** for it, at the top of the table or under **AI chat** on her Profile tab. They never change it.
 
 The panel says under the picker what the chosen model may read.
 

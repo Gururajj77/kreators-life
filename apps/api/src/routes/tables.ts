@@ -6,6 +6,7 @@ import {
   editValue,
   knownTableKeys,
   listTables,
+  parseAiTables,
   parseTableQuery,
   plainCall,
   rowEditable,
@@ -101,6 +102,21 @@ export function tablesRoutes(appFetch: AppFetch) {
   const r = new Hono<AppEnv>();
   /** The app's own routes as this person: their token, every gate. */
   const callAs = (c: Ctx) => caller((req) => Promise.resolve(appFetch(req, c.env, ctxOf(c))), tokenOf(c), 'tables');
+
+  // AI chat (2026-11-14): the assistant and the Companion call these routes as the person, marked `X-Kreators-Via: assistant` by the tool
+  // dispatcher. They may list and read a page of the person's own tables, and only the ones the person opened to AI chat (`ai_tables_json`);
+  // never a download, an edit, an archive, a coach's or an admin's view. A person who sends the mark themselves only shuts doors on themselves.
+  const viaAi = (c: Ctx) => c.req.header('X-Kreators-Via') === 'assistant';
+  r.use('*', async (c, next) => {
+    if (!viaAi(c)) return next();
+    const parts = new URL(c.req.url).pathname.split('/').filter(Boolean);
+    const at = parts.indexOf('tables');
+    const rest = at < 0 ? parts : parts.slice(at + 1);
+    if (c.req.method !== 'GET' || rest.length > 1 || rest[0] === 'coach' || rest[0] === 'admin') return c.json({ error: 'AI chat can only read the tables you open to it.' }, 403);
+    return next();
+  });
+  /** The tables this person opened to AI chat. */
+  const aiTablesOf = (c: Ctx) => parseAiTables(c.get('user').ai_tables_json ?? null);
 
   // ----------------------------------------------------------------------------------------------------------------------------------
   // A coach's view of one student: only the tables the student shares with them, read only. Registered before the owner's `/:table`.
@@ -204,11 +220,19 @@ export function tablesRoutes(appFetch: AppFetch) {
     return { view: 'owner', subject: subjectOf(user, day), viewerId: user.id };
   };
 
-  r.get('/', (c) => c.json({ view: 'owner', subject: ownerCtx(c).subject, groups: listTables('owner') } satisfies TablesListResponse));
+  r.get('/', (c) => {
+    const groups = listTables('owner');
+    if (!viaAi(c)) return c.json({ view: 'owner', subject: ownerCtx(c).subject, groups } satisfies TablesListResponse);
+    // AI chat lists only what the person opened to it.
+    const open = new Set(aiTablesOf(c));
+    const shown = groups.map((g) => ({ ...g, tables: g.tables.filter((t) => open.has(t.key)) })).filter((g) => g.tables.length > 0);
+    return c.json({ view: 'owner', subject: ownerCtx(c).subject, groups: shown } satisfies TablesListResponse);
+  });
 
   r.get('/:table', async (c) => {
     const table = tableOf(c.req.param('table'));
     if (!table) return c.json(NOT_FOUND, 404);
+    if (viaAi(c) && !aiTablesOf(c).includes(table.key)) return c.json({ error: `${table.name} is not open to AI chat. Switch on Show to AI chat at the top of that table to let it read it.` }, 403);
     return c.json(await readPage(c.env.DB, table, queryOf(c, table, 'owner'), ownerCtx(c)));
   });
 

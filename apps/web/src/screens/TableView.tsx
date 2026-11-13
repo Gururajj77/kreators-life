@@ -1,5 +1,6 @@
 import { formatCount, type ConsentChoices } from '@kreators/shared';
 import {
+  aiPrivateOnly,
   BULK_MAX,
   columnFor,
   csvMaxRows,
@@ -32,6 +33,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { AppCover } from '../components/AppCover';
 import { Button } from '../components/Button';
+import { TableSwitches, useAiChatOn, useTableCoaches } from '../components/TableSwitches';
 import { ConfirmDelete, DELETE_BTN } from '../components/ConfirmDelete';
 import { ErrorLine } from '../components/ErrorLine';
 import { FilterBar, FilterSelect } from '../components/FilterSelect';
@@ -133,6 +135,9 @@ function countKeyOf(table: DataTable, query: TableQuery): string {
 
 function Grid({ table, subject }: { table: DataTable; subject: TablesSubject }) {
   const view = subject.view;
+  // The owner's coaches and AI chat, for the cover's switches; a coach's or an admin's view never asks.
+  const coaches = useTableCoaches(view === 'owner');
+  const aiOn = useAiChatOn();
   const token = useSession((s) => s.token);
   const qc = useQueryClient();
   const [params, setParams] = useSearchParams();
@@ -380,7 +385,8 @@ function Grid({ table, subject }: { table: DataTable; subject: TablesSubject }) 
   return (
     <Screen howTo={false}>
       {/* The table's line speaks to its owner ("Every task you made"); a coach or an admin reads the read-only line under the controls instead. */}
-      <AppCover cover="tables" back={back} eyebrow={view === 'owner' ? group : name || undefined} title={table.name} lede={view === 'owner' ? table.blurb : undefined} />
+      {/* The owner's Show to my coach and Show to AI chat sit in the cover's action slot: left of the line on a laptop, under it on a phone (app.css). */}
+      <AppCover cover="tables" back={back} eyebrow={view === 'owner' ? group : name || undefined} title={table.name} lede={view === 'owner' ? table.blurb : undefined} actions={view === 'owner' && (coaches.length > 0 || aiOn) ? <TableSwitches table={table.key} coaches={coaches} ai={aiOn} privateOnly={aiPrivateOnly(table)} /> : undefined} />
 
       {notHere ? (
         <p className="mt-lg m-0 text-body">{view === 'coach' ? 'This table is not shared with you now.' : view === 'admin' ? 'This table is not shown for this member.' : 'There is no table here.'}</p>

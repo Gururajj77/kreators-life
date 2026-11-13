@@ -49,7 +49,7 @@ Protein is not part of the score. You add it up by what you ate, so nothing need
 - **The number:** with a goal it reads "42 g of 60 g today" with a plain bar. There is no fail in it, and going over reads the same.
 - **The goal:** open **Daily goal** and type what you weigh. ICMR-NIN gives adults about 0.83 g a day for each kg, and 1 g when most meals are rice or roti. Tap **Use** on one, change it if you like, then tap **Save goal**.
 - **What is kept:** only the goal. What you weigh is never sent or saved, and it goes when you close the fold.
-- **Who sees it:** only you. Not Emerging or Reviews, and not a coach, even with Reflection shared, unless you switch the Eating table on for them.
+- **Who sees it:** only you. Not Emerging or Reviews, and not a coach, even with Reflection shared, unless you switch the Eating table on for them. The assistant and the Companion see it only if you switch on **Show to AI chat** for that table, and then only on a model that keeps nothing.
 
 Check with a doctor if you have a kidney condition or are pregnant.
 
@@ -79,6 +79,7 @@ Under **Before you add one**:
 - **Active minutes and eating** feed Life, the numbers on Reviews, Emerging and your daily brief.
 - **Moving** can show on Emerging as a good habit. It is only ever a good one.
 - **A life coach** sees your minutes, your days moved and your eating number only under your Reflection switch, never a note. Your supplements, your notes and the whole of a table reach a coach only if you switch that table on for them.
+- **AI chat**, the assistant and the Companion, reads a whole table only if you switch on **Show to AI chat** for it, and the body and mind tables only on a model that keeps nothing.
 - **A count of your supplements** shows in your own review, and nowhere else.
 
 ## It pays nothing

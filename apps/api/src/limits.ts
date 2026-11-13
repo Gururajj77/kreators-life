@@ -241,6 +241,8 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/coach/students/:id/patterns/ask', limit: 'coachWrite' },
   { method: 'POST', path: '/coach/invite', limit: 'coachWrite' },
   { method: 'PUT', path: '/me/coach/prefs', limit: 'prefs' },
+  // AI chat's tables, one switch or the whole list (2026-11-14).
+  { method: 'PATCH', path: '/me/ai-tables', limit: 'prefs' },
   { method: 'GET', path: '/public/coach-join/:token', limit: 'coachJoin', by: 'address' },
   { method: 'GET', path: '/me/coach/join/:token', limit: 'coachJoin', by: 'address' },
   { method: 'POST', path: '/me/coach/join/:token', limit: 'coachJoin', by: 'address' },
