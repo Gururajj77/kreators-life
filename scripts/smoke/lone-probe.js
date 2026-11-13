@@ -2,7 +2,8 @@
 // Finds a wrapping row of pills, chips or buttons whose last line holds one item alone while the line above holds several:
 // the "lone tile" rule in CLAUDE.md, for rows of controls. Each hit is { line }.
 // A TabRow's sideways line (`data-pinned-scroll`, 2026-11-07) is one line by design, so it can never leave a pill alone: it is skipped,
-// and so is the row that holds it (the strip and its pinned All share one line).
+// and so is the row that holds it (the strip and its pinned All share one line). A group marked `data-items` (a task's time and pillar,
+// kept together as one pair, 2026-11-13) counts as that many items, since it is that many tags side by side.
 (() => {
   const hits = [];
   const where = (el) => {
@@ -34,11 +35,13 @@
     for (const k of kids) {
       const r = k.getBoundingClientRect();
       const line = lines.find((l) => Math.min(l.bottom, r.bottom) - Math.max(l.top, r.top) > Math.min(l.bottom - l.top, r.height) / 2);
+      // A group that keeps several tags together as one (a task's time and pillar, `data-items`) counts as that many on its line.
+      const n = Number(k.getAttribute('data-items')) || 1;
       if (line) {
-        line.n += 1;
+        line.n += n;
         line.top = Math.min(line.top, r.top);
         line.bottom = Math.max(line.bottom, r.bottom);
-      } else lines.push({ top: r.top, bottom: r.bottom, n: 1, width: r.width, text: (k.textContent ?? '').trim().slice(0, 24) });
+      } else lines.push({ top: r.top, bottom: r.bottom, n, width: r.width, text: (k.textContent ?? '').trim().slice(0, 24) });
     }
     if (lines.length < 2) continue;
     lines.sort((a, b) => a.top - b.top);

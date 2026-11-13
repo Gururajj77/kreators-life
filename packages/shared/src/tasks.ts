@@ -314,7 +314,7 @@ export function taskTabSort(tab: TaskTab, asked: unknown): TaskSort {
 
 export const TASK_HIDES = [
   { key: 'tomorrow', name: 'Until tomorrow', state: 'Until tomorrow', blurb: 'It comes back by itself tomorrow.' },
-  { key: 'always', name: 'Until I unhide it', state: 'Until you unhide it', blurb: 'It waits under Hidden tasks until you bring it back.' },
+  { key: 'always', name: 'Until I unhide it', state: 'Until you unhide it', blurb: 'It waits under Hidden until you bring it back.' },
 ] as const;
 export type TaskHide = (typeof TASK_HIDES)[number]['key'];
 /** The stored day for Until I unhide it: later than any real day, so `hidden_until >= day` holds for good. */
@@ -989,4 +989,123 @@ export function buildCalendar(tasks: readonly IcsTask[], zone: string, now: Date
   }
   lines.push('END:VCALENDAR');
   return `${lines.map(icsFold).join('\r\n')}\r\n`;
+}
+
+// ---- tap a tag to filter (2026-11-13, the founder: "apply click for those tags and make filters from them"; he chose: filter this list) ----
+
+/**
+ * The tags on a task that filter Daily's list (and a pillar page's Tasks to do) when tapped, as tokens in `?tags=`, a comma list in one
+ * fixed order: `pillar:<key>`, `pri:<0-3>`, `remember`, `review`, `habit`, `built` (From pillar), `coach` (From your coach), `kind:<open
+ * kind>`, `block:<time block id>`. The kinds combine with AND; one of each (a second pillar, priority, kind or block replaces the first) and
+ * the flags toggle. The Area filter keeps its own `?area=`. The due badge, "Ready in", the subtasks count and the line under the title are
+ * states, not tags, and never filter.
+ */
+export const TASK_TAG_FLAGS = ['remember', 'review', 'habit', 'built', 'coach'] as const;
+export type TaskTagFlag = (typeof TASK_TAG_FLAGS)[number];
+/** Each flag's words, the tag's own. */
+export const TASK_TAG_FLAG_WORDS: Readonly<Record<TaskTagFlag, string>> = { remember: 'Remember', review: 'For review', habit: 'Habit', built: 'From pillar', coach: 'From your coach' };
+const TASK_TAG_FLAG_BY_KEY: Record<string, TaskTagFlag> = byKey(TASK_TAG_FLAGS.map((k) => [k, k] as const));
+/** A block id's shape (the person's own ids are checked on the server). */
+const TAG_BLOCK_RE = /^[A-Za-z0-9-]{1,80}$/;
+
+export interface TaskTagCut {
+  pillar: RelationshipKey | null;
+  priority: Priority | null;
+  remember: boolean;
+  review: boolean;
+  habit: boolean;
+  built: boolean;
+  coach: boolean;
+  kind: OpenKind | null;
+  block: string | null;
+}
+export const NO_TASK_TAGS: TaskTagCut = { pillar: null, priority: null, remember: false, review: false, habit: false, built: false, coach: false, kind: null, block: null };
+
+/** One token read into the cut it adds, or null for anything unknown ("constructor", "pri:9", a block id of another shape). */
+function readTaskTag(raw: string): Partial<TaskTagCut> | null {
+  const t = raw.trim();
+  if (!t) return null;
+  const at = t.indexOf(':');
+  const head = (at < 0 ? t : t.slice(0, at)).toLowerCase();
+  const rest = at < 0 ? '' : t.slice(at + 1);
+  if (at < 0) {
+    const flag = TASK_TAG_FLAG_BY_KEY[head];
+    return flag ? { [flag]: true } : null;
+  }
+  if (head === 'pillar') {
+    const rel = RELATIONSHIP_BY_KEY[rest.toLowerCase() as RelationshipKey];
+    return rel ? { pillar: rel.key } : null;
+  }
+  if (head === 'pri') {
+    const p = /^[0-3]$/.test(rest) ? parsePriority(rest) : null;
+    return p === null ? null : { priority: p };
+  }
+  if (head === 'kind') {
+    const k = parseOpenKind(rest);
+    return k ? { kind: k } : null;
+  }
+  if (head === 'block') return TAG_BLOCK_RE.test(rest) ? { block: rest } : null;
+  return null;
+}
+
+/** The one reader of `?tags=`: unknown tokens are dropped, a later token of a kind replaces an earlier one. */
+export function parseTaskTags(raw: unknown): TaskTagCut {
+  const out: TaskTagCut = { ...NO_TASK_TAGS };
+  if (typeof raw !== 'string' || raw.length > 400) return out;
+  for (const part of raw.split(',').slice(0, 12)) {
+    const one = readTaskTag(part);
+    if (one) Object.assign(out, one);
+  }
+  return out;
+}
+
+/** The tokens of a cut, in the one order. */
+export function taskTagTokens(t: TaskTagCut): string[] {
+  const out: string[] = [];
+  if (t.pillar) out.push(`pillar:${t.pillar}`);
+  if (t.priority !== null) out.push(`pri:${t.priority}`);
+  for (const f of TASK_TAG_FLAGS) if (t[f]) out.push(f);
+  if (t.kind) out.push(`kind:${t.kind}`);
+  if (t.block) out.push(`block:${t.block}`);
+  return out;
+}
+/** The canonical string of a cut ('' for none), what the screen sends and the server echoes. */
+export const taskTagsKey = (t: TaskTagCut): string => taskTagTokens(t).join(',');
+/** Whether a token's filter is on in a cut. */
+export const taskTagOn = (t: TaskTagCut, token: string): boolean => {
+  const one = readTaskTag(token);
+  if (!one) return false;
+  return (Object.keys(one) as (keyof TaskTagCut)[]).every((k) => t[k] === one[k]);
+};
+/** A cut with a token's filter turned on, or off when it was on (a pillar, priority, kind or block replaces one of its kind). */
+export function toggleTaskTag(t: TaskTagCut, token: string): TaskTagCut {
+  const one = readTaskTag(token);
+  if (!one) return t;
+  if (taskTagOn(t, token)) {
+    const off: Partial<TaskTagCut> = {};
+    for (const k of Object.keys(one) as (keyof TaskTagCut)[]) (off as Record<string, unknown>)[k] = NO_TASK_TAGS[k];
+    return { ...t, ...off };
+  }
+  return { ...t, ...one };
+}
+
+/**
+ * Whether a task passes a cut, on the device (the lists are cut on the server too; this holds an older answer to the cut while the new one
+ * loads). A block is the one picked, else the one its time falls in among `slots` (`blockOfTask`).
+ */
+export function matchesTaskTags(
+  task: { relationship: RelationshipKey; priority: Priority | null; remind?: boolean; forReview?: boolean; repeat: Repeat | null; habit?: boolean | null; fromPillar?: boolean; fromCoach?: boolean; openKind?: OpenKind | null; timeBlockId?: string | null; dueTime: string | null },
+  t: TaskTagCut,
+  slots: readonly TemplateSlot[] = [],
+): boolean {
+  if (t.pillar && task.relationship !== t.pillar) return false;
+  if (t.priority !== null && task.priority !== t.priority) return false;
+  if (t.remember && !task.remind) return false;
+  if (t.review && !task.forReview) return false;
+  if (t.habit && !(task.repeat && taskIsHabit(task))) return false;
+  if (t.built && !task.fromPillar) return false;
+  if (t.coach && !task.fromCoach) return false;
+  if (t.kind && task.openKind !== t.kind) return false;
+  if (t.block && blockOfTask(task, slots)?.blockId !== t.block) return false;
+  return true;
 }

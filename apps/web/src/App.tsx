@@ -166,15 +166,16 @@ function Page({ tabs }: { tabs: boolean }) {
 }
 
 /** Sends people without a session to sign in, and brings them back here afterwards. */
-function toSignIn(pathname: string, search: string) {
-  const next = `${pathname}${search}`;
+function toSignIn(pathname: string, search: string, hash = '') {
+  // The section too (`/today#supplements`), so signing in lands where the link pointed.
+  const next = `${pathname}${search}${hash}`;
   return `/signin?next=${encodeURIComponent(next)}`;
 }
 
 function RequireSession() {
   const token = useSession((s) => s.token);
   const loc = useLocation();
-  if (!token) return <Navigate to={toSignIn(loc.pathname, loc.search)} replace />;
+  if (!token) return <Navigate to={toSignIn(loc.pathname, loc.search, loc.hash)} replace />;
   return <Outlet />;
 }
 
@@ -191,7 +192,7 @@ function Shell() {
   const token = useSession((s) => s.token);
   const me = useMe();
   const loc = useLocation();
-  if (!token) return <Navigate to={toSignIn(loc.pathname, loc.search)} replace />;
+  if (!token) return <Navigate to={toSignIn(loc.pathname, loc.search, loc.hash)} replace />;
   if (me.isPending) return <Loading />;
   // Only when there is nothing to show: a background refetch that fails (the window refocused while offline) keeps the page as it was.
   if (me.isError && !me.data) {
@@ -497,14 +498,20 @@ const router = createBrowserRouter([
   { path: '/resources/:id', element: <OldPath from="/resources" to="/knowledge" /> },
   { path: '/studio', element: <Navigate to="/shop" replace /> },
   { path: '/studio/*', element: <OldPath from="/studio" to="/shop" /> },
-  { path: '*', element: <Navigate to="/" replace /> },
+  { path: '*', element: <Unknown /> },
     ],
   },
 ]);
 
 function OldPath({ from, to }: { from: string; to: string }) {
   const loc = useLocation();
-  return <Navigate to={`${to}${loc.pathname.slice(from.length)}${loc.search}`} replace />;
+  return <Navigate to={`${to}${loc.pathname.slice(from.length)}${loc.search}${loc.hash}`} replace />;
+}
+
+/** An address nobody has: Home for someone signed in (2026-11-13, the frictionless pass), the public site's home for a visitor. */
+function Unknown() {
+  const token = useSession((s) => s.token);
+  return <Navigate to={token ? '/home' : '/'} replace />;
 }
 
 /** The matched route's pattern, such as /store/:id, never the real address. Used by the page-speed notes (lib/vitals.ts). */

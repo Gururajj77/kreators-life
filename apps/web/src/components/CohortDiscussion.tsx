@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { dateTime } from '../lib/date';
 import { useAuthed } from '../lib/queries';
 import { FIELD } from '../lib/ui';
+import { useTapTwice } from '../lib/useTapTwice';
 import { Button } from './Button';
 import { AskSheet, type Ask } from './Channels';
 import { ErrorLine } from './ErrorLine';
@@ -121,11 +122,9 @@ export function CohortDiscussion({ cohortId }: { cohortId: string }) {
                             setReplyDraft('');
                           }}
                           onDelete={() =>
-                            setAsk(
-                              l.mine
-                                ? { title: 'Delete this line?', body: 'Its words go for everyone. Replies under it stay.', action: 'Yes, delete it', run: () => unsay.mutate(l.id) }
-                                : { title: 'Take this line down?', body: 'Its words go for everyone, and the writer is told. Replies under it stay.', action: 'Yes, take it down', run: () => unsay.mutate(l.id) },
-                            )
+                            l.mine
+                              ? unsay.mutate(l.id)
+                              : setAsk({ title: 'Take this line down?', body: 'Its words go for everyone, and the writer is told. Replies under it stay.', action: 'Yes, take it down', run: () => unsay.mutate(l.id) })
                           }
                           onReport={() => setAsk({ title: 'Tell the team about this line?', body: 'The team reads it and decides what to do. The writer is not told who sent it.', action: 'Yes, tell the team', run: () => report.mutate(l.id) })}
                           onBlock={() => setAsk({ title: `Block ${l.author.label}?`, body: "You will not see each other's lines, and any friendship ends. You can undo it under Bond.", action: 'Yes, block', run: () => block.mutate(l.id) })}
@@ -221,6 +220,7 @@ function LineView({
   onBlock: () => void;
 }) {
   const [more, setMore] = useState(false);
+  const ask = useTapTwice();
   const empty = line.takenDown || line.hidden;
   if (empty)
     return (
@@ -245,10 +245,18 @@ function LineView({
         <button type="button" onClick={onReply} aria-expanded={replying} className={ACTION}>
           {replying ? 'Close reply' : 'Reply'}
         </button>
-        {(line.mine || moderator) && (
-          <button type="button" onClick={onDelete} className={ACTION}>
-            {line.mine ? 'Delete' : 'Take down'}
+        {/* Your own line: a second tap deletes it (the founder, 2026-11-13). Someone else's still asks in a sheet. */}
+        {line.mine ? (
+          <button type="button" onClick={() => ask.tap(true, onDelete)} className={ask.isArmed(true) ? `${ACTION} red-armed rounded-pill px-sm no-underline` : ACTION}>
+            <span aria-hidden={ask.isArmed(true) || undefined}>{ask.isArmed(true) ? 'Tap again to delete' : 'Delete'}</span>
+<span className="sr-only" aria-live="polite">{ask.isArmed(true) ? 'Tap again to delete' : ''}</span>
           </button>
+        ) : (
+          moderator && (
+            <button type="button" onClick={onDelete} className={ACTION}>
+              Take down
+            </button>
+          )
         )}
         {!line.mine && (
           <button type="button" aria-expanded={more} onClick={() => setMore((m) => !m)} className={`${ACTION} gap-xs`}>

@@ -1049,6 +1049,14 @@ describe('engagement', () => {
     expect(calm.actions.every((a) => a.to !== '/sleep' && a.to !== '/journal')).toBe(true);
     expect(calm.signals.find((x) => x.key === 'sleep')?.to).toBeNull();
   });
+  it('points each step at the place it is done: the section, the Past due tab and the week the review is for', () => {
+    const b = briefFor(facts);
+    expect(b.signals.find((x) => x.key === 'overdue')?.to).toBe('/today?taskTab=pastdue#tasks-heading');
+    expect(b.actions.find((x) => x.key === 'checkin')?.to).toBe('/today#show-heading');
+    const review = briefFor({ ...facts, apps: ['reviews'], checkedIn: true, tasksDue: 0, smallActDone: true, tasksOverdue: 0, reviewDue: true, reviewWeek: '2026-11-02' });
+    expect(review.actions.find((x) => x.key === 'review')?.to).toBe('/reviews?kind=week&date=2026-11-02#review-heading');
+    expect(briefFor({ ...facts, apps: ['reviews'], checkedIn: true, tasksDue: 0, smallActDone: true, tasksOverdue: 0, reviewDue: true }).actions.find((x) => x.key === 'review')?.to).toBe('/reviews');
+  });
   it('ticks the checklist from what was done, and folds it away when done, folded or old', () => {
     expect(gettingStarted({ checkin: true }, 2, false)).toMatchObject({ done: 1, show: true });
     expect(gettingStarted({ checkin: true }, 20, false).show).toBe(false);

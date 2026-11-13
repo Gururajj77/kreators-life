@@ -330,6 +330,15 @@
   --deep-guru: #323c9a;
   --deep-earth: #4f3422;
   --deep-divine: #2e1065;
+  /* An empty tick box's edge in a pillar's colour (`pillarTick`, 2026-11-12): the fill where it holds 3:1 on the page, the deep colour for
+     orange and yellow; in dark mode every pillar takes its deep colour (light there), since purple and indigo fall under 3:1 on the dark wash. */
+  --tick-edge-servant_leader: var(--color-r1);
+  --tick-edge-friendship: var(--deep-friendship);
+  --tick-edge-parent_child: var(--deep-parent_child);
+  --tick-edge-lover_partner: var(--color-r4);
+  --tick-edge-self: var(--color-r5);
+  --tick-edge-guru: var(--color-r6);
+  --tick-edge-divine: var(--color-r7);
   /* Home's app tiles (AppTile): each pillar's own hue lifted to a bright tile that carries dark ink, 8:1 or better here and 6:1 or better in dark mode. */
   --app-tile-servant_leader: #feaeb9;
   --app-tile-friendship: #ffb182;
@@ -399,6 +408,11 @@
     --deep-guru: #b4baf5;
     --deep-earth: #d6c2b8;
     --deep-divine: #ddd6fe;
+    --tick-edge-servant_leader: var(--deep-servant_leader);
+    --tick-edge-lover_partner: var(--deep-lover_partner);
+    --tick-edge-self: var(--deep-self);
+    --tick-edge-guru: var(--deep-guru);
+    --tick-edge-divine: var(--deep-divine);
     --app-tile-servant_leader: #f091a1;
     --app-tile-friendship: #f49c68;
     --app-tile-parent_child: #e3c151;
@@ -455,6 +469,11 @@
   --deep-guru: #b4baf5;
   --deep-earth: #d6c2b8;
   --deep-divine: #ddd6fe;
+  --tick-edge-servant_leader: var(--deep-servant_leader);
+  --tick-edge-lover_partner: var(--deep-lover_partner);
+  --tick-edge-self: var(--deep-self);
+  --tick-edge-guru: var(--deep-guru);
+  --tick-edge-divine: var(--deep-divine);
   --app-tile-servant_leader: #f091a1;
   --app-tile-friendship: #f49c68;
   --app-tile-parent_child: #e3c151;
@@ -683,6 +702,41 @@
   :is(.screen-even, .screen-even > .contents) > section:not(.span-all) > :last-child > ul > li > :first-child {
     height: 100%;
   }
+  /* Home's Emerging beside Your pillars (the founder, 2026-11-13): one row, Emerging the left half and the pillars the right, the two one
+     height like every pair on Home. Emerging's cards stack in its half (two to a row in a half would leave each under 240px), and when
+     Emerging draws nothing the pillars take the row. Below `lg` this wrapper is a plain block: Emerging right above the pillars. */
+  .home-pair {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 32px;
+    align-items: stretch;
+  }
+  .home-pair > * {
+    min-width: 0;
+  }
+  .home-pair > section:only-of-type {
+    grid-column: 1 / -1;
+  }
+  .home-pair > section {
+    display: flex;
+    flex-direction: column;
+  }
+  .home-pair > section > :last-child {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    justify-content: center;
+  }
+  /* The card or the list of cards fills its half; Emerging's quiet line, when it has nothing ready, sits in the middle of the room. */
+  .home-pair > section > :last-child > :first-child:not(p) {
+    flex: 1 1 auto;
+  }
+  .home-pair > section > :last-child > ul.grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .home-pair > section > :last-child > ul.grid > li {
+    grid-column: auto;
+  }
 }
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
@@ -809,15 +863,10 @@
     box-shadow: none;
     background-color: var(--color-line);
   }
-  /* Hovering a checkbox shows a faint tick where it will land. CheckRow's box stands outside its card (`.check-line`, 2026-11-12): the
-     box's own hit area always shows it, and so does the card while its words tick too; a card whose words open something (a task's
-     plan, `data-opens`) keeps only its toy lift, since the box alone ticks there. A row that holds its box inside (the Apps page's
-     Select rows, `.check-row`) shows it on the whole row. */
-  .check-hit:hover .check-box,
-  .check-line:not([data-opens]):has(> .check-row:hover) .check-box,
-  .check-row:hover .check-box {
-    background-color: color-mix(in oklab, var(--check-color) 14%, white);
-  }
+  /* Hovering a checkbox shows a faint tick where it will land (the box's fill stays as `CheckMark` sets it). CheckRow's box stands outside
+     its card (`.check-line`, 2026-11-12): the box's own hit area always shows it, and so does the card while its words tick too; a card
+     whose words open something (a task's plan, `data-opens`) keeps only its toy lift, since the box alone ticks there. A row that holds its
+     box inside (the Apps page's Select rows, `.check-row`) shows it on the whole row. */
   .check-hit:hover .check-preview,
   .check-line:not([data-opens]):has(> .check-row:hover) .check-preview,
   .check-row:hover .check-preview {
@@ -845,6 +894,52 @@
 .check-hit:has(input:focus-visible) .check-box {
   outline: 3px solid var(--color-ink);
   outline-offset: 2px;
+}
+/* A task's plan open in place on Daily closes from outside its card (RowClose in CheckRow.tsx; 2026-11-13, the founder: "put the close
+   button outside on scroll in daily tasks"). The rail is as tall as the row (the card and the plan under it, a whole `li`) less 8px at its
+   foot, and its slot sticks to the window's top inside it, so the button stays in view down the plan and stops at the plan's end. With a
+   margin at the row's right (`out`) the rail stands 8px past the row, or past the painted box round it (`--row-close-shift`, a time
+   block's box), and the 44px round close is centred on the card's first 56px row by its slot; without one (`in`, a phone or a tablet's
+   column) it runs down the row's own right edge, the 32px close with a 44px hit area where the card's small edit button sits (kept in
+   its slot, unseen), and the plan's parts keep a lane for it (`.row-lane`), so no field is covered. */
+.row-close-rail {
+  position: absolute;
+  top: 0;
+  bottom: var(--spacing-xs);
+  z-index: 15;
+  pointer-events: none;
+}
+.row-close-rail[data-mode='out'] {
+  left: calc(100% + var(--row-close-shift, 0px) + var(--spacing-xs));
+  width: 44px;
+}
+.row-close-rail[data-mode='in'] {
+  right: var(--spacing-xs);
+  width: 32px;
+}
+.row-close-slot {
+  position: sticky;
+  top: calc(env(safe-area-inset-top) + var(--spacing-xs));
+  display: flex;
+  pointer-events: none;
+}
+.row-close-slot > .row-close {
+  pointer-events: auto;
+}
+/* Under the condensed title bar where a screen has one (Daily has none). */
+body:has(.fx-condensed[data-on]) .row-close-slot {
+  top: calc(env(safe-area-inset-top) + 52px + var(--spacing-xs));
+}
+.row-close-rail[data-mode='out'] .row-close-slot {
+  height: 56px;
+  align-items: center;
+}
+.row-close-rail[data-mode='in'] .row-close-slot {
+  padding-top: var(--spacing-xs);
+}
+/* The lane: the button's 32px and a gap either side, from the row's edge (the plan's own 16px padding grows to 48px). */
+[data-row-close='in'] .row-lane {
+  padding-right: calc(var(--spacing-md) + var(--spacing-lg));
 }
 .check-preview {
   opacity: 0;
@@ -1581,8 +1676,8 @@ nav .bg-card {
 .dialog-rail .more-trigger:not(:hover) {
   background-color: var(--card-strong);
 }
-/* A rail button's name is the smart tip (lib/smartTip.ts, 2026-11-12), placed outside the panel over the scrim, beside the rail where the
-   window has room: no spot drawn by CSS alone is both off the panel and inside the window (at 768 a 600px sheet leaves 32px beside the rail).
+/* A rail button's name is the smart tip (lib/smartTip.ts, 2026-11-12), placed beside its button, outside the panel over the scrim where
+   that side has room: no spot drawn by CSS alone is both off the panel and inside the window (at 768 a 600px sheet leaves 32px beside the rail).
    So in a rail there is no CSS name, and the water card's words do not slide out over the panel. */
 .dialog-rail :is(.mf-round, .rail-tip)::after {
   content: none;
@@ -1698,9 +1793,44 @@ input[type='radio'] {
   background-color: color-mix(in oklab, var(--pri) 18%, var(--color-card-strong));
   color: var(--color-ink);
 }
-.pri-chip[aria-pressed='true'] {
+.pri-chip[aria-pressed='true']:not([data-tag-filter]) {
   background-color: var(--pri);
   color: var(--color-on-fill);
+}
+/* White is 2.5:1 on the orange fill: a picked P1 carries the dark slate, as every orange fill does (2026-11-12, found by the contrast probe). */
+.pri-1.pri-chip[aria-pressed='true']:not([data-tag-filter]) {
+  color: var(--color-ink-fixed);
+}
+
+/* A task's tags as filters (2026-11-13, the founder: tap a tag to filter the list). In a list that filters by its tags each tag is a real
+   button raised over the card's stretched control (`relative z-[1]` on the button itself, never on the rows of tags, so a tap between two
+   tags still opens the card), with the same look at rest whether its filter is on or not: the chips above the list say what is on. Its hit
+   area reaches 4px round it, exactly half the 8px between tags, so two never overlap and the title above is never taken: about 32px tall,
+   which WCAG 2.5.8 allows for a 24px target with that room round it (the second exception to 44px, beside On this page's rows). A mouse
+   hover is the tags' one quiet tint, and the keyboard's ring is the row's. Nothing here sets the tag's own type or box: these rules sit
+   outside the layers, so they would win over its utilities (Tailwind's base already resets a button's font). */
+button[data-tag-filter]::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+button[data-tag-filter]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in oklab, var(--tint, var(--color-ink)) 14%, transparent);
+  opacity: 0;
+  pointer-events: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  button[data-tag-filter]:hover::after {
+    opacity: 1;
+  }
+}
+button[data-tag-filter]:focus-visible {
+  outline: 3px solid var(--color-ink);
+  outline-offset: 2px;
 }
 
 
@@ -3524,8 +3654,9 @@ html[data-smart-tips] :is(.mf-round, .app-eye, .rail-tip)::after {
 
 /* Smart tips (lib/smartTip.ts with lib/tipGeometry.ts and `pickTipSpot` in @kreators/shared/tipPlace; the founder, 2026-11-12: "all the
    helper tooltips should appear in places that have no pre-existing text, like outside the popups"): one floating name for every
-   `data-tip` trigger, in the top layer (a popover), placed in the empty room nearest its trigger, outside a popup's panel where the
-   window has room. The look of the CSS name it replaces: the strong card over the page's own base, a hairline ring, caption size. */
+   `data-tip` trigger, in the top layer (a popover), placed beside its trigger at the 8px gap, above, below, left or right, on the side
+   that covers least and outside a popup's panel when that side is free (2026-11-13). The look of the CSS name it replaces: the strong
+   card over the page's own base, a hairline ring, caption size. */
 .smart-tip {
   position: fixed;
   top: 0;
@@ -3564,7 +3695,7 @@ html[data-smart-tips] :is(.mf-round, .app-eye, .rail-tip)::after {
 .smart-tip[data-on] {
   opacity: 1;
 }
-/* A glossary word's card (components/Tip.tsx), placed by the same rule; it keeps the pale purple of every tip. */
+/* A glossary word's card (components/Tip.tsx), placed by the same rule, beside its word; it keeps the pale purple of every tip. */
 .smart-tip-card {
   position: fixed;
   top: 0;

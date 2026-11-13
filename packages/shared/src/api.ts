@@ -310,6 +310,8 @@ export interface TodayResponse {
   agency?: TodayAgency;
   /** The area of life the lists were cut to (`?area=`, a `LIFE_AREAS` key or 'none'), so `tasks`, `backlog` and `backlogTotal` are all for it; absent or null for every area. */
   area?: LifeAreaKey | 'none' | null;
+  /** The tags the lists were cut to (`?tags=`, `taskTagsKey`: a pillar, a priority, Remember and the rest, combined), '' for none (2026-11-13). */
+  tags?: string;
   /** True when any open or ticked task of the person's carries an area, whatever `area` was asked; Daily shows its Area filter then. */
   areasUsed?: boolean;
   /** The day's plan: its day template (the kind of day), where it came from, its slots in clock order and every block (docs/time-blocks.md). */

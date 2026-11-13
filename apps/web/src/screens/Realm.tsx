@@ -7,6 +7,7 @@ import {
   KIND_META,
   KINDS,
   levelProgress,
+  mondayOf,
   parentKind,
   RELATIONSHIP_BY_KEY,
   type Node,
@@ -15,7 +16,7 @@ import {
 } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { AnimatePresence } from 'motion/react';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { Navigate, useParams, useSearchParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
@@ -29,8 +30,9 @@ import { Screen } from '../components/Screen';
 import { Sheet } from '../components/Sheet';
 import { Skeleton } from '../components/Skeleton';
 import { ConfirmDelete } from '../components/ConfirmDelete';
+import { ErrorLine } from '../components/ErrorLine';
 import { TaskRow } from '../components/TaskRow';
-import { ProjectSelect, StartFocus, Subtasks, TaskEndings, TaskPlanFields, planBody, planOf, planProblem, type Plan } from '../components/TaskPlan';
+import { HideTask, ProjectSelect, StartFocus, Subtasks, TaskEndings, TaskPlanFields, planBody, planOf, planProblem, type Plan } from '../components/TaskPlan';
 import { api } from '../lib/api';
 import { FIELD } from '../lib/ui';
 import { dayLabel, localDateTimeValue, todayLocal } from '../lib/date';
@@ -46,7 +48,17 @@ import { Fold } from '../components/Fold';
 import { EmergenceSlot } from '../components/EmergenceSlot';
 import { Pager, usePage } from '../components/Pager';
 import { SkeletonList } from '../components/Skeleton';
-import { DONE_PAGE_SIZE, DONE_PAGE_SIZES, type Node as TaskNode } from '@kreators/shared';
+import { DONE_PAGE_SIZE, DONE_PAGE_SIZES, HIDDEN_ALWAYS, matchesTaskTags, parseLifeArea, parseTaskTags, taskHiddenOn, taskTagOn, taskTagsKey, toggleTaskTag, type Node as TaskNode } from '@kreators/shared';
+import { TagChips } from '../components/TagChips';
+import { TagFilterHint } from '../components/TagFilterHint';
+import { TagFilterContext, tagChips, tagSentence, type TagFilter } from '../lib/taskTagFilter';
+import { useParamState } from '../lib/useParamState';
+import { sayStatus } from '../lib/sayStatus';
+import { useTimeBlocks } from '../lib/useTimeBlocks';
+import { HiddenFoot } from '../components/HiddenTasks';
+import { dialogOpen } from '../lib/useDialogFocus';
+import { focusHeading } from '../lib/focusHeading';
+import { useTapTwice } from '../lib/useTapTwice';
 
 // The same form as "Add a task" on Daily, downloaded the first time the fold opens.
 const AddTaskForm = lazyNamed(() => import('../components/TaskMonth'), 'AddTaskForm');
@@ -115,9 +127,67 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
   const built = nodes.some((n) => n.kind === 'pillar');
   const lp = levelProgress(state?.xp ?? 0);
   const evo = evolutionFor(CHARACTER_STAGES, state?.xp ?? 0, state?.floorAgeDays ?? 0);
-  const activeTasks = byKind('task').filter((n) => n.status === 'active');
+  // Hidden tasks (2026-11-13, the founder's yes): one hidden on the person's own day leaves Tasks to do for the Hidden fold under it, Until
+  // tomorrow first. Cut here on the screen, since GET /nodes is the whole pyramid (the layers' counts and a project's pace count every task).
+  const openTasks = byKind('task').filter((n) => n.status === 'active');
+  const shownTasks = openTasks.filter((n) => !taskHiddenOn(n.hiddenUntil, today));
+  // Tap a tag to filter Tasks to do (2026-11-13, as on Daily): kept in the URL as `tags` and `area`, cut here on the screen like the hidden
+  // ones (GET /nodes is the whole pyramid). No pillar tag (every task is this pillar's) and no time chip (no day plan here); a block tag is
+  // the block picked. Done tasks and the Hidden fold stay whole.
+  const [tagsRaw, setTagsRaw] = useParamState('tags', '');
+  const [areaRaw, setAreaRaw] = useParamState('area', '');
+  const tagCut = parseTaskTags(tagsRaw);
+  const tagArea = areaRaw === 'none' ? 'none' : (parseLifeArea(areaRaw) ?? '');
+  const filtersOn = tagArea !== '' || taskTagsKey(tagCut) !== '';
+  const weekBlocks = useTimeBlocks(mondayOf(today), Boolean(tagCut.block));
+  const blockName = (id: string) => weekBlocks.data?.blocks.find((b) => b.id === id)?.name;
+  const chips = tagChips(tagCut, tagArea, blockName);
+  const toggleTag = (token: string) => {
+    if (token.startsWith('area:')) {
+      const next = tagArea === token.slice(5) ? '' : token.slice(5);
+      setAreaRaw(next);
+      sayStatus(next ? tagSentence(tagChips(tagCut, next, blockName)) : 'Filter removed.');
+      return;
+    }
+    const was = taskTagOn(tagCut, token);
+    const next = toggleTaskTag(tagCut, token);
+    setTagsRaw(taskTagsKey(next));
+    sayStatus(was ? 'Filter removed.' : tagSentence(tagChips(next, tagArea, blockName)));
+  };
+  const clearFilters = () => {
+    setTagsRaw('');
+    setAreaRaw('');
+  };
+  const tagFilter: TagFilter = { on: (token) => (token.startsWith('area:') ? tagArea === token.slice(5) : taskTagOn(tagCut, token)), toggle: toggleTag, slots: [], pillar: false, time: false };
+  const activeTasks = shownTasks.filter((n) => (tagArea === '' || (tagArea === 'none' ? !n.lifeArea : n.lifeArea === tagArea)) && matchesTaskTags(n, tagCut));
+  const hiddenTasks = openTasks.filter((n) => taskHiddenOn(n.hiddenUntil, today)).sort((a, b) => Number(a.hiddenUntil === HIDDEN_ALWAYS) - Number(b.hiddenUntil === HIDDEN_ALWAYS));
   const doneTasks = byKind('task').filter((n) => n.status === 'done');
   const projects = byKind('project').filter((n) => n.status === 'active');
+  // The latest tasks, read once the edit sheet has closed (below).
+  const latest = useRef(nodes);
+  latest.current = nodes;
+  /**
+   * A hide or an unhide from the edit sheet moves the row between Tasks to do and the closed Hidden fold, so the sheet's opener is gone and
+   * focus would fall to the page. Each frame until the closing sheet has left (it keeps focus while it animates out), and only when focus
+   * then fell to the page, it goes to the Hidden fold's toggle (the task is hidden now) or to Tasks to do's heading. Never moves the page.
+   */
+  const landAfterEdit = (id: string) => {
+    const until = performance.now() + 2000;
+    const go = () => {
+      const now = document.activeElement;
+      const fell = !now || now === document.body;
+      if (!fell) {
+        // Still in the sheet on its way out: look again. Anywhere else, someone put it there on purpose.
+        if ((dialogOpen() || now.closest('[role="dialog"]')) && performance.now() < until) requestAnimationFrame(go);
+        return;
+      }
+      const n = latest.current.find((x) => x.id === id);
+      const fold = document.querySelector<HTMLButtonElement>('#pillar-hidden-tasks > button[aria-expanded]');
+      if (n && n.status === 'active' && taskHiddenOn(n.hiddenUntil, todayLocal()) && fold) fold.focus({ preventScroll: true });
+      else focusHeading('do-heading', { preventScroll: true });
+    };
+    requestAnimationFrame(go);
+  };
 
   const queue = useActionQueue(refresh);
   const toggle = (n: Node) =>
@@ -227,7 +297,10 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                 Tasks to do
               </h2>
               <p className="mt-xs m-0 text-subhead text-ink-soft">Tick the box when you have done it. The whole pyramid gets stronger.</p>
+              {filtersOn && <TagChips chips={chips} onRemove={(c) => toggleTag(c.token)} onClear={() => { clearFilters(); sayStatus('Filters cleared. Showing every task.'); }} heading="do-heading" />}
               {activeTasks.length > 0 ? (
+                <TagFilterContext.Provider value={tagFilter}>
+                <TagFilterHint />
                 <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                   <AnimatePresence initial={false}>
                     {activeTasks.map((n) => {
@@ -248,8 +321,16 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                     })}
                   </AnimatePresence>
                 </ul>
+                </TagFilterContext.Provider>
+              ) : filtersOn && shownTasks.length > 0 ? (
+                <div className="mt-sm flex flex-wrap-reverse items-center justify-between gap-sm rounded-card border-2 border-dashed border-line p-md">
+                  <p className="m-0 min-w-0 flex-1 basis-[60%] text-subhead text-ink-soft">No tasks match these filters.</p>
+                  <Button variant="outline" onClick={clearFilters}>
+                    Clear filters
+                  </Button>
+                </div>
               ) : (
-                <p className="mt-sm m-0 rounded-tile bg-card p-sm text-subhead text-ink-soft shadow-toy-soft">Nothing waiting. Add one below.</p>
+                <p className="mt-sm m-0 rounded-tile bg-card p-sm text-subhead text-ink-soft shadow-toy-soft">{hiddenTasks.length > 0 ? `Nothing waiting. ${hiddenTasks.length} hidden below.` : 'Nothing waiting. Add one below.'}</p>
               )}
               {/* A fold whose plus turns into a cross, opening the form right here (the founder's layout pass, 2026-11-06): this pillar's own
                   projects, so a task never lands on another pillar by accident. Saving folds it again and says where the task went. */}
@@ -285,6 +366,34 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                   {added}
                 </p>
               )}
+              {/* Hidden (2026-11-13): the last fold of Tasks to do, closed, its count beside it, shown only while a task is hidden today. Each
+                  is the ordinary row (a tick pays and counts, the edit sheet one tap away) with Daily's own foot: its state and Unhide. */}
+              {hiddenTasks.length > 0 && (
+                <Fold id="pillar-hidden-tasks" className={projects.length > 0 ? 'mt-xs' : 'mt-sm'} title="Hidden" hint={String(hiddenTasks.length)}>
+                  <p className="m-0 text-caption text-ink-soft">Out of your lists, with no reminders. A tick still counts.</p>
+                  <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+                    <AnimatePresence initial={false}>
+                      {hiddenTasks.map((n) => {
+                        const project = nodes.find((p) => p.id === n.parentId);
+                        return (
+                          <TaskRow
+                            key={n.id}
+                            task={n}
+                            today={today}
+                            subtitle={project ? `Project: ${project.title}` : undefined}
+                            pillarTag={false}
+                            busy={queue.isPending(n.id)}
+                            hint={queue.hint(n.id)}
+                            onToggle={() => toggle(n)}
+                            onEdit={() => setEditing(n)}
+                            panel={<HiddenFoot task={n} date={today} back="in Tasks to do" place={{ fold: 'pillar-hidden-tasks', heading: 'do-heading' }} />}
+                          />
+                        );
+                      })}
+                    </AnimatePresence>
+                  </ul>
+                </Fold>
+              )}
             </section>
 
             <section className="mt-lg" aria-labelledby="ladder-heading">
@@ -298,7 +407,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
                 <Pyramid
                   relationship={relationship}
                   compact
-                  words={Object.fromEntries(KINDS.map((k) => [k, byKind(k).find((n) => n.status === 'active')?.title ?? (k === 'task' ? 'Your next task' : 'Nothing here yet')]))}
+                  words={Object.fromEntries(KINDS.map((k) => [k, (k === 'task' ? shownTasks[0] : byKind(k).find((n) => n.status === 'active'))?.title ?? (k === 'task' ? 'Your next task' : 'Nothing here yet')]))}
                 />
               </div>
               <ol className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
@@ -414,6 +523,7 @@ function RealmView({ relationship }: { relationship: RelationshipKey }) {
         node={editing}
         focusDue={focusDue}
         onClose={() => {
+          if (editing) landAfterEdit(editing.id);
           setEditing(null);
           setFocusDue(false);
         }}
@@ -507,6 +617,8 @@ function EditSheet({ node, focusDue = false, onClose }: { node: Node | null; foc
   // An open task can move under any of the person's active projects, in any pillar: the same read and picker as TaskPanel on Daily.
   const [parentId, setParentId] = useState('');
   const [asking, setAsking] = useState(false);
+  // A task is a small personal remove (a second tap, the founder, 2026-11-13); a layer that holds others up still asks in a sheet.
+  const taskAsk = useTapTwice();
   const day = todayLocal();
   const month = day.slice(0, 7);
   const movable = node?.kind === 'task' && node.status === 'active';
@@ -520,7 +632,8 @@ function EditSheet({ node, focusDue = false, onClose }: { node: Node | null; foc
     setPlan(planOf(node));
     setParentId(node?.parentId ?? '');
     setAsking(false);
-  }, [node]);
+    taskAsk.disarm();
+  }, [node]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = useMutation({
     mutationFn: () => {
@@ -583,6 +696,8 @@ function EditSheet({ node, focusDue = false, onClose }: { node: Node | null; foc
               <Subtasks task={node} />
               <StartFocus task={{ ...node, estimateMin: Number(plan.minutes) > 0 ? Number(plan.minutes) : node.estimateMin }} />
               <TaskEndings task={node} today={todayLocal()} onPlan={(patch) => setPlan((p) => ({ ...p, ...patch }))} onGone={onClose} />
+              {/* Hide it (2026-11-12): from Daily, and from 2026-11-13 from Tasks to do into this page's Hidden fold; the sheet says so and offers Unhide. */}
+              <HideTask task={node} today={todayLocal()} pillar />
             </>
           )}
           <p className="m-0 text-subhead text-ink-soft">
@@ -591,23 +706,39 @@ function EditSheet({ node, focusDue = false, onClose }: { node: Node | null; foc
           <Button type="submit" size="lg" full disabled={save.isPending || !title.trim() || (node.kind === 'task' && planProblem(plan) !== null)}>
             Save changes
           </Button>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              remove.reset();
-              setAsking(true);
-            }}
-            disabled={remove.isPending}
-          >
-            Remove this {meta.label.toLowerCase()}
-          </Button>
+          {node.kind === 'task' ? (
+            <Button
+              variant="ghost"
+              className={taskAsk.isArmed(true) ? 'red-armed' : ''}
+              onClick={() => {
+                remove.reset();
+                taskAsk.tap(true, () => remove.mutate());
+              }}
+              disabled={remove.isPending}
+            >
+              <span aria-hidden={taskAsk.isArmed(true) || undefined}>{taskAsk.isArmed(true) ? 'Tap again to remove' : `Remove this ${meta.label.toLowerCase()}`}</span>
+<span className="sr-only" aria-live="polite">{taskAsk.isArmed(true) ? 'Tap again to remove' : ''}</span>
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                remove.reset();
+                setAsking(true);
+              }}
+              disabled={remove.isPending}
+            >
+              Remove this {meta.label.toLowerCase()}
+            </Button>
+          )}
+          {node.kind === 'task' && remove.isError && <ErrorLine e={remove.error} />}
         </form>
       )}
       {node && meta && (
         <ConfirmDelete
           open={asking}
           title={`Remove this ${meta.label.toLowerCase()}?`}
-          body={node.kind === 'task' ? `“${node.title}” goes from your pyramid. This cannot be undone.` : `“${node.title}” and everything it holds up go from your pyramid. This cannot be undone.`}
+          body={`“${node.title}” and everything it holds up go from your pyramid. This cannot be undone.`}
           pending={remove.isPending}
           failed={remove.isError}
           onYes={() => remove.mutate()}

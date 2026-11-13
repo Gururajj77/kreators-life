@@ -185,19 +185,31 @@ function Box({ g, open, onToggle, renderTask, by, extra }: { g: Group; open: boo
   useLayoutEffect(() => {
     const el = body.current;
     if (!el) return;
+    // The body clips only while it slides: once open it lets a task's plan close stand outside the row and stick as the page scrolls
+    // (RowClose in CheckRow.tsx, 2026-11-13), which a clipping box would cut off and keep from sticking.
+    const settle = () => void (el.style.overflow = 'visible');
     if (first.current) {
       first.current = false;
       el.hidden = !open;
-      if (open) gsap.set(el, { height: 'auto', opacity: 1 });
+      if (open) {
+        gsap.set(el, { height: 'auto', opacity: 1 });
+        settle();
+      }
       return;
     }
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let tween: gsap.core.Tween | null = null;
     if (open) {
       el.hidden = false;
-      if (reduce) gsap.set(el, { height: 'auto', opacity: 1 });
-      else tween = gsap.fromTo(el, { height: 0, opacity: 0 }, { height: 'auto', opacity: 1, duration: 0.32, ease: 'power3.out' });
+      if (reduce) {
+        gsap.set(el, { height: 'auto', opacity: 1 });
+        settle();
+      } else {
+        el.style.overflow = '';
+        tween = gsap.fromTo(el, { height: 0, opacity: 0 }, { height: 'auto', opacity: 1, duration: 0.32, ease: 'power3.out', onComplete: settle });
+      }
     } else if (!el.hidden) {
+      el.style.overflow = '';
       if (reduce) {
         gsap.set(el, { height: 0, opacity: 0 });
         el.hidden = true;

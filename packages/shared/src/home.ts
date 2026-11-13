@@ -214,6 +214,8 @@ export interface BriefFacts {
   coachNotes: number;
   coachAsks: number;
   reviewDue: boolean;
+  /** The first day of the week the review is due for (last week), so the step opens that week, not the one running. */
+  reviewWeek?: string;
   /** The apps that are on, so a step never points at one that is off. */
   apps: readonly string[];
   /** What Discover taught the app, when the person took it and allows next steps to use it. profile is null when they have not, or switched it off. */
@@ -256,6 +258,8 @@ export const BRIEF_MOVE_WEEK = 150;
 export const BRIEF_SLEEP_LOW = 6.5;
 /** The week's average mood (1 to 5) at or under which the brief suggests a Friends pillar step. */
 export const BRIEF_MOOD_LOW = 2.5;
+/** Daily's Past due tab, where a task past its day is moved or finished. */
+const PAST_DUE = '/today?taskTab=pastdue#tasks-heading';
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const one1 = (n: number) => Math.round(n * 10) / 10;
 
@@ -283,7 +287,7 @@ export function briefFor(f: BriefFacts): { signals: BriefLine[]; actions: BriefL
   if (!f.checkedIn && f.streak >= 3 && f.hour >= 17) sig(100, 'streak-risk', 'watch', `Your ${f.streak}-day streak ends tonight unless you check in.`, '/today');
   else if (f.checkedIn && f.streak >= 3 && f.streak >= f.bestStreak) sig(70, 'streak-best', 'good', `A new best: ${plural(f.streak, 'day')} in a row.`, '/today');
   else if (f.streak >= 3) sig(40, 'streak', 'good', `${plural(f.streak, 'day')} in a row so far.`, '/today');
-  if (f.tasksOverdue > 0) sig(90, 'overdue', 'watch', `${plural(f.tasksOverdue, 'task')} ${f.tasksOverdue === 1 ? 'is' : 'are'} past ${f.tasksOverdue === 1 ? 'its' : 'their'} day.`, '/tower');
+  if (f.tasksOverdue > 0) sig(90, 'overdue', 'watch', `${plural(f.tasksOverdue, 'task')} ${f.tasksOverdue === 1 ? 'is' : 'are'} past ${f.tasksOverdue === 1 ? 'its' : 'their'} day.`, PAST_DUE);
   if (f.doneWeekBefore > 0 && f.doneWeek > f.doneWeekBefore) sig(60, 'tasks-up', 'good', `${plural(f.doneWeek, 'task')} ticked these seven days, ${f.doneWeek - f.doneWeekBefore} more than the seven before.`, '/today');
   else if (f.doneWeekBefore > 0 && f.doneWeek < f.doneWeekBefore) sig(65, 'tasks-down', 'watch', `${plural(f.doneWeek, 'task')} ticked these seven days, ${f.doneWeekBefore - f.doneWeek} fewer than the seven before.`, '/today');
   if (f.sleepAvg !== null && f.sleepAvgBefore !== null && Math.abs(f.sleepAvg - f.sleepAvgBefore) >= 0.5)
@@ -291,7 +295,7 @@ export function briefFor(f: BriefFacts): { signals: BriefLine[]; actions: BriefL
   if (f.moodAvg !== null && f.moodAvgBefore !== null && Math.abs(f.moodAvg - f.moodAvgBefore) >= 0.5)
     sig(f.moodAvg < f.moodAvgBefore ? 75 : 45, 'mood', f.moodAvg < f.moodAvgBefore ? 'watch' : 'good', `Your mood is ${f.moodAvg < f.moodAvgBefore ? 'lower' : 'brighter'} this week than last.`, on('mood') ? '/mood' : null);
   if (f.stressAvg !== null && f.stressAvg >= 4) sig(85, 'stress', 'watch', 'Stress has been high most of this week.', on('stress') ? '/stress' : null);
-  if (f.notToDoSlipped > 0) sig(55, 'slipped', 'watch', `You slipped on ${plural(f.notToDoSlipped, 'not to do item')} yesterday. Today is a fresh start.`, '/today');
+  if (f.notToDoSlipped > 0) sig(55, 'slipped', 'watch', `You slipped on ${plural(f.notToDoSlipped, 'not to do item')} yesterday. Today is a fresh start.`, '/today#ntd-heading');
   if (f.routineWeek !== null && f.contractDays !== null)
     sig(f.routineWeek < f.contractDays ? 58 : 35, 'routine', f.routineWeek < f.contractDays ? 'watch' : 'good', `Routine: ${f.routineWeek} of the last 7 days, against a deal of ${f.contractDays}.`, '/today');
   if (f.nextEvent) sig(68, 'event', 'neutral', `${f.nextEvent.title} is ${f.nextEvent.when}.`, f.nextEvent.to);
@@ -314,17 +318,17 @@ export function briefFor(f: BriefFacts): { signals: BriefLine[]; actions: BriefL
   if (mv && mv.week >= BRIEF_MOVE_WEEK) sig(44, 'move-week', 'good', `${formatCount(mv.week)} active minutes these seven days.`, moveTo);
   sig(10, 'level', 'neutral', `Level ${f.level}. ${f.xpToNext} xp to the next one.`, '/you');
 
-  if (!f.checkedIn) act(100, 'checkin', 'Check in on Daily. It keeps your streak.', '/today');
-  if (f.tasksDue > 0) act(90, 'task', f.tasksDue === 1 ? 'Tick today’s task.' : `Tick one of today’s ${f.tasksDue} tasks.`, '/today');
-  if (!f.smallActDone) act(80, 'act', 'Do today’s small act. It takes a minute.', '/today');
+  if (!f.checkedIn) act(100, 'checkin', 'Check in on Daily. It keeps your streak.', '/today#show-heading');
+  if (f.tasksDue > 0) act(90, 'task', f.tasksDue === 1 ? 'Tick today’s task.' : `Tick one of today’s ${f.tasksDue} tasks.`, '/today#tasks-heading');
+  if (!f.smallActDone) act(80, 'act', 'Do today’s small act. It takes a minute.', '/today#spark-heading');
   if (f.coachAsks > 0) act(88, 'coach-ask', 'Answer the coach who asked: yes or no, on your Profile tab.', '/you#coach');
   if (f.coachNotes > 0 && on('coaching')) act(76, 'coach-note', 'Read your coach’s note.', '/coaching');
   if (ag && ag.changeAsks > 0) act(74, 'agency-change', ag.changeAsks === 1 ? 'Make the change your client asked for, then send it back.' : 'Work through the changes your clients asked for.', agTo);
   if (ag?.retainersChosen && ag.retainersChosen > 0) act(86, 'agency-retainer', 'Confirm the retainer your client chose, so its first month is made.', ag.retainersChosen === 1 && ag.retainerChosen ? `/agency/${ag.retainerChosen.clientId}` : '/agency');
   if (ag?.piecesDueToday && ag.piecesDueToday > 0) act(78, 'agency-due', ag.piecesDueToday === 1 ? 'Finish the client piece due today and send it for review.' : 'Work through the client pieces due today, oldest first.', '/today');
   if (ag?.invoicesOverdue && ag.invoicesOverdue > 0) act(68, 'agency-invoice', 'Remind the client about the late invoice, or mark it paid.', '/agency?tab=invoices');
-  if (f.tasksOverdue > 0) act(70, 'overdue', 'Move or finish the tasks past their day.', '/tower');
-  if (f.reviewDue && on('reviews')) act(65, 'review', 'Write last week’s review. Five minutes, and the numbers are filled in.', '/reviews');
+  if (f.tasksOverdue > 0) act(70, 'overdue', 'Move or finish the tasks past their day.', PAST_DUE);
+  if (f.reviewDue && on('reviews')) act(65, 'review', 'Write last week’s review. Five minutes, and the numbers are filled in.', f.reviewWeek ? `/reviews?kind=week&date=${f.reviewWeek}#review-heading` : '/reviews');
   if (f.stressAvg !== null && f.stressAvg >= 4 && on('mindful')) act(72, 'breathe', 'Take five minutes with the breathing timer.', '/mindful');
   if (f.sleepAvg !== null && f.sleepAvgBefore !== null && f.sleepAvg < f.sleepAvgBefore - 0.5 && on('sleep')) act(60, 'sleep', 'Log tonight’s sleep, and aim for lights out on time.', '/sleep');
   if (f.nextEvent) act(55, 'event', `Check the plan for ${f.nextEvent.title}.`, f.nextEvent.to);
@@ -398,11 +402,11 @@ export function briefFor(f: BriefFacts): { signals: BriefLine[]; actions: BriefL
 // ---------------------------------------------------------------------------
 
 export const GETTING_STARTED = [
-  { key: 'checkin', label: 'Check in on Daily', to: '/today' },
-  { key: 'task', label: 'Tick your first task', to: '/today' },
-  { key: 'act', label: 'Do a small act', to: '/today' },
+  { key: 'checkin', label: 'Check in on Daily', to: '/today#show-heading' },
+  { key: 'task', label: 'Tick your first task', to: '/today#tasks-heading' },
+  { key: 'act', label: 'Do a small act', to: '/today#spark-heading' },
   { key: 'interests', label: 'Pick two interests', to: '/profile#interests' },
-  { key: 'handle', label: 'Choose your username', to: '/profile' },
+  { key: 'handle', label: 'Choose your username', to: '/profile#username' },
   { key: 'people', label: 'Join a circle, an event or a run club', to: '/apps' },
   { key: 'session', label: 'Take the strategy session', to: '/session' },
 ] as const;

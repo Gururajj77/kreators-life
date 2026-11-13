@@ -109,8 +109,11 @@ export function ConsentPopup() {
   useEffect(() => {
     const el = root.current;
     if (!showCard || !el) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) gsap.set(el, { opacity: 1, y: 0 });
-    else gsap.fromTo(el, { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.4, ease: 'expo.out' });
+    // GSAP writes `translate: none` inline beside its transform, which beat `.lift-over-sticky` (app.css): on a phone the card stayed down
+    // over a held Add task while the assistant rose (2026-11-13, the founder's "unable to add a new task"). Clearing both once the card is
+    // in lets the lift work again.
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) gsap.set(el, { opacity: 1, clearProps: 'transform,translate' });
+    else gsap.fromTo(el, { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.4, ease: 'expo.out', clearProps: 'transform,translate' });
   }, [showCard, step, inFlow, ready]);
 
   // The footer's "Privacy choices" button.

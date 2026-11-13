@@ -18,9 +18,9 @@ export const ON_FILL = 'var(--color-on-fill)';
 
 /**
  * A tick box in one of the seven's colours (2026-11-12): the fill and the tick from the tokens above, the hard shadow in its deep colour,
- * and for orange and yellow, whose fill is under 3:1 on glass, the empty box's edge in that deep colour too.
+ * and the empty box's edge from `--tick-edge-<key>` in app.css: the fill where it holds 3:1 on the page, the deep colour for orange and
+ * yellow, and in dark mode the deep colour for all seven (purple and indigo fall under 3:1 on the dark wash, now the box stands outside its card).
  */
 export function pillarTick(r: { key: string; floor: number }) {
-  const deep = `var(--deep-${r.key})`;
-  return { color: fillVar(r), deep, text: ON_FILL, edge: r.floor === 2 || r.floor === 3 ? deep : undefined };
+  return { color: fillVar(r), deep: `var(--deep-${r.key})`, text: ON_FILL, edge: `var(--tick-edge-${r.key})` };
 }

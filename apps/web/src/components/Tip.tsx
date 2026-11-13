@@ -9,8 +9,8 @@ const GRACE = 120;
  * A word with a short explanation that opens on hover, keyboard focus or tap and closes on Escape or a tap elsewhere. Every tip in
  * the app wears the same pale purple card with ink text, so it reads as help and never as a button or a warning; in dark mode the tint
  * turns deep purple by itself. The card is drawn at the top of the page and placed by the smart tips' rule (lib/tipGeometry.ts,
- * 2026-11-12): in the empty room nearest the word, never over words, a control or a picture, inside the window, so a cover's clip
- * never cuts it. It stays open while the pointer is on it.
+ * 2026-11-12, 2026-11-13): beside its word, the gap away, above, below or to a side, on the side that covers least, inside the window,
+ * so a cover's clip never cuts it. It stays open while the pointer is on it.
  */
 export function Tip({ text, children, className = '' }: { text: string; children: ReactNode; className?: string }) {
   const id = useId();
@@ -54,6 +54,7 @@ export function Tip({ text, children, className = '' }: { text: string; children
     c.style.visibility = 'hidden';
     void import('../lib/tipGeometry').then((m) => {
       if (gone || !button.current || !card.current) return;
+      // Beside its word, however it was opened, so a mouse reaches it within the grace time (WCAG 1.4.13).
       m.placeTip(button.current, card.current, [
         ['top', 'start'],
         ['bottom', 'start'],
@@ -72,7 +73,10 @@ export function Tip({ text, children, className = '' }: { text: string; children
         aria-describedby={open ? id : undefined}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        onFocus={(e) => e.currentTarget.matches(':focus-visible') && setOpen(true)}
+        onFocus={(e) => {
+          if (!e.currentTarget.matches(':focus-visible')) return;
+          setOpen(true);
+        }}
         onBlur={() => setOpen(false)}
         className="cursor-help rounded-tile border-0 bg-transparent p-0 font-[inherit] text-inherit underline decoration-dotted decoration-2 underline-offset-4"
       >

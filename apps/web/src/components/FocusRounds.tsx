@@ -12,7 +12,8 @@ import { useFocusPortal } from '../lib/focusPortal';
 import { claimPart, FOCUS_TAB_ID, focusChannel, focusRunOwner, markPartDone, partDone, readFocusRun, snapshotLeftMs, useFocusSession, writeFocusRun, type FocusKind, type FocusSnapshot, type FocusTabMessage } from '../lib/focusSession';
 import { useRefreshAll } from '../lib/queries';
 import { useDebounced } from '../lib/useDebounced';
-import { chip, FIELD, RED_YES } from '../lib/ui';
+import { chip, FIELD } from '../lib/ui';
+import { useTapTwice } from '../lib/useTapTwice';
 import { playBeats, playBreathCue, playChime, unlockAudio, useAmbient } from '../lib/sound';
 import { BreathFour } from './BreathFour';
 import { useFocus, useSession } from '../lib/store';
@@ -262,7 +263,7 @@ function TaskPicker({ value, onPick, enabled, hint = 'The task is saved with eac
 
 /**
  * Change a finished session (its length and its task) or delete it, or add one that was forgotten, for today or yesterday. A session that
- * also counted as mindful minutes changes its log with it, on the server. Delete asks once more first.
+ * also counted as mindful minutes changes its log with it, on the server. Delete is a second tap.
  */
 function SessionEditor({ edit, onClose, enabled, owner, logFocus }: { edit: FocusRoundRow | 'new'; onClose: () => void; enabled: boolean; owner: string; logFocus: boolean }) {
   const qc = useQueryClient();
@@ -272,7 +273,8 @@ function SessionEditor({ edit, onClose, enabled, owner, logFocus }: { edit: Focu
   const [nodeId, setNodeId] = useState(fresh ? '' : (edit.nodeId ?? ''));
   const [title, setTitle] = useState<string | null>(fresh ? null : edit.title || null);
   const [day, setDay] = useState<'today' | 'yesterday'>('today');
-  const [asking, setAsking] = useState(false);
+  // A small personal entry: a second tap deletes it (the founder, 2026-11-13).
+  const ask = useTapTwice();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const max = Math.max(240, Math.ceil(minutes / 30) * 30);
@@ -346,21 +348,12 @@ function SessionEditor({ edit, onClose, enabled, owner, logFocus }: { edit: Focu
       <Button className="mt-md" full disabled={busy} onClick={save}>
         {fresh ? 'Add this session' : 'Save'}
       </Button>
-      {!fresh &&
-        (asking ? (
-          <div className="mt-sm grid grid-cols-2 gap-xs" role="group" aria-label="Delete this session?">
-            <button type="button" disabled={busy} onClick={remove} className={RED_YES}>
-              Delete it
-            </button>
-            <Button variant="outline" disabled={busy} onClick={() => setAsking(false)}>
-              Keep it
-            </Button>
-          </div>
-        ) : (
-          <Button className="mt-sm" variant="outline" full disabled={busy} onClick={() => setAsking(true)}>
-            Delete this session
-          </Button>
-        ))}
+      {!fresh && (
+        <Button className={`mt-sm ${ask.isArmed(true) ? 'red-armed' : ''}`} variant="outline" full disabled={busy} onClick={() => ask.tap(true, remove)}>
+          <span aria-hidden={ask.isArmed(true) || undefined}>{ask.isArmed(true) ? 'Tap again to delete' : 'Delete this session'}</span>
+<span className="sr-only" aria-live="polite">{ask.isArmed(true) ? 'Tap again to delete' : ''}</span>
+        </Button>
+      )}
     </>
   );
 }

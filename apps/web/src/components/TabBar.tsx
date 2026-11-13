@@ -260,7 +260,7 @@ export function TabBar() {
               const rel = RELATIONSHIP_BY_KEY[BADGE_META[role].accent];
               return (
                 <span className="inline-flex min-h-[32px] items-center gap-xs whitespace-nowrap rounded-pill py-[4px] pr-sm pl-[4px] text-caption font-medium" style={{ background: `var(--soft-${rel.key})`, color: `var(--deep-${rel.key})` }}>
-                  <RoleBadge role={role} size={24} />
+                  <RoleBadge role={role} size={24} named />
                   {BADGE_META[role].name}
                 </span>
               );

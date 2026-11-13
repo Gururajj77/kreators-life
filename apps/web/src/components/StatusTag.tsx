@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { TagTone } from '@kreators/shared';
+import { TAG_FILTER_HINT_ID, type TagPress } from '../lib/taskTagFilter';
 
 /**
  * The colours a tag wears: a pale wash, and a dot (or a small icon) in the relationship colour. The word is always
@@ -21,11 +22,12 @@ export const TONE: Record<TagTone, { bg: string; dot: string; ink: string }> = {
  * A small tag: a dot and a word on a pale wash. Used for the stage of a deliverable, a client's status, an invoice or
  * an agreement, and (through `FactTag`) for every fact on a card. `mark` replaces the dot with a small icon.
  */
-export function StatusTag({ tone, children, title, mark, fit = false, className = '' }: { tone: TagTone; children: ReactNode; title?: string; mark?: ReactNode; /** Lets a long tag truncate to one line, its full words in `title` (a tag in a card's corner). */ fit?: boolean; className?: string }) {
+export function StatusTag({ tone, children, title, mark, fit = false, className = '', press }: { tone: TagTone; children: ReactNode; title?: string; mark?: ReactNode; /** Lets a long tag truncate to one line, its full words in `title` (a tag in a card's corner). */ fit?: boolean; className?: string; /** Draws the tag as a filter button (a task's tag in a list that filters by it, 2026-11-13): the same look at rest. */ press?: TagPress }) {
   const t = TONE[tone];
   const tip = title ?? (fit && typeof children === 'string' ? children : undefined);
-  return (
-    <span title={tip} className={`tag inline-flex items-center gap-xs rounded-pill px-sm text-caption font-medium leading-[24px] text-ink ${fit ? 'min-w-0 max-w-full shrink' : 'shrink-0'} ${className}`} style={{ background: t.bg }}>
+  const cls = `tag inline-flex items-center gap-xs rounded-pill px-sm text-caption font-medium leading-[24px] text-ink ${fit ? 'min-w-0 max-w-full shrink' : 'shrink-0'} ${className}`;
+  const inner = (
+    <>
       {mark ? (
         <span aria-hidden="true" className="inline-flex shrink-0" style={{ color: t.ink }}>
           {mark}
@@ -34,6 +36,17 @@ export function StatusTag({ tone, children, title, mark, fit = false, className 
         <span aria-hidden="true" className="inline-block size-[8px] shrink-0 rounded-pill" style={{ background: t.dot }} />
       )}
       {fit ? <span className="min-w-0 truncate">{children}</span> : children}
+    </>
+  );
+  if (press)
+    return (
+      <button type="button" data-tag-filter="" data-tip={tip} aria-label={press.label} aria-describedby={TAG_FILTER_HINT_ID} aria-pressed={press.pressed} onClick={press.onPress} className={`${cls} relative z-[1] cursor-pointer`} style={{ background: t.bg }}>
+        {inner}
+      </button>
+    );
+  return (
+    <span title={tip} className={cls} style={{ background: t.bg }}>
+      {inner}
     </span>
   );
 }

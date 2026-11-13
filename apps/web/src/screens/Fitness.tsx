@@ -7,7 +7,9 @@ import { Link } from 'react-router';
 import { AnimatedIcon } from '../components/AnimatedIcon';
 import { AppIcon } from '../components/AppIcon';
 import { AreaLine, CalendarGrid, Donut, Gauge, Legend, PillBars } from '../components/Charts';
-import { ConfirmDelete } from '../components/ConfirmDelete';
+import { TapTwiceIcon } from '../components/TapTwiceIcon';
+import { ErrorLine } from '../components/ErrorLine';
+import { useTapTwice } from '../lib/useTapTwice';
 import { EatForm } from '../components/EatForm';
 import { EmergenceSlot } from '../components/EmergenceSlot';
 import { Hero, HeroNumber } from '../components/Hero';
@@ -68,11 +70,11 @@ export function Fitness() {
   const water = useAuthed(['reminders', today], () => api.reminders(today));
   const [eatDay, setEatDay] = useState<'today' | 'yesterday'>('today');
   const [openDay, setOpenDay] = useState<string | null>(null);
-  const [toDelete, setToDelete] = useState<MoveLog | null>(null);
+  // A movement is a small personal entry: a second tap removes it (the founder, 2026-11-13), never a popup.
+  const ask = useTapTwice<string>();
   const remove = useMutation({
     mutationFn: (id: string) => api.deleteMove(id),
     onSuccess: () => {
-      setToDelete(null);
       // The row and its trash button go, so the keyboard's place moves to the list's heading.
       focusHeadingAfter('moves-heading');
       return refresh();
@@ -139,7 +141,7 @@ export function Fitness() {
         <div className="mt-md">{d ? <EatForm day={eatOn} existing={eatNow} previous={eatBefore} proteinGoal={proteinGoal} lastScoop={lastScoop} onSaved={() => void refresh()} /> : <SkeletonList count={1} lines={3} label="Loading" />}</div>
         <p className="mt-md m-0 flex flex-wrap items-center justify-between gap-xs text-subhead">
           <span className="min-w-0">{w ? `Water today: ${litres(w.ml)} of ${litres(w.goalMl)}.` : 'Water today: loading.'}</span>
-          <Link to="/home" className="inline-flex min-h-[44px] items-center gap-xs font-semibold underline-offset-4 hover:underline">
+          <Link to="/home#reminders" className="inline-flex min-h-[44px] items-center gap-xs font-semibold underline-offset-4 hover:underline">
             Water on Home
             <Icon icon={ArrowUpRight} size={16} className="read-arrow" />
           </Link>
@@ -236,42 +238,46 @@ export function Fitness() {
                 </span>
                 {m.source === 'club' && <StatusTag tone="calm">Club run</StatusTag>}
               </button>
-              <button type="button" onClick={() => setToDelete(m)} aria-label={`Remove ${moveLine(m)} on ${dayLabel(m.date)}`} data-tip="Remove" className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1">
+              <TapTwiceIcon
+                armed={ask.isArmed(m.id)}
+                ask="Tap again to remove"
+                onClick={() => {
+                  remove.reset();
+                  ask.tap(m.id, () => remove.mutate(m.id));
+                }}
+                disabled={remove.isPending}
+                label={`Remove ${moveLine(m)} on ${dayLabel(m.date)}${m.source === 'club' ? '. The club run itself stays in Kreators Run.' : ''}`}
+                tip="Remove"
+                className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1"
+              >
                 <AnimatedIcon name="trash" size={20} />
-              </button>
+              </TapTwiceIcon>
             </li>
           ))}
         </ul>
+        {remove.isError && <ErrorLine e={remove.error} />}
         <Pager page={list.data?.page} prefix="m" label="movement" />
       </Section>
 
-      <ConfirmDelete
-        open={toDelete !== null}
-        title="Remove this movement?"
-        body={toDelete ? `${moveLine(toDelete)} on ${dayLabel(toDelete.date)}. It comes off your charts and Life. ${toDelete.source === 'club' ? 'The club run itself stays in Kreators Run.' : 'This cannot be undone.'}` : ''}
-        pending={remove.isPending}
-        failed={remove.isError}
-        yes="Yes, remove it"
-        onYes={() => toDelete && remove.mutate(toDelete.id)}
-        onClose={() => {
-          setToDelete(null);
-          remove.reset();
-        }}
-      />
       <DaySheet date={openDay} loading={mq.isPending} moves={(mq.data?.moves ?? []).filter((m) => m.date === openDay)} eat={(mq.data?.eats ?? []).find((e) => e.date === openDay) ?? null} proteinGoal={proteinGoal} near={openDay === today || openDay === yesterday} onClose={() => setOpenDay(null)} onChanged={() => void refresh()} />
     </Screen>
   );
 }
 
-/** One day of the calendar: its movement and its eating, each changed in place (today and yesterday) or removed after asking. */
+/** One day of the calendar: its movement and its eating, each changed in place (today and yesterday) or removed with a second tap. */
 function DaySheet({ date, loading, moves, eat, proteinGoal, near, onClose, onChanged }: { date: string | null; /** A row of an older month opens its day while that month is still on its way. */ loading: boolean; moves: MoveLog[]; eat: EatLog | null; proteinGoal: number | null; near: boolean; onClose: () => void; onChanged: () => void }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [eatOpen, setEatOpen] = useState(false);
-  const [gone, setGone] = useState<{ kind: 'move' | 'eat'; id: string; label: string } | null>(null);
+  // A second tap removes a movement or the day's check-in (small personal entries, the founder, 2026-11-13).
+  const ask = useTapTwice<string>();
   const remove = useMutation({
     mutationFn: (g: { kind: 'move' | 'eat'; id: string }) => (g.kind === 'move' ? api.deleteMove(g.id) : api.deleteEat(g.id)),
-    onSuccess: () => (setGone(null), onChanged()),
+    onSuccess: () => onChanged(),
   });
+  const tapRemove = (g: { kind: 'move' | 'eat'; id: string }) => {
+    remove.reset();
+    ask.tap(g.id, () => remove.mutate(g));
+  };
   const close = () => (setEditing(null), setEatOpen(false), onClose());
   // A save folds the form the focused button sits in, so focus goes back to the Change that opened it, still inside this sheet.
   const backTo = (id: string) => requestAnimationFrame(() => document.getElementById(id)?.focus({ preventScroll: true }));
@@ -295,9 +301,9 @@ function DaySheet({ date, loading, moves, eat, proteinGoal, near, onClose, onCha
                       {editing === m.id ? 'Close' : 'Change'}
                     </button>
                   )}
-                  <button type="button" onClick={() => setGone({ kind: 'move', id: m.id, label: moveLine(m) })} aria-label={`Remove ${moveLine(m)}`} data-tip="Remove" className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1">
+                  <TapTwiceIcon armed={ask.isArmed(m.id)} ask="Tap again to remove" onClick={() => tapRemove({ kind: 'move', id: m.id })} disabled={remove.isPending} label={`Remove ${moveLine(m)}`} tip="Remove" className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1">
                     <AnimatedIcon name="trash" size={20} />
-                  </button>
+                  </TapTwiceIcon>
                 </div>
                 {editing === m.id && (
                   <div className="mt-md">
@@ -337,9 +343,9 @@ function DaySheet({ date, loading, moves, eat, proteinGoal, near, onClose, onCha
                   {eatOpen ? 'Close' : 'Change'}
                 </button>
               )}
-              <button type="button" onClick={() => setGone({ kind: 'eat', id: eat.id, label: 'the eating check-in' })} aria-label="Remove this day’s eating check-in" data-tip="Remove" className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1">
+              <TapTwiceIcon armed={ask.isArmed(eat.id)} ask="Tap again to remove" onClick={() => tapRemove({ kind: 'eat', id: eat.id })} disabled={remove.isPending} label="Remove this day’s eating check-in" tip="Remove" className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1">
                 <AnimatedIcon name="trash" size={20} />
-              </button>
+              </TapTwiceIcon>
             </div>
             {eatOpen && date && (
               <div className="mt-md">
@@ -360,20 +366,8 @@ function DaySheet({ date, loading, moves, eat, proteinGoal, near, onClose, onCha
           </div>
         )}
         {!near && (moves.length > 0 || eat) && <p className="m-0 text-caption text-ink-soft">Only today and yesterday can change. Older days can still be removed.</p>}
+        {remove.isError && <ErrorLine e={remove.error} />}
       </div>
-      <ConfirmDelete
-        open={gone !== null}
-        title="Remove this?"
-        body={gone ? `${gone.label} on ${date ? dayLabel(date) : 'this day'}. It comes off your charts and Life. This cannot be undone.` : ''}
-        pending={remove.isPending}
-        failed={remove.isError}
-        yes="Yes, remove it"
-        onYes={() => gone && remove.mutate(gone)}
-        onClose={() => {
-          setGone(null);
-          remove.reset();
-        }}
-      />
     </Sheet>
   );
 }

@@ -1,11 +1,12 @@
 import { LINK_BLOCK_META, LINK_BLOCK_TYPES, MAX_CAROUSEL_ITEMS, MAX_LINK_BLOCKS, type LinkBlock, type LinkBlockItem, type LinkBlockType } from '@kreators/shared';
+import { afterRemove } from '../lib/focusHeading';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../lib/api';
 import { useAuthed, useRefreshAll } from '../lib/queries';
 import { Button } from './Button';
 import { Sheet } from './Sheet';
-import { ConfirmDelete } from './ConfirmDelete';
+import { useTapTwice } from '../lib/useTapTwice';
 import { AppIcon } from './AppIcon';
 import { FIELD } from '../lib/ui';
 import { StatusTag } from './StatusTag';
@@ -37,7 +38,8 @@ export function LinksEditor({ initial }: { initial: LinkBlock[] }) {
   const [blocks, setBlocks] = useState<LinkBlock[]>(initial);
   const [editing, setEditing] = useState<LinkBlock | null>(null);
   const [isNew, setIsNew] = useState(false);
-  const [removing, setRemoving] = useState<LinkBlock | null>(null);
+  // A block is the person's own words, added again in seconds: a second tap removes it (the founder, 2026-11-13), never a popup.
+  const ask = useTapTwice<string>();
   const clicks = useAuthed(['link-clicks'], api.linkClicks);
   const save = useMutation({
     mutationFn: (next: LinkBlock[]) => api.updateMe({ links: next }),
@@ -134,14 +136,15 @@ export function LinksEditor({ initial }: { initial: LinkBlock[] }) {
                     variant="ghost"
                     size="sm"
                     disabled={save.isPending}
-                    aria-haspopup="dialog"
-                    aria-label={`Remove ${b.title || LINK_BLOCK_META[b.type].name}`}
+                    className={ask.isArmed(b.id) ? 'red-armed' : ''}
+                    aria-label={`${ask.isArmed(b.id) ? 'Tap again to remove' : 'Remove'} ${b.title || LINK_BLOCK_META[b.type].name}`}
                     onClick={() => {
                       save.reset();
-                      setRemoving(b);
+                      ask.tap(b.id, () => { const said = afterRemove('Block removed.'); commit(blocks.filter((x) => x.id !== b.id)); said(); });
                     }}
                   >
-                    Remove
+                    <span aria-hidden={ask.isArmed(b.id) || undefined}>{ask.isArmed(b.id) ? 'Tap again to remove' : 'Remove'}</span>
+<span className="sr-only" aria-live="polite">{ask.isArmed(b.id) ? 'Tap again to remove' : ''}</span>
                   </Button>
                 </div>
                 <Button
@@ -161,23 +164,6 @@ export function LinksEditor({ initial }: { initial: LinkBlock[] }) {
         </ul>
       )}
 
-      <ConfirmDelete
-        open={removing !== null}
-        title="Remove this block?"
-        body={removing ? `“${removing.title || LINK_BLOCK_META[removing.type].name}” goes from your public page. This cannot be undone.` : ''}
-        pending={save.isPending}
-        failed={save.isError}
-        onYes={() => {
-          if (!removing) return;
-          const gone = removing.id;
-          save.mutate(
-            blocks.filter((x) => x.id !== gone),
-            { onSuccess: () => setRemoving(null) },
-          );
-        }}
-        onClose={() => setRemoving(null)}
-        yes="Yes, remove it"
-      />
 
       <Sheet open={Boolean(editing)} onClose={() => setEditing(null)} title={editing ? `${isNew ? 'Add' : 'Edit'} ${LINK_BLOCK_META[editing.type].name.toLowerCase()}` : 'Block'}>
         {editing && (

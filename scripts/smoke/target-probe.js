@@ -81,6 +81,10 @@
     if (el.disabled || el.getAttribute('aria-disabled') === 'true') continue;
     if (!shown(el)) continue;
     if (paperText(el)) continue;
+    // A task's tag as a filter (2026-11-13, `data-tag-filter`): a 24px tag whose hit area reaches 4px round it, half the 8px between tags,
+    // so neighbours never overlap and the title is never taken; WCAG 2.5.8 allows it (24px with that room round it). The second exception
+    // to 44px, beside On this page's rows; CLAUDE.md records both.
+    if (el.matches('[data-tag-filter]')) continue;
     const r = el.getBoundingClientRect();
     if (hitBig(el, r)) continue;
     if (inlineText(el)) continue;

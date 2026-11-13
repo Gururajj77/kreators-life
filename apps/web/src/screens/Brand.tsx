@@ -18,7 +18,7 @@ import { ToolsLine } from './Content';
 import { AppIcon } from '../components/AppIcon';
 import { Icon } from '../components/Icon';
 import { Check, Trash2 } from 'lucide-react';
-import { FIELD, chip, RED_YES } from '../lib/ui';
+import { FIELD, chip } from '../lib/ui';
 import { copyPlain } from '../lib/clipboard';
 import { dateTime } from '../lib/date';
 import { ErrorLine } from '../components/ErrorLine';
@@ -493,14 +493,11 @@ function RunSheet({ run, onClose }: { run: ResearchRun | null; onClose: () => vo
 
 function PieceSheet({ id, piece, onClose, onChange }: { id: string; piece: BrandPiece | null; onClose: () => void; onChange: () => void }) {
   const [copied, setCopied] = useState(false);
-  // A removal asks first, in a sheet of its own over this one (Sheet portals to the body): a red yes and an outline Keep.
-  const [asking, setAsking] = useState(false);
-  useEffect(() => setAsking(false), [piece?.id]);
+  // A piece is the person's own: Remove is a second tap (the founder, 2026-11-13), like a link or a research run in the folder.
   const keep = useMutation({ mutationFn: (status: BrandPiece['status']) => api.updatePiece(id, piece!.id, { status }), onSuccess: onChange });
   const remove = useMutation({
     mutationFn: () => api.removePiece(id, piece!.id),
     onSuccess: () => {
-      setAsking(false);
       onChange();
       onClose();
     },
@@ -526,31 +523,12 @@ function PieceSheet({ id, piece, onClose, onChange }: { id: string; piece: Brand
             <Button size="sm" variant="outline" onClick={() => keep.mutate(piece.status === 'kept' ? 'draft' : 'kept')} disabled={keep.isPending}>
               {piece.status === 'kept' ? 'Back to draft' : 'Keep it'}
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setAsking(true)} disabled={remove.isPending}>
-              Remove
-            </Button>
+            <TapTwice key={piece.id} size="sm" variant="ghost" name={piece.title} onYes={() => remove.mutate()} disabled={remove.isPending} />
           </div>
+          {remove.isError && <ErrorLine e={remove.error} className="mt-xs" />}
           <Markdown text={piece.body} className="mt-md" />
         </>
       )}
-      <Sheet open={asking && piece !== null} onClose={() => setAsking(false)} title="Remove this piece?">
-        <div className="grid gap-md pb-xl">
-          <p className="m-0 text-callout text-ink-soft">{piece ? `“${piece.title}” goes from this brand's folder. The research runs it came from stay. This cannot be undone.` : ''}</p>
-          {remove.isError && (
-            <p role="alert" className="m-0 text-subhead text-r1">
-              That did not work. Try again.
-            </p>
-          )}
-          <div className="flex flex-wrap gap-xs">
-            <button type="button" disabled={remove.isPending} onClick={() => remove.mutate()} className={RED_YES}>
-              Yes, remove it
-            </button>
-            <Button variant="outline" onClick={() => setAsking(false)}>
-              Keep it
-            </Button>
-          </div>
-        </div>
-      </Sheet>
     </Sheet>
   );
 }

@@ -18,10 +18,10 @@ const DONE_PAGES = { sizes: DONE_PAGE_SIZES, fallback: DONE_PAGE_SIZE };
  * 2026-11-08): GET /today carries the first page, so the
  * usual case costs nothing more; another page or size reads GET /today/done. The count is the day's true count.
  */
-export function DoneToday({ date, first, total, queue, onUntick, keep, area = '', open = '' }: { date: string; first: Node[]; total: number; queue: ReturnType<typeof useActionQueue>; onUntick: (id: string) => void; keep: (t: Node) => boolean; /** Daily's Area filter and the Unfinished business view ('any'): while one is on, the server cuts the list and its count the same way. */ area?: string; open?: string }) {
+export function DoneToday({ date, first, total, queue, onUntick, keep, area = '', tags = '', open = '' }: { date: string; first: Node[]; total: number; queue: ReturnType<typeof useActionQueue>; onUntick: (id: string) => void; keep: (t: Node) => boolean; /** Daily's Area filter, the tags tapped (2026-11-13) and the Unfinished business view ('any'): while one is on, the server cuts the list and its count the same way. */ area?: string; tags?: string; open?: string }) {
   const pg = usePage('d', DONE_PAGES);
-  const own = pg.page !== 1 || pg.size !== DONE_PAGE_SIZE || Boolean(area) || Boolean(open);
-  const q = useAuthed([...keys.today(date), 'done', pg.query, area, open], () => api.todayDone(date, pg.query, area, open), own);
+  const own = pg.page !== 1 || pg.size !== DONE_PAGE_SIZE || Boolean(area) || Boolean(tags) || Boolean(open);
+  const q = useAuthed([...keys.today(date), 'done', pg.query, area, tags, open], () => api.todayDone(date, pg.query, area, open, tags), own);
   const rows = (own ? (q.data?.tasks ?? []) : first).filter(keep);
   const page = own ? q.data?.page : { page: 1, size: DONE_PAGE_SIZE, more: total > first.length };
   if (own ? pg.page === 1 && q.data?.total === 0 : total === 0) return null;

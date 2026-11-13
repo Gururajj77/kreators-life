@@ -393,7 +393,8 @@ function EmailNote({ ctx, paperId, onChange }: { ctx: EmailContext; paperId: str
                 }
               }}
             >
-              <span aria-live="polite">{armed ? 'Tap again to remove it' : 'Remove'}</span>
+              <span aria-hidden={armed || undefined}>{armed ? 'Tap again to remove it' : 'Remove'}</span>
+<span className="sr-only" aria-live="polite">{armed ? 'Tap again to remove it' : ''}</span>
             </Button>
           </div>
         )}
@@ -425,7 +426,8 @@ function EmailNote({ ctx, paperId, onChange }: { ctx: EmailContext; paperId: str
                 }
               }}
             >
-              <span aria-live="polite">{resetting ? 'Tap again to start again' : 'Start again from the note'}</span>
+              <span aria-hidden={resetting || undefined}>{resetting ? 'Tap again to start again' : 'Start again from the note'}</span>
+<span className="sr-only" aria-live="polite">{resetting ? 'Tap again to start again' : ''}</span>
             </Button>
           )}
           {naming === null && (

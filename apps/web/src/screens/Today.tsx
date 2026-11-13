@@ -1,4 +1,4 @@
-import { LIFE_AREA_ORDER, LIFE_AREAS, RELATIONSHIP_BY_KEY, TASK_SORTS, TASK_TAB_SORTS, TASK_TABS, addDays, formatCount, openDay, isTaskSort, parseLifeArea, parseTaskTab, sortTasks, taskTabOf, taskTabSort, type LifeAreaKey, type Node, type TaskTab } from '@kreators/shared';
+import { LIFE_AREA_ORDER, LIFE_AREAS, RELATIONSHIP_BY_KEY, TASK_SORTS, matchesTaskTags, parseTaskTags, taskTagOn, taskTagsKey, toggleTaskTag, type TaskTagCut, TASK_TAB_SORTS, TASK_TABS, addDays, formatCount, openDay, isTaskSort, parseLifeArea, parseTaskTab, sortTasks, taskTabOf, taskTabSort, type LifeAreaKey, type Node, type TaskTab } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Suspense, useEffect, useId, useRef, useState } from 'react';
 import { WATER_LANE } from '../lib/ui';
@@ -39,6 +39,11 @@ import { useActionQueue } from '../lib/useActionQueue';
 import { useParamState, writeParams } from '../lib/useParamState';
 import { DayTemplateSelect, DayTypeNote, useDayTemplate } from '../components/DayTypePicker';
 import { FilterSelect } from '../components/FilterSelect';
+import { TagChips } from '../components/TagChips';
+import { TagFilterHint } from '../components/TagFilterHint';
+import { TagFilterContext, tagChips, tagSentence, type TagChip, type TagFilter } from '../lib/taskTagFilter';
+import { sayStatus } from '../lib/sayStatus';
+import { focusHeadingAfter } from '../lib/focusHeading';
 
 /** Daily's Area filter: every area, one of the five in their one order, or tasks with no area. Kept in the URL as `area`. */
 type AreaPick = '' | LifeAreaKey | 'none';
@@ -70,6 +75,8 @@ const SupplementsToday = lazyNamed(() => import('../components/SupplementsToday'
 const OpenBusinessView = lazyNamed(() => import('../components/TaskGroups'), 'OpenBusinessView');
 // Done today, paged (2026-11-07): its own small chunk, after the first paint.
 const DoneToday = lazyNamed(() => import('../components/DoneToday'), 'DoneToday');
+// Hidden tasks (2026-11-12): the last fold of Tasks, downloaded only while a task is hidden on the day.
+const HiddenTasks = lazyNamed(() => import('../components/HiddenTasks'), 'HiddenTasks');
 // The Past due and Upcoming tabs (2026-11-12): their paged lists download the first time either tab is picked.
 const TaskTabList = lazyNamed(() => import('../components/TaskTabList'), 'TaskTabList');
 
@@ -77,9 +84,9 @@ const TaskTabList = lazyNamed(() => import('../components/TaskTabList'), 'TaskTa
  * "8 more waiting": the open tasks past the ones Daily shows, read only once the fold opens (`GET /today/waiting`, in the server's order,
  * a page at a time, prefix `w`), each the same row as the main list.
  */
-function MoreWaiting({ date, area, open = '', tab = '', group, ask, sort, context, queue, onToggle, focusTask }: { date: string; area: string; /** 'today' on the Today tab, so the rest are today's too; '' in the Bottlenecks view. */ tab?: TaskTab | ''; /** The Unfinished business view's cut ('any'), sent like the area. */ open?: string; group: boolean; /** The sort the person picked, sent so the server's halves follow it ('' for its default). */ ask: string; sort: Parameters<typeof sortTasks>[1]; context: Parameters<typeof sortTasks>[2]; queue: ReturnType<typeof useActionQueue>; onToggle: (id: string) => void; focusTask: string | null }) {
+function MoreWaiting({ date, area, tags = '', open = '', tab = '', group, ask, sort, context, queue, onToggle, focusTask }: { date: string; area: string; /** The tags tapped (`taskTagsKey`), sent like the area. */ tags?: string; /** 'today' on the Today tab, so the rest are today's too; '' in the Bottlenecks view. */ tab?: TaskTab | ''; /** The Unfinished business view's cut ('any'), sent like the area. */ open?: string; group: boolean; /** The sort the person picked, sent so the server's halves follow it ('' for its default). */ ask: string; sort: Parameters<typeof sortTasks>[1]; context: Parameters<typeof sortTasks>[2]; queue: ReturnType<typeof useActionQueue>; onToggle: (id: string) => void; focusTask: string | null }) {
   const pg = usePage('w');
-  const q = useAuthed([...keys.today(date), 'waiting', area, group, ask, open, tab, pg.query], () => api.todayWaiting(date, area, group, pg.query, ask, open, tab));
+  const q = useAuthed([...keys.today(date), 'waiting', area, tags, group, ask, open, tab, pg.query], () => api.todayWaiting(date, area, group, pg.query, ask, open, tab, tags));
   if (q.isPending) return <SkeletonList count={2} lines={2} label="Loading the rest" />;
   if (q.isError || !q.data)
     return (
@@ -119,7 +126,7 @@ function BacklogTask({ t, date, queue }: { t: Node; date: string; queue: ReturnT
       editControls={`task-plan-${t.id}`}
       panel={
         <>
-          <div className="mt-xs flex flex-wrap items-center gap-xs" role="group" aria-label={`Pick a day for ${t.title}`}>
+          <div className="row-lane mt-xs flex flex-wrap items-center gap-xs" role="group" aria-label={`Pick a day for ${t.title}`}>
             <button type="button" onClick={() => pick.mutate(date)} className="toy toy-soft min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 border-line bg-card px-sm text-subhead font-medium">
               Today
             </button>
@@ -154,6 +161,18 @@ export function Today() {
     firstPages();
   };
   const area = readArea(areaRaw);
+  // Tap a tag to filter (2026-11-13, the founder: "apply click for those tags and make filters from them"; he chose: filter this list): a
+  // task's pillar, priority, Remember, For review, Habit, From pillar, From your coach, kind of open business and time block, kept in the URL
+  // as `tags` (one fixed order, `taskTagsKey`), combined with each other and with the Area filter. The server cuts every list and count the
+  // same way it cuts by Area; the chips above the list say what is on and take each off.
+  const [tagsRaw, setTagsOnly] = useParamState('tags', '');
+  const tagCut = parseTaskTags(tagsRaw);
+  const tagsKey = taskTagsKey(tagCut);
+  const tagsOn = tagsKey !== '';
+  const setTagCut = (next: TaskTagCut) => {
+    setTagsOnly(taskTagsKey(next));
+    firstPages();
+  };
   // The sort picks the grouped view (By time block, By area), which reads the longer list the boxes need.
   const [sortRaw, setSortOnly] = useParamState('taskSort', '');
   // Past due keeps its own order in its own key (`pdSort`, 2026-11-12), so a sort picked there never changes the Today tab's, and a grouped
@@ -164,7 +183,8 @@ export function Today() {
   // the lists to them (`open=any`) and reads the longer list the boxes need, like By time block.
   const openView = sortRaw === 'open';
   const openPick = openView ? 'any' : '';
-  // Blocks are not a filter (the founder, 2026-11-06): By time block draws them as boxes that fold, and an old `?block=` is ignored.
+  // Blocks have no filter of their own (the founder, 2026-11-06): By time block draws them as boxes that fold, and an old `?block=` is
+  // ignored. A block comes back only as a tapped tag (2026-11-13, `tags=block:<id>`, from a task's block or its time).
   // The picked sort goes to the server too, so the six shown are the top six of it and "N more waiting" starts where they end.
   // Today, Past due and Upcoming (2026-11-12, the founder), kept in the URL as `taskTab`. The Bottlenecks view stands apart: it lists every
   // open bottleneck, so while it is on there are no tabs and nothing is cut by one. The day's own read is always the Today tab's.
@@ -179,7 +199,7 @@ export function Today() {
     else setSortOnly(k);
     firstPages();
   };
-  const { date, data, isPending, isError, refetch } = useToday(area, { group: openView || (tab === 'today' && ownSort !== null && isGrouped(ownSort)), sort: tab === 'today' ? (ownSort ?? '') : '', open: openPick, tab: openView ? '' : 'today' });
+  const { date, data, isPending, isError, refetch } = useToday(area, { group: openView || (tab === 'today' && ownSort !== null && isGrouped(ownSort)), sort: tab === 'today' ? (ownSort ?? '') : '', open: openPick, tab: openView ? '' : 'today', tags: tagsKey });
   // View (2026-11-12): the sections the person hid, kept on the account; a link to one still shows it for the visit.
   const view = useDailyView();
   const [viewOpen, setViewOpen] = useState(false);
@@ -209,9 +229,21 @@ export function Today() {
       const r = await api.spark(date);
       if (!r.alreadyDone) celebrate({ title: 'Small act done', totalXp: r.awarded, color: RELATIONSHIP_BY_KEY[r.relationship].color });
     });
+  // A tick by mistake (2026-11-13, the frictionless pass): the ticked row leaves the list, so one quiet line under it says what was ticked,
+  // with Undo, for about ten seconds or until the next tick, as Inbox's "Archived. Undo" does. Focus moves to Undo, since the row went.
+  const [lastTick, setLastTick] = useState<{ id: string; title: string } | null>(null);
+  const undoTickBtn = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!lastTick) return;
+    undoTickBtn.current?.focus({ preventScroll: true });
+    const t = window.setTimeout(() => setLastTick(null), 10_000);
+    return () => window.clearTimeout(t);
+  }, [lastTick]);
   const tick = (id: string) =>
     queue.run(id, async () => {
+      setLastTick(null);
       const r = await api.complete(id, date);
+      setLastTick({ id, title: r.node.title });
       celebrate({
         title: r.capped ? 'Done. Daily xp limit reached, so this one was for you' : 'Ripple',
         totalXp: r.totalXp,
@@ -242,9 +274,9 @@ export function Today() {
   const grouped = isGrouped(sort) ? sort : null;
   const sorts = TASK_SORTS;
   const byArea = inArea(area);
-  const keep = (t: Node) => byArea(t) && (!openView || Boolean(t.openKind));
-  // The answer on screen was cut to this area by the server (or none is picked), so its counts and an empty list can be trusted.
-  const cutHere = (data?.area ?? '') === area && (data?.open ?? '') === openPick;
+  const keep = (t: Node) => byArea(t) && matchesTaskTags(t, tagCut, slots) && (!openView || Boolean(t.openKind));
+  // The answer on screen was cut to this area and these tags by the server (or none is picked), so its counts and an empty list can be trusted.
+  const cutHere = (data?.area ?? '') === area && (data?.open ?? '') === openPick && (data?.tags ?? '') === tagsKey;
   const allTasks = data?.tasks ?? [];
   const tasks = sortTasks(allTasks.filter(keep), openView ? 'priority' : sort, context);
   const backlogAll = sortTasks((data?.backlog ?? []).filter(keep), sort === 'day' ? 'priority' : sort, context);
@@ -260,7 +292,7 @@ export function Today() {
   // Daily lists six open tasks. When they were not cut to the area, more for it may be waiting past them, so the empty line says so.
   const areaCapped = !cutHere && allTasks.length >= (grouped ? 60 : 6);
   // Water and reminders links to To remember while a task tagged Remember has no day; the heading stays when the filter hides them all.
-  const rememberHidden = area !== '' && remembered.length === 0 && undatedRemember;
+  const rememberHidden = (area !== '' || tagsOn) && remembered.length === 0 && undatedRemember;
   const areaName = area === 'none' ? 'with no area' : area ? `for ${LIFE_AREAS[area].name}` : '';
   // The true count (2026-11-06): the server counts every open task whose day has come under the same cuts, and how many are late; an
   // older answer for another area can only count what is here.
@@ -282,7 +314,39 @@ export function Today() {
     if (focusTab && focusTab !== 'today' && focusNode.data?.node.status === 'active') setTabOnly(focusTab);
   }, [focusTab, focusNode.data, setTabOnly]);
   const restWaiting = totalWaiting - tasks.length;
-  const clearFilters = () => setAreaRaw('');
+  // Clears the Area filter and every tag (both writes go out as one, `writeParams`).
+  const clearFilters = () => {
+    setAreaOnly('');
+    setTagsOnly('');
+    firstPages();
+  };
+  const filtersOn = area !== '' || tagsOn;
+  // The chips above the list, and the filter every task row in it reads (lib/taskTagFilter.ts): a tag tapped turns its filter on, or off
+  // when it is on, and the status line says what the list shows now. An area tag sets the Area filter itself.
+  const blockName = (id: string) => blocks.find((b) => b.id === id)?.name;
+  const chips = tagChips(tagCut, area, blockName);
+  const toggleTag = (token: string) => {
+    if (token.startsWith('area:')) {
+      const k = token.slice(5);
+      const next = area === k ? '' : k;
+      setAreaRaw(next);
+      sayStatus(next ? tagSentence(tagChips(tagCut, next, blockName)) : 'Filter removed.');
+      return;
+    }
+    const was = taskTagOn(tagCut, token);
+    const next = toggleTaskTag(tagCut, token);
+    setTagCut(next);
+    sayStatus(was ? 'Filter removed.' : tagSentence(tagChips(next, area, blockName)));
+  };
+  const removeChip = (c: TagChip) => {
+    toggleTag(c.token);
+  };
+  const tagFilter: TagFilter = { on: (token) => (token.startsWith('area:') ? area === token.slice(5) : taskTagOn(tagCut, token)), toggle: toggleTag, slots, pillar: true, time: true };
+  // A block tag whose block has gone (a link kept from before it was deleted) is dropped from the address once the day's blocks are in.
+  const staleBlock = Boolean(data && tagCut.block && !data.day.blocks.some((b) => b.id === tagCut.block));
+  useEffect(() => {
+    if (staleBlock) setTagsOnly(taskTagsKey({ ...tagCut, block: null }));
+  }, [staleBlock]); // eslint-disable-line react-hooks/exhaustive-deps
   // The Unfinished business view: its boxes hold every task with a kind whose day has come, and those with no day yet (which the server
   // sent as the backlog under the same cut), so Not scheduled yet and To remember stand aside while it is on, never listing one twice.
   const openTasks = openView ? sortTasks([...tasks, ...backlogAll.filter((t) => !openDay(t))], 'priority', context) : [];
@@ -472,7 +536,8 @@ export function Today() {
                 ("instead of sort by call it sort and make it right aligned to area dropdown in same line"). Where the line is too short for all
                 three, the two dropdowns move to the next line together, still at the right; under a 34rem column each takes the full width,
                 the tabs in equal parts and the dropdowns one per line with their labels lined up. The Bottlenecks view (a choice in Sort)
-                stands apart from the tabs. There is no Block filter: By time block draws the blocks as boxes that fold (the founder, 2026-11-06). */}
+                stands apart from the tabs. There is no Block dropdown: By time block draws the blocks as boxes that fold (the founder, 2026-11-06); a
+                block filters only as a tapped tag (2026-11-13). */}
             {(showTabs || showArea || showSort) && (
               <div className="@container mt-sm">
                 <div className="flex flex-col gap-xs @min-[34rem]:flex-row @min-[34rem]:flex-wrap @min-[34rem]:items-center @min-[34rem]:gap-x-md @min-[34rem]:gap-y-sm">
@@ -494,6 +559,8 @@ export function Today() {
                 </div>
               </div>
             )}
+            {/* What is on (2026-11-13): the Area filter and every tag tapped on a task, each a chip that takes it off, with Clear filters for two or more. */}
+            {filtersOn && <TagChips chips={chips} onRemove={removeChip} onClear={() => { clearFilters(); sayStatus('Filters cleared. Showing every task.'); }} heading="tasks-heading" />}
             {/* The Unfinished view is a filter, not a sort (its boxes go by priority), so the note says only the kind of day while it is on. */}
             <DayTypeNote template={tpl.template} contextual={!openView && tab === 'today' && tpl.contextual} failed={tpl.failed} ownSort={!openView && tab === 'today' && ownSort && ownSort !== 'context' ? (TASK_SORTS.find((s) => s.key === ownSort)?.name.replace(/^By /, '').toLowerCase() ?? null) : null} />
             {/* The controls above (kind of day, sort, the note) end here: a wider gap before the day's own content. */}
@@ -523,13 +590,16 @@ export function Today() {
                 <DayBlocks tasks={tasks.filter((t) => openDay(t) === date)} day={dayPlan} loose={data?.looseTasks} looseTotal={data?.looseTotal} />
               </div>
             )}
+            {/* Every task row from here to Done today filters by its tags when one is tapped (lib/taskTagFilter.ts); Hidden tasks below stays whole. */}
+            <TagFilterContext.Provider value={tagFilter}>
+            <TagFilterHint />
             {openView ? (
               <Suspense fallback={<SkeletonList count={3} lines={2} label="Loading the groups" />}>
                 <OpenBusinessView tasks={openTasks} context={{ ...context, day: date }} more={Boolean(data.tasksMore) && !(cutHere && restWaiting > 0)} areaName={areaName} letGoTotal={data.letGoTotal ?? 0} renderTask={(t, below) => <DailyTask key={t.id} t={t} date={date} queue={queue} focus={t.id === focusTask} onToggle={() => tick(t.id)} below={below} />} />
               </Suspense>
             ) : tab !== 'today' ? (
               <Suspense fallback={<SkeletonList className="mt-sm" count={3} lines={2} label="Loading the tasks" />}>
-                <TaskTabList tab={tab} date={date} area={area} areaName={areaName} sort={tabSort} queue={queue} onToggle={tick} focusTask={focusTask} onClearArea={clearFilters} onPlanWeek={() => setLateOpen((n) => n + 1)} />
+                <TaskTabList tab={tab} date={date} area={area} tags={tagsKey} areaName={areaName} sort={tabSort} queue={queue} onToggle={tick} focusTask={focusTask} onClearArea={clearFilters} onPlanWeek={() => setLateOpen((n) => n + 1)} />
               </Suspense>
             ) : grouped && dayPlan && tasks.length > 0 ? (
               <Suspense fallback={<SkeletonList count={3} lines={2} label="Loading the groups" />}>
@@ -543,17 +613,21 @@ export function Today() {
                   ))}
                 </AnimatePresence>
               </ul>
-            ) : area ? (
+            ) : filtersOn ? (
               <div className="mt-sm flex flex-wrap-reverse items-center justify-between gap-sm rounded-card border-2 border-dashed border-line p-md">
                 <p className="m-0 min-w-0 flex-1 basis-[60%] text-subhead text-ink-soft">
-                  {areaCapped
+                  {tagsOn
+                    ? areaCapped
+                      ? `None of the first ${allTasks.length} tasks match these filters. More may be waiting.`
+                      : 'No tasks match these filters today.'
+                    : areaCapped
                     ? area === 'none'
                       ? `Each of the first ${allTasks.length} tasks has an area. More may be waiting.`
                       : `None of the first ${allTasks.length} tasks are ${areaName}. More may be waiting.`
                     : `No tasks ${areaName} today.`}
                 </p>
                 <Button variant="outline" onClick={clearFilters}>
-                  Show every area
+                  {tagsOn ? 'Clear filters' : 'Show every area'}
                 </Button>
               </div>
             ) : elsewhere > 0 ? (
@@ -578,9 +652,29 @@ export function Today() {
             {(tab === 'today' || openView) && cutHere && restWaiting > 0 && tasks.length > 0 && (
               // A Remember note opens Daily on its task (`?task=<id>`): when that task is not among the ones shown, this opens on it.
               <Fold className="mt-xs" title={`${restWaiting} more waiting`} defaultOpen={Boolean(focusTask) && !tasks.some((t) => t.id === focusTask)}>
-                <MoreWaiting date={date} area={area} open={openPick} tab={openView ? '' : 'today'} group={grouped !== null || openView} ask={grouped !== null || openView ? '' : (ownSort ?? '')} sort={openView ? 'priority' : sort} context={context} queue={queue} onToggle={tick} focusTask={focusTask} />
+                <MoreWaiting date={date} area={area} tags={tagsKey} open={openPick} tab={openView ? '' : 'today'} group={grouped !== null || openView} ask={grouped !== null || openView ? '' : (ownSort ?? '')} sort={openView ? 'priority' : sort} context={context} queue={queue} onToggle={tick} focusTask={focusTask} />
               </Fold>
             )}
+            {/* The task just ticked, offered back; always in the tree so a reader hears it. */}
+            <div role="status" className={lastTick ? 'mt-xs flex flex-wrap items-center gap-xs text-subhead text-ink-soft' : 'sr-only'}>
+              {lastTick && (
+                <>
+                  <span className="min-w-0">Ticked “{lastTick.title}”.</span>
+                  <button
+                    ref={undoTickBtn}
+                    type="button"
+                    className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center font-semibold text-ink underline underline-offset-4"
+                    onClick={() => {
+                      untick(lastTick.id);
+                      setLastTick(null);
+                      focusHeadingAfter('tasks-heading');
+                    }}
+                  >
+                    Undo
+                  </button>
+                </>
+              )}
+            </div>
             {/* Under the list: a quiet fold whose plus turns into a cross, opening the add form right here (downloaded on first open). */}
             {/* Saving a task folds it away again and says where the task went, right here, since the new row lands up in the list. */}
             <Fold
@@ -615,9 +709,9 @@ export function Today() {
                   To remember
                 </h3>
                 <div className="mt-xs flex flex-wrap-reverse items-center justify-between gap-sm">
-                  <p className="m-0 min-w-0 flex-1 basis-[60%] text-subhead text-ink-soft">None {areaName}.</p>
+                  <p className="m-0 min-w-0 flex-1 basis-[60%] text-subhead text-ink-soft">{tagsOn ? 'None match these filters.' : `None ${areaName}.`}</p>
                   <Button variant="outline" onClick={clearFilters}>
-                    Show every area
+                    {tagsOn ? 'Clear filters' : 'Show every area'}
                   </Button>
                 </div>
               </div>
@@ -653,7 +747,24 @@ export function Today() {
             )}
             {view.shows('done') && (
               <Suspense fallback={null}>
-                <DoneToday date={date} first={doneFirst} total={data.doneTotal ?? doneFirst.length} queue={queue} onUntick={untick} keep={keep} area={area} open={openPick} />
+                <DoneToday date={date} first={doneFirst} total={data.doneTotal ?? doneFirst.length} queue={queue} onUntick={untick} keep={keep} area={area} tags={tagsKey} open={openPick} />
+              </Suspense>
+            )}
+            </TagFilterContext.Provider>
+            {/* Hidden tasks (2026-11-12, the founder): at the bottom of Tasks, after Done today, closed, its count beside it; whole, so the Area
+                filter and Bottlenecks never cut it. A tick there pays and counts like any. Shown only while one is hidden. */}
+            {(data.hiddenTotal ?? 0) > 0 && (
+              <Suspense fallback={null}>
+                <HiddenTasks
+                  date={date}
+                  total={data.hiddenTotal ?? 0}
+                  queue={queue}
+                  onToggle={tick}
+                  focusTask={focusTask}
+                  // Like Not scheduled yet (2026-11-13): 8px under Tasks' own folds (Add a task, Not scheduled yet, Done today), a section's
+                  // 16px only right after To remember's list, so it never reads as a row of that list.
+                  className={!(view.shows('done') && (data.doneTotal ?? doneFirst.length) > 0) && !(!openView && view.shows('backlog') && waiting > 0) && !openView && view.shows('remember') && (remembered.length > 0 || rememberHidden) ? 'mt-md' : 'mt-xs'}
+                />
               </Suspense>
             )}
           </section>

@@ -1,9 +1,15 @@
 import { useMutation } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { afterRemove } from '../lib/focusHeading';
+import { useEffect, useId, useState } from 'react';
+import { addDays } from '@kreators/shared';
+import { FIELD } from '../lib/ui';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { Button } from '../components/Button';
 import { AnimatedIcon } from '../components/AnimatedIcon';
-import { Sheet } from '../components/Sheet';
+import { TapTwiceIcon } from '../components/TapTwiceIcon';
+import { ErrorLine } from '../components/ErrorLine';
+import { ToggleChevron } from '../components/ToggleMark';
+import { useTapTwice } from '../lib/useTapTwice';
 import { AreaLine, Donut, PillBars } from '../components/Charts';
 import { Hero, HeroNumber } from '../components/Hero';
 import { RulerPicker } from '../components/RulerPicker';
@@ -13,7 +19,6 @@ import { api } from '../lib/api';
 import { lastDays, shortDay, todayLocal, dayLabel } from '../lib/date';
 import { useLogs, useRefreshAll, useWellbeing } from '../lib/queries';
 import { EmergenceSlot } from '../components/EmergenceSlot';
-import { RED_YES } from '../lib/ui';
 
 const QUALITY = ['Rough', 'Light', 'Okay', 'Good', 'Deep'];
 const DAY = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -39,10 +44,30 @@ export function Sleep() {
   }, [logs.data, current, today, touched]);
   const pickHours = (v: number) => (setTouched((t) => ({ ...(t.day === today ? t : { day: today }), hours: true })), setHours(v));
   const pickQuality = (v: number) => (setTouched((t) => ({ ...(t.day === today ? t : { day: today }), quality: true })), setQuality(v));
-  const save = useMutation({ mutationFn: () => api.log('sleep', { date: today, value: hours, extra: { quality } }), onSuccess: () => refresh() });
+  // A night missed (2026-11-13, the frictionless pass): a quiet toggle under Save opens a day field in place, and Save logs that morning's
+  // night instead; the server keeps one a day, so logging a day again replaces it. Saved says so for two seconds; an error says why.
+  const [earlierOpen, setEarlierOpen] = useState(false);
+  const [earlier, setEarlier] = useState('');
+  const earlierId = useId();
+  const day = earlierOpen && earlier && earlier < today ? earlier : today;
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    if (!saved) return;
+    const t = window.setTimeout(() => setSaved(false), 2000);
+    return () => window.clearTimeout(t);
+  }, [saved]);
+  const save = useMutation({
+    mutationFn: () => api.log('sleep', { date: day, value: hours, extra: { quality } }),
+    onMutate: () => setSaved(false),
+    onSuccess: () => {
+      setSaved(true);
+      refresh();
+    },
+  });
   const avg = wb.data?.parts.find((p) => p.kind === 'sleep')?.avg7 ?? null;
-  const [toDelete, setToDelete] = useState<{ id: string; label: string } | null>(null);
-  const remove = useMutation({ mutationFn: (id: string) => api.deleteLog('sleep', id), onSuccess: () => (setToDelete(null), refresh()) });
+  // A small personal entry: a second tap removes it (the founder, 2026-11-13), never a popup.
+  const ask = useTapTwice<string>();
+  const remove = useMutation({ mutationFn: (id: string) => api.deleteLog('sleep', id), onSuccess: () => refresh() });
 
   return (
     <Screen>
@@ -86,9 +111,29 @@ export function Sleep() {
             </button>
           ))}
         </div>
-        <Button full size="lg" className="mt-md" onClick={() => save.mutate()} disabled={save.isPending || !logs.data}>
-          {current ? 'Update last night' : 'Save last night'}
+        <Button full size="lg" className="mt-md" onClick={() => save.mutate()} disabled={save.isPending || !logs.data || (earlierOpen && day === today)}>
+          {day !== today ? `Save the night of ${dayLabel(day)}` : current ? 'Update last night' : 'Save last night'}
         </Button>
+        <ErrorLine e={save.error} className="mt-xs" />
+        <p role="status" className={`${saved ? 'mt-xs ' : ''}m-0 text-subhead text-ink-soft`}>
+          {saved ? 'Saved.' : ''}
+        </p>
+        <button
+          type="button"
+          aria-expanded={earlierOpen}
+          aria-controls={earlierId}
+          onClick={() => setEarlierOpen((o) => !o)}
+          className="mt-xs inline-flex min-h-[44px] items-center gap-xs text-subhead font-semibold underline-offset-4 hover:underline"
+        >
+          Log an earlier night
+          <ToggleChevron open={earlierOpen} />
+        </button>
+        {earlierOpen && (
+          <label id={earlierId} className="block">
+            <span className="block text-subhead font-semibold">The night of</span>
+            <input type="date" value={earlier} max={addDays(today, -1)} onChange={(e) => setEarlier(e.target.value)} className={FIELD} />
+          </label>
+        )}
       </section>
 
       <section className="mt-lg" aria-labelledby="week-heading">
@@ -116,7 +161,7 @@ export function Sleep() {
         </div>
       </section>
 
-      {/* No heading over nothing: with no entry yet the list and its title wait (the delete sheet portals out, so it still opens). */}
+      {/* No heading over nothing: with no entry yet the list and its title wait. */}
       <section className="mt-lg" aria-labelledby="hist-heading" hidden={!logs.data?.logs.length}>
         <h2 id="hist-heading" className="text-title2">
           Nights
@@ -130,37 +175,23 @@ export function Sleep() {
                 </span>
                 <span className="block text-card-note text-ink-soft">{dayLabel(l.date)}</span>
               </span>
-              <button
-                type="button"
-                onClick={() => setToDelete({ id: l.id, label: `${l.value} hours on ${dayLabel(l.date)}` })}
-                aria-label={`Delete the night of ${dayLabel(l.date)}`}
-                data-tip="Delete"
+              <TapTwiceIcon
+                armed={ask.isArmed(l.id)}
+                onClick={() => {
+                  remove.reset();
+                  ask.tap(l.id, () => remove.mutate(l.id, { onSuccess: afterRemove('Night deleted.') }));
+                }}
+                disabled={remove.isPending}
+                label={`Delete the night of ${dayLabel(l.date)}`}
+                tip="Delete"
                 className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1"
               >
                 <AnimatedIcon name="trash" size={20} />
-              </button>
+              </TapTwiceIcon>
             </li>
           ))}
         </ul>
-        <Sheet open={toDelete !== null} onClose={() => setToDelete(null)} title="Delete this night?">
-          <div className="grid gap-md pb-xl">
-            <p className="m-0 text-callout text-ink-soft">{toDelete?.label}. It comes off your average and charts. This cannot be undone.</p>
-            {remove.isError && <p className="m-0 text-subhead text-r1">That did not work. Try again.</p>}
-            <div className="flex flex-wrap gap-xs">
-              <button
-                type="button"
-                disabled={remove.isPending}
-                onClick={() => toDelete && remove.mutate(toDelete.id)}
-                className={RED_YES}
-              >
-                Yes, delete it
-              </button>
-              <Button variant="outline" onClick={() => setToDelete(null)}>
-                Keep it
-              </Button>
-            </div>
-          </div>
-        </Sheet>
+        {remove.isError && <ErrorLine e={remove.error} className="mt-xs" />}
       </section>
     </Screen>
   );

@@ -8,6 +8,7 @@ import { todayLocal } from '../lib/date';
 import { lazyNamed } from '../lib/lazy';
 import { Section, SeeAll } from './Section';
 import { useHiddenInsightIds } from '../lib/insightsHidden';
+import { Skeleton } from './Skeleton';
 
 /**
  * The one Emerging query (2026-11-05): keyed by the device's day only, so Home, Daily, Pillars, each pillar page and every app screen
@@ -41,7 +42,7 @@ const EmptyWatch = lazyNamed(() => import('./EmergenceWatch'), 'EmptyWatch');
  * The Emerging block for a screen in the first download (Home, Daily): the patterns are asked for first, and the block's own code is
  * fetched only when there is something ready to show, so a screen with nothing to say downloads nothing more.
  */
-export function EmergenceSlot({ always = false, ...props }: ComponentProps<typeof Block> & { /** Home and Life (2026-11-06): with nothing ready, a light section says how many patterns are forming, so the way to Emerging is always there. */ always?: boolean }) {
+export function EmergenceSlot({ always = false, paired = false, ...props }: ComponentProps<typeof Block> & { /** Home and Life (2026-11-06): with nothing ready, a light section says how many patterns are forming, so the way to Emerging is always there. */ always?: boolean; /** Home's half beside Your pillars (2026-11-13): it keeps its half while it loads, and its quiet line sits in a card under a lede like its pair's. */ paired?: boolean }) {
   const q = useInsights(props.app, props.rel);
   // The whole list (the same query, shared cache) for the forming count; only read when `always` is set.
   const every = useInsights('insights');
@@ -52,21 +53,36 @@ export function EmergenceSlot({ always = false, ...props }: ComponentProps<typeo
   // count as ready here, so a Home whose every ready card was set aside shows the light section rather than a block that draws nothing.
   const [aside] = useHiddenInsightIds(me.data?.user.id);
   const hidden = always ? aside : null;
+  // Home's half holds its place while the patterns or the block's code load (review 2026-11-13: the pillars took the whole row, then
+  // snapped to a half), so the row never jumps.
+  const holding = paired ? (
+    <Section id={`emerging-${props.app}`} title="Emerging" span className={props.className} lede="Patterns in what you log." action={<SeeAll to="/insights">See all</SeeAll>}>
+      <Skeleton className="h-[220px] rounded-card" />
+    </Section>
+  ) : null;
   if (!q.data?.insights.some((i) => i.state === 'ready' && !props.exclude?.includes(i.key) && !hidden?.has(i.id))) {
-    if (!always || !every.data) return null;
+    if (!always) return null;
+    if (!every.data) return holding;
     const forming = every.data.insights.filter((i) => i.state === 'watching').length;
     // Patterns found that touch other apps, not this screen: said as found, never as "nothing clear".
     const found = every.data.insights.filter((i) => i.state === 'ready' && !hidden?.has(i.id)).length;
     const plural = (n: number, one: string, many: string) => `${formatCount(n)} ${n === 1 ? one : many}`;
     const line = found > 0 ? `${plural(found, 'pattern', 'patterns')} found in your apps${forming > 0 ? `, ${formatCount(forming)} still forming` : ''}.` : forming > 0 ? `Nothing clear yet. ${plural(forming, 'pattern is', 'patterns are')} forming.` : 'Patterns show up here as you log.';
     return (
-      <Section id={`emerging-${props.app}`} title="Emerging" span className={props.className} action={<SeeAll to="/insights">See all</SeeAll>}>
-        <p className="m-0 text-balance text-subhead text-ink-soft">{line}</p>
+      <Section id={`emerging-${props.app}`} title="Emerging" span className={props.className} lede={paired ? 'Patterns in what you log.' : undefined} action={<SeeAll to="/insights">See all</SeeAll>}>
+        {paired ? (
+          // Beside the pillars' card, the line sits in a card of its own that fills the half (review 2026-11-13), in the middle of it.
+          <div className="flex flex-col justify-center rounded-card bg-card p-md">
+            <p className="m-0 text-balance text-subhead text-ink-soft">{line}</p>
+          </div>
+        ) : (
+          <p className="m-0 text-balance text-subhead text-ink-soft">{line}</p>
+        )}
       </Section>
     );
   }
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={holding}>
       <Block {...props} quietWhenAllAside={always} />
       {always && <EmptyWatch id={`emerging-${props.app}${props.rel ? `-${props.rel}` : ''}`} onEmpty={recheck} />}
     </Suspense>

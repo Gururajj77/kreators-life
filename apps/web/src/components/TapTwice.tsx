@@ -27,7 +27,12 @@ export function TapTwice({ rest = 'Remove', ask = 'Tap again to remove', name, o
         } else setArmed(true);
       }}
     >
-      <span aria-live="polite">{armed ? ask : rest}</span>
+      {/* The words shown, and apart from them a live line that holds the ask only while it asks, so the lapse back to rest is never read out
+          (review 2026-11-13). */}
+      <span aria-hidden={armed || undefined}>{armed ? ask : rest}</span>
+      <span className="sr-only" aria-live="polite">
+        {armed ? ask : ''}
+      </span>
     </Button>
   );
 }

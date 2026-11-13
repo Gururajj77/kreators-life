@@ -34,6 +34,7 @@ import { Icon } from './Icon';
 import { X } from 'lucide-react';
 import { FIELD, RED_YES } from '../lib/ui';
 import { dateTime } from '../lib/date';
+import { useTapTwice } from '../lib/useTapTwice';
 import { ErrorLine } from './ErrorLine';
 import { IconTag } from './FactTag';
 import { StatusTag } from './StatusTag';
@@ -601,7 +602,7 @@ function ChannelView({ scope, id, onBack }: { scope: ChannelScope; id: string; o
                     canTakeDown={l.mine || (canManage && (scope === 'bond' || l.rank === null || canModerate(myRank, l.rank)))}
                     canMuteIt={scope === 'community' && !l.mine && Boolean(l.userId) && l.rank !== null && canMute(myRank, l.rank)}
                     onReply={() => setReply(l)}
-                    onTakeDown={() => setAsk({ title: 'Take this line down?', body: l.mine ? 'Your line is removed for everyone in the channel. This cannot be undone.' : 'The line is removed for everyone in the channel. This cannot be undone.', action: 'Yes, take it down', run: () => unsay.mutate(l.id) })}
+                    onTakeDown={() => (l.mine ? unsay.mutate(l.id) : setAsk({ title: 'Take this line down?', body: 'The line is removed for everyone in the channel. This cannot be undone.', action: 'Yes, take it down', run: () => unsay.mutate(l.id) }))}
                     onReport={() => setAsk({ title: 'Tell the team about this line?', body: 'The team reads the line and decides what to do. The writer is not told who sent it.', action: 'Yes, tell the team', run: () => report.mutate(l.id) })}
                     onBlock={() => setAsk({ title: `Block ${l.name}?`, body: "You will not see each other's lines, and any friendship ends. You can undo it under Bond.", action: 'Yes, block', run: () => block.mutate(l.id) })}
                     onMute={() => setAsk({ title: `Mute ${l.name} in Community?`, body: 'They can still read but cannot write.', action: 'Yes, mute', run: () => mute.mutate(l.userId) })}
@@ -689,12 +690,14 @@ export function LineActions({
   canTakeDown: boolean;
   canMuteIt: boolean;
   onReply: () => void;
+  /** Your own line: runs on the second tap. Someone else's: opens the caller's sheet. */
   onTakeDown: () => void;
   onReport: () => void;
   onBlock: () => void;
   onMute: () => void;
 }) {
   const [more, setMore] = useState(false);
+  const ask = useTapTwice();
   const tone = line.mine ? 'text-on-ink/80' : 'text-ink-soft';
   const btn = `inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-caption underline underline-offset-4 ${tone}`;
   return (
@@ -704,11 +707,19 @@ export function LineActions({
           Reply
         </button>
       )}
-      {canTakeDown && (
-        <button type="button" onClick={onTakeDown} className={btn}>
-          Take down
-        </button>
-      )}
+      {/* Your own line is a small personal remove: a second tap takes it down (the founder, 2026-11-13). Someone else's line still asks in
+          a sheet (the caller's `onTakeDown`), since it ends something for another person. */}
+      {canTakeDown &&
+        (line.mine ? (
+          <button type="button" onClick={() => ask.tap(true, onTakeDown)} className={ask.isArmed(true) ? `${btn} red-armed rounded-pill px-sm no-underline` : btn}>
+            <span aria-hidden={ask.isArmed(true) || undefined}>{ask.isArmed(true) ? 'Tap again to take it down' : 'Take down'}</span>
+<span className="sr-only" aria-live="polite">{ask.isArmed(true) ? 'Tap again to take it down' : ''}</span>
+          </button>
+        ) : (
+          <button type="button" onClick={onTakeDown} className={btn}>
+            Take down
+          </button>
+        ))}
       {!line.mine && (
         <button type="button" aria-expanded={more} onClick={() => setMore((m) => !m)} className={`${btn} gap-xs`}>
           More

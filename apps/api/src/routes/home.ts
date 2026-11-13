@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { latestExtras, latestProfile, settingsOf } from './discover';
-import { briefFor, briefPath, formatCount, LOCALE, gettingStarted, isAutoHandle, levelProgress, nudgeFor, parseCoachShare, periodFor, RELATIONSHIPS, type BriefLine, type DailyBrief, type HomeFloor, type HomeResponse, type HomeUpNext, type RelationshipKey } from '@kreators/shared';
+import { briefFor, briefPath, DEFAULT_ZONE, formatCount, LOCALE, gettingStarted, isAutoHandle, levelProgress, nudgeFor, parseCoachShare, periodFor, RELATIONSHIPS, zonedToUtc, type BriefLine, type DailyBrief, type HomeFloor, type HomeResponse, type HomeUpNext, type RelationshipKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { can, hiddenByBlock, liveUser, nameOf, nowIso, parseList, personDay, shiftDate, streakNow } from '../db';
+import { can, dayInZone, hiddenByBlock, liveUser, nameOf, nowIso, parseList, personDay, shiftDate, streakNow } from '../db';
 import { resolveAccess } from '../access';
 import { isCoach, LINK, type LinkRow } from '../coaching';
 import { lifeSummary } from './life';
@@ -20,7 +20,8 @@ const dayOf = (iso: string) => new Date(iso).toLocaleDateString(LOCALE, { day: '
 home.get('/', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const date = c.req.query('date') && /^\d{4}-\d{2}-\d{2}$/.test(c.req.query('date') ?? '') ? (c.req.query('date') as string) : new Date().toISOString().slice(0, 10);
+  // The person's own today when the device sends none (never the server's UTC day: the hidden tasks' "until tomorrow" reads it).
+  const date = c.req.query('date') && /^\d{4}-\d{2}-\d{2}$/.test(c.req.query('date') ?? '') ? (c.req.query('date') as string) : dayInZone(user.timezone);
   const hourRaw = Number(c.req.query('hour'));
   const hour = Number.isFinite(hourRaw) && hourRaw >= 0 && hourRaw <= 23 ? Math.floor(hourRaw) : new Date().getUTCHours();
   const month = date.slice(0, 7);
@@ -29,10 +30,18 @@ home.get('/', async (c) => {
   const days: string[] = [];
   for (let i = 13; i >= 0; i -= 1) days.push(new Date(new Date(`${date}T00:00:00Z`).getTime() - i * 86_400_000).toISOString().slice(0, 10));
   const since = `${days[0]}T00:00:00`;
+  // The xp and ticks of each day are counted on the person's own day (2026-11-13: with the UTC day, xp earned after midnight in India
+  // read as yesterday's until 05:30, and Home's "today" said 0), from their midnight fourteen days back.
+  const zone = user.timezone || DEFAULT_ZONE;
+  const sinceLocal = zonedToUtc(days[0] as string, 0, zone).toISOString();
+  // Each day's own midnight through zonedToUtc (never one offset for all fourteen: across a clock change the days before it would
+  // shift by an hour; review 2026-11-13). The SQL turns an instant into its day's index 0 to 13 by these thirteen boundaries.
+  const bounds = days.slice(1).map((d) => zonedToUtc(d, 0, zone).toISOString());
+  const dayIndexSql = (col: string) => `CASE ${bounds.map((_, i) => `WHEN ${col} < ?${i + 3} THEN ${i}`).join(' ')} ELSE ${bounds.length} END`;
 
   const [xpRows, taskRows, floors, pillars, sparkDone, waiting, doneRecently, unread, fin, dues, overdue, dueSoon, shopCounts, orderDays, events, bookings, circles, life, wb, journalDays, chat, srcRows, reads, runs] = await Promise.all([
-    db.prepare('SELECT substr(created_at, 1, 10) AS d, SUM(amount) AS xp FROM xp_events WHERE user_id = ? AND created_at >= ? GROUP BY d').bind(user.id, since).all<{ d: string; xp: number }>(),
-    db.prepare("SELECT substr(completed_at, 1, 10) AS d, COUNT(*) AS n FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'done' AND completed_at >= ? GROUP BY d").bind(user.id, since).all<{ d: string; n: number }>(),
+    db.prepare(`SELECT ${dayIndexSql('created_at')} AS i, SUM(amount) AS xp FROM xp_events WHERE user_id = ?1 AND created_at >= ?2 GROUP BY i`).bind(user.id, sinceLocal, ...bounds).all<{ i: number; xp: number }>(),
+    db.prepare(`SELECT ${dayIndexSql('completed_at')} AS i, COUNT(*) AS n FROM nodes WHERE user_id = ?1 AND kind = 'task' AND status = 'done' AND completed_at >= ?2 GROUP BY i`).bind(user.id, sinceLocal, ...bounds).all<{ i: number; n: number }>(),
     db.prepare('SELECT relationship, xp FROM relationship_scores WHERE user_id = ?').bind(user.id).all<{ relationship: RelationshipKey; xp: number }>(),
     db.prepare("SELECT relationship, COUNT(*) AS n FROM nodes INDEXED BY idx_nodes_user_done WHERE user_id = ? AND kind = 'pillar' AND status = 'active' GROUP BY relationship").bind(user.id).all<{ relationship: RelationshipKey; n: number }>(),
     db.prepare('SELECT relationship FROM spark_completions WHERE user_id = ? AND date = ?').bind(user.id, date).first<{ relationship: RelationshipKey }>(),
@@ -79,13 +88,13 @@ home.get('/', async (c) => {
     summaryFor(db, user.id, date, streakNow(user.streak, user.last_checkin, date)),
     db.prepare('SELECT substr(created_at, 1, 10) AS d, COUNT(*) AS n FROM journal_entries WHERE user_id = ? AND created_at >= ? GROUP BY d').bind(user.id, `${new Date(new Date(`${date}T00:00:00Z`).getTime() - 60 * 86_400_000).toISOString().slice(0, 10)}T00:00:00`).all<{ d: string; n: number }>(),
     db.prepare("SELECT COUNT(*) AS n FROM chat_messages WHERE user_id = ? AND role = 'user'").bind(user.id).first<{ n: number }>(),
-    db.prepare('SELECT source, SUM(amount) AS xp FROM xp_events WHERE user_id = ? AND created_at >= ? GROUP BY source').bind(user.id, since).all<{ source: string; xp: number }>(),
+    db.prepare('SELECT source, SUM(amount) AS xp FROM xp_events WHERE user_id = ? AND created_at >= ? GROUP BY source').bind(user.id, sinceLocal).all<{ source: string; xp: number }>(),
     db.prepare('SELECT id, title, kind, tags FROM resources WHERE published = 1 ORDER BY created_at DESC LIMIT 2').all<{ id: string; title: string; kind: string; tags: string }>(),
     db.prepare("SELECT r.id, r.title, r.starts_at, r.club_id FROM runs r JOIN run_members m ON m.club_id = r.club_id AND m.user_id = ? AND m.status = 'member' WHERE r.status = 'published' AND r.starts_at >= ? ORDER BY r.starts_at ASC LIMIT 3").bind(user.id, new Date().toISOString()).all<{ id: string; title: string; starts_at: string; club_id: string }>(),
   ]);
 
-  const xpByDay = new Map(xpRows.results.map((r) => [r.d, r.xp]));
-  const tasksByDay = new Map(taskRows.results.map((r) => [r.d, r.n]));
+  const xpByDay = new Map(xpRows.results.map((r) => [days[Number(r.i)] as string, r.xp]));
+  const tasksByDay = new Map(taskRows.results.map((r) => [days[Number(r.i)] as string, r.n]));
   const series = days.map((d) => ({ date: d, xp: xpByDay.get(d) ?? 0, tasks: tasksByDay.get(d) ?? 0 }));
   const xpToday = xpByDay.get(date) ?? 0;
   const xpWeek = series.slice(-7).reduce((s, d) => s + d.xp, 0);
@@ -212,7 +221,7 @@ const avgOf = (rows: { kind: string; date: string; value: number }[], kind: stri
 home.get('/brief', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(c.req.query('date') ?? '') ? (c.req.query('date') as string) : new Date().toISOString().slice(0, 10);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(c.req.query('date') ?? '') ? (c.req.query('date') as string) : dayInZone(user.timezone);
   const hourRaw = Number(c.req.query('hour'));
   const hour = Number.isFinite(hourRaw) && hourRaw >= 0 && hourRaw <= 23 ? Math.floor(hourRaw) : new Date().getUTCHours();
   const week = shiftDate(date, -6);
@@ -365,6 +374,7 @@ home.get('/brief', async (c) => {
     coachNotes: counts?.notes ?? 0,
     coachAsks: counts?.asks ?? 0,
     reviewDue: (counts?.reviewed ?? 0) === 0,
+    reviewWeek: lastWeek.start,
     apps,
     agency: agencyOn
       ? {

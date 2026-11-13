@@ -14,7 +14,6 @@ import {
   supplementListText,
   type SupplementInput,
   type SupplementKind,
-  type SupplementRow,
   type SupplementSettings,
   type SupplementTime,
 } from '@kreators/shared/fitness';
@@ -159,7 +158,6 @@ export function SupplementsSection() {
   const q = useAuthed(['supplements', today], () => api.supplements(today));
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
-  const [gone, setGone] = useState<SupplementRow | null>(null);
   const [clearAll, setClearAll] = useState(false);
   const { copy, said } = useCopy();
   const refresh = () => Promise.all([qc.invalidateQueries({ queryKey: ['supplements'] }), qc.invalidateQueries({ queryKey: ['supplements-today'] })]);
@@ -172,7 +170,6 @@ export function SupplementsSection() {
   const remove = useMutation({
     mutationFn: (id: string) => api.deleteSupplement(id),
     onSuccess: () => {
-      setGone(null);
       focusHeadingAfter('supplements');
       return refresh();
     },
@@ -266,7 +263,7 @@ export function SupplementsSection() {
                               { key: 'pause', label: s.paused ? 'Resume' : 'Pause', icon: s.paused ? Play : Pause, hint: s.paused ? undefined : 'Leaves Daily and the reminders. Keeps its history.', onSelect: () => edit.mutate({ id: s.id, paused: !s.paused }) },
                               ...(i > 0 ? [{ key: 'up', label: 'Move up', icon: ArrowUp, onSelect: () => move.mutate({ id: s.id, dir: 'up' as const }) }] : []),
                               ...(i < items.length - 1 ? [{ key: 'down', label: 'Move down', icon: ArrowDown, onSelect: () => move.mutate({ id: s.id, dir: 'down' as const }) }] : []),
-                              { key: 'remove', label: 'Remove', icon: Trash2, destructive: true, onSelect: () => (remove.reset(), setGone(s)) },
+                              { key: 'remove', label: 'Remove', icon: Trash2, destructive: true, hint: s.paused ? undefined : 'Pause keeps it instead', confirm: 'Tap again to remove it and its ticks', onSelect: () => (remove.reset(), remove.mutate(s.id)) },
                             ]}
                           />
                         );
@@ -364,16 +361,7 @@ export function SupplementsSection() {
         </div>
       )}
 
-      <ConfirmDelete
-        open={gone !== null}
-        title="Remove this supplement?"
-        body={gone ? `${gone.name} and the days you ticked it. You can pause it instead.` : ''}
-        pending={remove.isPending}
-        failed={remove.isError}
-        yes="Yes, remove it"
-        onYes={() => gone && remove.mutate(gone.id)}
-        onClose={() => setGone(null)}
-      />
+      {remove.isError && <ErrorLine e={remove.error} className="mt-xs" />}
       <ConfirmDelete
         open={clearAll}
         title="Remove your whole list?"

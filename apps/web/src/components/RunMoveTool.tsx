@@ -1,8 +1,7 @@
 import { formatCount } from '@kreators/shared';
-import { EFFORT_LEVELS, moveLine, RUN_TOOL_KINDS, type MoveLog } from '@kreators/shared/fitness';
+import { EFFORT_LEVELS, moveLine, RUN_TOOL_KINDS } from '@kreators/shared/fitness';
 import { useMutation } from '@tanstack/react-query';
 import { ArrowUpRight } from 'lucide-react';
-import { useState } from 'react';
 import { Link } from 'react-router';
 import { api } from '../lib/api';
 import { dayLabel, todayLocal } from '../lib/date';
@@ -10,7 +9,9 @@ import { focusHeadingAfter } from '../lib/focusHeading';
 import { useModule } from '../lib/modules';
 import { useAuthed, useRefreshAll } from '../lib/queries';
 import { AnimatedIcon } from './AnimatedIcon';
-import { ConfirmDelete } from './ConfirmDelete';
+import { TapTwiceIcon } from './TapTwiceIcon';
+import { ErrorLine } from './ErrorLine';
+import { useTapTwice } from '../lib/useTapTwice';
 import { Icon } from './Icon';
 import { MoveForm } from './MoveForm';
 
@@ -24,11 +25,11 @@ export function RunMoveTool() {
   const refresh = useRefreshAll();
   const q = useAuthed(['run', 'moves', today], () => api.runMoves(today));
   const fitness = useModule('fitness');
-  const [toDelete, setToDelete] = useState<MoveLog | null>(null);
+  // A small personal entry: a second tap removes it (the founder, 2026-11-13), never a popup.
+  const ask = useTapTwice<string>();
   const remove = useMutation({
     mutationFn: (id: string) => api.deleteMove(id, 'run'),
     onSuccess: () => {
-      setToDelete(null);
       // The row and its trash button go, so the keyboard's place moves to this card's heading.
       focusHeadingAfter('run-own');
       return refresh();
@@ -58,12 +59,24 @@ export function RunMoveTool() {
                   <span className="block text-card-title">{moveLine(m)}</span>
                   <span className="block truncate text-card-note text-ink-soft">{[dayLabel(m.date), m.effort ? EFFORT_LEVELS[m.effort - 1] : '', m.note].filter(Boolean).join(' · ')}</span>
                 </span>
-                <button type="button" onClick={() => setToDelete(m)} aria-label={`Remove ${moveLine(m)} on ${dayLabel(m.date)}`} data-tip="Remove" className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1">
+                <TapTwiceIcon
+                  armed={ask.isArmed(m.id)}
+                  ask="Tap again to remove"
+                  onClick={() => {
+                    remove.reset();
+                    ask.tap(m.id, () => remove.mutate(m.id));
+                  }}
+                  disabled={remove.isPending}
+                  label={`Remove ${moveLine(m)} on ${dayLabel(m.date)}`}
+                  tip="Remove"
+                  className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1"
+                >
                   <AnimatedIcon name="trash" size={20} />
-                </button>
+                </TapTwiceIcon>
               </li>
             ))}
           </ul>
+          {remove.isError && <ErrorLine e={remove.error} className="mt-xs" />}
         </div>
       )}
       {fitness?.on && (
@@ -72,19 +85,6 @@ export function RunMoveTool() {
           <Icon icon={ArrowUpRight} size={16} className="read-arrow" />
         </Link>
       )}
-      <ConfirmDelete
-        open={toDelete !== null}
-        title="Remove this?"
-        body={toDelete ? `${moveLine(toDelete)} on ${dayLabel(toDelete.date)}. It comes off your movement in Life. This cannot be undone.` : ''}
-        pending={remove.isPending}
-        failed={remove.isError}
-        yes="Yes, remove it"
-        onYes={() => toDelete && remove.mutate(toDelete.id)}
-        onClose={() => {
-          setToDelete(null);
-          remove.reset();
-        }}
-      />
     </section>
   );
 }

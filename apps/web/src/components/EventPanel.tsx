@@ -7,8 +7,10 @@ import { useSession } from '../lib/store';
 import { AnonToggle } from './AnonToggle';
 import { Button } from './Button';
 import { ConfirmDelete } from './ConfirmDelete';
+import { ErrorLine } from './ErrorLine';
 import { Section } from './Section';
 import { FIELD } from '../lib/ui';
+import { useTapTwice } from '../lib/useTapTwice';
 import { dateTime } from '../lib/date';
 import { IconTag } from './FactTag';
 import { Fold } from './Fold';
@@ -34,6 +36,7 @@ export function EventPanel({ app, id, talk = true }: { app: EventApp; id: string
   const [url, setUrl] = useState('');
   const [note, setNote] = useState('');
   const [dropLine, setDropLine] = useState<EventMessage | null>(null);
+  const lineAsk = useTapTwice<string>();
   const [dropFolder, setDropFolder] = useState(false);
   const end = useRef<HTMLLIElement | null>(null);
   const d = q.data;
@@ -140,15 +143,31 @@ export function EventPanel({ app, id, talk = true }: { app: EventApp; id: string
                 <button type="button" onClick={() => setTo(m)} className={`mt-xs mr-sm inline-flex min-h-[44px] items-center text-caption underline underline-offset-4 ${m.mine ? 'text-on-ink/80' : 'text-ink-soft'}`}>
                   Reply
                 </button>
-                {(m.mine || host) && (
-                  <button type="button" onClick={() => { unsay.reset(); setDropLine(m); }} className={`mt-xs inline-flex min-h-[44px] items-center text-caption underline underline-offset-4 ${m.mine ? 'text-on-ink/80' : 'text-ink-soft'}`}>
-                    Take down
+                {/* Your own message: a second tap takes it down (the founder, 2026-11-13). The host taking a guest's down still asks in a sheet. */}
+                {m.mine ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      unsay.reset();
+                      lineAsk.tap(m.id, () => unsay.mutate(m.id));
+                    }}
+                    className={`mt-xs inline-flex min-h-[44px] items-center text-caption ${lineAsk.isArmed(m.id) ? 'red-armed rounded-pill px-sm' : 'text-on-ink/80 underline underline-offset-4'}`}
+                  >
+                    <span aria-hidden={lineAsk.isArmed(m.id) || undefined}>{lineAsk.isArmed(m.id) ? 'Tap again to take it down' : 'Take down'}</span>
+<span className="sr-only" aria-live="polite">{lineAsk.isArmed(m.id) ? 'Tap again to take it down' : ''}</span>
                   </button>
+                ) : (
+                  host && (
+                    <button type="button" onClick={() => { unsay.reset(); setDropLine(m); }} className="mt-xs inline-flex min-h-[44px] items-center text-caption text-ink-soft underline underline-offset-4">
+                      Take down
+                    </button>
+                  )
                 )}
               </li>
             ))}
             <li ref={end} aria-hidden="true" />
           </ul>
+          {unsay.isError && dropLine === null && <ErrorLine e={unsay.error} className="mt-xs" />}
           {to && (
             <p className="mt-sm m-0 flex items-center justify-between gap-xs rounded-tile bg-paper p-xs text-caption text-ink-soft">
               <span className="min-w-0 truncate">Replying to {to.mine ? 'yourself' : to.name}: <Inert text={to.body} /></span>
@@ -179,7 +198,7 @@ export function EventPanel({ app, id, talk = true }: { app: EventApp; id: string
       <ConfirmDelete
         open={dropLine !== null}
         title="Take this message down?"
-        body={dropLine?.mine ? 'Your message is removed for every guest. This cannot be undone.' : 'The message is removed for every guest. This cannot be undone.'}
+        body="The message is removed for every guest. This cannot be undone."
         pending={unsay.isPending}
         failed={unsay.isError}
         onYes={() => dropLine && unsay.mutate(dropLine.id)}

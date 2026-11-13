@@ -765,7 +765,8 @@ function ResourceRow({ itemId, r, all, index, programBook, onSaved, onSay, onRem
               else setArmed(true);
             }}
           >
-            <span aria-live="polite">{armed ? 'Tap again to remove' : 'Remove'}</span>
+            <span aria-hidden={armed || undefined}>{armed ? 'Tap again to remove' : 'Remove'}</span>
+<span className="sr-only" aria-live="polite">{armed ? 'Tap again to remove' : ''}</span>
           </Button>
           <Button id={changeId} size="sm" variant="outline" aria-expanded={changing} aria-label={`Change ${label}`} onClick={() => setChanging((c) => !c)}>
             Change

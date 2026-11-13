@@ -413,6 +413,7 @@ function MetricSheet({ editing, kind, onClose, currency }: { editing: Kpi | 'new
             Cancel
           </Button>
           {prev && (
+            // A metric holds every number typed for it, a history that cannot be rebuilt, so removing it asks in a sheet (review 2026-11-13).
             <Button
               variant="ghost"
               onClick={() => {

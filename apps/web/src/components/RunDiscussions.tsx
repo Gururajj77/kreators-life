@@ -335,7 +335,7 @@ function TalkView({ runId, onBack }: { runId: string; onBack: () => void }) {
                 canTakeDown={l.mine || Boolean(t?.host)}
                 canMuteIt={false}
                 onReply={() => setReply(l)}
-                onTakeDown={() => setAsk({ title: 'Take this line down?', body: l.mine ? 'Your line is removed for everyone in the discussion. This cannot be undone.' : 'The line is removed for everyone in the discussion. This cannot be undone.', action: 'Yes, take it down', run: () => unsay.mutate(l.id) })}
+                onTakeDown={() => (l.mine ? unsay.mutate(l.id) : setAsk({ title: 'Take this line down?', body: 'The line is removed for everyone in the discussion. This cannot be undone.', action: 'Yes, take it down', run: () => unsay.mutate(l.id) }))}
                 onReport={() => setAsk({ title: 'Tell the team about this line?', body: 'The team reads the line and decides what to do. The writer is not told who sent it.', action: 'Yes, tell the team', run: () => report.mutate(l.id) })}
                 onBlock={() => setAsk({ title: `Block ${l.name}?`, body: "You will not see each other's lines, and any friendship ends. You can undo it under Bond.", action: 'Yes, block', run: () => block.mutate(l.id) })}
                 onMute={() => undefined}

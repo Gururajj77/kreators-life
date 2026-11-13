@@ -1,14 +1,16 @@
 import { AVAILABILITY, CATEGORIES, EXPERIENCE_LEVELS, GOALS, SKILLS, CURRENCIES, DEFAULT_ZONE, money, type DateFormat, type PortfolioItem, type Socials, type TimeFormat, type User, DEFAULT_PUBLIC, PUBLIC_SETTING_META, type PublicSettings } from '@kreators/shared';
+import { afterRemove } from '../lib/focusHeading';
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
-import { Link } from 'react-router';
+import { useEffect, useState } from 'react';
+import { Link, useBlocker } from 'react-router';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 import { Button } from '../components/Button';
 import { InterestPicker } from '../components/InterestPicker';
 import { LinksEditor } from '../components/LinksEditor';
 import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
 import { Toggle } from '../components/Toggle';
-import { ConfirmDelete } from '../components/ConfirmDelete';
+import { useTapTwice } from '../lib/useTapTwice';
 import { api } from '../lib/api';
 import { DatesAndTimes, datePrefsChange } from '../components/DatesAndTimes';
 import { useAuthed, useMe, useRefreshAll } from '../lib/queries';
@@ -97,6 +99,15 @@ function ProfileView({ user }: { user: User }) {
   const current = JSON.stringify({ handle, bio, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, city, area, avatarUrl, socials, timezone, currency, dateFormat, timeFormat, pub, coords });
   const [baseline, setBaseline] = useState(current);
   const dirty = current !== baseline;
+  // Changes not saved yet are never lost by a slip (2026-11-13, the frictionless pass): leaving for another page asks first, and closing or
+  // reloading the tab gets the browser's own question.
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => dirty && currentLocation.pathname !== nextLocation.pathname);
+  useEffect(() => {
+    if (!dirty) return;
+    const ask = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', ask);
+    return () => window.removeEventListener('beforeunload', ask);
+  }, [dirty]);
   const save = useMutation({
     mutationFn: () => api.updateMe({ handle: handle || null, bio, skills, categories, goals, experienceLevel, availability, location, openToIntros, interests, city, area, avatarUrl, socials, timezone, currency, publicSettings: pub, ...(coords === undefined ? {} : { lat: coords?.lat ?? null, lng: coords?.lng ?? null }), ...datePrefsChange(user.datePrefs, dateFormat, timeFormat) }),
     onSuccess: () => {
@@ -147,7 +158,7 @@ function ProfileView({ user }: { user: User }) {
           <span className="block text-subhead font-semibold">Username</span>
           <div className="mt-xs flex items-center gap-xs">
             <span className="text-headline text-ink-soft">/u/</span>
-            <input value={handle} onChange={(e) => setHandle(e.target.value.toLowerCase())} maxLength={20} pattern="[a-z0-9_]{3,20}" placeholder="yourname" className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+            <input id="username" value={handle} onChange={(e) => setHandle(e.target.value.toLowerCase())} maxLength={20} pattern="[a-z0-9_]{3,20}" placeholder="yourname" className="min-w-0 flex-1 rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
           </div>
           <span className="mt-xs block text-caption text-ink-soft">Yours alone, and it is your page address. Three to twenty characters: letters, numbers, underscore.</span>
         </label>
@@ -311,6 +322,17 @@ function ProfileView({ user }: { user: User }) {
           ))}
         </ul>
       </section>
+      <ConfirmDelete
+        open={blocker.state === 'blocked'}
+        title="Leave without saving?"
+        body="Your changes to this page are not saved yet. Leave and they are lost."
+        pending={false}
+        failed={false}
+        yes="Leave"
+        keep="Keep editing"
+        onYes={() => blocker.proceed?.()}
+        onClose={() => blocker.reset?.()}
+      />
     </Screen>
   );
 }
@@ -330,11 +352,11 @@ function Portfolio() {
       q.refetch();
     },
   });
-  const [askingRemove, setAskingRemove] = useState<{ id: string; title: string } | null>(null);
+  // A piece is the person's own, added again in seconds: a second tap removes it (the founder, 2026-11-13), never a popup.
+  const ask = useTapTwice<string>();
   const remove = useMutation({
     mutationFn: (id: string) => api.removePortfolio(id),
     onSuccess: () => {
-      setAskingRemove(null);
       q.refetch();
     },
   });
@@ -356,22 +378,23 @@ function Portfolio() {
               {it.description && <span className="block text-card-note text-ink-soft">{it.description}</span>}
               <span className="block text-caption text-ink-mute">{it.visibility === 'public' ? 'Public' : 'Only you'}</span>
             </span>
-            <Button variant="ghost" className="shrink-0" aria-label={`Remove ${it.title}`} onClick={() => setAskingRemove({ id: it.id, title: it.title })} disabled={remove.isPending}>
-              Remove
+            <Button
+              variant="ghost"
+              className={`shrink-0 ${ask.isArmed(it.id) ? 'red-armed' : ''}`}
+              aria-label={`${ask.isArmed(it.id) ? 'Tap again to remove' : 'Remove'} ${it.title}`}
+              onClick={() => {
+                remove.reset();
+                ask.tap(it.id, () => remove.mutate(it.id, { onSuccess: afterRemove('Piece removed.') }));
+              }}
+              disabled={remove.isPending}
+            >
+              <span aria-hidden={ask.isArmed(it.id) || undefined}>{ask.isArmed(it.id) ? 'Tap again to remove' : 'Remove'}</span>
+<span className="sr-only" aria-live="polite">{ask.isArmed(it.id) ? 'Tap again to remove' : ''}</span>
             </Button>
           </li>
         ))}
       </ul>
-      <ConfirmDelete
-        open={askingRemove !== null}
-        title="Remove this piece?"
-        body={`“${askingRemove?.title ?? ''}” leaves your portfolio and your page. To show it again you add it again.`}
-        yes="Yes, remove it"
-        pending={remove.isPending}
-        failed={remove.isError}
-        onYes={() => askingRemove && remove.mutate(askingRemove.id)}
-        onClose={() => setAskingRemove(null)}
-      />
+      {remove.isError && <ErrorLine e={remove.error} className="mt-xs" />}
       <form
         className="mt-sm flex flex-col gap-md rounded-card bg-card p-md shadow-toy-soft"
         onSubmit={(e) => {

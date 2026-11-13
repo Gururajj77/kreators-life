@@ -1,4 +1,5 @@
 import { MAX_NOT_TO_DO, NOT_TO_DO_TITLE_MAX, RELATIONSHIP_BY_KEY, RELATIONSHIPS, shiftDay, WAIT, type NotToDo, type NotToDoStatus, type RelationshipKey } from '@kreators/shared';
+import { afterRemove } from '../lib/focusHeading';
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { api, ApiError } from '../lib/api';
 import { pillarTick } from '../lib/relFill';
@@ -9,11 +10,11 @@ import { Fold } from './Fold';
 import { useCelebrate } from './Celebration';
 import { WeekDots } from './Charts';
 import { CheckRow } from './CheckRow';
-import { Sheet } from './Sheet';
 import { DELETE_BTN } from './ConfirmDelete';
 import { ToggleChevron, ToggleIcon } from './ToggleMark';
 import { Ellipsis } from 'lucide-react';
-import { FIELD, RED_YES } from '../lib/ui';
+import { FIELD } from '../lib/ui';
+import { useTapTwice } from '../lib/useTapTwice';
 
 type Queue = ReturnType<typeof useActionQueue>;
 
@@ -46,7 +47,6 @@ export function NotToDoList({ items, date, queue }: Props) {
   const [title, setTitle] = useState('');
   const [area, setArea] = useState<RelationshipKey | ''>('');
   const [openId, setOpenId] = useState<string | null>(null);
-  const [removing, setRemoving] = useState<NotToDo | null>(null);
   // Adding or removing an item changes what a Bad habit card offers (Add to not to do), so Emerging is read again at once.
   const refreshInsights = useRefreshInsights();
   const full = items.length >= MAX_NOT_TO_DO;
@@ -78,8 +78,8 @@ export function NotToDoList({ items, date, queue }: Props) {
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-ntd-toggle="${item.id}"]`)?.focus());
     mark(item, 'slipped');
   };
-  // Removing asks first (a red yes and an outline Keep); the sheet stays open with the reason when it fails.
-  // An item already gone (removed in another tab or by the assistant, a 404) counts as removed, so the sheet closes.
+  // Removing is a second tap in the item's own panel (the founder, 2026-11-13: a small personal item, never a popup); the panel stays
+  // open with the reason when it fails. An item already gone (removed in another tab or by the assistant, a 404) counts as removed.
   const remove = (item: NotToDo) =>
     queue.run(`ntd-${item.id}`, async () => {
       try {
@@ -88,7 +88,6 @@ export function NotToDoList({ items, date, queue }: Props) {
         if (!(e instanceof ApiError && e.status === 404)) throw e;
       }
       void refreshInsights();
-      setRemoving(null);
       setOpenId(null);
     });
 
@@ -140,7 +139,7 @@ export function NotToDoList({ items, date, queue }: Props) {
                     </button>
                   }
                 />
-                {open && <NotToDoMore item={item} busy={queue.isPending(`ntd-${item.id}`)} onSlipped={() => slipped(item)} onRemove={() => setRemoving(item)} onClose={() => setOpenId(null)} />}
+                {open && <NotToDoMore item={item} busy={queue.isPending(`ntd-${item.id}`)} onSlipped={() => slipped(item)} onRemove={() => remove(item)} onClose={() => setOpenId(null)} />}
               </li>
             );
           })}
@@ -190,26 +189,6 @@ export function NotToDoList({ items, date, queue }: Props) {
         </Fold>
       )}
 
-      <Sheet open={removing !== null} onClose={() => setRemoving(null)} title="Remove it from the list?">
-        {removing && (
-          <div className="grid gap-md pb-xl">
-            <p className="m-0 text-callout text-ink-soft">“{removing.title}” and its streak leave your not to do list. The xp you earned stays.</p>
-            {queue.hint(`ntd-${removing.id}`) && (
-              <p role="alert" className="m-0 text-subhead text-r1">
-                {queue.hint(`ntd-${removing.id}`)}
-              </p>
-            )}
-            <div className="flex flex-wrap gap-xs">
-              <button type="button" disabled={queue.isPending(`ntd-${removing.id}`)} onClick={() => remove(removing)} className={RED_YES}>
-                Yes, remove it
-              </button>
-              <Button variant="outline" onClick={() => setRemoving(null)}>
-                Keep it
-              </Button>
-            </div>
-          </div>
-        )}
-      </Sheet>
     </section>
   );
 }
@@ -220,6 +199,7 @@ export function NotToDoList({ items, date, queue }: Props) {
  */
 function NotToDoMore({ item, busy, onSlipped, onRemove, onClose }: { item: NotToDo; busy: boolean; onSlipped: () => void; onRemove: () => void; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
+  const ask = useTapTwice();
   useEffect(() => {
     ref.current?.querySelector<HTMLElement>('button:not([disabled])')?.focus();
   }, []);
@@ -241,10 +221,12 @@ function NotToDoMore({ item, busy, onSlipped, onRemove, onClose }: { item: NotTo
         <Button variant="outline" onClick={onSlipped} disabled={item.today === 'slipped' || busy}>
           I slipped today
         </Button>
-        <button type="button" onClick={onRemove} disabled={busy} className={DELETE_BTN}>
-          Remove from the list
+        <button type="button" onClick={() => ask.tap(true, () => { const said = afterRemove('Removed from the list.'); onRemove(); said(); })} disabled={busy} className={`${DELETE_BTN} ${ask.isArmed(true) ? 'red-armed' : ''}`}>
+          <span aria-hidden={ask.isArmed(true) || undefined}>{ask.isArmed(true) ? 'Tap again to remove' : 'Remove from the list'}</span>
+<span className="sr-only" aria-live="polite">{ask.isArmed(true) ? 'Tap again to remove' : ''}</span>
         </button>
       </div>
+      <p className="m-0 text-caption text-ink-soft">Removing it ends its streak. The xp you earned stays.</p>
     </div>
   );
 }

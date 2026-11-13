@@ -15,6 +15,7 @@ import { Fold } from './Fold';
 import { Toggle } from './Toggle';
 import { AppIcon } from './AppIcon';
 import { FIELD, RED_YES } from '../lib/ui';
+import { useTapTwice } from '../lib/useTapTwice';
 import { StatusTag } from './StatusTag';
 import { CardHead } from './CardHead';
 import './fx/spotlight';
@@ -1178,7 +1179,8 @@ function DesignScreen({ onBack }: { onBack: () => void }) {
   const refresh = useRefreshAll();
   const st: ExtraState | undefined = q.data?.extras.design;
   const [mode, setMode] = useState<'form' | 'result' | null>(null);
-  const [asking, setAsking] = useState(false);
+  // A chart is a form typed again in a minute: a second tap deletes it (the founder, 2026-11-13), never a popup.
+  const chartAsk = useTapTwice();
   const remove = useMutation({
     mutationFn: () => api.deleteExtra('design'),
     onSuccess: () => {
@@ -1226,11 +1228,12 @@ function DesignScreen({ onBack }: { onBack: () => void }) {
         <Button variant="outline" onClick={() => setMode('form')}>
           Change my birth details
         </Button>
-        <Button variant="ghost" onClick={() => setAsking(true)} disabled={remove.isPending}>
-          Delete this chart
+        <Button variant="ghost" className={chartAsk.isArmed(true) ? 'red-armed' : ''} onClick={() => chartAsk.tap(true, () => remove.mutate())} disabled={remove.isPending}>
+          <span aria-hidden={chartAsk.isArmed(true) || undefined}>{chartAsk.isArmed(true) ? 'Tap again to delete' : 'Delete this chart'}</span>
+<span className="sr-only" aria-live="polite">{chartAsk.isArmed(true) ? 'Tap again to delete' : ''}</span>
         </Button>
       </div>
-      <AskDelete open={asking} title="Delete this chart?" line="Your chart and your birth details are gone for good. This cannot be undone." pending={remove.isPending} failed={remove.isError} onYes={() => remove.mutate()} onClose={() => setAsking(false)} />
+      {remove.isError && <p role="alert" className="mt-xs m-0 text-subhead text-r1">That did not work. Try again.</p>}
     </>
   );
 }

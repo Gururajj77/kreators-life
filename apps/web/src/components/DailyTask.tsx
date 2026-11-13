@@ -12,7 +12,7 @@ const TaskPanel = lazyNamed(() => import('./TaskPlan'), 'TaskPanel');
  * A task on Daily with its plan panel one tap away: the main list, "N more waiting", the grouped views, and the Past due and Upcoming tabs
  * (2026-11-12) all draw this one row.
  */
-export function DailyTask({ t, date, queue, onToggle, subtitle, focus = false, below }: { t: Node; date: string; queue: ReturnType<typeof useActionQueue>; onToggle: () => void; subtitle?: string; focus?: boolean; /** A quiet line under the row (a block suggestion or a mismatch, from the grouped view). */ below?: ReactNode }) {
+export function DailyTask({ t, date, queue, onToggle, subtitle, focus = false, below, belowWhileClosed = false }: { t: Node; date: string; queue: ReturnType<typeof useActionQueue>; onToggle: () => void; subtitle?: string; focus?: boolean; /** A quiet line under the row (a block suggestion or a mismatch, from the grouped view). */ below?: ReactNode; /** Show `below` only while the plan is closed (Hidden tasks: the open plan carries its own Unhide, so it is never there twice). */ belowWhileClosed?: boolean }) {
   // A reminder note opens Daily on its task (`?task=<id>`): that task starts with its plan open and is scrolled into view, once.
   const [open, setOpen] = useState(focus);
   useEffect(() => {
@@ -35,7 +35,8 @@ export function DailyTask({ t, date, queue, onToggle, subtitle, focus = false, b
       panel={
         below || open ? (
           <>
-            {below}
+            {/* A lane for the plan's close while it runs down the row's edge (RowClose), so it never sits on a hint's buttons. */}
+            {belowWhileClosed && open ? null : below ? <div className="row-lane">{below}</div> : null}
             {open && (
               <div id={`task-plan-${t.id}`}>
                 <Suspense fallback={<Skeleton className="mt-xs h-[240px]" />}>

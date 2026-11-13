@@ -33,10 +33,32 @@ const loadGeometry = () =>
     }));
 
 /**
+ * "Chat with AI assistant" shows only the first few times a person points at the button or reaches it with the keyboard (the founder,
+ * 2026-11-13): by then they know what it is. The count is a per-person convenience on the device; storage that throws (a private
+ * window) reads as none, so the bubble just shows.
+ */
+const TIP_SHOWS = 3;
+const tipKey = (user: string) => `kreators.assistantTip:${user}`;
+const tipsShown = (user: string) => {
+  try {
+    return Number(localStorage.getItem(tipKey(user))) || 0;
+  } catch {
+    return 0;
+  }
+};
+const countTip = (user: string) => {
+  try {
+    localStorage.setItem(tipKey(user), String(tipsShown(user) + 1));
+  } catch {
+    // Nothing kept: the bubble shows again next time.
+  }
+};
+
+/**
  * The round button at the bottom right, on every screen inside the app: above the tab bar on a phone, in the
  * corner on a laptop. Bumling sits in it, bobbing and blinking, and gives a small hop every few seconds; pointing at
- * it (or reaching it with the keyboard) makes him jump and brings up "Chat with AI assistant" above it; a phone never shows
- * that text by itself, because space is tight. It opens the
+ * it (or reaching it with the keyboard) makes him jump and, the first three times, brings up "Chat with AI assistant" above it; a
+ * phone never shows that text by itself, because space is tight. It opens the
  * panel over the page. Hidden on the Companion, which is a chat of its own, and when the team has switched the
  * assistant off. Motion is GSAP; with reduced motion he stays put and the bubble just appears.
  */
@@ -48,18 +70,28 @@ export function Assistant() {
   const button = useRef<HTMLButtonElement>(null);
   // Opened with the button: focus goes into the panel, and comes back to the button when it folds away.
   const byButton = useRef(false);
+  // The focus handed back as the panel folds away is not someone reaching the button: no bubble, nothing counted.
+  const handedBack = useRef(false);
   const body = useRef<HTMLSpanElement>(null);
   const tip = useRef<HTMLSpanElement>(null);
   const arrow = useRef<HTMLSpanElement>(null);
   const pointing = useRef(false);
+  // Whether this pointing brought the bubble up (decided once, when it starts).
+  const showing = useRef(false);
+  const user = me.data?.user.id ?? 'none';
+  const [spent, setSpent] = useState(false);
   const [eager, setEager] = useState(false);
   const reduce = useReducedMotion();
+
+  useEffect(() => setSpent(tipsShown(user) >= TIP_SHOWS), [user]);
 
   // When the panel folds away after the button opened it, focus goes back to the button.
   useEffect(() => {
     if (open || !byButton.current) return;
     byButton.current = false;
+    handedBack.current = true;
     button.current?.focus({ preventScroll: true });
+    handedBack.current = false;
   }, [open]);
 
   // He pops in, then every few seconds gives a little hop and a wiggle, so the button reads as someone to talk to.
@@ -122,11 +154,19 @@ export function Assistant() {
   /** The bubble by the button, and his jump, when a mouse points at it or the keyboard reaches it. */
   const point = (on: boolean) => {
     setEager(on);
+    const was = pointing.current;
     pointing.current = on;
+    // A pointer and the keyboard at once are one showing, counted once.
+    if (on && !was) {
+      showing.current = tipsShown(user) < TIP_SHOWS;
+      if (showing.current) countTip(user);
+    }
+    if (!on && tipsShown(user) >= TIP_SHOWS) setSpent(true);
     const t = tip.current;
     const him = body.current;
     if (!t || !him) return;
-    if (on) {
+    const bubble = on && showing.current;
+    if (bubble) {
       if (geometry) placeBubble(geometry);
       else
         void loadGeometry().then((m) => {
@@ -134,10 +174,10 @@ export function Assistant() {
         });
     }
     if (reduce) {
-      gsap.set(t, { autoAlpha: on ? 1 : 0, y: 0 });
+      gsap.set(t, { autoAlpha: bubble ? 1 : 0, y: 0 });
       return;
     }
-    gsap.to(t, { autoAlpha: on ? 1 : 0, y: on ? 0 : 6, duration: 0.2, ease: 'power2.out', overwrite: true });
+    gsap.to(t, { autoAlpha: bubble ? 1 : 0, y: bubble ? 0 : 6, duration: 0.2, ease: 'power2.out', overwrite: true });
     if (on) gsap.fromTo(him, { y: 0, scale: 1 }, { y: -6, scale: 1.08, duration: 0.18, ease: 'power2.out', yoyo: true, repeat: 1, overwrite: 'auto' });
   };
 
@@ -166,6 +206,11 @@ export function Assistant() {
         type="button"
         onClick={() => {
           byButton.current = true;
+          // The panel takes the button's place with no pointerleave or blur, so this showing ends here and the next one is counted.
+          pointing.current = false;
+          showing.current = false;
+          setEager(false);
+          if (tipsShown(user) >= TIP_SHOWS) setSpent(true);
           setOpen(true);
         }}
         onPointerEnter={(e) => {
@@ -176,11 +221,12 @@ export function Assistant() {
         onPointerLeave={() => point(false)}
         onFocus={(e) => {
           loadPanel();
-          if (e.currentTarget.matches(':focus-visible')) point(true);
+          if (!handedBack.current && e.currentTarget.matches(':focus-visible')) point(true);
         }}
         onBlur={() => point(false)}
         aria-label="Open the assistant"
         aria-describedby="assistant-tip"
+        data-tip-spent={spent || undefined}
         className="toy toy-soft flex size-[60px] items-center justify-center rounded-pill border-2 border-line bg-card"
       >
         <span ref={body} className="flex" aria-hidden="true">

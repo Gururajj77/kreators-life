@@ -440,7 +440,8 @@ export function AgreementTemplates() {
                     onClick={() => armRemove(t.id)}
                     aria-label={armed === t.id ? `Tap again to remove template ${t.name}` : `Remove template ${t.name}`}
                   >
-                    <span aria-live="polite">{armed === t.id ? 'Tap again to remove' : 'Remove'}</span>
+                    <span aria-hidden={armed === t.id || undefined}>{armed === t.id ? 'Tap again to remove' : 'Remove'}</span>
+<span className="sr-only" aria-live="polite">{armed === t.id ? 'Tap again to remove' : ''}</span>
                   </Button>
                 </span>
               </div>

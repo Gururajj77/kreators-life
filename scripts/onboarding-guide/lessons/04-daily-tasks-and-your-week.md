@@ -22,13 +22,13 @@ Under **Tasks** you see what is open for today, from the pillars you set up. Thr
 - **Past due:** open tasks from days gone by, oldest first, ten a page. Tick one, or give it a new day with **Plan my week**.
 - **Upcoming:** what is set for later, soonest first, ten a page, with the day over each run. One with a do date waits for its day.
 
-Tap the box to tick one. It pays 20 xp and sends a ripple up its pyramid.
+Tap the box at a task's left to tick it. It pays 20 xp and sends a ripple up its pyramid.
 
 Your first three ticks have no wait. After that, a task must be ten minutes old, and ten minutes after your last tick. So you do the thing first, then tick it. Up to six tasks a day pay xp. The rest still count as done.
 
 ## Planning a task
 
-Tap the pencil beside a task. Its plan opens right under it. The first field, **Task**, is its name, so you can change the words right there.
+Tap the task itself, or the small pencil at its top right. Its plan opens right under it. The first field, **Task**, is its name, so you can change the words right there.
 
 1. **Do on:** the do date, the day you will do it. The task shows on Daily from that day, and cannot be ticked before. **Today**, **Tomorrow** and **Next week** are quick picks.
 2. **Due by:** the deadline. After it the task shows Overdue, but you can still tick it.
@@ -38,7 +38,7 @@ Tap the pencil beside a task. Its plan opens right under it. The first field, **
 6. **Time** and **Minutes:** when you will do it, and how long it should take. Quick picks run from 15 minutes to an hour and a half.
 7. **Subtasks:** small steps inside the task, up to twenty. They pay nothing and never stop you ticking the task.
 
-Tap **Save plan**. Once a task has minutes, **Start focus** opens Mindfulness with the task picked and the timer set to that length. **Delete task**, at the foot of the plan, asks first.
+Tap **Save plan**. Once a task has minutes, **Start focus** opens Mindfulness with the task picked and the timer set to that length. **Delete task**, at the foot of the plan, asks for a second tap: it turns red and reads **Tap again to delete**.
 
 > **Pro tip:** the do date and the due date are not the same thing. The do date is when you will work on it. The due date is when it must be done. The do date can never come after the due date.
 
@@ -62,10 +62,11 @@ Under the list, open **Add a task**. Type the task, pick which project it holds 
 
 - **Not scheduled yet:** tasks with no do date and no due date. They stay out of Tasks until you pick a day. Then they move up.
 - **Done today:** what you ticked, struck through, with the time. It starts folded, with the day's count beside it; tap it to open. Tap one to untick it. That takes back its xp. It shows ten at a time. Pick 25 or 50 under it, or go to the next page.
+- **Hidden tasks:** tasks you hid from your lists. In a task's plan, tap **Hide this task**, then **Until tomorrow** or **Until I unhide it**. A hidden task sends no reminder and keeps its days. It waits in this fold, last under Tasks, with **Unhide** under it. A tick there still counts.
 
 ## Close the unfinished
 
-Things you left open tend to stay on your mind: a course you stopped, a talk you put off, a choice you keep turning over. Any task can be marked as one of three kinds. Tap the pencil on it and pick under **Bottleneck**:
+Things you left open tend to stay on your mind: a course you stopped, a talk you put off, a choice you keep turning over. Any task can be marked as one of three kinds. Tap the task and pick under **Bottleneck**:
 
 - **Unfinished:** you started it and did not finish. Do you still want it enough to give it more time?
 - **Unresolved:** it is with other people, like a talk to have or a fight. Have the talk, or decide to let it go.

@@ -70,9 +70,8 @@ A prompt she wrote under or skipped comes back only after the rest of that pilla
 
 1. Riya taps an entry in My journals. The sheet opens with her words.
 2. She changes what she likes and taps **Save changes**.
-3. To remove it, she taps **Delete entry**.
-4. A box asks "Delete this entry?" and says the words are gone for good.
-5. She taps the red **Yes, delete it**, or **Keep it** to back out.
+3. To remove it, she taps **Delete entry**. It turns red and reads **Tap again to delete**.
+4. A second tap deletes it. If she waits a few seconds instead, it goes back to **Delete entry** and nothing changes.
 
 ## The rest of the screen
 

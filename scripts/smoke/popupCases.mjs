@@ -27,8 +27,9 @@ export const CASES = [
   { key: 'read-all', path: '/cards/funflow', steps: [/^Draw a card$/, /^Draw a card$/, /^Draw a card$/, /^Draw a card$/, /^Read all$/], optional: true },
   { key: 'water-sheet', path: '/cards/funflow', steps: [/^Water and reminders/], min: 768, rails: 4 },
   { key: 'tab-all', path: '/inbox', steps: [/^All$/], optional: true },
-  // A sheet over a sheet: the day's sheet, then asking before removing its movement.
-  { key: 'nested-confirm', path: '/fitness', steps: [new RegExp(`^${Number(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }).slice(8))}$`), /^Remove /], nested: true, optional: true, needsMove: true },
+  // A sheet over a sheet: a project's edit sheet on a pillar page, then asking before removing it and everything it holds up. (A movement
+  // in Fitness's day sheet was the case until 2026-11-13, when small personal removes became a second tap with no popup.)
+  { key: 'nested-confirm', path: '/realm/self', steps: [/^\d+Projects \d/, /Holds up:/, /^Remove this project$/], nested: true, optional: true },
   { key: 'bubble', path: '/today', steps: [/^Water \d/], min: 1024, frame: '[role="dialog"][aria-label="Water and reminders"]', close: 'Close water and reminders', rails: 4 },
   { key: 'assistant', path: '/today', steps: [/^Open the assistant$/], frame: '[data-assistant-panel]', close: 'Close', rails: 1 },
   // Admin's sheets (2026-11-09): the account must be an admin (shots-all.mjs makes one).

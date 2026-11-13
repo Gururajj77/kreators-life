@@ -2,9 +2,10 @@ import { panelOf, placeTip, type Prefer } from './tipGeometry';
 
 /**
  * Smart tips (the founder, 2026-11-12: "all the helper tooltips should appear in places that have no pre-existing text, like outside
- * the popups"). One floating name for every `data-tip` trigger in the app, placed by `placeTip` in the empty room nearest its trigger:
- * never over words, a control or a picture, outside a popup's panel whenever the window has room (over the scrim), always inside the
- * window. It shows on a mouse pointing (a fine pointer that can hover) and on keyboard focus reached by Tab or an arrow key, never on
+ * the popups"; 2026-11-13: "the tooltip text should remain close to the button itself not somewhere else, position it right, left top
+ * or bottom accordingly"). One floating name for every `data-tip` trigger in the app, placed by `placeTip` beside its trigger, the gap
+ * away, above, below, left or right, on the side that covers least (off words, a control or a picture where a side is clear, outside a
+ * popup's panel when that side is free), always inside the window, never further out. It shows on a mouse pointing (a fine pointer that can hover) and on keyboard focus reached by Tab or an arrow key, never on
  * a touch and never on the focus a popup gives its own Close as it opens; Escape, a press, a scroll or a resize hides it.
  *
  * Root starts it after the first paint (`startSmartTips`, a chunk of its own like the rectangle fixer); until then the CSS name drawn
@@ -19,6 +20,9 @@ const NAV_KEYS = new Set(['Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRigh
 const KEY_WINDOW = 1000;
 /** Past this many characters the name may wrap inside its width. */
 const WRAP_AT = 40;
+/** A name longer than this may go on two lines, `NARROW_W` wide, when it has no clear room on one. */
+const NARROW_AT = 16;
+const NARROW_W = 130;
 
 const SIDE_ALIGN: Record<string, [Prefer[number][0], Prefer[number][1]]> = {
   top: ['top', 'center'],
@@ -70,6 +74,51 @@ function wordsOf(el: Element): string {
   return (h.dataset.tip ?? h.dataset.tipTitle ?? h.getAttribute('title') ?? '').trim();
 }
 
+type Pt = { x: number; y: number };
+
+/** The convex hull of some points (Andrew's monotone chain), anticlockwise in screen terms. */
+function hull(points: Pt[]): Pt[] {
+  const p = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
+  if (p.length < 3) return p;
+  const cross = (o: Pt, a: Pt, b: Pt) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lower: Pt[] = [];
+  for (const q of p) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2]!, lower[lower.length - 1]!, q) <= 0) lower.pop();
+    lower.push(q);
+  }
+  const upper: Pt[] = [];
+  for (const q of [...p].reverse()) {
+    while (upper.length >= 2 && cross(upper[upper.length - 2]!, upper[upper.length - 1]!, q) <= 0) upper.pop();
+    upper.push(q);
+  }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+
+/** Whether a point lies in a convex polygon (or on its edge). */
+function inside(poly: Pt[], q: Pt): boolean {
+  if (poly.length < 3) return false;
+  for (let i = 0; i < poly.length; i += 1) {
+    const a = poly[i]!;
+    const b = poly[(i + 1) % poly.length]!;
+    if ((b.x - a.x) * (q.y - a.y) - (b.y - a.y) * (q.x - a.x) < 0) return false;
+  }
+  return true;
+}
+
+/** How far round the trigger and the name the pointer may stray on its way from one to the other. */
+const BRIDGE_SLACK = 6;
+
+/** The trigger, the name and the strip between them, as one shape the pointer may cross without the name going (WCAG 1.4.13). */
+function bridgeOf(a: DOMRect, b: DOMRect): Pt[] {
+  const corners = (r: DOMRect): Pt[] => [
+    { x: r.left - BRIDGE_SLACK, y: r.top - BRIDGE_SLACK },
+    { x: r.right + BRIDGE_SLACK, y: r.top - BRIDGE_SLACK },
+    { x: r.right + BRIDGE_SLACK, y: r.bottom + BRIDGE_SLACK },
+    { x: r.left - BRIDGE_SLACK, y: r.bottom + BRIDGE_SLACK },
+  ];
+  return hull([...corners(a), ...corners(b)]);
+}
+
 function triggerOf(target: EventTarget | null): HTMLElement | null {
   const el = target instanceof Element ? target.closest<HTMLElement>(TRIGGER) : null;
   return el && takes(el) ? el : null;
@@ -96,6 +145,8 @@ export function startSmartTips(): () => void {
   let lastNavKey = 0;
   let watch = 0;
   let replace = 0;
+  /** While a mouse travels from the trigger to its name across the gap between them: the shape it may cross. */
+  let bridge: Pt[] | null = null;
 
   const open = () => {
     if (layered) {
@@ -108,14 +159,40 @@ export function startSmartTips(): () => void {
     } else tip.hidden = true;
   };
 
+  /** Where the tip stands against its trigger, so a scroll moves it with the trigger and only a settled page is read again. */
+  let offset = { dx: 0, dy: 0 };
+  let settle = 0;
+  const remember = () => {
+    if (!current) return;
+    const t = current.getBoundingClientRect();
+    offset = { dx: parseFloat(tip.style.left) - t.left, dy: parseFloat(tip.style.top) - t.top };
+  };
+
   const place = () => {
     if (!current) return;
-    const spot = placeTip(current, tip, preferFor(current));
+    let spot = placeTip(current, tip, preferFor(current));
+    // A long name with no clear side (a rail near the window's edge, a table's crowded rows): try it on two lines, narrower, still beside
+    // its trigger, and keep that if it fits clear or covers less; else the first place is put back as it was found, never read a third time.
+    if (spot.blocked && tip.dataset.wrap === undefined && (tip.textContent ?? '').length > NARROW_AT) {
+      const wide = { left: tip.style.left, top: tip.style.top };
+      tip.dataset.wrap = '';
+      tip.style.maxWidth = `${NARROW_W}px`;
+      const narrow = placeTip(current, tip, preferFor(current), null, { scene: spot.scene });
+      if (narrow.blocked && narrow.score >= spot.score) {
+        delete tip.dataset.wrap;
+        tip.style.maxWidth = '';
+        tip.style.left = wide.left;
+        tip.style.top = wide.top;
+      } else spot = narrow;
+    }
     tip.dataset.side = spot.side;
+    remember();
   };
 
   const hide = () => {
     window.clearInterval(watch);
+    window.clearTimeout(settle);
+    bridge = null;
     window.cancelAnimationFrame(replace);
     watch = 0;
     if (current) {
@@ -146,6 +223,7 @@ export function startSmartTips(): () => void {
     by = how;
     trigger.setAttribute('data-tip-on', '');
     tip.textContent = words;
+    tip.style.maxWidth = '';
     if (words.length > WRAP_AT) tip.dataset.wrap = '';
     else delete tip.dataset.wrap;
     tip.style.visibility = 'hidden';
@@ -166,11 +244,25 @@ export function startSmartTips(): () => void {
     const t = triggerOf(e.target);
     if (t) show(t, 'mouse');
   };
+  /**
+   * Hoverable (WCAG 1.4.13, 2026-11-13): the name stands the gap away from its trigger and takes no pointer itself, so leaving the trigger
+   * does not hide it at once: it stays while the pointer is on the trigger, on the name or on the strip between the two (`bridgeOf`),
+   * and goes as soon as the pointer leaves that shape, the window, or points at another trigger.
+   */
   const onOut = (e: PointerEvent) => {
     if (!current || by !== 'mouse') return;
     const to = e.relatedTarget;
     if (to instanceof Node && current.contains(to)) return;
-    hide();
+    if (!to) {
+      hide();
+      return;
+    }
+    bridge = bridgeOf(current.getBoundingClientRect(), tip.getBoundingClientRect());
+    if (!inside(bridge, { x: e.clientX, y: e.clientY })) hide();
+  };
+  const onPointerMove = (e: PointerEvent) => {
+    if (!bridge || !current || by !== 'mouse') return;
+    if (!inside(bridge, { x: e.clientX, y: e.clientY })) hide();
   };
   const onFocusIn = (e: FocusEvent) => {
     const t = triggerOf(e.target);
@@ -189,15 +281,31 @@ export function startSmartTips(): () => void {
     // Escape hides the name and still reaches the popup's own Escape (nothing is prevented).
     if (current && (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ')) hide();
   };
-  /** A scroll or a resize: a mouse's name goes; the keyboard's follows its trigger (focus scrolls the page to it). */
-  const onMove = () => {
+  /**
+   * A scroll or a resize: a mouse's name goes; the keyboard's follows its trigger (focus scrolls the page to it): each frame it only moves
+   * with the trigger, and the page around it is read again once the scroll has rested, so a scroll never asks the page thousands of times.
+   */
+  const onMove = (e: Event) => {
     if (!current) return;
     if (by === 'mouse') {
       hide();
       return;
     }
     window.cancelAnimationFrame(replace);
-    replace = window.requestAnimationFrame(place);
+    window.clearTimeout(settle);
+    if (e.type === 'resize') {
+      replace = window.requestAnimationFrame(place);
+      return;
+    }
+    replace = window.requestAnimationFrame(() => {
+      if (!current) return;
+      const t = current.getBoundingClientRect();
+      tip.style.left = `${Math.round(t.left + offset.dx)}px`;
+      tip.style.top = `${Math.round(t.top + offset.dy)}px`;
+    });
+    settle = window.setTimeout(() => {
+      replace = window.requestAnimationFrame(place);
+    }, 150);
   };
   const onHidden = () => {
     if (doc.visibilityState === 'hidden') hide();
@@ -205,6 +313,7 @@ export function startSmartTips(): () => void {
 
   doc.addEventListener('pointerover', onOver, { capture: true, passive: true });
   doc.addEventListener('pointerout', onOut, { capture: true, passive: true });
+  doc.addEventListener('pointermove', onPointerMove, { capture: true, passive: true });
   doc.addEventListener('focusin', onFocusIn, true);
   doc.addEventListener('focusout', onFocusOut, true);
   doc.addEventListener('keydown', onKey, true);
@@ -217,6 +326,7 @@ export function startSmartTips(): () => void {
     hide();
     doc.removeEventListener('pointerover', onOver, true);
     doc.removeEventListener('pointerout', onOut, true);
+    doc.removeEventListener('pointermove', onPointerMove, true);
     doc.removeEventListener('focusin', onFocusIn, true);
     doc.removeEventListener('focusout', onFocusOut, true);
     doc.removeEventListener('keydown', onKey, true);

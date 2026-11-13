@@ -177,7 +177,10 @@ export function Home() {
 
   return (
     <Screen columns className="screen-even">
-      <header className="relative -mx-md overflow-hidden rounded-b-card night-card px-md pt-lg pb-md text-on-fill md:mx-0 md:mt-md md:rounded-card">
+      {/* The line of the day opens Home, above the greeting (the founder, 2026-11-13), so the header is no longer the screen's first
+          child: on a phone it is a card in the gutter like on a laptop, not the bleed under the corner buttons. */}
+      <QuoteOfTheDay date={date} />
+      <header className="relative mt-md overflow-hidden rounded-card night-card px-md pt-lg pb-md text-on-fill">
         <HeroBlobs opacity={0.06} kind="cosmos" />
         <div className="relative flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
           <p className="order-2 m-0 text-subhead opacity-80 md:order-1">
@@ -232,10 +235,9 @@ export function Home() {
 
       {/* + Glass in the water green on Home too (the founder, 2026-11-06), beside Breathe and focus's own Start. */}
       <RemindersSection always />
-      <QuoteOfTheDay date={date} />
       {/* Breathe and focus, the same living panel as Mindfulness (FocusRoundsHost moves it here while Home is showing), above the daily
           brief (the founder, 2026-11-06). */}
-      {/* A section's own 32px from the line of the day, like every titled section on Home: on a phone the panel's 16px top margin
+      {/* A section's own 32px from Water and reminders, like every titled section on Home: on a phone the panel's 16px top margin
           folds into this one, and in the laptop grid (an item keeps its child's margin) the two add up to the same 32. */}
       {mindfulOn && <div ref={setFocusSlot} className="span-all mt-lg lg:mt-md" style={{ minHeight: focusHeight || undefined }} />}
       <DailyBrief date={date} hour={hour} />
@@ -309,8 +311,8 @@ export function Home() {
 
           <Section id="home-stats" title="Your numbers" lede="Results first. Everything below is what moves them." span>
             <div className="grid grid-cols-2 gap-xs md:grid-cols-4">
-              <KitTile to="/today" tone="bg-r4" icon={Flame} value={String(d.today.streak)} label="day streak" hint={d.today.checkedIn ? 'checked in today' : 'not yet today'} />
-              <KitTile to="/today" tone="bg-r2" icon={Sparkles} value={`+${d.xp.today}`} label="xp today" hint={`${d.xp.week} this week`} />
+              <KitTile to="/today#show-heading" tone="bg-r4" icon={Flame} value={String(d.today.streak)} label="day streak" hint={d.today.checkedIn ? 'checked in today' : 'not yet today'} />
+              <KitTile to="/today#tasks-heading" tone="bg-r2" icon={Sparkles} value={`+${d.xp.today}`} label="xp today" hint={`${d.xp.week} this week`} />
               <KitTile to="/rewards" tone="bg-r3" yellow icon={Coins} value={formatCount(d.points)} label="points" hint="trade for rewards" />
               <KitTile to="/tower" tone="bg-ink" icon={Star} value={`Level ${d.xp.level}`} label={`${d.xp.into} of ${d.xp.span} xp`} hint={`${d.xp.span - d.xp.into} to level ${d.xp.level + 1}`}>
                 <span className="mt-xs block h-[6px] overflow-hidden rounded-pill bg-on-ink/20" aria-hidden="true">
@@ -344,8 +346,6 @@ export function Home() {
             </div>
           </Section>
           )}
-
-          <EmergenceSlot app="home" max={3} always />
 
           <Section id="home-today" title="Daily" lede="Tick each box when you have done it." action={<SeeAll to="/today">Open</SeeAll>} span={lastHalf === 'today'}>
             <div data-pillar="lover_partner" className="relative flex flex-col overflow-hidden rounded-card bg-r4 p-md text-on-fill">
@@ -422,7 +422,7 @@ export function Home() {
                   visual: <Sparkline values={d.trackers.mindful.week} max={60} color="var(--color-r4)" width={80} height={32} />,
                 },
                 {
-                  key: 'sleep', pillar: 'guru', to: '/sleep', name: 'Sleep', icon: MODULE_BY_KEY.sleep?.icon, tone: 'var(--tint-purple)',
+                  key: 'sleep', pillar: 'guru', to: '/sleep#log-heading', name: 'Sleep', icon: MODULE_BY_KEY.sleep?.icon, tone: 'var(--tint-purple)',
                   value: d.trackers.sleep.avg7 === null ? 'not logged' : `${d.trackers.sleep.avg7.toFixed(1)} h a night`,
                   visual: (
                     <Ring value={d.trackers.sleep.avg7 === null ? 0 : (Math.max(4, Math.min(8, d.trackers.sleep.avg7)) - 4) / 4} size={44} stroke={5} color="var(--color-r6)" track="var(--color-line)" label="Sleep quality">
@@ -442,7 +442,7 @@ export function Home() {
                   ),
                 },
                 {
-                  key: 'stress', pillar: 'parent_child', to: '/stress', name: 'Stress', icon: MODULE_BY_KEY.stress?.icon, tone: 'var(--tint-yellow)',
+                  key: 'stress', pillar: 'parent_child', to: '/stress#level-heading', name: 'Stress', icon: MODULE_BY_KEY.stress?.icon, tone: 'var(--tint-yellow)',
                   value: d.trackers.stress.latest === null ? 'not logged' : `Level ${d.trackers.stress.latest} (${STRESS_LEVELS[d.trackers.stress.latest - 1] ?? ''})`,
                   visual: <Segments value={d.trackers.stress.latest} color="var(--color-r3)" label="Stress level out of five" />,
                 },
@@ -732,24 +732,31 @@ export function Home() {
             </Section>
           )}
 
-          <Section id="home-tower" title="Your pillars" span lede="Seven pillars of your life. The bar shows how far each one has come." action={<SeeAll to="/tower">Open</SeeAll>}>
-            <Link to="/tower" className="toy toy-soft block rounded-card bg-card p-md text-ink">
-              <HBars
-                label="Pillar levels"
-                rows={[...d.floors].reverse().map((f) => {
-                  const r = RELATIONSHIP_BY_KEY[f.relationship];
-                  return {
-                    key: f.relationship,
-                    label: r.name,
-                    value: f.built ? Math.max(0.04, f.pct) : 0,
-                    text: f.built ? `lvl ${f.level}` : 'not set up',
-                    color: r.color,
-                    lead: <Avatar relationship={f.relationship} size={28} decorative still mood={f.built ? 'happy' : 'sleepy'} />,
-                  };
-                })}
-              />
-            </Link>
-          </Section>
+          {/* Emerging beside Your pillars (the founder, 2026-11-13): one row on the laptop's two columns, Emerging the left half and the
+              pillars the right, one height (`.home-pair` in app.css); on a phone and a tablet Emerging sits right above the pillars. Emerging
+              holds its half while it loads (`paired`); only when it draws nothing at all do the pillars take the whole row. */}
+          <div className="home-pair span-all">
+            <EmergenceSlot app="home" max={3} always paired />
+            <Section id="home-tower" title="Your pillars" lede="Seven pillars of your life. The bar shows how far each one has come." action={<SeeAll to="/tower">Open</SeeAll>}>
+              {/* Its bars sit in the middle of the card when Emerging beside it is the taller half. */}
+              <Link to="/tower" className="toy toy-soft flex flex-col justify-center rounded-card bg-card p-md text-ink">
+                <HBars
+                  label="Pillar levels"
+                  rows={[...d.floors].reverse().map((f) => {
+                    const r = RELATIONSHIP_BY_KEY[f.relationship];
+                    return {
+                      key: f.relationship,
+                      label: r.name,
+                      value: f.built ? Math.max(0.04, f.pct) : 0,
+                      text: f.built ? `lvl ${f.level}` : 'not set up',
+                      color: r.color,
+                      lead: <Avatar relationship={f.relationship} size={28} decorative still mood={f.built ? 'happy' : 'sleepy'} />,
+                    };
+                  })}
+                />
+              </Link>
+            </Section>
+          </div>
 
           {/* Book: the founder's three books, the whole row so it never pairs with a half. Covers only; the page has the rest. */}
           <Section id="home-books" title="Books" span lede="Three books by Shubham Aggarwal, with a course for each." action={<SeeAll to="/book">Open</SeeAll>}>

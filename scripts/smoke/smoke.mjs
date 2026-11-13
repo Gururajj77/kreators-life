@@ -7554,6 +7554,142 @@ section('Daily tabs, View, Place my day and content days');
   await api('DELETE', '/me', { confirm: 'DELETE' }, O.token);
 }
 
+// ---------------------------------------------------------------- hidden tasks (2026-11-12, the founder: "tasks that go under a toggle tab below called hidden tasks")
+section('Hidden tasks');
+{
+  const H = await signup(`hidden-${stamp}@smoke.test`, 'Hidden-smoke-ok-1', 'Hidden Tasks');
+  const hBuilt = await api('POST', '/onboarding/build', { relationships: ['self'], date: today, picks: { self: { project: 'Hidden project' } } }, H.token);
+  const hProj = (hBuilt.json.nodes ?? []).find((n) => n.kind === 'project');
+  for (const n of (hBuilt.json.nodes ?? []).filter((x) => x.kind === 'task')) await api('PATCH', `/nodes/${n.id}`, { status: 'archived' }, H.token);
+  const hAdd = (title, b = {}) => api('POST', '/nodes', { kind: 'task', parentId: hProj?.id, relationship: 'self', title, ...b }, H.token);
+  const dayAfter = tabsAddDays(today, 1);
+  const soon = (await hAdd('Hidden soon', { doDate: today, dueTime: '23:30', estimateMin: 15 })).json.node;
+  const keep = (await hAdd('Hidden always', { doDate: today })).json.node;
+  const late = (await hAdd('Hidden past due', { doDate: tabsAddDays(today, -1) })).json.node;
+  const later = (await hAdd('Hidden upcoming', { doDate: tabsAddDays(today, 3) })).json.node;
+  const undated = (await hAdd('Hidden undated')).json.node;
+  const remember = (await hAdd('Hidden remember', { remind: true })).json.node;
+  const shown = (await hAdd('Hidden stays shown', { doDate: today })).json.node;
+  check('hidden: the tasks were made', [soon, keep, late, later, undated, remember, shown].every((n) => n?.id));
+  const before = await api('GET', `/today?date=${today}&tab=today`, undefined, H.token);
+  check('hidden: nothing is hidden at first', before.status === 200 && (before.json.hiddenTotal ?? 0) === 0 && before.json.todayTotal === 3 && before.json.pastDueTotal === 1 && before.json.upcomingTotal === 1, [before.json.hiddenTotal, before.json.todayTotal, before.json.pastDueTotal, before.json.upcomingTotal]);
+  const tripsBefore = Number(before.headers.get('x-d1-round-trips') ?? 0);
+
+  // A bad choice is refused in words, and so is hiding a task that is not open; another person's task cannot be hidden.
+  const bad = await api('PATCH', `/nodes/${keep.id}`, { hide: 'forever', today }, H.token);
+  check('hidden: a choice that is not one of the two is refused in words', bad.status === 400 && typeof bad.json.error === 'string', bad.json);
+  const Other = await signup(`hidden-other-${stamp}@smoke.test`, 'Hidden-smoke-ok-2', 'Hidden Other');
+  const theirs = await api('PATCH', `/nodes/${keep.id}`, { hide: 'always', today }, Other.token);
+  check("hidden: another person's task cannot be hidden", theirs.status === 404 && (await api('GET', `/nodes/${keep.id}`, undefined, H.token)).json.node?.hiddenUntil == null, [theirs.status]);
+  check('hidden: the list needs a session', (await api('GET', `/today/hidden?date=${today}`)).status === 401);
+  check('hidden: a day that is not real is refused', (await api('GET', '/today/hidden?date=2026-11-31', undefined, H.token)).status === 400);
+
+  // Until tomorrow writes the person's own today as the last hidden day; Until I unhide it writes the far day.
+  const t1 = await api('PATCH', `/nodes/${soon.id}`, { hide: 'tomorrow', today }, H.token);
+  check('hidden: Until tomorrow keeps it hidden through today', t1.status === 200 && t1.json.node?.hiddenUntil === today, t1.json.node?.hiddenUntil);
+  const hides = await Promise.all([keep, late, later, undated, remember].map((n) => api('PATCH', `/nodes/${n.id}`, { hide: 'always', today }, H.token)));
+  check('hidden: Until I unhide it keeps it hidden for good', hides.every((r) => r.status === 200 && r.json.node?.hiddenUntil === '9999-12-31'), hides.map((r) => r.json.node?.hiddenUntil));
+  const day = await api('GET', `/today?date=${today}&tab=today`, undefined, H.token);
+  const ids = (list) => new Set((list ?? []).map((t) => t.id));
+  const allHidden = [soon, keep, late, later, undated, remember].map((n) => n.id);
+  check('hidden: they leave the Today tab and its count', day.json.todayTotal === 1 && day.json.tasksTotal === 1 && day.json.tasks?.length === 1 && day.json.tasks[0].id === shown.id, [day.json.todayTotal, day.json.tasks?.map((t) => t.title)]);
+  check('hidden: they leave the Past due and Upcoming counts', day.json.pastDueTotal === 0 && day.json.upcomingTotal === 0, [day.json.pastDueTotal, day.json.upcomingTotal]);
+  check('hidden: they leave Not scheduled yet and To remember', !allHidden.some((id) => ids(day.json.backlog).has(id)) && (day.json.backlogTotal ?? 0) === 0, [day.json.backlog?.map((t) => t.title), day.json.backlogTotal]);
+  check('hidden: they leave Your day and the time plan', !allHidden.some((id) => ids(day.json.looseTasks).has(id)) && !(day.json.timedSpans ?? []).some((sp) => sp.dueTime === '23:30'), [day.json.looseTasks?.map((t) => t.title), day.json.timedSpans]);
+  check('hidden: the day counts six hidden', day.json.hiddenTotal === 6, day.json.hiddenTotal);
+  check('hidden: the count costs no new round trip', Number(day.headers.get('x-d1-round-trips') ?? 0) <= Math.max(tripsBefore, 8), [day.headers.get('x-d1-round-trips'), tripsBefore]);
+  const noTab = await api('GET', `/today?date=${today}`, undefined, H.token);
+  check('hidden: with no tab (the assistant, an older tab) they stay out too', !allHidden.some((id) => ids(noTab.json.tasks).has(id)), noTab.json.tasks?.map((t) => t.title));
+  const waiting = await api('GET', `/today/waiting?date=${today}`, undefined, H.token);
+  check('hidden: they never wait in the more list', waiting.status === 200 && !allHidden.some((id) => ids(waiting.json.tasks).has(id)), waiting.json.tasks?.map((t) => t.title));
+  const pd = await api('GET', `/today/past-due?date=${today}`, undefined, H.token);
+  const uc = await api('GET', `/today/upcoming?date=${today}`, undefined, H.token);
+  check('hidden: they leave the Past due and Upcoming lists', pd.json.total === 0 && uc.json.total === 0 && !ids(pd.json.tasks).has(late.id) && !ids(uc.json.tasks).has(later.id), [pd.json.total, uc.json.total]);
+  const home = await api('GET', `/home?date=${today}`, undefined, H.token);
+  check("hidden: Home's Daily count leaves them out", home.status === 200 && home.json.today?.tasksWaiting === 1, home.json.today);
+
+  // The fold's list: Until tomorrow first, ten a page, whole.
+  const list = await api('GET', `/today/hidden?date=${today}`, undefined, H.token);
+  check('hidden: GET /today/hidden lists all six, Until tomorrow first', list.status === 200 && list.json.total === 6 && list.json.tasks?.length === 6 && list.json.tasks[0].id === soon.id, [list.json.total, list.json.tasks?.map((t) => t.title)]);
+  check('hidden: the list is read in a few round trips', Number(list.headers.get('x-d1-round-trips') ?? 0) <= 4, list.headers.get('x-d1-round-trips'));
+  const p2 = await api('GET', `/today/hidden?date=${today}&hdsize=10&hdpage=2`, undefined, H.token);
+  check('hidden: a page past the end says so', p2.status === 200 && p2.json.tasks?.length === 0 && p2.json.page?.empty === true, p2.json.page);
+  const other = await api('GET', `/today/hidden?date=${today}`, undefined, Other.token);
+  check('hidden: the list is owner only', other.status === 200 && other.json.total === 0, other.json.total);
+
+  // The month keeps them, marked; the reminders panel leaves a hidden Remember task out.
+  const month = await api('GET', `/today/month?month=${today.slice(0, 7)}&day=${today}`, undefined, H.token);
+  const monthTasks = (month.json.days ?? []).flatMap((d) => d.tasks ?? []).concat(month.json.tasks ?? []);
+  check('hidden: the month calendar keeps them, marked hidden', month.status === 200 && monthTasks.some((t) => t.id === keep.id && t.hidden === true) && monthTasks.some((t) => t.id === shown.id && !t.hidden), monthTasks.filter((t) => [keep.id, shown.id].includes(t.id)));
+  // The pillar page (2026-11-13) cuts them on the screen, so GET /nodes keeps the whole pyramid: every hidden task comes with its
+  // hiddenUntil (the page's Hidden fold reads it), and its counts still hold them.
+  const pyramid = await api('GET', '/nodes?relationship=self', undefined, H.token);
+  const pyrById = new Map((pyramid.json.nodes ?? []).map((n) => [n.id, n]));
+  check("hidden: the pillar page's read keeps every hidden task, marked", pyramid.status === 200 && allHidden.every((id) => pyrById.get(id)?.status === 'active' && typeof pyrById.get(id)?.hiddenUntil === 'string') && pyrById.get(shown.id)?.hiddenUntil == null, allHidden.map((id) => pyrById.get(id)?.hiddenUntil));
+  const rem = await api('GET', `/reminders?day=${today}`, undefined, H.token);
+  check('hidden: the reminders panel leaves a hidden Remember task out', rem.status === 200 && !(rem.json.tasks ?? []).some((t) => t.id === remember.id), rem.json.tasks);
+
+  // Until tomorrow comes back by itself on the person's next day; Until I unhide it does not.
+  const next = await api('GET', `/today?date=${dayAfter}`, undefined, H.token);
+  check('hidden: Until tomorrow is back on the next day', next.status === 200 && next.json.hiddenTotal === 5 && ids(next.json.tasks).has(soon.id) && !ids(next.json.tasks).has(keep.id), [next.json.hiddenTotal, next.json.tasks?.map((t) => t.title)]);
+  const nextList = await api('GET', `/today/hidden?date=${dayAfter}`, undefined, H.token);
+  check('hidden: the next day lists only the ones hidden for good', nextList.json.total === 5 && !ids(nextList.json.tasks).has(soon.id), nextList.json.total);
+  const far = await api('GET', `/today/hidden?date=${tabsAddDays(today, 30)}`, undefined, H.token);
+  check('hidden: Until I unhide it is still hidden a month on', far.status === 200 && far.json.total === 5, far.json.total);
+
+  // Unhide brings it back at once.
+  const un = await api('PATCH', `/nodes/${later.id}`, { hide: null, today }, H.token);
+  const afterUn = await api('GET', `/today?date=${today}&tab=today`, undefined, H.token);
+  check('hidden: Unhide brings it back', un.status === 200 && un.json.node?.hiddenUntil == null && afterUn.json.upcomingTotal === 1 && afterUn.json.hiddenTotal === 5, [un.json.node?.hiddenUntil, afterUn.json.upcomingTotal, afterUn.json.hiddenTotal]);
+
+  // A tick on a hidden task pays and counts like any; a done task cannot be hidden again.
+  const xp0 = (await api('GET', '/me', undefined, H.token)).json.user?.xp ?? 0;
+  const tick = await api('POST', `/nodes/${keep.id}/complete`, { date: today }, H.token);
+  const xp1 = (await api('GET', '/me', undefined, H.token)).json.user?.xp ?? 0;
+  const doneDay = await api('GET', `/today?date=${today}`, undefined, H.token);
+  check('hidden: ticking a hidden task pays', tick.status === 200 && xp1 - xp0 === XP.task, [tick.status, xp1 - xp0]);
+  check('hidden: a ticked hidden task counts under Done today and leaves the hidden count', ids(doneDay.json.done).has(keep.id) && doneDay.json.hiddenTotal === 4, [doneDay.json.done?.map((t) => t.title), doneDay.json.hiddenTotal]);
+  const doneHide = await api('PATCH', `/nodes/${keep.id}`, { hide: 'always', today }, H.token);
+  check('hidden: a done task cannot be hidden', doneHide.status === 400, doneHide.status);
+
+  // A repeating task hidden and ticked: the next one starts shown.
+  const rep = (await hAdd('Hidden repeats', { doDate: today, repeat: { kind: 'daily', every: 1, days: [], until: null } })).json.node;
+  await api('PATCH', `/nodes/${rep.id}`, { hide: 'always', today }, H.token);
+  const repTick = await api('POST', `/nodes/${rep.id}/complete`, { date: today }, H.token);
+  const nextOne = (await api('GET', `/today?date=${dayAfter}`, undefined, H.token)).json.tasks?.find((t) => t.title === 'Hidden repeats' && t.id !== rep.id);
+  check('hidden: the next of a hidden repeating task starts shown', repTick.status === 200 && nextOne && nextOne.hiddenUntil == null, [repTick.status, nextOne?.hiddenUntil]);
+
+  const exp = await api('GET', '/me/export', undefined, H.token);
+  check('hidden: the export carries the hide', exp.status === 200 && JSON.stringify(exp.json).includes('"hidden_until":"9999-12-31"'), exp.status);
+
+  // A hidden task sends no reminder note; one shown, due at the same time, does.
+  const zones = ['Asia/Kolkata', 'Europe/London', 'America/New_York', 'Asia/Tokyo', 'Pacific/Auckland', 'America/Los_Angeles'];
+  const localOf = (z) => {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: z, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date());
+    const get = (k) => parts.find((x) => x.type === k)?.value ?? '';
+    return { day: `${get('year')}-${get('month')}-${get('day')}`, minutes: Number(get('hour')) * 60 + Number(get('minute')) };
+  };
+  const zone = zones.find((z) => localOf(z).minutes >= 30 && localOf(z).minutes < 23 * 60 + 30) ?? 'Asia/Kolkata';
+  const local = localOf(zone);
+  const at = `${String(Math.floor((local.minutes - 10) / 60)).padStart(2, '0')}:${String((local.minutes - 10) % 60).padStart(2, '0')}`;
+  const R = await signup(`hidden-remind-${stamp}@smoke.test`, 'Hidden-smoke-ok-3', 'Hidden Remind');
+  await api('PATCH', '/me', { timezone: zone }, R.token);
+  const rBuilt = await api('POST', '/onboarding/build', { relationships: ['self'], date: local.day, picks: { self: { project: 'Remind project' } } }, R.token);
+  const rProj = (rBuilt.json.nodes ?? []).find((n) => n.kind === 'project');
+  const rAdd = (title) => api('POST', '/nodes', { kind: 'task', parentId: rProj?.id, relationship: 'self', title, doDate: local.day, dueTime: at, remind: true }, R.token);
+  const seen = (await rAdd(`Hidden note shown ${stamp}`)).json.node;
+  const quiet = (await rAdd(`Hidden note quiet ${stamp}`)).json.node;
+  const quietHide = await api('PATCH', `/nodes/${quiet?.id}`, { hide: 'tomorrow', today: local.day }, R.token);
+  check('hidden: a Remember task due now can be hidden', quietHide.status === 200 && quietHide.json.node?.hiddenUntil === local.day, quietHide.json.node?.hiddenUntil);
+  await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
+  await fetch(`${ORIGIN}/__scheduled?cron=*+*+*+*+*`);
+  const notes = (await api('GET', '/inbox?tab=reminders&size=50', undefined, R.token)).json.notifications ?? [];
+  check('hidden: the shown Remember task gets its note', notes.some((n) => n.title === `Remember: Hidden note shown ${stamp}`), notes.map((n) => n.title));
+  check('hidden: a hidden task sends no reminder note', !notes.some((n) => n.title === `Remember: Hidden note quiet ${stamp}`), notes.map((n) => n.title));
+
+  for (const who of [H, Other, R]) await api('DELETE', '/me', { confirm: 'DELETE' }, who.token);
+}
+
 // ---------------------------------------------------------------- the export and the delete cover what a person wrote (2026-11-07)
 import { readdirSync as privacyDirList } from 'node:fs';
 section('Export and delete cover what a person wrote');
@@ -9397,6 +9533,69 @@ section('Connect people by rank, place and pay');
   for (let n = 0; n <= LIMITS.connect.max; n++) last = await api('POST', '/manage/connect', { kind: 'nope' }, P.limit.token, { 'CF-Connecting-IP': `10.${((seed >> 16) + 94) & 255}.${(n >> 8) & 255}.${n & 255}` });
   check(`one staff member is stopped after ${LIMITS.connect.max} tries, from any address`, last?.status === 429, last?.status);
   check('another staff member still has tries', (await api('POST', '/manage/connect', { kind: 'nope' }, P.mod2.token, { 'CF-Connecting-IP': `10.${((seed >> 16) + 94) & 255}.250.1` })).status === 400);
+}
+
+// ---------------------------------------------------------------- Tap a tag to filter Daily (2026-11-13)
+section('Daily tag filters');
+{
+  const G = await signup(`tagcut-${stamp}@smoke.test`, 'Tagcut-smoke-ok-1', 'Tag Cut');
+  const built = await api('POST', '/onboarding/build', { relationships: ['self', 'parent_child'], date: today, picks: { self: { project: 'Tagcut self project' }, parent_child: { project: 'Tagcut family project' } } }, G.token);
+  const proj = (rel) => (built.json.nodes ?? []).find((n) => n.kind === 'project' && n.relationship === rel);
+  check('tags: two pyramids to hang tasks on', built.status === 201 && Boolean(proj('self')?.id) && Boolean(proj('parent_child')?.id), built.status);
+  // The pyramids' own first tasks are let go, so the counts below are this section's own.
+  for (const n of (built.json.nodes ?? []).filter((x) => x.kind === 'task')) await api('PATCH', `/nodes/${n.id}`, { status: 'archived' }, G.token);
+  const add = (rel, title, b = {}) => api('POST', '/nodes', { kind: 'task', parentId: proj(rel)?.id, relationship: rel, title, ...b }, G.token).then((r) => r.json.node);
+  const a = await add('self', 'Tagcut self remember', { doDate: today, remind: true, priority: 'P1' });
+  const b = await add('parent_child', 'Tagcut family remember', { doDate: today, remind: true });
+  const c = await add('parent_child', 'Tagcut family physical', { doDate: today, lifeArea: 'physical' });
+  const d = await add('self', 'Tagcut late review', { doDate: tabsAddDays(today, -1), forReview: true });
+  const e = await add('self', 'Tagcut later remember', { doDate: tabsAddDays(today, 1), remind: true });
+  check('tags: the tasks were made', [a, b, c, d, e].every((n) => n?.id), '');
+  const ids = (r) => new Set((r.json.tasks ?? []).map((t) => t.id));
+  const day = (q) => api('GET', `/today?date=${today}&tab=today&${q}`, undefined, G.token);
+
+  const rem = await day('tags=remember');
+  check('tags: Remember cuts the six to the Remember tasks', rem.status === 200 && ids(rem).size === 2 && ids(rem).has(a.id) && ids(rem).has(b.id) && rem.json.tags === 'remember', [rem.status, rem.json.tasks?.map((t) => t.title), rem.json.tags]);
+  check('tags: the tabs’ counts follow the tags', rem.json.todayTotal === 2 && rem.json.pastDueTotal === 0 && rem.json.upcomingTotal === 1, [rem.json.todayTotal, rem.json.pastDueTotal, rem.json.upcomingTotal]);
+  const both = await day('tags=remember,pillar:parent_child');
+  check('tags: two tags combine, and the echo is in the one order', both.status === 200 && ids(both).size === 1 && ids(both).has(b.id) && both.json.tags === 'pillar:parent_child,remember', [both.json.tasks?.map((t) => t.title), both.json.tags]);
+  const withArea = await day('area=physical&tags=pillar:parent_child');
+  check('tags: a tag combines with the Area filter', withArea.status === 200 && ids(withArea).size === 1 && ids(withArea).has(c.id), withArea.json.tasks?.map((t) => t.title));
+  const pri = await day('tags=pri:1');
+  check('tags: a priority tag cuts by priority', pri.status === 200 && ids(pri).size === 1 && ids(pri).has(a.id) && pri.json.tags === 'pri:1', pri.json.tasks?.map((t) => t.title));
+  const junk = await day('tags=pri:9,constructor,toString');
+  check('tags: junk is ignored and the echo is empty', junk.status === 200 && junk.json.tags === '' && ids(junk).size === 3, [junk.json.tags, junk.json.tasks?.length]);
+  const notMine = await day('tags=block:not-a-block-of-mine');
+  check('tags: a block that is not the person’s is dropped, never a 500 or a 400', notMine.status === 200 && notMine.json.tags === '' && ids(notMine).size === 3, [notMine.status, notMine.json.tags]);
+  check('tags: the read stays at its round trips', Number(rem.headers.get('x-d1-round-trips') ?? 0) <= 8, rem.headers.get('x-d1-round-trips'));
+
+  const waiting = await api('GET', `/today/waiting?date=${today}&tab=today&tags=remember`, undefined, G.token);
+  check('tags: more waiting follows the tags', waiting.status === 200 && (waiting.json.tasks ?? []).every((t) => t.remind), waiting.json.tasks?.map((t) => t.title));
+  const pastReview = await api('GET', `/today/past-due?date=${today}&tags=review`, undefined, G.token);
+  const pastRemember = await api('GET', `/today/past-due?date=${today}&tags=remember`, undefined, G.token);
+  check('tags: Past due follows the tags', pastReview.status === 200 && pastReview.json.total === 1 && pastReview.json.tasks?.[0]?.id === d.id && pastRemember.json.total === 0, [pastReview.json.total, pastRemember.json.total]);
+  const upRemember = await api('GET', `/today/upcoming?date=${today}&tags=remember`, undefined, G.token);
+  check('tags: Upcoming follows the tags', upRemember.status === 200 && upRemember.json.total === 1 && upRemember.json.tasks?.[0]?.id === e.id, upRemember.json.total);
+  const done = await api('GET', `/today/done?date=${today}&tags=remember`, undefined, G.token);
+  check('tags: Done today takes the tags', done.status === 200 && done.json.total === 0, done.status);
+  const hidden = await api('GET', `/today/hidden?date=${today}&tags=remember`, undefined, G.token);
+  check('tags: Hidden tasks stays whole', hidden.status === 200 && hidden.json.total === 0, hidden.status);
+  // The other kinds of tag (2026-11-13 gate): a habit, an open kind, and the undated list cut the same way.
+  const h = await add('self', 'Tagcut habit', { doDate: today, repeat: { kind: 'daily', every: 1, days: [], until: null } });
+  const k = await add('parent_child', 'Tagcut bottleneck', { doDate: today, openKind: 'unresolved' });
+  const u1 = await add('self', 'Tagcut undated remember', { remind: true });
+  const u2 = await add('self', 'Tagcut undated plain');
+  check('tags: the second set of tasks was made', [h, k, u1, u2].every((n) => n?.id), '');
+  const hab = await day('tags=habit');
+  check('tags: Habit cuts to the repeating tasks', hab.status === 200 && ids(hab).size === 1 && ids(hab).has(h.id) && hab.json.todayTotal === 1, [hab.json.tasks?.map((t) => t.title), hab.json.todayTotal]);
+  const kind = await day('tags=kind:unresolved');
+  check('tags: an open kind cuts to that kind', kind.status === 200 && ids(kind).size === 1 && ids(kind).has(k.id) && kind.json.tags === 'kind:unresolved', [kind.json.tasks?.map((t) => t.title), kind.json.tags]);
+  const all = await day('');
+  const remAll = await day('tags=remember');
+  const backIds = (r) => new Set((r.json.backlog ?? []).map((t) => t.id));
+  check('tags: Not scheduled yet and its count follow the tags', all.json.backlogTotal === 2 && remAll.json.backlogTotal === 1 && backIds(remAll).has(u1.id) && !backIds(remAll).has(u2.id), [all.json.backlogTotal, remAll.json.backlogTotal]);
+  const habPri = await day('tags=habit,pri:1');
+  check('tags: tags that no task has together leave the lists empty, never an error', habPri.status === 200 && ids(habPri).size === 0 && habPri.json.todayTotal === 0, [habPri.status, habPri.json.todayTotal]);
 }
 
 section('Search and answer engines');

@@ -1,4 +1,5 @@
 import { FocusDashboard } from '../components/FocusDashboard';
+import { afterRemove } from '../lib/focusHeading';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { AreaLine, Donut, Legend } from '../components/Charts';
 import { Hero, HeroNumber } from '../components/Hero';
@@ -10,15 +11,15 @@ import { Pager, TEN_A_PAGE, usePage } from '../components/Pager';
 import { useFocusPortal } from '../lib/focusPortal';
 import { Icon } from '../components/Icon';
 import { Wind } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { AnimatedIcon } from '../components/AnimatedIcon';
-import { Button } from '../components/Button';
-import { Sheet } from '../components/Sheet';
+import { TapTwiceIcon } from '../components/TapTwiceIcon';
+import { ErrorLine } from '../components/ErrorLine';
+import { useTapTwice } from '../lib/useTapTwice';
 import { api } from '../lib/api';
 import { useRefreshAll } from '../lib/queries';
 import { EmergenceSlot } from '../components/EmergenceSlot';
-import { RED_YES } from '../lib/ui';
 
 export function Mindful() {
   const wb = useWellbeing();
@@ -40,8 +41,9 @@ export function Mindful() {
   const monthTotal = buckets.reduce((s, b) => s + b.value, 0);
   // A session can be deleted (never edited): the person's own line, asked once more first. Logging pays no xp, so nothing is taken back.
   const refresh = useRefreshAll();
-  const [toDelete, setToDelete] = useState<{ id: string; label: string } | null>(null);
-  const remove = useMutation({ mutationFn: (id: string) => api.deleteLog('mindful', id), onSuccess: () => (setToDelete(null), refresh()) });
+  // A small personal entry: a second tap removes it (the founder, 2026-11-13), never a popup.
+  const ask = useTapTwice<string>();
+  const remove = useMutation({ mutationFn: (id: string) => api.deleteLog('mindful', id), onSuccess: () => refresh() });
   const when = eventTime;
 
   return (
@@ -121,38 +123,24 @@ export function Mindful() {
                 </span>
                 <span className="block text-card-note text-ink-soft">{when(l.createdAt)}</span>
               </span>
-              <button
-                type="button"
-                onClick={() => setToDelete({ id: l.id, label: `${l.value} ${l.value === 1 ? 'minute' : 'minutes'}, ${when(l.createdAt)}` })}
-                aria-label={`Delete the session of ${l.value} ${l.value === 1 ? 'minute' : 'minutes'} on ${when(l.createdAt)}`}
-                data-tip="Delete"
+              <TapTwiceIcon
+                armed={ask.isArmed(l.id)}
+                onClick={() => {
+                  remove.reset();
+                  ask.tap(l.id, () => remove.mutate(l.id, { onSuccess: afterRemove('Session deleted.') }));
+                }}
+                disabled={remove.isPending}
+                label={`Delete the session of ${l.value} ${l.value === 1 ? 'minute' : 'minutes'} on ${when(l.createdAt)}`}
+                tip="Delete"
                 className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1"
               >
                 <AnimatedIcon name="trash" size={20} />
-              </button>
+              </TapTwiceIcon>
             </li>
           ))}
         </ul>
         <Pager page={list.data?.page} prefix="s" label="sessions" only={TEN_A_PAGE} />
-        <Sheet open={toDelete !== null} onClose={() => setToDelete(null)} title="Delete this session?">
-          <div className="grid gap-md pb-xl">
-            <p className="m-0 text-callout text-ink-soft">{toDelete?.label}. Its minutes come off your totals and charts. This cannot be undone.</p>
-            {remove.isError && <p className="m-0 text-subhead text-r1">That did not work. Try again.</p>}
-            <div className="flex flex-wrap gap-xs">
-              <button
-                type="button"
-                disabled={remove.isPending}
-                onClick={() => toDelete && remove.mutate(toDelete.id)}
-                className={RED_YES}
-              >
-                Yes, delete it
-              </button>
-              <Button variant="outline" onClick={() => setToDelete(null)}>
-                Keep it
-              </Button>
-            </div>
-          </div>
-        </Sheet>
+        {remove.isError && <ErrorLine e={remove.error} className="mt-xs" />}
       </section>
     </Screen>
   );

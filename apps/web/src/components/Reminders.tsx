@@ -11,7 +11,6 @@ import { dayLabel, todayLocal, weekday } from '../lib/date';
 import { useSession } from '../lib/store';
 import { useDialogFocus } from '../lib/useDialogFocus';
 import { Button } from './Button';
-import { ConfirmDelete } from './ConfirmDelete';
 import { WaterFill } from './fx/WaterFill';
 import { WaterGlass } from './fx/WaterGlass';
 import { prefersReducedMotion } from './fx/env';

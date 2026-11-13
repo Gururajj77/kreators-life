@@ -15,10 +15,13 @@ import { Screen } from '../components/Screen';
 import { SkeletonList } from '../components/Skeleton';
 import { Sheet } from '../components/Sheet';
 import { api } from '../lib/api';
-import { FIELD, RED_YES, WATER_LANE } from '../lib/ui';
+import { FIELD, WATER_LANE } from '../lib/ui';
+import { useTapTwice } from '../lib/useTapTwice';
+import { ErrorLine } from '../components/ErrorLine';
 import { todayLocal, dateTime, fullDay, inZone } from '../lib/date';
 import { lazyNamed } from '../lib/lazy';
-import { useJournal, useRefreshAll } from '../lib/queries';
+import { useJournal, useMe, useRefreshAll } from '../lib/queries';
+import { useKept } from '../lib/kept';
 import { Pager, usePage } from '../components/Pager';
 import { AppIcon } from '../components/AppIcon';
 import { EmergenceSlot } from '../components/EmergenceSlot';
@@ -297,22 +300,33 @@ function EntrySheet({ entry, date, start, onClose, onSaved }: { entry: JournalEn
   const [emotion, setEmotion] = useState<number | null>(null);
   const [stress, setStress] = useState(2);
   const [stressors, setStressors] = useState<string[]>([]);
-  const [asking, setAsking] = useState(false);
+  // A journal entry is the person's own words they can write again: a second tap deletes it (the founder, 2026-11-13), never a panel or a popup.
+  const ask = useTapTwice();
   const existing = entry && entry !== 'new' ? entry : null;
   const qc = useQueryClient();
+  // A new entry not yet saved is kept for the tab (2026-11-13, the frictionless pass), so Escape, the scrim or Close never loses the words:
+  // the sheet opens on them again for the same day. Never sent anywhere; saving clears it, and signing out forgets it with every kept thing.
+  const me = useMe();
+  const [draft, setDraft] = useKept<{ date: string; title: string; body: string } | null>(`journal-draft:${me.data?.user.id ?? 'none'}`, 'new', null);
+  const draftHere = entry === 'new' && !start && draft && draft.date === (date ?? '') ? draft : null;
 
   useEffect(() => {
-    setTitle(existing?.title ?? start?.title ?? '');
-    setBody(existing?.body ?? start?.body ?? '');
+    setTitle(existing?.title ?? start?.title ?? draftHere?.title ?? '');
+    setBody(existing?.body ?? start?.body ?? draftHere?.body ?? '');
     setEmotion(existing?.emotion ?? null);
     setStress(existing?.stress ?? 2);
     setStressors(existing?.stressors ?? []);
-    setAsking(false);
+    ask.disarm();
   }, [entry]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const keepDraft = (t: string, b: string) => {
+    if (entry === 'new') setDraft(t.trim() || b.trim() ? { date: date ?? '', title: t, body: b } : null);
+  };
 
   const save = useMutation({
     mutationFn: () => (existing ? api.updateEntry(existing.id, { title, body, emotion, stress, stressors }) : api.createEntry({ title, body, emotion, stress, stressors, ...(date ? { date } : {}) })),
     onSuccess: () => {
+      if (!existing) setDraft(null);
       onSaved();
       void qc.invalidateQueries({ queryKey: ['journal-day'] });
       onClose();
@@ -339,14 +353,20 @@ function EntrySheet({ entry, date, start, onClose, onSaved }: { entry: JournalEn
       >
         <label className="block">
           <span className="block text-subhead font-semibold">Title</span>
-          <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Feeling good today" className={FIELD} />
+          <input autoFocus value={title} onChange={(e) => {
+              setTitle(e.target.value);
+              keepDraft(e.target.value, body);
+            }} maxLength={120} placeholder="Feeling good today" className={FIELD} />
         </label>
         <label className="block">
           <span className="flex justify-between text-subhead">
             <span>Say anything that is on your mind</span>
             <span className="text-ink-soft">{words} words</span>
           </span>
-          <textarea value={body} onChange={(e) => setBody(e.target.value)} maxLength={5000} rows={6} className={FIELD} />
+          <textarea value={body} onChange={(e) => {
+              setBody(e.target.value);
+              keepDraft(title, e.target.value);
+            }} maxLength={5000} rows={6} className={FIELD} />
         </label>
         <fieldset className="m-0 border-0 p-0">
           <legend className="text-subhead font-semibold">Emotion</legend>
@@ -389,32 +409,14 @@ function EntrySheet({ entry, date, start, onClose, onSaved }: { entry: JournalEn
           <Button type="submit" size="lg" className="flex-1" disabled={save.isPending || (!body.trim() && !title.trim())}>
             {existing ? 'Save changes' : 'Save entry'}
           </Button>
-          {existing && !asking && (
-            <Button variant="ghost" disabled={remove.isPending} onClick={() => setAsking(true)}>
-              Delete entry
+          {existing && (
+            <Button variant="ghost" className={ask.isArmed(true) ? 'red-armed' : ''} disabled={remove.isPending} onClick={() => ask.tap(true, () => remove.mutate())}>
+              <span aria-hidden={ask.isArmed(true) || undefined}>{ask.isArmed(true) ? 'Tap again to delete' : 'Delete entry'}</span>
+<span className="sr-only" aria-live="polite">{ask.isArmed(true) ? 'Tap again to delete' : ''}</span>
             </Button>
           )}
         </StickyAction>
-        {existing && asking && (
-          <div className="grid gap-sm rounded-tile bg-card p-sm" role="group" aria-label="Delete this entry?">
-            <p className="m-0 text-headline">Delete this entry?</p>
-            <p className="m-0 text-subhead text-ink-soft">Its words are gone for good. This cannot be undone.</p>
-            {remove.isError && <p className="m-0 text-subhead text-r1">That did not work. Try again.</p>}
-            <div className="flex flex-wrap gap-xs">
-              <button
-                type="button"
-                disabled={remove.isPending}
-                onClick={() => remove.mutate()}
-                className={RED_YES}
-              >
-                Yes, delete it
-              </button>
-              <Button variant="outline" onClick={() => setAsking(false)}>
-                Keep it
-              </Button>
-            </div>
-          </div>
-        )}
+        {remove.isError && <ErrorLine e={remove.error} />}
       </form>
     </Sheet>
   );

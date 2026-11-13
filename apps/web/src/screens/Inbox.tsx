@@ -23,6 +23,7 @@ import { useParamState } from '../lib/useParamState';
 import { TeamInvites } from '../components/TeamInvites';
 import { ErrorLine } from '../components/ErrorLine';
 import { FIELD_LINE, RED_YES_LG } from '../lib/ui';
+import { useTapTwice } from '../lib/useTapTwice';
 
 /** The icon for each kind of note (every `InboxKind` has one, the type insists); a row of a kind this list does not know gets the bell. */
 const ICON: Record<InboxKind, LucideIcon> = {
@@ -134,8 +135,10 @@ export function Inbox() {
     },
   });
   const archiveRead = useMutation({ mutationFn: () => api.archiveRead(tab), onMutate: () => setUndo(null), onSuccess: () => refresh() });
-  // Deleting for good always asks first: one note (its id) or everything archived in this tab ('all').
-  const [toDelete, setToDelete] = useState<string | 'all' | null>(null);
+  // Deleting for good: one archived note is a second tap on its own Delete (a small personal remove, the founder, 2026-11-13); everything
+  // archived in this tab ('all') still asks in a sheet.
+  const [toDelete, setToDelete] = useState<'all' | null>(null);
+  const noteAsk = useTapTwice<string>();
   const remove = useMutation({
     mutationFn: (what: string) => (what === 'all' ? api.deleteArchived(tab) : api.deleteNote(what)),
     onMutate: () => setUndo(null),
@@ -163,7 +166,7 @@ export function Inbox() {
         title="Inbox"
         lede="Notes from your apps and from people, sorted by kind."
         actions={
-          // Outline, since the reminder's Save below is the screen's one solid button.
+          // Outline, since the daily reminder's Save, under the notes, is the screen's one solid button.
           tabUnread > 0 || list.some((n) => !n.readAt) ? (
             <Button variant="outline" onClick={() => readAll.mutate()} disabled={readAll.isPending}>
               Mark all read
@@ -171,21 +174,6 @@ export function Inbox() {
           ) : undefined
         }
       />
-
-      <section className="mt-md rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="rem-heading">
-        <h2 id="rem-heading" className="text-title3">
-          Daily reminder
-        </h2>
-        <p className="mt-xs m-0 text-subhead text-ink-soft">
-          {me.data?.user.reminderTime ? `Set for ${clockOf(me.data.user.reminderTime)} in ${zoneName(me.data.user.timezone)}. A nudge lands here at that time on any day you have not checked in yet.` : 'Off. Pick a time, and a nudge lands here then on any day you have not checked in yet.'}
-        </p>
-        <div className="mt-sm flex gap-xs">
-          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} aria-label="Reminder time" className={`${FIELD_LINE} min-w-0 flex-1`} />
-          <Button onClick={() => saveTime.mutate(time || null)} disabled={saveTime.isPending || time === (me.data?.user.reminderTime ?? '')}>
-            {saveTime.isPending ? 'Saving' : !time && me.data?.user.reminderTime ? 'Turn off' : 'Save'}
-          </Button>
-        </div>
-      </section>
 
       <section className="mt-lg" aria-labelledby="list-heading">
         <h2 id="list-heading" className="text-title2">
@@ -258,7 +246,28 @@ export function Inbox() {
           )}
         </div>
         {q.isPending && <SkeletonList className="mt-sm" count={4} lines={2} label="Loading your inbox" />}
-        {!q.isPending && list.length === 0 && <p className="mt-sm m-0 text-subhead text-ink-soft">{show === 'archived' ? 'Nothing archived here.' : show === 'unread' ? 'All caught up.' : EMPTY[tab]}</p>}
+        {!q.isPending && list.length === 0 && (
+          <p className="mt-sm m-0 text-subhead text-ink-soft">
+            {show === 'archived' ? 'Nothing archived here.' : show === 'unread' ? 'All caught up.' : EMPTY[tab]}
+            {/* The way back from an empty view (2026-11-13, the frictionless pass), so nobody hunts for the view buttons again. */}
+            {show !== 'inbox' && (
+              <>
+                {' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUndo(null);
+                    setShow('inbox');
+                    pg.reset();
+                  }}
+                  className="tap-pad relative cursor-pointer font-semibold text-ink underline underline-offset-4"
+                >
+                  Show your inbox
+                </button>
+              </>
+            )}
+          </p>
+        )}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {list.map((n) => {
             const inner = (
@@ -302,12 +311,12 @@ export function Inbox() {
                   {/* An Agency team invite is answered right here, so it works even while Agency is off for them. */}
                   {/^team-(?!access-)/.test(n.id) && <TeamInvites only={n.id.slice(5)} compact className="mt-xs" />}
                 </span>
+                {/* No floating name on hover or focus (the founder, 2026-11-13): it sat over the next note on every row; the name is its aria-label. */}
                 <button
                   type="button"
                   onClick={() => archive.mutate({ id: n.id, archived: !n.archivedAt, unread: !n.readAt })}
                   disabled={archive.isPending}
                   aria-label={n.archivedAt ? `Bring back "${n.title}"` : `Archive "${n.title}"`}
-                  data-tip={n.archivedAt ? 'Bring back' : 'Archive'}
                   className="toy toy-soft flex w-[48px] shrink-0 flex-col items-center justify-center gap-xs rounded-tile bg-card text-ink-soft hover:text-ink"
                 >
                   {n.archivedAt ? <Icon icon={ArchiveRestore} size={20} /> : <AnimatedIcon name="archive" size={20} />}
@@ -316,22 +325,27 @@ export function Inbox() {
                 {n.archivedAt && (
                   <button
                     type="button"
+                    disabled={remove.isPending}
                     onClick={() => {
                       setUndo(null);
-                      setToDelete(n.id);
+                      remove.reset();
+                      noteAsk.tap(n.id, () => remove.mutate(n.id));
                     }}
-                    aria-label={`Delete "${n.title}" for good`}
-                    data-tip="Delete for good"
-                    className="toy toy-soft flex w-[48px] shrink-0 flex-col items-center justify-center gap-xs rounded-tile border-2 border-r1/40 bg-card text-r1 hover:bg-r1/10"
+                    aria-label={noteAsk.isArmed(n.id) ? `Tap again to delete "${n.title}" for good` : `Delete "${n.title}" for good`}
+                    data-tip={noteAsk.isArmed(n.id) ? undefined : 'Delete for good'}
+                    className={`toy toy-soft flex shrink-0 flex-col items-center justify-center gap-xs rounded-tile border-2 border-r1/40 bg-card text-r1 hover:bg-r1/10 ${noteAsk.isArmed(n.id) ? 'red-armed w-[96px] px-xs' : 'w-[48px]'}`}
                   >
                     <AnimatedIcon name="trash" size={20} />
-                    <span className="text-caption font-semibold">Delete</span>
+                    <span className="text-center text-caption font-semibold" aria-live="polite">
+                      {noteAsk.isArmed(n.id) ? 'Tap again to delete' : 'Delete'}
+                    </span>
                   </button>
                 )}
               </li>
             );
           })}
         </ul>
+        {toDelete === null && <ErrorLine e={remove.error} className="mt-xs" />}
         <Pager page={q.data?.page} label="notifications" />
         <Sheet
           open={toDelete !== null}
@@ -339,9 +353,9 @@ export function Inbox() {
             setToDelete(null);
             remove.reset();
           }}
-          title={toDelete === 'all' ? 'Delete everything archived?' : 'Delete this note for good?'}
+          title="Delete everything archived?"
         >
-          <p className="m-0 text-subhead text-ink-soft">{toDelete === 'all' ? 'Every archived note in this tab is removed and cannot be brought back.' : 'It is removed and cannot be brought back. Restore it instead if you might want it.'}</p>
+          <p className="m-0 text-subhead text-ink-soft">Every archived note in this tab is removed and cannot be brought back.</p>
           <ErrorLine e={remove.error} className="mt-sm" />
           <div className="mt-md flex flex-col gap-xs">
             <button
@@ -359,10 +373,26 @@ export function Inbox() {
                 remove.reset();
               }}
             >
-              Keep {toDelete === 'all' ? 'them' : 'it'}
+              Keep them
             </Button>
           </div>
         </Sheet>
+      </section>
+
+      {/* The daily reminder is a setting, so it sits under the notes (2026-11-13, the frictionless pass): the first note is the first thing on a phone. */}
+      <section className="mt-lg rounded-card bg-card p-md shadow-toy-soft" aria-labelledby="rem-heading">
+        <h2 id="rem-heading" className="text-title3">
+          Daily reminder
+        </h2>
+        <p className="mt-xs m-0 text-subhead text-ink-soft">
+          {me.data?.user.reminderTime ? `Set for ${clockOf(me.data.user.reminderTime)} in ${zoneName(me.data.user.timezone)}. A nudge lands here at that time on any day you have not checked in yet.` : 'Off. Pick a time, and a nudge lands here then on any day you have not checked in yet.'}
+        </p>
+        <div className="mt-sm flex gap-xs">
+          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} aria-label="Reminder time" className={`${FIELD_LINE} min-w-0 flex-1`} />
+          <Button onClick={() => saveTime.mutate(time || null)} disabled={saveTime.isPending || time === (me.data?.user.reminderTime ?? '')}>
+            {saveTime.isPending ? 'Saving' : !time && me.data?.user.reminderTime ? 'Turn off' : 'Save'}
+          </Button>
+        </div>
       </section>
     </Screen>
   );

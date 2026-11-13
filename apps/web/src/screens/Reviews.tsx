@@ -23,7 +23,8 @@ import { Fold } from '../components/Fold';
 import { api } from '../lib/api';
 import { prettyDate, todayLocal, inZone, weekday } from '../lib/date';
 import { focusHeading } from '../lib/focusHeading';
-import { useAuthed } from '../lib/queries';
+import { useAuthed, useMe } from '../lib/queries';
+import { useKept } from '../lib/kept';
 import { keepForApps, useModules } from '../lib/modules';
 import { useParamState, writeParams } from '../lib/useParamState';
 import { FIELD } from '../lib/ui';
@@ -86,6 +87,16 @@ export function Reviews() {
   const [answers, setAnswers] = useState<string[]>([]);
   const [rating, setRating] = useState<number | null>(null);
   const [highlight, setHighlight] = useState('');
+  // A review not saved yet is kept for the tab per period (2026-11-13, the frictionless pass), so switching the period or leaving the page
+  // never loses the answers; it opens on them again while no review is saved for that period, and saving clears it. Never sent anywhere.
+  const me = useMe();
+  type Draft = { templateId: string; answers: string[]; rating: number | null; highlight: string };
+  const [draft, setDraft] = useKept<Draft | null>(`review-draft:${me.data?.user.id ?? 'none'}`, `${period.kind}:${period.start}`, null);
+  const keep = (next: Partial<Draft>) => {
+    if (!d || d.review) return;
+    const v = { templateId, answers, rating, highlight, ...next };
+    setDraft(v.answers.some((a) => a.trim()) || v.rating !== null || v.highlight.trim() ? v : null);
+  };
   const reviewStamp = d?.review ? `${d.review.id}:${d.review.updatedAt}` : 'none';
   useEffect(() => {
     if (!d) return;
@@ -95,10 +106,10 @@ export function Reviews() {
       setRating(d.review.rating);
       setHighlight(d.review.highlight);
     } else {
-      setTemplateId(`builtin:${period.kind}`);
-      setAnswers([]);
-      setRating(null);
-      setHighlight('');
+      setTemplateId(draft?.templateId ?? `builtin:${period.kind}`);
+      setAnswers(draft?.answers ?? []);
+      setRating(draft?.rating ?? null);
+      setHighlight(draft?.highlight ?? '');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reviewStamp, period.kind, period.start, Boolean(d)]);
@@ -118,7 +129,9 @@ export function Reviews() {
   // The layer this review walks, by pillar. A saved review keeps the items it was saved with; one saved before this existed shows the live ones.
   const layer: ReviewLayer | undefined = d?.review?.snapshot?.layer ?? d?.summary.layer;
   const addTo = (at: number, line: string) => {
-    setAnswers((a) => prompts.map((_, j) => (j === at ? [a[j] ?? '', line].filter(Boolean).join('\n').slice(0, REVIEW_ANSWER_MAX) : (a[j] ?? ''))));
+    const next = prompts.map((_, j) => (j === at ? [answers[j] ?? '', line].filter(Boolean).join('\n').slice(0, REVIEW_ANSWER_MAX) : (answers[j] ?? '')));
+    setAnswers(next);
+    keep({ answers: next });
     // The review moves to that question's step, without taking focus from the list the person is working through.
     setStep(String(at + 1));
   };
@@ -142,8 +155,12 @@ export function Reviews() {
   };
   const save = useMutation({
     mutationFn: () => api.saveReview({ kind: period.kind, date: period.start, templateId: template && !template.builtIn ? template.id : null, answers, rating, highlight }),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      setDraft(null);
+      return invalidate();
+    },
   });
+  // Removing a review asks in a sheet: its snapshot of the numbers cannot be rebuilt (review 2026-11-13).
   const [askingRemove, setAskingRemove] = useState<string | null>(null);
   const remove = useMutation({
     mutationFn: (id: string) => api.deleteReview(id),
@@ -401,11 +418,21 @@ export function Reviews() {
               prompts={prompts}
               why={whyOf}
               answers={answers}
-              onAnswer={(i, v) => setAnswers((a) => prompts.map((_, j) => (j === i ? v : (a[j] ?? ''))))}
+              onAnswer={(i, v) => {
+                const next = prompts.map((_, j) => (j === i ? v : (answers[j] ?? '')));
+                setAnswers(next);
+                keep({ answers: next });
+              }}
               rating={rating}
-              onRating={setRating}
+              onRating={(v) => {
+                setRating(v);
+                keep({ rating: v });
+              }}
               highlight={highlight}
-              onHighlight={setHighlight}
+              onHighlight={(v) => {
+                setHighlight(v);
+                keep({ highlight: v });
+              }}
               step={stepIn(step, prompts.length)}
               onStep={setStep}
               head={
@@ -419,6 +446,7 @@ export function Reviews() {
                       value={template?.id ?? ''}
                       onChange={(e) => {
                         setTemplateId(e.target.value);
+                        keep({ templateId: e.target.value });
                         setStep('1');
                       }}
                       className={FIELD}
@@ -436,7 +464,7 @@ export function Reviews() {
               saving={save.isPending}
               failed={save.isError}
               onSave={() => save.mutate()}
-              onRemove={d?.review ? () => setAskingRemove(d.review!.id) : undefined}
+              onRemove={d?.review ? () => (remove.reset(), setAskingRemove(d.review!.id)) : undefined}
               removing={remove.isPending}
             />
             <ConfirmDelete

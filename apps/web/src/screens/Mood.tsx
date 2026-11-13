@@ -9,7 +9,9 @@ import { MoodFace } from '../components/MoodFace';
 import { BackLink } from '../components/PageHeader';
 import { Screen } from '../components/Screen';
 import { api } from '../lib/api';
-import { FIELD, RED_YES } from '../lib/ui';
+import { FIELD } from '../lib/ui';
+import { focusHeading } from '../lib/focusHeading';
+import { useTapTwice } from '../lib/useTapTwice';
 import { lastDays, shortDay, todayLocal, dayLabel, fullDay } from '../lib/date';
 import { useLogs, useRefreshAll, useWellbeing } from '../lib/queries';
 import { EmergenceSlot } from '../components/EmergenceSlot';
@@ -83,7 +85,20 @@ export function Mood() {
             ))}
           </div>
           {!why && (
-            <Button full variant="light" className="mt-md" onClick={() => setWhy(true)}>
+            <Button
+              full
+              variant="light"
+              className="mt-md"
+              onClick={() => {
+                setWhy(true);
+                // The second step opens below the coloured top, off a phone's screen (2026-11-13, the frictionless pass): bring it into view
+                // and move the keyboard's place to it, so the tap never seems to do nothing.
+                requestAnimationFrame(() => {
+                  document.getElementById('why-heading')?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+                  focusHeading('why-heading', { preventScroll: true });
+                });
+              }}
+            >
               {current ? `Update today (${MOODS.find((m) => m.value === current.value)?.name})` : 'Set mood'}
             </Button>
           )}
@@ -218,11 +233,11 @@ export function Mood() {
 function MoodDaySheet({ date, existing, onClose, onChanged }: { date: string | null; existing: { id: string; value: number; note: string } | null; onClose: () => void; onChanged: () => void }) {
   const [value, setValue] = useState(3);
   const [note, setNote] = useState('');
-  const [asking, setAsking] = useState(false);
+  const ask = useTapTwice();
   useEffect(() => {
     setValue(existing ? Math.round(existing.value) : 3);
     setNote(existing?.note ?? '');
-    setAsking(false);
+    ask.disarm();
   }, [date, existing?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const qc = useQueryClient();
   const done = () => {
@@ -256,32 +271,19 @@ function MoodDaySheet({ date, existing, onClose, onChanged }: { date: string | n
           <Button size="lg" className="flex-1" onClick={() => save.mutate()} disabled={save.isPending}>
             {existing ? 'Save this day' : 'Add this day'}
           </Button>
-          {existing && !asking && (
-            <Button variant="outline" onClick={() => setAsking(true)} disabled={remove.isPending}>
-              Remove this day
+          {/* A small personal entry: a second tap removes it (the founder, 2026-11-13), never a panel or a popup. */}
+          {existing && (
+            <Button
+              variant="outline"
+              className={ask.isArmed(true) ? 'red-armed' : ''}
+              onClick={() => ask.tap(true, () => remove.mutate())}
+              disabled={remove.isPending}
+            >
+              <span aria-hidden={ask.isArmed(true) || undefined}>{ask.isArmed(true) ? 'Tap again to remove' : 'Remove this day'}</span>
+<span className="sr-only" aria-live="polite">{ask.isArmed(true) ? 'Tap again to remove' : ''}</span>
             </Button>
           )}
         </div>
-        {existing && asking && (
-          <div className="grid gap-sm rounded-tile bg-card p-sm" role="group" aria-label="Remove this day’s mood?">
-            <p className="m-0 text-headline">Remove this day’s mood?</p>
-            <p className="m-0 text-subhead text-ink-soft">It comes off your calendar and charts. This cannot be undone.</p>
-            {remove.isError && <p className="m-0 text-subhead text-r1">That did not work. Try again.</p>}
-            <div className="flex flex-wrap gap-xs">
-              <button
-                type="button"
-                disabled={remove.isPending}
-                onClick={() => remove.mutate()}
-                className={RED_YES}
-              >
-                Yes, delete it
-              </button>
-              <Button variant="outline" onClick={() => setAsking(false)}>
-                Keep it
-              </Button>
-            </div>
-          </div>
-        )}
       </div>
     </Sheet>
   );

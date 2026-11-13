@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router';
-import { Check, Repeat as RepeatIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Check, EyeOff, Repeat as RepeatIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '../lib/api';
 import { pillarTick } from '../lib/relFill';
 import { dueLabel, prettyDate, weekday, clockOf } from '../lib/date';
@@ -202,6 +202,13 @@ function DayTask({ t, today, queue }: { t: MonthTask; today: string; queue: Retu
               </StatusTag>
             )}
             {t.openKind && <OpenTag kind={t.openKind} />}
+            {/* Hidden from Daily's lists today (2026-11-12): still on the calendar, with a quiet mark whose words say it all (no title, which a
+                touch and the keyboard never see; the row's tick reads it out with its other tags). Unhide lives under Hidden tasks on Daily. */}
+            {t.hidden && !done && (
+              <StatusTag tone="neutral" mark={<Icon icon={EyeOff} size={12} />}>
+                Hidden from Daily
+              </StatusTag>
+            )}
             {when && !done && <FactTag kind="when">{when}</FactTag>}
             {due?.overdue && <StatusTag tone="bad">{due.text}</StatusTag>}
           </span>

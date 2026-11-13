@@ -23,7 +23,7 @@ Next is her guide's small act for today, like "Dew's small act for today". It is
 
 Under **Tasks** sit the tasks from her pillars. A task pays 20 xp when ticked. Her first three ticks have no wait. After that, a task must be ten minutes old and ten minutes after her last tick.
 
-To plan one, Riya taps the pencil beside it. The plan opens right under the task. Its first field, **Task**, is the task's name, so she can change the words there. **Delete task**, at the plan's foot, asks first.
+She ticks a task with the box at its left. To plan one, she taps the task itself. The plan opens right under the task. Its first field, **Task**, is the task's name, so she can change the words there. **Delete task**, at the plan's foot, asks first.
 
 1. **Do on:** the do date. The task shows on Daily from that day, and cannot be ticked before. **Tomorrow** and **Next week** are quick picks.
 2. **Due by:** the deadline. After it the task shows Overdue, but it never stops a tick.
@@ -65,7 +65,7 @@ Riya plans "Edit the brand reel": do date Thursday, due Friday, P1, Financial, 9
 
 Riya keeps thinking about a course she stopped and a talk she put off with her sister. Both are tasks already, so she marks them.
 
-1. She taps the pencil on "Finish the colour course" and picks **Unfinished** under **Bottleneck**, then **Save plan**. "Talk to Meera about Diwali" gets **Unresolved**. A third kind, **Undecided**, is for a choice she keeps turning over.
+1. She taps "Finish the colour course" and picks **Unfinished** under **Bottleneck**, then **Save plan**. "Talk to Meera about Diwali" gets **Unresolved**. A third kind, **Undecided**, is for a choice she keeps turning over.
 2. On Home she taps **Close the unfinished**, which shows on the Daily card while a marked task is open. Daily opens with **Bottlenecks** picked in **Sort**: only the marked tasks, one coloured box for each kind, each with its one question.
 3. She ends each one from its panel, under **End it**. The course: **Give it a time and date**, Saturday at 10:00, which turns Remember on, so a note comes that day. The talk: **Do it**, which puts it on today. An old guitar plan: **Let it go**, on a second tap. It leaves her lists and reminders and waits under **Let go**, below the boxes, where **Bring back** returns it.
 

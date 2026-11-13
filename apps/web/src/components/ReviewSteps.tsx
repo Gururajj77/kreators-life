@@ -160,6 +160,8 @@ export function ReviewSteps({
               <Button id="review-save" type="submit" disabled={saving} className="min-w-0 flex-1">
                 {saving ? 'Saving' : saved ? 'Save changes' : 'Save this review'}
               </Button>
+              {/* A saved review keeps a snapshot of the period's numbers that later data never rebuilds, so removing it asks in a sheet
+                  (review 2026-11-13: the history rule in CLAUDE.md's Confirmations), opened by the screen. */}
               {onRemove && (
                 <Button variant="outline" onClick={onRemove} disabled={removing}>
                   Remove

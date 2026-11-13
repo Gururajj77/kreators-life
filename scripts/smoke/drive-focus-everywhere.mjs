@@ -589,9 +589,10 @@ try {
       rec('T4 a session can be changed', editing && minutesOf(afterEdit) === minutesOf(before) + 4, `${minutesOf(before)} -> ${minutesOf(afterEdit)}`);
       await page.evaluate(() => document.querySelector('[data-focus-round] button')?.click());
       await sleep(900);
+      // A second tap deletes it (2026-11-13): the first arms the button, the second reads "Tap again to delete".
       await clickIn('[role="dialog"]', 'Delete this session');
       await sleep(300);
-      await clickIn('[role="dialog"]', 'Delete it');
+      await clickIn('[role="dialog"]', 'Tap again to delete');
       await sleep(1500);
       rec('T4 a session can be deleted (asked twice)', (await rounds()).length === before.length - 1, `${before.length} -> ${(await rounds()).length}`);
       await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Add a session I forgot')?.click());

@@ -76,11 +76,6 @@ const OVERFLOW = fs.readFileSync(new URL('./overflow-probe.js', import.meta.url)
 // POPUP_PROBE=scripts/smoke/spacing-probe.js runs a probe inside each open popup; POPUP_HITS=<file> writes its hits as JSON.
 const PROBE = process.env.POPUP_PROBE ? fs.readFileSync(process.env.POPUP_PROBE, 'utf8') : null;
 const probeHits = [];
-if (!BEFORE && (!only || only.includes('nested-confirm'))) {
-  // Something to remove from the day's sheet. A row of the test account's own, on its own server.
-  const day = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-  await fetch(`${ORIGIN}/api/fitness/move`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${TOKEN}`, 'CF-Connecting-IP': '10.93.7.7' }, body: JSON.stringify({ minutes: 20, kind: 'walk', date: day }), signal: AbortSignal.timeout(8000) }).catch(() => {});
-}
 try {
   for (const [width, height] of SIZES) {
     for (const theme of THEMES) {

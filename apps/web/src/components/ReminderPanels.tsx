@@ -1,10 +1,11 @@
 // The water card's second and third panels (settings, and the person's own reminders), downloaded after the first paint so Daily's and
 // Home's first download stays inside its budget; the card mounts them hidden, so what is typed in either is kept as before.
 import { MAX_CUSTOM_REMINDERS, REMINDER_TIME, REMINDER_TITLE_MAX, WEEKDAY_NAMES, weekdaysLabel, type CustomReminder } from '@kreators/shared';
+import { afterRemove } from '../lib/focusHeading';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { api } from '../lib/api';
-import { ConfirmDelete } from './ConfirmDelete';
+import { useTapTwice } from '../lib/useTapTwice';
 import { Icon } from './Icon';
 import { Check } from 'lucide-react';
 import { FIELD } from '../lib/ui';
@@ -40,6 +41,44 @@ function TickBox() {
 }
 
 /**
+ * A reminder's row (2026-11-12, the founder: the tick box outside the card, on every tick row): the box is its own control at the left, 44
+ * by 44 to tap; the card beside it holds the words and is a second label for the same box, so a tap on the words still ticks, adding no
+ * keyboard stop; then any `aside` (Remove). The box is named by the title and described by the note.
+ */
+function ReminderTick({ checked, onChange, disabled = false, label, title, note, struck = false, aside }: { checked: boolean; onChange: (on: boolean) => void; disabled?: boolean; label?: string; title: string; note: ReactNode; struck?: boolean; aside?: ReactNode }) {
+  const id = useId();
+  return (
+    <li className="flex items-center gap-xs">
+      <label className="relative flex size-[44px] shrink-0 cursor-pointer items-center justify-center">
+        <input
+          id={`${id}-box`}
+          type="checkbox"
+          checked={checked}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.checked)}
+          aria-label={label}
+          aria-labelledby={label ? undefined : `${id}-title`}
+          aria-describedby={`${id}-note`}
+          className="peer sr-only"
+        />
+        <TickBox />
+      </label>
+      <label htmlFor={`${id}-box`} className="toy toy-flat flex min-h-[44px] min-w-0 flex-1 cursor-pointer items-center rounded-inner-sm bg-card px-sm py-xs">
+        <span className="min-w-0">
+          <span id={`${id}-title`} className={`block text-row-title ${struck ? 'text-ink-soft line-through' : ''}`}>
+            {title}
+          </span>
+          <span id={`${id}-note`} className="block text-card-note text-ink-soft">
+            {note}
+          </span>
+        </span>
+      </label>
+      {aside}
+    </li>
+  );
+}
+
+/**
  * The person's own reminders and the tasks they asked to remember, the card's third panel. `tasks={false}` (Daily, which
  * lists them under To remember) points there instead of listing them.
  */
@@ -66,10 +105,10 @@ export function YourReminders({ tasks = true, onLeave }: { tasks?: boolean; /** 
   const forget = useMutation({ mutationFn: (id: string) => api.updateNode(id, { remind: false }), onSuccess: touchDaily });
   const add = useMutation({ mutationFn: () => api.addReminder({ title, time, days }), onSuccess: () => { setTitle(''); setAdding(false); refresh(); } });
   const change = useMutation({ mutationFn: (v: { id: string; r: Partial<CustomReminder> }) => api.changeReminder(v.id, v.r), onSuccess: refresh });
-  // Removing asks first (every removal does): the reminder the sheet is about, null while it is shut.
-  const [gone, setGone] = useState<CustomReminder | null>(null);
-  const remove = useMutation({ mutationFn: (id: string) => api.removeReminder(id), onSuccess: () => { setGone(null); refresh(); } });
-  const failed = add.error ?? change.error ?? remember.error ?? forget.error;
+  // Your own reminder is a small personal remove: a second tap (the founder, 2026-11-13), never a popup. Unticking it pauses it instead.
+  const ask = useTapTwice<string>();
+  const remove = useMutation({ mutationFn: (id: string) => api.removeReminder(id), onSuccess: () => refresh() });
+  const failed = add.error ?? change.error ?? remember.error ?? forget.error ?? remove.error;
   return (
     <>
       <h3 className="m-0 text-headline">Your reminders</h3>
@@ -77,21 +116,29 @@ export function YourReminders({ tasks = true, onLeave }: { tasks?: boolean; /** 
       {custom.length > 0 && (
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {custom.map((r) => (
-            <li key={r.id} className="flex items-center gap-xs rounded-inner-sm bg-card p-xs">
-              <label className="toy toy-flat flex min-h-[44px] min-w-0 flex-1 cursor-pointer items-center gap-sm rounded-tile px-xs">
-                <input type="checkbox" checked={r.enabled} onChange={(e) => change.mutate({ id: r.id, r: { enabled: e.target.checked } })} className="peer sr-only" />
-                <TickBox />
-                <span className="min-w-0">
-                  <span className={`block text-row-title ${r.enabled ? '' : 'text-ink-soft line-through'}`}>{r.title}</span>
-                  <span className="block text-card-note text-ink-soft">
-                    {clockOf(r.time)} · {weekdaysLabel(r.days)}
-                  </span>
-                </span>
-              </label>
-              <button type="button" className="mf-mini toy" onClick={() => { remove.reset(); setGone(r); }} aria-label={`Remove ${r.title}`}>
-                Remove
-              </button>
-            </li>
+            <ReminderTick
+              key={r.id}
+              checked={r.enabled}
+              onChange={(on) => change.mutate({ id: r.id, r: { enabled: on } })}
+              title={r.title}
+              note={`${clockOf(r.time)} · ${weekdaysLabel(r.days)}`}
+              struck={!r.enabled}
+              aside={
+                <button
+                  type="button"
+                  className={`mf-mini toy ${ask.isArmed(r.id) ? 'red-armed' : ''}`}
+                  disabled={remove.isPending}
+                  onClick={() => {
+                    remove.reset();
+                    ask.tap(r.id, () => remove.mutate(r.id, { onSuccess: afterRemove('Reminder removed.') }));
+                  }}
+                  aria-label={`${ask.isArmed(r.id) ? 'Tap again to remove' : 'Remove'} ${r.title}. To pause it instead, untick it.`}
+                >
+                  <span aria-hidden={ask.isArmed(r.id) || undefined}>{ask.isArmed(r.id) ? 'Tap again to remove' : 'Remove'}</span>
+<span className="sr-only" aria-live="polite">{ask.isArmed(r.id) ? 'Tap again to remove' : ''}</span>
+                </button>
+              }
+            />
           ))}
         </ul>
       )}
@@ -165,16 +212,15 @@ export function YourReminders({ tasks = true, onLeave }: { tasks?: boolean; /** 
         remembered.length > 0 && (
           <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
             {remembered.map((t) => (
-              <li key={t.id} className="rounded-inner-sm bg-card p-xs">
-                <label className="toy toy-flat flex min-h-[44px] cursor-pointer items-center gap-sm rounded-tile px-xs">
-                  <input type="checkbox" checked onChange={() => forget.mutate(t.id)} disabled={forget.isPending} aria-label={`Stop reminding me about ${t.title}`} className="peer sr-only" />
-                  <TickBox />
-                  <span className="min-w-0">
-                    <span className="block text-row-title">{t.title}</span>
-                    <span className="block text-card-note text-ink-soft">{t.day ? `${shortDay(t.day)} · ${clockOf(t.time ?? '09:00')}` : 'No day yet, so no note'}</span>
-                  </span>
-                </label>
-              </li>
+              <ReminderTick
+                key={t.id}
+                checked
+                onChange={() => forget.mutate(t.id)}
+                disabled={forget.isPending}
+                label={`Stop reminding me about ${t.title}`}
+                title={t.title}
+                note={t.day ? `${shortDay(t.day)} · ${clockOf(t.time ?? '09:00')}` : 'No day yet, so no note'}
+              />
             ))}
           </ul>
         )
@@ -228,18 +274,6 @@ export function YourReminders({ tasks = true, onLeave }: { tasks?: boolean; /** 
         </div>
       )}
       {failed && <p role="alert" className="mf-line">{msg(failed)}</p>}
-      {/* The sheet portals to the page's top, so it is never framed by the bubble or the water card it is opened from. */}
-      <ConfirmDelete
-        open={gone !== null}
-        title="Remove this reminder?"
-        body={gone ? `“${gone.title}” will stop landing in your Inbox, for good. To pause it instead, untick it in the list.` : ''}
-        pending={remove.isPending}
-        failed={remove.isError}
-        error={remove.error ? msg(remove.error) : undefined}
-        onYes={() => gone && remove.mutate(gone.id)}
-        onClose={() => setGone(null)}
-        yes="Yes, remove it"
-      />
     </>
   );
 }

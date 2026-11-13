@@ -173,7 +173,8 @@ function RemoveTwice({ series, pending, size, onArm, onRemove }: { series: boole
           }
         }}
       >
-        <span aria-live="polite">{armed ? `Tap again to ${rest.toLowerCase()}` : rest}</span>
+        <span aria-hidden={armed || undefined}>{armed ? `Tap again to ${rest.toLowerCase()}` : rest}</span>
+        <span className="sr-only" aria-live="polite">{armed ? `Tap again to ${rest.toLowerCase()}` : ''}</span>
       </Button>
       {armed && <span className="order-last basis-full text-caption text-ink-soft">Reviews you wrote stay.</span>}
     </>

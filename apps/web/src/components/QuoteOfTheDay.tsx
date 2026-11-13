@@ -31,8 +31,8 @@ function write(k: Kept) {
 }
 
 /**
- * The line of the day, drawn like a tooltip: the same pale card as every tip, with a small point at the top that aims at the section above it
- * (Water and reminders). One line a day from a philosopher, with their name, or from the app, with none, the same for everyone on the same day,
+ * The line of the day, drawn like a tooltip card: the same pale card as every tip. It opens Home, above the greeting (the founder, 2026-11-13),
+ * so it carries no point: there is nothing above it to aim at. One line a day from a philosopher, with their name, or from the app, with none, the same for everyone on the same day,
  * and none comes back until every line has been shown. "Another line" (the founder, 2026-11-06) shows a new one on demand, taking turns
  * between a tip and a quote, never one this device has already been shown until the whole pool has been (`nextLine` in shared).
  * On a laptop the quote is always one row (the founder: "never make the quote more than one line on desktop"): it does not wrap, the
@@ -100,8 +100,8 @@ export function QuoteOfTheDay({ date }: { date: string }) {
   };
   const label = shown.key === day.key ? 'Line of the day' : shown.tip ? 'A tip' : 'A line to think about';
   return (
-    <aside className="span-all relative mt-md" aria-label="Line of the day">
-      <span className="tip-card absolute -top-[6px] left-lg block size-[12px] rotate-45 border-t border-l border-line" aria-hidden="true" />
+    // The first thing on Home: on a phone it starts 64px down, clear of the logo and the corner buttons (as a screen's first header does).
+    <aside className="span-all relative mt-xl md:mt-md" aria-label="Line of the day">
       <figure className="tip-card relative m-0 rounded-tile border border-line p-sm shadow-toy-soft">
         <div className="flex items-start justify-between gap-sm">
           <figcaption className="m-0 text-eyebrow uppercase text-ink-soft">{label}</figcaption>

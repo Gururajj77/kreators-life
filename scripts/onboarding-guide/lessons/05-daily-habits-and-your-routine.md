@@ -10,7 +10,7 @@ In this lesson you'll learn:
 
 ## Making a task repeat
 
-Open a task's plan with the pencil. Under **Repeat**, pick Every day, Weekdays, Every week, Every month or Every year, or every two weeks, say. For a weekly task, pick the days. **Stop after** is an optional last day.
+Tap a task to open its plan. Under **Repeat**, pick Every day, Weekdays, Every week, Every month or Every year, or every two weeks, say. For a weekly task, pick the days. **Stop after** is an optional last day.
 
 A repeat needs a do date or a due date to count from. When you tick the task, the next one appears by itself, with the same words, time and length. If you untick it, the new one goes away again.
 

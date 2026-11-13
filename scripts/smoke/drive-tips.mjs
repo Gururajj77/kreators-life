@@ -2,17 +2,30 @@
 // "all the helper tooltips should appear in places that have no pre-existing text, like outside the popups"). With a mouse at laptop sizes
 // it points at each trigger; on a phone it walks the page with Tab. Each tip shown is measured on its own, not by the placement code:
 //   missing         no tip showed for a trigger
+//   not-adjacent    the tip is not beside its trigger (2026-11-13, the founder: "the tooltip text should remain close to the button itself
+//                   not somewhere else"): on no side are the facing edges within 12px (the rule's gap is 8) with the two spans meeting
 //   outside         part of the tip is outside the window
 //   over-text       a line of words that is drawn there (not under a modal's scrim) meets the tip
 //   over-control    a control's box that is drawn there meets the tip (not the trigger, nor what holds it)
 //   over-picture    a picture that is drawn there meets the tip
 //   over-own-panel  the trigger sits in a popup's rail (or outside its panel), the tip meets that panel, and there was clear room off it
+//                   beside the trigger
+// Adjacency wins over cover: a tip now stands only beside its trigger, so where every side meets something it covers the least of it,
+// and the over-* counts may rise where the old far search found empty room further out; they are reported as they are.
 // Needs the smoke server on 8788 with the latest build and a prepared account (SHOOT_TOKEN, from shots-all.mjs).
 //
 //   SHOOT_TOKEN=<token> node scripts/smoke/drive-tips.mjs
 //   TIPS_SIZES=1280x800:mouse,1024x768:mouse,390x844:keys   TIPS_THEMES=light,dark
 //   TIPS_ROUTES="/home /apps"   TIPS_POPUPS=1 (also every popup in popupCases.mjs)   TIPS_CASES=week-plan,bubble
-//   TIPS_MAX=40 (triggers a page at most)   TIPS_OUT=<file> (every hit as JSON)
+//   TIPS_MAX=40 (triggers a page at most)   TIPS_OUT=<file> (every hit as JSON)   TIPS_BEHAVIOUR=0 (skip the behaviour checks)
+//   TIPS_PLAN=0 (skip Daily's open task plan, whose close is checked at laptop sizes halfway down the plan)
+// Before the placement walk it checks what smartTip.ts promises, once at 1280 (2026-11-12): a touch over a trigger shows no tip (touch),
+// Escape hides a keyboard tip (escape), a mouse can move onto a name and it goes once the mouse leaves (hoverable, 2026-11-13), and a
+// popup opened with Enter shows no tip on the Close it focuses (popup-close), and the assistant's bubble stops after three showings, the
+// panel opened and folded in between, and shows every time where the device's storage throws (bubble-count, bubble-private).
+// The assistant's bubble shows only the first three times a person points at the button (kreators.assistantTip:<user> on the device,
+// 2026-11-13): every new document starts with that count cleared, so each page still checks the first showing, and a button marked
+// data-tip-spent (a fourth pointing in one page) is not a trigger.
 //
 // Prints one line per hit, then a summary; exits 1 on any hit.
 import fs from 'node:fs';
@@ -33,6 +46,8 @@ const POPUPS = process.env.TIPS_POPUPS === '1';
 const ONLY_CASES = process.env.TIPS_CASES?.split(',');
 const MAX = Number(process.env.TIPS_MAX ?? 40);
 const KEY_STEPS = 200;
+/** How far a tip's facing edge may stand from its trigger's and still be beside it (the rule's gap is 8, the rest is rounding). */
+const ADJACENT = 12;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------------------------------------------------------------------------------------------------------------------------------------
@@ -41,6 +56,22 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const IN_PAGE = String.raw`
 (() => {
   if (window.__tips) return;
+  const ADJACENT = ${ADJACENT};
+  /** The side a tip stands on and its gap, the same reading as besideTrigger in packages/shared/src/tipPlace.ts. */
+  const besideOf = (t, a) => {
+    const acrossX = t.left < a.right && t.right > a.left;
+    const acrossY = t.top < a.bottom && t.bottom > a.top;
+    const sides = [
+      ['top', a.top - t.bottom, acrossX],
+      ['bottom', t.top - a.bottom, acrossX],
+      ['left', a.left - t.right, acrossY],
+      ['right', t.left - a.right, acrossY],
+    ];
+    let near = null;
+    for (const [side, g, along] of sides) if (along && g >= -0.5 && (!near || g < near.gap)) near = { side, gap: g };
+    if (!near) return { beside: false, gap: Math.round(Math.max(...sides.map((s) => s[1]))), side: null };
+    return { beside: near.gap <= ADJACENT, gap: Math.round(near.gap), side: near.side };
+  };
   const CONTROL = 'button, a[href], input, select, textarea, summary, [role=button], [role=tab], [contenteditable]';
   const PICTURE = 'img, svg, canvas, video, picture, [role=img]';
   const TRIGGER = '[data-tip], [data-tip-title], [data-term-tip] > button, :is(button, a, [role=button], [role=tab]):is([aria-label], [aria-labelledby])[title], button[aria-describedby="assistant-tip"]';
@@ -53,7 +84,8 @@ const IN_PAGE = String.raw`
     return cs.visibility !== 'hidden' && Number(cs.opacity) > 0.05;
   };
   const takes = (el) => {
-    if (el.matches('[data-term-tip] > button') || el.matches('button[aria-describedby="assistant-tip"]')) return true;
+    if (el.matches('button[aria-describedby="assistant-tip"]')) return !el.hasAttribute('data-tip-spent');
+    if (el.matches('[data-term-tip] > button')) return true;
     if (el.closest('[data-term-tip]')) return false;
     if (el.classList.contains('expand-btn') && el.querySelector('.expand-btn-words') && !el.closest('.dialog-rail')) return false;
     return Boolean((el.dataset.tip ?? el.dataset.tipTitle ?? el.getAttribute('title') ?? '').trim());
@@ -90,6 +122,15 @@ const IN_PAGE = String.raw`
    * (not strict) whose element takes no pointer count when the first thing met is what holds them and nothing clips them there.
    */
   const drawnAt = (el, x, y, strict) => {
+    // The condensed title bar is drawn over the page but takes no pointer, so the hit test sees through it (2026-11-13).
+    // Its own words are drawn there for the same reason, over whatever scrolls under it, unless a popup lies over the bar too.
+    for (const c of document.querySelectorAll('.fx-condensed[data-on]')) {
+      const r = c.getBoundingClientRect();
+      if (x < r.left || x > r.right || y < r.top || y > r.bottom) continue;
+      if (!c.contains(el)) return false;
+      const top = document.elementsFromPoint(x, y).find((e) => !e.closest(TIP));
+      return !top?.closest('.sheet-scrim, .dialog-frame, [role="dialog"]');
+    }
     for (const e of document.elementsFromPoint(x, y)) {
       if (e.closest(TIP)) continue;
       if (e === el || el.contains(e)) return true;
@@ -179,6 +220,9 @@ const IN_PAGE = String.raw`
       const vh = window.innerHeight;
       const hits = [];
       if (t.left < -0.5 || t.top < -0.5 || t.right > vw + 0.5 || t.bottom > vh + 0.5) hits.push({ kind: 'outside', words: Math.round(t.left) + ',' + Math.round(t.top) + ' ' + Math.round(t.width) + 'x' + Math.round(t.height) });
+      // Beside its trigger: on one side, the facing edges at most ADJACENT apart and the two spans meeting along it.
+      const near = besideOf(t, trigger.getBoundingClientRect());
+      if (!near.beside) hits.push({ kind: 'not-adjacent', words: (near.side ? near.side + ' ' : 'no side, ') + near.gap + 'px from the trigger' });
       // Measured with the tip out of the way, so what it covers can be asked about.
       const was = tip.style.visibility;
       tip.style.visibility = 'hidden';
@@ -194,17 +238,18 @@ const IN_PAGE = String.raw`
         const offPanel = panel && (trigger.closest('.dialog-rail') || !panel.contains(trigger));
         if (offPanel && meet(panel.getBoundingClientRect(), t)) {
           const p = panel.getBoundingClientRect();
+          // Only the spots the rule may take: beside the trigger at the gap, the tip spanning the trigger's middle.
           const anchors = [trigger.getBoundingClientRect()];
-          const rail = trigger.closest('.dialog-rail');
-          if (rail) anchors.push(rail.getBoundingClientRect());
           const w = t.width;
           const h = t.height;
           let room = false;
           search: for (const a of anchors) {
-            for (let gap = 8; gap <= 16; gap += 4) {
+            for (const gap of [8]) {
               const spots = [];
-              for (let x = a.left - w; x <= a.right; x += 4) spots.push([x, a.top - gap - h], [x, a.bottom + gap]);
-              for (let y = a.top - h; y <= a.bottom; y += 4) spots.push([a.left - gap - w, y], [a.right + gap, y]);
+              const cx = (a.left + a.right) / 2;
+              const cy = (a.top + a.bottom) / 2;
+              for (let x = cx - w; x <= cx; x += 4) spots.push([x, a.top - gap - h], [x, a.bottom + gap]);
+              for (let y = cy - h; y <= cy; y += 4) spots.push([a.left - gap - w, y], [a.right + gap, y]);
               for (const [x, y] of spots) {
                 const r = { left: x, top: y, right: x + w, bottom: y + h };
                 if (r.left < 8 || r.top < 8 || r.right > vw - 8 || r.bottom > vh - 8) continue;
@@ -317,8 +362,205 @@ async function byKeys(page, where, scopeSel, steps) {
   }
 }
 
+/** The three promises in smartTip.ts's header, each reported as a hit of kind `behaviour` when broken. */
+async function behaviour(browser) {
+  const page = await browser.newPage();
+  await page.setExtraHTTPHeaders({ 'CF-Connecting-IP': `10.93.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}` });
+  await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
+  await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
+  await page.evaluateOnNewDocument((t) => {
+    localStorage.setItem('kreators.session', JSON.stringify({ state: { token: t }, version: 0 }));
+    for (const k of Object.keys(localStorage)) if (k.startsWith('kreators.assistantTip:')) localStorage.removeItem(k);
+  }, TOKEN);
+  const tipOn = () => page.evaluate(() => Boolean(document.querySelector('.smart-tip[data-on]')));
+  const ready = async (route) => {
+    await page.goto(`${ORIGIN}${route}`, { waitUntil: 'networkidle2', timeout: 25000 });
+    await sleep(500);
+    await page.evaluate(() => {
+      for (const b of document.querySelectorAll('[role="dialog"]:not([aria-modal]) button')) if (/^Reject all$/.test(b.textContent.trim())) b.click();
+    });
+    await page.waitForFunction(() => document.documentElement.hasAttribute('data-smart-tips'), { timeout: 5000 }).catch(() => {});
+  };
+  try {
+    await ready('/mindful');
+    // A touch: a pointer of type touch over a trigger names nothing.
+    const touched = await page.evaluate(() => {
+      const el = [...document.querySelectorAll('[data-tip]')].find((x) => x.getClientRects().length > 0);
+      if (!el) return false;
+      for (const type of ['pointerover', 'pointerenter', 'pointerdown']) el.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerType: 'touch' }));
+      return true;
+    });
+    await sleep(200);
+    if (!touched) report('/mindful 1280', '(behaviour)', 'behaviour', 'touch: no data-tip trigger to touch');
+    else if (await tipOn()) report('/mindful 1280', '(behaviour)', 'behaviour', 'touch: a tip showed on a touch');
+    // Escape: Tab to a trigger until its tip shows, then Escape hides it.
+    await page.evaluate(() => document.activeElement?.blur?.());
+    let shownByKey = false;
+    for (let k = 0; k < 120 && !shownByKey; k += 1) {
+      await page.keyboard.press('Tab');
+      await sleep(40);
+      shownByKey = await tipOn();
+    }
+    if (!shownByKey) report('/mindful 1280', '(behaviour)', 'behaviour', 'escape: no keyboard tip showed in 120 Tabs');
+    else {
+      await page.keyboard.press('Escape');
+      await sleep(150);
+      if (await tipOn()) report('/mindful 1280', '(behaviour)', 'behaviour', 'escape: the tip stayed after Escape');
+    }
+    // Hoverable (WCAG 1.4.13): a name, the gap away from its trigger, stays while the mouse crosses onto it, and goes once it leaves.
+    await page.keyboard.press('Escape');
+    await page.mouse.move(2, 2);
+    const aim = await page.evaluate(() => {
+      const el = [...document.querySelectorAll('[data-tip]')].find((x) => x.getClientRects().length > 0 && x.getBoundingClientRect().top > 60);
+      if (!el) return null;
+      el.scrollIntoView({ block: 'center' });
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+    if (aim) {
+      await sleep(200);
+      await page.mouse.move(aim.x, aim.y);
+      await sleep(150);
+      const box = await page.evaluate(() => {
+        const t = document.querySelector('.smart-tip[data-on]');
+        if (!t) return null;
+        const r = t.getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      });
+      if (!box) report('/mindful 1280', '(behaviour)', 'behaviour', 'hoverable: no tip showed to move onto');
+      else {
+        await page.mouse.move(box.x, box.y, { steps: 12 });
+        await sleep(150);
+        if (!(await tipOn())) report('/mindful 1280', '(behaviour)', 'behaviour', 'hoverable: the tip went while the mouse moved onto it');
+        await page.mouse.move(2, 2, { steps: 4 });
+        await sleep(150);
+        if (await tipOn()) report('/mindful 1280', '(behaviour)', 'behaviour', 'hoverable: the tip stayed after the mouse left it');
+      }
+    }
+    // A popup opened with Enter focuses its own Close: no tip names it.
+    await ready('/today');
+    const opener = await page.evaluateHandle(() => [...document.querySelectorAll('button')].find((b) => /Plan my week/.test(b.textContent ?? '') && b.getClientRects().length > 0) ?? null);
+    const el = opener.asElement();
+    if (!el) report('/today 1280', '(behaviour)', 'behaviour', 'popup-close: no Plan my week button');
+    else {
+      await el.focus();
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('[role="dialog"][aria-modal="true"]', { timeout: 5000 }).catch(() => {});
+      await sleep(500);
+      const inDialog = await page.evaluate(() => Boolean(document.activeElement?.closest('[role="dialog"]')));
+      if (!inDialog) report('/today 1280', '(behaviour)', 'behaviour', 'popup-close: the popup did not take focus');
+      else if (await tipOn()) report('/today 1280', '(behaviour)', 'behaviour', 'popup-close: a tip named the Close the popup focused');
+    }
+  } catch (e) {
+    report('(behaviour)', '(behaviour)', 'behaviour', `could not run: ${String(e.message).slice(0, 120)}`);
+  } finally {
+    await page.close();
+  }
+  await assistantBubble(browser);
+}
+
+/**
+ * The assistant's bubble shows the first three times a person points at the button, never after (bubble-count): five hovers, the third
+ * followed by a click that opens the panel and Escape that folds it (focus handed back to the button must not show or count it), then a
+ * reload; and with the device's storage throwing (a private window) it shows every time (bubble-private).
+ */
+async function assistantBubble(browser) {
+  const run = async (privateWindow) => {
+    const tag = privateWindow ? 'bubble-private' : 'bubble-count';
+    const page = await browser.newPage();
+    try {
+      await page.setExtraHTTPHeaders({ 'CF-Connecting-IP': `10.95.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}` });
+      await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
+      await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
+      await page.evaluateOnNewDocument((t) => {
+        localStorage.setItem('kreators.session', JSON.stringify({ state: { token: t }, version: 0 }));
+      }, TOKEN);
+      if (privateWindow)
+        await page.evaluateOnNewDocument(() => {
+          const get = Storage.prototype.getItem;
+          const set = Storage.prototype.setItem;
+          Storage.prototype.getItem = function (k) {
+            if (String(k).startsWith('kreators.assistantTip:')) throw new Error('blocked');
+            return get.call(this, k);
+          };
+          Storage.prototype.setItem = function (k, v) {
+            if (String(k).startsWith('kreators.assistantTip:')) throw new Error('blocked');
+            return set.call(this, k, v);
+          };
+        });
+      const open = async () => {
+        await page.goto(`${ORIGIN}/home`, { waitUntil: 'networkidle2', timeout: 25000 });
+        await sleep(600);
+        await page.evaluate(() => {
+          for (const b of document.querySelectorAll('[role="dialog"]:not([aria-modal]) button')) if (/^Reject all$/.test(b.textContent.trim())) b.click();
+        });
+        await sleep(200);
+      };
+      await page.goto(`${ORIGIN}/home`, { waitUntil: 'networkidle2', timeout: 25000 });
+      await page.evaluate(() => {
+        for (const k of Object.keys(localStorage)) if (k.startsWith('kreators.assistantTip:')) localStorage.removeItem(k);
+      });
+      await open();
+      const at = async () =>
+        page.evaluate(() => {
+          const b = document.querySelector('button[aria-describedby="assistant-tip"]');
+          if (!b) return null;
+          const r = b.getBoundingClientRect();
+          return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        });
+      const shows = () =>
+        page.evaluate(() => {
+          const t = document.getElementById('assistant-tip');
+          if (!t) return false;
+          const cs = getComputedStyle(t);
+          return cs.visibility !== 'hidden' && Number(cs.opacity) > 0.5;
+        });
+      const hover = async (n, then) => {
+        const b = await at();
+        if (!b) throw new Error('no assistant button');
+        await page.mouse.move(2, 400);
+        await sleep(150);
+        await page.mouse.move(b.x, b.y, { steps: 4 });
+        await sleep(300);
+        const on = await shows();
+        const want = privateWindow || n <= 3;
+        if (on !== want) report('/home 1280', '(behaviour)', 'behaviour', `${tag}: hover ${n} ${on ? 'showed' : 'did not show'} the bubble`);
+        if (then) await then();
+        await page.mouse.move(2, 400, { steps: 4 });
+        await sleep(200);
+      };
+      await hover(1);
+      await hover(2);
+      await hover(3, async () => {
+        await page.mouse.down();
+        await page.mouse.up();
+        await sleep(800);
+        await page.keyboard.press('Escape');
+        await sleep(500);
+        // A pointer still over the button may count as pointing again; with three spent it must not show.
+        if (!privateWindow && (await shows())) report('/home 1280', '(behaviour)', 'behaviour', `${tag}: the bubble showed as the panel folded away`);
+      });
+      await hover(4);
+      await hover(5);
+      if (!privateWindow) {
+        const spent = await page.evaluate(() => document.querySelector('button[aria-describedby="assistant-tip"]')?.hasAttribute('data-tip-spent'));
+        if (!spent) report('/home 1280', '(behaviour)', 'behaviour', `${tag}: data-tip-spent is not set after three showings`);
+        await open();
+        await hover(6);
+      }
+    } catch (e) {
+      report('(behaviour)', '(behaviour)', 'behaviour', `${tag} could not run: ${String(e.message).slice(0, 120)}`);
+    } finally {
+      await page.close();
+    }
+  };
+  await run(false);
+  await run(true);
+}
+
 const browser = await puppeteer.launch({ executablePath: process.env.SHOOT_CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true, args: ['--no-first-run', '--disable-gpu'] });
 try {
+  if (process.env.TIPS_BEHAVIOUR !== '0') await behaviour(browser);
   for (const size of SIZES) {
     for (const theme of THEMES) {
       const page = await browser.newPage();
@@ -333,6 +575,8 @@ try {
         (t, mode) => {
           localStorage.setItem('kreators.session', JSON.stringify({ state: { token: t }, version: 0 }));
           localStorage.setItem('kreators.theme', JSON.stringify({ state: { mode }, version: 0 }));
+          // A fresh count for the assistant's bubble on every page, so its first showing is the one checked.
+          for (const k of Object.keys(localStorage)) if (k.startsWith('kreators.assistantTip:')) localStorage.removeItem(k);
         },
         TOKEN,
         theme,
@@ -350,6 +594,36 @@ try {
           if (!ready) report(where, '(page)', 'missing', 'the smart tips never started (data-smart-tips is not set)');
           if (size.mode === 'keys') await byKeys(page, where, null, KEY_STEPS);
           else await byMouse(page, where, null);
+        } catch (e) {
+          console.log(`ERR  ${where} ${String(e.message).slice(0, 160)}`);
+        }
+      }
+      // A task's plan open in place on Daily (2026-11-13): its close stands outside the card, sticky down the plan, named by a tip where it
+      // stands in the margin; read halfway down the plan, the way a person meets it.
+      if (size.mode === 'mouse' && size.w >= 1024 && process.env.TIPS_PLAN !== '0') {
+        const where = `/today [task plan] ${tag}`;
+        try {
+          await page.goto(`${ORIGIN}/today`, { waitUntil: 'networkidle2', timeout: 25000 });
+          await sleep(500);
+          await page.evaluate(() => {
+            for (const b of document.querySelectorAll('[role="dialog"]:not([aria-modal]) button')) if (/^Reject all$/.test(b.textContent.trim())) b.click();
+          });
+          const opened = await page.evaluate(async () => {
+            const li = document.querySelector('li[data-task-id]');
+            const opener = li?.querySelector('[data-row-open]');
+            if (!opener) return false;
+            opener.click();
+            for (let i = 0; i < 40 && !li.querySelector('[data-row-close-btn]'); i += 1) await new Promise((r) => setTimeout(r, 100));
+            await new Promise((r) => setTimeout(r, 800));
+            const card = li.querySelector('.check-row');
+            window.scrollBy(0, card.getBoundingClientRect().top + 300);
+            return Boolean(li.querySelector('[data-row-close-btn]'));
+          });
+          if (!opened) console.log(`MISS ${where}`);
+          else {
+            await sleep(300);
+            await byMouse(page, where, '.row-close-rail');
+          }
         } catch (e) {
           console.log(`ERR  ${where} ${String(e.message).slice(0, 160)}`);
         }

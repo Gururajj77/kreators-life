@@ -25,7 +25,9 @@ async function account(name) {
   const r = await api('POST', '/auth/signup', { email: `${name}-${stamp}@smoke.test`, password: `Camera-${stamp}-pass`, displayName: name, acceptTerms: true, phone: '+91 98765 43210', birthDate: '1990-05-20' });
   return { token: r.token, user: r.user };
 }
-const today = new Date().toISOString().slice(0, 10);
+// The device's own day, as the browser that shoots and probes reads it (2026-11-13: the UTC day, near midnight UTC, made every dated task
+// past due and an Until tomorrow hide already over by the time the shots ran in India's morning).
+const today = new Date().toLocaleDateString('en-CA');
 const soon = (hours) => new Date(Date.now() + hours * 3600_000).toISOString();
 
 const M = await account('Screenshot');
@@ -34,7 +36,16 @@ const T = await account('Third');
 await admin('POST', `/admin/users/${M.user.id}/role`, { role: 'admin' });
 const answers = QUESTIONS.filter((q) => q.relationship === 'self' || q.relationship === 'friendship').map((q) => ({ questionId: q.id, value: 2 }));
 await api('POST', '/onboarding', { answers, displayName: 'Screenshot' }, M.token);
-await api('POST', '/onboarding/build', { relationships: ['self', 'friendship'], date: today }, M.token);
+const built = await api('POST', '/onboarding/build', { relationships: ['self', 'friendship'], date: today }, M.token);
+// Two hidden tasks (2026-11-12), one of each choice, so the probes see the Hidden tasks fold on Daily and the Hidden fold on the Yourself
+// pillar page (2026-11-13), their rows and their Unhide.
+const shotProject = (built.nodes ?? []).find((n) => n.kind === 'project' && n.relationship === 'self');
+if (shotProject) {
+  for (const [title, hide] of [['Return the borrowed tripod', 'tomorrow'], ['Sort the old hard drive', 'always']]) {
+    const made = await api('POST', '/nodes', { kind: 'task', parentId: shotProject.id, relationship: 'self', title, doDate: today }, M.token);
+    if (made.node?.id) await api('PATCH', `/nodes/${made.node.id}`, { hide, today }, M.token);
+  }
+}
 await api('POST', '/today/checkin', { date: today }, M.token);
 await api('POST', '/today/not-to-do', { title: 'Scrolling before breakfast' }, M.token);
 for (const m of MODULES) if (!m.locked && !m.defaultOn && m.minRole === 'user') await api('PATCH', '/me/modules', { key: m.key, on: true }, M.token);
@@ -158,7 +169,7 @@ fs.writeFileSync(path.join(stateDir, 'shoot-token'), M.token);
 fs.writeFileSync(path.join(stateDir, 'shoot-token-student'), T.token);
 
 site.unshift('/', '/features', '/7rp', '/explore', '/features/school', '/features/books', '/licences', '/subprocessors', '/copyright', '/c/nope', '/i/nope', '/terms', '/privacy', '/refunds', '/contact', '/pricing', '/start', '/signin', '/forgot', '/signin/reset?token=nope', '/signup', `/u/sell${stamp}`.slice(0, 24), `/people/${S.user.id}`, sold.product?.id ? `/p/${sold.product.id}` : null, '/events', event.event?.id ?? event.id ? `/events/${event.event?.id ?? event.id}` : null);
-const app = [...agencyPaths, '/onboarding', '/session', '/vibe-check', '/home', '/today', '/tower', '/realm/self', '/apps', '/you', '/search', '/profile', '/help', '/insights', '/insights?kind=month', '/insights?kind=day', '/inbox', '/leaderboard', '/rewards', '/school', '/school/coh-editing-open', '/work', opp.id ? `/work/${opp.id}` : null, '/army', camp.id ? `/army/${camp.id}` : null, '/win', reward.id ? `/win/${reward.id}` : null, '/party', event.event?.id ?? event.id ? `/party/${event.event?.id ?? event.id}` : null, '/run', club.club?.id ?? club.id ? `/run/clubs/${club.club?.id ?? club.id}` : null, '/run?tab=tracking', '/run?tab=collabs', '/community', '/club', '/bond', chat.chat?.id ?? chat.id ? `/bond/chats/${chat.chat?.id ?? chat.id}` : null, '/circles', groupId ? `/circles/${groupId}` : null, '/life', '/reviews', '/wellbeing', '/mood', '/sleep', '/stress', '/mindful', '/journal', '/companion', '/knowledge', resourceId ? `/knowledge/${resourceId}` : null, '/tools', '/tv', '/fund', '/sessions', '/library', sold.product?.id ? `/library/${sold.product.id}` : null, '/shop', '/store', mine.product?.id ? `/shop/products/${mine.product.id}` : null, '/shop/page', '/shop/bookings', '/shop/testimonials', '/shop/audience', '/shop/content', '/shop/automations', '/shop/customers', '/shop/dm', '/finance', '/fitness', '/time-blocks', '/cards', '/discover', '/book', '/plans', '/coaching', `/coaching/students/${T.user.id}`, '/school/coh-onboarding', '/reviews?kind=day', '/insights?kind=week', '/internal/observability', '/internal/logs', '/manage', '/admin', '/admin/guide', '/nowhere-at-all'];
+const app = [...agencyPaths, '/onboarding', '/session', '/vibe-check', '/home', '/today', '/today#hidden-tasks', '/tower', '/realm/self', '/realm/self#pillar-hidden-tasks', '/apps', '/you', '/search', '/profile', '/help', '/insights', '/insights?kind=month', '/insights?kind=day', '/inbox', '/leaderboard', '/rewards', '/school', '/school/coh-editing-open', '/work', opp.id ? `/work/${opp.id}` : null, '/army', camp.id ? `/army/${camp.id}` : null, '/win', reward.id ? `/win/${reward.id}` : null, '/party', event.event?.id ?? event.id ? `/party/${event.event?.id ?? event.id}` : null, '/run', club.club?.id ?? club.id ? `/run/clubs/${club.club?.id ?? club.id}` : null, '/run?tab=tracking', '/run?tab=collabs', '/community', '/club', '/bond', chat.chat?.id ?? chat.id ? `/bond/chats/${chat.chat?.id ?? chat.id}` : null, '/circles', groupId ? `/circles/${groupId}` : null, '/life', '/reviews', '/wellbeing', '/mood', '/sleep', '/stress', '/mindful', '/journal', '/companion', '/knowledge', resourceId ? `/knowledge/${resourceId}` : null, '/tools', '/tv', '/fund', '/sessions', '/library', sold.product?.id ? `/library/${sold.product.id}` : null, '/shop', '/store', mine.product?.id ? `/shop/products/${mine.product.id}` : null, '/shop/page', '/shop/bookings', '/shop/testimonials', '/shop/audience', '/shop/content', '/shop/automations', '/shop/customers', '/shop/dm', '/finance', '/fitness', '/time-blocks', '/cards', '/discover', '/book', '/plans', '/coaching', `/coaching/students/${T.user.id}`, '/school/coh-onboarding', '/reviews?kind=day', '/insights?kind=week', '/internal/observability', '/internal/logs', '/manage', '/admin', '/admin/guide', '/nowhere-at-all'];
 const shots = [...site.filter(Boolean).map((p) => ({ path: p, name: `all-${p.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'site'}` })), ...app.filter(Boolean).map((p) => ({ path: p, needsSession: true, name: `all-${p.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')}` }))];
 process.stdout.write(JSON.stringify(shots, null, 1));
 console.error(`${shots.length} shots; token in ${path.join(stateDir, 'shoot-token')}`);

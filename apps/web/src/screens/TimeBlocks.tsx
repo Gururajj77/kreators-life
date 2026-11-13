@@ -26,7 +26,6 @@ import { Fold } from '../components/Fold';
 import { Icon } from '../components/Icon';
 import { IconButton } from '../components/IconButton';
 import { MoreMenu, type MoreMenuItem } from '../components/MoreMenu';
-import { ConfirmDelete } from '../components/ConfirmDelete';
 import { StatusTag } from '../components/StatusTag';
 import { CheckRow } from '../components/CheckRow';
 import { Segmented } from '../components/fx/Segmented';
@@ -34,7 +33,9 @@ import { SortableList } from '../components/SortableList';
 import { ToggleChevron } from '../components/ToggleMark';
 import { HowItWorks } from '../components/HowTo';
 import { Skeleton } from '../components/Skeleton';
-import { ErrorLine, errorText } from '../components/ErrorLine';
+import { ErrorLine } from '../components/ErrorLine';
+import { TapTwiceIcon } from '../components/TapTwiceIcon';
+import { useTapTwice } from '../lib/useTapTwice';
 import { BlockEditor, type BlockDraft } from '../components/timeblocks/BlockEditor';
 import { TemplateEditor, type TemplateDraft } from '../components/timeblocks/TemplateEditor';
 import { AreaTag, DayStrip, DayTimeline, PillarTag, SourceText, useTimeBlocksRefresh } from '../components/timeblocks/parts';
@@ -70,7 +71,7 @@ function freeName(base: string, taken: readonly string[]): string {
   for (let i = 2; i < 100; i++) if (!have.has(`${root} ${i}`.toLowerCase())) return `${root} ${i}`;
   return root;
 }
-type Confirm = { kind: 'block' | 'template'; id: string; title: string; body: string; yes: string };
+type Doomed = { kind: 'block' | 'template'; id: string };
 
 /**
  * Time blocks (2026-11-06, the founder's ask; docs/time-blocks.md): a page inside the app, not an app of its own. The week first, its days
@@ -147,7 +148,6 @@ function Loaded({
   const openBlock = editing?.startsWith('block:') ? editing.slice(6) : null;
   const setOpenTpl = (id: string | null) => setEditing(id ? `tpl:${id}` : null);
   const setOpenBlock = (id: string | null) => setEditing(id ? `block:${id}` : null);
-  const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [arranging, setArranging] = useState(false);
   const [note, setNote] = useState('');
   // A template opened from elsewhere on the page (Edit, New template, Copy, Save as new) is scrolled to once its card is drawn: a new
@@ -210,13 +210,12 @@ function Loaded({
   });
   const order = useMutation({ mutationFn: (ids: string[]) => api.orderTimeBlocks(ids), onSuccess: refresh });
   const remove = useMutation({
-    mutationFn: async (c: Confirm): Promise<void> => {
+    mutationFn: async (c: Doomed): Promise<void> => {
       if (c.kind === 'block') await api.deleteTimeBlock(c.id);
       else await api.deleteDayTemplate(c.id);
     },
     onSuccess: (_r, c) => {
       refresh();
-      setConfirm(null);
       if (c.kind === 'block') setOpenBlock(null);
       else setOpenTpl(null);
       setNote(c.kind === 'block' ? 'Block deleted.' : 'Template deleted.');
@@ -236,26 +235,28 @@ function Loaded({
   const weekNames = data.days.map((d) => weekday(d.date, 'long'));
   const weekTemplate = (d: ResolvedDay) => tplOf(data.pattern[d.weekday - 1] ?? data.defaultTemplateId);
 
-  const askDeleteTemplate = (t: DayTemplate) => {
-    const weekdays = data.pattern.map((id, i) => (id === t.id ? weekNames[i] : null)).filter((x): x is string => Boolean(x));
-    const back = fallback && fallback.id !== t.id ? fallback.name : 'your default';
-    setConfirm({
-      kind: 'template',
-      id: t.id,
-      title: `Delete ${t.name}?`,
-      body: `Days set to it go back to your week.${weekdays.length ? ` ${weekdays.join(', ')} go back to ${back}.` : ''}`,
-      yes: 'Yes, delete the template',
-    });
+  // A saved template or block is a small, recoverable remove (tasks keep their place, and "Bring back the starting set" restores a
+  // starting one): a second tap in its menu, never a popup (the founder, 2026-11-13).
+  const deleteTemplate = (t: DayTemplate) => {
+    remove.reset();
+    remove.mutate({ kind: 'template', id: t.id });
   };
-  const askDeleteBlock = (b: TimeBlock) => {
+  const blockAsk = useTapTwice<string>();
+  // What deleting a template changes, as its menu item's hint: the weekdays set to it go back to the default.
+  const templateLoss = (t: DayTemplate) => {
+    const weekNamesShort = data.days.map((d) => weekday(d.date, 'long'));
+    const weekdays = data.pattern.map((id, i) => (id === t.id ? weekNamesShort[i] : null)).filter((x): x is string => Boolean(x));
+    return weekdays.length ? `${weekdays.join(', ')} go back to your default` : 'Its days go back to your week';
+  };
+  // What deleting a block changes, on the control itself (review 2026-11-13: the sheet that said it went with the second tap): tasks keep,
+  // they lose the block, and the templates that use it lose its slots.
+  const blockLoss = (b: TimeBlock) => {
     const n = data.templates.filter((t) => t.slots.some((s) => s.blockId === b.id)).length;
-    setConfirm({
-      kind: 'block',
-      id: b.id,
-      title: `Delete ${b.name}?`,
-      body: `Tasks keep; they lose this block.${n ? ` It also leaves ${plural(n, 'template')}.` : ''}`,
-      yes: 'Yes, delete the block',
-    });
+    return `Delete ${b.name}. Tasks lose this block${n ? `, and ${n === 1 ? '1 template loses' : `${n} templates lose`} its slots` : ''}.`;
+  };
+  const deleteBlock = (b: TimeBlock) => {
+    remove.reset();
+    remove.mutate({ kind: 'block', id: b.id });
   };
   const tplMenu = (t: DayTemplate): MoreMenuItem[] => [
     ...(t.isDefault ? [] : [{ key: 'default', label: 'Make it the default', icon: Star, onSelect: () => makeDefault.mutate(t.id) }]),
@@ -266,7 +267,7 @@ function Loaded({
       disabled: data.templates.length >= MAX_DAY_TEMPLATES,
       onSelect: () => newTpl.mutate({ name: freeName(`${t.name} copy`, names), fromId: t.id }),
     },
-    { key: 'delete', label: 'Delete', icon: Trash2, destructive: true, disabled: t.isDefault, hint: t.isDefault ? 'Make another the default first' : undefined, onSelect: () => askDeleteTemplate(t) },
+    { key: 'delete', label: 'Delete', icon: Trash2, destructive: true, disabled: t.isDefault, hint: t.isDefault ? 'Make another the default first' : templateLoss(t), confirm: `Tap again to delete ${t.name}`, onSelect: () => deleteTemplate(t) },
   ];
 
   const dayTpl = tplOf(day.templateId);
@@ -548,7 +549,12 @@ function Loaded({
                         pending={saveBlock.isPending}
                         error={saveBlock.error}
                         onSave={(d) => saveBlock.mutate({ id: b.id, d })}
-                        aside={<MoreMenu label={`More for ${b.name}`} title={b.name} items={[{ key: 'delete', label: `Delete ${b.name}`, icon: Trash2, destructive: true, onSelect: () => askDeleteBlock(b) }]} />}
+                        aside={
+                          // One action, so one round button (as MoreMenu draws a lone item); it asks twice in place.
+                          <TapTwiceIcon armed={blockAsk.isArmed(b.id)} onClick={() => blockAsk.tap(b.id, () => deleteBlock(b))} disabled={remove.isPending} label={blockLoss(b)} tip={blockLoss(b)} className="mf-round toy shrink-0 disabled:opacity-50">
+                            <Icon icon={Trash2} size={20} />
+                          </TapTwiceIcon>
+                        }
                       />
                     </div>
                   )}
@@ -584,20 +590,7 @@ function Loaded({
         {restore.error ? <ErrorLine e={restore.error} /> : null}
       </div>
 
-      <ConfirmDelete
-        open={confirm !== null}
-        title={confirm?.title ?? ''}
-        body={confirm?.body ?? ''}
-        yes={confirm?.yes}
-        pending={remove.isPending}
-        failed={remove.isError}
-        error={remove.error ? errorText(remove.error) : undefined}
-        onYes={() => confirm && remove.mutate(confirm)}
-        onClose={() => {
-          setConfirm(null);
-          remove.reset();
-        }}
-      />
+      {remove.error ? <ErrorLine e={remove.error} /> : null}
     </>
   );
 }

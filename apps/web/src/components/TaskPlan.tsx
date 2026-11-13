@@ -1,8 +1,8 @@
-import { LIFE_AREA_ORDER, LIFE_AREAS, OPEN_KINDS, PRIORITIES, RELATIONSHIPS, addDays, type OpenKind, blockOfTask, blocksInDay, mondayOf, openDay, templateForDate, type TodayResponse, type LifeAreaKey, type MonthProject, type Node, type Priority, type RelationshipKey, type Repeat, type TemplateSlot, type TimeBlock, type TimeBlocksResponse } from '@kreators/shared';
+import { LIFE_AREA_ORDER, LIFE_AREAS, OPEN_KINDS, PRIORITIES, RELATIONSHIPS, TASK_HIDES, addDays, taskHideOf, taskHideState, type TaskHide, type OpenKind, blockOfTask, blocksInDay, mondayOf, openDay, templateForDate, type TodayResponse, type LifeAreaKey, type MonthProject, type Node, type Priority, type RelationshipKey, type Repeat, type TemplateSlot, type TimeBlock, type TimeBlocksResponse } from '@kreators/shared';
 import { blockMismatch, blockMismatchLine, blockUsedMin } from '@kreators/shared/blockHints';
 import { OPEN_ENDINGS, OPEN_KIND_META } from '@kreators/shared/openBusiness';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { X } from 'lucide-react';
 import { api, type TaskPlanBody } from '../lib/api';
@@ -14,8 +14,16 @@ import { Toggle } from './Toggle';
 import { FIELD, FIELD_LINE } from '../lib/ui';
 import { useTimeBlocks } from '../lib/useTimeBlocks';
 import { todayLocal, clockOf, dayLabel, slotRange } from '../lib/date';
-import { ConfirmDelete, DELETE_BTN } from './ConfirmDelete';
+import { DELETE_BTN } from './ConfirmDelete';
+import { TapTwiceIcon } from './TapTwiceIcon';
+import { ErrorLine } from './ErrorLine';
+import { useTapTwice } from '../lib/useTapTwice';
 import { FieldLabel } from './Field';
+import { ToggleChevron } from './ToggleMark';
+import { focusAfterHide, afterRemove } from '../lib/focusHeading';
+import { sayStatus } from '../lib/sayStatus';
+import { Button } from './Button';
+import { CheckRow } from './CheckRow';
 
 // The row's marks live in TaskMarks.tsx (in the first download); this file is the plan form, loaded when a plan opens.
 export { AreaTag, BlockMark, OpenTag, PriorityChip, TaskTags } from './TaskMarks';
@@ -410,7 +418,8 @@ export function TaskEndings({ task, today, onPlan, onGone }: { task: Node; today
           }}
           className={`${ACTION} ${armed ? 'red-armed' : ''}`}
         >
-          <span aria-live="polite">{armed ? 'Tap again to let it go' : OPEN_ENDINGS.letGo.name}</span>
+          <span aria-hidden={armed || undefined}>{armed ? 'Tap again to let it go' : OPEN_ENDINGS.letGo.name}</span>
+<span className="sr-only" aria-live="polite">{armed ? 'Tap again to let it go' : ''}</span>
         </button>
       </div>
       {timing && (
@@ -456,6 +465,92 @@ export function TaskEndings({ task, today, onPlan, onGone }: { task: Node; today
   );
 }
 
+/**
+ * Hide it (2026-11-12): beside a task's endings, on Daily's plan panel and the pillar page's edit sheet. While it shows, "Hide this task" opens
+ * the two choices in place (Until tomorrow, Until I unhide it), each an outline button with a line saying what it does; a tap is the ordinary
+ * PATCH /nodes/:id {hide, today}. While it is hidden, the state and an outline Unhide. A hidden task leaves Daily's lists and counts and sends no
+ * reminder; it keeps its dates, and a tick still pays. The news is said through the app's one live region (`sayStatus`), since on Daily the
+ * panel leaves with its row. `afterChange` gets the lists' read-again once the server answers (Daily moves the keyboard's place there);
+ * without it (the edit sheet, which stays) focus moves to the button that took the tapped one's place. `unsaved` holds it while the plan
+ * above has changes not saved, since on Daily the row and its panel go. `pillar` (the pillar page's edit sheet, 2026-11-13) says it waits under
+ * that page's Hidden fold too, and comes back to its Tasks to do as well as Daily.
+ */
+export function HideTask({ task, today, afterChange, unsaved = false, pillar = false }: { task: Node; today: string; afterChange?: (done: Promise<unknown>, hidden: boolean) => void; unsaved?: boolean; pillar?: boolean }) {
+  const refresh = useRefreshAll();
+  const [choosing, setChoosing] = useState(false);
+  const [said, setSaid] = useState<string | null>(null);
+  const [refocus, setRefocus] = useState(false);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const unhideRef = useRef<HTMLButtonElement>(null);
+  const choicesId = useId();
+  const stateId = useId();
+  const run = useMutation({
+    mutationFn: (hide: TaskHide | null) => api.hideTask(task.id, hide, today),
+    onSuccess: (_r, hide) => {
+      setChoosing(false);
+      const words = hide
+        ? `“${task.title}” is hidden ${taskHideState(hide).toLowerCase()}. ${pillar ? 'It waits under Hidden here and on Daily.' : 'It waits under Hidden tasks on Daily.'}`
+        : `“${task.title}” is back ${pillar ? 'in Tasks to do and on Daily' : 'on Daily'}.`;
+      setSaid(words);
+      sayStatus(words);
+      const done = refresh();
+      if (afterChange) afterChange(done, hide !== null);
+      else setRefocus(true);
+    },
+  });
+  // The answer is the task as it is now (an Unhide answers null); until one comes, the task as the panel opened it.
+  const hidden = taskHideOf(run.data ? run.data.node.hiddenUntil : task.hiddenUntil, today);
+  useEffect(() => {
+    if (!refocus) return;
+    setRefocus(false);
+    (hidden ? unhideRef : toggleRef).current?.focus({ preventScroll: true });
+  }, [refocus, hidden]);
+  if (task.status !== 'active') return null;
+  const held = unsaved && !run.isPending;
+  return (
+    <div>
+      {hidden ? (
+        <div className="flex flex-wrap-reverse items-center justify-between gap-sm">
+          <p id={stateId} className="m-0 min-w-0 flex-1 basis-[60%] text-subhead text-ink-soft">
+            Hidden {taskHideState(hidden).toLowerCase()}. Ticking it still counts.
+          </p>
+          <Button ref={unhideRef} variant="outline" size="sm" disabled={run.isPending || unsaved} onClick={() => run.mutate(null)} aria-label={`Unhide “${task.title}”`} aria-describedby={stateId}>
+            Unhide
+          </Button>
+        </div>
+      ) : (
+        <>
+          <button ref={toggleRef} type="button" aria-expanded={choosing} aria-controls={choosing ? choicesId : undefined} disabled={run.isPending || unsaved} onClick={() => setChoosing((v) => !v)} className={`${ACTION} gap-xs disabled:opacity-60`}>
+            Hide this task
+            <ToggleChevron open={choosing} className="text-ink-soft" />
+          </button>
+          {choosing && !unsaved && (
+            <div id={choicesId}>
+              <p className="mt-xs m-0 text-caption text-ink-soft">{pillar ? 'It leaves your task lists here and on Daily, and sends no reminder.' : 'It leaves Daily\u2019s lists and sends no reminder.'} A tick still counts.</p>
+              <div role="group" aria-label={`Hide “${task.title}”`} className="mt-xs grid gap-xs sm:grid-cols-2">
+                {TASK_HIDES.map((h) => (
+                  <button key={h.key} type="button" disabled={run.isPending} onClick={() => run.mutate(h.key)} className={`${ACTION} flex-col py-xs text-center`}>
+                    <span>{h.name}</span>
+                    <span className="text-caption font-normal text-ink-soft">{h.blurb}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+      {held && <p className="mt-xs m-0 text-caption text-ink-soft">Save or undo your changes above first.</p>}
+      {run.isError ? (
+        <p role="alert" className="mt-xs m-0 text-subhead">
+          {run.error instanceof Error ? run.error.message : 'That did not work. Try again.'}
+        </p>
+      ) : (
+        said && <p className="mt-xs m-0 text-subhead text-ink-soft">{said}</p>
+      )}
+    </div>
+  );
+}
+
 /** A task's checklist: add a line, tick it, remove it (asked first in a sheet). Pays nothing and never stops the task being ticked. */
 export function Subtasks({ task }: { task: Node }) {
   const refresh = useRefreshAll();
@@ -469,13 +564,11 @@ export function Subtasks({ task }: { task: Node }) {
   };
   const add = useMutation({ mutationFn: () => api.addSubtask(task.id, title.trim()), onSuccess: () => { setTitle(''); after(); } });
   const tick = useMutation({ mutationFn: (v: { id: string; done: boolean }) => api.editSubtask(v.id, { done: v.done }), onSuccess: after });
-  const [asking, setAsking] = useState<{ id: string; title: string } | null>(null);
+  // A checklist line is a small personal remove: a second tap on its ✕ (the founder, 2026-11-13), never a popup.
+  const subAsk = useTapTwice<string>();
   const remove = useMutation({
     mutationFn: (id: string) => api.deleteSubtask(id),
-    onSuccess: () => {
-      setAsking(null);
-      after();
-    },
+    onSuccess: () => after(),
   });
   return (
     <div>
@@ -485,34 +578,34 @@ export function Subtasks({ task }: { task: Node }) {
       </div>
       <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
         {list.data?.subtasks.map((s) => (
-          <li key={s.id} className="toy flex items-center gap-xs rounded-tile bg-paper px-sm">
-            <label className="flex min-h-[44px] min-w-0 flex-1 cursor-pointer items-center gap-sm">
-              <input type="checkbox" checked={s.done} onChange={(e) => tick.mutate({ id: s.id, done: e.target.checked })} className="size-[20px] shrink-0" />
-              <span className={`min-w-0 break-words text-callout ${s.done ? 'text-ink-soft line-through' : ''}`}>{s.title}</span>
-            </label>
-            <button
-              type="button"
-              onClick={() => {
-                remove.reset();
-                setAsking({ id: s.id, title: s.title });
-              }}
-              aria-haspopup="dialog"
-              aria-label={`Remove "${s.title}"`} className="flex min-h-[44px] min-w-[44px] items-center justify-center text-ink-soft hover:text-ink">
-              <Icon icon={X} size={18} />
-            </button>
+          // Its box outside the card like every tick row (2026-11-12): the words tick too, and Remove sits beside the card.
+          <li key={s.id}>
+            <CheckRow
+              checked={s.done}
+              onToggle={() => tick.mutate({ id: s.id, done: !s.done })}
+              busy={tick.isPending && tick.variables?.id === s.id}
+              title={s.title}
+              strike
+              aside={
+                <TapTwiceIcon
+                  armed={subAsk.isArmed(s.id)}
+                  ask="Tap again to remove"
+                  onClick={() => {
+                    remove.reset();
+                    subAsk.tap(s.id, () => remove.mutate(s.id, { onSuccess: afterRemove('Subtask deleted.') }));
+                  }}
+                  disabled={remove.isPending}
+                  label={`Remove "${s.title}"`}
+                  className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center self-center text-ink-soft hover:text-ink"
+                >
+                  <Icon icon={X} size={18} />
+                </TapTwiceIcon>
+              }
+            />
           </li>
         ))}
       </ul>
-      <ConfirmDelete
-        open={asking !== null}
-        title="Remove this subtask?"
-        body={asking ? `“${asking.title}” goes from this task's checklist. The task itself stays.` : ''}
-        pending={remove.isPending}
-        failed={remove.isError}
-        onYes={() => asking && remove.mutate(asking.id)}
-        onClose={() => setAsking(null)}
-        yes="Yes, remove it"
-      />
+      {remove.isError && <ErrorLine e={remove.error} className="mt-xs" />}
       <form
         className="mt-xs flex gap-xs"
         onSubmit={(e) => {
@@ -578,13 +671,18 @@ export function TaskPanel({ task, today }: { task: Node; today: string }) {
   const [title, setTitle] = useState(task.title);
   const renamed = title.trim() !== '' && title.trim() !== task.title;
   const problem = title.trim() ? planProblem(plan) : 'Give the task a name.';
+  // Anything typed above and not saved yet: Hide waits for it, since on Daily the row and this panel leave the list.
+  const moved = Boolean(parentId && parentId !== task.parentId);
+  const unsaved = renamed || moved || JSON.stringify(planBody(plan)) !== JSON.stringify(planBody(planOf(task)));
   const save = useMutation({ mutationFn: () => api.updateNode(task.id, { ...(renamed ? { title: title.trim() } : {}), ...planBody(plan), ...(parentId && parentId !== task.parentId ? { parentId } : {}) }), onSuccess: () => refresh() });
-  // Delete: the pillar page's own remove (DELETE /nodes/:id; its checklist goes with it), asked first.
-  const [asking, setAsking] = useState(false);
-  const remove = useMutation({ mutationFn: () => api.deleteNode(task.id), onSuccess: () => { setAsking(false); refresh(); } });
+  // Delete: the pillar page's own remove (DELETE /nodes/:id; its checklist goes with it). A second tap, never a popup (the founder,
+  // 2026-11-13: "make delete task a double click button rather than popup, its destructive but low priority item").
+  const delAsk = useTapTwice();
+  const remove = useMutation({ mutationFn: () => api.deleteNode(task.id), onSuccess: () => refresh() });
   const projects = projectsQ.data?.projects ?? [];
   return (
-    <div className="mt-xs flex flex-col gap-md rounded-card bg-card p-md shadow-toy-soft">
+    // `row-lane`: where the row's close runs down its right edge (a phone), the plan keeps a lane for it (RowClose in CheckRow.tsx).
+    <div className="row-lane mt-xs flex flex-col gap-md rounded-card bg-card p-md shadow-toy-soft">
       {task.status === 'active' && (
         <FieldLabel label="Task">
           <input
@@ -631,32 +729,26 @@ export function TaskPanel({ task, today }: { task: Node; today: string }) {
       <Subtasks task={task} />
       <StartFocus task={{ ...task, estimateMin: Number(plan.minutes) > 0 ? Number(plan.minutes) : task.estimateMin }} />
       <TaskEndings task={task} today={today} onPlan={(patch) => setPlan((p) => ({ ...p, ...patch }))} />
+      {/* Hide it (2026-11-12): beside the endings. On Daily the row leaves its list, so the keyboard's place goes to Hidden tasks. */}
+      <HideTask task={task} today={today} afterChange={focusAfterHide} unsaved={unsaved} />
       {task.status === 'active' && (
         <div className="flex justify-end">
           <button
             type="button"
-            aria-haspopup="dialog"
             disabled={remove.isPending}
             onClick={() => {
               remove.reset();
-              setAsking(true);
+              delAsk.tap(true, () => remove.mutate(undefined, { onSuccess: afterRemove('Task deleted.') }));
             }}
-            className={DELETE_BTN}
+            aria-label={delAsk.isArmed(true) ? `Tap again to delete: ${task.title}` : `Delete task: ${task.title}`}
+            className={`${DELETE_BTN} ${delAsk.isArmed(true) ? 'red-armed' : ''}`}
           >
-            Delete task
+            <span aria-hidden={delAsk.isArmed(true) || undefined}>{delAsk.isArmed(true) ? 'Tap again to delete' : 'Delete task'}</span>
+<span className="sr-only" aria-live="polite">{delAsk.isArmed(true) ? 'Tap again to delete' : ''}</span>
           </button>
         </div>
       )}
-      <ConfirmDelete
-        open={asking}
-        title="Delete this task?"
-        body={`“${task.title}” goes from Daily and its pyramid, with its subtasks. This cannot be undone.`}
-        pending={remove.isPending}
-        failed={remove.isError}
-        error={remove.error instanceof Error ? remove.error.message : undefined}
-        onYes={() => remove.mutate()}
-        onClose={() => setAsking(false)}
-      />
+      {remove.isError && <ErrorLine e={remove.error} />}
     </div>
   );
 }

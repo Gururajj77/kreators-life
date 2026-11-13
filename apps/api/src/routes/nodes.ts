@@ -199,9 +199,11 @@ export async function editNode(db: D1Database, row: NodeRow, body: NodeBody, own
     body.status === 'archived' && row.status === 'active' ? 'archived' : body.status === 'active' && row.status === 'archived' ? 'active' : row.status;
   // Renaming a task makes it a different task, so its wait starts again.
   const readyAt = row.kind === 'task' && title !== row.title ? readyFromNow() : row.ready_at;
+  // Letting a task go ends its hide too (2026-11-12), so one brought back from Let go is on Daily again, never waiting unseen under Hidden tasks.
+  const letGo = status === 'archived' && row.status === 'active' ? 1 : 0;
   await db
-    .prepare('UPDATE nodes SET title = ?, note = ?, due_date = ?, status = ?, ready_at = ?, updated_at = ?, due_time = ?, estimate_min = ? WHERE id = ?')
-    .bind(title, note, dueDate, status, readyAt, nowIso(), dueTime, estimateMin, row.id)
+    .prepare('UPDATE nodes SET title = ?, note = ?, due_date = ?, status = ?, ready_at = ?, updated_at = ?, due_time = ?, estimate_min = ?, hidden_until = CASE WHEN ? = 1 THEN NULL ELSE hidden_until END WHERE id = ?')
+    .bind(title, note, dueDate, status, readyAt, nowIso(), dueTime, estimateMin, letGo, row.id)
     .run();
   if (row.kind === 'task' && ('doDate' in body || 'repeat' in body)) {
     const doDate = body.doDate === null ? null : typeof body.doDate === 'string' && DATE_RE.test(body.doDate) ? body.doDate : (row.do_date ?? null);

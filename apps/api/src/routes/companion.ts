@@ -85,8 +85,9 @@ async function factsFor(c: Context<AppEnv>, date: string): Promise<{ plain: Plai
   const [weak, tasks, summary] = await Promise.all([
     db.prepare('SELECT relationship FROM relationship_scores WHERE user_id = ? ORDER BY score ASC, xp ASC LIMIT 1').bind(user.id).first<{ relationship: RelationshipKey }>(),
     db
-      .prepare("SELECT title FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' ORDER BY COALESCE(do_date, due_date) IS NULL, COALESCE(do_date, due_date) ASC LIMIT 5")
-      .bind(user.id)
+      // A task the person hid (2026-11-12) stays quiet here too: hidden_until is its last hidden day, the person's own.
+      .prepare("SELECT title FROM nodes WHERE user_id = ? AND kind = 'task' AND status = 'active' AND (hidden_until IS NULL OR hidden_until < ?) ORDER BY COALESCE(do_date, due_date) IS NULL, COALESCE(do_date, due_date) ASC LIMIT 5")
+      .bind(user.id, date)
       .all<{ title: string }>(),
     summaryFor(db, user.id, date, streakNow(user.streak, user.last_checkin, date)),
   ]);

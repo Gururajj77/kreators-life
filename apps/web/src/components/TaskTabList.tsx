@@ -47,6 +47,7 @@ export function TaskTabList({
   tab,
   date,
   area,
+  tags = '',
   areaName,
   sort,
   queue,
@@ -59,6 +60,8 @@ export function TaskTabList({
   date: string;
   /** Daily's Area cut, sent to the server like the main list's. */
   area: string;
+  /** The tags tapped on a task (2026-11-13, `taskTagsKey`), sent like the area. */
+  tags?: string;
   /** "for Physical", "with no area", or '' with no area picked. */
   areaName: string;
   /** Past due's order (`taskTabSort`); Upcoming is always by day. */
@@ -66,6 +69,7 @@ export function TaskTabList({
   queue: ReturnType<typeof useActionQueue>;
   onToggle: (id: string) => void;
   focusTask: string | null;
+  /** Clears the Area filter and the tags. */
   onClearArea: () => void;
   /** Opens Plan my week, where a late task gets a new day. */
   onPlanWeek: () => void;
@@ -77,10 +81,16 @@ export function TaskTabList({
   // Under the day's key, so a tick anywhere on Daily (which reads the day again) reads this page again too. A new page keeps the old rows
   // on screen until it lands, so the list never drops to the loading cards and back.
   const q = useQuery<TodayTabResponse>({
-    queryKey: [...keys.today(date), 'tab', tab, area, order, pg.query],
-    queryFn: () => (tab === 'pastdue' ? api.todayPastDue(date, pg.query, area, order) : api.todayUpcoming(date, pg.query, area)),
+    queryKey: [...keys.today(date), 'tab', tab, area, tags, order, pg.query],
+    queryFn: () => (tab === 'pastdue' ? api.todayPastDue(date, pg.query, area, order, tags) : api.todayUpcoming(date, pg.query, area, tags)),
     enabled: Boolean(token),
-    placeholderData: (prev) => (prev?.tab === tab ? prev : undefined),
+    // Only a new page of the same cut keeps the old rows (review 2026-11-13: a tapped tag or a removed chip showed the old cut's rows, unmatched,
+    // until the answer came); a new tag, area or order shows the loading cards instead.
+    placeholderData: (prev, prevQuery) => {
+      const k = prevQuery?.queryKey ?? [];
+      const same = k[k.length - 5] === tab && k[k.length - 4] === area && k[k.length - 3] === tags && k[k.length - 2] === order;
+      return prev?.tab === tab && same ? prev : undefined;
+    },
   });
   const label = tab === 'pastdue' ? 'past due tasks' : 'upcoming tasks';
   // A link to one task (`?task=<id>`, a Remember note or a content day's Open it) whose day puts it on this tab but not on the page shown:
@@ -102,7 +112,11 @@ export function TaskTabList({
 
   const rows = q.data.tasks;
   if (rows.length === 0 && pg.page === 1 && !pinned) {
-    const words = area
+    const words = tags
+      ? tab === 'pastdue'
+        ? 'Nothing past due matches these filters.'
+        : 'Nothing coming up matches these filters.'
+      : area
       ? tab === 'pastdue'
         ? `Nothing past due ${areaName}.`
         : `Nothing coming up ${areaName}.`
@@ -112,9 +126,9 @@ export function TaskTabList({
     return (
       <div className="mt-sm flex flex-wrap-reverse items-center justify-between gap-sm rounded-card border-2 border-dashed border-line p-md">
         <p className="m-0 min-w-0 flex-1 basis-[60%] text-subhead text-ink-soft">{words}</p>
-        {area ? (
+        {area || tags ? (
           <Button variant="outline" onClick={onClearArea}>
-            Show every area
+            {tags ? 'Clear filters' : 'Show every area'}
           </Button>
         ) : tab === 'upcoming' ? (
           <Button variant="outline" onClick={onPlanWeek}>
