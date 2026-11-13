@@ -79,7 +79,7 @@ Your trust score is one number out of a hundred. It reads New here, Getting know
 
 ## Finance: your real money
 
-Points are the app's. Finance is for your own money. It starts hidden on a new account, in the **Creation** group. Only you can see it.
+Points are the app's. Finance is for your own money. It starts hidden on a new account, in the **Creation** group. No brand or leaderboard sees it. A coach sees it only if you switch its table on for them, and a super admin can read it to help you, with each look logged.
 
 1. First, pick your currency. Open the **Public page** app, find **Currency** and save. It is rupees unless you change it.
 2. Open **Finance**. Tap **Money in** or **Money out**, type the amount and who it was with, and save.
@@ -97,4 +97,4 @@ Your level climbs, your badges fill in family by family, and your trust grows as
 
 ## The bottom line
 
-Xp shows effort, points buy things, badges mark the road, and trust grows from what you prove. None of it can be bought or typed in. Show up, spend on what you will use, and keep your real money in Finance, where only you can see it.
+Xp shows effort, points buy things, badges mark the road, and trust grows from what you prove. None of it can be bought or typed in. Show up, spend on what you will use, and keep your real money in Finance.

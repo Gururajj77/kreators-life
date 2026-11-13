@@ -722,7 +722,7 @@ export function Home() {
           )}
 
           {d.money && moneyOn && (
-            <Section id="home-money" title="Money this month" lede="From Finance. Only you see this." action={<SeeAll to="/finance">Open</SeeAll>} span={lastOptional === 'money'}>
+            <Section id="home-money" title="Money this month" lede="From Finance. Never shown to brands." action={<SeeAll to="/finance">Open</SeeAll>} span={lastOptional === 'money'}>
               <div className="grid grid-cols-2 gap-xs">
                 <KitTile to="/finance" tone="bg-r4" icon={ArrowDownLeft} value={money(d.money.incomeCents, d.money.currency)} label="in" hint="this month" />
                 <KitTile to="/finance" tone="bg-r2" icon={ArrowUpRight} value={money(d.money.expenseCents, d.money.currency)} label="out" hint="this month" />

@@ -137,6 +137,7 @@ export interface EatMeal {
 // Protein (2026-11-07, the founder: "protien calculator should be also there not rating right? within food, that needs tracking right"). Added up
 // by what you ate, in everyday servings, never weighed. Whole grams, and every one is "about". Protein stays on Fitness: its grams and goal reach
 // no coach, Emerging, Reviews, the brief, the leaderboard, a badge, search, the assistant or the public page, and it is out of the eating score.
+// The one exception (2026-11-13): a day's grams show in the Eating table, which a coach reads only when the person switches it on for them.
 //
 // Where the grams come from, per 100 g of the food as bought, from the Indian Food Composition Tables (IFCT 2017, Longvah and others, ICMR-NIN):
 //   lentil dal 24.35 (B013), green gram dal 23.88 (B010), black gram dal 23.06 (B003), red gram dal 21.70 (B021), Bengal gram dal 21.55 (B001);
@@ -533,7 +534,8 @@ export function moveLine(m: Pick<MoveLog, 'kind' | 'minutes' | 'metres'>): strin
 // minerals, nootropics, those can also be a toggle in daily"). The person's own list, off until they switch on Track supplements (that
 // switch is the consent), and on Daily only when they also switch on Show on Daily. The app never suggests one, never gives an amount,
 // never checks a mix with medicines and never says what any supplement does: the only words about one are what the person typed. It
-// pays nothing, counts toward no streak or badge, and never reaches Emerging, the brief, the leaderboard, a coach or the assistant.
+// pays nothing, counts toward no streak or badge, and never reaches Emerging, the brief, the leaderboard or the assistant, nor a coach
+// but as its own tables (Supplements, Supplement days) when the person switches them on for that coach under All tables (2026-11-13).
 // ---------------------------------------------------------------------------
 
 export const SUPPLEMENT_KINDS = ['vitamin', 'mineral', 'protein', 'omega3', 'herbal', 'probiotic', 'nootropic', 'other'] as const;
@@ -683,7 +685,7 @@ export function pastSupplementNote(id: string, today: string): boolean {
 }
 
 /** The caution lines, word for word from the design brief. Plain words, no claim, never about what a supplement does. */
-export const SUPPLEMENT_PRIVATE_LINE = 'Your list stays private. Only you see it.';
+export const SUPPLEMENT_PRIVATE_LINE = 'Your list stays private. Only you see it, unless you share its table with a life coach.';
 export const SUPPLEMENT_CAUTION = 'The app does not check amounts or mixes. Ask a doctor or pharmacist before you start, stop or change one, more so if you take medicines or are pregnant.';
 export const SUPPLEMENT_BEFORE: readonly string[] = [
   'Natural does not mean safe.',

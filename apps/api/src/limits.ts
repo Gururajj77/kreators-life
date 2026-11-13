@@ -1,7 +1,8 @@
 /**
  * Every rate limit in the app, in one place. Change a number here and it changes everywhere.
  * A limit counts hits per window: by the signed-in person, or by the address on the doors that
- * take no session. Going over answers 429 "too many tries, wait a minute".
+ * take no session. Going over answers 429 "too many tries, wait a minute" (or, for a limit counted by the day, "too many tries today, try
+ * again tomorrow").
  */
 export const LIMITS = {
   // Doors without a session, counted per address.
@@ -89,6 +90,18 @@ export const LIMITS = {
    * year stays well inside this. Each ask rebuilds weeks of rows, so a script looping on it is held to it.
    */
   insights: { max: 240, windowSec: 3600 },
+  /**
+   * All tables (2026-11-13): reading a page of a table, per person, whoever's tables they are (their own, a student's as a coach, a member's as
+   * an admin). Each page is one round trip of reads; paging, sorting and filtering a big table asks a few times a minute at most.
+   */
+  tables: { max: 600, windowSec: 3600 },
+  /** All tables' "Download all": up to 5,000 rows a file, so thirty an hour. */
+  tablesCsv: { max: 30, windowSec: 3600 },
+  /**
+   * And ten a day, per person, whoever's tables they are (their own, a student's, a member's): at most 5,000 rows a file, so one person reads at
+   * most about 50,000 rows a day this way. Thirty an hour all day would be past the free plan's daily rows for everyone (2026-11-13).
+   */
+  tablesCsvDay: { max: 10, windowSec: 86400 },
   /** Everyday Agency work: moving a deliverable, a note, a time entry. */
   agency: { max: 600, windowSec: 3600 },
   /** Asking someone to join your Agency team: an inbox note and maybe a friend request go out, so twenty a day. */
@@ -278,6 +291,23 @@ export const ROUTE_LIMITS: readonly {
   { method: 'PUT', path: '/time-blocks/days', limit: 'prefs' },
   { method: 'POST', path: '/time-blocks/restore', limit: 'prefs' },
   { method: 'GET', path: '/insights', limit: 'insights' },
+  // All tables (2026-11-13): reads per person, a download its own count (by the hour, then by the day: each row is its own check, the hourly
+  // first, so a download it refuses never spends a day's place), and a change or an archive action as a preference (the route it is sent to
+  // keeps its own limit too).
+  { method: 'GET', path: '/tables', limit: 'tables' },
+  { method: 'GET', path: '/tables/:table', limit: 'tables' },
+  { method: 'GET', path: '/tables/:table/csv', limit: 'tablesCsv' },
+  { method: 'GET', path: '/tables/:table/csv', limit: 'tablesCsvDay' },
+  { method: 'POST', path: '/tables/:table/edit', limit: 'prefs' },
+  { method: 'POST', path: '/tables/:table/bulk', limit: 'prefs' },
+  { method: 'GET', path: '/tables/coach/:studentId', limit: 'tables' },
+  { method: 'GET', path: '/tables/coach/:studentId/:table', limit: 'tables' },
+  { method: 'GET', path: '/tables/coach/:studentId/:table/csv', limit: 'tablesCsv' },
+  { method: 'GET', path: '/tables/coach/:studentId/:table/csv', limit: 'tablesCsvDay' },
+  { method: 'GET', path: '/tables/admin/:userId', limit: 'tables' },
+  { method: 'GET', path: '/tables/admin/:userId/:table', limit: 'tables' },
+  { method: 'GET', path: '/tables/admin/:userId/:table/csv', limit: 'tablesCsv' },
+  { method: 'GET', path: '/tables/admin/:userId/:table/csv', limit: 'tablesCsvDay' },
   { method: 'GET', path: '/insights/dashboard', limit: 'insights' },
   { method: 'POST', path: '/discover/more/:kind/submit', limit: 'discover' },
   { method: 'POST', path: '/public/client-error', limit: 'clientError' },

@@ -73,6 +73,7 @@ const ART = [
   ['search', 'Magnifying glass tilted left', 'finding anything'],
   ['leaderboard', 'Trophy', 'where you stand'],
   ['notifications', 'Inbox tray', 'what came in while you were away'],
+  ['tables', 'Card file box', 'every list of your own data, filed and easy to find'],
   ['help', 'Ring buoy', 'a line when you need one'],
   ['assistant', 'Magic wand', 'say it and it is done'],
   // Operations

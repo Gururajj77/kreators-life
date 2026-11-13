@@ -480,17 +480,21 @@ nodes.delete('/:id', async (c) => {
   const user = c.get('user');
   const row = await getNode(db, user.id, c.req.param('id'));
   if (!row) return c.json({ error: 'not found' }, 404);
-  await db
+  // All tables' Delete forever sends ?archived=1: the delete itself then takes only a task still let go, so one brought back in another tab
+  // between the table's check and this call is never deleted (2026-11-13).
+  const onlyArchived = c.req.query('archived') === '1' ? 1 : 0;
+  const done = await db
     .prepare(
       `WITH RECURSIVE tree(id) AS (
-         SELECT id FROM nodes WHERE id = ?1 AND user_id = ?2
+         SELECT id FROM nodes WHERE id = ?1 AND user_id = ?2 AND (?3 = 0 OR status = 'archived')
          UNION ALL
          SELECT n.id FROM nodes n JOIN tree t ON n.parent_id = t.id
        )
        DELETE FROM nodes WHERE id IN (SELECT id FROM tree)`,
     )
-    .bind(row.id, user.id)
+    .bind(row.id, user.id, onlyArchived)
     .run();
+  if (onlyArchived && !(done.meta.changes ?? 0)) return c.json({ error: 'It is not in your archive any more.' }, 409);
   return c.json({ ok: true });
 });
 

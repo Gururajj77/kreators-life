@@ -153,7 +153,7 @@ export const FEATURES: Record<string, FeatureCopy> = {
   },
   journal: {
     tagline: 'Write it down.',
-    pitch: 'Entries with an emotion and a stress level. Nobody else sees them: not brands, not staff, not the leaderboard.',
+    pitch: 'Entries with an emotion and a stress level. Brands, staff and the leaderboard never see them, and a life coach sees them only if you share.',
     more: ['Gratitude for today: three short lines, each under a prompt. A prompt you answered does not come back until you have been through the others.', 'Stuck? Prompt me gives you a question from sixteen categories, with why it helps.'],
     steps: ['Write a few lines.', 'Tag how you felt.', 'Look back a month later.'],
     relationships: ['self', 'parent_child', 'lover_partner', 'divine'],
@@ -211,7 +211,7 @@ export const FEATURES: Record<string, FeatureCopy> = {
   },
   finance: {
     tagline: 'See your money clearly.',
-    pitch: 'Money in, money out, by category and by month. Yours alone to see.',
+    pitch: 'Money in, money out, by category and by month. Brands and the leaderboard never see it.',
     more: ['See what the platform paid you alongside everything else.', 'Invoices for clients are made in Agency.'],
     steps: ['Log what came in and what went out.', 'Track dues and monthly repeats; settle them with a tap.', 'Watch the month, keep budgets and goals honest.'],
     relationships: ['self', 'servant_leader', 'parent_child'],
@@ -253,6 +253,17 @@ export const FEATURES: Record<string, FeatureCopy> = {
     steps: ['Opt in under Profile.', 'Pick a board: everyone, your goal, a pillar, your city, your tag or your level.', 'Rank by xp, this month, streak or badges.'],
     relationships: ['friendship', 'servant_leader', 'self'],
   },
+  tables: {
+    tagline: 'All your data, in tables.',
+    pitch: 'Your tasks, moods, money, badges and more, each as a table. Sort it, filter it, search it, and copy or download the rows you pick.',
+    more: [
+      'Pick 10, 25, 50 or 100 rows a page. Download a CSV file of the rows you tick, or of every row that matches.',
+      'Change a cell where the app lets you, by the same rules as its own screen. Records such as xp, points, orders and signed paper stay as they are.',
+      'A life coach sees a table only if you switch it on for them, and can never change it. An admin never sees your journal, gratitude or body and mind tables, and every table an admin opens is logged.',
+    ],
+    steps: ['Open All tables and pick a table.', 'Sort, filter or search it.', 'Tick rows to copy them, or download them as a CSV file.'],
+    relationships: ['self', 'guru'],
+  },
   rewards: {
     tagline: 'Points for real things.',
     pitch: 'Points come from showing up. Spend them on gear, three books, a meetup ticket, a call with a mentor or creators’ products.',
@@ -282,9 +293,9 @@ export const FEATURES: Record<string, FeatureCopy> = {
   },
   coaching: {
     tagline: 'A life coach in your corner.',
-    pitch: 'Life coaches the team chose, with the Life coach badge. You pick what they see, never your journal.',
-    more: ['Ask one, say yes when one asks, or open a coach’s invite link.', 'Your coach reads a report of only the parts you share, and leaves notes and tasks for you.', 'Every step they take is in a change log you both read.'],
-    steps: ['Find a life coach and ask, or answer a coach who asked you.', 'Pick what they see: daily, pillars, routine, life map, reflection or patterns.', 'Read their notes, tick their tasks, and end it any time.'],
+    pitch: 'Life coaches the team chose, with the Life coach badge. They see only what you switch on for them.',
+    more: ['Ask one, say yes when one asks, or open a coach’s invite link.', 'Your coach reads a report of only the parts you share, and leaves notes and tasks for you.', 'You can also share whole tables from All tables, one by one. Each starts off, and your coach can read it, never change it.', 'Every step they take is in a change log you both read.'],
+    steps: ['Find a life coach and ask, or answer a coach who asked you.', 'Pick what they see: daily, pillars, routine, life map, reflection, patterns or whole tables.', 'Read their notes, tick their tasks, and end it any time.'],
     relationships: ['guru', 'lover_partner', 'self', 'divine'],
   },
 };

@@ -33,7 +33,7 @@ export const FEATURE_PAGE_SLUGS: readonly string[] = [
   'life', 'journal', 'reviews', 'mindful', 'fitness', 'wellbeing', 'mood', 'sleep', 'stress', 'coaching', 'companion', 'discover',
   'community', 'run', 'club', 'party', 'bond', 'circles', 'cards',
   'shop', 'profile', 'content', 'audience', 'automations', 'finance', 'fund', 'tv', 'knowledge', 'tools', 'store', 'library',
-  'home', 'today', 'tower', 'leaderboard', 'help', 'assistant',
+  'home', 'today', 'tower', 'leaderboard', 'tables', 'help', 'assistant',
   'books',
 ];
 
@@ -166,7 +166,7 @@ const FEATURE_HEAD: Readonly<Record<string, { title: string; description: string
       'Agency is the kreators.app app for a content agency or a freelance creator. Each client gets a dashboard of deliverables moving from idea to published, your time, invoices with GST and TDS worked out, and agreements from templates. A client’s page never shows your fees or private notes. We take nothing from what you invoice.',
   },
   life: { title: 'Life: five areas, one picture', description: 'Life on kreators.app scores five areas of life, physical, financial, mental, emotional and spiritual, from what you already log. Only you see the scores.' },
-  journal: { title: 'Journal: write it down', description: 'Journal on kreators.app: entries with an emotion and a stress level, plus gratitude prompts. Nobody else sees it: not brands, not staff, not the leaderboard.' },
+  journal: { title: 'Journal: write it down', description: 'Journal on kreators.app: entries with an emotion and a stress level, plus gratitude prompts. Brands, staff and the leaderboard never see it.' },
   reviews: { title: 'Reviews: look back, a day to a year', description: 'Reviews on kreators.app: pick a day, week, month, quarter, half year or year and see every app’s numbers next to the period before. Then answer a few questions.' },
   mindful: { title: 'Mindfulness: breathe and focus', description: 'Mindfulness on kreators.app: a breathing timer and focus sessions with breaks, background sounds made in your browser, and a rating of how focused you were.' },
   fitness: { title: 'Fitness: move, eat, see the week', description: 'Fitness on kreators.app: log a run, a walk or a workout, and tick your meals once a day. No calories, no sizes, and your weight is never saved.' },
@@ -174,7 +174,7 @@ const FEATURE_HEAD: Readonly<Record<string, { title: string; description: string
   mood: { title: 'Mood: how are you, really?', description: 'Mood on kreators.app: pick a face for how you really are and see the week. Two taps a day show a pattern over time, and only you see it unless you share.' },
   sleep: { title: 'Sleep: hours and quality', description: 'Sleep on kreators.app: log last night’s hours and quality in a few seconds, then see how your sleep lines up with everything else you log in the app.' },
   stress: { title: 'Stress: the level and the cause', description: 'Stress on kreators.app: set the level and name the cause. Patterns show up faster than you expect, and only you see them unless you share with a coach.' },
-  coaching: { title: 'Coaching: a life coach for you', description: 'Coaching on kreators.app: work with a life coach the team chose. You pick what they see, never your journal, and every step is in a log you both read.' },
+  coaching: { title: 'Coaching: a life coach for you', description: 'Coaching on kreators.app: work with a life coach the team chose. They see only what you switch on for them, and every step is in a log you both read.' },
   companion: { title: 'Companion: a chat that knows you', description: 'Companion on kreators.app: a chat that knows how your week is going, reflects and asks questions back. It is not a therapist and never pretends to be one.' },
   discover: {
     title: 'Discover: find your strengths',
@@ -194,7 +194,7 @@ const FEATURE_HEAD: Readonly<Record<string, { title: string; description: string
   content: { title: 'Content: find the posts that sell', description: 'Content on kreators.app gives every post a tracked link and shows clicks, sales and revenue for each piece, so you can make more of what sells.' },
   audience: { title: 'Audience: know who wants more', description: 'Audience on kreators.app: see who follows you, collect leads from your page, send a broadcast and share an affiliate link that pays twenty percent.' },
   automations: { title: 'Auto-DM: comment a word, get the link', description: 'Auto-DM on kreators.app sends a tracked link to anyone who comments your keyword, and funnels show where people drop off between the post and the sale.' },
-  finance: { title: 'Finance: see your money clearly', description: 'Finance on kreators.app: money in and out by category and by month, with dues, repeats, budgets and goals, and what the platform paid you. Yours alone.' },
+  finance: { title: 'Finance: see your money clearly', description: 'Finance on kreators.app: money in and out by category and by month, with dues, repeats, budgets and goals, and what the platform paid you. Never shown to brands.' },
   fund: { title: 'Fund: backing for a project', description: 'Fund on kreators.app: apply for a grant or backing for a project, then follow each stage: submitted, review, diligence, and a decision with a reason.' },
   tv: { title: 'TV: pitch a series', description: 'TV on kreators.app: pitch a series with a budget, then follow it from review to diligence to release, with every decision logged where you can see it.' },
   knowledge: { title: 'Knowledge: articles with sources', description: 'Knowledge on kreators.app: articles and things to try on the seven relationships. The team writes them and always names where each idea came from.' },
@@ -215,6 +215,12 @@ const FEATURE_HEAD: Readonly<Record<string, { title: string; description: string
       'In kreators.app each of the seven relationships is a pillar, and each pillar is a pyramid with six layers: a foundation, a guiding principle, a value goal, a goal outcome, a project and tasks at the tip. A short session builds them for you. Tick a task and the whole pyramid grows.',
   },
   leaderboard: { title: 'Leaderboard: climb on effort', description: 'Leaderboard on kreators.app: opt in to climb on xp, streaks and badges. Never on follower counts, and never on your journal or your wellbeing.' },
+  tables: {
+    title: 'All tables: your data as tables',
+    description: 'All tables on kreators.app shows your own lists, from tasks and moods to money and badges, as tables you can sort, filter, search, copy and download as CSV files.',
+    opening:
+      'All tables is the kreators.app page that shows your own data as tables, in the same groups as the app: Daily, Pillars, Reviews, Body and mind, Journal, Money, Learning, People and your account. Sort by any column, filter, search, and pick 10, 25, 50 or 100 rows a page. Copy the rows you tick or download them as a CSV file. A life coach sees a table only if you switch it on for them.',
+  },
   help: { title: 'Help: answers and the team', description: 'Help on kreators.app: common questions answered, and a support ticket when you need a person. The reply comes to your own inbox inside the app.' },
   assistant: {
     title: 'Assistant: say it, it is done',
@@ -291,15 +297,15 @@ export const SITE_FAQ: { q: string; a: string }[] = [
   { q: 'Can I see my tasks in my own calendar?', a: 'Yes. Under Profile, switch on the calendar link and subscribe to it in Google, Apple or Outlook Calendar. It shows each open task that has a day, and the reviews you planned. It carries only a title, a pillar and a priority, never your notes or your journal. It shows your tasks there; it does not change them.' },
   { q: 'Can I use it on my phone and my laptop?', a: 'Yes. One account can be signed in on up to three devices at once. A fourth signs out the oldest, and it tells that device why.' },
   { q: 'I don’t have time for another app.', a: 'That is the point of it. The daily ask is three moves: check in, do one small act, tick one task. It takes a few minutes. It counts reps, not hours. The rest is there when you want it, and switched off when you don’t.' },
-  { q: 'Who sees my journal and Discover results?', a: 'Only you. Your journal, wellbeing numbers and Discover results never reach brands, staff, the leaderboard or Club selection, and a life coach never sees your journal or your quiz. The assistant reads your journal only when you ask, and a short Discover summary only if you switch that on, both through models that keep nothing. Discover is a self-check, not an IQ test or a diagnosis.' },
+  { q: 'Who sees my journal and Discover results?', a: 'Only you, unless you share. Your journal, wellbeing numbers and Discover results never reach brands, staff, the leaderboard or Club selection. A life coach never sees your quiz, and sees your journal only if you switch its table on for them. The assistant reads your journal only when you ask, and a short Discover summary only if you switch that on, both through models that keep nothing. Discover is a self-check, not an IQ test or a diagnosis.' },
   { q: 'I’m not a creator. Is it for me?', a: 'Yes, if you are 18 or over. The seven relationships are for everyone: servitude, friends, family, love, yourself, teachers and faith. The creator apps, like the Shop and Win, stay off until you want them.' },
   { q: 'I’m doing fine. Is it still for me?', a: 'Yes. It is not only for fixing what hurts. Your pillars keep the good parts strong, and reviews show what is working, so you keep doing it.' },
   { q: 'Apps like this never stick for me.', a: 'That isn’t you. Most apps track one part of life and forget the other six. Here each tick climbs a pillar you chose, toward a foundation you wrote. And a task can only be ticked from its do date, so the plan stays honest.' },
   { q: 'Is the pay real?', a: 'It is real, and it is careful. Win pays per verified view, not per follower, and a reviewer checks before anything pays. Everything that pays out has a wait or a person who checks it. Points work today; money checkout turns on when payments go live.' },
   { q: 'Will I be on my own?', a: 'No. Bumling, the app’s own guide, and seven characters walk with you. A free first course shows you around, every app ends with a How it works section, Help answers questions, and you can work with a life coach if you want one.' },
-  { q: 'I’m not ready for groups or events.', a: 'Start on your own. Circles, Run, Party and Community stay hidden until you or the setup chat bring them in, and your journal and Discover results are yours alone. Join people when you are ready.' },
+  { q: 'I’m not ready for groups or events.', a: 'Start on your own. Circles, Run, Party and Community stay hidden until you or the setup chat bring them in, and nobody sees your journal or Discover results unless you choose to share. Join people when you are ready.' },
   { q: 'Is there proof it works?', a: 'We will not show you a rating or a study we cannot point to. What we can show is how it works: the rules on this page are the rules the app keeps. Try it for a week and see what your first review says.' },
-  { q: 'Can I leave?', a: 'Any time. From the Profile tab you can export everything, erase your progress, or delete your account. Hiding an app is one tap, and nothing is deleted.' },
+  { q: 'Can I leave?', a: 'Any time. All tables downloads your tasks, trackers, money and more as CSV files, and from the Profile tab you can export everything, erase your progress, or delete your account. Hiding an app is one tap, and nothing is deleted.' },
   { q: 'Why do you ask for my phone and birthday?', a: 'So that everyone here is 18 or over. Nobody under 18 gets an account. Neither your phone number nor your birthday is ever shown to anyone else, and you can change the phone number under the Profile tab.' },
 ];
 

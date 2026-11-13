@@ -235,7 +235,7 @@ export const HOW_TO: Record<string, HowTo> = {
   mood: {
     steps: [
       'Pick a face for today. That is the whole ask.',
-      'Say why, if you like. Nobody else sees it.',
+      'Say why, if you like. Nobody else sees it, unless you share the Mood table with a life coach.',
       'The month shows as a grid of faces, so patterns are easy to spot.',
       'Mood feeds your wellbeing score and the emotional part of Life.',
     ],
@@ -256,7 +256,7 @@ export const HOW_TO: Record<string, HowTo> = {
       'Once a day, tick your meals and mark each one Good fuel, Tasty or both. Try half your plate as vegetables and fruit, a quarter grains, ideally whole, and a quarter protein. Five servings of fruit and veg is the mark.',
       'The score reads fruit and veg, packaged food and meals without a screen. What you leave out does not count, but a score needs your fruit and veg, even 0. Tasty and how full you felt never lower it, and a fasting day has none. On packaged food, check the label: flavours, colours or sweeteners mean it is highly processed.',
       'Open Protein to add up what you ate: tap a katori of dal, an egg, paneer or a scoop, or type a number from a label. The grams are rough amounts from India’s food tables, and protein is its own number, never part of the score. For a daily goal, type what you weigh once: ICMR-NIN gives adults about 0.83 g a day for each kg, and 1 g when most meals are rice or roti. Only the goal is kept. Check with a doctor if you have a kidney condition or are pregnant.',
-      'Track supplements stays off until you switch it on. It is for supplements you already take: the app does not suggest any and does not check them against medicines. A supplement adds to food, it does not replace it. All of Fitness pays nothing: no xp, no points, no badges. Only you see it, unless you share reflection with a life coach, who sees numbers and never your protein or your supplements.',
+      'Track supplements stays off until you switch it on. It is for supplements you already take: the app does not suggest any and does not check them against medicines. A supplement adds to food, it does not replace it. All of Fitness pays nothing: no xp, no points, no badges. Only you see it, unless you share with a life coach. Reflection shows them the numbers. Your protein and supplements reach them only if you switch on the Eating or Supplements table for them.',
     ],
     terms: ['active minutes', 'eating check-in', 'eating moment', 'serving', 'protein goal', 'supplement', 'nootropic'],
   },
@@ -283,7 +283,7 @@ export const HOW_TO: Record<string, HowTo> = {
     steps: [
       'Write it down, with a feeling and a stress level. The feeling feeds Life.',
       'Gratitude for today: three lines, each under a prompt, saved as you type. On an empty line, tap the pillar’s name to pick another, or keep the three as your usual. A prompt you wrote under or skipped comes back only after the rest of that pillar’s prompts.',
-      'Only you see your journal: never brands, staff, a coach or the leaderboard.',
+      'Only you see your journal: never brands, staff or the leaderboard, and a life coach only if you switch its table on for them.',
       'A dot on the calendar marks a day with gratitude. Search finds entries.',
       'Not sure what to write? Tap Prompt me for a question from a category such as shadow work, gratitude or a weekly reset, with why it helps and what to expect. Write about this opens a new entry with the question as its first line. Which prompts you saw stays on this device.',
     ],
@@ -292,7 +292,7 @@ export const HOW_TO: Record<string, HowTo> = {
   coaching: {
     steps: [
       'A life coach is someone the team chose, with the Life coach badge. Find one under Coaching and ask, say yes when a coach asks you, or open a coach’s invite link. Nothing is shared until you say yes.',
-      `You pick what your coach sees, in six parts: Daily and streaks, pillars and pyramids, routine and contract, life map answers, reflection and patterns. Reflection is your mood, sleep, stress, mindful minutes, movement and how you ate, as numbers, and your saved reviews. Never your journal, gratitude, supplements, money or a note. Change it or end it any time on your Profile tab. Up to ${MAX_COACHES} coaches at once.`,
+      `You pick what your coach sees, in six parts: Daily and streaks, pillars and pyramids, routine and contract, life map answers, reflection and patterns. Reflection is your mood, sleep, stress, mindful minutes, movement and how you ate, as numbers, and your saved reviews. The six parts never show your journal, gratitude, supplements, money or a note. You can also switch on whole tables for one coach, one by one: each starts off, and your coach can read it, never change it. Change it or end it any time on your Profile tab. Up to ${MAX_COACHES} coaches at once.`,
       'Patterns are what the app finds in the parts you share, by plain rules, kept nowhere. They say what goes together, never why. On for a new coach, off for a coach you had before. A coach can ask once a week, and the choice stays yours.',
       'Your coach leaves notes and can add or edit tasks in your pyramids, marked From your coach: the dates, priority, repeat, length and whether it counts as a habit, never a time block. Only you tick them, and they pay the same xp as your own. Every ask, yes, note and task change is in the change log, for both of you.',
       'Are you a life coach? Say so in the setup chat, on your Profile or here, and the team checks first. Then add students by @username, friend code or email, or share your invite link; each one has to say yes. Each student has a report by day, week, month or quarter, and Show on this page hides any section.',
@@ -372,7 +372,7 @@ export const HOW_TO: Record<string, HowTo> = {
       'Dues track what you owe and what you are owed, with a date. Recurring entries post themselves each month.',
       'Settling a due with a tap books the money in or out for you.',
       'Budgets and goals show how the month is going. Pick a period to compare with the one before.',
-      'Yours alone to see.',
+      'Nobody else sees it, unless you share its table with a life coach. A super admin can read it to help you, and each look is logged.',
     ],
     terms: ['period'],
   },
@@ -497,6 +497,17 @@ export const HOW_TO: Record<string, HowTo> = {
       'The Admin guide, from the button on this page’s cover, walks through every screen. Only admins can open it.',
     ],
     terms: ['life coach', 'student', 'invite code', 'waitlist'],
+  },
+  tables: {
+    steps: [
+      'All tables shows your own data as tables, in groups like the app: Daily, Pillars, Reviews, Body and mind, Journal, Money, Learning, People and your account. Open one to see its rows.',
+      'Tap a column’s name to sort by it. Pick a filter or type in the search box to narrow it down. Pick 10, 25, 50 or 100 rows a page at the bottom left, and move between pages at the bottom right.',
+      // The number is CSV_MAX_ROWS in dataTables.ts (a test holds the two together; importing it would load the registry with this panel).
+      'Tick rows to copy them or to download them as a CSV file. Download all gets every row that matches, up to 5,000 (fewer on a wide table), ten files a day.',
+      'Where a cell can change, tap it, change it and press Enter. It saves the same way as the app’s own screen, so the same rules and waits apply. Records such as xp, points, orders, badges and signed paper stay as they are. Tasks and inbox notes can be archived, brought back, or deleted for good from the archive.',
+      'A life coach sees only the tables you switch on for them, under your coach on your Profile tab, and can never change them. An admin never sees your journal, gratitude or body and mind tables, and each table an admin opens is written in the audit log.',
+    ],
+    terms: ['table', 'life coach'],
   },
   observability: {
     steps: [

@@ -215,7 +215,7 @@ export function Reviews() {
     <Screen columns={false}>
       {/* The app cover (2026-11-06, the founder: "the hero cover with back button, title and helper text in a card/cover like the other
           pages"): Reviews wears the cover, so by the hero rule no coloured Hero; the period's numbers are under The numbers. */}
-      <PageHeader back={{ to: '/apps', label: 'Apps' }} title="Reviews" lede="Look back on a day, a week, a month, a quarter, half a year or a year: your numbers, and one layer of your pyramids. Only you see this." />
+      <PageHeader back={{ to: '/apps', label: 'Apps' }} title="Reviews" lede="Look back on a day, a week, a month, a quarter, half a year or a year: your numbers, and one layer of your pyramids." />
       <div className="mt-md">
         <PeriodFilter period={period} onChange={setPeriod} today={today} kinds={PERIOD_KINDS} pick={reviewPeriodNow} />
       </div>

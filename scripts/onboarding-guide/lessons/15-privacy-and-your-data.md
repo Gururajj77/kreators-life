@@ -3,21 +3,20 @@ You write things here that you would not post: how you slept, what stressed you,
 
 In this lesson you'll learn:
 
-- What nobody else ever sees.
+- What only you see, and what the team may read.
 - What others may see, and the switch for each part.
 - How your devices and your password work.
-- How to take your data with you, or wipe it.
+- How to see all your data as tables, take it with you, or wipe it.
 
 ## What only you see
 
-Some things in the app are for your eyes only. They never reach brands, the team, the leaderboard or your public page.
+Some things in the app are for your eyes only. They never reach brands, the team, the leaderboard or your public page. A coach sees one only if you switch it on for them.
 
-- **Your journal:** every entry, every prompt you wrote about, and your gratitude lines. Not even a coach sees it.
+- **Your journal:** every entry, every prompt you wrote about, and your gratitude lines. A coach sees them only if you switch that table on for them.
 - **Your wellbeing logs:** mood, sleep, stress, mindful minutes, your movement and how you ate, and the one wellbeing score. Only a coach you said yes to can see the numbers, and only while you allow it.
-- **Your supplements:** if you keep the list in Fitness, only you see it. Not a coach, not the assistant.
+- **Your supplements:** if you keep the list in Fitness, only you see it. Never the assistant, and a coach only if you switch its table on.
 - **Discover:** your quiz answers, your results and the add-ons, like love languages and how your mind works.
 - **Your phone and date of birth:** asked once at sign-up, never shown to anyone.
-- **Finance:** your money in and money out. The screen says it: "Only you can see this."
 - **Your year:** the grid of days on the Profile tab.
 - **Emerging:** the patterns the app notices. They are worked out fresh each time you look, and never saved. A coach sees them only if you switch Patterns on.
 
@@ -44,7 +43,13 @@ You are not on it until you tick **Show me on the leaderboard** on the Profile t
 
 ### A life coach
 
-If you work with a coach, you pick what they see, in six parts: Daily and streaks, pillars and pyramids, routine and contract, life map answers, reflection and patterns. All are on for a new coach, and Patterns is off for a coach you had before. Reflection is your wellbeing numbers and saved reviews. A coach never sees your journal, gratitude, supplements, money or a note. Turn any part off, or end the link, at any time.
+If you work with a coach, you pick what they see, in six parts: Daily and streaks, pillars and pyramids, routine and contract, life map answers, reflection and patterns. All are on for a new coach, and Patterns is off for a coach you had before. Reflection is your wellbeing numbers and saved reviews. The six parts never show your journal, gratitude, supplements, money or a note.
+
+You can also share whole tables with one coach, one at a time, under **Tables your coach can see**. Each starts off, and a coach can read a table but never change it. Turn any part or table off, or end the link, at any time.
+
+### Your tables and the team
+
+**All tables** shows your own lists, from tasks and moods to money and badges, as tables. A super admin on the team can open your tables to help you or to look into a problem. They can read them, never change them, and never open your journal, gratitude or body and mind tables. Each table they open or download is written in a log, and your export lists when. Your money in Finance is one of the tables they can read.
 
 ### The assistant
 
@@ -77,6 +82,8 @@ The first time you visit, a small card called **Your privacy** asks about three 
 > **Pro tip:** if you lose a phone, change your password from any other device. That one step signs the lost phone out.
 
 ## Take it with you, or wipe it
+
+Open **All tables** to see your tasks, trackers, money and more as tables. Sort it, filter it, search it, then copy the rows you tick or download them as a CSV file.
 
 On the Profile tab, the **Your data** card has three buttons.
 

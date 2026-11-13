@@ -94,8 +94,8 @@ Each metric then sits against its target for the period on screen, from the week
 
 ## What the admin checks
 
-- **Private words:** a review is the owner's. Journal and wellbeing numbers in it go only to its owner.
-- **Coaches:** a coach sees saved reviews only while the student's Reflection switch is on, and never the snapshot of numbers.
+- **Private words:** a review is the owner's. Journal and wellbeing numbers in it go only to its owner. A super admin can read her saved answers only through **Tables** in **People**, read only, never the numbers kept with them, and each look goes in the audit log.
+- **Coaches:** a coach sees saved reviews only while the student's Reflection switch or her Reviews table is on for them, and never the snapshot of numbers.
 - **Business metrics:** the switch is the person's own. While it is off, the server refuses everything but the switch. The Agency numbers come from that person's own Agency records.
 - **Reminders:** the cron sends each reminder once. A day missed while nothing ran is skipped, never sent late.
 - **Switches:** in Admin, **Flags**, the Reviews row sets On, Minimum role, Rollout % and Overrides. In **People**, **What does this person see?** sets it for one person.

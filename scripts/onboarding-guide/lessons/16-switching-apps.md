@@ -16,7 +16,7 @@ Every app lives in one group. The groups always come in the same order, on every
 - **Reflection:** looking inward, like Journal, Life, Mood, Sleep, Stress, Fitness, Mindfulness, Reviews, Discover, the Companion and Coaching.
 - **Connection:** people, like Community, Bond, Party, Kreators Run, Circles, Club and Games.
 - **Creation:** making and selling, like your Public page, Shop, Store, Finance, Knowledge and Tools.
-- **Essentials:** the Leaderboard, Inbox and Help.
+- **Essentials:** the Leaderboard, Inbox, All tables and Help.
 
 A few parts cannot be hidden, because the app is built on them. Home, Daily, Pillars, Search and the assistant are always there, so they do not show in the lists.
 

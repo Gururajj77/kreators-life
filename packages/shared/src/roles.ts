@@ -34,7 +34,7 @@ export const ICON_NAMES = [
   'Mountain', 'Newspaper', 'NotebookPen', 'NotebookText', 'OctagonX', 'Orbit', 'Package', 'Palette', 'PartyPopper', 'PenLine', 'PersonStanding',
   'PiggyBank', 'Pill', 'Plane', 'Presentation', 'Puzzle', 'RadioTower', 'Rainbow', 'Receipt', 'Recycle', 'Repeat', 'Rocket', 'Route', 'ScanSearch',
   'Scissors', 'Search', 'SearchCheck', 'Share2', 'Shield', 'ShieldCheck', 'Shirt', 'ShoppingBag', 'ShoppingCart', 'Signpost', 'Smartphone', 'Spade',
-  'Sparkle', 'Sparkles', 'Speech', 'Sprout', 'SquareCheck', 'SquarePlay', 'Star', 'Store', 'Sun', 'Sunrise', 'Swords', 'Tag', 'Target', 'Telescope',
+  'Sparkle', 'Sparkles', 'Speech', 'Sprout', 'SquareCheck', 'SquarePlay', 'Star', 'Store', 'Sun', 'Sunrise', 'Swords', 'Table2', 'Tag', 'Target', 'Telescope',
   'Tent', 'ThumbsUp', 'Ticket', 'Toolbox', 'Tornado', 'TreeDeciduous', 'TreePine', 'TrendingUp', 'Triangle', 'Trophy', 'Tv', 'Type', 'Undo2',
   'UserRound', 'Users', 'UsersRound', 'UtensilsCrossed', 'Video', 'VolumeX', 'Wallet', 'WalletMinimal', 'WandSparkles', 'WavesHorizontal', 'Wind',
   'X', 'Zap',
@@ -82,7 +82,7 @@ export const PERMISSION_META: Record<Permission, { name: string; blurb: string; 
   support: { name: 'Support', blurb: 'Answers help requests.', icon: 'LifeBuoy' },
   review: { name: 'Reviewer', blurb: 'Decides Club applications, bounties, TV and Fund proposals.', icon: 'SearchCheck' },
   mentor: { name: 'Mentor', blurb: 'Gives feedback on assignments. Can be held by a creator.', icon: 'Presentation' },
-  coach: { name: 'Life coach', blurb: 'Coaches students who said yes: sees what they share, leaves notes, adds tasks. Never their journal. Can be held by a creator.', icon: 'Target' },
+  coach: { name: 'Life coach', blurb: 'Coaches students who said yes: sees only what each one switches on, leaves notes, adds tasks. Can be held by a creator.', icon: 'Target' },
   invite: { name: 'Inviter', blurb: 'Makes invite codes. People who join with one are credited to them. Can be held by a creator.', icon: 'Ticket' },
 };
 

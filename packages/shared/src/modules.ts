@@ -37,6 +37,8 @@ export const MODULES: readonly AppModule[] = [
   // On for everyone. People still only appear after they opt in under Profile, and journal and wellbeing never count.
   { key: 'leaderboard', name: 'Leaderboard', blurb: 'See where you stand by goal, pillar and city, with a monthly season.', icon: 'Trophy', group: 'core', path: '/leaderboard', defaultOn: true, minRole: 'user' },
   { key: 'notifications', name: 'Inbox', blurb: 'What happened while you were away, and daily reminders.', icon: 'Bell', group: 'core', path: '/inbox', defaultOn: true, minRole: 'user' },
+  // On for everyone (2026-11-13): every list of your own data as a table. Not locked, so it can be hidden.
+  { key: 'tables', name: 'All tables', blurb: 'Your lists as tables: sort, filter, copy and download.', icon: 'Table2', group: 'core', path: '/tables', defaultOn: true, minRole: 'user' },
   { key: 'help', name: 'Help', blurb: 'Answers to your questions, and a line to the team.', icon: 'LifeBuoy', group: 'core', path: '/help', defaultOn: true, minRole: 'user' },
   // The assistant is part of every screen, not an app of its own: locked on, and its page is its plan and credits.
   { key: 'assistant', name: 'Assistant', blurb: 'Tap a flow to log something, or type it with a plan.', icon: 'WandSparkles', group: 'core', path: '/plans', defaultOn: true, locked: true, minRole: 'user' },
@@ -67,7 +69,7 @@ export const MODULES: readonly AppModule[] = [
   { key: 'mood', name: 'Mood', blurb: 'How are you feeling today? Pick a face, see the week.', icon: 'FaceSlightlySmiling', group: 'wellbeing', path: '/mood', defaultOn: false, minRole: 'user', accent: 'parent_child' },
   { key: 'sleep', name: 'Sleep', blurb: 'Hours and quality, night by night.', icon: 'Moon', group: 'wellbeing', path: '/sleep', defaultOn: false, minRole: 'user', accent: 'guru' },
   { key: 'stress', name: 'Stress', blurb: 'Level and what is behind it.', icon: 'WavesHorizontal', group: 'wellbeing', path: '/stress', defaultOn: false, minRole: 'user', accent: 'friendship' },
-  { key: 'coaching', name: 'Coaching', blurb: 'A life coach sees only what you share, never your journal.', icon: 'Target', group: 'wellbeing', path: '/coaching', defaultOn: false, minRole: 'user', accent: 'guru' },
+  { key: 'coaching', name: 'Coaching', blurb: 'A life coach sees only what you switch on for them.', icon: 'Target', group: 'wellbeing', path: '/coaching', defaultOn: false, minRole: 'user', accent: 'guru' },
   { key: 'companion', name: 'Companion', blurb: 'A chat that knows how you are doing. Not a therapist.', icon: 'MessageCircleHeart', group: 'wellbeing', path: '/companion', defaultOn: false, minRole: 'user', accent: 'guru' },
   // Off on a new account. Owner only, like the journal: never shown to brands, staff, the leaderboard, a coach or the assistant.
   { key: 'discover', name: 'Discover', blurb: 'A quiz on how you think, feel and act. It shows your strengths across the seven relationships.', icon: 'Telescope', group: 'wellbeing', path: '/discover', defaultOn: false, minRole: 'user', accent: 'self' },

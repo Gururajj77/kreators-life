@@ -393,3 +393,44 @@ export async function blockFromBody(db: D1Database, userId: string, body: { time
   }
   return undefined;
 }
+
+/** All tables (2026-11-13): a person's blocks and templates with when each last changed, the week pattern and the default. */
+export interface TablesBlocking {
+  blocks: { block: TimeBlock; updatedAt: string | null }[];
+  templates: { template: DayTemplate; updatedAt: string | null }[];
+  defaultId: string;
+  /** Seven entries, Monday first; null follows the default. */
+  pattern: (string | null)[];
+}
+/**
+ * What the All tables screens read of the time blocks: the same rows (or the starting set from code, until the first change) as
+ * `loadBlocking`, as plain reads, so the binding sends them in the same round trip as the page's rows (d1Batch.ts). `slots: false` leaves the
+ * template slots out (a list of choices needs only names).
+ */
+export async function blockingForTables(db: D1Database, userId: string, opts: { slots?: boolean } = {}): Promise<TablesBlocking> {
+  const withSlots = opts.slots !== false;
+  const [written, b, t, s, p] = await Promise.all([
+    blocksWritten(db, userId),
+    db.prepare('SELECT * FROM time_blocks WHERE user_id = ? ORDER BY sort ASC, created_at ASC').bind(userId).all<TimeBlockRow>(),
+    db.prepare('SELECT * FROM day_templates WHERE user_id = ? ORDER BY sort ASC, created_at ASC').bind(userId).all<DayTemplateRow>(),
+    withSlots ? db.prepare('SELECT template_id, block_id, start_min, end_min FROM day_template_slots WHERE user_id = ? ORDER BY start_min ASC').bind(userId).all<SlotRow>() : Promise.resolve({ results: [] as SlotRow[] }),
+    db.prepare('SELECT weekday, template_id FROM week_patterns WHERE user_id = ?').bind(userId).all<{ weekday: number; template_id: string }>(),
+  ]);
+  let blocks: TablesBlocking['blocks'];
+  let templates: TablesBlocking['templates'];
+  if (!written) {
+    const start = startingSet(userId, { slots: withSlots });
+    blocks = start.blocks.map((block) => ({ block, updatedAt: null }));
+    templates = start.templates.map((template) => ({ template, updatedAt: null }));
+  } else {
+    const slotsBy = new Map<string, TemplateSlot[]>();
+    for (const r of s.results) slotsBy.set(r.template_id, [...(slotsBy.get(r.template_id) ?? []), { blockId: r.block_id, start: r.start_min, end: r.end_min }]);
+    blocks = b.results.map((r) => ({ block: toTimeBlock(r), updatedAt: r.updated_at || null }));
+    templates = t.results.map((r) => ({ template: toDayTemplate(r, slotsBy.get(r.id) ?? []), updatedAt: r.updated_at || null }));
+  }
+  const ids = new Set(templates.map((x) => x.template.id));
+  const defaultId = templates.find((x) => x.template.isDefault)?.template.id ?? templates[0]?.template.id ?? '';
+  const pattern: (string | null)[] = [null, null, null, null, null, null, null];
+  for (const r of p.results) if (r.weekday >= 1 && r.weekday <= 7 && ids.has(r.template_id)) pattern[r.weekday - 1] = r.template_id;
+  return { blocks, templates, defaultId, pattern };
+}

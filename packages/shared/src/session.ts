@@ -475,6 +475,8 @@ export interface RoutineDay {
   day: string;
   dayType: DayType;
   steps: string[];
+  /** The other blocks ticked that day, by key (never the morning, whose steps are ticked one by one). Pays nothing and never moves `done`. */
+  blocks?: BlockKey[];
   done: boolean;
 }
 export interface SessionResponse {

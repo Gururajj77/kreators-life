@@ -75,7 +75,7 @@ function OneOf({ label, hint, options, value, onChange }: { label: string; hint?
 /**
  * The day's eating check-in, one a day and about thirty seconds (2026-11-07): which meals, each one Good fuel, Tasty or both, fruit and
  * vegetables, protein by the serving behind one row (`EatProtein`, its own number and no part of the score), and in More how much was packaged, fried or sweet, how
- * full you felt, meals without a screen and a note only you see. Fasting today clears the meals and is cleared by them; a fasting day has no score. Never a grade, never calories.
+ * full you felt, meals without a screen and a note (private unless its table is shared with a life coach). Fasting today clears the meals and is cleared by them; a fasting day has no score. Never a grade, never calories.
  * It fills from the day's check-in (and again when the day changes); with none, "Same as yesterday" copies the last one for you to check.
  */
 export function EatForm({ day, existing, previous = null, solid = false, proteinGoal = null, lastScoop = null, onSaved, onGoalSaved = onSaved }: { day: string; existing: EatLog | null; previous?: EatLog | null; solid?: boolean; proteinGoal?: number | null; lastScoop?: number | null; onSaved: () => void; /** The goal saves apart from the day, so it must not fold what the day's Save folds. */ onGoalSaved?: () => void }) {
@@ -227,7 +227,7 @@ export function EatForm({ day, existing, previous = null, solid = false, protein
           {meals.length > 0 && (
             <Stepper label="Meals without a screen" value={e.screenFree} max={meals.length} unit={['meal', 'meals']} onChange={(screenFree) => set({ screenFree })} />
           )}
-          <FieldLabel label="A note only you see" hint="Optional">
+          <FieldLabel label="A note" hint="Optional. Private unless you share its table with a life coach.">
             <input value={e.note} onChange={(ev) => set({ note: ev.target.value })} maxLength={500} className={FIELD} />
           </FieldLabel>
         </div>

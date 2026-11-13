@@ -261,7 +261,7 @@ const DISALLOW = [
   '/unsubscribe/', '/join/', '/coach/join/',
   '/signin', '/signup', '/forgot', '/onboarding', '/session', '/vibe-check',
   '/home', '/today', '/tower', '/you', '/inbox', '/insights', '/plans', '/rewards', '/library', '/manage', '/admin', '/internal/',
-  '/leaderboard', '/help', '/school', '/work', '/army', '/win', '/agency', '/community', '/run', '/club', '/party', '/bond', '/circles',
+  '/leaderboard', '/tables', '/help', '/school', '/work', '/army', '/win', '/agency', '/community', '/run', '/club', '/party', '/bond', '/circles',
   '/cards', '/life', '/journal', '/reviews', '/mindful', '/fitness', '/wellbeing', '/mood', '/sleep', '/stress', '/coaching',
   '/companion', '/discover', '/shop', '/profile', '/finance', '/fund', '/tv', '/knowledge', '/tools', '/store', '/apps', '/search',
   '/time-blocks', '/realm/', '/resources$', '/studio', '/book$', '/*?add=',

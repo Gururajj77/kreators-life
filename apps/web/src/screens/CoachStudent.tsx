@@ -3,7 +3,7 @@ import { COACH_NOTE_MAX, DONE_PAGE_SIZE, DONE_PAGE_SIZES, COACH_SHARE_META, COAC
 import { useMutation } from '@tanstack/react-query';
 import gsap from 'gsap';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import { Button } from '../components/Button';
 import { WeekDots } from '../components/Charts';
 import { CoachFold, ShowOnThisPage, useCoachSections } from '../components/CoachSections';
@@ -321,8 +321,14 @@ export function CoachStudent() {
         <BackLink to="/coaching">Coaching</BackLink>
         <h1 className="text-large-title">{s.name}</h1>
         <p className="mt-xs m-0 text-subhead text-ink-soft">
-          {s.handle ? `@${s.handle}. ` : ''}Your student since {longDate(d.link.answeredAt ?? d.link.createdAt)}. They pick what you see. Never their journal.
+          {s.handle ? `@${s.handle}. ` : ''}Your student since {longDate(d.link.answeredAt ?? d.link.createdAt)}. They pick what you see.
         </p>
+        {/* Whole tables they switched on for you (All tables, 2026-11-13), read only; the server checks the share on every request. */}
+        <div className="mt-sm">
+          <Link to={`/coaching/students/${encodeURIComponent(id)}/tables`} className="toy toy-ink btn-outline tap-pad inline-flex min-h-[36px] select-none items-center justify-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-sm text-subhead font-semibold leading-none text-ink md:min-h-[44px]">
+            Tables ({(share.tables ?? []).length} shared)
+          </Link>
+        </div>
         <Hero color="var(--color-r6)" deep="var(--deep-guru)" className="mt-md" character="guru" mood={hero.mood}>
           <p className="m-0 text-eyebrow uppercase opacity-90">{hero.eyebrow}</p>
           <HeroNumber value={hero.value} unit={hero.unit} label={hero.label} />

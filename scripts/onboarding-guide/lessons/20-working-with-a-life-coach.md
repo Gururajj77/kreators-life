@@ -35,7 +35,11 @@ You choose in six parts, under **What they see**:
 
 All six are on for a new coach, and Patterns is off for a coach you had before. A coach can ask once a week to see your patterns, and the choice stays yours. Change any part, or tap **End coaching**, under **Your life coach** on the Profile tab.
 
-A coach never sees your journal, gratitude, supplements, money or a note.
+These six parts never show your journal, gratitude, supplements, money or a note.
+
+## Whole tables
+
+You can also share whole tables from **All tables** with one coach, one table at a time: your tasks, your money, your journal or any other. Open **Tables your coach can see** under **Your life coach** on the Profile tab and switch on the ones you want. Each one starts off. **Share all** and **Share none** change them all at once. A coach can read a table, but never change it, and the change log names the tables you switched, never what is in them.
 
 > **Pro tip:** start with only the parts you want to talk about. You can turn on more once you trust them.
 
@@ -58,6 +62,7 @@ Say so in the setup chat, on your Profile tab, or under **Are you a life coach?*
 - **Your invite link:** one link for anyone you coach, with a QR code for a slide or a poster. **Make a new link** closes the old one.
 - **Each student's report:** pick a day, a week, a month or a quarter. **Show on this page** folds away what you do not need.
 - **Suggestions:** they can fill a note or a task for you, and nothing goes until you send it. No line is ever made about eating.
+- **Tables:** the outline **Tables** link on a student's page opens the tables they switched on for you. You can sort, filter, search, copy and download them, and never change them.
 
 A short week shows on your list as **Below the plan last week** only if that person's contract picked The coach sees it.
 
@@ -73,4 +78,4 @@ You learn to ask for help on your own terms. You share what is useful, keep what
 
 ## The bottom line
 
-A coach helps most when you set the terms. Say yes only when you want to, pick what they see, and keep the switch in your own hands. Your journal stays yours, whatever you share.
+A coach helps most when you set the terms. Say yes only when you want to, pick what they see, and keep the switch in your own hands. Your journal stays yours: a coach sees it only if you switch its table on.

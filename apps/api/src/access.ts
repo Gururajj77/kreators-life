@@ -39,6 +39,11 @@ export const MODULE_FOR_PREFIX: Record<string, readonly string[]> = {
   // The coach's side and the directory. The student's own side (answers, what they share, ending a link) lives
   // under /me/coach, which is core, so switching Coaching off never stops anyone from saying no or ending it.
   coach: ['coaching'],
+  // All tables (2026-11-13): the person's own tables are their own app; a coach's view of a student's shared tables is Coaching's; a
+  // super admin's read of a member's tables is Admin's (the route checks the admin role again, and the shared key never reaches it).
+  tables: ['tables'],
+  'tables/coach': ['coaching'],
+  'tables/admin': ['admin'],
   // Not listed on purpose: `time-blocks` (time blocks, day templates and the weekly pattern, docs/time-blocks.md). It is core like
   // /today, which reads it for every Daily, so it is always open.
   // Not listed on purpose: `me/teams` (an Agency team invite's answer, leaving, and a client member's read-only view). It is core like

@@ -10,7 +10,7 @@ In this lesson you'll learn:
 
 ## Where it lives
 
-Time blocks is a page under Daily, not an app. It is core, like Daily, so it is always on. It is not on Apps, and it is not in **What does this person see?**. Nobody can switch it off, and no admin screen lists what is on it.
+Time blocks is a page under Daily, not an app. It is core, like Daily, so it is always on. It is not on Apps, and it is not in **What does this person see?**. Nobody can switch it off. A super admin sees its blocks and templates only as the member's tables, read only.
 
 Riya reaches it three ways:
 
@@ -82,7 +82,7 @@ After some weeks, Emerging on Daily reads her blocks back to her. It may say "Yo
 
 ## What an admin checks
 
-Nothing here is staff-only. There is no admin screen for blocks, templates or the week, no switch, and no override. When a member asks, you guide them on their own screen.
+Nothing here is staff-only. There is no switch and no override, and you change nothing for them. A super admin can read a member's blocks and templates under **Tables** in **People**, read only, and each look goes in the audit log. When a member asks, you guide them on their own screen.
 
 1. **"My starting blocks are gone."** At the foot of the page, **Bring back the starting set** adds back any starting block or template they deleted. Their own stay as they are.
 2. **"I can't delete a template."** It is the default. They make another one the default first.
@@ -92,7 +92,7 @@ Nothing here is staff-only. There is no admin screen for blocks, templates or th
 6. **"My Everyday days are not counted."** Everyday is the default, and a day on it counts as no kind. They give a day a kind on Daily or in the month calendar, or set a weekday's template in their usual week.
 7. **"Daily sorts in an odd order."** On a day that follows the default, Daily sorts by day. A changed date or another weekday template sorts By context. Any sort they pick stays theirs.
 8. **The assistant:** with a plan, it can read their blocks and set a day's template for them, each with Undo.
-9. **Privacy:** a coach never sees blocks or templates. The Logs show that a change was made, never which template.
+9. **Privacy:** a coach sees blocks or templates only as the Time blocks or Day templates table, when the person switches it on for them. The Logs show that a change was made, never which template.
 10. **Their data:** blocks, templates and the week are in their export. **Erase everything** keeps them, since they are settings, not progress. Deleting the account removes them.
 
 ## The bottom line

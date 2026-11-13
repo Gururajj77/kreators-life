@@ -31,6 +31,7 @@ import {
   type RealDay,
   type RelationshipKey,
   type Routine,
+  type BlockKey,
   type RoutineBlock,
   type RoutineDay,
   type Scores,
@@ -48,7 +49,7 @@ interface ARow { id: string; kind: Assessment['kind']; fears_json: string; insec
 interface PRow { relationship: RelationshipKey; core_level: number; floor_level: number; evidence: string }
 interface RRow { id: string; assessment_id: string; ramp_step: number; general_json: string; exceptional_json: string; practices_json: string; created_at: string }
 interface CRow { min_days: number; checkin_time: string; penalty: Contract['penalty']; next_weekly: string; next_monthly: string; signed_name: string; signed_at: string }
-interface DRow { day: string; day_type: RoutineDay['dayType']; steps_json: string; done: number }
+interface DRow { day: string; day_type: RoutineDay['dayType']; steps_json: string; blocks_json: string; done: number }
 const json = <T,>(s: string, fb: T): T => {
   try {
     return JSON.parse(s) as T;
@@ -66,7 +67,7 @@ export async function latest(db: D1Database, userId: string, date: string): Prom
     db.prepare("SELECT * FROM assessments WHERE user_id = ? AND kind = 'onboard' ORDER BY created_at DESC LIMIT 1").bind(userId).first<ARow>(),
     db.prepare('SELECT * FROM routines WHERE user_id = ? ORDER BY created_at DESC LIMIT 1').bind(userId).first<RRow>(),
     db.prepare('SELECT * FROM contracts WHERE user_id = ? ORDER BY signed_at DESC LIMIT 1').bind(userId).first<CRow>(),
-    db.prepare('SELECT day, day_type, steps_json, done FROM routine_days WHERE user_id = ? AND day > ? AND day <= ?').bind(userId, shiftDate(date, -7), date).all<DRow>(),
+    db.prepare('SELECT day, day_type, steps_json, blocks_json, done FROM routine_days WHERE user_id = ? AND day > ? AND day <= ?').bind(userId, shiftDate(date, -7), date).all<DRow>(),
   ]);
   let assessment: Assessment | null = null;
   if (a) {
@@ -94,7 +95,7 @@ export async function latest(db: D1Database, userId: string, date: string): Prom
     assessment,
     routine: r ? { id: r.id, rampStep: r.ramp_step, general: json<RoutineBlock[]>(r.general_json, []), exceptional: json<RoutineBlock[]>(r.exceptional_json, []), practices: json<Practices>(r.practices_json, { mantra: 'none', breathing: 'box', affirmation: '', reading: '' }), createdAt: r.created_at } : null,
     contract: c ? { minDays: c.min_days, checkinTime: c.checkin_time, penalty: c.penalty, nextWeekly: c.next_weekly, nextMonthly: c.next_monthly, signedName: c.signed_name, signedAt: c.signed_at } : null,
-    today: today ? { day: today.day, dayType: today.day_type, steps: json<string[]>(today.steps_json, []), done: today.done === 1 } : null,
+    today: today ? { day: today.day, dayType: today.day_type, steps: json<string[]>(today.steps_json, []), blocks: json<BlockKey[]>(today.blocks_json, []), done: today.done === 1 } : null,
     week: { done: week.filter((d) => d === true).length, days: week },
   };
 }
@@ -280,6 +281,16 @@ session.post('/day', async (c) => {
   const morning = blocks.find((b) => b.key === 'morning')?.steps ?? [];
   const steps = (Array.isArray(body.steps) ? body.steps : []).filter((s): s is string => typeof s === 'string' && morning.includes(s));
   const done = morning.length > 0 && morning.every((s) => steps.includes(s)) ? 1 : 0;
-  await db.prepare('INSERT INTO routine_days (user_id, day, day_type, steps_json, done, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, day) DO UPDATE SET day_type = excluded.day_type, steps_json = excluded.steps_json, done = excluded.done, updated_at = excluded.updated_at').bind(user.id, day, dayType, JSON.stringify(steps), done, nowIso()).run();
+  // The other blocks ticked that day: only keys this day type has, never the morning. A body with no `blocks` (the assistant's
+  // tick_routine, an older tab) leaves the day's block ticks as they are.
+  const others = new Set(blocks.filter((b) => b.key !== 'morning').map((b) => b.key));
+  const sentBlocks = Array.isArray(body.blocks) ? [...new Set(body.blocks.filter((k): k is BlockKey => typeof k === 'string' && others.has(k as BlockKey)))] : null;
+  await db
+    .prepare(
+      `INSERT INTO routine_days (user_id, day, day_type, steps_json, blocks_json, done, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(user_id, day) DO UPDATE SET day_type = excluded.day_type, steps_json = excluded.steps_json, done = excluded.done, updated_at = excluded.updated_at${sentBlocks ? ', blocks_json = excluded.blocks_json' : ''}`,
+    )
+    .bind(user.id, day, dayType, JSON.stringify(steps), JSON.stringify(sentBlocks ?? []), done, nowIso())
+    .run();
   return c.json(await latest(db, user.id, day));
 });

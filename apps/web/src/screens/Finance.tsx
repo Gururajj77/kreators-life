@@ -49,7 +49,7 @@ export function Finance() {
 
   return (
     <Screen>
-      <AppCover back={{ to: '/apps', label: 'Apps' }} title="Finance" lede="Money in, money out, who with, what is owed, what repeats, and your goals. Only you can see this.">
+      <AppCover back={{ to: '/apps', label: 'Apps' }} title="Finance" lede="Money in, money out, who with, what is owed, what repeats, and your goals. Brands and the leaderboard never see it.">
         {d && (
           <div className="mt-md grid grid-cols-2 gap-xs md:grid-cols-4" aria-label="All time">
             <Stat label="earned, all time" value={money(d.totals.incomeCents, d.currency)} tone="var(--tint-green)" />

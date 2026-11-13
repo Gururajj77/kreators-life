@@ -1,5 +1,5 @@
 # Journal and prompts
-Riya edits videos all day. By night her head is full of client notes, cuts and half ideas. The Journal is where she puts it down, and nobody else ever reads it. Not a brand. Not a coach. Not you, the admin.
+Riya edits videos all day. By night her head is full of client notes, cuts and half ideas. The Journal is where she puts it down, and nobody else reads it unless she shares it with her coach. Not a brand, and never you, the admin.
 
 In this lesson you'll learn:
 
@@ -87,8 +87,8 @@ A prompt she wrote under or skipped comes back only after the rest of that pilla
 
 The Journal is the most private part of the app. You cannot read it, and you should never try to.
 
-- **No staff view:** no admin screen shows a journal entry or a gratitude line. Journal data never reaches brands, staff, the leaderboard or Club picks.
-- **Coaches never see it:** a life coach can see many things a student shares, but never the journal or gratitude.
+- **No staff view:** no admin screen shows a journal entry or a gratitude line, not even a member's tables, which leave both out. Journal data never reaches brands, staff, the leaderboard or Club picks.
+- **A coach only if she shares it:** a life coach sees the journal or gratitude only as a whole table she switches on for that coach, read only. Nobody can switch it on for her.
 - **The assistant:** it reads the journal only for its owner, only when the owner asks about it, and only through a model that keeps no data.
 - **Logs stay clean:** the Logs page never holds journal words. At most it keeps a bare error line with no person and no path.
 - **Switching it:** in Admin, **Flags**, you can turn the Journal off for everyone, set a rollout share or a minimum role. Use this with care, since it is on for all new accounts.

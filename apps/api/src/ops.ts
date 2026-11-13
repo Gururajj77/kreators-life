@@ -121,7 +121,8 @@ export function rateLimit(name: LimitName, by?: 'address', when?: 'discountCode'
     // runs before the session check (`session`, /admin/connect) reads the session itself, so a signed-in person is counted as themself.
     const userId = by === 'address' ? undefined : (c.get('user') ?? (when === 'session' ? await sessionUser(c) : null))?.id;
     const who = userId ?? (await limitKey(c.env, ipOf(c)));
-    if (await limited(c.env.DB, `${name}${by === 'address' ? ':ip' : ''}:${who}`, max, windowSec)) return c.json({ error: 'too many tries, wait a minute' }, 429);
+    // A daily limit says so: waiting a minute would not help.
+    if (await limited(c.env.DB, `${name}${by === 'address' ? ':ip' : ''}:${who}`, max, windowSec)) return c.json({ error: windowSec >= 86_400 ? 'too many tries today, try again tomorrow' : 'too many tries, wait a minute' }, 429);
     await next();
   };
 }

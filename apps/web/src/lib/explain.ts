@@ -9,10 +9,10 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 /** Things worth explaining that are not a glossary word: short answers in plain words. */
 const EXTRA: readonly { words: readonly string[]; answer: string }[] = [
   { words: ['plan my week', 'week plan', 'plan the week'], answer: 'Plan my week: on Daily, it suggests a day for each task that has none, so no day is overloaded. Nothing changes until you keep a suggestion.' },
-  { words: ['focus quality'], answer: 'Focus quality: after a focus session you can rate how focused you were, from scattered to deep. Only you see it.' },
+  { words: ['focus quality'], answer: 'Focus quality: after a focus session you can rate how focused you were, from scattered to deep. Only you see it, unless you share the Focus sessions table with a life coach.' },
   { words: ['calendar link', 'private calendar', 'calendar sync'], answer: 'Calendar link: under Profile, a private address your Google, Apple or Outlook calendar can subscribe to. It shows your tasks there. It never changes them.' },
   { words: ['business metrics', 'business numbers'], answer: 'Business metrics: in Reviews, for people who run a business. Switch them on to track numbers such as pieces published or hours billed. Only you see them.' },
-  { words: ['gratitude for the day', 'gratitude for today', 'daily gratitude', 'gratitude'], answer: 'Gratitude for today: on Journal, three short lines a day, each under its own prompt. It saves as you type, and only you see it.' },
+  { words: ['gratitude for the day', 'gratitude for today', 'daily gratitude', 'gratitude'], answer: 'Gratitude for today: on Journal, three short lines a day, each under its own prompt. It saves as you type, and only you see it, unless you share its table with a life coach.' },
   { words: ['daily review', 'daily report', 'review of the day'], answer: 'Daily review: in Reviews, a look back at one day: your tasks, pillar by pillar, and one small step for tomorrow.' },
   { words: ['mid-year check-in', 'mid year check in', 'mid-year review', 'mid year review', 'mid-year', 'mid year', 'midyear'], answer: 'Mid-year check-in: in Reviews, the half-year review of January to June, opened in July. It looks at your guiding principles.' },
   { words: ['start-of-year setting', 'start of year setting', 'start-of-year', 'start of year', 'start of the year'], answer: 'Start-of-year setting: in Reviews, the half-year review of July to December, opened in January beside the yearly review. It looks at your guiding principles too.' },

@@ -7,7 +7,8 @@ import type { AppEnv } from './env';
  * and leave nothing but a bare server-error line, with no name and no path.
  */
 export type LogLevel = 'info' | 'warn' | 'error';
-const PRIVATE_AREAS = new Set(['journal', 'wellbeing', 'companion', 'discover', 'assistant', 'fitness']);
+// All tables (2026-11-13) holds the journal and every tracker, so its paths stay out of the log too.
+const PRIVATE_AREAS = new Set(['journal', 'wellbeing', 'companion', 'discover', 'assistant', 'fitness', 'tables']);
 /** Kreators Run's own movement tool writes the same wellbeing rows as Fitness, so its paths are private too, though the rest of /run is not. */
 const isPrivatePath = (clean: string, area: string): boolean => PRIVATE_AREAS.has(area) || clean === '/run/move' || clean.startsWith('/run/move/');
 /** Old lines go after thirty days (`tidyOld` in cron.ts). */

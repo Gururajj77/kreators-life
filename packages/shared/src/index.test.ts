@@ -180,7 +180,7 @@ describe('circles', () => {
 describe('apps', () => {
   it('starts with only the core apps on', () => {
     const on = MODULES.filter((m) => m.defaultOn && !m.locked && m.minRole === 'user').map((m) => m.key).sort();
-    expect(on).toEqual(['help', 'journal', 'leaderboard', 'life', 'notifications', 'profile', 'school', 'shop', 'work', 'army'].sort());
+    expect(on).toEqual(['help', 'journal', 'leaderboard', 'life', 'notifications', 'profile', 'school', 'shop', 'tables', 'work', 'army'].sort());
   });
   it('lists the leaderboard as an app that is on for everyone, but not rewards', () => {
     const lb = MODULES.find((m) => m.key === 'leaderboard');

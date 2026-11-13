@@ -17,7 +17,7 @@ import type { AgencyStageKey, LifecycleDates, RetainerOption } from '@kreators/s
 import type { AdminAttendeeCode, AttendeeCodeHost, AttendeeCodeView, PublicEvent } from '@kreators/shared';
 import type { AssistantContext, AssistantReceipt, AssistantReply, AssistantStatus, AssistantTurn, CompanionReply, CompanionStatus, CreditEntry, CreditsResponse, FeelingsReadResult, PlanKey } from '@kreators/shared';
 import type { Brand, BrandDetail, BrandPiece, BrandSource, PieceKind, ResearchKind, ResearchRun } from '@kreators/shared';
-import type { Contract, DayType, Fear, Insecurity, Placement, Practices, RealDay, RoutineBlock, Scores, SessionResponse } from '@kreators/shared';
+import type { BlockKey, Contract, DayType, Fear, Insecurity, Placement, Practices, RealDay, RoutineBlock, Scores, SessionResponse } from '@kreators/shared';
 import type { FeedFilter, FeedSort, SocialAward, TrustScore } from '@kreators/shared';
 import type { ListingDetail, MarketResponse, PreownedListing, PreownedMessage, PreownedOffer, StoreItem, StoreKit } from '@kreators/shared';
 import type { PeriodKind, Review, ReviewCalendarResponse, ReviewSummary, ReviewTemplate, ReviewTemplatesResponse, ReviewsResponse } from '@kreators/shared';
@@ -1038,7 +1038,7 @@ export const api = {
   /** Set love, teachers or faith aside on the map (not part of my life right now), or bring it back. */
   setSessionAway: (relationship: RelationshipKey, away: boolean, date: string) => put<SessionResponse>('/session/away', { relationship, away, date }),
   submitPlan: (body: { focus: RelationshipKey[]; practices: Practices; contract: Pick<Contract, 'minDays' | 'checkinTime' | 'penalty' | 'signedName'>; date: string }) => post<SessionResponse>('/session/plan', body),
-  markRoutineDay: (body: { date: string; dayType: DayType; steps: string[] }) => post<SessionResponse>('/session/day', body),
+  markRoutineDay: (body: { date: string; dayType: DayType; steps: string[]; blocks?: BlockKey[] }) => post<SessionResponse>('/session/day', body),
   /** The live call with a coach: the open ask, and a yes that keeps the ask and, only while payments are live, the order to pay it. */
   liveCall: () => request<{ request: LiveCallRequest | null; live: boolean }>('/session/call'),
   askLiveCall: () => post<LiveCallAnswer>('/session/call', {}),

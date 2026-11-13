@@ -111,7 +111,7 @@ const ANSWERS: {
     villain: 'silence',
     pillar: 'friendship',
     poster: ['People in your corner.', 'Every week.'],
-    how: 'Small circles near you, run clubs, events and a kind community. A life coach if you want one, who sees only what you switch on and never your journal. Card games, so a first meeting never starts with silence.',
+    how: 'Small circles near you, run clubs, events and a kind community. A life coach if you want one, who sees only what you switch on for them. Card games, so a first meeting never starts with silence.',
     apps: ['circles', 'run', 'party', 'community', 'cards', 'coaching'],
   },
   {

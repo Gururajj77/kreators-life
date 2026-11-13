@@ -105,6 +105,14 @@ const Plans = lazyNamed(() => import('./screens/Plans'), 'Plans');
 const Coaching = lazyNamed(() => import('./screens/Coaching'), 'Coaching');
 const CoachStudent = lazyNamed(() => import('./screens/CoachStudent'), 'CoachStudent');
 const CoachJoin = lazyNamed(() => import('./screens/CoachJoin'), 'CoachJoin');
+// All tables (2026-11-13): every list of a person's own data as a table they can sort, filter, copy, download and change in place; a
+// coach's view of what a student shares and a super admin's view of a member's are the same two screens, read only.
+const Tables = lazyNamed(() => import('./screens/Tables'), 'Tables');
+const CoachTables = lazyNamed(() => import('./screens/Tables'), 'CoachTables');
+const AdminTables = lazyNamed(() => import('./screens/Tables'), 'AdminTables');
+const TableView = lazyNamed(() => import('./screens/TableView'), 'TableView');
+const CoachTableView = lazyNamed(() => import('./screens/TableView'), 'CoachTableView');
+const AdminTableView = lazyNamed(() => import('./screens/TableView'), 'AdminTableView');
 // An invite link (2026-11-10): checks the code and goes on to Welcome with it kept for the tab.
 const JoinInvite = lazyNamed(() => import('./screens/JoinInvite'), 'JoinInvite');
 const School = lazyNamed(() => import('./screens/School'), 'School');
@@ -416,6 +424,9 @@ const router = createBrowserRouter([
       { path: '/inbox', element: gated('notifications', <Inbox />) },
       // Rank and rewards are part of the game, not apps: always on.
       { path: '/leaderboard', element: gated('leaderboard', <Leaderboard />) },
+      // All tables: on for everyone (core, may be hidden), each table its own page so it opens in a new tab.
+      { path: '/tables', element: gated('tables', <Tables />) },
+      { path: '/tables/:table', element: gated('tables', <TableView />) },
       { path: '/discover', element: gated('discover', <Discover />) },
       { path: '/cards', element: gated('cards', <Cards />) },
       { path: '/cards/:game', element: gated('cards', <CardTable />) },
@@ -427,6 +438,9 @@ const router = createBrowserRouter([
       { path: '/school/:id', element: gated('school', <Cohort />) },
       // The Admin guide: the private School cohort for the team, outside School's switch, shown only to an admin account.
       { path: '/admin/guide', element: <AdminGuide /> },
+      // A member's tables for a super admin (a real session, never the admin key alone; read only, each opening audited).
+      { path: '/admin/people/:id/tables', element: <AdminTables /> },
+      { path: '/admin/people/:id/tables/:table', element: <AdminTableView /> },
       { path: '/work', element: gated('work', <Work />) },
       { path: '/work/:id', element: gated('work', <Opportunity />) },
       { path: '/army', element: gated('army', <Army />) },
@@ -454,6 +468,8 @@ const router = createBrowserRouter([
       { path: '/reviews', element: gated('reviews', <Reviews />) },
       { path: '/coaching', element: gated('coaching', <Coaching />) },
       { path: '/coaching/students/:id', element: gated('coaching', <CoachStudent />) },
+      { path: '/coaching/students/:id/tables', element: gated('coaching', <CoachTables />) },
+      { path: '/coaching/students/:id/tables/:table', element: gated('coaching', <CoachTableView />) },
       { path: '/wellbeing', element: gated('wellbeing', <Wellbeing />) },
       { path: '/mood', element: gated('mood', <Mood />) },
       { path: '/sleep', element: gated('sleep', <Sleep />) },

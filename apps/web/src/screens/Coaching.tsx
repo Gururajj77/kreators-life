@@ -61,7 +61,7 @@ export function Coaching() {
         <p className="mt-xs m-0 text-subhead text-ink-soft">
           {h?.coach
             ? 'Each student picks what you see. Every note and task you add is logged for both of you.'
-            : 'A coach the team chose sees only what you share, never your journal. End it any time.'}
+            : 'A coach sees only what you switch on. End it any time.'}
         </p>
         <CoachingHero hub={h} />
       </header>

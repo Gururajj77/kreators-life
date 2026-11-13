@@ -57,7 +57,7 @@ export const GratitudeCard = forwardRef<HTMLHeadingElement, { day: string; onDay
           <h2 id="gratitude-heading" ref={ref} tabIndex={-1} className="text-title2 outline-none">
             {gratitudeTitle(day, today)}
           </h2>
-          <p className="mt-xs m-0 text-balance text-subhead text-ink-soft">Three short lines on what went right. Only you see them.</p>
+          <p className="mt-xs m-0 text-balance text-subhead text-ink-soft">Three short lines on what went right. Only you see them, unless you share the Gratitude table with a life coach.</p>
         </div>
         {day !== today && (
           <button type="button" onClick={() => onDay(today)} className="toy toy-flat inline-flex min-h-[44px] shrink-0 items-center rounded-pill px-sm text-subhead font-semibold">

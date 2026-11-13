@@ -32,7 +32,7 @@ The rule for every business field: an empty one is shown on the site as "not set
 
 ## Status (2026-11-12)
 
-What is built, in the repo, not yet deployed:
+What is built, in the repo, not yet deployed (2026-11-13: All tables joined as the 43rd app, with its own page `/features/tables`, its head, its line in the lists and the robots line for its app path `/tables`; the fair questions and the coaching and journal heads now say a life coach sees a table only when the person switches it on):
 
 | Part | Built | Where |
 |---|---|---|
@@ -40,7 +40,7 @@ What is built, in the repo, not yet deployed:
 | Part 4: robots.txt, llms.txt, llms-full.txt | Generated into `apps/web/dist` at build time from the same data, with the origin from `SITE_URL` (else https://kreators.app). The two robots groups as written; training crawlers allowed. | `scripts/seo/build-static.mjs`, run by `apps/web/package.json`'s build |
 | Part 4: sitemap | One urlset on `PUBLIC_URL`: the stable pages, each upcoming public event with `lastmod`, and live members' switched-on pages with a live product. One D1 round trip. Not the sitemap index of option A. | `apps/api/src/routes/go.ts`, `apps/api/src/sitemap.ts` |
 | Part 5: JSON-LD | `/`: Organization (business fields only from the Worker variables, left out when empty), WebSite, WebApplication, FAQPage. `/features`: ItemList and BreadcrumbList. A feature page: BreadcrumbList. `/features/books`: the three books. `/pricing`: WebApplication with a names-only Organization. `/events`: BreadcrumbList and ItemList. `/events/:id`: Event (left out for an event in person with no place typed) and BreadcrumbList. Other pages: none. | `build-static.mjs`, `go.ts` |
-| Part 6: head tags | 54 stable pages as HTML at build time (title, description, absolute og tags, canonical, JSON-LD, a `<noscript>` of the page's words). The Worker writes the head of `/`, `/events` and `/events/:id` (a minute in the edge cache; a 503 with Retry-After over the shell when D1 fails; noindex off the production host). The client sets the title, description and a canonical on the production origin (`__SITE_URL__`) as people browse, and puts the shell's words back when a site page leaves. | `build-static.mjs`, `go.ts`, `apps/web/src/lib/usePageMeta.ts`, `apps/web/vite.config.ts` |
+| Part 6: head tags | 55 stable pages as HTML at build time (title, description, absolute og tags, canonical, JSON-LD, a `<noscript>` of the page's words). The Worker writes the head of `/`, `/events` and `/events/:id` (a minute in the edge cache; a 503 with Retry-After over the shell when D1 fails; noindex off the production host). The client sets the title, description and a canonical on the production origin (`__SITE_URL__`) as people browse, and puts the shell's words back when a site page leaves. | `build-static.mjs`, `go.ts`, `apps/web/src/lib/usePageMeta.ts`, `apps/web/vite.config.ts` |
 | Part 8: client and smoke | Manifest description fixed, the service worker's fallback denylist widened, FocusRounds keeps a page's new title, `/u/<handle>` names its own canonical and title. Smoke section "Search and answer engines". | `vite.config.ts`, `FocusRounds.tsx`, `screens/Public.tsx`, `scripts/smoke/smoke.mjs` |
 
 Pending:
@@ -88,7 +88,7 @@ Use these words, unchanged, wherever a short definition is needed.
 
 **About paragraph (about 120 words)**
 
-> kreators.app helps creators, freelancers, founders and students grow their work without losing their life. It sees your work as one of seven relationships: servitude, friends, family, love, yourself, teachers and faith. Each relationship is a pillar with its own guide, and each pillar is a pyramid from a foundation down to today's task. The daily ask is three moves: check in, do one small act, tick one task. Around it sit 42 apps, each one a switch, from School and Agency to Journal, Circles and the Shop. Only a few are on to start. It runs in the browser on a phone or laptop, India first, for people 18 or over. It is free to start and free to stay.
+> kreators.app helps creators, freelancers, founders and students grow their work without losing their life. It sees your work as one of seven relationships: servitude, friends, family, love, yourself, teachers and faith. Each relationship is a pillar with its own guide, and each pillar is a pyramid from a foundation down to today's task. The daily ask is three moves: check in, do one small act, tick one task. Around it sit 43 apps, each one a switch, from School and Agency to Journal, Circles and the Shop. Only a few are on to start. It runs in the browser on a phone or laptop, India first, for people 18 or over. It is free to start and free to stay.
 
 ### Facts table
 
@@ -101,7 +101,7 @@ Use these words, unchanged, wherever a short definition is needed.
 | For whom | Anyone 18 or over building something of their own: creators, freelancers, founders, small agencies and students. The seven relationships are for everyone. |
 | The seven relationships | Servitude, friends, family, love, yourself, teachers, faith |
 | The five areas of life | Physical, financial, mental, emotional, spiritual (always in this order) |
-| Apps | 42 public apps in five groups, each one a switch |
+| Apps | 43 public apps in five groups, each one a switch |
 | Pricing model | Free to start and free to stay. The Shop takes 5% of each sale. Typing to the assistant needs a plan from ₹1,499 for 30 days (not on sale yet). An optional live call with a coach costs ₹10,000 (not on sale yet). Brand campaigns are priced per brief. |
 | Payments | Points work today. Money checkout runs in test mode until payments are switched on. Prices are in Indian rupees, with GST shown before you pay. |
 | Where based | Built in India by BrandingBum. India first: rupees, `en-IN`, India time by default, Indian phone numbers, GST, the DPDP Act 2023. Legal name and address: `{{BUSINESS_NAME}}`, `{{BUSINESS_ADDRESS}}`. |
@@ -174,6 +174,7 @@ Disallow: /manage
 Disallow: /admin
 Disallow: /internal/
 Disallow: /leaderboard
+Disallow: /tables
 Disallow: /help
 Disallow: /school
 Disallow: /work
@@ -269,6 +270,7 @@ Disallow: /manage
 Disallow: /admin
 Disallow: /internal/
 Disallow: /leaderboard
+Disallow: /tables
 Disallow: /help
 Disallow: /school
 Disallow: /work
@@ -381,6 +383,7 @@ No private or token routes are listed. Add `<lastmod>` with a real `YYYY-MM-DD` 
   <url><loc>{{SITE_URL}}/features/today</loc></url>
   <url><loc>{{SITE_URL}}/features/tower</loc></url>
   <url><loc>{{SITE_URL}}/features/leaderboard</loc></url>
+  <url><loc>{{SITE_URL}}/features/tables</loc></url>
   <url><loc>{{SITE_URL}}/features/help</loc></url>
   <url><loc>{{SITE_URL}}/features/assistant</loc></url>
   <url><loc>{{SITE_URL}}/terms</loc></url>
@@ -407,7 +410,7 @@ Key facts:
 - The seven relationships, each a pillar with its own guide: servitude, friends, family, love, yourself, teachers, faith.
 - The five areas of life, in order: physical, financial, mental, emotional, spiritual.
 - The daily ask: check in, do one small act, tick one task.
-- 42 apps in five groups, each one a switch. Only a few are on to start.
+- 43 apps in five groups, each one a switch. Only a few are on to start.
 - Free to start and free to stay. The Shop takes 5% of each sale. Typing to the assistant needs a plan from ₹1,499 for 30 days, not on sale yet.
 - Points work today. Money checkout runs in test mode until payments are switched on.
 - Joining may be by invite: while Invite only is on, a new account needs a code or a place from the waitlist.
@@ -478,6 +481,7 @@ Key facts:
 - [Daily]({{SITE_URL}}/features/today): Three small boxes. One better day.
 - [Pillars]({{SITE_URL}}/features/tower): Seven pillars, one life.
 - [Leaderboard]({{SITE_URL}}/features/leaderboard): Climb on effort, not followers.
+- [All tables]({{SITE_URL}}/features/tables): All your data, in tables.
 - [Help]({{SITE_URL}}/features/help): Answers, and a line to the team.
 - [Assistant]({{SITE_URL}}/features/assistant): Say what you did. It is done.
 
@@ -560,7 +564,7 @@ The Life app scores each one from what you already log. Only you see them.
 
 ## The apps
 
-42 apps in five groups. Each one is a switch. Only a few are on to start. The setup chat shows up to five that fit what you tell it and hides the rest. Showing or hiding an app is one tap, and nothing is deleted.
+43 apps in five groups. Each one is a switch. Only a few are on to start. The setup chat shows up to five that fit what you tell it and hides the rest. Showing or hiding an app is one tap, and nothing is deleted.
 
 ### Contribution
 
@@ -573,7 +577,7 @@ The Life app scores each one from what you already log. Only you see them.
 ### Reflection
 
 - Life: Five areas, one picture. Physical, financial, mental, emotional and spiritual, each scored from what you already log. See your life by day, week, month, quarter, half year or year. Emerging points out what goes together in what you log; it never says one thing caused another.
-- Journal: Write it down. Entries with an emotion and a stress level. Gratitude for today: three short lines, each under a prompt. Prompt me gives a question from sixteen categories. Nobody else sees it: not brands, not staff, not the leaderboard.
+- Journal: Write it down. Entries with an emotion and a stress level. Gratitude for today: three short lines, each under a prompt. Prompt me gives a question from sixteen categories. Brands, staff and the leaderboard never see it, and a life coach sees it only if you share.
 - Reviews: Look back, from a day to a year. See the numbers from every app for the period you pick, next to the one before. Then answer a few questions and keep one line. Each built-in question says the idea it comes from, such as CBT, ACT or the Gita.
 - Mindfulness: Breathe, focus, and see how it went. A breathing timer, and focus sessions with breaks: work for 25 minutes, rest for five, and take a longer break after four. Background sounds are made in your browser.
 - Fitness: Move, eat, and see the week. Log a run, a walk or a workout, and tick your meals once a day. Add up protein against a goal you set. No sizes, no calories, and your weight is never saved. It pays nothing, so the numbers stay honest.
@@ -581,7 +585,7 @@ The Life app scores each one from what you already log. Only you see them.
 - Mood: How are you, really? Pick a face and see the week.
 - Sleep: Hours and quality. Log last night in a few seconds.
 - Stress: Level, and what is behind it. Name the stress and the cause.
-- Coaching: A life coach in your corner. Life coaches the team chose. You pick what they see, never your journal. Every step they take is in a change log you both read.
+- Coaching: A life coach in your corner. Life coaches the team chose. They see only what you switch on for them, and whole tables only one by one. Every step they take is in a change log you both read.
 - Companion: A chat that knows how you are doing. It reflects and asks questions back. It is not a therapist and never pretends to be one.
 - Discover: Find out what you are good at. A quiz that gives your top three strengths across the seven relationships, a read on five personality traits and on your reasoning. It is not an IQ test. Add-ons: emotional intelligence, 16 personality types (MBTI-style, not the official MBTI), love languages, how your mind works (signs, never a diagnosis), Human design and numerology (for reflection, not science).
 
@@ -602,7 +606,7 @@ The Life app scores each one from what you already log. Only you see them.
 - Content: Find the posts that sell. Every post gets a tracked link, and the dashboard shows clicks, sales and revenue per piece.
 - Audience: Know the people who want more. Followers, leads, broadcasts, and an affiliate link that pays twenty percent.
 - Auto-DM: Comment a word, get the link. Sends a tracked link to anyone who comments the word on your post.
-- Finance: See your money clearly. Money in, money out, by category and by month. Yours alone to see.
+- Finance: See your money clearly. Money in, money out, by category and by month. Brands and the leaderboard never see it.
 - Fund: Backing for a project. Apply for a grant or backing and see each stage: submitted, review, diligence, decision.
 - TV: Pitch a series. Submit a pitch and a budget, then follow it from review to diligence to release.
 - Knowledge: Articles and exercises, with sources. Curated reading on the seven relationships, written by the team and always attributed.
@@ -616,6 +620,7 @@ The Life app scores each one from what you already log. Only you see them.
 - Daily: Three small boxes. One better day. Check in, do one small act, tick one task. Every tick pays xp, and the check-in pays points. Tasks have a do date, an optional due date, a priority from P0 to P3, repeats and reminders. Plan my week gives a day to each task that has none.
 - Pillars: Seven pillars, one life. Each relationship is a pyramid you build in a short session.
 - Leaderboard: Climb on effort, not followers. Opt in to rank on xp, streaks and badges. Never follower counts, and never your journal or your wellbeing.
+- All tables: All your data, in tables. Your tasks, moods, money, badges and more, each as a table to sort, filter, search, copy and download as a CSV file. A life coach sees a table only if you switch it on for them.
 - Help: Answers, and a line to the team.
 - Assistant: Say what you did. It is done. Bumling sits at the corner of every screen. Tapping is free. Typing needs a plan. It asks before it removes anything, and you can undo with one tap.
 
@@ -665,7 +670,7 @@ Q: I don't have time for another app.
 A: That is the point of it. The daily ask is three moves: check in, do one small act, tick one task. It takes a few minutes. It counts reps, not hours. The rest is there when you want it, and switched off when you don't.
 
 Q: Who sees my journal and Discover results?
-A: Only you. Your journal, wellbeing numbers and Discover results never reach brands, staff, the leaderboard or Club selection, and a life coach never sees your journal or your quiz. The assistant reads your journal only when you ask, and a short Discover summary only if you switch that on, both through models that keep nothing. Discover is a self-check, not an IQ test or a diagnosis.
+A: Only you, unless you share. Your journal, wellbeing numbers and Discover results never reach brands, staff, the leaderboard or Club selection. A life coach never sees your quiz, and sees your journal only if you switch its table on for them. The assistant reads your journal only when you ask, and a short Discover summary only if you switch that on, both through models that keep nothing. Discover is a self-check, not an IQ test or a diagnosis.
 
 Q: I'm not a creator. Is it for me?
 A: Yes, if you are 18 or over. The seven relationships are for everyone: servitude, friends, family, love, yourself, teachers and faith. The creator apps, like the Shop and Win, stay off until you want them.
@@ -683,13 +688,13 @@ Q: Will I be on my own?
 A: No. Bumling, the app's own guide, and seven characters walk with you. A free first course shows you around, every app ends with a How it works section, Help answers questions, and you can work with a life coach if you want one.
 
 Q: I'm not ready for groups or events.
-A: Start on your own. Circles, Run, Party and Community stay hidden until you or the setup chat bring them in, and your journal and Discover results are yours alone. Join people when you are ready.
+A: Start on your own. Circles, Run, Party and Community stay hidden until you or the setup chat bring them in, and nobody sees your journal or Discover results unless you choose to share. Join people when you are ready.
 
 Q: Is there proof it works?
 A: We will not show you a rating or a study we cannot point to. What we can show is how it works: the rules on this page are the rules the app keeps. Try it for a week and see what your first review says.
 
 Q: Can I leave?
-A: Any time. From the Profile tab you can export everything, erase your progress, or delete your account. Hiding an app is one tap, and nothing is deleted.
+A: Any time. All tables downloads your tasks, trackers, money and more as CSV files, and from the Profile tab you can export everything, erase your progress, or delete your account. Hiding an app is one tap, and nothing is deleted.
 
 Q: Why do you ask for my phone and birthday?
 A: So that everyone here is 18 or over. Nobody under 18 gets an account. Neither your phone number nor your birthday is ever shown to anyone else, and you can change the phone number under the Profile tab.
@@ -820,7 +825,7 @@ The plan offers carry "Not on sale yet". When payments go live, add `"availabili
   "@id": "{{SITE_URL}}/#app",
   "name": "kreators.app",
   "url": "{{SITE_URL}}/",
-  "description": "kreators.app is a daily game for the seven relationships that make a life, with the tools a creator needs built in. Check in, do one small act and tick one task each day. 42 apps, each one a switch.",
+  "description": "kreators.app is a daily game for the seven relationships that make a life, with the tools a creator needs built in. Check in, do one small act and tick one task each day. 43 apps, each one a switch.",
   "applicationCategory": "LifestyleApplication",
   "operatingSystem": "Web",
   "browserRequirements": "Requires JavaScript. Works in a modern browser on a phone or laptop.",
@@ -927,7 +932,7 @@ Answers copied word for word from the home page's "Fair questions". Google shows
     {
       "@type": "Question",
       "name": "Who sees my journal and Discover results?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Only you. Your journal, wellbeing numbers and Discover results never reach brands, staff, the leaderboard or Club selection, and a life coach never sees your journal or your quiz. The assistant reads your journal only when you ask, and a short Discover summary only if you switch that on, both through models that keep nothing. Discover is a self-check, not an IQ test or a diagnosis." }
+      "acceptedAnswer": { "@type": "Answer", "text": "Only you, unless you share. Your journal, wellbeing numbers and Discover results never reach brands, staff, the leaderboard or Club selection. A life coach never sees your quiz, and sees your journal only if you switch its table on for them. The assistant reads your journal only when you ask, and a short Discover summary only if you switch that on, both through models that keep nothing. Discover is a self-check, not an IQ test or a diagnosis." }
     },
     {
       "@type": "Question",
@@ -957,7 +962,7 @@ Answers copied word for word from the home page's "Fair questions". Google shows
     {
       "@type": "Question",
       "name": "I’m not ready for groups or events.",
-      "acceptedAnswer": { "@type": "Answer", "text": "Start on your own. Circles, Run, Party and Community stay hidden until you or the setup chat bring them in, and your journal and Discover results are yours alone. Join people when you are ready." }
+      "acceptedAnswer": { "@type": "Answer", "text": "Start on your own. Circles, Run, Party and Community stay hidden until you or the setup chat bring them in, and nobody sees your journal or Discover results unless you choose to share. Join people when you are ready." }
     },
     {
       "@type": "Question",
@@ -967,7 +972,7 @@ Answers copied word for word from the home page's "Fair questions". Google shows
     {
       "@type": "Question",
       "name": "Can I leave?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Any time. From the Profile tab you can export everything, erase your progress, or delete your account. Hiding an app is one tap, and nothing is deleted." }
+      "acceptedAnswer": { "@type": "Answer", "text": "Any time. All tables downloads your tasks, trackers, money and more as CSV files, and from the Profile tab you can export everything, erase your progress, or delete your account. Hiding an app is one tap, and nothing is deleted." }
     },
     {
       "@type": "Question",
@@ -1015,7 +1020,7 @@ In the site's order: Contribution, Reflection, Connection, Creation, Essentials.
   "@context": "https://schema.org",
   "@type": "ItemList",
   "name": "The apps in kreators.app",
-  "numberOfItems": 42,
+  "numberOfItems": 43,
   "itemListOrder": "https://schema.org/ItemListOrderAscending",
   "itemListElement": [
     { "@type": "ListItem", "position": 1, "name": "School", "url": "{{SITE_URL}}/features/school" },
@@ -1058,8 +1063,9 @@ In the site's order: Contribution, Reflection, Connection, Creation, Essentials.
     { "@type": "ListItem", "position": 38, "name": "Daily", "url": "{{SITE_URL}}/features/today" },
     { "@type": "ListItem", "position": 39, "name": "Pillars", "url": "{{SITE_URL}}/features/tower" },
     { "@type": "ListItem", "position": 40, "name": "Leaderboard", "url": "{{SITE_URL}}/features/leaderboard" },
-    { "@type": "ListItem", "position": 41, "name": "Help", "url": "{{SITE_URL}}/features/help" },
-    { "@type": "ListItem", "position": 42, "name": "Assistant", "url": "{{SITE_URL}}/features/assistant" }
+    { "@type": "ListItem", "position": 41, "name": "All tables", "url": "{{SITE_URL}}/features/tables" },
+    { "@type": "ListItem", "position": 42, "name": "Help", "url": "{{SITE_URL}}/features/help" },
+    { "@type": "ListItem", "position": 43, "name": "Assistant", "url": "{{SITE_URL}}/features/assistant" }
   ]
 }
 ```
@@ -1190,7 +1196,7 @@ Online, ticket in points (so no `offers`):
 | Path | Title | Meta description | H1 |
 |---|---|---|---|
 | `/` | Grow your work without losing your life \| kreators.app | kreators.app is a daily game for the seven relationships that make a life, with a creator's tools built in. One small act a day. Free to start, free to stay. | Grow your work without losing your life |
-| `/features` | Features: 42 apps, each one a switch \| kreators.app | Every app in kreators.app by group: courses, gigs, campaigns, clients, a shop, money, wellbeing and people. Each one is a switch. Keep only the apps you use. | Everything a creator needs, one switch at a time |
+| `/features` | Features: 43 apps, each one a switch \| kreators.app | Every app in kreators.app by group: courses, gigs, campaigns, clients, a shop, money, wellbeing and people. Each one is a switch. Keep only the apps you use. | Everything a creator needs, one switch at a time |
 | `/7rp` | The seven relationships \| kreators.app | Servitude, friends, family, love, yourself, teachers and faith: the seven relationships of kreators.app. Each is a pillar with a guide and its own apps. | Seven relationships, one life. |
 | `/events` | Events: meetups and workshops \| kreators.app | Meetups, workshops and days you can join on kreators.app. Pick an event to see when and where it is, then save your seat. Tickets are free or paid in points. | Events |
 | `/explore` | Explore rewards, gigs and events \| kreators.app | Search content rewards, opportunities, events, programs, tools, campaigns and circles on kreators.app. Sign in to join, apply or submit, then come back. | Explore |
@@ -1214,7 +1220,7 @@ Online, ticket in points (so no `offers`):
 | win | Win: get paid for real views \| kreators.app | Win on kreators.app: content rewards where a brand funds a pool and pays per thousand verified views. No follower count needed. A reviewer checks first. |
 | agency | Agency: run clients like a studio \| kreators.app | Agency on kreators.app is for a content agency or a freelance creator. Each client gets a page of work to do, with invoices that work out GST and TDS, and agreements. |
 | life | Life: five areas, one picture \| kreators.app | Life on kreators.app scores five areas of life, physical, financial, mental, emotional and spiritual, from what you already log. Only you see the scores. |
-| journal | Journal: write it down \| kreators.app | Journal on kreators.app: entries with an emotion and a stress level, plus gratitude prompts. Nobody else sees it: not brands, not staff, not the leaderboard. |
+| journal | Journal: write it down \| kreators.app | Journal on kreators.app: entries with an emotion and a stress level, plus gratitude prompts. Brands, staff and the leaderboard never see it. |
 | reviews | Reviews: look back, a day to a year \| kreators.app | Reviews on kreators.app: pick a day, week, month, quarter, half year or year and see every app's numbers next to the period before. Then answer a few questions. |
 | mindful | Mindfulness: breathe and focus \| kreators.app | Mindfulness on kreators.app: a breathing timer and focus sessions with breaks, background sounds made in your browser, and a rating of how focused you were. |
 | fitness | Fitness: move, eat, see the week \| kreators.app | Fitness on kreators.app: log a run, a walk or a workout, and tick your meals once a day. No calories, no sizes, and your weight is never saved. |
@@ -1222,7 +1228,7 @@ Online, ticket in points (so no `offers`):
 | mood | Mood: how are you, really? \| kreators.app | Mood on kreators.app: pick a face for how you really are and see the week. Two taps a day show a pattern over time, and only you see it unless you share. |
 | sleep | Sleep: hours and quality \| kreators.app | Sleep on kreators.app: log last night's hours and quality in a few seconds, then see how your sleep lines up with everything else you log in the app. |
 | stress | Stress: the level and the cause \| kreators.app | Stress on kreators.app: set the level and name the cause. Patterns show up faster than you expect, and only you see them unless you share with a coach. |
-| coaching | Coaching: a life coach for you \| kreators.app | Coaching on kreators.app: work with a life coach the team chose. You pick what they see, never your journal, and every step is in a log you both read. |
+| coaching | Coaching: a life coach for you \| kreators.app | Coaching on kreators.app: work with a life coach the team chose. They see only what you switch on for them, and every step is in a log you both read. |
 | companion | Companion: a chat that knows you \| kreators.app | Companion on kreators.app: a chat that knows how your week is going, reflects and asks questions back. It is not a therapist and never pretends to be one. |
 | discover | Discover: find your strengths \| kreators.app | Discover on kreators.app: a quiz that finds your top three strengths across the seven relationships, five traits and your reasoning. It is not an IQ test. |
 | community | Community: ask and share \| kreators.app | Community on kreators.app: a kind room to ask and share, with a room for each topic and guides who keep it calm. Post under your name or a made-up one. |
@@ -1237,7 +1243,7 @@ Online, ticket in points (so no `offers`):
 | content | Content: find the posts that sell \| kreators.app | Content on kreators.app gives every post a tracked link and shows clicks, sales and revenue for each piece, so you can make more of what sells. |
 | audience | Audience: know who wants more \| kreators.app | Audience on kreators.app: see who follows you, collect leads from your page, send a broadcast and share an affiliate link that pays twenty percent. |
 | automations | Auto-DM: comment a word, get the link \| kreators.app | Auto-DM on kreators.app sends a tracked link to anyone who comments your keyword, and funnels show where people drop off between the post and the sale. |
-| finance | Finance: see your money clearly \| kreators.app | Finance on kreators.app: money in and out by category and by month, with dues, repeats, budgets and goals, and what the platform paid you. Yours alone. |
+| finance | Finance: see your money clearly \| kreators.app | Finance on kreators.app: money in and out by category and by month, with dues, repeats, budgets and goals, and what the platform paid you. Never shown to brands. |
 | fund | Fund: backing for a project \| kreators.app | Fund on kreators.app: apply for a grant or backing for a project, then follow each stage: submitted, review, diligence, and a decision with a reason. |
 | tv | TV: pitch a series \| kreators.app | TV on kreators.app: pitch a series with a budget, then follow it from review to diligence to release, with every decision logged where you can see it. |
 | knowledge | Knowledge: articles with sources \| kreators.app | Knowledge on kreators.app: articles and things to try on the seven relationships. The team writes them and always names where each idea came from. |
@@ -1248,6 +1254,7 @@ Online, ticket in points (so no `offers`):
 | today | Daily: three small boxes \| kreators.app | Daily on kreators.app: check in, do one small act, tick one task. Tasks have do dates, priorities and repeats, and Plan my week suggests a day for each task that has none. |
 | tower | Pillars: seven pillars, one life \| kreators.app | Pillars on kreators.app: each of the seven relationships is a pillar, and each pillar is a pyramid from a foundation down to today's task. Tick it to grow. |
 | leaderboard | Leaderboard: climb on effort \| kreators.app | Leaderboard on kreators.app: opt in to climb on xp, streaks and badges. Never on follower counts, and never on your journal or your wellbeing. |
+| tables | All tables: your data as tables \| kreators.app | All tables on kreators.app shows your own lists, from tasks and moods to money and badges, as tables you can sort, filter, search, copy and download as CSV files. |
 | help | Help: answers and the team \| kreators.app | Help on kreators.app: common questions answered, and a support ticket when you need a person. The reply comes to your own inbox inside the app. |
 | assistant | Assistant: say it, it is done \| kreators.app | Bumling, the kreators.app assistant, logs a mood, adds a task or ticks a box when you tap. Typing to it needs a plan. Undo anything with one tap. |
 
@@ -1256,7 +1263,7 @@ Online, ticket in points (so no `offers`):
 Put one of these as the first paragraph of the page's `<noscript>` summary (part 8). Each answers the page's main question in 40 to 60 words.
 
 - **`/`** kreators.app is a daily game for the seven relationships that make a life, with a creator's tools built in. Each day you check in, do one small act and tick one task. Courses, paid work, brand campaigns, client work, a shop and money tools are switches you turn on. It is free to start and free to stay.
-- **`/features`** kreators.app has 42 apps in five groups: Contribution, Reflection, Connection, Creation and Essentials. Each app is a switch. Only a few are on to start, and a short setup chat shows the ones that fit you. Hiding an app takes one tap, and nothing is deleted. Every app below has its own page.
+- **`/features`** kreators.app has 43 apps in five groups: Contribution, Reflection, Connection, Creation and Essentials. Each app is a switch. Only a few are on to start, and a short setup chat shows the ones that fit you. Hiding an app takes one tap, and nothing is deleted. Every app below has its own page.
 - **`/7rp`** kreators.app is built on seven relationships: servitude, friends, family, love, yourself, teachers and faith. Each one is a pillar with its own guide, from Ember for servitude to Lumen for faith. Pick a pillar to see the apps that serve it, or switch to the five areas of life: physical, financial, mental, emotional and spiritual.
 - **`/events`** Events on kreators.app are meetups, workshops and days you can join, online or in person. Each event page shows the start in your own time zone, the place and the seats left. A ticket is free or paid in points. You need to be 18 or older, and you can make your account right on the event's own page.
 - **`/pricing`** kreators.app is free to start and free to stay: the daily game, your seven pillars and every app you switch on, Agency included. Three things cost money. The Shop takes 5% of each sale. Typing to the assistant needs a plan from ₹1,499 for 30 days. That plan and an optional ₹10,000 live call are not on sale yet.
@@ -1320,7 +1327,7 @@ They come from The Relationship Method, a book by Shubham Aggarwal, the founder 
 ### The apps
 
 **How many apps does kreators.app have?**
-It has 42 apps in five groups: Contribution, Reflection, Connection, Creation and Essentials. Each one is a switch. Only a few are on to start, and the setup chat shows up to five that fit what you told it and hides the rest. Hiding an app is one tap, and nothing is deleted.
+It has 43 apps in five groups: Contribution, Reflection, Connection, Creation and Essentials. Each one is a switch. Only a few are on to start, and the setup chat shows up to five that fit what you told it and hides the rest. Hiding an app is one tap, and nothing is deleted.
 
 **What is Agency in kreators.app?**
 Agency is for a content agency or a freelance creator. Each client gets a dashboard of deliverables moving from idea to published, your logged time, invoices with GST and TDS worked out, and agreements from templates. A client's page never shows your fees or private notes, and kreators.app takes nothing from what you invoice.
@@ -1349,7 +1356,7 @@ Joining may be by invite. While the team keeps Invite only on, a new account nee
 You need to be 18 or older. Sign-up asks for your date of birth and a phone number, and an account for anyone younger is refused. If the team learns an account belongs to someone under 18, they close it. Neither your birthday nor your phone number is ever shown to anyone else.
 
 **Can I export or delete my data?**
-Yes, any time. From the Profile tab you can export everything, erase your progress, or delete your account. Hiding an app is one tap and deletes nothing. In India, the Digital Personal Data Protection Act 2023 also lets you ask for a summary of your data, fix it, or erase it.
+Yes, any time. All tables downloads your tasks, trackers, money and more as CSV files, and from the Profile tab you can export everything, erase your progress, or delete your account. Hiding an app is one tap and deletes nothing. In India, the Digital Personal Data Protection Act 2023 also lets you ask for a summary of your data, fix it, or erase it.
 
 ### Money, India and payments
 
@@ -1374,7 +1381,7 @@ Money refunds go back the way you paid, by UPI, card or bank, through Razorpay, 
 ### Privacy and safety
 
 **Who can see my journal on kreators.app?**
-Only you. Your journal, wellbeing numbers and Discover results never reach brands, staff, the leaderboard or Club selection, and a life coach never sees your journal. The assistant reads your journal only when you ask, through models that keep nothing. A coach sees only the numbers you choose to share.
+Only you, unless you share. Your journal, wellbeing numbers and Discover results never reach brands, staff, the leaderboard or Club selection. A life coach sees only the numbers and the tables you switch on for them, so your journal only if you switch its table on. The assistant reads your journal only when you ask, through models that keep nothing.
 
 **Does kreators.app use my data to train AI?**
 No. kreators.app never uses what you write to train AI models. It does not sell your personal information or share it for advertising on other sites, and it has no third-party advertising trackers. Three privacy choices, about tracked links, videos and marketing email, all start as no until you say yes.
@@ -1796,7 +1803,7 @@ Small mismatches to clean up later, none of which changes what is drawn:
 
 Update this kit and the files it made whenever one of these changes:
 
-- **An app is added, renamed or removed.** Update the sitemap, `llms.txt`, `llms-full.txt`, the ItemList (and its `numberOfItems`), the per-page table and every "42 apps". The count is `SITE_FEATURES` in `content.ts`; quote what it computes. Rewards, Search, Inbox, Manage, Admin and Dev Tools are not counted.
+- **An app is added, renamed or removed.** Update the sitemap, `llms.txt`, `llms-full.txt`, the ItemList (and its `numberOfItems`), the per-page table and every "N apps" (43 now). The count is `SITE_FEATURES` in `content.ts`; quote what it computes. Rewards, Search, Inbox, Manage, Admin and Dev Tools are not counted.
 - **A price changes, or payments go live.** Update the WebApplication offers (add `availability` once plans are on sale), the pricing lines in `llms-full.txt`, the `/pricing` description and every "not on sale yet" in part 7. Prices come from `PLANS`, `TOPUP_PACKS` and `LIVE_CALL_CENTS`; never type them by hand where code can generate them.
 - **The FAQ changes.** Regenerate FAQPage and the "Fair questions" in `llms-full.txt` from `SITE_FAQ`.
 - **Invite only is switched off or on.** Add or remove the invite question in FAQPage and the invite paragraph in `llms-full.txt`. Keep the question-bank answer conditional.

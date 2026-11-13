@@ -1,5 +1,5 @@
-import { DEFAULT_PAGE_SIZE, PAGE_SIZES, pageQuery, type Page, type PageSize } from '@kreators/shared';
-import { useEffect, useRef } from 'react';
+import { DEFAULT_PAGE_SIZE, formatCount, PAGE_SIZES, pageQuery, type Page, type PageSize } from '@kreators/shared';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { useParamState, writeParams } from '../lib/useParamState';
 import { Button } from './Button';
@@ -17,13 +17,37 @@ export const TEN_A_PAGE: PageSizes = { sizes: [10, 25, 50], fallback: 10 };
 export const DOOR_SIZES: PageSizes = { sizes: PAGE_SIZES, fallback: 100 };
 const sizeIn = (v: unknown, only: PageSizes = LIST_SIZES): PageSize => (only.sizes.includes(Number(v) as PageSize) ? (Number(v) as PageSize) : only.fallback);
 
+/** Every size a list can take (10, 25, 50 or 100, 25 by default): All tables (2026-11-13), whose bar always shows. */
+export const ALL_SIZES: PageSizes = { sizes: PAGE_SIZES, fallback: DEFAULT_PAGE_SIZE };
+
 /**
  * The bar under a paged list: how many rows a page holds (10, 25 or 50; the guest list also 100) and the way to the
- * page before or after. It hides itself on a short list that fits one page at the default size.
+ * page before or after. It hides itself on a short list that fits one page at the default size, unless `always` (All tables keeps it
+ * in sight, 2026-11-13). With `total` (the rows that match, from the server) it reads "Page 2 of 7". `before` and `after` sit either side of
+ * Previous and Next (All tables' first and last page, drawn by its own lazy screen so this bar, in the first download, carries none of it).
  */
-export function PagerBar({ page, onPage, label = 'rows', only }: { page: Page | undefined; onPage: (page: number, size: PageSize) => void; label?: string; only?: PageSizes }) {
+export function PagerBar({
+  page,
+  onPage,
+  label = 'rows',
+  only,
+  always = false,
+  total,
+  before,
+  after,
+}: {
+  page: Page | undefined;
+  onPage: (page: number, size: PageSize) => void;
+  label?: string;
+  only?: PageSizes;
+  always?: boolean;
+  total?: number;
+  before?: ReactNode;
+  after?: ReactNode;
+}) {
   if (!page) return null;
-  if (page.page === 1 && !page.more && page.size === (only?.fallback ?? DEFAULT_PAGE_SIZE)) return null;
+  if (!always && page.page === 1 && !page.more && page.size === (only?.fallback ?? DEFAULT_PAGE_SIZE)) return null;
+  const pages = total === undefined ? undefined : Math.max(1, Math.ceil(total / page.size));
   return (
     <div className="mt-sm flex flex-wrap items-center justify-between gap-sm" role="navigation" aria-label={`Pages of ${label}`}>
       <label className="flex items-center gap-xs">
@@ -36,14 +60,20 @@ export function PagerBar({ page, onPage, label = 'rows', only }: { page: Page | 
           ))}
         </select>
       </label>
-      <div className="flex items-center gap-xs">
+      {/* With `always` (All tables) the way between pages keeps to the right when a phone's line wraps it under the rows. */}
+      <div className={`flex items-center gap-xs ${always ? 'ml-auto' : ''}`}>
+        {before}
         <Button variant="outline" size="sm" disabled={page.page <= 1} onClick={() => onPage(page.page - 1, page.size)}>
           Previous
         </Button>
-        <span className="text-subhead text-ink-soft">Page {page.page}</span>
+        <span className="whitespace-nowrap text-subhead text-ink-soft">
+          Page {formatCount(page.page)}
+          {pages !== undefined && ` of ${formatCount(Math.max(pages, page.page))}`}
+        </span>
         <Button variant="outline" size="sm" disabled={!page.more} onClick={() => onPage(page.page + 1, page.size)}>
           Next
         </Button>
+        {after}
       </div>
     </div>
   );

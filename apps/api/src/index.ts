@@ -66,6 +66,7 @@ import { feelings } from './routes/feelings';
 import { credits } from './routes/credits';
 import { discounts } from './routes/discounts';
 import { coach, coachJoinPublic, myCoach } from './routes/coach';
+import { tablesRoutes } from './routes/tables';
 import { media, mediaPublic } from './routes/media';
 import { reminders } from './routes/reminders';
 import { agency, agencyPublic } from './routes/agency';
@@ -183,6 +184,12 @@ app.route('/public', invitesPublic);
 app.route('/public', publicPage);
 // Webhooks verify their own signatures.
 app.route('/webhooks', webhooks);
+
+// All tables: a member's tables open to a super admin's own session only. The shared admin key never opens them, and says so plainly.
+app.use('/tables/admin/*', async (c, next) => {
+  if (c.req.header('X-Admin-Key') && !(c.req.header('Authorization') ?? '').startsWith('Bearer ')) return c.json({ error: 'The admin key cannot open a member’s tables. Sign in as an admin.' }, 403);
+  await next();
+});
 
 // Everything below needs a device session.
 app.use('*', async (c, next) => {
@@ -307,6 +314,9 @@ app.route('/assistant', assistantRoutes((req, env, ctx) => app.fetch(req, env, c
 app.route('/credits', credits);
 app.route('/discounts', discounts);
 app.route('/coach', coach);
+// All tables (2026-11-13): every list of a person's data as a table, a coach's view of what a student shares, and a super admin's read.
+// Edits and archive actions are sent to the app's own routes as the person, so the router gets the app to call into, like the assistant.
+app.route('/tables', tablesRoutes((req, env, ctx) => app.fetch(req, env, ctx)));
 
 app.notFound((c) => c.json({ error: 'not found' }, 404));
 app.onError((err, c) => {

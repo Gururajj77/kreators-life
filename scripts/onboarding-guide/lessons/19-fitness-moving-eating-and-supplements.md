@@ -19,7 +19,7 @@ Fitness starts hidden on a new account, unless the setup chat showed it for you.
 3. Set the minutes on the ruler.
 4. For a run, walk, ride or swim, you can add **Distance in km**.
 5. Tap how hard it felt, from Easy to All out, if you like.
-6. Add **A note only you see**, if you like, and tap **Save movement**.
+6. Add **A note**, if you like, and tap **Save movement**.
 
 **Your movement** lists what you logged, newest first. A run from a club reads **Club run**. It can be removed here, but not changed. Kreators Run's own **Log a run or walk** writes the same minutes.
 
@@ -49,7 +49,7 @@ Protein is not part of the score. You add it up by what you ate, so nothing need
 - **The number:** with a goal it reads "42 g of 60 g today" with a plain bar. There is no fail in it, and going over reads the same.
 - **The goal:** open **Daily goal** and type what you weigh. ICMR-NIN gives adults about 0.83 g a day for each kg, and 1 g when most meals are rice or roti. Tap **Use** on one, change it if you like, then tap **Save goal**.
 - **What is kept:** only the goal. What you weigh is never sent or saved, and it goes when you close the fold.
-- **Who sees it:** only you. Not a coach, not even with Reflection shared, and not Emerging or Reviews.
+- **Who sees it:** only you. Not Emerging or Reviews, and not a coach, even with Reflection shared, unless you switch the Eating table on for them.
 
 Check with a doctor if you have a kidney condition or are pregnant.
 
@@ -78,7 +78,7 @@ Under **Before you add one**:
 
 - **Active minutes and eating** feed Life, the numbers on Reviews, Emerging and your daily brief.
 - **Moving** can show on Emerging as a good habit. It is only ever a good one.
-- **A life coach** sees your minutes, your days moved and your eating number only under your Reflection switch, never a note and never your supplements.
+- **A life coach** sees your minutes, your days moved and your eating number only under your Reflection switch, never a note. Your supplements, your notes and the whole of a table reach a coach only if you switch that table on for them.
 - **A count of your supplements** shows in your own review, and nowhere else.
 
 ## It pays nothing

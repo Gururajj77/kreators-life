@@ -5,6 +5,7 @@ import type { AppEnv, UserRow } from '../env';
 import { LIMITS } from '../limits';
 import { blockedByName, blockedEither, DATE_RE, getNode, liveUser, nameOf, newId, notify, nowIso, pageOf, paged, personBy, randomCode, str, toNode } from '../db';
 import { activeLink, askToCoach, coachNode, endLink, isCoach, LINK, linkById, logCoach, logPage, notePage, rosterRow, shareChange, studentView, toLink, toPerson, type LinkRow } from '../coaching';
+import { sharedTables, tablesChange } from '../tablesShare';
 import { coachPatterns, coachReport } from '../coachReport';
 import { emailProblem, maskEmail, publicUrl } from '../agencyPaper';
 import { limited, sendEmail, sha } from '../ops';
@@ -536,6 +537,8 @@ myCoach.post('/join/:token', async (c) => {
   const share: CoachShare = { ...NEW_LINK_SHARE };
   for (const k of COACH_SHARE_PARTS) if (typeof asked[k] === 'boolean') share[k] = asked[k] as boolean;
   const waiting = await db.prepare(`${LINK} WHERE l.coach_id = ? AND l.student_id = ? AND l.status = 'pending'`).bind(coachRow.id, user.id).first<LinkRow>();
+  // Tables the student already switched on while the ask waited stay on: each is their own yes (All tables, 2026-11-13).
+  if (waiting) share.tables = sharedTables(parseCoachShare(waiting.share_json).tables);
   let linkId: string;
   if (waiting) {
     const full = await db.prepare("SELECT COUNT(*) AS n FROM coach_links WHERE student_id = ? AND status = 'active'").bind(user.id).first<{ n: number }>();
@@ -616,20 +619,30 @@ myCoach.delete('/links/:id', async (c) => {
 myCoach.patch('/links/:id/share', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const link = await linkById(db, c.req.param('id'));
-  if (!link || link.student_id !== user.id) return c.json({ error: 'not found' }, 404);
-  if (link.status !== 'pending' && link.status !== 'active') return c.json({ error: 'This coaching has ended.' }, 400);
+  const id = c.req.param('id');
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
-  const before = parseCoachShare(link.share_json);
-  const after = { ...before };
-  for (const k of COACH_SHARE_PARTS) if (typeof body[k] === 'boolean') after[k] = body[k] as boolean;
-  const said = shareChange(before, after);
-  if (said) {
-    await db.prepare('UPDATE coach_links SET share_json = ? WHERE id = ?').bind(JSON.stringify(after), link.id).run();
+  // All tables (2026-11-13): the whole tables this coach may open, read only, each the student's own yes. Known keys only; the list replaces the old one.
+  if (body.tables !== undefined && (!Array.isArray(body.tables) || body.tables.length > 100)) return c.json({ error: 'Send the tables as a list of their names.' }, 400);
+  // A part switch and a table switch can be saved at the same moment (MyCoach's six beside the tables', or two tabs): each write is guarded on
+  // the share it read, so the later one never puts back what the earlier one changed; one that lost the race reads again and applies only its
+  // own change, once. Two misses answer 409 and the screen reads the link again.
+  for (let tries = 0; tries < 2; tries++) {
+    const link = await linkById(db, id);
+    if (!link || link.student_id !== user.id) return c.json({ error: 'not found' }, 404);
+    if (link.status !== 'pending' && link.status !== 'active') return c.json({ error: 'This coaching has ended.' }, 400);
+    const before = parseCoachShare(link.share_json);
+    const after = { ...before, tables: sharedTables(before.tables) };
+    for (const k of COACH_SHARE_PARTS) if (typeof body[k] === 'boolean') after[k] = body[k] as boolean;
+    if (body.tables !== undefined) after.tables = sharedTables(body.tables);
+    const said = [shareChange(before, after), tablesChange(sharedTables(before.tables), after.tables)].filter(Boolean).join('; ');
+    if (!said) return c.json({ link: toLink(link) });
+    const res = await db.prepare('UPDATE coach_links SET share_json = ? WHERE id = ? AND share_json = ?').bind(JSON.stringify(after), link.id, link.share_json).run();
+    if ((res.meta.changes ?? 0) !== 1) continue;
     await logCoach(db, { linkId: link.id, coachId: link.coach_id, studentId: link.student_id, actorId: user.id, action: 'share.change', label: `${nameOf(user)} ${said}`, before, after });
+    const fresh = await linkById(db, link.id);
+    return c.json({ link: fresh ? toLink(fresh) : null });
   }
-  const fresh = await linkById(db, link.id);
-  return c.json({ link: fresh ? toLink(fresh) : null });
+  return c.json({ error: 'changed' }, 409);
 });
 
 /** The join card with no session: who the coach is, and nothing else. A renewed or closed link answers 410. */

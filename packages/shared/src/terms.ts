@@ -136,7 +136,7 @@ export const TERMS: Record<string, string> = {
   floor: 'Where you drop to under stress, in one relationship. A floor under Courage marks that pillar as a good place to start.',
   routine: 'Six blocks a day, built from your real day and moved thirty minutes a week. The morning block counts only when every step is ticked.',
   contract: 'Your signed deal: days a week, a check-in time, and what a short week costs.',
-  'life coach': 'Someone the team made a life coach. Once you both say yes, they see the parts of your progress you share, leave you notes and add tasks. Never your journal. Their badge says Life coach.',
+  'life coach': 'Someone the team made a life coach. Once you both say yes, they see only the parts and tables you switch on, leave you notes and add tasks. Their badge says Life coach.',
   student: 'Someone a life coach works with, once both said yes. In the setup chat, Student means someone at school or college.',
   'invite link': 'A life coach’s own link. Open it, pick what they see and say yes. Nothing is shared before that.',
   patterns: 'What the app notices in what you log, by plain rules. It says what goes together, never why. A coach sees them only if you switch Patterns on.',
@@ -149,6 +149,7 @@ export const TERMS: Record<string, string> = {
   'friend code': 'Eight letters and numbers, yours alone. Someone types it in Bond or scans your QR code, and you get a friend request.',
   'invite code': 'Lets one new account join while joining is by invite. Shared as a link or a code, it works once, and who joins is credited to its maker.',
   waitlist: 'Leave your name and email when you have no invite code. When the team says yes, a code comes by email.',
+  table: 'One kind of your own data, like your tasks or your moods, in rows you can sort, filter, copy and download. All tables lists them.',
 };
 
 /** True for the username an account is given at sign-up, before the person picks their own. */
@@ -158,7 +159,7 @@ export const isAutoHandle = (handle: string | null | undefined): boolean => !han
 export const TERM_GROUPS: { name: string; terms: string[] }[] = [
   { name: 'Pillars and pyramids', terms: ['pillar', 'pyramid', 'foundation', 'guiding principle', 'value goal', 'goal outcome', 'project', 'task', 'ripple', 'map', 'life map', 'strategy session', 'live call', 'routine', 'contract', 'core', 'floor'] },
   { name: 'Daily and progress', terms: ['small act', 'check-in', 'daily three', 'do date', 'due date', 'priority', 'day type', 'time block', 'day template', 'weekly pattern', 'by time block', 'by area', 'habit', 'good habit', 'bad habit', 'emerging', 'subtask', 'remember', 'past due', 'not scheduled', 'hidden task', 'place my day', 'content day', 'bottlenecks', 'unfinished', 'unresolved', 'undecided', 'three endings', 'daily brief', 'not-to-do', 'kept day', 'streak', 'xp', 'points', 'level', 'who you are becoming', 'life score', 'five areas of life', 'period', 'review', 'season', 'active minutes', 'eating check-in', 'eating moment', 'serving', 'protein goal', 'supplement', 'nootropic', 'CBT', 'ACT', 'trauma-informed care', 'family systems', 'improv', 'positive psychology', 'self-compassion', 'karma yoga', 'the Stoics'] },
-  { name: 'You and your page', terms: ['strength', 'personality type', 'love language', 'signs', 'human design', 'gate', 'channel', 'sidereal', 'numerology', 'master number', 'username', 'identity tag', 'setup chat', 'public page', 'badge', 'honor', 'trust', 'unlock'] },
+  { name: 'You and your page', terms: ['table', 'strength', 'personality type', 'love language', 'signs', 'human design', 'gate', 'channel', 'sidereal', 'numerology', 'master number', 'username', 'identity tag', 'setup chat', 'public page', 'badge', 'honor', 'trust', 'unlock'] },
   { name: 'Friends and community', terms: ['friend code', 'chat channel', 'alias', 'circle', 'reaction', 'mention', 'guide', 'life coach', 'student', 'invite link', 'invite code', 'waitlist', 'patterns', 'change log', 'run club', 'start code', 'attendee code', 'deck', 'focus mode', 'focus session'] },
   { name: 'Learn and earn', terms: ['cohort', 'campaign', 'bounty', 'Club', 'collab', 'giveaway', 'retainer', 'deliverable', 'client link', 'utilisation', 'paperwork', 'team member', 'first pass', 'plan strength', 'pace'] },
   { name: 'Shop and store', terms: ['featured', 'partner link', 'pre-owned', 'kit', 'offer', 'discount code'] },

@@ -2185,6 +2185,11 @@ section('Strategy session');
   const full = await api('POST', '/session/day', { date: today, dayType: 'general', steps }, B.token);
   check('every step ticked is a done morning, and the week counts it', full.json.today?.done === true && full.json.week?.done === 1, full.json?.week);
   check('a routine day with every step ticked counts in the review numbers', (await api('GET', `/reviews/summary?kind=day&date=${today}`, undefined, B.token)).json.now?.routineDays === 1);
+  const withBlocks = await api('POST', '/session/day', { date: today, dayType: 'general', steps, blocks: ['work', 'work', 'morning', 'nonsense'] }, B.token);
+  check('the other blocks tick too: once each, never the morning or a key it does not have', JSON.stringify(withBlocks.json.today?.blocks) === '["work"]' && withBlocks.json.today?.done === true, withBlocks.json?.today);
+  const stepsOnly = await api('POST', '/session/day', { date: today, dayType: 'general', steps: steps.slice(0, 1) }, B.token);
+  check('a save with no blocks keeps the block ticks, and a block never makes the day done', JSON.stringify(stepsOnly.json.today?.blocks) === '["work"]' && stepsOnly.json.today?.done === false, stepsOnly.json?.today);
+  await api('POST', '/session/day', { date: today, dayType: 'general', steps, blocks: [] }, B.token);
   const junk = await api('POST', '/session/day', { date: today, dayType: 'general', steps: ['Skip it all'] }, B.token);
   check('a step that is not in the routine is ignored', junk.json.today?.steps?.length === 0, junk.json?.today);
   const edited = await api('PATCH', '/session/routine', { date: today, general: [{ key: 'morning', start: '08:45', end: '09:30', steps: ['Water', 'Stretch'], minutes: [2, 10] }, { key: 'work', start: '09:30', end: '17:00', note: 'Deep work first' }] }, B.token);
@@ -9669,6 +9674,225 @@ section('Search and answer engines');
   check('the events list carries its canonical and parsing data', list.status === 200 && list.body.includes(`<link rel="canonical" href="${SITE}/events"`) && parses(ldBlocks(list.body)), list.status);
   check('the 8788 server is not marked noindex by host (PUBLIC_URL unset)', home.robots === null, home.robots);
   await api('PATCH', '/me', { publicSettings: { pagePublic: true } }, SE.token);
+}
+
+import { CSV_MAX_ROWS as TABLES_CSV_MAX, DATA_TABLES as TABLES_ALL } from '../../packages/shared/src/dataTables.ts';
+section('All tables');
+{
+  // The person's own tables, a coach's view of what a student switched on, and a super admin's read (2026-11-13, routes/tables.ts).
+  const O = await signup(`tables-${stamp}@smoke.test`, `Harbor-${stamp}-pass`, 'Tables owner');
+  const K = await signup(`tablescoach-${stamp}@smoke.test`, `Meadow-${stamp}-pass`, 'Tables coach');
+  const X = await signup(`tablesother-${stamp}@smoke.test`, `Canyon-${stamp}-pass`, 'Tables other');
+  const tb = (path, token, method = 'GET', body) => api(method, `/tables${path}`, body, token);
+
+  const list = await tb('', O.token);
+  const listed = (list.json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
+  check('tables: the owner’s list holds every table, in groups', list.status === 200 && listed.length === TABLES_ALL.length && list.json.view === 'owner' && list.json.subject?.id === O.user.id, [list.status, listed.length]);
+  for (const key of ['nope', 'constructor', '__proto__', 'coach']) {
+    const r = await tb(`/${key}`, O.token);
+    check(`tables: an unknown table "${key}" answers 404`, r.status === 404, r.status);
+  }
+
+  // Every table opens for its owner on the real database, and none carries a secret.
+  const SECRET = /password_hash|password_salt|"token"|signed_name|snapshot_json|portal_pass|friend_code|referral_code/i;
+  let opened = 0;
+  for (const t of TABLES_ALL) {
+    const r = await tb(`/${t.key}?count=1`, O.token);
+    if (r.status === 200 && Array.isArray(r.json.rows) && typeof r.json.total === 'number' && !SECRET.test(JSON.stringify(r.json))) opened += 1;
+    else check(`tables: ${t.key} opens for its owner with no secret in it`, false, [r.status, JSON.stringify(r.json).slice(0, 200)]);
+  }
+  check('tables: every table opens for its owner, with a count', opened === TABLES_ALL.length, opened);
+
+  // Tasks to read, sort, filter, search, page, change and archive.
+  const built = await api('POST', '/onboarding/build', { relationships: ['self'], date: today, picks: { self: { project: 'Tables project' } } }, O.token);
+  const project = (built.json.nodes ?? []).find((n) => n.kind === 'project');
+  const made = [];
+  for (let i = 1; i <= 11; i += 1) {
+    const r = await api('POST', '/nodes', { kind: 'task', parentId: project?.id, relationship: 'self', title: `Tbl ${stamp} ${String(i).padStart(2, '0')}`, doDate: today, ...(i === 1 ? { priority: 'P0' } : {}) }, O.token);
+    made.push(r.json.node);
+  }
+  const formula = (await api('POST', '/nodes', { kind: 'task', parentId: project?.id, relationship: 'self', title: `=SUM(1) Tbl ${stamp}` }, O.token)).json.node;
+  check('tables: the tasks were made', made.every((n) => n?.id) && Boolean(formula?.id), made.filter((n) => !n?.id).length);
+  const q = encodeURIComponent(`Tbl ${stamp}`);
+  const first = await tb(`/tasks?q=${q}&size=10&count=1`, O.token);
+  check('tables: a page of tasks with the count', first.status === 200 && first.json.total === 12 && first.json.rows?.length === 10 && first.json.page?.more === true, [first.status, first.json.total, first.json.rows?.length, first.json.page]);
+  check('tables: a hidden cell is never a column, and the person’s own choices come with the page', !first.json.columns?.includes('parentId') && first.json.columns?.includes('title') && Array.isArray(first.json.options?.project) && Array.isArray(first.json.options?.timeBlock), first.json.columns);
+  check('tables: an open task says what may change', first.json.rows?.[0]?.edit?.includes('title') === true, first.json.rows?.[0]?.edit);
+  check('tables: a page of a table is one or two round trips past the session and the gate', Number(first.headers.get('x-d1-round-trips') ?? 0) <= 6, first.headers.get('x-d1-round-trips'));
+  const second = await tb(`/tasks?q=${q}&size=10&page=2`, O.token);
+  check('tables: the next page holds the rest, and no count unless asked', second.status === 200 && second.json.rows?.length === 2 && second.json.page?.more === false && second.json.total === undefined, [second.json.rows?.length, second.json.total]);
+  const past = await tb(`/tasks?q=${q}&size=10&page=5`, O.token);
+  check('tables: a page past the end says it is empty', past.status === 200 && past.json.rows?.length === 0 && past.json.page?.empty === true, past.json.page);
+  const sorted = await tb(`/tasks?q=${q}&sort=title&dir=asc&size=25`, O.token);
+  const titles = (sorted.json.rows ?? []).map((r) => r.cells.title);
+  check('tables: sorted by any sortable column, on the server', titles.length === 12 && titles.join('|') === [...titles].sort().join('|'), titles.slice(0, 3));
+  const p0 = await tb(`/tasks?q=${q}&f_priority=0&count=1`, O.token);
+  check('tables: a filter cuts the rows and the count', p0.status === 200 && p0.json.total === 1 && p0.json.rows?.[0]?.id === made[0]?.id, [p0.json.total, p0.json.rows?.map((r) => r.cells.title)]);
+  const junk = await tb(`/tasks?q=${q}&f_priority=9&f_constructor=1&sort=constructor&size=7&count=1`, O.token);
+  check('tables: a value, a column or a size that is not the table’s is dropped, never an error', junk.status === 200 && junk.json.total === 12 && junk.json.query?.size === 25 && junk.json.query?.sort === 'createdAt', [junk.status, junk.json.total, junk.json.query?.sort]);
+  const wild = await tb(`/tasks?q=${encodeURIComponent('%_%')}&count=1`, O.token);
+  check('tables: a search for % and _ matches them as letters', wild.status === 200 && wild.json.total === 0, wild.json.total);
+
+  const csv = await fetch(`${API}/tables/tasks/csv?q=${q}`, { headers: { authorization: `Bearer ${O.token}`, 'CF-Connecting-IP': ADDRESS } });
+  const csvText = await csv.text();
+  check('tables: Download all is a CSV of every matching row', csv.status === 200 && /text\/csv/.test(csv.headers.get('content-type') ?? '') && /attachment; filename="tasks-/.test(csv.headers.get('content-disposition') ?? '') && csv.headers.get('x-table-rows') === '12' && csvText.includes('Task') && csvText.includes(`Tbl ${stamp} 03`), [csv.status, csv.headers.get('x-table-rows')]);
+  check('tables: a CSV never runs a formula someone typed', csvText.includes(`'=SUM(1) Tbl ${stamp}`), '');
+  check('tables: the CSV cap is 5,000 rows', TABLES_CSV_MAX === 5000, TABLES_CSV_MAX);
+
+  // Changes go through the app's own routes as the person.
+  const target = made[1];
+  const renamed = await tb('/tasks/edit', O.token, 'POST', { id: target?.id, column: 'title', value: `Tbl ${stamp} renamed`, today });
+  check('tables: a cell changes through the app’s own route', renamed.status === 200 && renamed.json.row?.cells?.title === `Tbl ${stamp} renamed`, renamed.json);
+  const viaNodes = await api('GET', `/nodes/${target?.id}`, undefined, O.token);
+  check('tables: and the task itself has the new name', JSON.stringify(viaNodes.json).includes(`Tbl ${stamp} renamed`), viaNodes.status);
+  const pri = await tb('/tasks/edit', O.token, 'POST', { id: target?.id, column: 'priority', value: '1', today });
+  check('tables: a choice is sent as the route takes it', pri.status === 200 && pri.json.row?.cells?.priority === '1', pri.json.row?.cells?.priority);
+  const hid = await tb('/tasks/edit', O.token, 'POST', { id: target?.id, column: 'hidden', value: 'tomorrow', today });
+  check('tables: hiding a task sends the person’s day with it', hid.status === 200 && hid.json.row?.cells?.hidden === 'tomorrow', hid.json);
+  await tb('/tasks/edit', O.token, 'POST', { id: target?.id, column: 'hidden', value: 'shown', today });
+  const empty = await tb('/tasks/edit', O.token, 'POST', { id: target?.id, column: 'title', value: '   ', today });
+  check('tables: a task’s name cannot be emptied', empty.status === 400, empty.json);
+  await tb('/tasks/edit', O.token, 'POST', { id: target?.id, column: 'note', value: 'A note to clear', today });
+  const noteCleared = await tb('/tasks/edit', O.token, 'POST', { id: target?.id, column: 'note', value: '', today });
+  check('tables: a task’s note can be emptied, as on Daily', noteCleared.status === 200 && !noteCleared.json.row?.cells?.note, noteCleared.json);
+  const xpCell = await tb('/tasks/edit', O.token, 'POST', { id: target?.id, column: 'xp', value: 500, today });
+  check('tables: a column with no route that changes it is read only', xpCell.status === 400, xpCell.json);
+  const ledger = await tb('/xpHistory/edit', O.token, 'POST', { id: '1', column: 'amount', value: 500, today });
+  check('tables: a ledger never changes', ledger.status === 400, ledger.json);
+  const xBuilt = await api('POST', '/onboarding/build', { relationships: ['self'], date: today, picks: { self: { project: 'Other project' } } }, X.token);
+  const otherTask = (xBuilt.json.nodes ?? []).find((n) => n.kind === 'task');
+  const notMine = await tb('/tasks/edit', O.token, 'POST', { id: otherTask?.id, column: 'title', value: 'Taken over', today });
+  check('tables: someone else’s row cannot be changed (404)', notMine.status === 404, notMine.json);
+  const stillTheirs = await api('GET', `/nodes/${otherTask?.id}`, undefined, X.token);
+  check('tables: and it kept its name', !JSON.stringify(stillTheirs.json).includes('Taken over'), '');
+
+  // A day's log is sent again whole: the route replaces the row, and the answer says its new id.
+  await api('POST', '/wellbeing/mood', { date: today, value: 3, note: 'before' }, O.token);
+  const moods = await tb('/mood', O.token);
+  const moodRow = moods.json.rows?.[0];
+  const moodEdit = await tb('/mood/edit', O.token, 'POST', { id: moodRow?.id, column: 'note', value: 'after', today });
+  check('tables: a mood note changes, and the answer names the row that replaced it', moodEdit.status === 200 && typeof moodEdit.json.replacedBy === 'string' && moodEdit.json.replacedBy !== moodRow?.id && moodEdit.json.row?.cells?.note === 'after' && moodEdit.json.row?.cells?.mood === '3', moodEdit.json);
+
+  // The archive, only where the app has one.
+  const [a1, a2, a3] = [made[2]?.id, made[3]?.id, made[4]?.id];
+  const arch = await tb('/tasks/bulk', O.token, 'POST', { action: 'archive', ids: [a1, a2], today });
+  check('tables: ticked tasks go to the archive', arch.status === 200 && arch.json.done?.length === 2 && arch.json.left?.length === 0, arch.json);
+  const archived = await tb(`/tasks?q=${q}&view=archived&count=1`, O.token);
+  check('tables: the Archived view lists them, and they leave Active', archived.json.total === 2 && (await tb(`/tasks?q=${q}&count=1`, O.token)).json.total === 10 && archived.json.rows?.every((r) => r.edit === undefined), archived.json.total);
+  const back = await tb('/tasks/bulk', O.token, 'POST', { action: 'restore', ids: [a2], today });
+  check('tables: Restore brings one back', back.status === 200 && back.json.done?.[0] === a2, back.json);
+  const gone = await tb('/tasks/bulk', O.token, 'POST', { action: 'delete', ids: [a1, a3], today });
+  check('tables: Delete forever takes only what is in the archive', gone.status === 200 && gone.json.done?.join() === a1 && gone.json.skipped?.[0]?.id === a3, gone.json);
+  check('tables: the deleted task is gone, the active one stays', (await api('GET', `/nodes/${a1}`, undefined, O.token)).status === 404 && (await api('GET', `/nodes/${a3}`, undefined, O.token)).status === 200, '');
+  const noArchive = await tb('/journal/bulk', O.token, 'POST', { action: 'archive', ids: ['x'], today });
+  check('tables: a table with no archive has no archive here', noArchive.status === 400, noArchive.json);
+  const tooMany = await tb('/tasks/bulk', O.token, 'POST', { action: 'archive', ids: Array.from({ length: 101 }, (_, i) => `id${i}`), today });
+  check('tables: at most a hundred rows at a time', tooMany.status === 400, tooMany.json);
+  const othersBulk = await tb('/tasks/bulk', O.token, 'POST', { action: 'archive', ids: [otherTask?.id], today });
+  check('tables: someone else’s task is never archived', othersBulk.json.done?.length === 0 && othersBulk.json.skipped?.length === 1, othersBulk.json);
+  // Delete forever is guarded at the moment of deleting: a task brought back (here, never let go) is refused by the delete itself.
+  const guarded = await api('DELETE', `/nodes/${a3}?archived=1`, undefined, O.token);
+  check('tables: the delete itself takes only a task still let go (409), and the task stays', guarded.status === 409 && (await api('GET', `/nodes/${a3}`, undefined, O.token)).status === 200, guarded.json);
+  // A repeating task keeps a day to count from: emptying its only do date is refused, and the repeat stays.
+  const habitTask = (await api('POST', '/nodes', { kind: 'task', parentId: project?.id, relationship: 'self', title: `Repeating ${stamp}`, doDate: today, repeat: { kind: 'daily', every: 1, days: [], until: null } }, O.token)).json.node;
+  const dropDay = await tb('/tasks/edit', O.token, 'POST', { id: habitTask?.id, column: 'doDate', value: null, today });
+  const habitAfter = await tb(`/tasks?q=${encodeURIComponent(`Repeating ${stamp}`)}`, O.token);
+  check('tables: a repeating task’s only do date cannot be emptied, and it still repeats', dropDay.status === 400 && /repeats/i.test(dropDay.json.error ?? '') && habitAfter.json.rows?.[0]?.cells?.repeat !== 'Once' && habitAfter.json.rows?.[0]?.cells?.doDate === today, [dropDay.status, habitAfter.json.rows?.[0]?.cells?.repeat]);
+
+  // A coach sees only the tables a student switched on, read only.
+  const secret = `Tables journal ${stamp}`;
+  await api('PATCH', '/me/modules', { key: 'journal', on: true }, O.token);
+  await api('POST', '/journal', { title: secret, body: secret }, O.token);
+  // A gratitude line whose prompt moved on Journal ("Another prompt") since the day was saved still takes words from the table.
+  const gk = (await api('GET', `/journal/gratitude?day=${today}&today=${today}`, undefined, O.token)).json.prompts ?? [];
+  await api('PUT', `/journal/gratitude/${today}`, { lines: gk.map((prompt, i) => ({ prompt, text: i === 0 ? 'Tables thanks one' : '' })), today, ifUpdatedAt: '' }, O.token);
+  const moved = await api('POST', `/journal/gratitude/${today}/another`, { index: 1, prompt: gk[1], today }, O.token);
+  const lineTwo = await tb('/gratitude/edit', O.token, 'POST', { id: today, column: 'line2', value: 'Tables thanks two', today });
+  check('tables: a gratitude line saves under the prompt Journal shows now', moved.status === 200 && lineTwo.status === 200 && lineTwo.json.row?.cells?.line2 === 'Tables thanks two', [moved.status, lineTwo.status, lineTwo.json.error]);
+  await admin('POST', `/admin/users/${K.user.id}/permissions`, { permissions: ['coach'] });
+  const asked = await api('POST', '/coach/requests', { who: `tables-${stamp}@smoke.test` }, K.token);
+  const linkId = asked.json.link?.id;
+  await api('POST', `/me/coach/links/${linkId}/answer`, { yes: true }, O.token);
+  const nothing = await tb(`/coach/${O.user.id}`, K.token);
+  check('tables: a coach sees no table until the student switches one on', nothing.status === 200 && (nothing.json.groups ?? []).length === 0 && nothing.json.view === 'coach', nothing.json);
+  check('tables: and opening one is a 404', (await tb(`/coach/${O.user.id}/tasks`, K.token)).status === 404, '');
+  const share = await api('PATCH', `/me/coach/links/${linkId}/share`, { tables: ['tasks', 'journal', 'nonsense', 'constructor', 'tasks'] }, O.token);
+  check('tables: the student switches tables on, known ones only, once each', share.status === 200 && JSON.stringify(share.json.link?.share?.tables) === '["tasks","journal"]', share.json.link?.share);
+  const sixStay = await api('PATCH', `/me/coach/links/${linkId}/share`, { reflection: false }, O.token);
+  check('tables: switching one of the six parts keeps the tables', JSON.stringify(sixStay.json.link?.share?.tables) === '["tasks","journal"]' && sixStay.json.link?.share?.reflection === false, sixStay.json.link?.share);
+  const logged = await api('GET', '/me/coach/log', undefined, O.token);
+  check('tables: the change log names the tables, never what they hold', JSON.stringify(logged.json).includes('started sharing the tables Tasks and Journal entries') && !JSON.stringify(logged.json).includes(secret), '');
+  const coachList = await tb(`/coach/${O.user.id}`, K.token);
+  const coachKeys = (coachList.json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
+  check('tables: the coach’s list holds only the shared tables', coachKeys.join() === 'tasks,journal', coachKeys);
+  const coachTasks = await tb(`/coach/${O.user.id}/tasks?q=${q}&count=1`, K.token);
+  check('tables: the coach reads them, with no way to change a row', coachTasks.status === 200 && coachTasks.json.total === 11 && coachTasks.json.rows?.every((r) => r.edit === undefined) && coachTasks.json.view === 'coach', [coachTasks.status, coachTasks.json.total]);
+  const coachJournal = await tb(`/coach/${O.user.id}/journal?count=1`, K.token);
+  check('tables: a journal the student shared reaches that coach', coachJournal.status === 200 && JSON.stringify(coachJournal.json).includes(secret), coachJournal.status);
+  check('tables: a table not shared stays shut', (await tb(`/coach/${O.user.id}/mood`, K.token)).status === 404, '');
+  const coachCsv = await fetch(`${API}/tables/coach/${O.user.id}/tasks/csv?q=${q}`, { headers: { authorization: `Bearer ${K.token}`, 'CF-Connecting-IP': ADDRESS } });
+  check('tables: the coach can download what is shared', coachCsv.status === 200 && coachCsv.headers.get('x-table-rows') === '11', coachCsv.status);
+  check('tables: a coach gets only the time blocks the rows use, never the student’s whole list', (first.json.options?.timeBlock?.length ?? 0) > 0 && Array.isArray(coachTasks.json.options?.timeBlock) && coachTasks.json.options.timeBlock.length === 0, [first.json.options?.timeBlock?.length, coachTasks.json.options?.timeBlock?.length]);
+  // A part switch and a table switch saved at the same moment both land (each write is guarded on the share it read).
+  await Promise.all([
+    api('PATCH', `/me/coach/links/${linkId}/share`, { routine: false }, O.token),
+    api('PATCH', `/me/coach/links/${linkId}/share`, { tables: ['tasks', 'journal', 'xpHistory', 'friends'] }, O.token),
+  ]);
+  const raced = (await api('PATCH', `/me/coach/links/${linkId}/share`, {}, O.token)).json.link?.share;
+  check('tables: a part and a table switched at once are both kept', raced?.routine === false && JSON.stringify(raced?.tables) === '["tasks","xpHistory","journal","friends"]', raced);
+  // A post's xp lands as it is written: a coach never reads a social xp, which would say who wrote an anonymous post.
+  await api('PATCH', '/me/modules', { key: 'community', on: true }, O.token);
+  const anonPost = await api('POST', '/community', { category: 'Stories', body: `Tables anon ${stamp}`, anonymous: true }, O.token);
+  const ownSocial = await tb('/xpHistory?f_source=social%3Apost&count=1', O.token);
+  const coachSocial = await tb(`/coach/${O.user.id}/xpHistory?f_source=social%3Apost&count=1`, K.token);
+  check('tables: a coach never reads the xp an anonymous post paid', anonPost.status === 201 && (anonPost.json.held || anonPost.json.post?.held || ownSocial.json.total >= 1) && coachSocial.status === 200 && coachSocial.json.total === 0, [anonPost.status, ownSocial.json.total, coachSocial.json.total]);
+  // Someone who blocked the coach by name is left out of the coach's view of the student's friends.
+  const xMe = await me(X.token);
+  await api('POST', '/bond/friends', { code: xMe.friendCode }, O.token);
+  await api('POST', '/bond/block', { userId: K.user.id }, X.token);
+  const ownFriends = await tb('/friends', O.token);
+  const coachFriends = await tb(`/coach/${O.user.id}/friends`, K.token);
+  check('tables: a coach never sees a friend who blocked them by name, and the student still does', (ownFriends.json.rows ?? []).some((r) => r.cells.handle === xMe.handle) && coachFriends.status === 200 && !(coachFriends.json.rows ?? []).some((r) => r.cells.handle === xMe.handle), [ownFriends.json.rows?.length, coachFriends.json.rows?.length]);
+  const coachEdit = await tb('/tasks/edit', K.token, 'POST', { id: made[5]?.id, column: 'title', value: 'Coach was here', today });
+  check('tables: a coach never edits a student’s row here', coachEdit.status === 404, coachEdit.status);
+  check('tables: someone who is not their coach sees nothing', (await tb(`/coach/${O.user.id}`, X.token)).status === 404 && (await tb(`/coach/${O.user.id}/tasks`, X.token)).status === 404, '');
+  await api('PATCH', `/me/coach/links/${linkId}/share`, { tables: ['journal'] }, O.token);
+  check('tables: a table switched off is shut at once', (await tb(`/coach/${O.user.id}/tasks`, K.token)).status === 404, '');
+  await api('DELETE', `/me/coach/links/${linkId}`, undefined, O.token);
+  check('tables: an ended link shuts every table', (await tb(`/coach/${O.user.id}/journal`, K.token)).status === 404 && (await tb(`/coach/${O.user.id}`, K.token)).status === 404, '');
+
+  // A super admin reads a member's tables, never the journal or a body and mind table, and every table opened is in the audit log.
+  const adminList = await tb(`/admin/${O.user.id}`, A.token);
+  const adminKeys = (adminList.json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
+  check('tables: an admin’s list leaves out the journal and the body and mind tables', adminList.status === 200 && adminKeys.includes('tasks') && !adminKeys.includes('journal') && !adminKeys.includes('gratitude') && !adminKeys.includes('mood') && !adminKeys.includes('supplements'), adminKeys.length);
+  const adminTasks = await tb(`/admin/${O.user.id}/tasks?q=${q}&count=1`, A.token);
+  check('tables: an admin reads a member’s tasks, read only', adminTasks.status === 200 && adminTasks.json.total === 11 && adminTasks.json.rows?.every((r) => r.edit === undefined), [adminTasks.status, adminTasks.json.total]);
+  for (const key of ['journal', 'gratitude', 'mood', 'sleep', 'water', 'focusSessions', 'supplements']) {
+    const r = await tb(`/admin/${O.user.id}/${key}?count=1`, A.token);
+    check(`tables: an admin is never shown ${key}`, r.status === 404, r.status);
+  }
+  await tb(`/admin/${O.user.id}/tasks?q=${q}&page=2`, A.token);
+  const audit = (await admin('GET', '/admin/audit?size=100')).json.logs ?? [];
+  const views = audit.filter((l) => l.action === 'tables.view' && l.resourceId === O.user.id && l.after === 'tasks');
+  check('tables: the table an admin opened is in the audit log once, never what it holds', views.length === 1 && !JSON.stringify(views).includes(`Tbl ${stamp}`), views.length);
+  const keyOnly = await api('GET', `/tables/admin/${O.user.id}`, undefined, null, { 'X-Admin-Key': ADMIN_KEY });
+  check('tables: the shared admin key never opens a member’s tables', keyOnly.status === 403 && /admin key/i.test(keyOnly.json.error ?? ''), keyOnly.json);
+  check('tables: someone who is not an admin is refused (403)', (await tb(`/admin/${O.user.id}`, X.token)).status === 403 && (await tb(`/admin/${O.user.id}/tasks`, X.token)).status === 403, '');
+  const D = await signup(`tablesgone-${stamp}@smoke.test`, `Glacier-${stamp}-pass`, 'Tables gone');
+  await admin('DELETE', `/admin/users/${D.user.id}`);
+  check('tables: a deleted member is never opened', (await tb(`/admin/${D.user.id}`, A.token)).status === 404 && (await tb(`/admin/${D.user.id}/tasks`, A.token)).status === 404, '');
+
+  check('tables: reads, downloads and changes each have a limit', Boolean(LIMITS.tables && LIMITS.tablesCsv) && ['/tables/:table', '/tables/:table/csv', '/tables/:table/edit', '/tables/:table/bulk', '/tables/coach/:studentId/:table', '/tables/admin/:userId/:table'].every((p) => ROUTE_LIMITS.some((r) => r.path === p)), '');
+  // A person's downloads read at most about 50,000 rows a day, whoever's tables: a daily limit on all three, after the hourly one.
+  const csvPaths = ['/tables/:table/csv', '/tables/coach/:studentId/:table/csv', '/tables/admin/:userId/:table/csv'];
+  check(
+    'tables: downloads have a daily limit too, of at most 50,000 rows a person',
+    LIMITS.tablesCsvDay?.windowSec === 86400 && LIMITS.tablesCsvDay.max * TABLES_CSV_MAX <= 50000 && csvPaths.every((p) => {
+      const at = (limit) => ROUTE_LIMITS.findIndex((r) => r.method === 'GET' && r.path === p && r.limit === limit);
+      return at('tablesCsv') !== -1 && at('tablesCsvDay') > at('tablesCsv');
+    }),
+    LIMITS.tablesCsvDay,
+  );
 }
 
 // The run's own admin goes back to a user once every section that needs it is done (the Pages section makes a program as it, Dev Tools reads as it).

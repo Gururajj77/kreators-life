@@ -15,7 +15,7 @@ import {
   MessageCircle, MessageCircleHeart, MessagesSquare, MicSignal, MicVocal, Minus, Moon, MoonStar, Mountain, Newspaper, NotebookPen, NotebookText,
   OctagonX, Orbit, Package, Palette, PartyPopper, PenLine, PersonStanding, PiggyBank, Pill, Plane, Presentation, Puzzle, RadioTower, Rainbow, Receipt,
   Recycle, Repeat, Rocket, Route, ScanSearch, Scissors, Search, SearchCheck, Share2, Shield, ShieldCheck, Shirt, ShoppingBag, ShoppingCart, Signpost,
-  Smartphone, Spade, Sparkle, Sparkles, Speech, Sprout, SquareCheck, SquarePlay, Star, Store, Sun, Sunrise, Swords, Tag, Target, Telescope, Tent,
+  Smartphone, Spade, Sparkle, Sparkles, Speech, Sprout, SquareCheck, SquarePlay, Star, Store, Sun, Sunrise, Swords, Table2, Tag, Target, Telescope, Tent,
   ThumbsUp, Ticket, Toolbox, Tornado, TreeDeciduous, TreePine, TrendingUp, Triangle, Trophy, Tv, Type, Undo2, UserRound, Users, UsersRound,
   UtensilsCrossed, Video, VolumeX, Wallet, WalletMinimal, WandSparkles, WavesHorizontal, Wind, X, Zap,
 } from 'lucide-react';
@@ -31,7 +31,7 @@ export const APP_ICONS = {
   MessageCircle, MessageCircleHeart, MessagesSquare, MicSignal, MicVocal, Minus, Moon, MoonStar, Mountain, Newspaper, NotebookPen, NotebookText,
   OctagonX, Orbit, Package, Palette, PartyPopper, PenLine, PersonStanding, PiggyBank, Pill, Plane, Presentation, Puzzle, RadioTower, Rainbow, Receipt,
   Recycle, Repeat, Rocket, Route, ScanSearch, Scissors, Search, SearchCheck, Share2, Shield, ShieldCheck, Shirt, ShoppingBag, ShoppingCart, Signpost,
-  Smartphone, Spade, Sparkle, Sparkles, Speech, Sprout, SquareCheck, SquarePlay, Star, Store, Sun, Sunrise, Swords, Tag, Target, Telescope, Tent,
+  Smartphone, Spade, Sparkle, Sparkles, Speech, Sprout, SquareCheck, SquarePlay, Star, Store, Sun, Sunrise, Swords, Table2, Tag, Target, Telescope, Tent,
   ThumbsUp, Ticket, Toolbox, Tornado, TreeDeciduous, TreePine, TrendingUp, Triangle, Trophy, Tv, Type, Undo2, UserRound, Users, UsersRound,
   UtensilsCrossed, Video, VolumeX, Wallet, WalletMinimal, WandSparkles, WavesHorizontal, Wind, X, Zap,
 } satisfies Record<IconName, LucideIcon>;

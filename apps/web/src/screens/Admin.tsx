@@ -40,7 +40,7 @@ import {
 } from '@kreators/shared';
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import { lazyNamed } from '../lib/lazy';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { Button } from '../components/Button';
 import { DataTable, Select } from '../components/DataTable';
 import { AppCover } from '../components/AppCover';
@@ -53,7 +53,7 @@ import { Toggle } from '../components/Toggle';
 import { AppIcon } from '../components/AppIcon';
 import { AnimatedIcon } from '../components/AnimatedIcon';
 import { Icon } from '../components/Icon';
-import { Link2, X } from 'lucide-react';
+import { Link2, Table2, X } from 'lucide-react';
 import { IconButton } from '../components/IconButton';
 import { adminApi } from '../lib/api';
 import { useMe } from '../lib/queries';
@@ -132,6 +132,7 @@ const Pill = ({ children, tone = 'bg-paper text-ink-soft' }: { children: ReactNo
 export function Admin() {
   const me = useMe();
   const sessionAdmin = me.data?.user.role === 'admin';
+  const navigate = useNavigate();
   const [key, setKey] = useState(readKey);
   // The tab lives in the address, so Back, a reload and a shared link land on it.
   const [tabParam, setTabParam] = useParamState('tab', 'people');
@@ -548,6 +549,24 @@ export function Admin() {
                         </span>
                       ),
                     },
+                    // A member's tables, read only (All tables, 2026-11-13): a super admin's own session only, never the admin key alone,
+                    // and never the journal, gratitude or a body and mind table. Each table opened is audited.
+                    ...(sessionAdmin
+                      ? [
+                          {
+                            key: 'tables',
+                            label: 'Tables',
+                            get: () => '',
+                            sortable: false,
+                            align: 'right' as const,
+                            render: (u: AdminUser) => (
+                              <span className="inline-flex" onClick={(e) => e.stopPropagation()}>
+                                <IconButton icon={Table2} label={`Tables of ${u.displayName || 'this person'}`} tip="br" onClick={() => navigate(`/admin/people/${encodeURIComponent(u.id)}/tables`)} />
+                              </span>
+                            ),
+                          },
+                        ]
+                      : []),
                     {
                       key: 'delete',
                       label: 'Delete',
@@ -1558,7 +1577,7 @@ export function Admin() {
               <h2 id="coaches-heading" className="text-title2">
                 Life coaches
               </h2>
-              <p className="mt-xs m-0 text-subhead text-ink-soft">A life coach works only with students who said yes, and never sees the journal. A student has up to {MAX_COACHES} coaches. Every change is audited, and the person is told.</p>
+              <p className="mt-xs m-0 text-subhead text-ink-soft">A life coach works only with students who said yes, and sees only what each student shares. A student has up to {MAX_COACHES} coaches. Every change is audited, and the person is told.</p>
               {/* The link form moved to Connect people (2026-11-09), the one place the team connects anyone; said at the top (2026-11-09), not
                   under the list of coaches, where the founder would have had to scroll past every coach to find it. */}
               <p className="mt-xs m-0 text-subhead text-ink-soft">

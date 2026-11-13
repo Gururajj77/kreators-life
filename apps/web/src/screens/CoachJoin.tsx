@@ -82,7 +82,7 @@ function SignedIn({ token }: { token: string }) {
       {d.about && <p className="mt-sm m-0 text-subhead">{d.about}</p>}
       <fieldset className="m-0 mt-md border-0 p-0">
         <legend className="text-subhead font-semibold">What they would see</legend>
-        <p className="m-0 text-subhead text-ink-soft">Never your journal. Change it or end it any time.</p>
+        <p className="m-0 text-subhead text-ink-soft">Whole tables of your data stay off until you share them. Change it or end it any time.</p>
         <div className="mt-xs flex flex-col gap-xs">
           {COACH_SHARE_PARTS.map((part) => (
             <Toggle key={part} on={share[part]} onChange={(on) => setShare((s) => ({ ...s, [part]: on }))} label={COACH_SHARE_META[part].name} hint={COACH_SHARE_META[part].blurb} />

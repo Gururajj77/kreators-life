@@ -14,7 +14,9 @@ import type { Priority, ProjectPace, Repeat } from './tasks.ts';
 // coach badge). A coach works only with students who said yes: they see the parts of a student's progress the
 // student shares, leave notes, and add or edit tasks; every step lands in a change log both of them see. A link
 // starts three ways: a coach (or an admin) asks and the student says yes, a student asks and the coach says yes, or
-// an admin links the two. Either side can end it. The journal never reaches a coach.
+// an admin links the two. Either side can end it. The journal never reaches a coach through the report, patterns or the six parts;
+// since 2026-11-13 (the founder's All tables) a student can switch on whole tables of their own data for one coach, read only, each
+// table off until they turn it on (`CoachShare.tables`).
 // ---------------------------------------------------------------------------
 
 /**
@@ -24,20 +26,29 @@ import type { Priority, ProjectPace, Repeat } from './tasks.ts';
  */
 export const COACH_SHARE_PARTS = ['daily', 'pillars', 'routine', 'lifeMap', 'reflection', 'patterns'] as const;
 export type CoachSharePart = (typeof COACH_SHARE_PARTS)[number];
-export type CoachShare = Record<CoachSharePart, boolean>;
-/** What a stored share reads as when a part is not in it: on, but Patterns off. */
-export const DEFAULT_COACH_SHARE: CoachShare = { daily: true, pillars: true, routine: true, lifeMap: true, reflection: true, patterns: false };
-/** What a new link starts with (2026-11-07): every part on, Patterns too. */
-export const NEW_LINK_SHARE: CoachShare = { ...DEFAULT_COACH_SHARE, patterns: true };
+/**
+ * What a student shares with one coach: the six parts, and (2026-11-13) the keys of the whole tables they switched on for this coach
+ * (All tables, `@kreators/shared/dataTables`), each off until the student turns it on, read only. The keys are checked here by shape
+ * only, since this file is in the barrel and the registry is a leaf that must not be pulled into it; the server keeps only keys the
+ * registry knows (`knownTableKeys`) when it saves them and every time a coach opens a table, and the screen lists only known tables.
+ */
+export type CoachShare = Record<CoachSharePart, boolean> & { tables: string[] };
+/** The most table keys a share keeps (more than the registry holds). */
+export const COACH_SHARE_TABLES_MAX = 100;
+const TABLE_KEY_SHAPE = /^[a-z][A-Za-z0-9]{0,39}$/;
+/** What a stored share reads as when a part is not in it: on, but Patterns off, and no table. */
+export const DEFAULT_COACH_SHARE: CoachShare = { daily: true, pillars: true, routine: true, lifeMap: true, reflection: true, patterns: false, tables: [] };
+/** What a new link starts with (2026-11-07): every part on, Patterns too. Tables stay off: each is the student's own yes. */
+export const NEW_LINK_SHARE: CoachShare = { daily: true, pillars: true, routine: true, lifeMap: true, reflection: true, patterns: true, tables: [] };
 export const COACH_SHARE_META: Record<CoachSharePart, { name: string; blurb: string }> = {
   daily: { name: 'Daily and streaks', blurb: 'Check-ins, streaks, xp, the tasks you ticked (habits too), the day’s tasks, the small act and your not to do list.' },
   pillars: { name: 'Pillars and pyramids', blurb: 'Every layer of your pyramids, how each project keeps pace, and the layer a saved review walks. With this on, your coach can add and edit tasks.' },
   routine: { name: 'Routine and contract', blurb: 'Your routine, the days you kept it, and the deal you signed.' },
   lifeMap: { name: 'Life map answers', blurb: 'Where each pillar sits on the map, your scores, your fears and what weighs on you.' },
-  reflection: { name: 'Reflection', blurb: 'Mood, sleep, stress, mindful minutes, movement (minutes, days and kinds), how you ate (1 to 5) and the answers in your saved reviews. Never your journal, gratitude, supplements or a note.' },
+  reflection: { name: 'Reflection', blurb: 'Mood, sleep, stress, mindful minutes, movement (minutes, days and kinds), how you ate (1 to 5) and the answers in your saved reviews. Not your journal, gratitude, supplements or notes: those reach a coach only in a table you switch on.' },
   patterns: { name: 'Patterns', blurb: 'Patterns the app finds only in the parts above that you share, by plain rules, kept nowhere. Never from your journal, gratitude, money, water, supplements or a note. With this off, your coach still gets plain tips from the numbers you share.' },
 };
-/** The one reader for what a student shares: known parts as true or false, over the defaults. */
+/** The one reader for what a student shares: known parts as true or false, over the defaults, and the table keys by shape. */
 export function parseCoachShare(raw: unknown): CoachShare {
   let v: unknown = raw;
   if (typeof raw === 'string') {
@@ -48,8 +59,16 @@ export function parseCoachShare(raw: unknown): CoachShare {
     }
   }
   const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
-  const out = { ...DEFAULT_COACH_SHARE };
+  const out: CoachShare = { ...DEFAULT_COACH_SHARE, tables: [] };
   for (const k of COACH_SHARE_PARTS) if (typeof o[k] === 'boolean') out[k] = o[k] as boolean;
+  out.tables = coachShareTables(o.tables);
+  return out;
+}
+/** The table keys in a share, by shape only: strings that look like a registry key, each once, at most COACH_SHARE_TABLES_MAX. */
+export function coachShareTables(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const k of raw) if (typeof k === 'string' && TABLE_KEY_SHAPE.test(k) && !out.includes(k) && out.length < COACH_SHARE_TABLES_MAX) out.push(k);
   return out;
 }
 

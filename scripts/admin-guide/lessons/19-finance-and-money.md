@@ -85,7 +85,7 @@ Riya can also use the assistant. Its free flows include **Add money in or out**,
 
 ## What an admin checks
 
-- **It is private:** Finance is the person's own. Staff and admins never see it, and the screen tells the person so.
+- **It is private:** Finance is the person's own. Staff, brands and the leaderboard never see it. A super admin can read its tables through **Tables** in **People**, read only, and each look goes in the audit log. Open one only to answer her question.
 - **A different Finance:** the **Finance** permission in Admin, People is a staff job. It approves bounty payouts and reviews money orders. It does not open anyone's Finance app.
 - **Turning it on:** use the Flags tab to switch Finance for everyone, a share of people or one person.
 - **Their data:** a person's Finance lists are in their own export, and they go when the account is deleted.

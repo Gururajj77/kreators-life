@@ -33,7 +33,7 @@ Once a day, under **How you ate**:
 
 The score reads fruit and vegetables, packaged food and meals without a screen. Tasty and how full she felt never move it. What she leaves out does not count, but a score needs her fruit and vegetables, even if the answer is 0, and a fasting day has no score. Older days keep the scores they already have. The app never asks for calories or a photo.
 
-Protein is its own number, such as "42 g of 60 g today". **Daily goal** works one out from what she weighs. Only the goal is saved, and what she weighs is never sent. Nobody else sees the grams or the goal: not a coach, staff, Emerging or Reviews. So if a member asks, there is nothing here to look up for them. The line beside it says to check with a doctor if you have a kidney condition or are pregnant.
+Protein is its own number, such as "42 g of 60 g today". **Daily goal** works one out from what she weighs. Only the goal is saved, and what she weighs is never sent. Nobody else sees the goal. The grams reach a coach only in the Eating table, when she switches it on for them, and never staff, Emerging or Reviews. So if a member asks, there is nothing here to look up for them. The line beside it says to check with a doctor if you have a kidney condition or are pregnant.
 
 ## Her supplement list
 
@@ -51,8 +51,8 @@ The app gives no starter list and no picks. Its only caution reads: "The app doe
 - **Logs:** they keep only a bare error line for Fitness and for Kreators Run's own tool, with no person and no path.
 - **Switches:** in Admin, **Flags**, and **What does this person see?** work as for any app.
 - **Nothing to police:** nothing here pays. The Fitness badge family counts club entries only.
-- **Supplements:** they never reach a coach, the assistant, Emerging, search or the calendar link.
-- **A coach:** sees minutes, days moved and the eating number only under the student's Reflection switch, never a note.
+- **Supplements:** they never reach the assistant, Emerging, search or the calendar link, and a coach only as their tables, when she switches them on.
+- **A coach:** sees minutes, days moved and the eating number only under the student's Reflection switch, never a note, unless she switches a whole table on for them.
 - **Their data:** it is in the export and goes with the account. An erase of progress keeps it.
 
 If a member asks whether a supplement is safe, the answer is always a doctor or pharmacist, never the team.

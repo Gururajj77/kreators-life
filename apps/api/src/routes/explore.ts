@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { DEFAULT_ZONE, EVENT_TYPE_META, LISTING_TYPES, LOCALE, fact, money as moneyOf, type Listing, type ListingType, type PublicStats } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { liveUser, nameOf, pageOf, paged } from '../db';
+import { likeFit, liveUser, nameOf, pageOf, paged } from '../db';
 import { mediaForListings } from './media';
 import { cache } from '../cachecontrol';
 
@@ -39,6 +39,7 @@ const money = (min: number | null, max: number | null, cur: string) =>
  * A LIMIT/OFFSET per kind would page each kind on its own and the merged pages would skip and repeat cards. Only live
  * things are read (open rewards, upcoming events and circles, published programs), so 200 of one kind is far past what
  * is ever open at once; the person still sees the list ten to a hundred at a time through `pageOf` on the route.
+ * Events can pass it (any host posts one), so a search also reads the events whose own words hold it (2026-11-13).
  */
 export async function listingsFor(db: D1Database, o: Opts): Promise<Listing[]> {
   const now = new Date().toISOString();
@@ -102,9 +103,23 @@ export async function listingsFor(db: D1Database, o: Opts): Promise<Listing[]> {
   const kind_event = types.includes('event')
     ? (async () => {
         const out: Listing[] = [];
-        const rows = await db
-          .prepare(`SELECT e.id, e.title, e.description, e.event_type, e.venue, e.online_url, e.starts_at, e.ends_at, e.price_points, e.status, e.featured, e.created_at, u.display_name AS host_name FROM events e JOIN users u ON u.id = e.host_user_id WHERE e.visibility = 'public' ${o.includeHidden ? '' : `AND e.status = 'published' AND e.ends_at >= '${now}'`}${idClause('e.id')} ORDER BY e.featured DESC, e.starts_at LIMIT 200`)
-          .all<{ id: string; title: string; description: string; host_name: string; event_type: keyof typeof EVENT_TYPE_META; venue: string; online_url: string | null; starts_at: string; ends_at: string; price_points: number; status: string; featured: number; created_at: string }>();
+        type EventRow = { id: string; title: string; description: string; host_name: string; event_type: keyof typeof EVENT_TYPE_META; venue: string; online_url: string | null; starts_at: string; ends_at: string; price_points: number; status: string; featured: number; created_at: string };
+        const select = `SELECT e.id, e.title, e.description, e.event_type, e.venue, e.online_url, e.starts_at, e.ends_at, e.price_points, e.status, e.featured, e.created_at, u.display_name AS host_name FROM events e JOIN users u ON u.id = e.host_user_id WHERE e.visibility = 'public' ${o.includeHidden ? '' : `AND e.status = 'published' AND e.ends_at >= '${now}'`}${idClause('e.id')}`;
+        // Events are the one kind that can pass 200 open at once (every host can post one), so a search also reads the events whose own
+        // words hold it, wherever they fall in time (2026-11-13): the 201st event is found by its name. Both reads go in one round trip,
+        // and the card's facts are still matched below, as for every kind.
+        const words = q.replace(/[%_\\]/g, '');
+        const [soonest, matched] = await Promise.all([
+          db.prepare(`${select} ORDER BY e.featured DESC, e.starts_at LIMIT 200`).all<EventRow>(),
+          words
+            ? db
+                .prepare(`${select} AND (lower(e.title) LIKE ?1 OR lower(e.description) LIKE ?1 OR lower(e.venue) LIKE ?1 OR lower(u.display_name) LIKE ?1) ORDER BY e.featured DESC, e.starts_at LIMIT 200`)
+                .bind(`%${likeFit(words)}%`)
+                .all<EventRow>()
+            : Promise.resolve({ results: [] as EventRow[] }),
+        ]);
+        const seen = new Set<string>();
+        const rows = { results: [...soonest.results, ...matched.results].filter((r) => !seen.has(r.id) && (seen.add(r.id), true)) };
         for (const r of rows.results) {
           out.push({
             type: 'event',

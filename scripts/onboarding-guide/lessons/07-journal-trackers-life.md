@@ -10,7 +10,7 @@ In this lesson you'll learn:
 
 ## Why these apps are there
 
-Your pillars are about what you do. These apps are about how you are. They are all private. Your journal and your wellbeing numbers never reach a brand, the team, the leaderboard or anyone else. Even a life coach only sees your numbers if you let them, and never your journal.
+Your pillars are about what you do. These apps are about how you are. They are all private. Your journal and your wellbeing numbers never reach a brand, the team or the leaderboard. A life coach sees your numbers only if you let them, and your journal only if you switch its table on for them.
 
 ## Find them
 

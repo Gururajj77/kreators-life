@@ -1,6 +1,6 @@
 import { BADGE_META, COACH_SHARE_META, COACH_SHARE_PARTS, MAX_COACHES, type CoachLink, type CoachSharePart } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { Link } from 'react-router';
 import { api } from '../lib/api';
 import { useAuthed, useRefreshAll } from '../lib/queries';
@@ -14,10 +14,13 @@ import { Sheet } from './Sheet';
 import { SkeletonList } from './Skeleton';
 import { Toggle } from './Toggle';
 import { longDate } from '../lib/date';
+import { lazyNamed } from '../lib/lazy';
 import { focusHeadingAfter } from '../lib/focusHeading';
 import { RED_YES } from '../lib/ui';
 
 const day = longDate;
+// The table switches download only when their fold is opened (the registry of every table is its own chunk).
+const CoachTablesShare = lazyNamed(() => import('./CoachTablesShare'), 'CoachTablesShare');
 
 /** A person in a coaching list: the first letter of their name, with their badge on it. */
 export function CoachFace({ name, badge, size = 40 }: { name: string; badge: CoachLink['coach']['badge']; size?: number }) {
@@ -46,7 +49,8 @@ export function MyCoachSection({ id = 'coach', title = 'Your life coach', inCoac
     void q.refetch();
   };
   const answer = useMutation({ mutationFn: (v: { id: string; yes: boolean }) => api.answerCoach(v.id, v.yes), onSuccess: done });
-  const share = useMutation({ mutationFn: (v: { id: string; part: CoachSharePart; on: boolean }) => api.shareWithCoach(v.id, { [v.part]: v.on }), onSuccess: done });
+  // Read the link again after a refusal too (a 409 when another save changed the share at the same moment), so the switches show what is kept.
+  const share = useMutation({ mutationFn: (v: { id: string; part: CoachSharePart; on: boolean }) => api.shareWithCoach(v.id, { [v.part]: v.on }), onSettled: done });
   const end = useMutation({
     mutationFn: (linkId: string) => api.endCoach(linkId),
     onSuccess: () => {
@@ -66,7 +70,7 @@ export function MyCoachSection({ id = 'coach', title = 'Your life coach', inCoac
           <h2 id={`${id}-heading`} className="text-title2">
             {title}
           </h2>
-          <p className="mt-xs m-0 text-subhead text-ink-soft">A coach the team chose sees only what you switch on, never your journal. End it any time.</p>
+          <p className="mt-xs m-0 text-subhead text-ink-soft">A coach sees only what you switch on, and only reads it. End it any time.</p>
         </>
       )}
       {q.isPending && <SkeletonList className="mt-sm" count={1} lines={2} label="Loading your life coach" />}
@@ -118,6 +122,14 @@ export function MyCoachSection({ id = 'coach', title = 'Your life coach', inCoac
                   </div>
                 </fieldset>
               </Fold>
+              {/* Whole tables of their own data (All tables, 2026-11-13): each off until they switch it on for this one coach, read only. */}
+              {(l.status === 'active' || waiting) && (
+                <Fold title="Tables your coach can see" hint={`${(l.share.tables ?? []).length} shared`} className="mt-xs">
+                  <Suspense fallback={<SkeletonList count={1} lines={2} label="Loading the tables" />}>
+                    <CoachTablesShare linkId={l.id} coachName={l.coach.name} shared={l.share.tables ?? []} onSaved={done} />
+                  </Suspense>
+                </Fold>
+              )}
               <div className="mt-sm flex flex-wrap gap-xs">
                 {mineToAnswer && (
                   <>

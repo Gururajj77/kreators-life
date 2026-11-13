@@ -83,8 +83,8 @@ The kind is a tag like the area: it never changes what a tick pays, and **By con
 
 Daily is core and always on. You cannot switch it off for anyone.
 
-1. **Privacy:** her tasks, not to do list, habits and unfinished business are hers. No admin screen lists them.
-2. **Coaches:** a coach sees Daily and streaks only if Riya shares it on their link.
+1. **Privacy:** her tasks, not to do list, habits and unfinished business are hers. Only **Tables** in **People** shows them to a super admin, read only, and each table you open goes in the audit log.
+2. **Coaches:** a coach sees Daily and streaks only if Riya shares it on their link, or switches its tables on for them.
 3. **XP by hand:** in **Admin**, **People**, tap her row. Under **XP**, add or take away xp with a note. The note and your name go to the audit log.
 4. **Reviews:** Reviews starts hidden. Riya unhides it herself under **Apps** (Reflection). **What does this person see?** only allows or blocks an app; it never unhides one for her.
 5. **Wait and cap:** after her first three ticks, a task must be ten minutes old and ten minutes after her last tick, and only six ticks a day pay xp. These guard against people gaming the boxes.

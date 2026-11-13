@@ -23,7 +23,7 @@ Flows are short taps that cost nothing. Each one says where its answer lands. A 
 - **Add a task** and **Add to a pyramid**, which land in Pillars.
 - **Mark my not to do list** and **Add to my not to do list**.
 - **Log my mood**, **Log my sleep**, **Log my stress** and **Log mindful minutes**.
-- **Write in my journal**, which only you can see.
+- **Write in my journal**, which nobody else sees unless you share it.
 - **Add money in or out** and **Set a money goal**, when Finance is on.
 
 A flow for an app you have hidden does not show. Flows use the same steps as your own taps, so the same rules apply.

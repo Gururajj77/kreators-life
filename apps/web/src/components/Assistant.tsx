@@ -105,7 +105,7 @@ const FLOWS: Record<Flow, FlowMeta> = {
   stress: { label: 'Log my stress', icon: 'WavesHorizontal', lands: 'the trackers on Home, Stress and your Life score', to: '/home', host: 'bumling', needs: TRACKERS },
   mindful: { label: 'Log mindful minutes', icon: 'Wind', lands: 'the trackers on Home, Mindfulness and your Life score', to: '/home', host: 'divine', needs: TRACKERS },
   move: { label: 'Log time moving', icon: 'Footprints', lands: 'the physical part of your Life score', to: '/life', host: 'self', needs: TRACKERS },
-  journal: { label: 'Write in my journal', icon: 'NotebookPen', lands: 'your Journal. Only you can see it', to: '/journal', host: 'self', needs: ['journal'] },
+  journal: { label: 'Write in my journal', icon: 'NotebookPen', lands: 'your Journal. Nobody else sees it unless you share it', to: '/journal', host: 'self', needs: ['journal'] },
   money: { label: 'Add money in or out', icon: 'Wallet', lands: 'Finance, and money this month on Home', to: '/finance', host: 'servant_leader', needs: ['finance'] },
   due: { label: 'Note money owed', icon: 'HandCoins', lands: 'Finance, under what is owed', to: '/finance', host: 'servant_leader', needs: ['finance'] },
   settle: { label: 'Settle something owed', icon: 'CircleCheckBig', lands: 'Finance, under what is owed', to: '/finance', host: 'servant_leader', needs: ['finance'] },
@@ -1268,7 +1268,7 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
       }
 
       if (f === 'due') {
-        return form(f, [intro, 'Who owes whom, how much, and by when. Only you see it.'], () => (
+        return form(f, [intro, 'Who owes whom, how much, and by when. Brands and the leaderboard never see it.'], () => (
           <DueForm
             today={date}
             onSend={async (v, label) => {
@@ -1347,7 +1347,7 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
         ));
       }
       // money
-      return form(f, [intro, 'Money in or out, how much, and what for. Only you see it.'], () => (
+      return form(f, [intro, 'Money in or out, how much, and what for. Brands and the leaderboard never see it.'], () => (
         <MoneyForm
           onSend={async (v, label) => {
             you(label);

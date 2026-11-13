@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const API = join(ROOT, 'apps/api/src');
-const PRIVATE_FILES = ['journal', 'wellbeing', 'fitness', 'supplements', 'companion', 'discover', 'feelings', 'assistant'];
+const PRIVATE_FILES = ['journal', 'wellbeing', 'fitness', 'supplements', 'companion', 'discover', 'feelings', 'assistant', 'tables'];
 
 const logsSrc = readFileSync(join(API, 'logs.ts'), 'utf8');
 const privateAreas = new Set([...(/PRIVATE_AREAS = new Set\(\[([^\]]*)\]/.exec(logsSrc)?.[1] ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1]));

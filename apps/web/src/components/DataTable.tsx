@@ -94,7 +94,7 @@ export function Select({ className = '', selectClass = '', children, ...rest }: 
 }
 
 /** A small switch for a cell. Same look as the app's Toggle, without a label of its own. */
-function Switch({ on, onChange, disabled, label }: { on: boolean; onChange: (on: boolean) => void; disabled?: boolean; label: string }) {
+export function Switch({ on, onChange, disabled, label }: { on: boolean; onChange: (on: boolean) => void; disabled?: boolean; label: string }) {
   return (
     <button type="button" role="switch" aria-checked={on} aria-label={label} disabled={disabled} onClick={() => onChange(!on)} className={`tap-pad relative h-[24px] w-[44px] shrink-0 rounded-pill transition-colors disabled:opacity-50 ${on ? 'bg-r4' : 'bg-line'}`}>
       <span className={`absolute top-[2px] left-[2px] size-[20px] rounded-pill bg-card shadow-toy-soft transition-transform ${on ? 'translate-x-[20px]' : ''}`} aria-hidden="true" />
@@ -108,7 +108,7 @@ function Switch({ on, onChange, disabled, label }: { on: boolean; onChange: (on:
  * a phone instead of squeezing. Nothing here talks to the server; the columns say what each edit does.
  */
 /** Scrolls a sideways-scrolling table box so the control that took focus shows whole, with 8px to spare; nothing when it fits. */
-function showFocused(e: FocusEvent<HTMLDivElement>) {
+export function showFocused(e: FocusEvent<HTMLDivElement>) {
   const box = e.currentTarget;
   if (box.scrollWidth <= box.clientWidth || !(e.target instanceof HTMLElement)) return;
   const b = box.getBoundingClientRect();

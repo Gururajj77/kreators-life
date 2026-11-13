@@ -112,10 +112,11 @@ adminConnect.get('/places', async (c) => {
   const me = actor?.id ?? '';
   const answer = (places: ConnectPlace[], mine = false) => c.json({ places, mine } satisfies ConnectPlaces);
   if (kind === 'cohort') {
+    // The newest 100 cohorts, shown in name order (2026-11-13): cut by name, a cohort made after the hundredth name could never be picked.
     const rows = await db
       .prepare(
-        `SELECT k.id, k.name, k.manager_user_id, p.id AS program_id, p.created_by, ${VIS} AS vis, p.name AS program, u.display_name AS manager FROM cohorts k JOIN programs p ON p.id = k.program_id LEFT JOIN users u ON u.id = k.manager_user_id
-         WHERE p.id != ?1 AND (?2 = 1 OR ${cohortManagerSql('?3')}) ORDER BY p.name COLLATE NOCASE, k.name COLLATE NOCASE LIMIT 100`,
+        `SELECT * FROM (SELECT k.id, k.name, k.manager_user_id, p.id AS program_id, p.created_by, ${VIS} AS vis, p.name AS program, u.display_name AS manager FROM cohorts k JOIN programs p ON p.id = k.program_id LEFT JOIN users u ON u.id = k.manager_user_id
+         WHERE p.id != ?1 AND (?2 = 1 OR ${cohortManagerSql('?3')}) ORDER BY k.created_at DESC, k.id LIMIT 100) ORDER BY program COLLATE NOCASE, name COLLATE NOCASE`,
       )
       .bind(ADMIN_GUIDE_PROGRAM, all ? 1 : 0, me)
       .all<{ id: string; name: string; manager_user_id: string | null; program_id: string; created_by: string | null; vis: ProgramVisibility; program: string; manager: string | null }>();

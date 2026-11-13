@@ -85,8 +85,8 @@ Each pillar's guide asks three quick questions. **Write my own** lets her answer
 
 The strategy session and Pillars are core. You cannot switch them off for anyone, and they are always open.
 
-1. **Privacy:** her map, scores, fears and contract are hers. No admin screen shows them.
-2. **Coaches:** a life coach sees only what Riya shares on that link. There are six switches: Daily and streaks, Pillars and pyramids, Routine and contract, Life map answers, Reflection and Patterns. She can turn any off.
+1. **Privacy:** her map, scores, fears and contract are hers. The one door is **Tables** in **People**: a super admin can read them there, never change them, and each table you open goes in the audit log. Open one only to answer her question.
+2. **Coaches:** a life coach sees only what Riya shares on that link. There are six switches: Daily and streaks, Pillars and pyramids, Routine and contract, Life map answers, Reflection and Patterns. She can turn any off. She can also switch on whole tables for them, one by one, read only.
 3. **Making a coach:** use the **Life coaches** tab in Admin to answer people who asked to coach.
 4. **The live call:** a person asks from the contract or the life map, every admin hears once in the inbox, and the team writes to set a time. Once payments are live it is paid first, and only the signed webhook marks it paid.
 

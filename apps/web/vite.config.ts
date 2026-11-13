@@ -83,6 +83,9 @@ export default defineConfig({
           if (id.includes('/packages/shared/src/connect.ts')) return 'shared-connect';
           // Joining by invite's words and readers (a subpath export and a leaf: it imports only types), read by Welcome's gate, /join, Admin's Invites and Profile, all lazy.
           if (id.includes('/packages/shared/src/invites.ts')) return 'shared-invites';
+          // All tables' registry (2026-11-13; a subpath export and a leaf: it imports only the shared-base files core, dates and money),
+          // read by the lazy All tables screens, a coach's and an admin's table pages and MyCoach's table switches, never the first download.
+          if (id.includes('/packages/shared/src/dataTables.ts')) return 'shared-tables';
           // The public site's words for search engines (every page's title, description and opening, the fair questions, the JSON-LD
           // builders; a subpath export that imports the rest of shared and that nothing in the barrel imports, like blockHints, so no
           // cycle), read through import() by lib/usePageMeta.ts, so it loads after the first paint and never with the shared chunk.

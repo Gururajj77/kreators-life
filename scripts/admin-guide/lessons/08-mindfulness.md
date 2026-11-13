@@ -74,7 +74,7 @@ These settings are saved on her account, so they follow her to her laptop.
 ## What the admin checks
 
 - **No pay to police:** logging mindful minutes pays no xp. Deleting a session takes nothing back.
-- **Private numbers:** mindful minutes are wellbeing data. They reach a coach only through the student's Reflection switch, never a brand or staff screen.
+- **Private numbers:** mindful minutes are wellbeing data. They reach a coach only through the student's Reflection switch or a table she switches on for them. They never reach a brand or a staff screen, not even a member's tables.
 - **Switches:** in Admin, **Flags**, the Mindfulness row sets On, Minimum role, Rollout % and Overrides. In **People**, **What does this person see?** sets it for one person.
 - **Sound help:** if someone hears nothing, ask them to tap Start once. Browsers only allow sound after a tap. Then check the master sound switch.
 - **Fullscreen help:** Escape, the same button, or leaving the page ends full screen.

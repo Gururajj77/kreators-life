@@ -35,7 +35,8 @@ import { summaryFor as wellbeingSummary } from './routes/wellbeing';
  * read. A coach reads a student only through an active link they are on, holding the Life coach permission at that
  * moment, and only the parts the student shares on that link; every read checks all three again, so ending a link,
  * switching a part off or taking the permission away cuts the view at once. The journal is never read here, nor gratitude, any
- * tracker note, money, water, supplements or the Companion. The report and the patterns are in coachReport.ts.
+ * tracker note, money, water, supplements or the Companion. The report and the patterns are in coachReport.ts. Since 2026-11-13 a student
+ * can also switch on whole tables of their own data for one coach, read only (All tables): those are read in routes/tables.ts, never here.
  */
 
 export const isCoach = (user: UserRow) => can(user, 'coach');

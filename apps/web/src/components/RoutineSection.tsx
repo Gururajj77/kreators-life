@@ -1,4 +1,4 @@
-import { minutesLabel, stepsMinutes, type DayType, type SessionResponse } from '@kreators/shared';
+import { minutesLabel, stepsMinutes, type BlockKey, type DayType, type SessionResponse } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef } from 'react';
 import { Link } from 'react-router';
@@ -13,8 +13,9 @@ import { clockOf } from '../lib/date';
 
 
 /**
- * The routine from the strategy session, on Daily: the morning steps as tick rows (done only when every one
- * is ticked), the day's other blocks as a timeline, and the week's dots. Without a session, one quiet row.
+ * The routine from the strategy session, on Daily: the morning steps as tick rows (the day is done only when every one
+ * is ticked), the day's other blocks as tick rows too (2026-11-13, the founder: a tick for each, paying nothing and never
+ * moving the day's done), and the week's dots. Without a session, one quiet row.
  */
 export function RoutineSection({ date }: { date: string }) {
   const qc = useQueryClient();
@@ -26,8 +27,8 @@ export function RoutineSection({ date }: { date: string }) {
   const chain = useRef<Promise<unknown>>(Promise.resolve());
   const latest = useRef(0);
   const mark = useMutation({
-    mutationFn: (body: { dayType: DayType; steps: string[]; n: number }) => {
-      const send = chain.current.catch(() => undefined).then(() => api.markRoutineDay({ date, dayType: body.dayType, steps: body.steps }));
+    mutationFn: (body: { dayType: DayType; steps: string[]; blocks: BlockKey[]; n: number }) => {
+      const send = chain.current.catch(() => undefined).then(() => api.markRoutineDay({ date, dayType: body.dayType, steps: body.steps, blocks: body.blocks }));
       chain.current = send;
       return send;
     },
@@ -37,7 +38,7 @@ export function RoutineSection({ date }: { date: string }) {
       if (before?.routine) {
         const morning = (body.dayType === 'general' ? before.routine.general : before.routine.exceptional).find((b) => b.key === 'morning')?.steps ?? [];
         const done = morning.length > 0 && morning.every((s) => body.steps.includes(s));
-        qc.setQueryData<SessionResponse>(key, { ...before, today: { day: date, dayType: body.dayType, steps: body.steps, done } });
+        qc.setQueryData<SessionResponse>(key, { ...before, today: { day: date, dayType: body.dayType, steps: body.steps, blocks: body.blocks, done } });
       }
       return { before };
     },
@@ -55,7 +56,7 @@ export function RoutineSection({ date }: { date: string }) {
       if (body.n === latest.current) void qc.invalidateQueries({ queryKey: ['session'], predicate: (x) => x.queryKey[1] !== date });
     },
   });
-  const save = (dayType: DayType, steps: string[]) => mark.mutate({ dayType, steps, n: ++latest.current });
+  const save = (dayType: DayType, steps: string[], blocks: BlockKey[]) => mark.mutate({ dayType, steps, blocks, n: ++latest.current });
   const d = q.data;
   // While /session loads, a title and a row of the no-routine card's size keep the place, so the small act below does not move.
   if (q.isPending) {
@@ -89,11 +90,18 @@ export function RoutineSection({ date }: { date: string }) {
   const blocks = dayType === 'general' ? d.routine.general : d.routine.exceptional;
   const morning = blocks.find((b) => b.key === 'morning');
   const ticked = new Set(d.today?.steps ?? []);
+  const blocksDone = new Set(d.today?.blocks ?? []);
   const toggle = (step: string) => {
     const next = new Set(ticked);
     if (next.has(step)) next.delete(step);
     else next.add(step);
-    save(dayType, [...next]);
+    save(dayType, [...next], [...blocksDone]);
+  };
+  const toggleBlock = (key: BlockKey) => {
+    const next = new Set(blocksDone);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    save(dayType, [...ticked], [...next]);
   };
   const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   return (
@@ -116,7 +124,7 @@ export function RoutineSection({ date }: { date: string }) {
       {d.routine.practices.affirmation && <p className="mt-sm m-0 rounded-tile bg-paper p-sm text-subhead font-semibold">“{d.routine.practices.affirmation}”</p>}
       <div className="mt-sm flex gap-xs">
         {(['general', 'exceptional'] as const).map((t) => (
-          <button key={t} type="button" className={chip(dayType === t)} onClick={() => save(t, [...ticked])} aria-pressed={dayType === t}>
+          <button key={t} type="button" className={chip(dayType === t)} onClick={() => save(t, [...ticked], [...blocksDone])} aria-pressed={dayType === t}>
             {t === 'general' ? 'Normal day' : 'Exceptional day'}
           </button>
         ))}
@@ -133,18 +141,27 @@ export function RoutineSection({ date }: { date: string }) {
           ))}
         </div>
       )}
-      <ol className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
+      <p id="routine-rest" className="mt-sm m-0 text-subhead font-semibold">
+        The rest of your day
+      </p>
+      <ol className="mt-xs flex list-none flex-col gap-xs p-0 m-0" aria-labelledby="routine-rest">
         {blocks
           .filter((b) => b.key !== 'morning')
           .map((b) => (
-            <li key={b.key} className="flex items-start gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
-              <span className="w-[100px] shrink-0 text-caption text-ink-soft">
-                {clockOf(b.start)} to {clockOf(b.end)}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-subhead font-semibold">{b.name}</span>
-                <span className="block text-caption text-ink-soft">{b.note}</span>
-              </span>
+            <li key={b.key}>
+              <CheckRow
+                checked={blocksDone.has(b.key)}
+                onToggle={() => toggleBlock(b.key)}
+                title={b.name}
+                subtitle={
+                  <>
+                    <span className="whitespace-nowrap">
+                      {clockOf(b.start)} to {clockOf(b.end)}
+                    </span>
+                    {b.note ? `. ${b.note}` : ''}
+                  </>
+                }
+              />
             </li>
           ))}
       </ol>

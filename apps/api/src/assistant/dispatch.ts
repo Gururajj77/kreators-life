@@ -33,8 +33,8 @@ export function seg(v: unknown): string {
   return v;
 }
 
-/** A caller bound to one person's session. */
-export function caller(fetcher: Fetcher, token: string): (req: Req) => Promise<Answer> {
+/** A caller bound to one person's session. `via` names who is calling in the X-Kreators-Via header: the assistant, or All tables (2026-11-13). */
+export function caller(fetcher: Fetcher, token: string, via: 'assistant' | 'tables' = 'assistant'): (req: Req) => Promise<Answer> {
   return async (req) => {
     const url = new URL(`http://internal/api${req.path}`);
     // The path must arrive as written: anything the URL parser had to tidy (a dot segment, a stray slash) is refused.
@@ -42,7 +42,7 @@ export function caller(fetcher: Fetcher, token: string): (req: Req) => Promise<A
     const res = await fetcher(
       new Request(url, {
         method: req.method,
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Kreators-Via': 'assistant' },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Kreators-Via': via },
         body: req.body === undefined ? undefined : JSON.stringify(req.body),
       }),
     );
