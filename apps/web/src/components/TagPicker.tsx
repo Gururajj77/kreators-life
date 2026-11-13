@@ -1,7 +1,7 @@
 import { cleanIdentity, IDENTITY_BY_KEY, IDENTITY_LABEL_MAX, identitiesOf, MAX_CUSTOM_IDENTITIES, MAX_IDENTITIES, OWN_TAG_ICON, SETUP_ROLE_GROUPS, type IconName, type IdentityOption, type MeResponse } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, Plus, X } from 'lucide-react';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { api } from '../lib/api';
 import { evenGrid, evenTile } from '../lib/bento';
 import { focusHeadingAfter } from '../lib/focusHeading';
@@ -43,7 +43,7 @@ const TAG_COLS = { base: 2, '@lg': 3, '@3xl': 4 } as const;
 
 const isStage = (k: string) => IDENTITY_BY_KEY[k]?.kind === 'stage';
 
-export function TagPicker({ identities }: { identities: readonly string[] }) {
+export function TagPicker({ identities, action, actionClass = '' }: { identities: readonly string[]; action?: ReactNode; actionClass?: string }) {
   const qc = useQueryClient();
   const refresh = useRefreshAll();
   const [said, setSaid] = useState('');
@@ -133,6 +133,10 @@ export function TagPicker({ identities }: { identities: readonly string[] }) {
           </ul>
         )}
         {own.length < MAX_CUSTOM_IDENTITIES && !atMax && <AddOwn onAdd={addOwn} />}
+        {/* The section's own action ends the line at its right (the founder, 2026-11-13: "Match my apps again" beside "In your own words");
+            when the line wraps, ml-auto keeps it at the right of the line it lands on. */}
+        {/* actionClass: where the screen draws it here (Profile: a laptop only; a phone and a tablet draw it beside the title). */}
+        {action && <div className={`ml-auto shrink-0 ${actionClass}`}>{action}</div>}
       </div>
       {GROUPS.map((g) => {
         const count = g.keys.filter((k) => identities.includes(k)).length;

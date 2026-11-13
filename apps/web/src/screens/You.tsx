@@ -125,6 +125,11 @@ function YouView({ data }: { data: MeResponse }) {
   // Who you are, from the setup chat, and the apps it says fit: the same match, so Features can say why.
   const setup = { identities: user.identities, goals: user.intake.goals, blockers: user.intake.blockers };
   const whoLine = identityLine(setup);
+  const matchAgain = (
+    <Link to="/onboarding?fresh=1" className="toy toy-soft inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center rounded-pill bg-card px-md text-subhead font-semibold text-ink">
+      Match my apps again
+    </Link>
+  );
   const fits = useFits();
   const awarded = new Set(honors);
 
@@ -183,21 +188,18 @@ function YouView({ data }: { data: MeResponse }) {
       </AppCover>
 
       <section className="mt-lg" aria-labelledby="who-heading">
-        {/* The title at the left and the way to match the apps again at its right (a section's link sits at its top right); a narrow phone wraps it under, still at the right. */}
-        <div className="flex flex-wrap items-center justify-between gap-xs">
+        {/* The way to match the apps again (the founder, 2026-11-13): on a phone and a tablet at the right of the title's line, since the
+            "In your own words" line has no room for it there; on a laptop at the right end of that line. One is drawn at a time. */}
+        <div className="flex items-center justify-between gap-xs">
           <h2 id="who-heading" className="min-w-0 text-title2">
             Who you are
           </h2>
-          {/* -my-xs: the 48px button reaches 8px above and below the title's row instead of making the row 48px tall, so the line under the
-              title sits as close to it as every other section's (it pushed it 11px further down). From the tablet up only: on a phone the
-              line runs under the button, so there the button keeps its row and the line stays clear of it. */}
-          <Link to="/onboarding?fresh=1" className="toy toy-soft md:-my-xs ml-auto inline-flex min-h-[40px] md:min-h-[48px] tap-pad shrink-0 items-center rounded-pill bg-card px-md text-subhead font-semibold text-ink">
-            Match my apps again
-          </Link>
+          {/* -my-xs: the tablet's 48px button reaches 8px above and below the title's row instead of making the row taller. */}
+          <div className="shrink-0 md:-my-xs lg:hidden">{matchAgain}</div>
         </div>
         <p className="mt-xs m-0 text-subhead text-ink-soft">{whoLine || 'No tags yet. Pick the ones that fit you.'}</p>
         {/* Every tag as a tile to pick, saved as you tap (components/TagPicker.tsx). */}
-        <TagPicker identities={user.identities} />
+        <TagPicker identities={user.identities} action={matchAgain} actionClass="hidden lg:block" />
         {/* Two short lines: what tags do, then the privacy promise with the way to read more. */}
         <p className="mt-xs m-0 text-caption text-ink-soft">Tags mark the apps that fit you.</p>
         <Nudge text="They never show on your public page." />
