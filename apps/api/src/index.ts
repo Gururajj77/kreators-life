@@ -216,6 +216,8 @@ app.use('*', async (c, next) => {
   if (!keys) return next();
   if (adminGuideBypass(path, c.get('user').role)) return next();
   const { access } = await resolveAccess(c.env.DB, c.get('user'));
+  // Kept for the request, so a route that also asks which apps are on for this same person (All tables' `needs`) reads it once.
+  c.set('gateAccess', access);
   if (keys.some((k) => access[k]?.available)) return next();
   const name = MODULE_BY_KEY[keys[0] ?? '']?.name ?? 'That app';
   return c.json({ error: `${name} is not available on your account.`, module: keys[0] }, 403);

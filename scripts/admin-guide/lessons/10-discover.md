@@ -79,6 +79,7 @@ Human design and numerology are shown as systems for reflection, not science. Th
 
 - **Owner only:** Discover answers and results are like the journal. They are never shown to brands, staff, the leaderboard or a coach.
 - **The assistant:** it sees only a short profile, and only while the person's switch is on.
+- **Its tables:** in **All tables**, results and add-ons are tables only the person and AI chat read, never a coach or staff. AI chat reads them only while that switch and **Show to AI chat** are both on, on a model that keeps nothing.
 - **Birth details:** they stay on the person's own table. Only type, strategy, authority and profile can reach the assistant or next steps.
 - **Dev Tools:** it counts each add-on finished and how many switched how your mind works on. Counts only, no names or answers.
 - **Switches:** in Admin, **Flags**, the Discover row sets On, Minimum role, Rollout % and Overrides. In **People**, **What does this person see?** sets it for one person.

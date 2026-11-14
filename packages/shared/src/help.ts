@@ -23,7 +23,7 @@ export const HOW_TO: Record<string, HowTo> = {
       'Tap a flow to log something by answering a question or two: a check-in, a task, your sleep, money in or out. The flows are free for everyone.',
       'With a plan you can also type what you did, like “I edited the vlog and slept six hours”. It does it in the app as you, then lists each change with an Undo. It can also log movement, your eating check-in and the day’s gratitude. Removing things and settling money wait for your Confirm.',
       'Typing spends credits, and a typical message is about 12. Pro gives 10,000 credits a month, Pro Max 100,000 and Ultra 400,000. Each plan also caps what one message and one day can spend.',
-      'It earns the same xp and points as a tap, waits the same waits, and never sees anything that is not yours. It reads your journal only when you ask about it, and a whole table from All tables only when you switch on Show to AI chat for it.',
+      'It earns the same xp and points as a tap, waits the same waits, and never sees anything you cannot see yourself. It reads a whole table from All tables only when you switch on Show to AI chat for it. Your journal and gratitude too: it reads them only when you ask, and only while their tables are on. The journal, body and mind and tables with other people’s details need a model that keeps nothing.',
     ],
     terms: ['assistant', 'credits', 'top-up'],
   },
@@ -283,7 +283,7 @@ export const HOW_TO: Record<string, HowTo> = {
     steps: [
       'Write it down, with a feeling and a stress level. The feeling feeds Life.',
       'Gratitude for today: three lines, each under a prompt, saved as you type. On an empty line, tap the pillar’s name to pick another, or keep the three as your usual. A prompt you wrote under or skipped comes back only after the rest of that pillar’s prompts.',
-      'Only you see your journal: never brands, staff or the leaderboard, and a life coach only if you switch its table on for them.',
+      'Only you see your journal: never brands, staff or the leaderboard. A life coach sees it only if you switch its table on for them, and the assistant and the Companion only if you switch on Show to AI chat for it.',
       'A dot on the calendar marks a day with gratitude. Search finds entries.',
       'Not sure what to write? Tap Prompt me for a question from a category such as shadow work, gratitude or a weekly reset, with why it helps and what to expect. Write about this opens a new entry with the question as its first line. Which prompts you saw stays on this device.',
     ],
@@ -292,7 +292,7 @@ export const HOW_TO: Record<string, HowTo> = {
   coaching: {
     steps: [
       'A life coach is someone the team chose, with the Life coach badge. Find one under Coaching and ask, say yes when a coach asks you, or open a coach’s invite link. Nothing is shared until you say yes.',
-      `You pick what your coach sees, in six parts: Daily and streaks, pillars and pyramids, routine and contract, life map answers, reflection and patterns. Reflection is your mood, sleep, stress, mindful minutes, movement and how you ate, as numbers, and your saved reviews. The six parts never show your journal, gratitude, supplements, money or a note. You can also switch on whole tables for one coach, one by one, on your Profile tab or with Show to my coach at the top of a table: each starts off, and your coach can read it, never change it. Change it or end it any time on your Profile tab. Up to ${MAX_COACHES} coaches at once.`,
+      `You pick what your coach sees, in six parts: Daily and streaks, pillars and pyramids, routine and contract, life map answers, reflection and patterns. Reflection is your mood, sleep, stress, mindful minutes, movement and how you ate, as numbers, and your saved reviews. The six parts never show your journal, gratitude, supplements, money or a note. You can also switch on whole tables for one coach, one by one, on your Profile tab or with Show to my coach at the top of a table: each starts off, and your coach can read it, never change it. A table with other people’s details, such as buyers, guests or chats, is never offered to a coach. Change it or end it any time on your Profile tab. Up to ${MAX_COACHES} coaches at once.`,
       'Patterns are what the app finds in the parts you share, by plain rules, kept nowhere. They say what goes together, never why. On for a new coach, off for a coach you had before. A coach can ask once a week, and the choice stays yours.',
       'Your coach leaves notes and can add or edit tasks in your pyramids, marked From your coach: the dates, priority, repeat, length and whether it counts as a habit, never a time block. Only you tick them, and they pay the same xp as your own. Every ask, yes, note and task change is in the change log, for both of you.',
       'Are you a life coach? Say so in the setup chat, on your Profile or here, and the team checks first. Then add students by @username, friend code or email, or share your invite link; each one has to say yes. Each student has a report by day, week, month or quarter, and Show on this page hides any section.',
@@ -303,9 +303,9 @@ export const HOW_TO: Record<string, HowTo> = {
     steps: [
       'A chat that knows your day: your streak, your pillars, your tasks, your mood and your sleep.',
       'Say what is on your mind. It reflects and asks a better question back.',
-      'With a plan it answers with the model you pick. Without one, the built-in companion answers, free. Only a model that keeps nothing sees your mood and sleep. It can read a whole table from All tables only when you switch on Show to AI chat for it.',
+      'With a plan it answers with the model you pick. Without one, the built-in companion answers, free. Only a model that keeps nothing sees your mood and sleep. It can read a whole table from All tables, your journal and gratitude among them, only when you switch on Show to AI chat for it.',
       'It is not a therapist and never pretends to be one. In danger, call your local emergency number or go to the nearest hospital.',
-      'The chat stays with you alone.',
+      'The chat stays with you alone. No coach or admin ever sees it, even as a table.',
     ],
     terms: [],
   },
@@ -432,7 +432,7 @@ export const HOW_TO: Record<string, HowTo> = {
       'You get your top three strengths out of seven, one for each relationship, a detailed read on five personality traits, your reasoning puzzles and, if you add it, your emotional intelligence. The reasoning part is not an IQ test.',
       'Under More ways to know yourself are four self-checks you can take on their own: your 16 personality type, in the style of Myers-Briggs, your love languages (how you like to be shown love and how you show it), how your mind works (never a diagnosis), and Human design. Human design works out your chart from your birth date, time and zone, reads it in the tropical and the sidereal zodiac and in three layers, and turns it into goals you can do and count. Numerology sits beside the three layers, with the master numbers 11, 22 and 33, and sets your numbers next to what Discover learned about you. They are systems for reflection, not science.',
       'Every number is you against your own scale, never against other people. A result is not a verdict: use it, watch for its other side, and try the small thing it suggests.',
-      'Only you see it. It never reaches brands, staff, the leaderboard or a life coach. You choose whether it shapes your next steps (on by default, plain rules) and whether the assistant may learn from a short summary (off until you say). How your mind works has its own switch, off until you say. You can retake any part or delete it.',
+      'Only you see it. It never reaches brands, staff, the leaderboard or a life coach, not even as a table. You choose whether it shapes your next steps (on by default, plain rules) and whether the assistant may learn from a short summary (off until you say). Its tables reach AI chat only while that is on too. How your mind works has its own switch, off until you say. You can retake any part or delete it.',
     ],
     terms: ['strength', 'personality type', 'love language', 'signs', 'human design', 'gate', 'channel', 'sidereal', 'numerology', 'master number'],
   },
@@ -490,7 +490,7 @@ export const HOW_TO: Record<string, HowTo> = {
   },
   admin: {
     steps: [
-      'Tables for people, flags, listings, orders, webhooks, KYC, mail and audit. Sort by any column, search, filter, tick rows for bulk actions, and edit a cell in place. Only an admin changes a role, never their own.',
+      'Tables for people, flags, listings, orders, webhooks, KYC, mail and audit. Sort by any column, search, filter, tick rows for bulk actions, and edit a cell in place. Only an admin changes a role, never their own. A person’s Tables opens their own tables, read only and logged, never the journal, gratitude, body and mind or a table with other people’s details.',
       'Life coaches: say yes or no to people who asked to coach, and give or take the Life coach badge.',
       'Connect people joins two people the app’s own way: a coach and a student, an Agency team, a private program or course, a Club manager, or two friends. Most wait for a yes. Every one is listed, and you can end it.',
       `Invites: while Invite only is on, a new account needs an invite code. Approve someone on the waitlist and they get a code by email, or make codes to share as a link or a code. Each works once. Whoever made it is credited, and paid once the person has used the app on ${INVITE_ACTIVE_DAYS} different days.`,
@@ -500,12 +500,12 @@ export const HOW_TO: Record<string, HowTo> = {
   },
   tables: {
     steps: [
-      'All tables shows your own data as tables, in groups like the app: Daily, Pillars, Reviews, Body and mind, Journal, Money, Learning, People and your account. Open one to see its rows.',
+      'All tables shows your own data as tables, from tasks and moods to your shop, clients, events and chats. They are grouped like the Apps page: one toggle for each group, with parts like Daily, Journal and Money inside. A table shows only while its app is shown, and Business metrics only while its switch in Reviews is on too. Open one to see its rows.',
       'Tap a column’s name to sort by it. Pick a filter or type in the search box to narrow it down. A page shows 10 rows at first. Pick 25, 50 or 100 at the bottom left, and move between pages at the bottom right.',
       // The number is CSV_MAX_ROWS in dataTables.ts (a test holds the two together; importing it would load the registry with this panel).
       'Tick rows to copy them or to download them as a CSV file. Download all gets every row that matches, up to 5,000 (fewer on a wide table), ten files a day.',
       'Where a cell can change, tap it, change it and press Enter. It saves the same way as the app’s own screen, so the same rules and waits apply. Records such as xp, points, orders, badges and signed paper stay as they are. Tasks and inbox notes can be archived, brought back, or deleted for good from the archive.',
-      'A life coach sees a table only when you switch on Show to my coach at the top of it, and the assistant and the Companion only with Show to AI chat beside it. Both lists are on your Profile tab too, and none of them can change a table. The journal, gratitude and body and mind tables reach AI chat only on a model that keeps nothing, and never an admin. Each table an admin opens is written in the audit log.',
+      'A life coach sees a table only when you switch on Show to my coach at the top of it, and the assistant and the Companion only with Show to AI chat beside it. That goes for your journal too, even when you ask about it. Both lists are on your Profile tab too, grouped the same way, and none of them can change a table. A table with other people’s details, such as buyers, guests, clients or chats, never reaches a coach or an admin. It reaches AI chat only on a model that keeps nothing, like the journal, gratitude and body and mind tables, which an admin never opens either. Each table an admin opens is written in the audit log.',
     ],
     terms: ['table', 'life coach'],
   },

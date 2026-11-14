@@ -335,23 +335,107 @@ export function rampTime(real: string, target: string, weeksCompliant: number, d
   if (gap > day / 2) return toHHMM(toMin(real));
   return toHHMM(toMin(target) + Math.max(0, gap - RAMP_MINUTES * Math.max(0, weeksCompliant)));
 }
+/**
+ * The coach's template anchors (Strategy Session App Product Spec, the routine table): the last meal by eight, people until
+ * nine, nine to eleven for learning and reflection. They hold whenever the person's day allows them.
+ */
+const LAST_MEAL = '20:00';
+const PEOPLE_UNTIL = '21:00';
+const LEARNING_UNTIL = '23:00';
+/** The template's gap from the last meal to lights out (20:00 against 23:30). */
+const LAST_MEAL_BEFORE_SLEEP = 210;
+/** Food and water's note: the template's own while the last meal is at eight, and words that hold for any time once it moved. */
+export const FOOD_NOTE = 'Water through the day. Last meal by eight.';
+export const FOOD_NOTE_MOVED = 'Water through the day. Last meal by the end of this block.';
+const foodNoteFor = (end: string) => (end === LAST_MEAL ? FOOD_NOTE : FOOD_NOTE_MOVED);
+
+export interface DaySpan {
+  start: string;
+  end: string;
+}
+/** Where Food and water, People and Learning sit on one day, and whether the template's own times held. */
+export interface DayLayout {
+  food: DaySpan;
+  people: DaySpan;
+  learning: DaySpan;
+  /** Learning on an exceptional day: the last hour of it at most. */
+  learningShort: DaySpan;
+  template: { food: boolean; evening: boolean };
+}
+
+/**
+ * The one rule for the times of Food and water, People and Learning, used by routineFor and by repairRoutineBlocks. It works
+ * in minutes since wake-up (t), on a waking day that runs from wake-up to lights out (D; lights out at the wake-up time is a
+ * whole day). The morning is the first hour, work keeps the person's own times, lights out keeps theirs.
+ * - Food and water starts an hour after wake-up and ends at eight while eight is at least an hour into it and not after
+ *   lights out; otherwise it ends three and a half hours before lights out, never under an hour long and never past lights out.
+ * - People then Learning: the template (people from the end of work to nine, learning nine to eleven, an exceptional day ten
+ *   to eleven) while work ends at least half an hour before nine and eleven falls before lights out. Otherwise the evening
+ *   after work up to eleven, or up to half an hour before lights out when eleven is past lights out or less than an hour
+ *   after work (so work that ends at half past eleven still leaves its evening after it): Learning takes up to two hours at
+ *   its end, People at least half an hour before it. With no hour after work, the stretch before work (its last two and a
+ *   half hours at most). With no hour on either side, the last hour of the waking day. An exceptional day's Learning is the
+ *   last hour of it at most.
+ */
+export function dayLayout(day: Pick<RealDay, 'wake' | 'sleep' | 'workStart' | 'workEnd'>): DayLayout {
+  const DAY = 24 * 60;
+  const w = toMin(day.wake);
+  const t = (x: string) => (((toMin(x) - w) % DAY) + DAY) % DAY;
+  const at = (m: number) => toHHMM(w + m);
+  const D = t(day.sleep) || DAY;
+  // Food and water.
+  const t20 = t(LAST_MEAL);
+  const foodHolds = t20 >= 120 && t20 <= D;
+  const food = { start: at(60), end: foodHolds ? LAST_MEAL : at(Math.max(60, Math.min(D, Math.max(120, D - LAST_MEAL_BEFORE_SLEEP)))) };
+  // People then Learning.
+  const tWorkEnd = t(day.workEnd);
+  const t21 = t(PEOPLE_UNTIL);
+  const t23 = t(LEARNING_UNTIL);
+  const split = (a: number, b: number) => {
+    const learn = Math.min(120, b - a - 30);
+    return { people: { start: at(a), end: at(b - learn) }, learning: { start: at(b - learn), end: at(b) }, learningShort: { start: at(b - Math.min(60, learn)), end: at(b) } };
+  };
+  const eveningHolds = tWorkEnd + 30 <= t21 && t21 < t23 && t23 <= D;
+  let evening: Pick<DayLayout, 'people' | 'learning' | 'learningShort'>;
+  if (eveningHolds) {
+    evening = { people: { start: day.workEnd, end: PEOPLE_UNTIL }, learning: { start: PEOPLE_UNTIL, end: LEARNING_UNTIL }, learningShort: { start: '22:00', end: LEARNING_UNTIL } };
+  } else {
+    const a = Math.max(tWorkEnd, 60);
+    // Eleven ends the evening only while it leaves an hour after work; past that the evening runs to half an hour before lights out.
+    const b = t23 <= D && t23 - a >= 60 ? t23 : D - 30;
+    const beforeWork = Math.min(t(day.workStart), D);
+    if (b - a >= 60) evening = split(a, b);
+    else if (beforeWork - 60 >= 60) evening = split(Math.max(60, beforeWork - 150), beforeWork);
+    else {
+      const from = Math.max(0, D - 60);
+      const mid = Math.max(from, D - 30);
+      const learning = { start: at(mid), end: at(D) };
+      evening = { people: { start: at(from), end: at(mid) }, learning, learningShort: learning };
+    }
+  }
+  return { food, ...evening, template: { food: foodHolds, evening: eveningHolds } };
+}
+
 /** The routine from the coach's template, ramped from the person's real day. Pure, so it can be tested. */
 export function routineFor(day: RealDay, weeksCompliant: number, focus: RelationshipKey[], placements: Placement[]): Routine {
   const wake = rampTime(day.wake || DEFAULT_REAL_DAY.wake, TARGET_WAKE, weeksCompliant, 'earlier');
   const sleep = rampTime(day.sleep || DEFAULT_REAL_DAY.sleep, TARGET_SLEEP, weeksCompliant, 'earlier');
   const w = toMin(wake);
+  const workStart = day.workStart || DEFAULT_REAL_DAY.workStart;
+  const workEnd = day.workEnd || DEFAULT_REAL_DAY.workEnd;
+  const lay = dayLayout({ wake, sleep, workStart, workEnd });
   const exposure = placements.filter((p) => placementFlags(p).required).map((p) => RELATIONSHIP_BY_KEY[p.relationship].name.toLowerCase());
   const morningSteps = ['Mantra, five to ten minutes', 'Three breathing rounds', 'Two minutes of seeing the day go well', 'Ten minutes of movement', 'One page of reading'];
   const general: RoutineBlock[] = [
     { key: 'morning', name: 'Morning routine', start: wake, end: toHHMM(w + 60), steps: morningSteps, minutes: [10, 3, 2, 10, 5], note: 'Done only when every step is ticked.' },
-    { key: 'nutrition', name: 'Food and water', start: toHHMM(w + 60), end: '20:00', steps: [], note: 'Water through the day. Last meal by eight.' },
-    { key: 'work', name: 'Work', start: day.workStart || DEFAULT_REAL_DAY.workStart, end: day.workEnd || DEFAULT_REAL_DAY.workEnd, steps: [], note: day.gym ? `Gym at ${day.gym}, before dinner.` : 'Gym before dinner if you train.' },
-    { key: 'social', name: 'People', start: day.workEnd || DEFAULT_REAL_DAY.workEnd, end: '21:00', steps: [], note: exposure.length ? `One small scary thing a day for ${exposure.join(' and ')}. Log it.` : focus.length ? `One real conversation a day for ${focus.map((k) => RELATIONSHIP_BY_KEY[k].name.toLowerCase()).join(' or ')}.` : 'One real conversation a day.' },
-    { key: 'skills', name: 'Learning and reflection', start: '21:00', end: '23:00', steps: [], note: 'A lesson, then the journal: mood, stress, where you were on the map today.' },
+    { key: 'nutrition', name: 'Food and water', start: lay.food.start, end: lay.food.end, steps: [], note: foodNoteFor(lay.food.end) },
+    { key: 'work', name: 'Work', start: workStart, end: workEnd, steps: [], note: day.gym ? `Gym at ${day.gym}, before dinner.` : 'Gym before dinner if you train.' },
+    { key: 'social', name: 'People', start: lay.people.start, end: lay.people.end, steps: [], note: exposure.length ? `One small scary thing a day for ${exposure.join(' and ')}. Log it.` : focus.length ? `One real conversation a day for ${focus.map((k) => RELATIONSHIP_BY_KEY[k].name.toLowerCase()).join(' or ')}.` : 'One real conversation a day.' },
+    { key: 'skills', name: 'Learning and reflection', start: lay.learning.start, end: lay.learning.end, steps: [], note: 'A lesson, then the journal: mood, stress, where you were on the map today.' },
     { key: 'sleep', name: 'Lights out', start: sleep, end: wake, steps: [], note: 'Evening line on the way down.' },
   ];
   const exceptional: RoutineBlock[] = general.map((b) =>
-    b.key === 'morning' ? { ...b, end: toHHMM(w + 20), steps: ['Mantra, five minutes', 'One breathing round', 'Five minutes of movement'], minutes: [5, 1, 5], note: 'The short form for a day that is not yours.' } : b.key === 'skills' ? { ...b, start: '22:00', note: 'Just the journal tonight.' } : b,
+    b.key === 'morning' ? { ...b, end: toHHMM(w + 20), steps: ['Mantra, five minutes', 'One breathing round', 'Five minutes of movement'], minutes: [5, 1, 5], note: 'The short form for a day that is not yours.' } : b.key === 'skills' ? { ...b, start: lay.learningShort.start, note: 'Just the journal tonight.' } : b,
   );
   return { general, exceptional };
 }
@@ -394,6 +478,9 @@ export function parseRoutineBlocks(input: unknown, current: RoutineBlock[]): Rou
     if (!raw) return was;
     const time = (v: unknown, fallback: string) => (typeof v === 'string' && HHMM.test(v) ? v : fallback);
     const block: RoutineBlock = { key, name: was.name, start: time(raw.start, was.start), end: time(raw.end, was.end), steps: [], note: typeof raw.note === 'string' ? text(raw.note, ROUTINE_NOTE_MAX) : was.note };
+    // Food and water's note follows its end while it is still one of the app's own two, so a moved end never says "by eight";
+    // a note the person wrote stays theirs.
+    if (key === 'nutrition' && (block.note === FOOD_NOTE || block.note === FOOD_NOTE_MOVED)) block.note = foodNoteFor(block.end);
     if (key !== 'morning') return block;
     const minutes = Array.isArray(raw.minutes) ? raw.minutes : [];
     const seen = new Set<string>();
@@ -405,6 +492,113 @@ export function parseRoutineBlocks(input: unknown, current: RoutineBlock[]): Rou
     if (kept.length === 0) return { ...block, steps: was.steps, ...(was.minutes ? { minutes: was.minutes } : {}) };
     return { ...block, steps: kept.map((x) => x.step), minutes: kept.map((x) => x.mins) };
   });
+}
+
+/** The blocks whose times must run forward on the person's day. Morning, work and lights out are the person's own and are never refused. */
+export const ROUTINE_TIMED_KEYS: readonly BlockKey[] = ['nutrition', 'social', 'skills'];
+const isClock = (v: unknown): v is string => typeof v === 'string' && HHMM.test(v);
+const blockIn = (blocks: readonly RoutineBlock[], key: BlockKey): RoutineBlock | undefined =>
+  blocks.find((b): b is RoutineBlock => Boolean(b) && typeof b === 'object' && (b as { key?: unknown }).key === key);
+/** The day a saved routine describes: wake-up from the morning's start (else lights out's end), lights out, and work. */
+function routineDayOf(blocks: readonly RoutineBlock[]): Pick<RealDay, 'wake' | 'sleep' | 'workStart' | 'workEnd'> | null {
+  const morning = blockIn(blocks, 'morning');
+  const sleep = blockIn(blocks, 'sleep');
+  const work = blockIn(blocks, 'work');
+  const wake = [morning?.start, sleep?.end].find(isClock);
+  if (!wake) return null;
+  return {
+    wake,
+    sleep: isClock(sleep?.start) ? sleep.start : wake,
+    workStart: isClock(work?.start) ? work.start : DEFAULT_REAL_DAY.workStart,
+    workEnd: isClock(work?.end) ? work.end : DEFAULT_REAL_DAY.workEnd,
+  };
+}
+/**
+ * A block runs backwards when its end comes before its start on the day counted from wake-up, so a block that crosses
+ * midnight inside the waking day is fine. With lights out at the wake-up time the day is a whole day, and an end at wake-up is its end.
+ */
+function runsBackwards(day: Pick<RealDay, 'wake' | 'sleep'>, b: RoutineBlock | undefined): boolean {
+  if (!b || !isClock(b.start) || !isClock(b.end)) return false;
+  const DAY = 24 * 60;
+  const w = toMin(day.wake);
+  const t = (x: string) => (((toMin(x) - w) % DAY) + DAY) % DAY;
+  const whole = t(day.sleep) === 0;
+  const end = t(b.end) === 0 && whole ? DAY : t(b.end);
+  return end < t(b.start);
+}
+/** A timed block that runs backwards, and which of its times to change. */
+export interface RoutineTimesIssue {
+  block: RoutineBlock;
+  /**
+   * The start when it falls while the person is asleep (after lights out and before wake-up, as when the morning moved later
+   * than Food and water's start): no end can fix that. Otherwise the end, which comes before the start.
+   */
+  field: 'start' | 'end';
+  /** Wake-up as the routine's own blocks give it (the morning's start), for "Pick a start after …". */
+  wake: string;
+}
+/** The first of Food and water, People or Learning (in the routine's own order) that runs backwards, and which time to change. */
+export function routineTimesIssue(blocks: readonly RoutineBlock[]): RoutineTimesIssue | null {
+  if (!Array.isArray(blocks)) return null;
+  const day = routineDayOf(blocks);
+  if (!day) return null;
+  const block = blocks.find((b) => Boolean(b) && typeof b === 'object' && ROUTINE_TIMED_KEYS.includes(b.key) && runsBackwards(day, b));
+  if (!block) return null;
+  const DAY = 24 * 60;
+  const w = toMin(day.wake);
+  const t = (x: string) => (((toMin(x) - w) % DAY) + DAY) % DAY;
+  const D = t(day.sleep) || DAY;
+  return { block, field: t(block.start) > D ? 'start' : 'end', wake: day.wake };
+}
+/** The first of Food and water, People or Learning (in the routine's own order) whose end comes before its start, if any. */
+export function routineBackwardsBlock(blocks: readonly RoutineBlock[]): RoutineBlock | null {
+  return routineTimesIssue(blocks)?.block ?? null;
+}
+/**
+ * The one check on edited routine times, for PATCH /session/routine (the editor words the same with the times in the person's
+ * own format): the block named and the time to change, or null.
+ */
+export function routineTimesProblem(blocks: readonly RoutineBlock[]): string | null {
+  const issue = routineTimesIssue(blocks);
+  if (!issue) return null;
+  const name = issue.block.name || 'This block';
+  return issue.field === 'start' ? `${name} starts while you are asleep. Pick a start after you wake up.` : `${name} ends before it starts. Pick an end after its start.`;
+}
+/**
+ * A block the template left empty before 2026-11-14, read only by what it wrote: People from the end of work to 21:00 when work
+ * ended at 21:00, and Food from an hour after wake-up to 20:00 when the morning started at 19:00. A block a person set to
+ * nothing at another time is theirs and stays.
+ */
+const emptyFromTemplate = (b: RoutineBlock | undefined, at: string, anchor: string | undefined, anchorAt: string): boolean =>
+  Boolean(b) && b!.start === at && b!.end === at && anchor === anchorAt;
+/**
+ * A saved routine put right: a Food and water, People or Learning block that runs backwards on the person's own day (as the
+ * routine's own blocks describe it) is laid out again by dayLayout. People and Learning are a pair, so both move when either
+ * runs backwards, keeping their names and notes; Food's note moves only while it is one of the app's own two. The empty
+ * blocks the same old template left (People 21:00 to 21:00 when work ended at 21:00, Food 20:00 to 20:00 for someone up
+ * at 19:00) are laid out the same way. Nothing else moves, and a block that runs forward is never touched. A block laid out
+ * where it already was keeps its own object, and a routine that needs nothing is returned as it came, the same array, so a
+ * repair is kept once and never again.
+ */
+export function repairRoutineBlocks(blocks: RoutineBlock[], dayType: DayType = 'general'): RoutineBlock[] {
+  if (!Array.isArray(blocks)) return blocks;
+  const day = routineDayOf(blocks);
+  if (!day) return blocks;
+  const food = blockIn(blocks, 'nutrition');
+  const people = blockIn(blocks, 'social');
+  const fixFood = runsBackwards(day, food) || emptyFromTemplate(food, LAST_MEAL, blockIn(blocks, 'morning')?.start, '19:00');
+  const fixPair = runsBackwards(day, people) || runsBackwards(day, blockIn(blocks, 'skills')) || emptyFromTemplate(people, PEOPLE_UNTIL, blockIn(blocks, 'work')?.end, PEOPLE_UNTIL);
+  if (!fixFood && !fixPair) return blocks;
+  const lay = dayLayout(day);
+  const moved = (b: RoutineBlock, span: DaySpan, note = b.note): RoutineBlock => (b.start === span.start && b.end === span.end && b.note === note ? b : { ...b, start: span.start, end: span.end, note });
+  const next = blocks.map((b) => {
+    if (!b || typeof b !== 'object') return b;
+    if (fixFood && b.key === 'nutrition') return moved(b, lay.food, b.note === FOOD_NOTE || b.note === FOOD_NOTE_MOVED ? foodNoteFor(lay.food.end) : b.note);
+    if (fixPair && b.key === 'social') return moved(b, lay.people);
+    if (fixPair && b.key === 'skills') return moved(b, dayType === 'exceptional' ? lay.learningShort : lay.learning);
+    return b;
+  });
+  return next.every((b, i) => b === blocks[i]) ? blocks : next;
 }
 
 export const MANTRAS = [

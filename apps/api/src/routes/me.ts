@@ -15,10 +15,11 @@ import {
   type RelationshipKey,
   type RelationshipState,
 } from '@kreators/shared';
-import { knownTableKeys, parseAiTables } from '@kreators/shared/dataTables';
+import { keepHiddenTables, knownTableKeys, parseAiTables, TABLE_LIST_MAX, tablesShownNow } from '@kreators/shared/dataTables';
 import type { AppEnv } from '../env';
 import { badgeState, badgesFor, DELETED_NAME_PROBLEM, keptStats, getUser, honorKeys, httpUrl, isDeletedName, LINK_PROBLEM, newFriendCode, newId, nowIso, objectBody, parseModules, randomCode, str, toUser, publicOf } from '../db';
-import { resolveAccess } from '../access';
+import { appsOn, resolveAccess } from '../access';
+import { tableSwitchesOn } from '../tablesShare';
 import { hashPassword, randomHex, safeEqual } from './auth';
 import { sendEmail, track } from '../ops';
 import { deleteAccount, StillClosing } from '../account';
@@ -36,7 +37,7 @@ me.get('/', async (c) => {
     await db.prepare('UPDATE users SET referral_code = ? WHERE id = ? AND referral_code IS NULL').bind(randomCode(), user.id).run();
     user = (await getUser(db, user.id)) ?? user;
   }
-  const [scores, counts, stats, honors, resolved, unread, orgs, answeredRows] = await Promise.all([
+  const [scores, counts, stats, honors, resolved, unread, orgs, answeredRows, switches] = await Promise.all([
     db
       .prepare('SELECT relationship, score, xp FROM relationship_scores WHERE user_id = ?')
       .bind(user.id)
@@ -52,6 +53,8 @@ me.get('/', async (c) => {
     db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL').bind(user.id).first<{ n: number }>(),
     db.prepare("SELECT o.*, m.role AS my_role FROM organizations o JOIN organization_members m ON m.organization_id = o.id WHERE m.user_id = ? AND m.status = 'active' ORDER BY o.name").bind(user.id).all<{ id: string; name: string; type: Organization['type']; status: Organization['status']; created_at: string; my_role: 'owner' | 'member' }>(),
     db.prepare('SELECT DISTINCT relationship FROM onboarding_answers WHERE user_id = ?').bind(user.id).all<{ relationship: string }>(),
+    // The settings inside an app that a table needs on too (Business metrics), one row by its key in the same round trip.
+    tableSwitchesOn(db, user.id),
   ]);
   // The badges: what the counts earn, what was earned before, and what the team gave. New ones are written down here.
   const held = await badgeState(db, user, { stats });
@@ -78,7 +81,12 @@ me.get('/', async (c) => {
   });
 
   const body: MeResponse = {
-    user: toUser(user),
+    // AI chat's tables are the ones shown now: a table whose app is hidden stays in the stored list, unseen, and comes back with its app.
+    user: {
+      ...toUser(user),
+      aiTables: tablesShownNow(parseAiTables(user.ai_tables_json ?? null), [...appsOn(resolved.access), ...switches]),
+      tableSwitches: switches.map((k) => k.replace(/^switch:/, '')),
+    },
     relationships,
     badges: held.keys,
     honors,
@@ -288,16 +296,20 @@ me.patch('/ai-tables', async (c) => {
   const one = body.table !== undefined || body.on !== undefined;
   const bad = one
     ? typeof body.table !== 'string' || typeof body.on !== 'boolean' || body.tables !== undefined || knownTableKeys([body.table]).length !== 1
-    : !Array.isArray(body.tables) || body.tables.length > 100;
+    : !Array.isArray(body.tables) || body.tables.length > TABLE_LIST_MAX;
   if (bad) return c.json({ error: 'Name one table and whether AI chat may read it, or send the list of tables.' }, 400);
+  // The apps on for the person now (2026-11-14, the review): a whole list (Share all, Share none) speaks only for the tables they can see, so a
+  // table whose app is hidden keeps its switch for when the app comes back, and the answer carries only the tables shown now, as GET /me does.
+  const [resolvedNow, switches] = await Promise.all([resolveAccess(db, user), tableSwitchesOn(db, user.id)]);
+  const on = [...appsOn(resolvedNow.access), ...switches];
   let stored = user.ai_tables_json ?? null;
   for (let tries = 0; tries < 2; tries++) {
     if (tries) stored = (await db.prepare('SELECT ai_tables_json FROM users WHERE id = ?').bind(user.id).first<{ ai_tables_json: string | null }>())?.ai_tables_json ?? null;
     const before = parseAiTables(stored);
-    const after = one ? knownTableKeys(body.on ? [...before, body.table] : before.filter((k) => k !== body.table)) : knownTableKeys(body.tables);
-    if (after.join() === before.join()) return c.json({ aiTables: after });
+    const after = one ? knownTableKeys(body.on ? [...before, body.table] : before.filter((k) => k !== body.table)) : knownTableKeys(keepHiddenTables(knownTableKeys(body.tables), before, on));
+    if (after.join() === before.join()) return c.json({ aiTables: tablesShownNow(after, on) });
     const res = await db.prepare('UPDATE users SET ai_tables_json = ? WHERE id = ? AND ai_tables_json IS ?').bind(after.length ? JSON.stringify(after) : null, user.id, stored).run();
-    if ((res.meta.changes ?? 0) === 1) return c.json({ aiTables: after });
+    if ((res.meta.changes ?? 0) === 1) return c.json({ aiTables: tablesShownNow(after, on) });
   }
   return c.json({ error: 'That changed somewhere else just now. Try again.' }, 409);
 });
@@ -431,7 +443,8 @@ me.get('/export', async (c) => {
     ['termsAcceptances', 'SELECT * FROM terms_acceptances WHERE user_id = ?'],
     ['privacyChoices', 'SELECT * FROM user_consents WHERE user_id = ?'],
     ['privacyChoiceLog', 'SELECT * FROM consent_records WHERE user_id = ?'],
-    ['companionChat', 'SELECT * FROM chat_messages WHERE user_id = ?'],
+    // The model alone: a line's stored model also says what its answer read from All tables (aiOpen.ts, `withReads`), which is the app's own.
+    ['companionChat', "SELECT id, user_id, role, body, created_at, CASE WHEN instr(model, '#reads:') > 0 THEN substr(model, 1, instr(model, '#reads:') - 1) ELSE model END AS model FROM chat_messages WHERE user_id = ?"],
     ['portfolio', 'SELECT * FROM portfolio_items WHERE user_id = ?'],
     // The product events kept against you (checkout started, paid, failed, refunded), so the export covers what delete removes.
     ['productEvents', 'SELECT name, props_json, created_at FROM analytics_events WHERE user_id = ?'],

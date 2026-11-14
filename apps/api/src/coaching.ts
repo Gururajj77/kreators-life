@@ -1,3 +1,4 @@
+import { tablesShownNow, type AppsOn } from '@kreators/shared/dataTables';
 import {
   badgeRoleOf,
   COACH_SHARE_META,
@@ -28,6 +29,8 @@ import { toMove } from './fitness';
 import { toReview, type ReviewRow } from './routes/reviews';
 import { latest } from './routes/session';
 import { dayBounds, notToDoList } from './routes/today';
+import { appsOnForMany } from './access';
+import { sharedTables } from './tablesShare';
 import { summaryFor as wellbeingSummary } from './routes/wellbeing';
 
 /**
@@ -71,25 +74,48 @@ export interface LinkRow {
   s_handle: string | null;
   s_role: Role;
   s_permissions: string;
+  s_modules: string;
   s_streak: number;
   s_last_checkin: string | null;
   s_timezone: string;
 }
 export const LINK = `SELECT l.*, c.display_name AS c_name, c.handle AS c_handle, c.role AS c_role, c.permissions AS c_permissions,
-  s.display_name AS s_name, s.handle AS s_handle, s.role AS s_role, s.permissions AS s_permissions, s.streak AS s_streak, s.last_checkin AS s_last_checkin, s.timezone AS s_timezone
+  s.display_name AS s_name, s.handle AS s_handle, s.role AS s_role, s.permissions AS s_permissions, s.modules AS s_modules, s.streak AS s_streak, s.last_checkin AS s_last_checkin, s.timezone AS s_timezone
   FROM coach_links l JOIN users c ON c.id = l.coach_id JOIN users s ON s.id = l.student_id`;
-export const toLink = (r: LinkRow): CoachLink => ({
+/**
+ * A link's share as either side reads it: its tables only those a coach may be shown (known keys, never one with other people's details), and of
+ * those only the ones whose app is on for the student now (`on`, 2026-11-14, the review). So the coach's "Tables (N shared)", the student's
+ * "N shared" and every list under them count the same tables, and nothing in an answer tells a coach which app the student hid. A table whose
+ * app is hidden stays in the stored share, unseen, and comes back with its app.
+ */
+export function shareFor(raw: string, on: AppsOn): CoachShare {
+  const share = parseCoachShare(raw);
+  return { ...share, tables: tablesShownNow(sharedTables(share.tables), on) };
+}
+const studentOf = (r: LinkRow) => ({ id: r.student_id, role: r.s_role, modules: r.s_modules });
+/** The student's apps on, by student id, for these links: one read whatever their number (`appsOnForMany`). */
+export const studentAppsOn = (db: D1Database, rows: readonly LinkRow[]) => appsOnForMany(db, rows.map(studentOf));
+
+/** A link for an answer, with `on` the apps on for its student now. Every answer goes through this or `linksFor`, never the stored share as it is. */
+export const linkFor = (r: LinkRow, on: AppsOn): CoachLink => ({
   id: r.id,
   coach: toPerson({ id: r.coach_id, display_name: r.c_name, handle: r.c_handle, role: r.c_role, permissions: r.c_permissions }),
   student: toPerson({ id: r.student_id, display_name: r.s_name, handle: r.s_handle, role: r.s_role, permissions: r.s_permissions }),
   status: r.status,
   askedBy: r.asked_by,
-  share: parseCoachShare(r.share_json),
+  share: shareFor(r.share_json, on),
   createdAt: r.created_at,
   answeredAt: r.answered_at,
   endedAt: r.ended_at,
   patternsAskedAt: r.patterns_asked_at ?? null,
 });
+/** Links for an answer, each with its student's apps read in one go. */
+export async function linksFor(db: D1Database, rows: readonly LinkRow[]): Promise<CoachLink[]> {
+  const on = await studentAppsOn(db, rows);
+  return rows.map((r) => linkFor(r, on.get(r.student_id) ?? []));
+}
+/** One link for an answer (null stays null). */
+export const linkOut = async (db: D1Database, r: LinkRow | null): Promise<CoachLink | null> => (r ? ((await linksFor(db, [r]))[0] ?? null) : null);
 
 export const linkById = (db: D1Database, id: string) => db.prepare(`${LINK} WHERE l.id = ?`).bind(id).first<LinkRow>();
 /** The one active link between this coach and this student, or null. */
@@ -215,8 +241,8 @@ export async function askToCoach(db: D1Database, user: UserRow, about: string): 
  * One student on a coach's roster: the streak and last check-in when Daily is shared, this week's routine days, the
  * contract and whether last week came in under it when the routine is shared, and the focus when the life map is.
  */
-export async function rosterRow(db: D1Database, r: LinkRow): Promise<CoachRosterRow> {
-  const share = parseCoachShare(r.share_json);
+export async function rosterRow(db: D1Database, r: LinkRow, on: AppsOn): Promise<CoachRosterRow> {
+  const share = shareFor(r.share_json, on);
   const date = localDay(r.s_timezone);
   let week: (boolean | null)[] | null = null;
   let contractDays: number | null = null;
@@ -247,7 +273,7 @@ export async function rosterRow(db: D1Database, r: LinkRow): Promise<CoachRoster
   }
   return {
     linkId: r.id,
-    student: toLink(r).student,
+    student: toPerson({ id: r.student_id, display_name: r.s_name, handle: r.s_handle, role: r.s_role, permissions: r.s_permissions }),
     since: r.answered_at ?? r.created_at,
     share,
     streak: share.daily ? streakNow(r.s_streak, r.s_last_checkin, date) : null,
@@ -324,6 +350,9 @@ export async function studentView(db: D1Database, link: LinkRow, student: UserRo
   const share = parseCoachShare(link.share_json);
   const date = localDay(student.timezone);
   const id = student.id;
+  // The student's apps on, for the tables in the link's share (`shareFor`): started now, so it rides with the first reads below as one trip.
+  const appsOnNow = appsOnForMany(db, [{ id, role: student.role, modules: student.modules }]);
+  appsOnNow.catch(() => undefined);
   const from = shiftDate(date, -29);
   const days30 = Array.from({ length: 30 }, (_, i) => shiftDate(from, i));
 
@@ -420,7 +449,7 @@ export async function studentView(db: D1Database, link: LinkRow, student: UserRo
   }
 
   return {
-    link: toLink(link),
+    link: linkFor(link, (await appsOnNow).get(id) ?? []),
     date,
     daily,
     pillars,

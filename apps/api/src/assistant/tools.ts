@@ -68,6 +68,11 @@ import { shiftDate } from '../db';
 import { must, seg, ToolError, type Answer, type Req } from './dispatch';
 import { aiPrivateOnly, cellText, DATA_TABLES, dataTableByKey, visibleColumns, type TablePageResponse, type TablesListResponse } from '@kreators/shared/dataTables';
 import { localStamp } from '@kreators/shared';
+import { keepsWhatItReads, notOpenToAi, type AllTablesState } from '../aiOpen';
+
+/** The two tables read_journal reads, by their names in All tables (each opened to AI chat on its own, Show to AI chat). */
+const JOURNAL_TABLE = dataTableByKey.journal?.name ?? 'Journal entries';
+const GRATITUDE_TABLE = dataTableByKey.gratitude?.name ?? 'Gratitude';
 
 /**
  * The assistant's tools: the app's own actions, described for a model. Each tool calls the same routes the screens
@@ -94,6 +99,12 @@ export interface Outcome {
   /** Plain words for the receipt. Never journal text or a log's note. */
   label?: string;
   undo?: Req | null;
+  /**
+   * The tables (All tables keys) whose words this handed the model. A reply written after it is held back from a later message while one of
+   * them is shut to AI chat, or from a model that may keep data when one is only for a model that keeps nothing (`heldBack` in aiOpen.ts). A
+   * sensitive tool that leaves it out counts as one private read of its own.
+   */
+  reads?: readonly string[];
 }
 
 interface Prop {
@@ -440,20 +451,24 @@ export const TOOLS: readonly Tool[] = [
   },
   {
     // All tables for AI chat (2026-11-14, the founder: "give one toggle for ai chat access"): read only, and only the tables the person opened
-    // to AI chat; the route checks that too (`X-Kreators-Via: assistant`). A table only a model that keeps nothing may read (the journal,
-    // gratitude, every Body and mind table) is refused here to any other model, so a tool offered to every model never hands one of them over.
+    // to AI chat; the route checks that too (`X-Kreators-Via: assistant`). A table only a model that keeps nothing may read (`aiPrivateOnly`: the
+    // journal, gratitude, every Body and mind table and every table with other people's details) is refused here to any other model, so a tool
+    // offered to every model never hands one of them over. Only a model that keeps nothing marks its read `ai=private`: the route reads any other
+    // model's as anyone but the owner sees the table (no column only the owner sees, such as an order's seller, and no private badge family), and
+    // refuses it a private-only table too.
     name: 'read_table',
     risk: 'read',
     needs: ['tables'],
     refresh: [],
     title: 'Read one of your tables',
     description:
-      "One of the person's own tables from All tables (call it first with no table to see which are open, and their keys), read only, and only a table they opened to AI chat (Show to AI chat at the top of the table, or under AI chat on their Profile tab). With table: a page of rows (size 10 or 25, 10 by default; empty cells left out; times in their own zone), the total that match and whether more follow, narrowed by words in q, sorted by a sortable column's key if asked, a later page with page. If a table is not open to you, say they can switch on Show to AI chat at the top of it; never ask them to paste it in. The journal, gratitude and the body and mind tables are read only by a model that keeps nothing. Read the journal or gratitude only when they ask about it, and quote it only when they ask.",
+      "One of the person's own tables from All tables (call it first with no table to see which are open, and their keys), read only, and only a table they opened to AI chat (Show to AI chat at the top of the table, or under AI chat on their Profile tab). With table: a page of rows (size 10 or 25, 10 by default; empty cells left out; times in their own zone), the total that match and whether more follow, narrowed by words in q, sorted by a sortable column's key if asked, a later page with page. If a table is not open to you, say they can switch on Show to AI chat at the top of it; never ask them to paste it in. The journal, gratitude, the body and mind tables and any table with other people's details are read only by a model that keeps nothing. Read the journal or gratitude only when they ask about it, and quote it only when they ask.",
     params: {
       type: 'object',
       properties: {
-        // The keys only, no names beside them: the spec rides on every message, and a call with no table lists the open ones by name.
-        table: { type: 'string', enum: DATA_TABLES.map((t) => t.key) },
+        // A key, never a list of every key (2026-11-14): the spec rides on every message and the registry is growing past a hundred and fifty
+        // tables, so a call with no table lists the open ones by name and key. A key in other case, or a table's own name, is read kindly below.
+        table: { type: 'string', maxLength: 60 },
         q: { type: 'string', maxLength: 80 },
         sort: { type: 'string', maxLength: 40 },
         dir: { type: 'string', enum: ['asc', 'desc'] },
@@ -475,16 +490,19 @@ export const TOOLS: readonly Tool[] = [
           },
         };
       }
-      const table = dataTableByKey[key];
-      if (!table) throw new ToolError('There is no table by that name.');
+      const want = key.trim().toLowerCase().replace(/[\s_-]+/g, ' ');
+      const table = dataTableByKey[key] ?? DATA_TABLES.find((t) => t.key.toLowerCase() === want.replace(/ /g, '') || t.name.toLowerCase() === want);
+      if (!table) throw new ToolError('There is no table by that name. Call read_table with no table to see the open ones and their keys.');
       if (aiPrivateOnly(table) && !io.private) throw new ToolError(`This model may keep what it reads, so it cannot read ${table.name}. Pick a model that keeps nothing to read it.`);
       const qs = new URLSearchParams({ size: a.size === 25 ? '25' : '10', count: '1' });
+      if (io.private) qs.set('ai', 'private');
       if (typeof a.page === 'number') qs.set('page', String(a.page));
       if (str(a.q)) qs.set('q', str(a.q));
       if (str(a.sort)) qs.set('sort', str(a.sort));
       if (str(a.dir)) qs.set('dir', str(a.dir));
       const p = must(await io.call({ method: 'GET', path: `/tables/${seg(table.key)}?${qs.toString()}` })) as TablePageResponse;
-      const cols = visibleColumns(table, 'owner').filter((col) => p.columns.includes(col.key));
+      // The columns the route read for this model (the owner's, or anyone else's for a model that may keep data).
+      const cols = visibleColumns(table, p.view).filter((col) => p.columns.includes(col.key));
       const ctx = { options: p.options, currency: p.subject.currency };
       const zone = p.subject.zone;
       // A stamp is shown in the person's own zone (a journal entry at 1:30am IST is that day, never the UTC day before), as the screen shows it.
@@ -514,14 +532,16 @@ export const TOOLS: readonly Tool[] = [
         data.rows.pop();
         cut += 1;
       }
-      if (!cut) return { data };
+      // What this page handed the model, so a reply written from it is held back once the table is shut (heldBack).
+      const reads = [table.key];
+      if (!cut) return { data, reads };
       const size = p.page.size;
       const first = (p.page.page - 1) * size + data.rows.length + 1;
       const last = (p.page.page - 1) * size + data.rows.length + cut;
       const from = Math.ceil(first / 10);
       const to = Math.ceil(last / 10);
       const where = size === 10 ? 'Narrow it with q to read them.' : `Ask with size 10 and page ${from === to ? from : `${from} to ${to}`} to read them.`;
-      return { data: { ...data, sent: data.rows.length, cut: `Rows ${first} to ${last} of the list did not fit in this answer. ${where}` } };
+      return { data: { ...data, sent: data.rows.length, cut: `Rows ${first} to ${last} of the list did not fit in this answer. ${where}` }, reads };
     },
   },
   {
@@ -543,8 +563,7 @@ export const TOOLS: readonly Tool[] = [
     needs: ['journal'],
     refresh: [],
     title: 'Read your journal',
-    description:
-      "The person's own journal entries, newest first, and their gratitude for the day (three short lines a day, each under a prompt), optionally matching words or a date range. Call it only when they ask about their journal or their gratitude. Never bring the journal up yourself, and quote it only when they ask.",
+    description: `The person's own journal entries, newest first, and their gratitude for the day (three short lines a day, each under a prompt), optionally matching words or a date range. It reads only what they opened to AI chat: the ${JOURNAL_TABLE} table and the ${GRATITUDE_TABLE} table, each with its own Show to AI chat switch. When a part is not open, it says so in tell: pass that on to them, and never guess what that part holds. Call it only when they ask about their journal or their gratitude. Never bring the journal up yourself, and quote it only when they ask.`,
     params: {
       type: 'object',
       properties: {
@@ -555,30 +574,50 @@ export const TOOLS: readonly Tool[] = [
       },
     },
     run: async (a, io) => {
+      // Only a model that keeps nothing (the host's promise and the list's flag, as read_table): the routes hold it too, through `ai=private`.
+      if (!io.private) throw new ToolError(keepsWhatItReads('the journal or gratitude'));
       const words = str(a.query).toLowerCase();
       const from = str(a.from);
       const to = str(a.to);
       const range = `${/^\d{4}-\d{2}-\d{2}$/.test(from) ? `&from=${from}` : ''}${/^\d{4}-\d{2}-\d{2}$/.test(to) ? `&to=${to}` : ''}`;
       // The entries and the gratitude days (migration 0102) are both the journal: read together, through the same routes a tap uses.
-      const [r, g] = await Promise.all([io.call({ method: 'GET', path: '/journal?size=100' }), io.call({ method: 'GET', path: `/journal/gratitude?size=50${range}` })]);
-      const journal = must(r) as { entries: JournalEntry[]; stats: { total: number } };
-      const thanks = must(g) as { days: GratitudeDay[] };
+      const [r, g] = await Promise.all([io.call({ method: 'GET', path: '/journal?size=100&ai=private' }), io.call({ method: 'GET', path: `/journal/gratitude?size=50${range}&ai=private` })]);
+      // Each part only while the person opened its table to AI chat (Show to AI chat, 2026-11-14, the founder's yes). A shut part answers 403
+      // with `aiClosed` and nothing read: said here in plain words, never as an error and never with a word, or a count, of what it holds.
+      const shutJournal = r.status === 403 && r.data?.aiClosed === 'journal';
+      const shutThanks = g.status === 403 && g.data?.aiClosed === 'gratitude';
+      const shut = [...(shutJournal ? ['journal'] : []), ...(shutThanks ? ['gratitude'] : [])];
+      // While All tables is hidden in Apps (or not on the account), the words say so, since neither place shows its switch then.
+      const said = [r.data?.allTables, g.data?.allTables].find((v): v is AllTablesState => v === 'hidden' || v === 'off') ?? 'on';
+      const notOpen = shut.length ? { notOpen: shut.map((k) => dataTableByKey[k]?.name ?? k), tell: notOpenToAi(shut, said) } : {};
+      // Nothing read: a reply written after it holds no word of either part.
+      if (shutJournal && shutThanks) return { data: notOpen, reads: [] };
+      const journal = shutJournal ? null : (must(r) as { entries: JournalEntry[]; stats: { total: number } });
+      const thanks = shutThanks ? null : (must(g) as { days: GratitudeDay[] });
       // The day it is filed on in the person's zone, as on Journal, so an entry at 1 am sits on the same day as that day's gratitude.
       const dayOfEntry = (e: JournalEntry) => e.day ?? e.createdAt.slice(0, 10);
-      const hits = journal.entries.filter((e) => {
+      const hits = (journal?.entries ?? []).filter((e) => {
         const day = dayOfEntry(e);
         return (!words || `${e.title} ${e.body}`.toLowerCase().includes(words)) && (!from || day >= from) && (!to || day <= to);
       });
       const limit = Number(a.limit ?? 5);
       return {
         data: {
-          total: journal.stats.total,
-          entries: hits.slice(0, limit).map((e) => ({ id: e.id, date: dayOfEntry(e), title: e.title, body: e.body.slice(0, 1500), feeling: feeling(e.emotion), stress: e.stress })),
-          gratitude: thanks.days
-            .map((d) => ({ date: d.day, lines: d.lines.filter((l) => l.text).map((l) => ({ prompt: gratitudePromptByKey(l.prompt)?.text ?? '', text: l.text })) }))
-            .filter((d) => !words || d.lines.some((l) => l.text.toLowerCase().includes(words)))
-            .slice(0, limit),
+          ...(journal
+            ? { total: journal.stats.total, entries: hits.slice(0, limit).map((e) => ({ id: e.id, date: dayOfEntry(e), title: e.title, body: e.body.slice(0, 1500), feeling: feeling(e.emotion), stress: e.stress })) }
+            : {}),
+          ...(thanks
+            ? {
+                gratitude: thanks.days
+                  .map((d) => ({ date: d.day, lines: d.lines.filter((l) => l.text).map((l) => ({ prompt: gratitudePromptByKey(l.prompt)?.text ?? '', text: l.text })) }))
+                  .filter((d) => !words || d.lines.some((l) => l.text.toLowerCase().includes(words)))
+                  .slice(0, limit),
+              }
+            : {}),
+          ...notOpen,
         },
+        // The parts it handed the model, so a reply written from them is held back once that table is shut (heldBack).
+        reads: [...(journal ? ['journal'] : []), ...(thanks ? ['gratitude'] : [])],
       };
     },
   },
@@ -1032,7 +1071,9 @@ export const TOOLS: readonly Tool[] = [
       const base = keys.map((prompt, i) => ({ prompt, text: before?.lines[i]?.text ?? '' }));
       const queue = [...words];
       const lines = base.map((l) => (l.text || !queue.length ? l : { prompt: l.prompt, text: queue.shift()! }));
-      if (queue.length === words.length) throw new ToolError(`All ${GRATITUDE_LINES} lines for that day are written already. They can change them on Journal.`);
+      // Said with no word of the lines already there: the day's words are the person's, and the Gratitude table may be shut to AI chat. (A full
+      // day does say that every line is written, as `written` and `left` below let the model work out how many were; never what they hold.)
+      if (queue.length === words.length) throw new ToolError('There is no empty line left for that day. They can change the lines on Journal.');
       const saved = (must(await io.call({ method: 'PUT', path: `/journal/gratitude/${day}`, body: { lines, today: io.date, ifUpdatedAt: before?.updatedAt ?? '' } })) as { gratitude: GratitudeDay | null }).gratitude;
       // Undo only a day that had nothing before: emptying it removes it. A day with lines already kept has no Undo, so their words never sit in the action log.
       // The undo carries the version this write made, so once the person changes the day on Journal the undo answers 409 and their words stay.
@@ -1040,7 +1081,9 @@ export const TOOLS: readonly Tool[] = [
       return {
         label: `Wrote ${words.length - queue.length === 1 ? 'a line' : `${words.length - queue.length} lines`} of gratitude`,
         undo: before || !saved ? null : { method: 'PUT', path: `/journal/gratitude/${day}`, body: { lines: empty, today: io.date, ifUpdatedAt: saved.updatedAt } },
-        data: { saved: true, day, written: lines.filter((l) => l.text).length, left: queue.length },
+        // Only what this call wrote and what did not fit, never a word of the lines the day already held (the Gratitude table may be shut to AI
+        // chat). The two numbers do let the model work out how many lines were already written; no claim is made otherwise.
+        data: { saved: true, day, written: words.length - queue.length, left: queue.length },
       };
     },
   },

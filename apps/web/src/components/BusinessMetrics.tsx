@@ -22,6 +22,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api';
+import { keys } from '../lib/queries';
 import { Button } from './Button';
 import { ConfirmDelete } from './ConfirmDelete';
 import { Sparkline } from './Charts';
@@ -88,7 +89,8 @@ export function BusinessMetrics({ kind, date }: { kind: PeriodKind; date: string
   const d = q.data;
   const [editing, setEditing] = useState<Kpi | 'new' | null>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: ['reviews', 'kpis'] });
-  const toggle = useMutation({ mutationFn: (on: boolean) => api.kpiSwitch(on), onSuccess: () => void refresh() });
+  // The switch also opens or shuts Business metrics' tables (All tables lists them only while it is on), which read it from the account.
+  const toggle = useMutation({ mutationFn: (on: boolean) => api.kpiSwitch(on), onSuccess: () => void Promise.all([refresh(), qc.invalidateQueries({ queryKey: keys.me })]) });
   const total = d ? d.readings.length + d.elsewhere : 0;
 
   if (q.isPending) return null;

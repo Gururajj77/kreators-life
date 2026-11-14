@@ -12,7 +12,7 @@ In this lesson you'll learn:
 
 Some things in the app are for your eyes only. They never reach brands, the team, the leaderboard or your public page. A coach sees one only if you switch it on for them.
 
-- **Your journal:** every entry, every prompt you wrote about, and your gratitude lines. A coach sees them only if you switch that table on for them.
+- **Your journal:** every entry, every prompt you wrote about, and your gratitude lines. A coach sees them only if you switch that table on for them, and the assistant only if you switch it on with **Show to AI chat**.
 - **Your wellbeing logs:** mood, sleep, stress, mindful minutes, your movement and how you ate, and the one wellbeing score. Only a coach you said yes to can see the numbers, and only while you allow it.
 - **Your supplements:** if you keep the list in Fitness, only you see it. A coach sees it only if you switch its table on for them, and the assistant only if you switch it on with **Show to AI chat**, on a model that keeps nothing.
 - **Discover:** your quiz answers, your results and the add-ons, like love languages and how your mind works.
@@ -45,17 +45,17 @@ You are not on it until you tick **Show me on the leaderboard** on the Profile t
 
 If you work with a coach, you pick what they see, in six parts: Daily and streaks, pillars and pyramids, routine and contract, life map answers, reflection and patterns. All are on for a new coach, and Patterns is off for a coach you had before. Reflection is your wellbeing numbers and saved reviews. The six parts never show your journal, gratitude, supplements, money or a note.
 
-You can also share whole tables with one coach, one at a time, under **Tables your coach can see** on the Profile tab, or with **Show to my coach** at the top of each table. Each starts off, and a coach can read a table but never change it. Turn any part or table off, or end the link, at any time.
+You can also share whole tables with one coach, one at a time, under **Tables your coach can see** on the Profile tab, or with **Show to my coach** at the top of each table. Each starts off, and a coach can read a table but never change it. A table that holds other people's details, such as your buyers, guests, clients or chats, is never offered to a coach. Turn any part or table off, or end the link, at any time.
 
 ### Your tables and the team
 
-**All tables** shows your own lists, from tasks and moods to money and badges, as tables. A super admin on the team can open your tables to help you or to look into a problem. They can read them, never change them, and never open your journal, gratitude or body and mind tables. Each table they open or download is written in a log, and your export lists when. Your money in Finance is one of the tables they can read.
+**All tables** shows your own lists, from tasks and moods to money, clients and events, as tables. They sit in the same groups as the Apps page, and a table shows only while its app does. A super admin on the team can open your tables to help you or to look into a problem. They can read them, never change them, and never open your journal, gratitude or body and mind tables. They never see a table that holds other people's details either: those are for you and AI chat alone. Each table they open or download is written in a log, and your export lists when. Your money in Finance is one of the tables they can read.
 
 ### The assistant
 
-The assistant reads your journal only when you ask it about your journal. Even then, only a model that keeps nothing may read it, and the picker marks those models "keeps nothing". Discover reaches it only as a short summary, and only if you switch on **Let the assistant learn from them**.
+The assistant reads your journal and gratitude only when you ask it about them, and only while you have switched on **Show to AI chat** for each of their tables. Each one starts off. Even then, only a model that keeps nothing may read them, and the picker marks those models "keeps nothing". Switch a table off and any answer that read it is left out of what the chat sends next. Discover reaches it only as a short summary, and only if you switch on **Let the assistant learn from them**. Your Discover tables need that switch too.
 
-A whole table from **All tables** reaches the assistant and the Companion only if you switch on **Show to AI chat** for it, at the top of the table or under **AI chat** on the Profile tab. Each one starts off. They can read it, but never change it. The journal, gratitude and the body and mind tables still go only to a model that keeps nothing.
+A whole table from **All tables** reaches the assistant and the Companion only if you switch on **Show to AI chat** for it, at the top of the table or under **AI chat** on the Profile tab. Each one starts off. They can read it, but never change it. The journal, gratitude, the body and mind tables and any table with other people's details still go only to a model that keeps nothing.
 
 ### People you talk to
 

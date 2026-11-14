@@ -2156,6 +2156,9 @@ section('Pages');
   check('observability pages by the same rule', obs.status === 200 && obs.json.page?.size === 10 && typeof obs.json.total === 'number', obs.json?.page);
 }
 
+// A routine saved before the 2026-11-14 fix is planted straight in the smoke database to check the repair on read (below).
+import { execFileSync as routineExec } from 'node:child_process';
+import { existsSync as routineStateExists } from 'node:fs';
 section('Strategy session');
 {
   const LEVELS = { self: [400, 200], lover_partner: [350, 100], friendship: [310, 250], parent_child: [310, 310], servant_leader: [250, 200], guru: [350, 350], divine: [540, 400] };
@@ -2216,6 +2219,85 @@ section('Strategy session');
   check('a pillar set aside can be turned back on from the life map', back.status === 200 && JSON.stringify(back.json.assessment?.away) === '["lover_partner"]', back.json?.assessment?.away);
   const notOptional = await api('PUT', '/session/away', { relationship: 'self', away: true }, C.token);
   check('only the optional pillars can be set aside', notOptional.status === 400, notOptional.json);
+
+  // The routine's times on any real day (2026-11-14): the template's anchors stay while the day allows them, and People and
+  // Learning run forward after work that ends past nine, never "9:30pm to 9:00pm".
+  const blockOf = (list, key) => (list ?? []).find((b) => b.key === key);
+  const spanOf = (list, key) => `${blockOf(list, key)?.start} to ${blockOf(list, key)?.end}`;
+  const tpl = plan.json.routine;
+  check(
+    'a template day keeps the template: food to eight, people to nine, learning nine to eleven, ten to eleven on an exceptional day',
+    spanOf(tpl?.general, 'nutrition') === '10:00 to 20:00' && blockOf(tpl?.general, 'nutrition')?.note === 'Water through the day. Last meal by eight.' && spanOf(tpl?.general, 'social') === '18:00 to 21:00' && spanOf(tpl?.general, 'skills') === '21:00 to 23:00' && spanOf(tpl?.exceptional, 'skills') === '22:00 to 23:00',
+    [spanOf(tpl?.general, 'nutrition'), spanOf(tpl?.general, 'social'), spanOf(tpl?.general, 'skills'), spanOf(tpl?.exceptional, 'skills')],
+  );
+  const RT = await signup(`routine-${stamp}@smoke.test`, `Quartz-${stamp}-pass`, 'Smoke routine');
+  const late = await api('POST', '/session/assessment', { placements, realDay: { wake: '08:30', sleep: '00:30', workStart: '10:00', workEnd: '21:30', evening: '', gym: '' } }, RT.token);
+  const latePlan = await api('POST', '/session/plan', { focus: ['self'], contract: { minDays: 5, checkinTime: '21:30', penalty: 'streak', signedName: 'Smoke routine' }, date: today }, RT.token);
+  const toMin = (x) => Number(x.slice(0, 2)) * 60 + Number(x.slice(3, 5));
+  // Minutes since wake-up: a block runs forward when its end is not before its start, and sits inside the day when it ends by lights out.
+  const forward = (list) => {
+    const w = toMin(blockOf(list, 'morning').start);
+    const t = (x) => (toMin(x) - w + 1440) % 1440;
+    const D = t(blockOf(list, 'sleep').start) || 1440;
+    return ['nutrition', 'social', 'skills'].every((k) => t(blockOf(list, k).end) >= t(blockOf(list, k).start) && t(blockOf(list, k).end) <= D);
+  };
+  const lr = latePlan.json.routine;
+  check(
+    'work that ends at 21:30 gives people 21:30 to 22:00 and learning 22:00 to 23:00, running forward inside the day',
+    late.status === 201 && latePlan.status === 201 && spanOf(lr?.general, 'social') === '21:30 to 22:00' && spanOf(lr?.general, 'skills') === '22:00 to 23:00' && spanOf(lr?.exceptional, 'skills') === '22:00 to 23:00' && forward(lr?.general) && forward(lr?.exceptional),
+    [late.status, latePlan.status, spanOf(lr?.general, 'social'), spanOf(lr?.general, 'skills'), spanOf(lr?.exceptional, 'skills')],
+  );
+  const backwards = await api('PATCH', '/session/routine', { date: today, general: [{ key: 'social', start: '21:30', end: '21:00' }] }, RT.token);
+  const afterBack = await api('GET', `/session?date=${today}`, undefined, RT.token);
+  check(
+    'an edit where People ends before it starts is refused in words, and nothing changes',
+    backwards.status === 400 && /^People ends before it starts/.test(backwards.json?.error ?? '') && spanOf(afterBack.json.routine?.general, 'social') === '21:30 to 22:00' && JSON.stringify(afterBack.json.routine) === JSON.stringify(lr),
+    [backwards.status, backwards.json, spanOf(afterBack.json.routine?.general, 'social')],
+  );
+  const crossing = await api('PATCH', '/session/routine', { date: today, general: [{ key: 'skills', start: '23:00', end: '00:15' }, { key: 'social', start: '21:30', end: '23:00' }] }, RT.token);
+  check('a block that crosses midnight inside the waking day saves', crossing.status === 200 && spanOf(crossing.json.routine?.general, 'skills') === '23:00 to 00:15', [crossing.status, crossing.json?.error]);
+  // A morning moved later than Food and water's start leaves Food starting while the person sleeps: the words say to move its
+  // start, since no end can fix that.
+  const lateWake = await api('PATCH', '/session/routine', { date: today, general: [{ key: 'morning', start: '10:00', end: '11:00' }] }, RT.token);
+  check('a morning moved past Food and water\'s start is refused with the start to change, and nothing is saved', lateWake.status === 400 && /^Food and water starts while you are asleep\./.test(lateWake.json?.error ?? '') && blockOf((await api('GET', `/session?date=${today}`, undefined, RT.token)).json.routine?.general, 'morning')?.start === '08:30', [lateWake.status, lateWake.json]);
+  // Food and water's own note follows its end, so a moved end never says "by eight"; back at eight it says eight again.
+  const BY_EIGHT = 'Water through the day. Last meal by eight.';
+  const foodLater = await api('PATCH', '/session/routine', { date: today, general: [{ key: 'nutrition', end: '21:30', note: BY_EIGHT }] }, RT.token);
+  const foodBack = await api('PATCH', '/session/routine', { date: today, general: [{ key: 'nutrition', end: '20:00', note: blockOf(foodLater.json.routine?.general, 'nutrition')?.note }] }, RT.token);
+  check(
+    'Food and water\'s own note follows a moved end and comes back at eight',
+    foodLater.status === 200 && blockOf(foodLater.json.routine?.general, 'nutrition')?.note === 'Water through the day. Last meal by the end of this block.' && foodBack.status === 200 && blockOf(foodBack.json.routine?.general, 'nutrition')?.note === BY_EIGHT,
+    [blockOf(foodLater.json.routine?.general, 'nutrition'), blockOf(foodBack.json.routine?.general, 'nutrition')],
+  );
+  // A routine saved before the fix (People "9:30pm to 9:00pm") is put right on read and kept once. Only a saved routine can hold
+  // that shape now, so it is planted in the smoke database itself (only ever that one, on 8788), as the Emerging checks move ticks.
+  const routineState = new URL('./state', import.meta.url).pathname;
+  if (ORIGIN === 'http://127.0.0.1:8788' && routineStateExists(routineState) && /^[\w-]+$/.test(RT.user?.id ?? '')) {
+    const routineSql = (sql, json = false) =>
+      routineExec('npx', ['--no-install', 'wrangler', 'd1', 'execute', 'kreators-life', '--local', '--persist-to', routineState, ...(json ? ['--json'] : []), '--command', sql], { cwd: new URL('../../apps/api', import.meta.url).pathname, stdio: 'pipe' }).toString();
+    const now = (await api('GET', `/session?date=${today}`, undefined, RT.token)).json.routine;
+    const old = (list, learning) => list.map((b) => (b.key === 'social' ? { ...b, start: '21:30', end: '21:00' } : b.key === 'skills' ? { ...b, start: learning, end: '23:00' } : b));
+    const planted = { general: old(now.general, '21:00'), exceptional: old(now.exceptional, '22:00') };
+    const quoted = (v) => `'${JSON.stringify(v).replace(/'/g, "''")}'`;
+    routineSql(`UPDATE routines SET general_json = ${quoted(planted.general)}, exceptional_json = ${quoted(planted.exceptional)} WHERE user_id = '${RT.user.id}'`);
+    const first = await api('GET', `/session?date=${today}`, undefined, RT.token);
+    const fr = first.json.routine;
+    const same = (a, b, key) => spanOf(a, key) === spanOf(b, key) && blockOf(a, key)?.note === blockOf(b, key)?.note && blockOf(a, key)?.name === blockOf(b, key)?.name;
+    check(
+      'a saved People "9:30pm to 9:00pm" reads 21:30 to 22:00 and Learning 22:00 to 23:00, names, notes and the other blocks kept',
+      first.status === 200 && spanOf(fr?.general, 'social') === '21:30 to 22:00' && spanOf(fr?.general, 'skills') === '22:00 to 23:00' && spanOf(fr?.exceptional, 'skills') === '22:00 to 23:00' && blockOf(fr?.general, 'social')?.note === blockOf(planted.general, 'social')?.note && blockOf(fr?.exceptional, 'skills')?.note === blockOf(planted.exceptional, 'skills')?.note && ['morning', 'nutrition', 'work', 'sleep'].every((k) => same(fr?.general, planted.general, k) && same(fr?.exceptional, planted.exceptional, k)),
+      [first.status, spanOf(fr?.general, 'social'), spanOf(fr?.general, 'skills'), spanOf(fr?.exceptional, 'skills')],
+    );
+    const stored = JSON.parse(routineSql(`SELECT general_json, exceptional_json FROM routines WHERE user_id = '${RT.user.id}' ORDER BY created_at DESC LIMIT 1`, true))[0]?.results?.[0] ?? {};
+    check('and the repair is kept in the database once', JSON.stringify(JSON.parse(stored.general_json ?? 'null')) === JSON.stringify(fr?.general) && JSON.stringify(JSON.parse(stored.exceptional_json ?? 'null')) === JSON.stringify(fr?.exceptional), [stored.general_json?.slice(0, 120)]);
+    const second = await api('GET', `/session?date=${today}`, undefined, RT.token);
+    const written = (r) => (r.headers.has('x-d1-rows-written') ? Number(r.headers.get('x-d1-rows-written')) : null);
+    check(
+      'the next read answers the same and writes nothing',
+      second.status === 200 && JSON.stringify(second.json.routine) === JSON.stringify(fr) && (written(first) === null || (written(first) >= 1 && written(second) === 0)),
+      [written(first), written(second)],
+    );
+  }
 }
 
 section('Daily reminder');
@@ -2461,6 +2543,8 @@ section('Assistant and credits');
     const sayWith = (text, model) => api('POST', '/assistant', { messages: [{ role: 'user', text }], model, context: { path: '/tables', date: today, timeZone: 'UTC' } }, E.token);
     const shutTable = await sayWith(DO({ name: 'read_table', args: { table: 'tasks' } }), keepsData?.id);
     check('read_table refuses a table not switched on for AI chat', shutTable.status === 200 && shutTable.json.calls?.[0]?.tool === 'read_table' && shutTable.json.calls[0].ok === false, shutTable.json.calls);
+    // Mood's table lists only while Mood is on for the person (2026-11-14, `needs`), as it is for anyone who logs a mood.
+    await api('PATCH', '/me/modules', { key: 'mood', on: true }, E.token);
     await api('PATCH', '/me/ai-tables', { tables: ['tasks', 'mood'] }, E.token);
     const listed = await sayWith(DO({ name: 'read_table' }), keepsData?.id);
     const readTasks = await sayWith(DO({ name: 'read_table', args: { table: 'tasks' } }), keepsData?.id);
@@ -2468,7 +2552,12 @@ section('Assistant and credits');
     const moodKeeps = await sayWith(DO({ name: 'read_table', args: { table: 'mood' } }), keepsData?.id);
     const moodNothing = keepsNothing ? await sayWith(DO({ name: 'read_table', args: { table: 'mood' } }), keepsNothing.id) : null;
     check('read_table hands a body and mind table only to a model that keeps nothing', moodKeeps.json.calls?.[0]?.ok === false && (!moodNothing || moodNothing.json.calls?.[0]?.ok === true), [moodKeeps.json.calls, moodNothing?.json.calls]);
+    // A key in other case, or the table's own name, finds it (the tool takes text, not a list of every key).
+    const byName = await sayWith(DO({ name: 'read_table', args: { table: 'Tasks' } }), keepsData?.id);
+    const noSuch = await sayWith(DO({ name: 'read_table', args: { table: 'constructor' } }), keepsData?.id);
+    check('read_table reads a table named in other case, and finds nothing for a key that is no table', byName.json.calls?.[0]?.ok === true && noSuch.json.calls?.[0]?.ok === false, [byName.json.calls, noSuch.json.calls]);
     await api('PATCH', '/me/ai-tables', { tables: [] }, E.token);
+    await api('PATCH', '/me/modules', { key: 'mood', on: false }, E.token);
     const before = (await api('GET', '/credits', undefined, E.token)).json.account;
     const tick = await say(DO({ name: 'complete_task', args: { taskId: mine[0]?.id } }));
     const receipt = tick.json.receipts?.[0];
@@ -2506,6 +2595,107 @@ section('Assistant and credits');
     const exported = await api('GET', '/me/export', undefined, E.token);
     const actions = JSON.stringify(exported.json.assistantActions ?? null);
     check('the export carries what the assistant did, and never the journal text', Array.isArray(exported.json.assistantActions) && exported.json.assistantActions.length >= 3 && !actions.includes(secret) && JSON.stringify(exported.json.journal).includes(secret), actions.slice(0, 200));
+
+    // read_journal needs the tables' AI switches (2026-11-14, the founder's yes): the entries only while Journal entries is open to AI chat,
+    // the gratitude days only while Gratitude is, still only on a model that keeps nothing (the stand-in, smoke-mock, keeps nothing).
+    // The routes hold it for a call marked as AI chat; the screens send no mark. The person's own list is put back at the end.
+    const aiBefore = (await me(E.token)).aiTables ?? [];
+    await api('PATCH', '/me/ai-tables', { tables: [] }, E.token);
+    const thanks = `Smoke thanks ${stamp}`;
+    const toolSaid = () => (mockModel.last?.messages ?? []).filter((m) => m.role === 'tool').at(-1)?.content ?? '';
+    const gWrote = await say(DO({ name: 'write_gratitude', args: { lines: [thanks] } }));
+    const gWroteSaid = toolSaid();
+    const gDay = await api('GET', `/journal/gratitude?day=${today}`, undefined, E.token);
+    check('write_gratitude still writes with both tables shut to AI chat, and tells the model no word of it', gWrote.json.receipts?.[0]?.status === 'done' && gDay.json.gratitude?.lines?.some((l) => l.text === thanks) && gWroteSaid.includes('"saved":true') && !gWroteSaid.includes(thanks) && !String(gWrote.json.text ?? '').includes(thanks), { receipts: gWrote.json.receipts, said: gWroteSaid });
+    const readJ = async (model) => {
+      const r = model ? await sayWith(DO({ name: 'read_journal' }), model) : await say(DO({ name: 'read_journal' }));
+      return { r, said: toolSaid() };
+    };
+    const bothShut = await readJ();
+    check('read_journal with both tables shut says so in plain words and where to switch them on, with no word or count of either', bothShut.r.json.calls?.[0]?.tool === 'read_journal' && bothShut.r.json.calls[0].ok === true && /Journal entries and Gratitude are not open to AI chat/.test(bothShut.said) && /Show to AI chat/.test(bothShut.said) && /Profile tab/.test(bothShut.said) && !bothShut.said.includes(secret) && !bothShut.said.includes(thanks) && !/"total"|"entries"|"gratitude"/.test(bothShut.said), bothShut.said);
+    check('the assistant is told read_journal reads only what is opened to AI chat, and never to guess', /reads only what they opened to AI chat/.test(mockModel.last?.messages?.[0]?.content ?? '') && /Never guess what their journal holds/.test(mockModel.last?.messages?.[0]?.content ?? ''), '');
+    await api('PATCH', '/me/ai-tables', { table: 'journal', on: true }, E.token);
+    const journalOnly = await readJ();
+    check('with only Journal entries open it reads the entries and says Gratitude is not open, without a line of it', journalOnly.r.json.calls?.[0]?.ok === true && journalOnly.said.includes(secret) && !journalOnly.said.includes(thanks) && /Gratitude is not open to AI chat/.test(journalOnly.said), journalOnly.said.slice(0, 400));
+    await api('PATCH', '/me/ai-tables', { tables: ['gratitude'] }, E.token);
+    const thanksOnly = await readJ();
+    check('with only Gratitude open it reads the lines and says Journal entries is not open, without an entry or its count', thanksOnly.r.json.calls?.[0]?.ok === true && thanksOnly.said.includes(thanks) && !thanksOnly.said.includes(secret) && !/"total"/.test(thanksOnly.said) && /Journal entries is not open to AI chat/.test(thanksOnly.said), thanksOnly.said.slice(0, 400));
+    await api('PATCH', '/me/ai-tables', { tables: ['journal', 'gratitude'] }, E.token);
+    const bothOpen = await readJ();
+    check('with both open it reads both and says nothing is shut', bothOpen.r.json.calls?.[0]?.ok === true && bothOpen.said.includes(secret) && bothOpen.said.includes(thanks) && !/not open to AI chat/.test(bothOpen.said), bothOpen.said.slice(0, 400));
+    const keepsRead = keepsData ? await readJ(keepsData.id) : null;
+    check('a model that may keep what it reads never reads the journal or gratitude, even with both open', !keepsRead || (keepsRead.r.json.calls?.some((x) => x.tool === 'read_journal' && x.ok === false) && !keepsRead.said.includes(secret) && !keepsRead.said.includes(thanks)), keepsRead?.r.json.calls);
+    // The routes themselves, called as AI chat would (the dispatcher's mark) and as a screen would (no mark).
+    const AI = { 'X-Kreators-Via': 'assistant' };
+    await api('PATCH', '/me/ai-tables', { tables: [] }, E.token);
+    const jShut = await api('GET', '/journal?ai=private', undefined, E.token, AI);
+    const dayShut = await api('GET', `/journal?date=${today}&ai=private`, undefined, E.token, AI);
+    const gShut = await api('GET', '/journal/gratitude?size=10&ai=private', undefined, E.token, AI);
+    const shutText = JSON.stringify([jShut.json, dayShut.json, gShut.json]);
+    check('marked as AI chat, the journal list, a day of it and the gratitude pages answer 403 in words naming the switch while shut', jShut.status === 403 && /Journal entries is not open to AI chat/.test(jShut.json.error ?? '') && /Show to AI chat/.test(jShut.json.error ?? '') && dayShut.status === 403 && gShut.status === 403 && /Gratitude is not open to AI chat/.test(gShut.json.error ?? '') && !shutText.includes(secret) && !shutText.includes(thanks) && !/"total"/.test(shutText), [jShut.json, dayShut.status, gShut.json]);
+    const gOneDay = await api('GET', `/journal/gratitude?day=${today}&today=${today}`, undefined, E.token, AI);
+    const jScreen = await api('GET', '/journal', undefined, E.token);
+    const gScreen = await api('GET', '/journal/gratitude?size=10', undefined, E.token);
+    check('one gratitude day stays open to AI chat (write_gratitude places lines by it), and the screens answer as before', gOneDay.status === 200 && jScreen.status === 200 && JSON.stringify(jScreen.json).includes(secret) && gScreen.status === 200 && JSON.stringify(gScreen.json).includes(thanks), [gOneDay.status, jScreen.status, gScreen.status]);
+    await api('PATCH', '/me/ai-tables', { tables: ['journal', 'gratitude'] }, E.token);
+    const jOpen = await api('GET', '/journal?ai=private', undefined, E.token, AI);
+    const gOpen = await api('GET', '/journal/gratitude?size=10&ai=private', undefined, E.token, AI);
+    const jKeeps = await api('GET', '/journal', undefined, E.token, AI);
+    const jScreen2 = await api('GET', '/journal', undefined, E.token);
+    check('once open they answer AI chat on a model that keeps nothing, never one that may keep it, and the screens still answer', jOpen.status === 200 && JSON.stringify(jOpen.json).includes(secret) && gOpen.status === 200 && JSON.stringify(gOpen.json).includes(thanks) && jKeeps.status === 403 && /may keep/.test(jKeeps.json.error ?? '') && jScreen2.status === 200, [jOpen.status, gOpen.status, jKeeps.json, jScreen2.status]);
+    // Search matches an entry's words: no tool calls it, and AI chat gets no journal hit from it while Journal entries is shut.
+    await api('PATCH', '/me/ai-tables', { tables: [] }, E.token);
+    const findSecret = `/search?q=${encodeURIComponent(`secret ${stamp}`)}`;
+    const sShut = await api('GET', findSecret, undefined, E.token, AI);
+    const sScreen = await api('GET', findSecret, undefined, E.token);
+    check('search finds a journal entry for AI chat only while Journal entries is open, and for the screen as before', sShut.status === 200 && (sShut.json.journal ?? []).length === 0 && (sScreen.json.journal ?? []).length >= 1, [sShut.json.journal, sScreen.json.journal]);
+    // The review of 2026-11-14: search gives AI chat a journal hit only on a model that keeps nothing (ai=private), as the journal's routes do.
+    await api('PATCH', '/me/ai-tables', { tables: ['journal'] }, E.token);
+    const sKeeps = await api('GET', findSecret, undefined, E.token, AI);
+    const sPriv = await api('GET', `${findSecret}&ai=private`, undefined, E.token, AI);
+    check('with Journal entries open, search gives AI chat a journal hit only on a model that keeps nothing', (sKeeps.json.journal ?? []).length === 0 && (sPriv.json.journal ?? []).length >= 1, [sKeeps.json.journal, sPriv.json.journal]);
+    // Any gratitude day but today and yesterday is a read of its words: AI chat gets it only as the pages of days get it.
+    await api('PATCH', '/me/ai-tables', { tables: [] }, E.token);
+    const oldDay = new Date(Date.parse(`${today}T12:00:00Z`) - 5 * 86_400_000).toISOString().slice(0, 10);
+    const gOld = await api('GET', `/journal/gratitude?day=${oldDay}`, undefined, E.token, AI);
+    const gOldScreen = await api('GET', `/journal/gratitude?day=${oldDay}`, undefined, E.token);
+    check('marked as AI chat, a gratitude day older than yesterday answers 403 in words while Gratitude is shut; the screen still reads it', gOld.status === 403 && /Gratitude is not open to AI chat/.test(gOld.json.error ?? '') && gOldScreen.status === 200, [gOld.status, gOld.json, gOldScreen.status]);
+    // write_gratitude tells the model only what it wrote and what did not fit, never a word of the lines the day already held.
+    const gMore = await say(DO({ name: 'write_gratitude', args: { lines: [`Smoke more thanks ${stamp}`] } }));
+    const gMoreSaid = toolSaid();
+    check('write_gratitude says how many of its own lines it wrote and none of the day’s words', gMore.json.receipts?.[0]?.status === 'done' && gMoreSaid.includes('"written":1') && gMoreSaid.includes('"left":0') && !gMoreSaid.includes(thanks), gMoreSaid);
+    // With All tables hidden in Apps, neither place shows the switch, so the words say to show it first.
+    await api('PATCH', '/me/modules', { key: 'tables', on: false }, E.token);
+    const hiddenTables = await readJ();
+    await api('PATCH', '/me/modules', { key: 'tables', on: true }, E.token);
+    check('with All tables hidden, read_journal says to show All tables in Apps first', hiddenTables.r.json.calls?.[0]?.ok === true && /show All tables in Apps first/.test(hiddenTables.said) && !hiddenTables.said.includes(secret), hiddenTables.said);
+    // What a reply read goes with it (AssistantReply.reads), and a later message holds its words back once that table is shut to AI chat,
+    // or from a model that may keep data when it read what only a model that keeps nothing may read.
+    check('a reply that read nothing private says so, so the client keeps an empty list with it', Array.isArray(bothShut.r.json.reads) && !bothShut.r.json.reads.includes('journal') && !bothShut.r.json.reads.includes('gratitude'), bothShut.r.json.reads);
+    check('a reply that read the journal and gratitude says so', bothOpen.r.json.reads?.includes('journal') && bothOpen.r.json.reads.includes('gratitude'), bothOpen.r.json.reads);
+    const quoted = `Smoke quoted ${stamp}`;
+    const turnsWith = (reads) => [{ role: 'user', text: 'What did I write?' }, { role: 'assistant', text: quoted, ...(reads ? { reads } : {}) }, { role: 'user', text: 'And then?' }];
+    const sendTurns = async (reads, model) => {
+      await api('POST', '/assistant', { messages: turnsWith(reads), ...(model ? { model } : {}), context: { path: '/journal', date: today, timeZone: 'UTC' } }, E.token);
+      return (mockModel.last?.messages ?? []).map((m) => String(m.content ?? ''));
+    };
+    await api('PATCH', '/me/ai-tables', { tables: ['journal', 'gratitude'] }, E.token);
+    const keptOpen = await sendTurns(['journal']);
+    await api('PATCH', '/me/ai-tables', { tables: ['gratitude'] }, E.token);
+    const heldShut = await sendTurns(['journal']);
+    const heldUnknown = await sendTurns(undefined);
+    const keptNothing = await sendTurns([]);
+    check('an earlier reply that read Journal entries reaches the model while it is open, and is left out once it is shut', keptOpen.some((t) => t.includes(quoted)) && !heldShut.some((t) => t.includes(quoted)) && heldShut.some((t) => t.includes('An earlier answer is left out here')) && heldShut.includes('And then?'), [keptOpen, heldShut]);
+    check('a reply that does not say what it read is left out while Journal entries is shut, and one that read nothing is kept', !heldUnknown.some((t) => t.includes(quoted)) && keptNothing.some((t) => t.includes(quoted)), [heldUnknown, keptNothing]);
+    if (keepsData) {
+      await api('PATCH', '/me/ai-tables', { tables: ['journal', 'gratitude', 'tasks'] }, E.token);
+      const keepsJournal = await sendTurns(['journal'], keepsData.id);
+      const keepsTracker = await sendTurns(['tool:get_wellbeing'], keepsData.id);
+      const keepsTasks = await sendTurns(['tasks'], keepsData.id);
+      check('a model that may keep data never gets an earlier reply that read the journal or a tracker, even with the tables open; one from an own table it may read is kept', !keepsJournal.some((t) => t.includes(quoted)) && !keepsTracker.some((t) => t.includes(quoted)) && keepsTasks.some((t) => t.includes(quoted)), [keepsJournal, keepsTracker, keepsTasks]);
+    }
+    await api('PATCH', '/me/ai-tables', { tables: aiBefore }, E.token);
+
     await api('PATCH', '/me/modules', { key: 'journal', on: false }, E.token);
     const off = await say(DO({ name: 'write_journal', args: { body: 'Should not land' } }));
     check('an app switched off is out of reach', off.json.calls?.[0]?.ok === false && /switched off/.test(off.json.calls[0].error ?? ''), off.json.calls);
@@ -2602,6 +2792,56 @@ section('Companion');
     const ptools = (mockModel.last?.tools ?? []).map((t) => t.function.name);
     check('a model that keeps nothing sees the mood and the sleep', priv.status === 200 && /mood today (?!unknown)\w+/.test(psys) && /sleep last night (?!unknown)[\d.]+ hours/.test(psys), psys.slice(-200));
     check('and may read the trackers', ptools.includes('get_wellbeing'), ptools);
+
+    // read_journal through the Companion (2026-11-14): the same two AI switches as the assistant's, on a model that keeps nothing.
+    await api('PATCH', '/me/modules', { key: 'journal', on: true }, K.token);
+    const kEntry = `Smoke companion entry ${stamp}`;
+    const kThanks = `Smoke companion thanks ${stamp}`;
+    await api('POST', '/journal', { title: 'Smoke companion', body: kEntry }, K.token);
+    const kKeys = (await api('GET', `/journal/gratitude?day=${today}&today=${today}`, undefined, K.token)).json.prompts ?? gratitudePromptsForDay(today).map((p) => p.key);
+    await api('PUT', `/journal/gratitude/${today}`, { lines: kKeys.map((prompt, i) => ({ prompt, text: i === 0 ? kThanks : '' })), today, ifUpdatedAt: '' }, K.token);
+    const kAiBefore = (await me(K.token)).aiTables ?? [];
+    const askJournal = async () => {
+      mockModel.last = null;
+      const r = await tell(`DO ${JSON.stringify([{ name: 'read_journal' }])}`, { model: closed.id });
+      return { r, said: (mockModel.last?.messages ?? []).filter((m) => m.role === 'tool').at(-1)?.content ?? '', sent: (mockModel.last?.messages ?? []).map((m) => String(m.content ?? '')) };
+    };
+    await api('PATCH', '/me/ai-tables', { tables: [] }, K.token);
+    const cShut = await askJournal();
+    check('the Companion’s read_journal says both are shut and where to open them, with no word of either', cShut.r.status === 200 && /Journal entries and Gratitude are not open to AI chat/.test(cShut.said) && !cShut.said.includes(kEntry) && !cShut.said.includes(kThanks) && !(cShut.r.json.messages?.[1]?.body ?? '').includes(kEntry), cShut.said);
+    check('the Companion is told read_journal reads only what is opened to AI chat, and never to guess', /reads only what they opened to AI chat/.test(mockModel.last?.messages?.[0]?.content ?? '') && /Never guess what their journal holds/.test(mockModel.last?.messages?.[0]?.content ?? ''), (mockModel.last?.messages?.[0]?.content ?? '').slice(-400));
+    await api('PATCH', '/me/ai-tables', { tables: ['journal'] }, K.token);
+    const cJournal = await askJournal();
+    await api('PATCH', '/me/ai-tables', { tables: ['gratitude'] }, K.token);
+    const cThanks = await askJournal();
+    check('and reads only the part that is open', cJournal.said.includes(kEntry) && !cJournal.said.includes(kThanks) && /Gratitude is not open to AI chat/.test(cJournal.said) && cThanks.said.includes(kThanks) && !cThanks.said.includes(kEntry) && /Journal entries is not open to AI chat/.test(cThanks.said), [cJournal.said.slice(0, 300), cThanks.said.slice(0, 300)]);
+    // A line keeps what its answer read, so the next message holds it back once that table is shut (the review of 2026-11-14).
+    const cJournalBody = cJournal.r.json.messages?.[1]?.body ?? '';
+    check('a Companion line that read Journal entries is left out of the next message once that table is shut', cJournalBody.length > 0 && !cThanks.sent.includes(cJournalBody), cThanks.sent);
+    await api('PATCH', '/me/ai-tables', { tables: ['journal', 'gratitude'] }, K.token);
+    mockModel.last = null;
+    await tell('And how was it?', { model: closed.id });
+    check('and is read again once it is open', (mockModel.last?.messages ?? []).some((m) => m.content === cJournalBody), (mockModel.last?.messages ?? []).map((m) => String(m.content ?? '').slice(0, 60)));
+    const kSeen = (await api('GET', '/companion', undefined, K.token)).json.messages ?? [];
+    const kTable = await api('GET', '/tables/companionChat?size=25', undefined, K.token);
+    check('the chat and its table show only the model that answered, never what it read', kSeen.some((m) => m.body === cJournalBody && m.model === closed.id) && !JSON.stringify(kSeen).includes('#reads') && kTable.status === 200 && !JSON.stringify(kTable.json).includes('#reads'), [kSeen.slice(-3), kTable.status]);
+    // The Companion chat table read by AI chat (the review of 2026-11-14): with Journal entries shut and the chat open, read_table's page and a
+    // search leave out the answer that quoted the journal; the person's own lines stay, and it comes back once Journal entries is open again.
+    const kAi = { 'X-Kreators-Via': 'assistant' };
+    const chatLines = (res) => (res.json.rows ?? []).map((row) => String(row.cells?.line ?? ''));
+    await api('PATCH', '/me/ai-tables', { tables: ['companionChat'] }, K.token);
+    const chatShut = await api('GET', '/tables/companionChat?size=100&count=1&ai=private', undefined, K.token, kAi);
+    const chatFindShut = await api('GET', `/tables/companionChat?size=100&count=1&ai=private&q=${encodeURIComponent('Mock done')}`, undefined, K.token, kAi);
+    await api('PATCH', '/me/ai-tables', { tables: ['companionChat', 'journal', 'gratitude'] }, K.token);
+    const chatOpen = await api('GET', '/tables/companionChat?size=100&count=1&ai=private', undefined, K.token, kAi);
+    const chatFindOpen = await api('GET', `/tables/companionChat?size=100&count=1&ai=private&q=${encodeURIComponent('Mock done')}`, undefined, K.token, kAi);
+    check(
+      'read_table on the Companion chat leaves out an answer that read Journal entries while that table is shut, from the page and a search; the person’s own lines stay',
+      chatShut.status === 200 && !chatLines(chatShut).includes(cJournalBody) && chatLines(chatShut).some((l) => l.includes('read_journal')) && chatFindShut.status === 200 && !chatLines(chatFindShut).includes(cJournalBody) && chatShut.json.total < chatOpen.json.total,
+      [chatShut.status, chatShut.json.total, chatOpen.json.total, chatLines(chatFindShut).map((l) => l.slice(0, 40))],
+    );
+    check('and reads it again once Journal entries is open', chatOpen.status === 200 && chatLines(chatOpen).includes(cJournalBody) && chatLines(chatFindOpen).includes(cJournalBody), [chatOpen.status, chatLines(chatFindOpen).map((l) => l.slice(0, 40))]);
+    await api('PATCH', '/me/ai-tables', { tables: kAiBefore }, K.token);
 
     const read = await tell(`DO ${JSON.stringify([{ name: 'get_daily' }])}`, { model: open.id });
     check('a read tool runs as the person', read.status === 200 && /^Mock done:/.test(read.json.messages?.[1]?.body ?? '') && !/only reads/.test(read.json.messages[1].body), read.json.messages?.[1]);
@@ -5387,6 +5627,9 @@ section('Agency lifecycle');
   check('a length that was not offered is refused', (await P('POST', `/agency/${tok2}/retainer`, { months: 4 })).status === 400);
   check('and the confirm needs a choice first', (await api('POST', `/agency/retainers/${offer.json.id}/confirm?day=${today}`, {}, O.token)).status === 409);
   check('the client chooses a length', (await P('POST', `/agency/${tok2}/retainer`, { months: 3 })).status === 200 && (await P('GET', `/agency/${tok2}`)).json.retainer.status === 'chosen' && (await page(cid)).lifecycle.retainer.status === 'chosen');
+  // All tables reads the month as Agency shows it and bills it, after the discount, with the fee before it beside it (the review, 2026-11-14).
+  const retRow = ((await api('GET', '/tables/agencyRetainers?size=100', undefined, O.token)).json.rows ?? []).find((r) => r.id === offer.json.id);
+  check('All tables reads a chosen retainer’s month after its discount, as the client page does', retRow?.cells?.fee === 4750000 && retRow?.cells?.feeBefore === 5000000 && (await page(cid)).lifecycle.retainer.monthlyCents === retRow?.cells?.fee, retRow?.cells);
   check('another person cannot confirm, withdraw or end it', (await api('POST', `/agency/retainers/${offer.json.id}/confirm`, {}, X.token)).status === 404 && (await api('POST', `/agency/retainers/${offer.json.id}/withdraw`, {}, X.token)).status === 404 && (await api('POST', `/agency/retainers/${offer.json.id}/end`, {}, X.token)).status === 404);
   const [k1, k2] = await Promise.all([api('POST', `/agency/retainers/${offer.json.id}/confirm?day=${today}`, { startDay: today }, O.token), api('POST', `/agency/retainers/${offer.json.id}/confirm?day=${today}`, { startDay: today }, O.token)]);
   check('two confirms at once start it once', [k1.status, k2.status].sort().join() === '200,409', [k1.status, k2.status, k1.json, k2.json]);
@@ -6508,6 +6751,11 @@ section('Agency team');
   check('team: the editor\'s next request is refused as gone', gone.status === 403 && gone.json.reason === 'gone', gone.json);
   check('team: and their own Agency still works', (await api('GET', `/agency?day=${D}`, undefined, E.token)).status === 200);
   check('team: a member can leave', (await api('POST', `/me/teams/${cId}/leave`, undefined, C.token)).status === 200 && (await api('GET', `/agency/items?day=${D}`, undefined, C.token, ch)).status === 403);
+  // All tables names each ending as Agency does: a no to the invite is a no, never a leaving (the review, 2026-11-14).
+  const teamRows = (await api('GET', '/tables/agencyTeam?size=100', undefined, T.token)).json.rows ?? [];
+  const endedOf = (id) => teamRows.find((r) => r.id === id)?.cells?.endedBy;
+  const saidNo = ((await api('GET', '/tables/agencyTeam?size=100&f_endedBy=declined', undefined, T.token)).json.rows ?? []).map((r) => r.id);
+  check('team: All tables says the editor said no, the member left and the owner removed the editor', endedOf(iE.json.id) === 'declined' && endedOf(cId) === 'member' && endedOf(eId) === 'owner' && saidNo.includes(iE.json.id) && !saidNo.includes(cId), [endedOf(iE.json.id), endedOf(cId), endedOf(eId), saidNo.length]);
 
   // One more invite that stays open, so the owner's delete can be seen taking it.
   const iX = await invite({ who: `team-outsider-${stamp}@smoke.test`, role: 'videographer' });
@@ -9693,7 +9941,8 @@ section('Search and answer engines');
   await api('PATCH', '/me', { publicSettings: { pagePublic: true } }, SE.token);
 }
 
-import { CSV_MAX_ROWS as TABLES_CSV_MAX, DATA_TABLES as TABLES_ALL } from '../../packages/shared/src/dataTables.ts';
+import { CSV_MAX_ROWS as TABLES_CSV_MAX, DATA_TABLES as TABLES_ALL, tableAllowed as tableOpenTo, tableReach } from '../../packages/shared/src/dataTables.ts';
+import { BADGE_FAMILY_META as TABLE_BADGE_FAMILIES } from '../../packages/shared/src/index.ts';
 section('All tables');
 {
   // The person's own tables, a coach's view of what a student switched on, and a super admin's read (2026-11-13, routes/tables.ts).
@@ -9701,24 +9950,1055 @@ section('All tables');
   const K = await signup(`tablescoach-${stamp}@smoke.test`, `Meadow-${stamp}-pass`, 'Tables coach');
   const X = await signup(`tablesother-${stamp}@smoke.test`, `Canyon-${stamp}-pass`, 'Tables other');
   const tb = (path, token, method = 'GET', body) => api(method, `/tables${path}`, body, token);
+  const appsOnOf = async (token) => {
+    const got = (await api('GET', '/me', undefined, token)).json;
+    const access = got.access ?? {};
+    // With the settings inside an app a table needs on too (Business metrics in Reviews), as `switch:<key>`.
+    return [...Object.keys(access).filter((k) => access[k]?.on === true), ...(got.user?.tableSwitches ?? []).map((k) => `switch:${k}`)];
+  };
+  const { MODULE_GROUP_ORDER: GROUP_ORDER } = await import('../../packages/shared/src/index.ts');
 
+  // A table lists and opens only while one of its apps is on for the person (2026-11-14, `needs`): a new account has only the apps it starts with.
+  const firstOn = await appsOnOf(O.token);
+  const firstKeys = TABLES_ALL.filter((t) => tableOpenTo(t, 'owner', [], firstOn)).map((t) => t.key);
   const list = await tb('', O.token);
   const listed = (list.json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
-  check('tables: the owner’s list holds every table, in groups', list.status === 200 && listed.length === TABLES_ALL.length && list.json.view === 'owner' && list.json.subject?.id === O.user.id, [list.status, listed.length]);
+  check('tables: the owner’s list holds every table whose app is on, in groups', list.status === 200 && listed.join() === firstKeys.join() && listed.length < TABLES_ALL.length && list.json.view === 'owner' && list.json.subject?.id === O.user.id, [list.status, listed.length, firstKeys.length]);
+  check('tables: each category in the list names the app group whose toggle it sits in', (list.json.groups ?? []).length > 0 && list.json.groups.every((g) => GROUP_ORDER.includes(g.appGroup)), (list.json.groups ?? []).map((g) => g.appGroup));
+  const offTable = TABLES_ALL.find((t) => !firstKeys.includes(t.key) && t.key === 'mood') ?? TABLES_ALL.find((t) => !firstKeys.includes(t.key));
+  const offPage = await tb(`/${offTable?.key}?count=1`, O.token);
+  const offCsv = await tb(`/${offTable?.key}/csv`, O.token);
+  const offEdit = await tb(`/${offTable?.key}/edit`, O.token, 'POST', { id: 'x', column: 'note', value: 'x', today });
+  check('tables: a table whose app is hidden answers 404, saying which app to show, and is never downloaded or changed', offPage.status === 404 && /^Show .+ in Apps to open/.test(offPage.json.error ?? '') && offCsv.status === 404 && offEdit.status === 404, [offTable?.key, offPage.status, offPage.json.error, offCsv.status, offEdit.status]);
+  // An app the team switched off for the person cannot be shown in Apps, so its table says that instead, in the module gate's own words (the review, 2026-11-14).
+  {
+    const needs = offTable?.needs ?? [];
+    const shutApps = await Promise.all(needs.map((k) => admin('POST', `/admin/flags/${k}/overrides`, { subjectType: 'user', subjectId: O.user.id, enabled: false, reason: 'smoke tables' })));
+    try {
+      const unavailable = await tb(`/${offTable?.key}`, O.token);
+      check('tables: a table whose app is not available on the account says so, never to show it in Apps', needs.length > 0 && unavailable.status === 404 && /is not available on your account|are not available on your account/.test(unavailable.json.error ?? '') && !/in Apps/.test(unavailable.json.error ?? ''), [offTable?.key, unavailable.status, unavailable.json.error]);
+    } finally {
+      for (const o of shutApps) if (o.json?.override?.id) await admin('DELETE', `/admin/flags/overrides/${o.json.override.id}`);
+    }
+  }
   for (const key of ['nope', 'constructor', '__proto__', 'coach']) {
     const r = await tb(`/${key}`, O.token);
     check(`tables: an unknown table "${key}" answers 404`, r.status === 404, r.status);
   }
+  // Every app a table needs, on, so every table can be opened below.
+  const needed = [...new Set(TABLES_ALL.flatMap((t) => t.needs ?? []))];
+  const turned = await api('PATCH', '/me/modules', { changes: needed.map((key) => ({ key, on: true })) }, O.token);
+  // Business metrics' tables need Reviews and its own switch (2026-11-14, `needsSwitch`): with Reviews on and the switch off they stay shut.
+  const metricsShut = await tb('/businessMetrics?count=1', O.token);
+  const metricsShutListed = ((await tb('', O.token)).json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
+  check(
+    'tables: Business metrics’ tables stay shut while its switch in Reviews is off, saying which switch, even with Reviews on',
+    metricsShut.status === 404 && /^Turn on Business metrics in Reviews/.test(metricsShut.json.error ?? '') && metricsShut.json.switchOff === 'businessMetrics' && !metricsShutListed.includes('businessMetrics') && !metricsShutListed.includes('businessMetricValues') && metricsShutListed.includes('agencyClients'),
+    [metricsShut.status, metricsShut.json.error, metricsShutListed.length],
+  );
+  await api('PUT', '/reviews/kpis/settings', { enabled: true }, O.token);
+  check('tables: /me says which settings inside an app are on, for the screen’s own lists', JSON.stringify((await me(O.token)).tableSwitches) === '["businessMetrics"]', (await me(O.token)).tableSwitches);
+  const allOn = await appsOnOf(O.token);
+  const openKeys = TABLES_ALL.filter((t) => tableOpenTo(t, 'owner', [], allOn)).map((t) => t.key);
+  const relisted = ((await tb('', O.token)).json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
+  check('tables: showing those apps lists their tables again', turned.status === 200 && relisted.join() === openKeys.join() && openKeys.length === TABLES_ALL.length, [turned.status, relisted.length, openKeys.length]);
 
   // Every table opens for its owner on the real database, and none carries a secret.
   const SECRET = /password_hash|password_salt|"token"|signed_name|snapshot_json|portal_pass|friend_code|referral_code/i;
   let opened = 0;
-  for (const t of TABLES_ALL) {
+  for (const t of TABLES_ALL.filter((x) => openKeys.includes(x.key))) {
     const r = await tb(`/${t.key}?count=1`, O.token);
     if (r.status === 200 && Array.isArray(r.json.rows) && typeof r.json.total === 'number' && !SECRET.test(JSON.stringify(r.json))) opened += 1;
     else check(`tables: ${t.key} opens for its owner with no secret in it`, false, [r.status, JSON.stringify(r.json).slice(0, 200)]);
   }
-  check('tables: every table opens for its owner, with a count', opened === TABLES_ALL.length, opened);
+  check('tables: every table opens for its owner, with a count', opened === openKeys.length && opened === TABLES_ALL.length, opened);
+
+  // Agency and Business metrics (2026-11-14, "Me and AI chat only"): made through Agency's and Reviews' own routes, read and changed here.
+  {
+    const cl = await api('POST', '/agency/clients', { name: `Tables client ${stamp}`, contactName: 'Asha', contactEmail: `tables-client-${stamp}@smoke.test`, retainerCents: 2500000, portalPassword: 'generate' }, O.token);
+    const piece = await api('POST', `/agency/items?day=${today}`, { clientId: cl.json.id, title: `Tables piece ${stamp}`, kind: 'short', feeCents: 150000 }, O.token);
+    const noteMade = await api('POST', `/agency/items/${piece.json.id}/notes`, { body: `Tables note ${stamp}`, shared: true }, O.token);
+    const inv = await api('POST', '/agency/invoices', { clientId: cl.json.id, items: [{ description: 'Two shorts', quantity: 2, unitCents: 150000 }] }, O.token);
+    const metric = await api('POST', '/reviews/kpis', { name: `Tables revenue ${stamp}`, unit: 'money', direction: 'up', cadence: 'month', target: 5000000 }, O.token);
+    const valued = await api('PUT', `/reviews/kpis/${metric.json.id}/value?day=${today}`, { date: today, value: 1234500, note: 'A good month' }, O.token);
+    check('tables: a client, a piece, its note, an invoice and a business metric were made through the app’s own routes', [cl, piece, noteMade, inv, metric].every((r) => r.status === 201) && valued.status === 200, [cl.status, piece.status, noteMade.status, inv.status, metric.status, valued.status]);
+    const clients = await tb(`/agencyClients?q=${encodeURIComponent(`Tables client ${stamp}`)}&count=1`, O.token);
+    const row = clients.json.rows?.[0];
+    check(
+      'tables: Agency’s clients read for their owner: the client’s details, the fee in the Agency’s money, never a link key or a password',
+      clients.status === 200 && clients.json.total === 1 && row?.cells?.name === `Tables client ${stamp}` && row?.cells?.monthlyFee === 2500000 && row?.cells?.currency === 'INR' && !clients.json.columns.includes('currency') && typeof row?.cells?.linkLocked === 'string' && !SECRET.test(JSON.stringify(clients.json)) && !JSON.stringify(clients.json).includes(cl.json.portalToken ?? 'no-token') && !JSON.stringify(clients.json).includes(cl.json.password ?? 'no-password'),
+      [clients.status, clients.json.total, row?.cells],
+    );
+    const renamed = await tb('/agencyClients/edit', O.token, 'POST', { id: cl.json.id, column: 'name', value: `Tables client ${stamp} renamed`, today });
+    const inAgency = await api('GET', `/agency/clients/${cl.json.id}?day=${today}`, undefined, O.token);
+    check('tables: a client’s name changes through Agency’s own route', renamed.status === 200 && renamed.json.row?.cells?.name === `Tables client ${stamp} renamed` && JSON.stringify(inAgency.json).includes(`Tables client ${stamp} renamed`), [renamed.status, renamed.json.error]);
+    const changesEdit = await tb('/agencyClients/edit', O.token, 'POST', { id: cl.json.id, column: 'changes', value: 3, today });
+    check('tables: the changes in each piece go through the client’s lifecycle route', changesEdit.status === 200 && changesEdit.json.row?.cells?.changes === 3, [changesEdit.status, changesEdit.json.error]);
+    const moved = await tb('/agencyPieces/edit', O.token, 'POST', { id: piece.json.id, column: 'stage', value: 'approved', today });
+    check('tables: a piece moved to Approved takes the device’s day, through Agency’s own route', moved.status === 200 && moved.json.row?.cells?.stage === 'approved' && moved.json.row?.cells?.approvedOn === today && moved.json.row?.cells?.client === `Tables client ${stamp} renamed`, [moved.status, moved.json.row?.cells]);
+    const noteRows = await tb(`/agencyNotes?q=${encodeURIComponent(`Tables note ${stamp}`)}&count=1`, O.token);
+    const noteEdit = await tb('/agencyNotes/edit', O.token, 'POST', { id: noteRows.json.rows?.[0]?.id, column: 'words', value: 'Changed', today });
+    check('tables: a piece’s line reads with who wrote it, and stays as written', noteRows.json.total === 1 && noteRows.json.rows?.[0]?.cells?.from === 'me' && noteRows.json.rows?.[0]?.cells?.shared === true && noteEdit.status === 400 && /stays as it was written/.test(noteEdit.json.error ?? ''), [noteRows.json.total, noteRows.json.rows?.[0]?.cells, noteEdit.status]);
+    const invRows = await tb(`/agencyInvoices?f_status=draft&count=1`, O.token);
+    const invRow = (invRows.json.rows ?? []).find((r) => r.id === inv.json.invoice?.id);
+    const dueSet = await tb('/agencyInvoices/edit', O.token, 'POST', { id: inv.json.invoice?.id, column: 'due', value: today, today });
+    await api('PATCH', `/agency/invoices/${inv.json.invoice?.id}`, { status: 'void' }, O.token);
+    const voidEdit = await tb('/agencyInvoices/edit', O.token, 'POST', { id: inv.json.invoice?.id, column: 'note', value: 'Too late', today });
+    check(
+      'tables: an Agency invoice reads with its total and changes its due day while a draft, never once void',
+      typeof inv.json.invoice?.totalCents === 'number' && invRow?.cells?.total === inv.json.invoice.totalCents && invRow?.cells?.lines === 1 && dueSet.status === 200 && dueSet.json.row?.cells?.due === today && voidEdit.status === 400 && /void invoice/i.test(voidEdit.json.error ?? ''),
+      [invRow?.cells, dueSet.status, dueSet.json.error, voidEdit.status, voidEdit.json.error],
+    );
+    const metrics = await tb(`/businessMetrics?q=${encodeURIComponent(`Tables revenue ${stamp}`)}`, O.token);
+    const values = await tb(`/businessMetricValues?q=${encodeURIComponent(`Tables revenue ${stamp}`)}&count=1`, O.token);
+    check(
+      'tables: a business metric and its value read in their unit’s words',
+      metrics.json.rows?.[0]?.cells?.target === '₹50,000' && values.json.total === 1 && values.json.rows?.[0]?.cells?.value === '₹12,345' && values.json.rows?.[0]?.cells?.note === 'A good month',
+      [metrics.json.rows?.[0]?.cells, values.json.rows?.[0]?.cells],
+    );
+    // A table behind a setting inside its app reads the setting beside its rows, so its page costs what any other table's page does (the
+    // review, 2026-11-14: awaited first, it was a round trip more), and its CSV too.
+    const tripsOf = (r) => Number(r.headers.get('x-d1-round-trips') ?? 0);
+    const plainPage = await tb(`/agencyClients?q=${encodeURIComponent(`Tables client ${stamp}`)}`, O.token);
+    const valuesPage = await tb(`/businessMetricValues?q=${encodeURIComponent(`Tables revenue ${stamp}`)}`, O.token);
+    const plainCsv = await tb(`/agencyClients/csv?q=${encodeURIComponent(`Tables client ${stamp}`)}`, O.token);
+    const valuesCsv = await tb(`/businessMetricValues/csv?q=${encodeURIComponent(`Tables revenue ${stamp}`)}`, O.token);
+    check(
+      'tables: a page or a CSV of a table behind a setting costs no round trip more than a plain table’s',
+      [valuesPage, plainCsv, valuesCsv].every((r) => r.status === 200) && (!plainPage.headers.has('x-d1-round-trips') || (tripsOf(valuesPage) <= tripsOf(plainPage) && tripsOf(valuesCsv) <= tripsOf(plainCsv))),
+      [tripsOf(plainPage), tripsOf(valuesPage), tripsOf(plainCsv), tripsOf(valuesCsv), valuesPage.status, plainCsv.status, valuesCsv.status],
+    );
+    const metricRenamed = await tb('/businessMetrics/edit', O.token, 'POST', { id: metric.json.id, column: 'name', value: `Tables income ${stamp}`, today });
+    check('tables: a business metric’s name changes through Reviews’ own route', metricRenamed.status === 200 && metricRenamed.json.row?.cells?.name === `Tables income ${stamp}`, [metricRenamed.status, metricRenamed.json.error]);
+    // The Business metrics switch off shuts both tables, AI chat's too, and /me says so; on again opens them.
+    await api('PATCH', '/me/ai-tables', { tables: ['agencyClients', 'businessMetrics'] }, O.token);
+    await api('PUT', '/reviews/kpis/settings', { enabled: false }, O.token);
+    const offMe = await me(O.token);
+    const offAi = await api('GET', '/tables/businessMetrics', undefined, O.token, { 'X-Kreators-Via': 'assistant' });
+    const offEdit = await tb('/businessMetrics/edit', O.token, 'POST', { id: metric.json.id, column: 'name', value: 'x', today });
+    await api('PUT', '/reviews/kpis/settings', { enabled: true }, O.token);
+    // Back on: the stored list kept the table, in the registry's order (Business metrics' category comes before Agency's).
+    const backMe = await me(O.token);
+    const backPage = await tb('/businessMetrics', O.token);
+    check(
+      'tables: with Business metrics switched off, its tables neither list, open nor change, for the person or AI chat, and come back with the switch',
+      JSON.stringify(offMe.tableSwitches) === '[]' && JSON.stringify(offMe.aiTables) === '["agencyClients"]' && offAi.status === 404 && offEdit.status === 404 && JSON.stringify(backMe.aiTables) === '["businessMetrics","agencyClients"]' && backPage.status === 200,
+      [offMe.tableSwitches, offMe.aiTables, offAi.status, offEdit.status, backMe.aiTables, backPage.status],
+    );
+    // AI chat reads an Agency table opened to it (the tool hands one only to a model that keeps nothing); Agency switched off shuts them all.
+    const aiAgency = await api('GET', `/tables/agencyClients?count=1&ai=private`, undefined, O.token, { 'X-Kreators-Via': 'assistant' });
+    await api('PATCH', '/me/modules', { key: 'agency', on: false }, O.token);
+    const agencyOffKeys = ((await tb('', O.token)).json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
+    const agencyOff = await tb('/agencyPieces?count=1', O.token);
+    const agencyOffAi = await api('GET', '/tables/agencyClients?ai=private', undefined, O.token, { 'X-Kreators-Via': 'assistant' });
+    await api('PATCH', '/me/modules', { key: 'agency', on: true }, O.token);
+    await api('PATCH', '/me/ai-tables', { tables: [] }, O.token);
+    check(
+      'tables: AI chat reads an Agency table opened to it, and with Agency switched off none of its tables lists or opens, for the person or AI chat',
+      aiAgency.status === 200 && aiAgency.json.total >= 1 && !agencyOffKeys.some((k) => k.startsWith('agency')) && agencyOff.status === 404 && /^Show Agency in Apps/.test(agencyOff.json.error ?? '') && agencyOffAi.status === 404,
+      [aiAgency.status, agencyOff.status, agencyOff.json.error, agencyOffAi.status],
+    );
+  }
+
+  // Shop and creator tools (2026-11-14, "ok, add them"): made through the Shop's own routes, read and changed here. The tables with other people's
+  // details (who booked, a review someone wrote, who was invited, a lead) reach only their owner and AI chat, never a coach or an admin.
+  {
+    const enc = encodeURIComponent;
+    const file = `https://example.com/tables-file-${stamp}`;
+    const dl = await api('POST', '/studio/products', { kind: 'digital', title: `Tables download ${stamp}`, pricePoints: 0, status: 'live', url: file }, O.token);
+    const course = await api('POST', '/studio/products', { kind: 'course', title: `Tables course ${stamp}`, pricePoints: 0, status: 'live' }, O.token);
+    const pid = dl.json.product?.id;
+    const cid = course.json.product?.id;
+    const priv = await api('PATCH', `/studio/products/${cid}`, { status: 'private' }, O.token);
+    const invited = await api('POST', `/studio/products/${cid}/invites`, { who: `tablesother-${stamp}@smoke.test` }, O.token);
+    const taken = await api('POST', `/store/${pid}/checkout`, {}, X.token);
+    const reviewed = await api('POST', `/store/${pid}/review`, { rating: 4, body: `Tables review ${stamp}` }, X.token);
+    const hours = await api('POST', '/studio/availability', { weekday: 1, startMin: 540, endMin: 720 }, O.token);
+    const closedDay = await api('PUT', '/studio/availability/overrides/2026-12-25', { ranges: [] }, O.token);
+    const ownHours = await api('PUT', '/studio/availability/overrides/2026-12-24', { ranges: [{ startMin: 600, endMin: 780 }] }, O.token);
+    const link = await api('POST', '/studio/links', { label: `Tables bio link ${stamp}`, sourceType: 'bio' }, O.token);
+    const auto = await api('POST', '/studio/automations', { keywords: [`tbl${stamp}`], dmMessage: `Tables DM ${stamp}` }, O.token);
+    const handle = (await me(O.token)).handle;
+    const leadEmail = `tables-lead-${stamp}@smoke.test`;
+    const lead = await api('POST', `/public/${handle}/lead`, { name: `Tables lead ${stamp}`, email: leadEmail, message: 'Tell me more' });
+    check(
+      'tables: products, a private course and its invite, a sale and its review, hours, a link, an Auto-DM and a lead were made through the app’s own routes',
+      [dl, course, link, auto, lead].every((r) => r.status === 201) && priv.status === 200 && invited.status < 300 && taken.status < 300 && reviewed.status === 201 && hours.status === 201 && closedDay.status === 200 && ownHours.status === 200,
+      [dl.status, course.status, priv.status, invited.status, taken.status, reviewed.status, hours.status, closedDay.status, ownHours.status, link.status, auto.status, lead.status],
+    );
+    const products = await tb(`/products?q=${enc(`Tables download ${stamp}`)}&count=1`, O.token);
+    const pRow = products.json.rows?.[0];
+    check(
+      'tables: a product reads for its owner with its state and price, never the file a buyer pays for',
+      products.status === 200 && products.json.total === 1 && pRow?.cells?.status === 'live' && pRow?.cells?.kind === 'digital' && pRow?.cells?.pricePoints === 0 && !JSON.stringify(products.json).includes(file),
+      [products.status, products.json.total, pRow?.cells],
+    );
+    const priced = await tb('/products/edit', O.token, 'POST', { id: pid, column: 'price', value: 49900, today });
+    const tooDear = await tb('/products/edit', O.token, 'POST', { id: pid, column: 'price', value: 100_000_001, today });
+    const inStudio = await api('GET', `/studio/products/${pid}`, undefined, O.token);
+    check(
+      'tables: a product’s price changes through Studio’s own route, and one past ₹10,00,000 is refused out loud, never saved as the most',
+      priced.status === 200 && priced.json.row?.cells?.price === 49900 && inStudio.json.product?.priceCents === 49900 && tooDear.status === 400 && /The most is 10,00,000/.test(tooDear.json.error ?? ''),
+      [priced.status, priced.json.error, inStudio.json.product?.priceCents, tooDear.status, tooDear.json.error],
+    );
+    // Studio's old ₹10,000 cap is gone (2026-11-14, the founder: "remove the cap", then "stop under 10lacs"): ₹2,50,000 saves as typed,
+    // through the table and Studio itself, and a price past ₹10,00,000 is refused by Studio in words, leaving the price as it was.
+    const dearTable = await tb('/products/edit', O.token, 'POST', { id: pid, column: 'price', value: 25_000_000, today });
+    const dearStudio = await api('PATCH', `/studio/products/${pid}`, { priceCents: 30_000_000 }, O.token);
+    const pastCeiling = await api('PATCH', `/studio/products/${pid}`, { priceCents: 100_000_001 }, O.token);
+    const afterDear = await api('GET', `/studio/products/${pid}`, undefined, O.token);
+    check(
+      'studio: a money price goes past the old ₹10,000 up to ₹10,00,000, and Studio refuses one past that in words without changing the price',
+      dearTable.status === 200 && dearTable.json.row?.cells?.price === 25_000_000 && dearStudio.status === 200 && pastCeiling.status === 400 && /too high/.test(pastCeiling.json.error ?? '') && afterDear.json.product?.priceCents === 30_000_000,
+      [dearTable.status, dearTable.json.row?.cells?.price, dearStudio.status, pastCeiling.status, pastCeiling.json.error, afterDear.json.product?.priceCents],
+    );
+    await api('PATCH', `/studio/products/${pid}`, { priceCents: 49900 }, O.token);
+    const invites = await tb(`/courseInvites?q=${enc(`Tables course ${stamp}`)}&count=1`, O.token);
+    const toYou = await tb(`/myCourseInvites?q=${enc(`Tables course ${stamp}`)}&count=1`, X.token);
+    check(
+      'tables: a course invite reads for the course’s owner with who was invited, and for the person invited as their own',
+      invites.json.total === 1 && invites.json.rows?.[0]?.cells?.person === 'Tables other' && invites.json.rows?.[0]?.cells?.courseState === 'private' && toYou.status === 200 && toYou.json.total === 1 && toYou.json.rows?.[0]?.cells?.host === 'Tables owner',
+      [invites.json.total, invites.json.rows?.[0]?.cells, toYou.status, toYou.json.rows?.[0]?.cells],
+    );
+    const madePublic = await tb('/products/edit', O.token, 'POST', { id: cid, column: 'status', value: 'public', today });
+    check('tables: a course set to Public is sent as live, through Studio’s own route, and reads Public', madePublic.status === 200 && madePublic.json.row?.cells?.status === 'public' && (await api('GET', `/studio/products/${cid}`, undefined, O.token)).json.product?.status === 'live', [madePublic.status, madePublic.json.error, madePublic.json.row?.cells?.status]);
+    const reviews = await tb(`/productReviews?q=${enc(`Tables review ${stamp}`)}&count=1`, O.token);
+    const rRow = reviews.json.rows?.[0];
+    const shown = await tb('/productReviews/edit', O.token, 'POST', { id: rRow?.id, column: 'shown', value: true, today });
+    const written = await tb(`/myProductReviews?q=${enc(`Tables review ${stamp}`)}&count=1`, X.token);
+    check(
+      'tables: a review reads for the seller with who wrote it, shows through Studio’s own route, and reads for its writer as their own',
+      reviews.json.total === 1 && rRow?.cells?.person === 'Tables other' && rRow?.cells?.rating === '4' && rRow?.cells?.shown === false && shown.status === 200 && shown.json.row?.cells?.shown === true && written.json.total === 1 && written.json.rows?.[0]?.cells?.shown === true,
+      [reviews.json.total, rRow?.cells, shown.status, shown.json.error, written.json.total],
+    );
+    const hourRows = (await tb('/sessionHours?count=1', O.token)).json.rows ?? [];
+    const dayRows = (await tb('/sessionDays?f_day_from=2026-12-24&f_day_to=2026-12-25', O.token)).json.rows ?? [];
+    const byDay = Object.fromEntries(dayRows.map((r) => [r.cells.day, r.cells]));
+    check(
+      'tables: session hours read by day and time, and a day closed or with its own hours in words',
+      hourRows.some((r) => r.cells.day === '1' && r.cells.from === '09:00' && r.cells.until === '12:00') && byDay['2026-12-25']?.closed === true && byDay['2026-12-25']?.hours === 'Closed all day' && byDay['2026-12-24']?.closed === false && / to /.test(byDay['2026-12-24']?.hours ?? ''),
+      [hourRows.map((r) => r.cells), dayRows.map((r) => r.cells)],
+    );
+    const links = await tb(`/trackedLinks?q=${enc(`Tables bio link ${stamp}`)}&count=1`, O.token);
+    check(
+      'tables: a tracked link reads with where it opens and its taps, never its code',
+      links.json.total === 1 && links.json.rows?.[0]?.cells?.opens === 'Your page' && links.json.rows?.[0]?.cells?.from === 'bio' && links.json.rows?.[0]?.cells?.taps === 0 && !JSON.stringify(links.json).includes(link.json.link?.code ?? 'no-code'),
+      [links.json.total, links.json.rows?.[0]?.cells],
+    );
+    const autoOff = await tb('/autoDms/edit', O.token, 'POST', { id: auto.json.automation?.id, column: 'on', value: false, today });
+    check('tables: an Auto-DM is switched off through its own route', autoOff.status === 200 && autoOff.json.row?.cells?.on === false && autoOff.json.row?.cells?.keywords === `tbl${stamp}`, [autoOff.status, autoOff.json.error, autoOff.json.row?.cells]);
+    const leads = await tb(`/leads?q=${enc(`Tables lead ${stamp}`)}&count=1`, O.token);
+    check('tables: a lead reads with their name, message and where it came from, never their email', leads.json.total === 1 && leads.json.rows?.[0]?.cells?.message === 'Tell me more' && leads.json.rows?.[0]?.cells?.from === 'page' && !JSON.stringify(leads.json).includes(leadEmail), [leads.json.total, leads.json.rows?.[0]?.cells]);
+    // A super admin reads a creator's own records, and never one with other people's details.
+    const adminProducts = await tb(`/admin/${O.user.id}/products?q=${enc(`Tables download ${stamp}`)}&count=1`, A.token);
+    const adminReviews = await tb(`/admin/${O.user.id}/productReviews?count=1`, A.token);
+    const adminLeads = await tb(`/admin/${O.user.id}/leads?count=1`, A.token);
+    // On the buyer's side too: the creator a session is with, and who invited them to a private course and its title (2026-11-14 review).
+    const adminInvitedTo = await tb(`/admin/${X.user.id}/myCourseInvites?count=1`, A.token);
+    const adminBooked = await tb(`/admin/${X.user.id}/myBookings?count=1`, A.token);
+    const adminList = ((await tb(`/admin/${X.user.id}`, A.token)).json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
+    check(
+      'tables: an admin reads a member’s products, read only, and is never shown their reviews from buyers, their leads, the sessions they booked or the courses they were invited to',
+      adminProducts.status === 200 && adminProducts.json.total === 1 && adminProducts.json.rows?.every((r) => r.edit === undefined) && adminReviews.status === 404 && adminLeads.status === 404 && adminInvitedTo.status === 404 && adminBooked.status === 404 && !adminList.includes('myCourseInvites') && !adminList.includes('myBookings'),
+      [adminProducts.status, adminReviews.status, adminLeads.status, adminInvitedTo.status, adminBooked.status, adminList.filter((k) => k.startsWith('my'))],
+    );
+    // Shop hidden: its tables neither list, open nor change; what the person bought or wrote elsewhere still lists.
+    await api('PATCH', '/me/modules', { key: 'shop', on: false }, O.token);
+    const shopOffKeys = ((await tb('', O.token)).json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
+    const shopOff = await tb('/products?count=1', O.token);
+    const shopOffEdit = await tb('/products/edit', O.token, 'POST', { id: pid, column: 'title', value: 'Hidden', today });
+    await api('PATCH', '/me/modules', { key: 'shop', on: true }, O.token);
+    check(
+      'tables: with Shop hidden its tables neither list, open nor change, saying which app to show, and the reviews you wrote still list',
+      !shopOffKeys.includes('products') && !shopOffKeys.includes('productReviews') && shopOffKeys.includes('myProductReviews') && shopOff.status === 404 && /^Show Shop in Apps/.test(shopOff.json.error ?? '') && shopOffEdit.status === 404,
+      [shopOff.status, shopOff.json.error, shopOffEdit.status],
+    );
+  }
+
+  // Content, the Store, Tools and Rewards (2026-11-14, the third batch of "ok, add them"): made through the app's own routes, read and changed
+  // here. Offers on the person's listings and both sides of a listing's chat hold another person's name and words: only the person and AI chat.
+  {
+    const enc = encodeURIComponent;
+    await api('PATCH', '/me/modules', { key: 'store', on: true }, X.token);
+    const brand = await api('POST', '/studio/brands', { name: `Tables brand ${stamp}`, niche: 'phone videos' }, O.token);
+    const bid = brand.json.brand?.id;
+    const src = await api('POST', `/studio/brands/${bid}/sources`, { url: `https://example.com/tables-src-${stamp}`, label: 'Their site' }, O.token);
+    const run = await api('POST', `/studio/brands/${bid}/research`, { kind: 'x_search', query: `tables look ${stamp}` }, O.token);
+    const piece = await api('POST', `/studio/brands/${bid}/pieces`, { kind: 'ideas', brief: `Tables brief ${stamp}`, research: false }, O.token);
+    const listing = await api('POST', '/market/listings', { title: `Tables camera ${stamp}`, priceCents: 250000, condition: 'lightly_used', category: 'Camera' }, O.token);
+    const lid = listing.json.listing?.id;
+    const offer = await api('POST', `/market/listings/${lid}/offers`, { cents: 200000, note: `Tables offer ${stamp}` }, X.token);
+    const asked = await api('POST', `/market/listings/${lid}/messages`, { body: `Tables ask ${stamp}` }, X.token);
+    const answered = await api('POST', `/market/listings/${lid}/messages`, { body: `Tables answer ${stamp}`, buyerId: X.user.id }, O.token);
+    const tool = await api('POST', '/tools', { name: `Tables tool ${stamp}`, url: `https://example.com/tool-${stamp}`, category: 'Editing' }, O.token);
+    check(
+      'tables: a brand folder, its link, a run and a piece, a listing with an offer and a chat, and a tool were made through the app’s own routes',
+      [brand, src, piece, listing, offer, asked, answered, tool].every((r) => r.status === 201) && run.status === 200 && run.json.run?.status === 'failed',
+      [brand.status, src.status, run.status, piece.status, listing.status, offer.status, asked.status, answered.status, tool.status],
+    );
+    const brands = await tb(`/brands?q=${enc(`Tables brand ${stamp}`)}&count=1`, O.token);
+    const bRow = brands.json.rows?.[0];
+    const niche = await tb('/brands/edit', O.token, 'POST', { id: bid, column: 'niche', value: 'phone video tips', today });
+    const folder = await api('GET', `/studio/brands/${bid}`, undefined, O.token);
+    check(
+      'tables: a brand folder reads with what is in it, and its niche changes through Content’s own route',
+      brands.status === 200 && brands.json.total === 1 && bRow?.cells?.links === 1 && bRow?.cells?.runs === 1 && bRow?.cells?.pieces === 1 && niche.status === 200 && niche.json.row?.cells?.niche === 'phone video tips' && folder.json.brand?.niche === 'phone video tips',
+      [brands.status, brands.json.total, bRow?.cells, niche.status, niche.json.error, folder.json.brand?.niche],
+    );
+    const runs = await tb(`/researchRuns?q=${enc(`tables look ${stamp}`)}&count=1`, O.token);
+    const links = await tb(`/brandSources?q=${enc(`tables-src-${stamp}`)}&count=1`, O.token);
+    check(
+      'tables: a run reads with what was looked up, how it went and how many results, and a link with its folder',
+      runs.json.total === 1 && runs.json.rows?.[0]?.cells?.status === 'failed' && runs.json.rows?.[0]?.cells?.results === 0 && /Agent Reach/.test(runs.json.rows?.[0]?.cells?.why ?? '') && links.json.total === 1 && links.json.rows?.[0]?.cells?.brand === `Tables brand ${stamp}`,
+      [runs.json.total, runs.json.rows?.[0]?.cells, links.json.total],
+    );
+    const pid = piece.json.piece?.id;
+    const renamed = await tb('/brandPieces/edit', O.token, 'POST', { id: pid, column: 'title', value: `Tables plan ${stamp}`, today });
+    const keptPiece = await tb('/brandPieces/edit', O.token, 'POST', { id: pid, column: 'status', value: 'kept', today });
+    const inFolder = (await api('GET', `/studio/brands/${bid}`, undefined, O.token)).json.pieces?.find((p) => p.id === pid);
+    check(
+      'tables: a piece is renamed and kept through Content’s own route, under its folder',
+      renamed.status === 200 && renamed.json.row?.cells?.title === `Tables plan ${stamp}` && keptPiece.status === 200 && keptPiece.json.row?.cells?.status === 'kept' && inFolder?.title === `Tables plan ${stamp}` && inFolder?.status === 'kept',
+      [renamed.status, renamed.json.error, keptPiece.status, keptPiece.json.error, inFolder?.title, inFolder?.status],
+    );
+    const listings = await tb(`/preownedListings?q=${enc(`Tables camera ${stamp}`)}&count=1`, O.token);
+    const lRow = listings.json.rows?.[0];
+    const repriced = await tb('/preownedListings/edit', O.token, 'POST', { id: lid, column: 'price', value: 300000, today });
+    const takenDown = await tb('/preownedListings/edit', O.token, 'POST', { id: lid, column: 'status', value: 'withdrawn', today });
+    const soldHere = await tb('/preownedListings/edit', O.token, 'POST', { id: lid, column: 'status', value: 'sold', today });
+    const backUp = await tb('/preownedListings/edit', O.token, 'POST', { id: lid, column: 'status', value: 'live', today });
+    const inStore = (await api('GET', `/market/listings/${lid}`, undefined, O.token)).json.listing;
+    check(
+      'tables: a listing reads with its open offers, its price changes and it is taken down and put back through the Store’s own route, never sold here',
+      listings.json.total === 1 && lRow?.cells?.openOffers === 1 && lRow?.cells?.status === 'live' && repriced.status === 200 && repriced.json.row?.cells?.price === 300000 && takenDown.json.row?.cells?.status === 'withdrawn' && soldHere.status === 400 && /set in the app itself/.test(soldHere.json.error ?? '') && backUp.json.row?.cells?.status === 'live' && inStore?.priceCents === 300000 && inStore?.status === 'live',
+      [listings.json.total, lRow?.cells, repriced.status, repriced.json.error, takenDown.status, soldHere.status, soldHere.json.error, inStore?.priceCents, inStore?.status],
+    );
+    const theirOffers = await tb(`/listingOffers?q=${enc(`Tables camera ${stamp}`)}&count=1`, O.token);
+    const myOffers = await tb(`/myOffers?q=${enc(`Tables camera ${stamp}`)}&count=1`, X.token);
+    check(
+      'tables: an offer reads for the seller with who made it, and for the buyer as their own',
+      theirOffers.json.total === 1 && theirOffers.json.rows?.[0]?.cells?.person === 'Tables other' && theirOffers.json.rows?.[0]?.cells?.amount === 200000 && myOffers.json.total === 1 && myOffers.json.rows?.[0]?.cells?.status === 'open' && myOffers.json.rows?.[0]?.cells?.note === `Tables offer ${stamp}`,
+      [theirOffers.json.total, theirOffers.json.rows?.[0]?.cells, myOffers.json.total, myOffers.json.rows?.[0]?.cells],
+    );
+    const sellerChat = await tb(`/chatsWithBuyers?q=${enc(`Tables camera ${stamp}`)}&count=1`, O.token);
+    const buyerChat = await tb(`/chatsWithSellers?q=${enc(`Tables camera ${stamp}`)}&count=1`, X.token);
+    const whoWrote = (r, body) => r.json.rows?.find((x) => x.cells.message === body)?.cells?.from;
+    check(
+      'tables: both sides of a listing’s chat read whole, each line by who wrote it, the person’s own as You, and no id',
+      sellerChat.json.total === 2 && buyerChat.json.total === 2 && whoWrote(sellerChat, `Tables answer ${stamp}`) === 'You' && whoWrote(sellerChat, `Tables ask ${stamp}`) === 'Tables other' && whoWrote(buyerChat, `Tables ask ${stamp}`) === 'You' && buyerChat.json.rows?.[0]?.cells?.seller === 'Tables owner' && !JSON.stringify(sellerChat.json).includes(X.user.id) && !JSON.stringify(buyerChat.json).includes(O.user.id),
+      [sellerChat.json.total, buyerChat.json.total, sellerChat.json.rows?.map((r) => r.cells), buyerChat.json.rows?.[0]?.cells],
+    );
+    const accepted = await api('POST', `/market/offers/${offer.json.offer?.id}`, { action: 'accept' }, O.token);
+    const lateEdit = await tb('/preownedListings/edit', O.token, 'POST', { id: lid, column: 'price', value: 310000, today });
+    const agreedRow = (await tb(`/preownedListings?q=${enc(`Tables camera ${stamp}`)}`, O.token)).json.rows?.[0];
+    check(
+      'tables: once an offer is accepted the listing stays as it is, and never says who the buyer is',
+      accepted.status === 200 && agreedRow?.cells?.status === 'agreed' && (agreedRow?.edit ?? []).length === 0 && lateEdit.status === 400 && /accepted offer/.test(lateEdit.json.error ?? '') && !JSON.stringify(agreedRow).includes(X.user.id),
+      [accepted.status, agreedRow?.cells?.status, agreedRow?.edit, lateEdit.status, lateEdit.json.error],
+    );
+    const tools = await tb(`/toolsSuggested?q=${enc(`Tables tool ${stamp}`)}&count=1`, O.token);
+    check(
+      'tables: a tool the person suggested reads with its link and that the team has not checked it yet',
+      tools.json.total === 1 && tools.json.rows?.[0]?.cells?.checked === false && tools.json.rows?.[0]?.cells?.link === `https://example.com/tool-${stamp}` && tools.json.rows?.[0]?.cells?.category === 'Editing',
+      [tools.json.total, tools.json.rows?.[0]?.cells],
+    );
+    // A super admin reads a member's own listings and folders, never the offers on them or their chats.
+    const adminListings = await tb(`/admin/${O.user.id}/preownedListings?q=${enc(`Tables camera ${stamp}`)}&count=1`, A.token);
+    const adminOffers = await tb(`/admin/${O.user.id}/listingOffers?count=1`, A.token);
+    const adminChats = await tb(`/admin/${O.user.id}/chatsWithBuyers?count=1`, A.token);
+    const adminBuyerChats = await tb(`/admin/${X.user.id}/chatsWithSellers?count=1`, A.token);
+    // A piece's words quote its research (other creators' titles, names and words), so the pieces are never a super admin's either.
+    const adminPieces = await tb(`/admin/${O.user.id}/brandPieces?count=1`, A.token);
+    const adminKeys = ((await tb(`/admin/${O.user.id}`, A.token)).json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
+    check(
+      'tables: an admin reads a member’s own listings and brand folders, read only, never the offers on them, a listing’s chat or the pieces written',
+      adminListings.status === 200 && adminListings.json.total === 1 && adminListings.json.rows?.every((r) => r.edit === undefined) && adminOffers.status === 404 && adminChats.status === 404 && adminBuyerChats.status === 404 && adminPieces.status === 404 && adminKeys.includes('brands') && adminKeys.includes('rewardReservations') && !adminKeys.includes('listingOffers') && !adminKeys.includes('chatsWithBuyers') && !adminKeys.includes('brandPieces'),
+      [adminListings.status, adminOffers.status, adminChats.status, adminBuyerChats.status, adminPieces.status],
+    );
+    // The Store and Content hidden: their tables neither list, open nor change; Rewards, no app, always lists.
+    await api('PATCH', '/me/modules', { changes: [{ key: 'store', on: false }, { key: 'content', on: false }] }, O.token);
+    const offKeys = ((await tb('', O.token)).json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
+    const storeOff = await tb('/preownedListings?count=1', O.token);
+    const storeOffEdit = await tb('/preownedListings/edit', O.token, 'POST', { id: lid, column: 'title', value: 'Hidden', today });
+    const contentOff = await tb('/brands?count=1', O.token);
+    await api('PATCH', '/me/modules', { changes: [{ key: 'store', on: true }, { key: 'content', on: true }] }, O.token);
+    check(
+      'tables: with the Store and Content hidden their tables neither list, open nor change, saying which app to show, and Rewards still lists',
+      !offKeys.includes('preownedListings') && !offKeys.includes('chatsWithSellers') && !offKeys.includes('brands') && offKeys.includes('rewardReservations') && offKeys.includes('gamesUnlocked') && storeOff.status === 404 && /^Show Store in Apps/.test(storeOff.json.error ?? '') && storeOffEdit.status === 404 && contentOff.status === 404 && /^Show Content in Apps/.test(contentOff.json.error ?? ''),
+      [storeOff.status, storeOff.json.error, storeOffEdit.status, contentOff.status, contentOff.json.error],
+    );
+  }
+
+  // Work, Win, Army, TV, Fund and Club (2026-11-14, the fourth batch of "ok, add them"): made through the app's own routes, read and changed
+  // here. Who applied to a listing, a brand's team, campaigns and log, feedback on work sent and a Win reviewer's note hold another person's
+  // name or words: only the person and AI chat.
+  {
+    const enc = encodeURIComponent;
+    // The other side turns on what its own tables need (a new account starts with Work and Army); the run's admin turns on Win for its rewards.
+    await api('PATCH', '/me/modules', { changes: ['win', 'club', 'tv'].map((key) => ({ key, on: true })) }, X.token);
+    await api('PATCH', '/me/modules', { key: 'win', on: true }, A.token);
+    const org = await api('POST', '/orgs', { name: `Tables brand co ${stamp}` }, O.token);
+    const orgId = org.json.organization?.id;
+    const deadline = new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10);
+    const listing = await api('POST', '/work/opportunities', { organizationId: orgId, title: `Tables gig ${stamp}`, compensationMin: 5000, compensationMax: 8000, currency: 'INR', skillsRequired: ['Editing', 'Reels'], deadline }, O.token);
+    const oppId = listing.json.id;
+    // Published from the table, through Work's own route, then applied to.
+    const published = await tb('/workListings/edit', O.token, 'POST', { id: oppId, column: 'status', value: 'published', today });
+    const applied = await api('POST', `/work/opportunities/${oppId}/apply`, { coverNote: `Tables cover ${stamp}` }, X.token);
+    const campaign = await api('POST', '/army/campaigns', { organizationId: orgId, name: `Tables campaign ${stamp}`, brief: 'Three cuts', budgetAmount: 50000 }, O.token);
+    const cid = campaign.json.campaign?.id;
+    const piece = await api('POST', `/army/campaigns/${cid}/deliverables`, { title: `Tables cut ${stamp}` }, O.token);
+    const role = await api('POST', `/army/campaigns/${cid}/assignments`, { creator: X.user.id, role: 'Editor', feeAmount: 12000 }, A.token);
+    const answered = await api('POST', `/army/assignments/${role.json.id}`, { status: 'accepted' }, X.token);
+    const version = await api('POST', `/army/deliverables/${piece.json.id}/versions`, { url: `https://example.com/tables-cut-${stamp}`, note: 'First cut' }, X.token);
+    const reviewed = await api('POST', `/army/versions/${version.json.id}/review`, { status: 'changes', comment: `Tables feedback ${stamp}` }, O.token);
+    const asked = await api('POST', `/orgs/${orgId}/members`, { email: `tablesother-${stamp}@smoke.test` }, O.token);
+    const reward = await api('POST', '/win', { title: `Tables reward ${stamp}`, brandName: 'Tables brand', budgetPoints: 1000, ratePerThousand: 10, minViews: 100 }, A.token);
+    const entry = await api('POST', `/win/${reward.json.id}/submit`, { url: `https://www.youtube.com/watch?v=tables${stamp}` }, X.token);
+    const rejected = await api('POST', `/win/submissions/${entry.json.submission?.id}/review`, { status: 'rejected', evidenceNote: `Tables reviewer ${stamp}` }, A.token);
+    const pitch = await api('POST', '/proposals', { kind: 'tv', title: `Tables series ${stamp}`, pitch: 'Six short episodes', budgetAmount: '5,000' }, O.token);
+    const club = await api('POST', '/club/apply', { note: `Tables club ${stamp}` }, X.token);
+    check(
+      'tables: a brand, a listing, an application, a campaign with a piece, a role, work sent and feedback, a reward and an entry, a pitch and a Club application were made through the app’s own routes',
+      [org, listing, applied, campaign, piece, role, version, asked, reward, entry, pitch, club].every((r) => r.status === 201) && [published, answered, reviewed, rejected].every((r) => r.status === 200),
+      [org.status, listing.status, published.status, published.json.error, applied.status, campaign.status, piece.status, role.status, answered.status, version.status, reviewed.status, asked.status, reward.status, entry.status, rejected.status, pitch.status, club.status],
+    );
+
+    // Work: the poster's listing with its pay in cents and how many applied, who applied by name, and the applicant's own side and each step.
+    const listings = await tb(`/workListings?q=${enc(`Tables gig ${stamp}`)}&count=1`, O.token);
+    const lRow = listings.json.rows?.[0];
+    check(
+      'tables: a listing reads for its poster with its brand, pay in cents, skills and how many applied, published through Work’s own route',
+      listings.json.total === 1 && lRow?.cells?.status === 'published' && lRow?.cells?.brand === `Tables brand co ${stamp}` && lRow?.cells?.payFrom === 500000 && lRow?.cells?.payTo === 800000 && lRow?.cells?.skills === 'Editing, Reels' && lRow?.cells?.applied === 1 && published.json.row?.cells?.status === 'published',
+      [listings.json.total, lRow?.cells],
+    );
+    const clubbed = await tb('/workListings/edit', O.token, 'POST', { id: oppId, column: 'clubOnly', value: true, today });
+    const inWork = (await api('GET', `/work/opportunities/${oppId}`, undefined, O.token)).json.opportunity;
+    const unclubbed = await tb('/workListings/edit', O.token, 'POST', { id: oppId, column: 'clubOnly', value: false, today });
+    const backToDraft = await tb('/workListings/edit', O.token, 'POST', { id: oppId, column: 'status', value: 'draft', today });
+    check(
+      'tables: Club only changes through Work’s own route, and a published listing is never set back or closed here',
+      clubbed.status === 200 && clubbed.json.row?.cells?.clubOnly === true && inWork?.clubOnly === true && inWork?.status === 'published' && unclubbed.json.row?.cells?.clubOnly === false && backToDraft.status === 400 && /closed on its page in Work/.test(backToDraft.json.error ?? ''),
+      [clubbed.status, clubbed.json.error, inWork?.clubOnly, unclubbed.status, backToDraft.status, backToDraft.json.error],
+    );
+    const shortlisted = await api('POST', `/work/applications/${applied.json.application?.id}`, { status: 'shortlisted', note: `Tables step note ${stamp}` }, O.token);
+    const applicants = await tb(`/workApplicants?q=${enc(`Tables gig ${stamp}`)}&count=1`, O.token);
+    const mine = await tb(`/workApplications?q=${enc(`Tables gig ${stamp}`)}&count=1`, X.token);
+    const steps = await tb(`/workApplicationSteps?q=${enc(`Tables gig ${stamp}`)}&count=1`, X.token);
+    const stepOf = (s) => steps.json.rows?.find((r) => r.cells.step === s)?.cells;
+    check(
+      'tables: who applied reads for the poster by name, the applicant reads their own, and each step by who took it, never a step’s note or an id',
+      shortlisted.status === 200 && applicants.json.total === 1 && applicants.json.rows?.[0]?.cells?.person === 'Tables other' && applicants.json.rows?.[0]?.cells?.coverNote === `Tables cover ${stamp}` && !JSON.stringify(applicants.json).includes(X.user.id) &&
+        mine.json.total === 1 && mine.json.rows?.[0]?.cells?.status === 'shortlisted' && mine.json.rows?.[0]?.cells?.brand === `Tables brand co ${stamp}` &&
+        steps.json.total === 2 && stepOf('submitted')?.by === 'you' && stepOf('shortlisted')?.by === 'listing' && !JSON.stringify(steps.json).includes(`Tables step note ${stamp}`) && !JSON.stringify(steps.json).includes(O.user.id),
+      [shortlisted.status, applicants.json.total, applicants.json.rows?.[0]?.cells, mine.json.total, mine.json.rows?.[0]?.cells, steps.json.total, steps.json.rows?.map((r) => r.cells)],
+    );
+
+    // Army: the creator's role, work sent and the brand's feedback; the brand's team, campaigns and log for its owner.
+    const roles = await tb(`/armyRoles?q=${enc(`Tables campaign ${stamp}`)}&count=1`, X.token);
+    const sent = await tb(`/armyWorkSent?q=${enc(`Tables campaign ${stamp}`)}&count=1`, X.token);
+    const feedback = await tb(`/armyFeedback?q=${enc(`Tables campaign ${stamp}`)}&count=1`, X.token);
+    check(
+      'tables: a creator reads their role with its fee in cents, the work they sent and the brand’s feedback on it by name',
+      roles.json.total === 1 && roles.json.rows?.[0]?.cells?.role === 'Editor' && roles.json.rows?.[0]?.cells?.fee === 1200000 && roles.json.rows?.[0]?.cells?.status === 'accepted' && typeof roles.json.rows?.[0]?.cells?.accepted === 'string' && roles.json.rows?.[0]?.cells?.stage === 'lead' &&
+        sent.json.total === 1 && sent.json.rows?.[0]?.cells?.review === 'changes' && sent.json.rows?.[0]?.cells?.version === 1 &&
+        feedback.json.total === 1 && feedback.json.rows?.[0]?.cells?.from === 'Tables owner' && feedback.json.rows?.[0]?.cells?.comment === `Tables feedback ${stamp}` && !JSON.stringify(feedback.json).includes(O.user.id),
+      [roles.json.total, roles.json.rows?.[0]?.cells, sent.json.total, sent.json.rows?.[0]?.cells, feedback.json.total, feedback.json.rows?.[0]?.cells],
+    );
+    const brandsOwner = await tb(`/armyBrands?q=${enc(`Tables brand co ${stamp}`)}&count=1`, O.token);
+    const brandsAsked = await tb(`/armyBrands?q=${enc(`Tables brand co ${stamp}`)}&count=1`, X.token);
+    const team = await tb(`/armyBrandTeams?q=${enc(`Tables brand co ${stamp}`)}&count=1`, O.token);
+    const teamOf = (who) => team.json.rows?.find((r) => r.cells.person === who)?.cells;
+    check(
+      'tables: the brand reads as owned for its owner and as an ask for the person asked, and its team for the owner with the ask, no teammate’s id',
+      brandsOwner.json.total === 1 && brandsOwner.json.rows?.[0]?.cells?.role === 'owner' && brandsOwner.json.rows?.[0]?.cells?.status === 'active' && brandsAsked.json.total === 1 && brandsAsked.json.rows?.[0]?.cells?.status === 'invited' &&
+        team.json.total === 2 && teamOf('You')?.role === 'owner' && teamOf('Tables other')?.status === 'invited' && !JSON.stringify(team.json).includes(X.user.id),
+      [brandsOwner.json.rows?.[0]?.cells, brandsAsked.json.rows?.[0]?.cells, team.json.total, team.json.rows?.map((r) => r.cells)],
+    );
+    const campaigns = await tb(`/armyCampaigns?q=${enc(`Tables campaign ${stamp}`)}&count=1`, O.token);
+    const log = await tb(`/armyCampaignLog?q=${enc(`Tables campaign ${stamp}`)}&count=1`, O.token);
+    const lineOf = (what) => log.json.rows?.filter((r) => r.cells.what === what).map((r) => r.cells.who) ?? [];
+    check(
+      'tables: the brand’s campaign reads with its budget in cents and its counts, and its log line by line by who did each, the owner as You',
+      campaigns.json.total === 1 && campaigns.json.rows?.[0]?.cells?.budget === 5000000 && campaigns.json.rows?.[0]?.cells?.stage === 'lead' && campaigns.json.rows?.[0]?.cells?.runBy === 'Not given yet' && campaigns.json.rows?.[0]?.cells?.pieces === 1 && campaigns.json.rows?.[0]?.cells?.creators === 1 &&
+        lineOf('created').join() === 'You' && lineOf('version').join() === 'Tables other' && lineOf('changes').join() === 'You' && log.json.total >= 5 && !JSON.stringify(log.json).includes(X.user.id),
+      [campaigns.json.total, campaigns.json.rows?.[0]?.cells, log.json.total, log.json.rows?.map((r) => [r.cells.what, r.cells.who])],
+    );
+
+    // Win: the entrant's entry without the reviewer's words, which are a table of their own; the launcher's reward with its entries.
+    const entries = await tb(`/winEntries?q=${enc(`Tables reward ${stamp}`)}&count=1`, X.token);
+    const notes = await tb(`/winReviewerNotes?q=${enc(`Tables reward ${stamp}`)}&count=1`, X.token);
+    const rewards = await tb(`/winRewards?q=${enc(`Tables reward ${stamp}`)}&count=1`, A.token);
+    check(
+      'tables: an entry reads for its entrant without the reviewer’s note, which reads on its own, and a reward for whoever launched it with its entries',
+      entries.json.total === 1 && entries.json.rows?.[0]?.cells?.status === 'rejected' && entries.json.rows?.[0]?.cells?.platform === 'youtube' && !JSON.stringify(entries.json).includes(`Tables reviewer ${stamp}`) &&
+        notes.json.total === 1 && notes.json.rows?.[0]?.cells?.note === `Tables reviewer ${stamp}` && !JSON.stringify(notes.json).includes(A.user.id) &&
+        rewards.json.total === 1 && rewards.json.rows?.[0]?.cells?.entries === 1 && rewards.json.rows?.[0]?.cells?.brand === 'Tables brand' && rewards.json.rows?.[0]?.cells?.pool === 1000,
+      [entries.json.total, entries.json.rows?.[0]?.cells, notes.json.total, notes.json.rows?.[0]?.cells, rewards.status, rewards.json.total, rewards.json.rows?.[0]?.cells],
+    );
+
+    // TV: a pitch's title and budget change through the pitch's own route while it waits, and stay once the team starts reading.
+    const renamed = await tb('/tvPitches/edit', O.token, 'POST', { id: pitch.json.id, column: 'title', value: `Tables series ${stamp} renamed`, today });
+    const rebudget = await tb('/tvPitches/edit', O.token, 'POST', { id: pitch.json.id, column: 'budget', value: 750000, today });
+    const inTv = (await api('GET', '/proposals?kind=tv', undefined, O.token)).json.proposals?.find((p) => p.id === pitch.json.id);
+    const fundSide = await tb(`/fundApplications?q=${enc(`Tables series ${stamp}`)}&count=1`, O.token);
+    await api('POST', `/proposals/${pitch.json.id}/stage`, { stage: 'review' }, A.token);
+    const late = await tb('/tvPitches/edit', O.token, 'POST', { id: pitch.json.id, column: 'title', value: 'Too late', today });
+    check(
+      'tables: a TV pitch’s title and budget change through its own route, with its words kept, only while it waits, and it is never a Fund application',
+      renamed.status === 200 && renamed.json.row?.cells?.title === `Tables series ${stamp} renamed` && rebudget.status === 200 && rebudget.json.row?.cells?.budget === 750000 && inTv?.title === `Tables series ${stamp} renamed` && inTv?.budgetAmount === 7500 && inTv?.pitch === 'Six short episodes' &&
+        fundSide.json.total === 0 && late.status === 400 && /started reading it/.test(late.json.error ?? ''),
+      [renamed.status, renamed.json.error, rebudget.status, rebudget.json.error, inTv, fundSide.json.total, late.status, late.json.error],
+    );
+
+    // Club: the person's own application, never the reviewer's words or who decides.
+    const membership = await tb('/clubMembership?count=1', X.token);
+    check(
+      'tables: a Club application reads for its person with their own note, and whether a manager is named',
+      membership.json.total === 1 && membership.json.rows?.[0]?.cells?.status === 'applied' && membership.json.rows?.[0]?.cells?.note === `Tables club ${stamp}` && membership.json.rows?.[0]?.cells?.manager === false,
+      [membership.json.total, membership.json.rows?.[0]?.cells],
+    );
+
+    // A super admin reads a member's own records, read only, never who applied to their listings, their brands' teams, campaigns or log, or the
+    // feedback and reviewer's notes they were given.
+    const adminOwn = await tb(`/admin/${O.user.id}/workListings?q=${enc(`Tables gig ${stamp}`)}&count=1`, A.token);
+    const adminRoles = await tb(`/admin/${X.user.id}/armyRoles?count=1`, A.token);
+    const adminShut = await Promise.all(['workApplicants', 'armyBrandTeams', 'armyCampaigns', 'armyCampaignLog'].map((k) => tb(`/admin/${O.user.id}/${k}?count=1`, A.token)));
+    const adminShutX = await Promise.all(['armyFeedback', 'winReviewerNotes'].map((k) => tb(`/admin/${X.user.id}/${k}?count=1`, A.token)));
+    check(
+      'tables: an admin reads a member’s listings and roles, read only, never who applied, a brand’s team, campaigns or log, the feedback or a reviewer’s note',
+      adminOwn.status === 200 && adminOwn.json.total === 1 && adminOwn.json.rows?.every((r) => r.edit === undefined) && adminRoles.status === 200 && adminRoles.json.total >= 1 && [...adminShut, ...adminShutX].every((r) => r.status === 404),
+      [adminOwn.status, adminRoles.status, adminShut.map((r) => r.status), adminShutX.map((r) => r.status)],
+    );
+
+    // Work hidden: its tables neither list, open nor change; the brands the person is on still list (no one app holds them).
+    await api('PATCH', '/me/modules', { key: 'work', on: false }, O.token);
+    const offKeys = ((await tb('', O.token)).json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
+    const workOff = await tb('/workListings?count=1', O.token);
+    const workOffEdit = await tb('/workListings/edit', O.token, 'POST', { id: oppId, column: 'clubOnly', value: true, today });
+    await api('PATCH', '/me/modules', { key: 'work', on: true }, O.token);
+    check(
+      'tables: with Work hidden its tables neither list, open nor change, saying which app to show, and the brands still list',
+      !offKeys.includes('workListings') && !offKeys.includes('workApplicants') && offKeys.includes('armyBrands') && offKeys.includes('armyCampaigns') && workOff.status === 404 && /^Show Work in Apps/.test(workOff.json.error ?? '') && workOffEdit.status === 404,
+      [workOff.status, workOff.json.error, workOffEdit.status],
+    );
+  }
+
+  // Party, Kreators Run and Circles (2026-11-14, the fifth batch of "ok, add them"): made through the app's own routes, read and changed here.
+  // The guests at the person's events, who logged the runs at their clubs, the clubs that applied to their collabs and their lines at a
+  // circle's tables reach only the person and AI chat, and so do the circles they signed up for.
+  // The event's and the club's own ids, for the coach's view below: neither may ever reach a coach or an admin (a private one's id is its link).
+  const eventKeys = {};
+  {
+    const enc = encodeURIComponent;
+    const soon = (min) => new Date(Date.now() + min * 60_000).toISOString();
+    // The other side and the coach turn on what their own tables and seats need (O has every app a table needs on, above).
+    await api('PATCH', '/me/modules', { changes: ['party', 'run', 'circles'].map((key) => ({ key, on: true })) }, X.token);
+    await api('PATCH', '/me/modules', { key: 'circles', on: true }, K.token);
+    // Party: O hosts an event two days out with xp for its guests; X takes a seat, leaves feedback and writes two lines in its talk, one
+    // without a name.
+    const ev = await api('POST', '/party/events', { title: `Tables party ${stamp}`, startsAt: soon(60 * 48), minutes: 90, venue: 'Cubbon Park', capacity: 20, attendeeXp: 10 }, O.token);
+    const evId = ev.json.event?.id;
+    eventKeys.event = evId;
+    const rsvp = await api('POST', `/party/events/${evId}/rsvp`, { networking: false }, X.token);
+    const fb = await api('POST', `/party/events/${evId}/feedback`, { rating: 4, comment: `Tables feedback ${stamp}` }, X.token);
+    const named = await api('POST', `/connect/party/${evId}/messages`, { body: `Tables line ${stamp}` }, X.token);
+    const unnamed = await api('POST', `/connect/party/${evId}/messages`, { body: `Tables quiet ${stamp}`, anonymous: true }, X.token);
+    // Kreators Run: O hosts a club with a run two days out and one starting now; X joins, logs the one starting now with its start code and
+    // writes in its talk, and O writes a line there without a name.
+    const club = await api('POST', '/run/clubs', { name: `Tables runners ${stamp}`, city: 'Pune', pace: 'easy', meets: 'Sundays at six' }, O.token);
+    const clubId = club.json.club?.id;
+    eventKeys.club = clubId;
+    const later = await api('POST', `/run/clubs/${clubId}/runs`, { title: `Tables long run ${stamp}`, startsAt: soon(60 * 48), minutes: 60, metres: 8000, xp: 15 }, O.token);
+    const nowRun = await api('POST', `/run/clubs/${clubId}/runs`, { title: `Tables run now ${stamp}`, startsAt: soon(5), minutes: 45, metres: 5000 }, O.token);
+    const joinedClub = await api('POST', `/run/clubs/${clubId}/join`, {}, X.token);
+    const logged = await api('POST', `/run/runs/${nowRun.json.run?.id}/entry`, { code: nowRun.json.run?.code, metres: 5200, minutes: 31 }, X.token);
+    const talked = await api('POST', `/run/talk/${nowRun.json.run?.id}/messages`, { body: `Tables run line ${stamp}` }, X.token);
+    const quietTalk = await api('POST', `/run/talk/${nowRun.json.run?.id}/messages`, { body: `Tables run quiet ${stamp}`, anonymous: true }, O.token);
+    // A brand collab O posts for its new brand, and a club X hosts that applies to it.
+    const org = await api('POST', '/orgs', { name: `Tables shoes ${stamp}` }, O.token);
+    const collab = await api('POST', '/run/collabs', { organizationId: org.json.organization?.id, title: `Tables collab ${stamp}`, giveaway: 'Two pairs', giveawayCount: 2, startsAt: soon(0), endsAt: soon(60 * 24 * 30) }, O.token);
+    const xClub = await api('POST', '/run/clubs', { name: `Tables pacers ${stamp}`, city: 'Pune' }, X.token);
+    const applied = await api('POST', `/run/collabs/${collab.json.collab?.id}/apply`, { clubId: xClub.json.club?.id, note: `Tables apply ${stamp}` }, X.token);
+    // Circles: the run's admin opens a circle in a town of its own, O, X and the coach sign up, and its one table of three is set.
+    const town = `Tables town ${stamp}`;
+    for (const who of [O, X, K]) await api('PATCH', '/me', { city: town, interests: ['Running', 'Cooking'] }, who.token);
+    const circle = await api('POST', '/circles/events', { title: `Tables circle ${stamp}`, city: town, startsAt: soon(60 * 24 * 5), groupSize: 3 }, A.token);
+    const circleId = circle.json.event?.id;
+    const signed = await Promise.all([[O, 'single'], [X, 'committed'], [K, 'private']].map(([who, status]) => api('POST', `/circles/events/${circleId}/join`, { status }, who.token)));
+    const matched = await api('POST', `/circles/events/${circleId}/match`, {}, A.token);
+    check(
+      'tables: an event, a seat, feedback and lines, a run club with two runs, a logged run and its talk, a brand collab and a club’s application, and a circle with its table were made through the app’s own routes',
+      [ev, club, later, nowRun, joinedClub, logged, talked, quietTalk, org, collab, xClub, applied, circle, ...signed, named, unnamed, fb].every((r) => r.status < 300) && rsvp.status < 300 && matched.json.groups === 1,
+      [ev.status, rsvp.status, fb.status, named.status, unnamed.status, club.status, later.status, nowRun.status, joinedClub.status, logged.status, logged.json.error, talked.status, quietTalk.status, org.status, collab.status, xClub.status, applied.status, circle.status, signed.map((r) => r.status), matched.json],
+    );
+
+    // Party: the host's event with who is coming, the guests' xp and the feedback score, never its code; the xp changes through the event's own
+    // route before the code opens; the guest's seat, feedback and own lines; the host's guests by name.
+    const hostCode = (await api('GET', `/party/events/${evId}`, undefined, O.token)).json.hostCode;
+    const hosted = await tb(`/partyHosted?q=${enc(`Tables party ${stamp}`)}&count=1`, O.token);
+    const hRow = hosted.json.rows?.[0];
+    const rexp = await tb('/partyHosted/edit', O.token, 'POST', { id: hRow?.id, column: 'guestXp', value: 25, today });
+    // The event's id as a row's key is no row at all: the key is the row's own number.
+    const byEventId = await tb('/partyHosted/edit', O.token, 'POST', { id: evId, column: 'guestXp', value: 26, today });
+    const hostCodeAfter = (await api('GET', `/party/events/${evId}`, undefined, O.token)).json.hostCode;
+    check(
+      'tables: an event reads for its host with who is coming, the guests’ xp and the feedback score, never its code, and the xp changes through Party’s own route before the code opens',
+      hosted.json.total === 1 && hRow?.cells?.going === 1 && hRow?.cells?.guestXp === 10 && hRow?.cells?.score === 4 && hRow?.cells?.scores === 1 && hRow?.cells?.kind === 'meetup' && hRow?.cells?.venue === 'Cubbon Park' && hRow?.edit?.includes('guestXp') &&
+        typeof hostCode?.code === 'string' && !JSON.stringify(hosted.json).includes(hostCode.code) && !hosted.json.columns.includes('xpOpen') &&
+        rexp.status === 200 && rexp.json.row?.cells?.guestXp === 25 && hostCodeAfter?.xp === 25 && hostCodeAfter?.code === hostCode.code && !JSON.stringify(rexp.json).includes(hostCode.code) &&
+        hRow?.id !== evId && hRow?.cells?.eventId === evId && byEventId.status === 404,
+      [hosted.json.total, hRow?.id, hRow?.cells, hRow?.edit, rexp.status, rexp.json.error, hostCodeAfter?.xp, byEventId.status],
+    );
+    const seat = await tb(`/partyJoined?q=${enc(`Tables party ${stamp}`)}&count=1`, X.token);
+    const sRow = seat.json.rows?.[0];
+    const listedOn = await tb('/partyJoined/edit', X.token, 'POST', { id: sRow?.id, column: 'openToMeet', value: true, today });
+    const extras = (await api('GET', `/connect/party/${evId}`, undefined, X.token)).json;
+    check(
+      'tables: a guest reads their seat without the host’s name, and goes on the list to meet other guests through the event’s own route',
+      seat.json.total === 1 && sRow?.cells?.status === 'registered' && sRow?.cells?.eventState === 'published' && sRow?.cells?.openToMeet === false && sRow?.edit?.includes('openToMeet') && !JSON.stringify(seat.json).includes('Tables owner') && !seat.json.columns.includes('eventId') &&
+        listedOn.status === 200 && listedOn.json.row?.cells?.openToMeet === true && extras.iAmListed === true,
+      [seat.json.total, sRow?.cells, listedOn.status, listedOn.json.error, extras.iAmListed],
+    );
+    const feedback = await tb(`/partyFeedback?q=${enc(`Tables party ${stamp}`)}&count=1`, X.token);
+    const lines = await tb(`/partyLines?q=${enc(`Tables party ${stamp}`)}&count=1`, X.token);
+    const guests = await tb(`/partyGuests?q=${enc(`Tables party ${stamp}`)}&count=1`, O.token);
+    check(
+      'tables: the guest’s feedback and own lines read, one without a name, and the host’s guests by name, never an id',
+      feedback.json.total === 1 && feedback.json.rows?.[0]?.cells?.score === 4 && feedback.json.rows?.[0]?.cells?.words === `Tables feedback ${stamp}` &&
+        lines.json.total === 2 && lines.json.rows?.filter((r) => r.cells.anonymous === true).length === 1 && lines.json.rows?.some((r) => r.cells.line === `Tables quiet ${stamp}`) &&
+        guests.json.total === 1 && guests.json.rows?.[0]?.cells?.guest === 'Tables other' && guests.json.rows?.[0]?.cells?.status === 'registered' && !JSON.stringify(guests.json).includes(X.user.id),
+      [feedback.json.total, feedback.json.rows?.[0]?.cells, lines.json.total, lines.json.rows?.map((r) => r.cells), guests.json.total, guests.json.rows?.[0]?.cells],
+    );
+
+    // Kreators Run: the host's club, changed through the club's own route; the runs, never a start code, the xp changed before the code opens
+    // and refused after; the runner's club, logged run and own line; who logged at the host's club; and the collab both ways.
+    const clubs = await tb(`/runClubsHosted?q=${enc(`Tables runners ${stamp}`)}&count=1`, O.token);
+    const clubRow = clubs.json.rows?.[0];
+    const reabout = await tb('/runClubsHosted/edit', O.token, 'POST', { id: clubRow?.id, column: 'about', value: `Tables about ${stamp}`, today });
+    const repace = await tb('/runClubsHosted/edit', O.token, 'POST', { id: clubRow?.id, column: 'pace', value: 'steady', today });
+    // Found only through its link from here on, so the coach's view below holds a club whose id would open it.
+    const relink = await tb('/runClubsHosted/edit', O.token, 'POST', { id: clubRow?.id, column: 'visibility', value: 'private', today });
+    const inRun = (await api('GET', `/run/clubs/${clubId}`, undefined, O.token)).json;
+    check(
+      'tables: a club reads for its host with its members and runs, keyed by its own row, and its words, pace and who can find it change through the club’s own route, keeping the rest',
+      clubs.json.total === 1 && clubRow?.cells?.members === 2 && clubRow?.cells?.runs === 2 && clubRow?.cells?.pace === 'easy' && clubRow?.id !== clubId && clubRow?.cells?.clubId === clubId &&
+        reabout.status === 200 && repace.status === 200 && repace.json.row?.cells?.pace === 'steady' && relink.status === 200 && relink.json.row?.cells?.visibility === 'private' &&
+        inRun.club?.description === `Tables about ${stamp}` && inRun.club?.pace === 'steady' && inRun.club?.meets === 'Sundays at six' && inRun.club?.status === 'active' && inRun.club?.visibility === 'private',
+      [clubs.json.total, clubRow?.id, clubRow?.cells, reabout.status, reabout.json.error, repace.status, relink.status, relink.json.error, inRun.club],
+    );
+    const hostedRuns = await tb(`/runsHosted?q=${enc(`Tables runners ${stamp}`)}&count=1`, O.token);
+    const longRow = hostedRuns.json.rows?.find((r) => r.id === later.json.run?.id);
+    const nowRow = hostedRuns.json.rows?.find((r) => r.id === nowRun.json.run?.id);
+    const rexpRun = await tb('/runsHosted/edit', O.token, 'POST', { id: later.json.run?.id, column: 'xp', value: 30, today });
+    const lateXp = await tb('/runsHosted/edit', O.token, 'POST', { id: nowRun.json.run?.id, column: 'xp', value: 30, today });
+    const clubRuns = (await api('GET', `/run/clubs/${clubId}`, undefined, O.token)).json.runs ?? [];
+    const longAfter = clubRuns.find((r) => r.id === later.json.run?.id);
+    check(
+      'tables: a host’s runs read with who logged them, never a start code, and the xp changes through the run’s own route only before its code opens, keeping the code',
+      hostedRuns.json.total === 2 && longRow?.cells?.xp === 15 && longRow?.cells?.distance === 8000 && longRow?.edit?.includes('xp') && nowRow?.cells?.logged === 1 && !(nowRow?.edit ?? []).includes('xp') &&
+        !JSON.stringify(hostedRuns.json).includes(later.json.run?.code) && !JSON.stringify(hostedRuns.json).includes(nowRun.json.run?.code) &&
+        rexpRun.status === 200 && rexpRun.json.row?.cells?.xp === 30 && longAfter?.xp === 30 && longAfter?.code === later.json.run?.code && !JSON.stringify(rexpRun.json).includes(later.json.run?.code) &&
+        lateXp.status === 400 && /fixed once the code opens/.test(lateXp.json.error ?? ''),
+      [hostedRuns.json.total, longRow?.cells, longRow?.edit, nowRow?.cells, nowRow?.edit, rexpRun.status, rexpRun.json.error, longAfter?.xp, lateXp.status, lateXp.json.error],
+    );
+    const myRuns = await tb(`/runEntries?q=${enc(`Tables runners ${stamp}`)}&count=1`, X.token);
+    const clubsIn = await tb(`/runClubsJoined?q=${enc(`Tables runners ${stamp}`)}&count=1`, X.token);
+    const ownClubIn = await tb(`/runClubsJoined?q=${enc(`Tables runners ${stamp}`)}&count=1`, O.token);
+    const myRunLines = await tb(`/runLines?q=${enc(`Tables runners ${stamp}`)}&count=1`, X.token);
+    const atMyClubs = await tb(`/runEntriesHosted?q=${enc(`Tables runners ${stamp}`)}&count=1`, O.token);
+    check(
+      'tables: a runner reads the club they are in, the run they logged and their own line, and the host who logged at their club by name, never an id',
+      myRuns.json.total === 1 && myRuns.json.rows?.[0]?.cells?.distance === 5200 && myRuns.json.rows?.[0]?.cells?.minutes === 31 && myRuns.json.rows?.[0]?.cells?.status === 'logged' && myRuns.json.rows?.[0]?.cells?.xp > 0 &&
+        clubsIn.json.total === 1 && clubsIn.json.rows?.[0]?.cells?.status === 'member' && clubsIn.json.rows?.[0]?.cells?.youHost === false && ownClubIn.json.rows?.[0]?.cells?.youHost === true &&
+        myRunLines.json.total === 1 && myRunLines.json.rows?.[0]?.cells?.line === `Tables run line ${stamp}` && myRunLines.json.rows?.[0]?.cells?.anonymous === false &&
+        atMyClubs.json.total === 1 && atMyClubs.json.rows?.[0]?.cells?.runner === 'Tables other' && !JSON.stringify(atMyClubs.json).includes(X.user.id),
+      [myRuns.json.total, myRuns.json.rows?.[0]?.cells, clubsIn.json.rows?.[0]?.cells, ownClubIn.json.rows?.[0]?.cells, myRunLines.json.total, myRunLines.json.rows?.[0]?.cells, atMyClubs.json.total, atMyClubs.json.rows?.[0]?.cells],
+    );
+    const posted = await tb(`/runCollabsPosted?q=${enc(`Tables collab ${stamp}`)}&count=1`, O.token);
+    const applicants = await tb(`/runCollabApplicants?q=${enc(`Tables collab ${stamp}`)}&count=1`, O.token);
+    const myApps = await tb(`/runCollabApplications?q=${enc(`Tables collab ${stamp}`)}&count=1`, X.token);
+    check(
+      'tables: a brand collab reads for its poster with the clubs that applied, their host by name, and for the club’s host with their own note',
+      posted.json.total === 1 && posted.json.rows?.[0]?.cells?.applied === 1 && posted.json.rows?.[0]?.cells?.brand === `Tables shoes ${stamp}` && posted.json.rows?.[0]?.cells?.giveaway === 'Two pairs' &&
+        applicants.json.total === 1 && applicants.json.rows?.[0]?.cells?.host === 'Tables other' && applicants.json.rows?.[0]?.cells?.club === `Tables pacers ${stamp}` && applicants.json.rows?.[0]?.cells?.note === `Tables apply ${stamp}` && !JSON.stringify(applicants.json).includes(X.user.id) &&
+        myApps.json.total === 1 && myApps.json.rows?.[0]?.cells?.status === 'applied' && myApps.json.rows?.[0]?.cells?.club === `Tables pacers ${stamp}` && !JSON.stringify(myApps.json).includes('Tables owner'),
+      [posted.json.total, posted.json.rows?.[0]?.cells, applicants.json.total, applicants.json.rows?.[0]?.cells, myApps.json.total, myApps.json.rows?.[0]?.cells],
+    );
+
+    // Circles: the person's own seat with how they show up and the name they go by, never anyone else at the table; a super admin never sees
+    // it at all, since Circles tells nobody who is at a circle (a named seat would narrow an alias at the table).
+    const mySeat = await tb(`/circleSignups?q=${enc(`Tables circle ${stamp}`)}&count=1`, X.token);
+    const cRow = mySeat.json.rows?.[0];
+    const adminSeat = await tb(`/admin/${X.user.id}/circleSignups?q=${enc(`Tables circle ${stamp}`)}&count=1`, A.token);
+    const adminList = ((await tb(`/admin/${X.user.id}`, A.token)).json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
+    check(
+      'tables: a circle reads for its person with their table and the name they go by there, never another member, and never for an admin',
+      mySeat.json.total === 1 && cRow?.cells?.seated === true && cRow?.cells?.showUp === 'committed' && typeof cRow?.cells?.alias === 'string' && cRow?.cells?.table === 'Table 1' && cRow?.cells?.state === 'matched' &&
+        adminSeat.status === 404 && !JSON.stringify(adminSeat.json).includes(cRow?.cells?.alias ?? '@@') && !adminList.includes('circleSignups') && adminList.includes('runClubsJoined'),
+      [mySeat.json.total, cRow?.cells, adminSeat.status, adminList.includes('circleSignups')],
+    );
+
+    // A super admin reads a member's own events, runs and clubs, read only, never their guests, who logged at their clubs, the clubs that
+    // applied to their collabs, their lines at a circle's table, or a photo folder's link.
+    const adminHosted = await tb(`/admin/${O.user.id}/partyHosted?q=${enc(`Tables party ${stamp}`)}&count=1`, A.token);
+    const adminRuns = await tb(`/admin/${O.user.id}/runsHosted?q=${enc(`Tables runners ${stamp}`)}&count=1`, A.token);
+    const adminKeyed = await Promise.all([
+      tb(`/admin/${O.user.id}/runClubsHosted?q=${enc(`Tables runners ${stamp}`)}&count=1`, A.token),
+      tb(`/admin/${X.user.id}/partyJoined?q=${enc(`Tables party ${stamp}`)}&count=1`, A.token),
+      tb(`/admin/${X.user.id}/runClubsJoined?q=${enc(`Tables runners ${stamp}`)}&count=1`, A.token),
+    ]);
+    const adminText = JSON.stringify([adminHosted.json, ...adminKeyed.map((r) => r.json)]);
+    check(
+      'tables: an admin reads a member’s events and clubs, hosted or joined, without an event’s or a club’s id anywhere, not even as a row’s key',
+      adminKeyed.every((r) => r.status === 200 && r.json.total === 1) && !adminText.includes(evId) && !adminText.includes(clubId) && adminKeyed[1].json.rows?.[0]?.cells?.status === 'registered',
+      [adminKeyed.map((r) => [r.status, r.json.total, r.json.rows?.[0]?.id]), adminText.includes(evId), adminText.includes(clubId)],
+    );
+    const adminShut = await Promise.all(['partyGuests', 'runEntriesHosted', 'runCollabApplicants', 'circleLines'].map((k) => tb(`/admin/${O.user.id}/${k}?count=1`, A.token)));
+    check(
+      'tables: an admin reads a member’s events and runs, read only, without a photo folder’s link, never their guests, who logged at their clubs, who applied to their collabs or their circle lines',
+      adminHosted.status === 200 && adminHosted.json.total === 1 && adminHosted.json.rows?.every((r) => r.edit === undefined) && !adminHosted.json.columns.includes('photoFolder') && adminHosted.json.columns.includes('photosShared') &&
+        adminRuns.status === 200 && adminRuns.json.total === 2 && adminShut.every((r) => r.status === 404),
+      [adminHosted.status, adminHosted.json.columns, adminRuns.status, adminShut.map((r) => r.status)],
+    );
+
+    // Party hidden: its tables neither list, open nor change; Kreators Run's still do.
+    await api('PATCH', '/me/modules', { key: 'party', on: false }, X.token);
+    const partyOffKeys = ((await tb('', X.token)).json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
+    const partyOff = await tb('/partyJoined?count=1', X.token);
+    const partyOffEdit = await tb('/partyJoined/edit', X.token, 'POST', { id: sRow?.id, column: 'openToMeet', value: false, today });
+    await api('PATCH', '/me/modules', { key: 'party', on: true }, X.token);
+    check(
+      'tables: with Party hidden its tables neither list, open nor change, saying which app to show, and Kreators Run’s still list',
+      !partyOffKeys.includes('partyJoined') && !partyOffKeys.includes('partyLines') && partyOffKeys.includes('runEntries') && partyOff.status === 404 && /^Show Party in Apps/.test(partyOff.json.error ?? '') && partyOffEdit.status === 404,
+      [partyOff.status, partyOff.json.error, partyOffEdit.status],
+    );
+  }
+
+  // School and Connection (2026-11-14, the sixth batch of "ok, add them"): made through the app's own routes, read and changed here. Who was
+  // invited, another person's post or reply, a member muted, a chat under made-up names, an introduction, a friend's room and someone blocked
+  // reach only the person and AI chat; the person's own programs, cohorts, cohort lines and Community channels and lines as before.
+  const socialKeys = {};
+  {
+    const enc = encodeURIComponent;
+    // The other side turns on what its own tables need (O has every app a table needs on, above), and the two become friends, open to introductions.
+    await api('PATCH', '/me/modules', { changes: ['school', 'community', 'bond'].map((key) => ({ key, on: true })) }, X.token);
+    await api('PATCH', '/me/modules', { key: 'community', on: true }, A.token);
+    const [oSelf, xSelf] = await Promise.all([me(O.token), me(X.token)]);
+    await api('POST', '/bond/friends', { code: xSelf.friendCode }, O.token);
+    await api('POST', '/bond/friends', { code: oSelf.friendCode }, X.token);
+    await Promise.all([O, X].map((who) => api('PATCH', '/me', { openToIntros: true }, who.token)));
+    // School: the run's admin makes a program and opens a cohort; O joins and writes a line in its talk (private there, as everyone starts);
+    // then the program goes private and X is invited to it by name.
+    const prog = await api('POST', '/school/programs', { name: `Tables program ${stamp}`, description: 'Made by the smoke test.', published: true }, A.token);
+    const progId = prog.json.id;
+    const coh = await api('POST', `/school/programs/${progId}/cohorts`, { name: `Tables cohort ${stamp}`, startAt: new Date().toISOString(), endAt: new Date(Date.now() + 30 * 86_400_000).toISOString() }, A.token);
+    socialKeys.cohort = coh.json.id;
+    const enrolled = await api('POST', `/school/cohorts/${coh.json.id}/enroll`, {}, O.token);
+    const talked = await api('POST', `/school/cohorts/${coh.json.id}/talk`, { body: `Tables cohort line ${stamp}` }, O.token);
+    const hidden = await api('PATCH', `/school/programs/${progId}`, { visibility: 'private' }, A.token);
+    const invited = await api('POST', `/school/programs/${progId}/invites`, { who: `tablesother-${stamp}@smoke.test` }, A.token);
+    // Community: the run's admin, a guide, opens a channel (any left open by an earlier run closes first: Community holds thirty); O joins and
+    // writes in it, once without a name; X posts and replies, O reacts to both and follows the post; the admin mutes someone new.
+    for (const ch of (await api('GET', '/community/channels?all=1&size=100', undefined, A.token)).json.channels ?? []) {
+      if (ch.slug?.startsWith('tables-room-') && !ch.archived) await api('POST', `/community/channels/${ch.id}/archive`, {}, A.token);
+    }
+    const room = await api('POST', '/community/channels', { name: `Tables room ${stamp}`, topic: 'Say hello' }, A.token);
+    const roomId = room.json.channel?.id;
+    const joinedRoom = await api('POST', `/community/channels/${roomId}/join`, {}, O.token);
+    const roomLine = await api('POST', `/community/channels/${roomId}/messages`, { body: `Tables room line ${stamp}` }, O.token);
+    const roomQuiet = await api('POST', `/community/channels/${roomId}/messages`, { body: `Tables room quiet ${stamp}`, anonymous: true }, O.token);
+    const post = await api('POST', '/community', { category: 'Stories', body: `Tables post ${stamp}` }, X.token);
+    const postId = post.json.post?.id;
+    const reply = await api('POST', `/community/${postId}/replies`, { body: `Tables reply ${stamp}` }, X.token);
+    const liked = await api('POST', `/community/${postId}/like`, { kind: 'celebrate' }, O.token);
+    const reacted = await api('POST', `/community/replies/${reply.json.reply?.id}/react`, { kind: 'insightful' }, O.token);
+    const followed = await api('POST', `/community/${postId}/follow-post`, {}, O.token);
+    // Two people O blocks: one by name from Bond, and one from a post written under a made-up name, which never names them.
+    const Y = await signup(`tablesblocked-${stamp}@smoke.test`, `Hollow-${stamp}-pass`, 'Tables blocked');
+    const Z = await signup(`tablesmasked-${stamp}@smoke.test`, `Willow-${stamp}-pass`, 'Tables masked');
+    await api('PATCH', '/me/modules', { key: 'community', on: true }, Z.token);
+    const zPost = await api('POST', '/community', { category: 'Stories', body: `Tables masked post ${stamp}`, anonymous: true }, Z.token);
+    const blockedByName = await api('POST', '/bond/block', { userId: Y.user.id }, O.token);
+    const blockedMasked = await api('POST', `/community/posts/${zPost.json.post?.id}/block-author`, {}, O.token);
+    const muted = await api('POST', `/community/members/${Y.user.id}/mute`, { reason: `Tables mute ${stamp}` }, A.token);
+    // Bond: an anonymous chat, both ways; an introduction O asks of X; and a room O makes and asks X into, where O writes.
+    const chat = await api('POST', '/bond/chats', { userId: X.user.id }, O.token);
+    const chatId = chat.json.chat?.id;
+    const hello = await api('POST', `/bond/chats/${chatId}/messages`, { body: `Tables hello ${stamp}` }, O.token);
+    const back = await api('POST', `/bond/chats/${chatId}/messages`, { body: `Tables hi back ${stamp}` }, X.token);
+    const intro = await api('POST', '/bond/intros', { recipientId: X.user.id, context: `Tables intro ${stamp}` }, O.token);
+    const den = await api('POST', '/bond/channels', { name: `Tables den ${stamp}`, topic: 'Plans' }, O.token);
+    const denId = den.json.channel?.id;
+    const askedIn = await api('POST', `/bond/channels/${denId}/members`, { userId: X.user.id }, O.token);
+    const saidYes = await api('POST', `/bond/channels/${denId}/join`, {}, X.token);
+    const denLine = await api('POST', `/bond/channels/${denId}/messages`, { body: `Tables den line ${stamp}` }, O.token);
+    check(
+      'tables: a program, its cohort, a line in its talk and an invite, a channel with two lines, a post, a reply, reactions and a follow, a block by name and one behind a made-up name, a mute, a chat, an introduction and a room were made through the app’s own routes',
+      [prog, coh, enrolled, talked, invited, room, roomLine, roomQuiet, post, reply, zPost, blockedByName, blockedMasked, chat, hello, back, intro, den, askedIn].every((r) => r.status < 300) &&
+        [hidden, joinedRoom, liked, reacted, followed, muted, saidYes, denLine].every((r) => r.status < 300) && post.json.held === false && followed.json.following === true,
+      [prog.status, coh.status, enrolled.status, talked.status, invited.status, invited.json.error, room.status, room.json.error, roomLine.status, roomQuiet.status, post.status, reply.status, liked.status, reacted.status, followed.json, zPost.status, blockedByName.status, blockedMasked.status, muted.status, chat.status, hello.status, back.status, intro.status, intro.json.error, den.status, askedIn.status, saidYes.status, denLine.status],
+    );
+
+    // School: the maker's program with its cohort and who joined counted, never who; its name changes through School's own route; the cohort
+    // the admin runs; who they invited, by name; the program X was invited to, with who invited them; and O's own line, masked there for now.
+    const made = await tb(`/programsMade?q=${enc(`Tables program ${stamp}`)}&count=1`, A.token);
+    const pRow = made.json.rows?.[0];
+    const renamed = await tb('/programsMade/edit', A.token, 'POST', { id: pRow?.id, column: 'name', value: `Tables program ${stamp} renamed`, today });
+    const byProgramId = await tb('/programsMade/edit', A.token, 'POST', { id: progId, column: 'name', value: 'Nope', today });
+    const inSchool = await api('GET', `/school/cohorts/${coh.json.id}`, undefined, O.token);
+    check(
+      'tables: a program reads for its maker with its state, cohorts and how many joined, keyed by its own row, and its name changes through School’s own route',
+      made.json.total === 1 && pRow?.cells?.state === 'private' && pRow?.cells?.cohorts === 1 && pRow?.cells?.learners === 1 && pRow?.cells?.delivery === 'online' && pRow?.id !== progId && pRow?.cells?.programId === progId &&
+        renamed.status === 200 && renamed.json.row?.cells?.name === `Tables program ${stamp} renamed` && inSchool.json.cohort?.programName === `Tables program ${stamp} renamed` && byProgramId.status === 404,
+      [made.json.total, pRow?.cells, renamed.status, renamed.json.error, inSchool.json.cohort?.programName, byProgramId.status],
+    );
+    const runs = await tb(`/cohortsRun?q=${enc(`Tables cohort ${stamp}`)}&count=1`, A.token);
+    const sent = await tb(`/programInvitesSent?q=${enc(`Tables program ${stamp}`)}&count=1`, A.token);
+    const got = await tb(`/programInvites?q=${enc(`Tables program ${stamp}`)}&count=1`, X.token);
+    const myLines = await tb(`/cohortLines?q=${enc(`Tables cohort ${stamp}`)}&count=1`, O.token);
+    check(
+      'tables: the cohort an admin runs with how many joined, who they invited by name, the program X was invited to, never who invited them, and O’s own line, private there',
+      runs.json.total === 1 && runs.json.rows?.[0]?.cells?.learners === 1 && runs.json.rows?.[0]?.cells?.when === 'running' &&
+        sent.json.total === 1 && sent.json.rows?.[0]?.cells?.person === 'Tables other' && !JSON.stringify(sent.json).includes(X.user.id) &&
+        got.json.total === 1 && got.json.rows?.[0]?.cells?.programState === 'private' && !('from' in (got.json.rows?.[0]?.cells ?? {})) &&
+        myLines.json.total === 1 && myLines.json.rows?.[0]?.cells?.line === `Tables cohort line ${stamp}` && myLines.json.rows?.[0]?.cells?.shownAs === 'private',
+      [runs.json.total, runs.json.rows?.[0]?.cells, sent.json.total, sent.json.rows?.[0]?.cells, got.json.total, got.json.rows?.[0]?.cells, myLines.json.total, myLines.json.rows?.[0]?.cells],
+    );
+
+    // Community: the channel for its guide, whose topic changes through the channel's own route; for O, who did not open it, no change at all; O's
+    // two lines, one without a name; the reactions and the follow with who wrote the post, by name; the admin's own mute.
+    const guideRooms = await tb(`/communityChannels?q=${enc(`Tables room ${stamp}`)}&count=1`, A.token);
+    const gRow = guideRooms.json.rows?.[0];
+    const retopic = await tb('/communityChannels/edit', A.token, 'POST', { id: gRow?.id, column: 'topic', value: `Tables topic ${stamp}`, today });
+    const roomNow = (await api('GET', `/community/channels/${roomId}`, undefined, O.token)).json.channel;
+    const oRooms = await tb(`/communityChannels?q=${enc(`Tables room ${stamp}`)}&count=1`, O.token);
+    const oRename = await tb('/communityChannels/edit', O.token, 'POST', { id: oRooms.json.rows?.[0]?.id, column: 'channel', value: 'Not mine', today });
+    check(
+      'tables: a Community channel reads for the guide who opened it, its topic changed through the channel’s own route, and for a member with no change, never its id but their own',
+      guideRooms.json.total === 1 && gRow?.cells?.madeIt === true && gRow?.cells?.members === 2 && gRow?.edit?.includes('topic') && retopic.status === 200 && roomNow?.topic === `Tables topic ${stamp}` &&
+        oRooms.json.total === 1 && oRooms.json.rows?.[0]?.cells?.madeIt === false && (oRooms.json.rows?.[0]?.edit ?? []).length === 0 && oRename.status === 400 && /channel you made/.test(oRename.json.error ?? ''),
+      [guideRooms.json.total, gRow?.cells, gRow?.edit, retopic.status, retopic.json.error, roomNow?.topic, oRooms.json.rows?.[0]?.cells, oRename.status, oRename.json.error],
+    );
+    const roomLines = await tb(`/communityLines?q=${enc(`Tables room ${stamp}`)}&count=1`, O.token);
+    const reactions = await tb(`/postReactions?q=${enc(`Tables post ${stamp}`)}&count=1`, O.token);
+    const replyReacts = await tb(`/replyReactions?q=${enc(`Tables reply ${stamp}`)}&count=1`, O.token);
+    const follows = await tb(`/followedPosts?q=${enc(`Tables post ${stamp}`)}&count=1`, O.token);
+    const mutes = await tb(`/mutes?q=${enc('Tables blocked')}&count=1`, A.token);
+    check(
+      'tables: O’s lines in the channel, one without a name; the post and reply reacted to and the post followed, who wrote them by name; the admin’s mute with its reason',
+      roomLines.json.total === 2 && roomLines.json.rows?.filter((r) => r.cells.anonymous === true).length === 1 &&
+        reactions.json.total === 1 && reactions.json.rows?.[0]?.cells?.reaction === 'celebrate' && reactions.json.rows?.[0]?.cells?.writer === 'Tables other' &&
+        replyReacts.json.total === 1 && replyReacts.json.rows?.[0]?.cells?.reaction === 'insightful' && replyReacts.json.rows?.[0]?.cells?.onPost === `Tables post ${stamp}` &&
+        follows.json.total === 1 && follows.json.rows?.[0]?.cells?.writer === 'Tables other' &&
+        mutes.json.total === 1 && mutes.json.rows?.[0]?.cells?.reason === `Tables mute ${stamp}` && !JSON.stringify([reactions.json, follows.json, mutes.json]).includes(X.user.id),
+      [roomLines.json.total, reactions.json.rows?.[0]?.cells, replyReacts.json.rows?.[0]?.cells, follows.json.total, mutes.json.total, mutes.json.rows?.[0]?.cells],
+    );
+
+    // Bond: the chat both ways under made-up names, never an id; the introduction from both sides; the room for its maker, its topic changed
+    // through the room's own route, and for the friend asked in, no change; O's line there; and only the block by name.
+    const chats = await tb('/bondChats?count=1', O.token);
+    const chatLines = await tb(`/bondChatLines?q=${enc(`Tables h`)}&count=1`, O.token);
+    const myAlias = chat.json.chat?.myAlias;
+    const theirAlias = chat.json.chat?.theirAlias;
+    check(
+      'tables: an anonymous chat reads both ways under its made-up names, the person’s own lines as You, never anyone’s id or name',
+      chats.json.total === 1 && chats.json.rows?.[0]?.cells?.them === theirAlias && chats.json.rows?.[0]?.cells?.you === myAlias && chats.json.rows?.[0]?.cells?.lines === 2 &&
+        chatLines.json.total === 2 && chatLines.json.rows?.some((r) => r.cells.from === 'You' && r.cells.line === `Tables hello ${stamp}`) && chatLines.json.rows?.some((r) => r.cells.from === theirAlias && r.cells.line === `Tables hi back ${stamp}`) &&
+        !JSON.stringify([chats.json, chatLines.json]).includes(X.user.id) && !JSON.stringify([chats.json, chatLines.json]).includes('Tables other'),
+      [chats.json.total, chats.json.rows?.[0]?.cells, chatLines.json.total, chatLines.json.rows?.map((r) => r.cells)],
+    );
+    const introsO = await tb(`/introductions?q=${enc(`Tables intro ${stamp}`)}&count=1`, O.token);
+    const introsX = await tb(`/introductions?q=${enc(`Tables intro ${stamp}`)}&count=1`, X.token);
+    const dens = await tb(`/bondChannels?q=${enc(`Tables den ${stamp}`)}&count=1`, O.token);
+    const dRow = dens.json.rows?.[0];
+    const redescribe = await tb('/bondChannels/edit', O.token, 'POST', { id: dRow?.id, column: 'topic', value: `Tables den topic ${stamp}`, today });
+    const denNow = (await api('GET', `/bond/channels/${denId}`, undefined, X.token)).json.channel;
+    const xDens = await tb(`/bondChannels?q=${enc(`Tables den ${stamp}`)}&count=1`, X.token);
+    const denLines = await tb(`/bondChannelLines?q=${enc(`Tables den ${stamp}`)}&count=1`, O.token);
+    const blocked = await tb('/blocks?count=1', O.token);
+    check(
+      'tables: an introduction reads from both sides, a room for its maker with its topic changed through the room’s own route and for the friend asked in with no change, the maker’s line, and only the block by name',
+      introsO.json.total === 1 && introsO.json.rows?.[0]?.cells?.side === 'you' && introsO.json.rows?.[0]?.cells?.person === 'Tables other' && introsO.json.rows?.[0]?.cells?.state === 'proposed' &&
+        introsX.json.total === 1 && introsX.json.rows?.[0]?.cells?.side === 'them' && introsX.json.rows?.[0]?.cells?.person === 'Tables owner' &&
+        dens.json.total === 1 && dRow?.cells?.madeIt === true && dRow?.cells?.members === 2 && redescribe.status === 200 && denNow?.topic === `Tables den topic ${stamp}` &&
+        xDens.json.total === 1 && xDens.json.rows?.[0]?.cells?.madeIt === false && xDens.json.rows?.[0]?.cells?.seat === 'member' && (xDens.json.rows?.[0]?.edit ?? []).length === 0 &&
+        denLines.json.total === 1 && blocked.json.total === 1 && blocked.json.rows?.[0]?.cells?.person === 'Tables blocked' && !JSON.stringify(blocked.json).includes('Tables masked'),
+      [introsO.json.rows?.[0]?.cells, introsX.json.rows?.[0]?.cells, dRow?.cells, redescribe.status, redescribe.json.error, denNow?.topic, xDens.json.rows?.[0]?.cells, denLines.json.total, blocked.json.total, blocked.json.rows?.map((r) => r.cells)],
+    );
+
+    // A super admin reads a member's own School and Community records, read only, never a table with other people's details.
+    const adminLines = await tb(`/admin/${O.user.id}/communityLines?q=${enc(`Tables room ${stamp}`)}&count=1`, A.token);
+    const adminCohort = await tb(`/admin/${O.user.id}/cohortLines?q=${enc(`Tables cohort ${stamp}`)}&count=1`, A.token);
+    const adminShut = await Promise.all(['bondChats', 'bondChatLines', 'blocks', 'introductions', 'postReactions', 'followedPosts', 'bondChannels'].map((k) => tb(`/admin/${O.user.id}/${k}?count=1`, A.token)));
+    const adminList = ((await tb(`/admin/${O.user.id}`, A.token)).json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
+    check(
+      'tables: an admin reads a member’s cohort and channel lines, read only, never their chats, blocks, introductions, reactions, follows or rooms',
+      adminLines.status === 200 && adminLines.json.total === 2 && adminLines.json.rows?.every((r) => r.edit === undefined) && adminCohort.status === 200 && adminCohort.json.total === 1 &&
+        adminShut.every((r) => r.status === 404) && !adminList.includes('bondChats') && !adminList.includes('blocks') && adminList.includes('communityChannels'),
+      [adminLines.status, adminLines.json.total, adminCohort.status, adminShut.map((r) => r.status), adminList.includes('bondChats')],
+    );
+
+    // Bond hidden: its tables neither list, open nor change; Community's still do.
+    await api('PATCH', '/me/modules', { key: 'bond', on: false }, O.token);
+    const bondOffKeys = ((await tb('', O.token)).json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
+    const bondOff = await tb('/bondChats?count=1', O.token);
+    const bondOffEdit = await tb('/bondChannels/edit', O.token, 'POST', { id: dRow?.id, column: 'topic', value: 'Off', today });
+    await api('PATCH', '/me/modules', { key: 'bond', on: true }, O.token);
+    check(
+      'tables: with Bond hidden its tables neither list, open nor change, saying which app to show, and Community’s still list',
+      !bondOffKeys.includes('bondChats') && !bondOffKeys.includes('blocks') && bondOffKeys.includes('communityLines') && bondOff.status === 404 && /^Show Bond in Apps/.test(bondOff.json.error ?? '') && bondOffEdit.status === 404,
+      [bondOff.status, bondOff.json.error, bondOffEdit.status],
+    );
+
+    // Tidy for the next run: the mute lifted, the room closed (Community holds thirty open), the program archived.
+    await api('DELETE', `/community/members/${Y.user.id}/mute`, undefined, A.token);
+    await api('POST', `/community/channels/${roomId}/archive`, {}, A.token);
+    await api('PATCH', `/school/programs/${progId}`, { visibility: 'archived' }, A.token);
+  }
+
+  // You (2026-11-14, the seventh batch of "ok, add them"): made through the app's own routes, read and changed here. A coach or a student and the
+  // log between them, Discover's results, the Companion chat, the assistant's changes, a code's label and the team's answers reach only the person
+  // and AI chat (Discover's only with its own yes for the assistant too); the vibe check, live call asks, plan, payout details, honors, the calendar
+  // link and the privacy and terms records as before.
+  {
+    const enc = encodeURIComponent;
+    const AIV = { 'X-Kreators-Via': 'assistant' };
+    const SECRET_YOU = /pan_hash|provider_order|provider_payment|args_json|undo_json|answers_json|draft_json/;
+    // The vibe check, a live call ask, payout details, a message to the team, a Companion line, a privacy choice and the calendar link, each
+    // through its own route; a plan and an honor from the team; an invite code the run's admin made.
+    const vq = QUESTIONS.find((x) => x.relationship === 'self' && x.format === 'scale') ?? QUESTIONS.find((x) => x.relationship === 'self' && x.format === 'pick');
+    const vibed = await api('POST', '/onboarding', { answers: [{ questionId: vq.id, value: 3 }, { questionId: 'self.f', value: 0 }] }, O.token);
+    const called = await api('POST', '/session/call', {}, O.token);
+    const kyc = await api('POST', '/kyc', { legalName: 'Asha Tables', pan: 'ABCDE1234F', bankAccount: '123456789012', ifsc: 'HDFC0001234', address: '1 Lake Road, Pune, Maharashtra 411001' }, O.token);
+    const asked = await api('POST', '/support', { subject: `Tables help ${stamp}`, body: 'Where does my plan show?' }, O.token);
+    const talked = await api('POST', '/companion', { body: 'Tables hello', context: { date: today, timeZone: 'Asia/Kolkata' } }, O.token);
+    const chose = await api('PUT', '/me/legal/consent', { choices: { attribution: false, embeds: true, marketing: false }, source: 'profile' }, O.token);
+    const cal = await api('POST', '/me/calendar', { on: true }, O.token);
+    const planned = await admin('POST', `/admin/users/${O.user.id}/plan`, { plan: 'pro' });
+    const honored = await admin('POST', `/admin/users/${O.user.id}/honors`, { key: 'collab', note: `Tables honor ${stamp}` });
+    const coded = await api('POST', '/me/invites', { count: 1, label: `Tables invite ${stamp}` }, A.token);
+    const loved = await api('POST', '/discover/more/love/submit', { answers: { receive: LOVE_PAIRS.map(() => 0), give: LOVE_PAIRS.map(() => 1) } }, O.token);
+    const minded = await api('POST', '/discover/more/mind/submit', { answers: MIND_SCREENS.map((sc) => sc.map(() => 4)) }, O.token);
+    check(
+      'tables: a vibe check answer, a live call ask, payout details, a message to the team, a Companion line, a privacy choice, the calendar link, a plan, an honor, an invite code and two self-checks were made through the app’s own routes',
+      [vibed, chose, cal, planned, honored].every((r) => r.status === 200) && [called, kyc, asked, coded, loved, minded].every((r) => r.status === 201) && talked.status === 200,
+      [vibed.status, called.status, kyc.status, asked.status, talked.status, chose.status, cal.status, planned.status, honored.status, coded.status, loved.status, minded.status],
+    );
+    const [vibe, calls, payout, msgs, chat, records, terms, calLink, plan, honors, codes, addOns] = await Promise.all([
+      tb('/vibeCheckAnswers?count=1', O.token),
+      tb('/liveCalls?count=1', O.token),
+      tb('/payoutDetails', O.token),
+      tb(`/teamMessages?q=${enc(`Tables help ${stamp}`)}&count=1`, O.token),
+      tb('/companionChat?count=1', O.token),
+      tb('/privacyRecords?f_choice=embeds&count=1', O.token),
+      tb('/termsAccepted?count=1', O.token),
+      tb('/calendarLink', O.token),
+      tb('/plan', O.token),
+      tb('/honors', O.token),
+      tb(`/inviteCodes?q=${enc(`Tables invite ${stamp}`)}&count=1`, A.token),
+      tb('/discoverAddOns?count=1', O.token),
+    ]);
+    const answerWords = vq.format === 'scale' ? vq.scale.labels[3] : vq.options[3]?.label;
+    check(
+      'tables: the vibe check answer reads by its question and the choice it counted as (a foundation, whose own words may replace it on the pyramid, as nothing), and the live call ask by its state and price, never a payment id',
+      vibe.status === 200 && vibe.json.rows?.some((r) => r.cells.question === vq.prompt && r.cells.answer === answerWords && r.cells.pillar === 'self') &&
+        vibe.json.rows?.some((r) => r.cells.question === QUESTIONS.find((x) => x.id === 'self.f')?.prompt && r.cells.answer == null && r.cells.pillar === 'self') &&
+        calls.status === 200 && calls.json.total === 1 && calls.json.rows?.[0]?.cells?.state === 'asked' && calls.json.rows?.[0]?.cells?.price === 1000000 && !SECRET_YOU.test(JSON.stringify(calls.json)),
+      [vibe.status, vibe.json.rows?.slice(0, 2).map((r) => r.cells), calls.status, calls.json.rows?.[0]?.cells],
+    );
+    check(
+      'tables: payout details read by the last four of the PAN and the account as stored, never the PAN itself or its hash',
+      payout.status === 200 && payout.json.rows?.[0]?.cells?.panEnds === '234F' && payout.json.rows?.[0]?.cells?.accountEnds === '9012' && payout.json.rows?.[0]?.cells?.state === 'pending' && !JSON.stringify(payout.json).includes('ABCDE1234F') && !SECRET_YOU.test(JSON.stringify(payout.json)),
+      payout.json.rows?.[0]?.cells,
+    );
+    const said = chat.json.rows?.find((r) => r.cells.who === 'companion');
+    check(
+      'tables: a message to the team reads with its state, and the Companion chat both ways, saying who answered',
+      msgs.status === 200 && msgs.json.total === 1 && msgs.json.rows?.[0]?.cells?.state === 'open' && msgs.json.rows?.[0]?.cells?.words === 'Where does my plan show?' &&
+        chat.status === 200 && chat.json.total === 2 && chat.json.rows?.some((r) => r.cells.who === 'you' && r.cells.line === 'Tables hello' && r.cells.answeredBy === null) && ['The built-in companion', 'The built-in model'].includes(said?.cells?.answeredBy),
+      [msgs.status, msgs.json.rows?.[0]?.cells, chat.status, chat.json.rows?.map((r) => r.cells)],
+    );
+    check(
+      'tables: the privacy choices made and the terms accepted read as records, where and how each was made',
+      records.status === 200 && records.json.total >= 1 && records.json.rows?.[0]?.cells?.allowed === true && records.json.rows?.[0]?.cells?.place === 'profile' && records.json.rows?.every((r) => r.edit === undefined || r.edit.length === 0) &&
+        terms.status === 200 && terms.json.total >= 2 && ['terms', 'privacy'].every((d) => terms.json.rows?.some((r) => r.cells.doc === d && r.cells.how === 'signup')),
+      [records.json.total, records.json.rows?.[0]?.cells, terms.json.total, terms.json.rows?.map((r) => r.cells)],
+    );
+    check(
+      'tables: the plan reads running with its credits, and the honor with its tier and the team’s note',
+      plan.status === 200 && plan.json.rows?.[0]?.cells?.plan === 'pro' && plan.json.rows?.[0]?.cells?.running === true && plan.json.rows?.[0]?.cells?.planCredits === 10000 &&
+        honors.status === 200 && honors.json.rows?.some((r) => r.cells.honor === 'collab' && r.cells.tier === 'silver' && r.cells.note === `Tables honor ${stamp}`),
+      [plan.json.rows?.[0]?.cells, honors.json.rows?.map((r) => r.cells)],
+    );
+    const code = coded.json.items?.[0]?.code ?? 'no-code';
+    check(
+      'tables: an invite code reads by its label and state, its link working, never the code itself',
+      codes.status === 200 && codes.json.total === 1 && codes.json.rows?.[0]?.cells?.state === 'open' && codes.json.rows?.[0]?.cells?.linkWorks === true && !JSON.stringify(codes.json).includes(code),
+      [codes.status, codes.json.rows?.[0]?.cells],
+    );
+    check(
+      'tables: the self-checks read in words, never an answer, and the calendar link on or off, never its token',
+      addOns.status === 200 && addOns.json.total === 2 && /Feels cared for through/.test(addOns.json.rows?.find((r) => r.cells.addOn === 'love')?.cells?.found ?? '') && /many signs/.test(addOns.json.rows?.find((r) => r.cells.addOn === 'mind')?.cells?.found ?? '') && !SECRET_YOU.test(JSON.stringify(addOns.json)) &&
+        calLink.status === 200 && calLink.json.rows?.[0]?.cells?.on === true && !JSON.stringify(calLink.json).includes(cal.json.token ?? 'no-token'),
+      [addOns.json.rows?.map((r) => r.cells), calLink.json.rows?.[0]?.cells],
+    );
+    // Changes through the app's own routes: the calendar link off, then on again (the same link).
+    const calOff = await tb('/calendarLink/edit', O.token, 'POST', { id: 'calendar', column: 'on', value: false, today });
+    const calAfter = await api('GET', '/me/calendar', undefined, O.token);
+    const calOn = await tb('/calendarLink/edit', O.token, 'POST', { id: 'calendar', column: 'on', value: true, today });
+    const calBack = await api('GET', '/me/calendar', undefined, O.token);
+    const readOnly = await tb('/teamMessages/edit', O.token, 'POST', { id: msgs.json.rows?.[0]?.id ?? 'x', column: 'words', value: 'x', today });
+    check(
+      'tables: the calendar link switches off and on through its own route, keeping the same link, and a message to the team never changes here',
+      calOff.status === 200 && calOff.json.row?.cells?.on === false && calAfter.json.enabled === false && calOn.status === 200 && calBack.json.enabled === true && calBack.json.token === cal.json.token && readOnly.status === 400,
+      [calOff.status, calOff.json.error, calAfter.json.enabled, calOn.status, calBack.json.token === cal.json.token, readOnly.status],
+    );
+    // AI chat reads Discover's add-ons only with Show to AI chat and Discover's own yes for the assistant, and how the mind works only with its own switch.
+    await api('PATCH', '/me/ai-tables', { table: 'discoverAddOns', on: true }, O.token);
+    // Discover's tables hold the person's answers, so only a model that keeps nothing reads them: the tool marks its read `ai=private`.
+    const aiNo = await api('GET', '/tables/discoverAddOns?count=1&ai=private', undefined, O.token, AIV);
+    await api('PUT', '/discover/settings', { assistant: true }, O.token);
+    const aiYes = await api('GET', '/tables/discoverAddOns?count=1&ai=private', undefined, O.token, AIV);
+    await api('PUT', '/discover/settings', { mind: true }, O.token);
+    const aiMind = await api('GET', '/tables/discoverAddOns?count=1&ai=private', undefined, O.token, AIV);
+    await api('PUT', '/discover/settings', { assistant: false, mind: false }, O.token);
+    await api('PATCH', '/me/ai-tables', { table: 'discoverAddOns', on: false }, O.token);
+    check(
+      'tables: AI chat reads the Discover add-ons only with Discover’s own yes for the assistant, and how the mind works only with its switch too',
+      aiNo.status === 200 && aiNo.json.total === 0 && aiYes.status === 200 && JSON.stringify(aiYes.json.rows?.map((r) => r.cells.addOn)) === '["love"]' && aiMind.status === 200 && aiMind.json.total === 2,
+      [aiNo.status, aiNo.json.total, aiYes.json.rows?.map((r) => r.cells.addOn), aiMind.json.total],
+    );
+    // The Companion hidden: its chat neither lists, opens nor downloads, saying which app to show.
+    await api('PATCH', '/me/modules', { key: 'companion', on: false }, O.token);
+    const compOffKeys = ((await tb('', O.token)).json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
+    const compOff = await tb('/companionChat?count=1', O.token);
+    const compOffCsv = await tb('/companionChat/csv', O.token);
+    await api('PATCH', '/me/modules', { key: 'companion', on: true }, O.token);
+    check(
+      'tables: with the Companion hidden its chat neither lists, opens nor downloads, saying which app to show, and the rest of You still lists',
+      !compOffKeys.includes('companionChat') && compOffKeys.includes('termsAccepted') && compOffKeys.includes('lifeCoaches') && compOff.status === 404 && /^Show Companion in Apps/.test(compOff.json.error ?? '') && compOffCsv.status === 404,
+      [compOff.status, compOff.json.error, compOffCsv.status],
+    );
+    // An admin reads a member's own records, never those with other people's details.
+    const [adminHonors, adminPayout, adminMsgs, adminChat, adminCodes] = await Promise.all([
+      tb(`/admin/${O.user.id}/honors?count=1`, A.token),
+      tb(`/admin/${O.user.id}/payoutDetails`, A.token),
+      tb(`/admin/${O.user.id}/teamMessages`, A.token),
+      tb(`/admin/${O.user.id}/companionChat`, A.token),
+      tb(`/admin/${O.user.id}/lifeCoaches`, A.token),
+    ]);
+    const adminYouList = ((await tb(`/admin/${O.user.id}`, A.token)).json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
+    check(
+      'tables: an admin reads a member’s honors and payout details, read only, never their messages to the team, Companion chat or coaches',
+      adminHonors.status === 200 && adminHonors.json.total >= 1 && adminHonors.json.rows?.every((r) => r.edit === undefined) && adminPayout.status === 200 && !JSON.stringify(adminPayout.json).includes('ABCDE1234F') &&
+        [adminMsgs, adminChat, adminCodes].every((r) => r.status === 404) && adminYouList.includes('plan') && !adminYouList.includes('teamMessages') && !adminYouList.includes('assistantChanges'),
+      [adminHonors.status, adminPayout.status, adminMsgs.status, adminChat.status, adminCodes.status],
+    );
+    // Tidy for the next run and the checks below: the plan ended, the code taken back.
+    await admin('POST', `/admin/users/${O.user.id}/plan`, { plan: 'none' });
+    if (coded.json.items?.[0]?.id) await api('DELETE', `/me/invites/${coded.json.items[0].id}`, undefined, A.token);
+  }
 
   // Tasks to read, sort, filter, search, page, change and archive.
   const built = await api('POST', '/onboarding/build', { relationships: ['self'], date: today, picks: { self: { project: 'Tables project' } } }, O.token);
@@ -9853,23 +11133,44 @@ section('All tables');
   // A part switch and a table switch saved at the same moment both land (each write is guarded on the share it read).
   await Promise.all([
     api('PATCH', `/me/coach/links/${linkId}/share`, { routine: false }, O.token),
-    api('PATCH', `/me/coach/links/${linkId}/share`, { tables: ['tasks', 'journal', 'xpHistory', 'friends'] }, O.token),
+    api('PATCH', `/me/coach/links/${linkId}/share`, { tables: ['tasks', 'journal', 'xpHistory', 'posts'] }, O.token),
   ]);
   const raced = (await api('PATCH', `/me/coach/links/${linkId}/share`, {}, O.token)).json.link?.share;
-  check('tables: a part and a table switched at once are both kept', raced?.routine === false && JSON.stringify(raced?.tables) === '["tasks","xpHistory","journal","friends"]', raced);
+  check('tables: a part and a table switched at once are both kept', raced?.routine === false && JSON.stringify(raced?.tables) === '["tasks","xpHistory","journal","posts"]', raced);
   // One table switched from its own page (the cover's Show to my coach, 2026-11-14): added to or taken from the list as it stands.
   const sameSet = (got, want) => JSON.stringify([...(got ?? [])].sort()) === JSON.stringify([...want].sort());
   const oneOn = await api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'mood', on: true }, O.token);
-  check('tables: one table switched on from its page joins the list, the rest kept', oneOn.status === 200 && sameSet(oneOn.json.link?.share?.tables, ['tasks', 'xpHistory', 'journal', 'friends', 'mood']) && oneOn.json.link?.share?.routine === false, oneOn.json.link?.share);
+  check('tables: one table switched on from its page joins the list, the rest kept', oneOn.status === 200 && sameSet(oneOn.json.link?.share?.tables, ['tasks', 'xpHistory', 'journal', 'posts', 'mood']) && oneOn.json.link?.share?.routine === false, oneOn.json.link?.share);
   check('tables: and the coach can open it at once', (await tb(`/coach/${O.user.id}/mood`, K.token)).status === 200, '');
   await Promise.all([
     api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'sleep', on: true }, O.token),
     api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'stress', on: true }, O.token),
   ]);
   const twoPages = (await api('PATCH', `/me/coach/links/${linkId}/share`, {}, O.token)).json.link?.share;
-  check('tables: two tables switched on from two pages at once are both kept', sameSet(twoPages?.tables, ['tasks', 'xpHistory', 'journal', 'friends', 'mood', 'sleep', 'stress']), twoPages);
+  check('tables: two tables switched on from two pages at once are both kept', sameSet(twoPages?.tables, ['tasks', 'xpHistory', 'journal', 'posts', 'mood', 'sleep', 'stress']), twoPages);
+  // A shared table shuts for the coach while its app is hidden for the student, with the plain 404 that says nothing of their apps, and opens again
+  // with it (2026-11-14, `needs`).
+  await api('PATCH', '/me/modules', { key: 'sleep', on: false }, O.token);
+  const sleepOffList = ((await tb(`/coach/${O.user.id}`, K.token)).json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
+  const sleepOffPage = await tb(`/coach/${O.user.id}/sleep`, K.token);
+  // Every answer that carries the share counts only the tables shown now (the review, 2026-11-14): the coach's student page, so its "Tables
+  // (N shared)" never says the student hid an app, and the student's own, so "N shared" matches the list; Share none speaks only for those.
+  const shareOfLink = async () => ((await api('GET', '/me/coach', undefined, O.token)).json.links ?? []).find((l) => l.id === linkId)?.share?.tables ?? [];
+  const coachSeesHidden = (await api('GET', `/coach/students/${O.user.id}`, undefined, K.token)).json.link?.share?.tables ?? [];
+  const ownSeesHidden = await shareOfLink();
+  const noneWhileHidden = await api('PATCH', `/me/coach/links/${linkId}/share`, { tables: [] }, O.token);
+  await api('PATCH', '/me/modules', { key: 'sleep', on: true }, O.token);
+  const sleepBack = await tb(`/coach/${O.user.id}/sleep`, K.token);
+  const keptForLater = await shareOfLink();
+  check('tables: a shared table shuts for the coach while its app is hidden for the student, and opens again with it', !sleepOffList.includes('sleep') && sleepOffList.includes('stress') && sleepOffPage.status === 404 && sleepOffPage.json.error === 'not found' && sleepBack.status === 200, [sleepOffList, sleepOffPage.status, sleepOffPage.json.error, sleepBack.status]);
+  check(
+    'tables: a table whose app is hidden is left out of the share in every answer, coach and student, and Share none keeps it for when the app comes back',
+    !coachSeesHidden.includes('sleep') && coachSeesHidden.includes('stress') && !ownSeesHidden.includes('sleep') && ownSeesHidden.includes('stress') && noneWhileHidden.status === 200 && sameSet(noneWhileHidden.json.link?.share?.tables, []) && sameSet(keptForLater, ['sleep']),
+    [coachSeesHidden, ownSeesHidden, noneWhileHidden.json.link?.share?.tables, keptForLater],
+  );
+  await api('PATCH', `/me/coach/links/${linkId}/share`, { tables: ['tasks', 'xpHistory', 'journal', 'posts', 'mood', 'sleep', 'stress'] }, O.token);
   const oneOff = await api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'mood', on: false }, O.token);
-  check('tables: one table switched off from its page leaves the list, the rest kept, and is shut at once', oneOff.status === 200 && sameSet(oneOff.json.link?.share?.tables, ['tasks', 'xpHistory', 'journal', 'friends', 'sleep', 'stress']) && (await tb(`/coach/${O.user.id}/mood`, K.token)).status === 404, oneOff.json.link?.share);
+  check('tables: one table switched off from its page leaves the list, the rest kept, and is shut at once', oneOff.status === 200 && sameSet(oneOff.json.link?.share?.tables, ['tasks', 'xpHistory', 'journal', 'posts', 'sleep', 'stress']) && (await tb(`/coach/${O.user.id}/mood`, K.token)).status === 404, oneOff.json.link?.share);
   const badOne = await Promise.all([
     api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'nonsense', on: true }, O.token),
     api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'constructor', on: true }, O.token),
@@ -9879,7 +11180,183 @@ section('All tables');
     api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'mood', on: true }, K.token),
   ]);
   check('tables: a table switch names one known table and on or off, from the student only', badOne.slice(0, 5).every((r) => r.status === 400) && badOne[5].status === 404, badOne.map((r) => r.status));
-  await api('PATCH', `/me/coach/links/${linkId}/share`, { tables: ['tasks', 'journal', 'xpHistory', 'friends'] }, O.token);
+  // A table with other people's details is never shared with a coach (2026-11-14, `tableReach`): refused alone in words, dropped from a list, 404.
+  const OTHERS = TABLES_ALL.filter((t) => !tableReach(t).coach);
+  for (const ot of [OTHERS[0], OTHERS.find((t) => t.key === 'agencyClients'), OTHERS.find((t) => t.key === 'productReviews')].filter((t, i, all) => t && all.indexOf(t) === i)) {
+    const othersOne = await api('PATCH', `/me/coach/links/${linkId}/share`, { table: ot.key, on: true }, O.token);
+    const othersList = await api('PATCH', `/me/coach/links/${linkId}/share`, { tables: ['tasks', ot.key] }, O.token);
+    const othersCoach = await tb(`/coach/${O.user.id}/${ot.key}`, K.token);
+    const othersCoachList = ((await tb(`/coach/${O.user.id}`, K.token)).json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
+    check(
+      'tables: a table with other people’s details is never shared with a coach: refused alone in words, dropped from a list, never listed and 404 to the coach',
+      othersOne.status === 400 && /never shown to a coach/.test(othersOne.json.error ?? '') && othersList.status === 200 && !(othersList.json.link?.share?.tables ?? []).includes(ot.key) && othersCoach.status === 404 && !othersCoachList.includes(ot.key),
+      [ot.key, othersOne.status, othersOne.json.error, othersList.json.link?.share?.tables, othersCoach.status],
+    );
+  }
+  check('tables: Agency’s and Business metrics’ tables are among those never shown to a coach', ['agencyClients', 'agencyInvoices', 'businessMetrics'].every((k) => OTHERS.some((t) => t.key === k)), OTHERS.map((t) => t.key));
+  check('tables: so are the Shop’s with other people’s details, and never the creator’s own products', ['bookings', 'courseInvites', 'priorityDms', 'productReviews', 'myBookings', 'myQuestions', 'myCourseInvites', 'leads'].every((k) => OTHERS.some((t) => t.key === k)) && !OTHERS.some((t) => t.key === 'products'), OTHERS.map((t) => t.key));
+  // The Store's with other people's details (offers on the person's listings, both sides of a listing's chat) never reach a coach; the person's
+  // own listings and brand folders do, once switched on (the third batch, 2026-11-14).
+  {
+    const chatAlone = await api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'chatsWithBuyers', on: true }, O.token);
+    const offersInList = await api('PATCH', `/me/coach/links/${linkId}/share`, { tables: ['tasks', 'listingOffers', 'chatsWithSellers', 'preownedListings', 'brands', 'brandPieces'] }, O.token);
+    const coachListing = await tb(`/coach/${O.user.id}/preownedListings?count=1`, K.token);
+    const coachOffers = await tb(`/coach/${O.user.id}/listingOffers`, K.token);
+    check(
+      'tables: a listing’s offers and chats and the pieces written are never shared with a coach, and the person’s own listings and brand folders are, read only',
+      chatAlone.status === 400 && /never shown to a coach/.test(chatAlone.json.error ?? '') && sameSet(offersInList.json.link?.share?.tables, ['tasks', 'preownedListings', 'brands']) && coachListing.status === 200 && coachListing.json.total >= 1 && coachListing.json.rows?.every((r) => r.edit === undefined) && coachOffers.status === 404,
+      [chatAlone.status, chatAlone.json.error, offersInList.json.link?.share?.tables, coachListing.status, coachOffers.status],
+    );
+    check('tables: so are the Store’s with other people’s details and the pieces written, and never a seller’s own listings or brand folders', ['listingOffers', 'chatsWithBuyers', 'chatsWithSellers', 'brandPieces'].every((k) => OTHERS.some((t) => t.key === k)) && !OTHERS.some((t) => ['preownedListings', 'myOffers', 'brands', 'brandSources', 'researchRuns', 'rewardReservations'].includes(t.key)), OTHERS.map((t) => t.key));
+  }
+  // Who applied to the person's listings, their brands' teams, campaigns and log, and the feedback and reviewer's notes they were given never reach a
+  // coach; their own listings and pitches do, once switched on, read only (the fourth batch, 2026-11-14).
+  {
+    const applicantsAlone = await api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'workApplicants', on: true }, O.token);
+    const workList = await api('PATCH', `/me/coach/links/${linkId}/share`, { tables: ['tasks', 'workListings', 'tvPitches', 'armyCampaigns', 'armyCampaignLog', 'armyBrandTeams'] }, O.token);
+    const coachListings = await tb(`/coach/${O.user.id}/workListings?count=1`, K.token);
+    const coachPitches = await tb(`/coach/${O.user.id}/tvPitches?count=1`, K.token);
+    const coachCampaigns = await tb(`/coach/${O.user.id}/armyCampaigns`, K.token);
+    const coachEdit = await tb(`/coach/${O.user.id}/workListings/edit`, K.token, 'POST', { id: 'x', column: 'clubOnly', value: true, today });
+    check(
+      'tables: who applied to a listing and a brand’s team, campaigns and log are never shared with a coach, and the person’s own listings and pitches are, read only',
+      applicantsAlone.status === 400 && /never shown to a coach/.test(applicantsAlone.json.error ?? '') && sameSet(workList.json.link?.share?.tables, ['tasks', 'workListings', 'tvPitches']) &&
+        coachListings.status === 200 && coachListings.json.total >= 1 && coachListings.json.rows?.every((r) => r.edit === undefined) && coachPitches.status === 200 && coachCampaigns.status === 404 && coachEdit.status === 404,
+      [applicantsAlone.status, applicantsAlone.json.error, workList.json.link?.share?.tables, coachListings.status, coachPitches.status, coachCampaigns.status, coachEdit.status],
+    );
+    check(
+      'tables: so are the feedback and a reviewer’s notes a person was given, and never their own roles, entries or Club membership',
+      ['workApplicants', 'armyFeedback', 'armyBrandTeams', 'armyCampaigns', 'armyCampaignLog', 'winReviewerNotes'].every((k) => OTHERS.some((t) => t.key === k)) && !OTHERS.some((t) => ['workListings', 'workApplications', 'armyRoles', 'armyWorkSent', 'armyBrands', 'winEntries', 'winRewards', 'tvPitches', 'fundApplications', 'clubMembership'].includes(t.key)),
+      OTHERS.map((t) => t.key),
+    );
+  }
+  // The guests at the person's events, who logged runs at their clubs, the clubs that applied to their collabs and their lines at a circle's
+  // tables never reach a coach; their own events, runs and seats do, once switched on, read only, never a line written without a name, nor how
+  // they show up at a circle, their table or the name they go by there (the fifth batch, 2026-11-14).
+  {
+    const guestsAlone = await api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'partyGuests', on: true }, O.token);
+    const circleLinesAlone = await api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'circleLines', on: true }, O.token);
+    const seatsAlone = await api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'circleSignups', on: true }, O.token);
+    const eventsList = await api('PATCH', `/me/coach/links/${linkId}/share`, { tables: ['tasks', 'partyHosted', 'runLines', 'runClubsHosted', 'runClubsJoined', 'circleSignups', 'partyGuests', 'runEntriesHosted', 'runCollabApplicants', 'circleLines'] }, O.token);
+    const coachHosted = await tb(`/coach/${O.user.id}/partyHosted?q=${encodeURIComponent(`Tables party ${stamp}`)}&count=1`, K.token);
+    const ownLines = await tb(`/runLines?q=${encodeURIComponent(`Tables runners ${stamp}`)}&count=1`, O.token);
+    const coachLines = await tb(`/coach/${O.user.id}/runLines?q=${encodeURIComponent(`Tables runners ${stamp}`)}&count=1`, K.token);
+    const coachSeat = await tb(`/coach/${O.user.id}/circleSignups?q=${encodeURIComponent(`Tables circle ${stamp}`)}&count=1`, K.token);
+    const coachShut = await Promise.all(['partyGuests', 'runEntriesHosted', 'runCollabApplicants', 'circleLines'].map((k) => tb(`/coach/${O.user.id}/${k}`, K.token)));
+    const coachEdit = await tb(`/coach/${O.user.id}/partyHosted/edit`, K.token, 'POST', { id: 'x', column: 'guestXp', value: 5, today });
+    check(
+      'tables: the guests at an event, who logged at a club, who applied to a collab, the circles signed up for and the lines at a circle’s table are never shared with a coach, and the person’s own events, runs and clubs are, read only',
+      [guestsAlone, circleLinesAlone, seatsAlone].every((r) => r.status === 400 && /never shown to a coach/.test(r.json.error ?? '')) && sameSet(eventsList.json.link?.share?.tables, ['tasks', 'partyHosted', 'runLines', 'runClubsHosted', 'runClubsJoined']) &&
+        coachHosted.status === 200 && coachHosted.json.total === 1 && coachHosted.json.rows?.every((r) => r.edit === undefined) && !coachHosted.json.columns.includes('photoFolder') &&
+        coachShut.every((r) => r.status === 404) && coachEdit.status === 404 && coachSeat.status === 404,
+      [guestsAlone.status, circleLinesAlone.status, seatsAlone.status, eventsList.json.link?.share?.tables, coachHosted.status, coachHosted.json.total, coachShut.map((r) => r.status), coachEdit.status, coachSeat.status],
+    );
+    // The student's club is found only through its link now: the coach's pages of their events and clubs carry neither its id nor the event's,
+    // and no row's key opens a club or an event in the app.
+    const coachClubs = await tb(`/coach/${O.user.id}/runClubsHosted?q=${encodeURIComponent(`Tables runners ${stamp}`)}&count=1`, K.token);
+    const coachClubsIn = await tb(`/coach/${O.user.id}/runClubsJoined?q=${encodeURIComponent(`Tables runners ${stamp}`)}&count=1`, K.token);
+    const coachText = JSON.stringify([coachHosted.json, coachClubs.json, coachClubsIn.json]);
+    const keyed = [...(coachHosted.json.rows ?? []), ...(coachClubs.json.rows ?? []), ...(coachClubsIn.json.rows ?? [])].map((r) => r.id);
+    const opened = await Promise.all(keyed.flatMap((id) => [api('GET', `/run/clubs/${encodeURIComponent(id)}`, undefined, O.token), api('GET', `/party/events/${encodeURIComponent(id)}`, undefined, O.token)]));
+    check(
+      'tables: a coach’s pages of a person’s events and clubs, one found only through its link, carry no event’s or club’s id, and no row’s key opens either in the app',
+      coachClubs.status === 200 && coachClubs.json.total === 1 && coachClubs.json.rows?.[0]?.cells?.visibility === 'private' && coachClubsIn.status === 200 && coachClubsIn.json.total === 1 &&
+        typeof eventKeys.event === 'string' && typeof eventKeys.club === 'string' && !coachText.includes(eventKeys.event) && !coachText.includes(eventKeys.club) &&
+        !['eventId', 'clubId'].some((k) => coachText.includes(`"${k}"`)) && keyed.length === 3 && opened.every((r) => r.status === 404),
+      [coachClubs.status, coachClubs.json.total, coachClubsIn.status, coachClubsIn.json.total, coachText.includes(eventKeys.event ?? '@@'), coachText.includes(eventKeys.club ?? '@@'), keyed, opened.map((r) => r.status)],
+    );
+    check(
+      'tables: a coach never sees a run line written without a name',
+      ownLines.json.total === 1 && ownLines.json.rows?.[0]?.cells?.anonymous === true && coachLines.status === 200 && coachLines.json.total === 0,
+      [ownLines.json.total, coachLines.status, coachLines.json.total],
+    );
+    check(
+      'tables: so are a guest list, who logged at a club, the clubs that applied, the circles signed up for and the lines at a circle’s table, and never the person’s own events, runs or clubs',
+      ['partyGuests', 'runEntriesHosted', 'runCollabApplicants', 'circleSignups', 'circleLines'].every((k) => OTHERS.some((t) => t.key === k)) &&
+        !OTHERS.some((t) => ['partyHosted', 'partyJoined', 'partyFeedback', 'partyLines', 'runClubsHosted', 'runClubsJoined', 'runsHosted', 'runEntries', 'runLines', 'runCollabsPosted', 'runCollabApplications'].includes(t.key)),
+      OTHERS.map((t) => t.key),
+    );
+  }
+  // Who was invited, another person's post or reply, a chat under made-up names, an introduction, a friend's room and someone blocked never reach
+  // a coach; the person's own cohort lines, Community channels and lines do, once switched on, read only, never a line written without a name,
+  // nor a cohort's line while the person shows there behind a masked name (the sixth batch, 2026-11-14).
+  {
+    const enc = encodeURIComponent;
+    const othersAlone = await Promise.all(['bondChats', 'postReactions', 'programInvites', 'blocks'].map((table) => api('PATCH', `/me/coach/links/${linkId}/share`, { table, on: true }, O.token)));
+    const socialList = await api('PATCH', `/me/coach/links/${linkId}/share`, { tables: ['tasks', 'cohortLines', 'communityChannels', 'communityLines', 'bondChats', 'bondChatLines', 'blocks', 'introductions', 'followedPosts', 'mutes'] }, O.token);
+    const masked = await tb(`/coach/${O.user.id}/cohortLines?q=${enc(`Tables cohort ${stamp}`)}&count=1`, K.token);
+    const shown = await api('PUT', `/school/cohorts/${socialKeys.cohort}/talk/me`, { visibility: 'public' }, O.token);
+    const unmasked = await tb(`/coach/${O.user.id}/cohortLines?q=${enc(`Tables cohort ${stamp}`)}&count=1`, K.token);
+    const coachRoomLines = await tb(`/coach/${O.user.id}/communityLines?q=${enc(`Tables room ${stamp}`)}&count=1`, K.token);
+    const coachRooms = await tb(`/coach/${O.user.id}/communityChannels?q=${enc(`Tables room ${stamp}`)}&count=1`, K.token);
+    const coachShut = await Promise.all(['bondChats', 'bondChatLines', 'blocks', 'introductions', 'followedPosts', 'postReactions', 'programInvites'].map((k) => tb(`/coach/${O.user.id}/${k}`, K.token)));
+    const coachEdit = await tb(`/coach/${O.user.id}/communityChannels/edit`, K.token, 'POST', { id: 'x', column: 'topic', value: 'x', today });
+    check(
+      'tables: chats, blocks, introductions, reactions, follows and invites are never shared with a coach, and the person’s own cohort lines and channels are, read only, a cohort’s line only once they show there by name and never a channel line without it',
+      othersAlone.every((r) => r.status === 400 && /never shown to a coach/.test(r.json.error ?? '')) && sameSet(socialList.json.link?.share?.tables, ['tasks', 'cohortLines', 'communityChannels', 'communityLines']) &&
+        masked.status === 200 && masked.json.total === 0 && shown.status === 200 && unmasked.status === 200 && unmasked.json.total === 1 && unmasked.json.rows?.[0]?.cells?.shownAs === 'public' &&
+        coachRoomLines.status === 200 && coachRoomLines.json.total === 1 && coachRoomLines.json.rows?.[0]?.cells?.anonymous === false && coachRooms.status === 200 && coachRooms.json.total === 1 &&
+        !coachRooms.json.columns.includes('channelId') && coachRooms.json.rows?.every((r) => r.edit === undefined) && coachShut.every((r) => r.status === 404) && coachEdit.status === 404,
+      [othersAlone.map((r) => r.status), socialList.json.link?.share?.tables, masked.status, masked.json.total, shown.status, unmasked.json.total, coachRoomLines.json.total, coachRooms.status, coachShut.map((r) => r.status), coachEdit.status],
+    );
+    check(
+      'tables: so are a program’s invites both ways, the mutes a guide made, a Bond room and its lines, and never the person’s own programs, cohorts or channel lines',
+      ['programInvites', 'programInvitesSent', 'postReactions', 'replyReactions', 'followedPosts', 'mutes', 'bondChats', 'bondChatLines', 'introductions', 'bondChannels', 'bondChannelLines', 'blocks'].every((k) => OTHERS.some((t) => t.key === k)) &&
+        !OTHERS.some((t) => ['programsMade', 'cohortsRun', 'cohortLines', 'communityChannels', 'communityLines'].includes(t.key)),
+      OTHERS.map((t) => t.key),
+    );
+  }
+  // A coach link reads on both sides, the student's parts change from their own table through My coach's route, the coach's card through
+  // Coaching's; none of it, nor the Companion chat or the messages to the team, ever reaches the coach, while the person's own terms and honors
+  // do once switched on (the seventh batch, 2026-11-14).
+  {
+    const [coaches, students, logO, logK] = await Promise.all([
+      tb('/lifeCoaches?q=Tables%20coach&count=1', O.token),
+      tb('/coachStudents?q=Tables%20owner&count=1', K.token),
+      tb('/coachingLog?f_step=link.yes&count=1', O.token),
+      tb('/studentsLog?f_step=link.yes&count=1', K.token),
+    ]);
+    const linkRow = coaches.json.rows?.find((r) => r.id === linkId);
+    check(
+      'tables: the student’s coaches and the coach’s students read the same link from each side, with the log on both, by name and never by id',
+      coaches.status === 200 && linkRow?.cells?.status === 'active' && linkRow?.cells?.asker === 'them' && linkRow?.edit?.includes('patterns') &&
+        students.status === 200 && students.json.rows?.some((r) => r.id === linkId && r.cells.asker === 'you' && (r.edit ?? []).length === 0) &&
+        logO.status === 200 && logO.json.total >= 1 && logO.json.rows?.[0]?.cells?.person === 'Tables coach' && logK.status === 200 && logK.json.total >= 1 && logK.json.rows?.some((r) => r.cells.person === 'Tables owner') &&
+        !JSON.stringify([coaches.json, logO.json]).includes(K.user.id) && !JSON.stringify(logK.json).includes(O.user.id),
+      [coaches.status, linkRow?.cells, linkRow?.edit, students.status, logO.json.total, logO.json.rows?.[0]?.cells, logK.json.total, logK.json.rows?.[0]?.cells],
+    );
+    const before = linkRow?.cells?.patterns === true;
+    const flipped = await tb('/lifeCoaches/edit', O.token, 'POST', { id: linkId, column: 'patterns', value: !before, today });
+    const seenLink = ((await api('GET', '/me/coach', undefined, O.token)).json.links ?? []).find((l) => l.id === linkId) ?? null;
+    const back = await tb('/lifeCoaches/edit', O.token, 'POST', { id: linkId, column: 'patterns', value: before, today });
+    check(
+      'tables: a part the student shares changes from their table through My coach’s own route, and back',
+      flipped.status === 200 && flipped.json.row?.cells?.patterns === !before && seenLink?.share?.patterns === !before && back.status === 200 && back.json.row?.cells?.patterns === before,
+      [flipped.status, flipped.json.error, seenLink?.share?.patterns, back.status],
+    );
+    await api('PUT', '/coach/profile', { about: `Tables card ${stamp}` }, K.token);
+    const card = await tb('/coachCard', K.token);
+    const closed = await tb('/coachCard/edit', K.token, 'POST', { id: 'card', column: 'open', value: false, today });
+    const reopened = await tb('/coachCard/edit', K.token, 'POST', { id: 'card', column: 'about', value: `Tables card ${stamp} again`, today });
+    await tb('/coachCard/edit', K.token, 'POST', { id: 'card', column: 'open', value: true, today });
+    check(
+      'tables: a coach’s card reads and changes through Coaching’s own route, one field at a time',
+      card.status === 200 && card.json.rows?.[0]?.cells?.about === `Tables card ${stamp}` && closed.status === 200 && closed.json.row?.cells?.open === false && closed.json.row?.cells?.about === `Tables card ${stamp}` &&
+        reopened.status === 200 && reopened.json.row?.cells?.about === `Tables card ${stamp} again` && reopened.json.row?.cells?.open === false,
+      [card.status, card.json.rows?.[0]?.cells, closed.status, closed.json.error, reopened.status],
+    );
+    const youAlone = await Promise.all(['lifeCoaches', 'coachingLog', 'studentsLog', 'companionChat', 'teamMessages', 'inviteCodes', 'discoverAddOns'].map((table) => api('PATCH', `/me/coach/links/${linkId}/share`, { table, on: true }, O.token)));
+    const youList = await api('PATCH', `/me/coach/links/${linkId}/share`, { tables: ['tasks', 'termsAccepted', 'honors', 'lifeCoaches', 'companionChat', 'teamMessages'] }, O.token);
+    const coachTerms = await tb(`/coach/${O.user.id}/termsAccepted?count=1`, K.token);
+    const coachShut = await Promise.all(['lifeCoaches', 'coachingLog', 'studentsLog', 'companionChat', 'teamMessages', 'discoverResults'].map((k) => tb(`/coach/${O.user.id}/${k}`, K.token)));
+    check(
+      'tables: coaching, the Companion chat, messages to the team, invite codes and Discover are never shared with a coach, and the person’s own terms and honors are, read only',
+      youAlone.every((r) => r.status === 400 && /never shown to a coach/.test(r.json.error ?? '')) && sameSet(youList.json.link?.share?.tables, ['tasks', 'termsAccepted', 'honors']) &&
+        coachTerms.status === 200 && coachTerms.json.total >= 2 && coachTerms.json.rows?.every((r) => r.edit === undefined) && coachShut.every((r) => r.status === 404),
+      [youAlone.map((r) => r.status), youList.json.link?.share?.tables, coachTerms.status, coachTerms.json.total, coachShut.map((r) => r.status)],
+    );
+  }
+  await api('PATCH', `/me/coach/links/${linkId}/share`, { tables: ['tasks', 'journal', 'xpHistory', 'posts'] }, O.token);
   // AI chat's tables (2026-11-14): off until switched on; the assistant's calls (marked X-Kreators-Via: assistant) read only those, never more.
   const AI = { 'X-Kreators-Via': 'assistant' };
   const aiNone = await api('GET', '/tables', undefined, O.token, AI);
@@ -9893,6 +11370,17 @@ section('All tables');
   const aiList = await api('GET', '/tables', undefined, O.token, AI);
   const aiKeys = (aiList.json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
   check('tables: AI chat lists only the tables switched on', sameSet(aiKeys, ['tasks', 'mood']), aiKeys);
+  await api('PATCH', '/me/modules', { key: 'mood', on: false }, O.token);
+  const aiMoodOffKeys = ((await api('GET', '/tables', undefined, O.token, AI)).json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
+  const aiMoodOff = await api('GET', '/tables/mood', undefined, O.token, AI);
+  // /me and the switch's answer carry only the tables shown now, and a whole list leaves a hidden app's table as it was (the review, 2026-11-14).
+  const aiMeHidden = (await me(O.token)).aiTables;
+  const aiNoneHidden = await api('PATCH', '/me/ai-tables', { tables: [] }, O.token);
+  await api('PATCH', '/me/modules', { key: 'mood', on: true }, O.token);
+  const aiMeBack = (await me(O.token)).aiTables;
+  check('tables: AI chat neither lists nor reads a table whose app is hidden, even when switched on for it', sameSet(aiMoodOffKeys, ['tasks']) && aiMoodOff.status === 404, [aiMoodOffKeys, aiMoodOff.status]);
+  check('tables: /me leaves out an AI chat table whose app is hidden, and Share none keeps it for when the app comes back', sameSet(aiMeHidden, ['tasks']) && aiNoneHidden.status === 200 && sameSet(aiNoneHidden.json.aiTables, []) && sameSet(aiMeBack, ['mood']), [aiMeHidden, aiNoneHidden.json.aiTables, aiMeBack]);
+  await api('PATCH', '/me/ai-tables', { tables: ['tasks', 'mood'] }, O.token);
   const aiPage = await api('GET', `/tables/tasks?q=${q}&count=1`, undefined, O.token, AI);
   const aiShut = await api('GET', `/tables/journal`, undefined, O.token, AI);
   check('tables: AI chat reads a switched-on table, and a table not switched on is refused in words naming the switch', aiPage.status === 200 && aiPage.json.total === 11 && aiShut.status === 403 && /Show to AI chat/.test(aiShut.json.error ?? ''), [aiPage.status, aiPage.json.total, aiShut.status]);
@@ -9917,6 +11405,38 @@ section('All tables');
   check('tables: the whole list keeps known tables only, once each', aiAll.status === 200 && sameSet(aiAll.json.aiTables, ['tasks', 'journal']), aiAll.json);
   const aiExport = await api('GET', '/me/export', undefined, O.token);
   check('tables: AI chat’s tables come with the export', sameSet(aiExport.json.user?.aiTables, ['tasks', 'journal']), aiExport.json.user?.aiTables);
+  // A model that may keep what it reads (a read marked as AI chat without `ai=private`, which the read_table tool sends only for a model that keeps
+  // nothing) never gets a table only such a model may read, and gets an own table as anyone but its owner would: no seller's name, no private
+  // badge family (the review, 2026-11-14).
+  await api('PATCH', '/me/ai-tables', { tables: ['tasks', 'journal', 'orders', 'badges', 'inbox', 'friends'] }, O.token);
+  await api('GET', '/me/badges', undefined, O.token);
+  const [kJournal, pJournal, kInbox, pInbox, kFriends, kOrders, pOrders, kBadges, ownBadges] = await Promise.all([
+    api('GET', '/tables/journal', undefined, O.token, AI),
+    api('GET', '/tables/journal?ai=private', undefined, O.token, AI),
+    api('GET', '/tables/inbox', undefined, O.token, AI),
+    api('GET', '/tables/inbox?ai=private', undefined, O.token, AI),
+    api('GET', '/tables/friends', undefined, O.token, AI),
+    api('GET', '/tables/orders', undefined, O.token, AI),
+    api('GET', '/tables/orders?ai=private', undefined, O.token, AI),
+    api('GET', '/tables/badges?count=1&size=100', undefined, O.token, AI),
+    tb('/badges?count=1&size=100', O.token),
+  ]);
+  check(
+    'tables: a model that may keep data is refused the journal, the inbox and friends, which a model that keeps nothing reads',
+    [kJournal, kInbox, kFriends].every((r) => r.status === 403 && /keep/.test(r.json.error ?? '')) && pJournal.status === 200 && pInbox.status === 200,
+    [kJournal.status, kInbox.status, kFriends.status, pJournal.status, pInbox.status],
+  );
+  check(
+    'tables: a model that may keep data reads orders without the seller’s name, and a model that keeps nothing with it',
+    kOrders.status === 200 && !kOrders.json.columns?.includes('seller') && pOrders.status === 200 && pOrders.json.columns?.includes('seller'),
+    [kOrders.status, kOrders.json.columns, pOrders.json.columns],
+  );
+  const privateFamily = (r) => TABLE_BADGE_FAMILIES[r.cells?.family]?.private === true;
+  check(
+    'tables: a model that may keep data never reads a private badge family, which the owner sees',
+    kBadges.status === 200 && ownBadges.status === 200 && (ownBadges.json.rows ?? []).some(privateFamily) && !(kBadges.json.rows ?? []).some(privateFamily) && kBadges.json.total < ownBadges.json.total,
+    [kBadges.json.total, ownBadges.json.total],
+  );
   await api('PATCH', '/me/ai-tables', { tables: [] }, O.token);
   // A post's xp lands as it is written: a coach never reads a social xp, which would say who wrote an anonymous post.
   await api('PATCH', '/me/modules', { key: 'community', on: true }, O.token);
@@ -9924,13 +11444,16 @@ section('All tables');
   const ownSocial = await tb('/xpHistory?f_source=social%3Apost&count=1', O.token);
   const coachSocial = await tb(`/coach/${O.user.id}/xpHistory?f_source=social%3Apost&count=1`, K.token);
   check('tables: a coach never reads the xp an anonymous post paid', anonPost.status === 201 && (anonPost.json.held || anonPost.json.post?.held || ownSocial.json.total >= 1) && coachSocial.status === 200 && coachSocial.json.total === 0, [anonPost.status, ownSocial.json.total, coachSocial.json.total]);
-  // Someone who blocked the coach by name is left out of the coach's view of the student's friends.
+  // A student's friends are other people by name: never a coach's, even when asked for, and the student still sees them (2026-11-14, the review).
   const xMe = await me(X.token);
   await api('POST', '/bond/friends', { code: xMe.friendCode }, O.token);
   await api('POST', '/bond/block', { userId: K.user.id }, X.token);
-  const ownFriends = await tb('/friends', O.token);
-  const coachFriends = await tb(`/coach/${O.user.id}/friends`, K.token);
-  check('tables: a coach never sees a friend who blocked them by name, and the student still does', (ownFriends.json.rows ?? []).some((r) => r.cells.handle === xMe.handle) && coachFriends.status === 200 && !(coachFriends.json.rows ?? []).some((r) => r.cells.handle === xMe.handle), [ownFriends.json.rows?.length, coachFriends.json.rows?.length]);
+  const [ownFriends, coachFriends, askFriends] = await Promise.all([
+    tb('/friends', O.token),
+    tb(`/coach/${O.user.id}/friends`, K.token),
+    api('PATCH', `/me/coach/links/${linkId}/share`, { table: 'friends', on: true }, O.token),
+  ]);
+  check('tables: a coach never sees the student’s friends, and the student still does', (ownFriends.json.rows ?? []).some((r) => r.cells.handle === xMe.handle) && coachFriends.status === 404 && askFriends.status === 400, [ownFriends.json.rows?.length, coachFriends.status, askFriends.status]);
   const coachEdit = await tb('/tasks/edit', K.token, 'POST', { id: made[5]?.id, column: 'title', value: 'Coach was here', today });
   check('tables: a coach never edits a student’s row here', coachEdit.status === 404, coachEdit.status);
   check('tables: someone who is not their coach sees nothing', (await tb(`/coach/${O.user.id}`, X.token)).status === 404 && (await tb(`/coach/${O.user.id}/tasks`, X.token)).status === 404, '');
@@ -9949,6 +11472,17 @@ section('All tables');
     const r = await tb(`/admin/${O.user.id}/${key}?count=1`, A.token);
     check(`tables: an admin is never shown ${key}`, r.status === 404, r.status);
   }
+  // Nor any table with other people's details (2026-11-14), checked once one exists; and a table whose app is hidden for the member, the plain 404.
+  for (const t of TABLES_ALL.filter((x) => !x.adminHidden && !tableReach(x).admin)) {
+    const r = await tb(`/admin/${O.user.id}/${t.key}?count=1`, A.token);
+    check(`tables: an admin is never shown ${t.key}, which holds other people’s details`, r.status === 404 && !adminKeys.includes(t.key), r.status);
+  }
+  const moneyAdmin = await tb(`/admin/${O.user.id}/moneyInOut?count=1`, A.token);
+  await api('PATCH', '/me/modules', { key: 'finance', on: false }, O.token);
+  const finOffKeys = ((await tb(`/admin/${O.user.id}`, A.token)).json.groups ?? []).flatMap((g) => g.tables.map((t) => t.key));
+  const finOff = await tb(`/admin/${O.user.id}/moneyInOut?count=1`, A.token);
+  await api('PATCH', '/me/modules', { key: 'finance', on: true }, O.token);
+  check('tables: an admin reads a member’s table only while its app is on for the member', moneyAdmin.status === 200 && !finOffKeys.includes('moneyInOut') && finOffKeys.includes('tasks') && finOff.status === 404 && finOff.json.error === 'not found', [moneyAdmin.status, finOff.status, finOffKeys.length]);
   await tb(`/admin/${O.user.id}/tasks?q=${q}&page=2`, A.token);
   const audit = (await admin('GET', '/admin/audit?size=100')).json.logs ?? [];
   const views = audit.filter((l) => l.action === 'tables.view' && l.resourceId === O.user.id && l.after === 'tasks');

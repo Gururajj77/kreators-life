@@ -1,6 +1,7 @@
-import { formatCount, type ConsentChoices } from '@kreators/shared';
+import { formatCount, MODULE_BY_KEY, type ConsentChoices } from '@kreators/shared';
 import {
   aiPrivateOnly,
+  andList,
   BULK_MAX,
   columnFor,
   csvMaxRows,
@@ -14,6 +15,9 @@ import {
   tableColumn,
   tableEditable,
   tableQueryString,
+  tableReach,
+  TABLE_SWITCHES,
+  tableAppsOn,
   toCsv,
   toTsv,
   visibleColumns,
@@ -30,7 +34,7 @@ import {
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronsLeft, ChevronsRight, Download } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import { AppCover } from '../components/AppCover';
 import { Button } from '../components/Button';
 import { TableSwitches, useAiChatOn, useTableCoaches } from '../components/TableSwitches';
@@ -48,6 +52,7 @@ import { ApiError } from '../lib/api';
 import { useCopy } from '../lib/clipboard';
 import { useConsent } from '../lib/consent';
 import { todayLocal } from '../lib/date';
+import { useAppsOn, useModules } from '../lib/modules';
 import { useMe } from '../lib/queries';
 import { useSession } from '../lib/store';
 import { saveFile, subjectKey, tablesApi, type TablesSubject } from '../lib/tablesApi';
@@ -365,6 +370,7 @@ function Grid({ table, subject }: { table: DataTable; subject: TablesSubject }) 
   const archived = query.view === 'archived';
   const name = data?.subject.name ?? '';
   const group = DATA_TABLE_GROUPS.find((g) => g.key === table.group)?.name ?? '';
+  const reach = tableReach(table);
   const back = { to: tablesPath(subject), label: view === 'owner' ? 'All tables' : 'Their tables' };
   const notHere = pageQ.error instanceof ApiError && pageQ.error.status === 404;
   const readNote =
@@ -386,7 +392,14 @@ function Grid({ table, subject }: { table: DataTable; subject: TablesSubject }) 
     <Screen howTo={false}>
       {/* The table's line speaks to its owner ("Every task you made"); a coach or an admin reads the read-only line under the controls instead. */}
       {/* The owner's Show to my coach and Show to AI chat sit in the cover's action slot: left of the line on a laptop, under it on a phone (app.css). */}
-      <AppCover cover="tables" back={back} eyebrow={view === 'owner' ? group : name || undefined} title={table.name} lede={view === 'owner' ? table.blurb : undefined} actions={view === 'owner' && (coaches.length > 0 || aiOn) ? <TableSwitches table={table.key} coaches={coaches} ai={aiOn} privateOnly={aiPrivateOnly(table)} /> : undefined} />
+      <AppCover
+        cover="tables"
+        back={back}
+        eyebrow={view === 'owner' ? group : name || undefined}
+        title={table.name}
+        lede={view === 'owner' ? table.blurb : undefined}
+        actions={view === 'owner' && ((coaches.length > 0 && reach.coach) || aiOn) ? <TableSwitches table={table.key} coaches={coaches} ai={aiOn} privateOnly={aiPrivateOnly(table)} others={!reach.coach} /> : undefined}
+      />
 
       {notHere ? (
         <p className="mt-lg m-0 text-body">{view === 'coach' ? 'This table is not shared with you now.' : view === 'admin' ? 'This table is not shown for this member.' : 'There is no table here.'}</p>
@@ -582,9 +595,53 @@ function NoTable({ subject }: { subject: TablesSubject }) {
   );
 }
 
+/**
+ * The person's own table whose app is hidden or off for them (the server answers 404 too): which app to show, and the way to Apps. When none
+ * of its apps is available on their account (the team switched it off, a rollout, a role), Apps cannot show it, so the page says so in the
+ * module gate's own words and offers no way to Apps (the review, 2026-11-14).
+ */
+function AppOff({ table, apps }: { table: DataTable; apps: readonly string[] }) {
+  const { modules } = useModules();
+  const needs = table.needs ?? [];
+  // Its app is on and only the setting inside it is off (Business metrics in Reviews): the switch, and the way to it.
+  if (table.needsSwitch && tableAppsOn({ ...table, needsSwitch: undefined }, apps)) {
+    const sw = TABLE_SWITCHES[table.needsSwitch];
+    return (
+      <Screen howTo={false}>
+        <AppCover cover="tables" back={{ to: '/tables', label: 'All tables' }} title={table.name} lede={`Turn on ${sw.name} in ${sw.where} to open this table.`} />
+        <p className="mt-lg m-0">
+          <Link to={sw.path} className="inline-flex min-h-[44px] items-center text-subhead font-semibold underline underline-offset-4">
+            Open {sw.where}
+          </Link>
+        </p>
+      </Screen>
+    );
+  }
+  const name = (k: string) => MODULE_BY_KEY[k]?.name ?? k;
+  const showable = needs.filter((k) => modules.some((m) => m.key === k && m.available));
+  const orList = (xs: string[]) => (xs.length <= 1 ? (xs[0] ?? 'its app') : `${xs.slice(0, -1).join(', ')} or ${xs.at(-1)}`);
+  const lede = showable.length > 0 ? `Show ${orList(showable.map(name))} in Apps to open this table.` : `${andList(needs.map(name)) || 'Its app'} ${needs.length > 1 ? 'are' : 'is'} not available on your account.`;
+  return (
+    <Screen howTo={false}>
+      <AppCover cover="tables" back={{ to: '/tables', label: 'All tables' }} title={table.name} lede={lede} />
+      {showable.length > 0 && (
+        <p className="mt-lg m-0">
+          <Link to="/apps" className="inline-flex min-h-[44px] items-center text-subhead font-semibold underline underline-offset-4">
+            Open Apps
+          </Link>
+        </p>
+      )}
+    </Screen>
+  );
+}
+
 function TablePage({ subject, tableKey }: { subject: TablesSubject; tableKey: string }) {
   const table = dataTableByKey[tableKey];
-  if (!table || !tableAllowed(table, subject.view === 'coach' ? 'owner' : subject.view)) return <NoTable subject={subject} />;
+  const apps = useAppsOn();
+  const { ready } = useModules();
+  // A coach's or an admin's screen cannot know the other person's apps; the server answers 404 there, which the page says plainly.
+  if (!table || !tableAllowed(table, subject.view === 'coach' ? 'owner' : subject.view, [], null)) return <NoTable subject={subject} />;
+  if (subject.view === 'owner' && ready && !tableAllowed(table, 'owner', [], apps)) return <AppOff table={table} apps={apps} />;
   // Keyed by whose table and which one, so moving between tables starts fresh (no rows of one under the columns of another).
   return <Grid key={`${subjectKey(subject)}:${table.key}`} table={table} subject={subject} />;
 }

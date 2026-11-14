@@ -146,6 +146,13 @@ export interface FinanceSummary {
   goals: FinanceGoal[];
 }
 
+/**
+ * The most a product's money price can be, in paise or cents: ₹10,00,000, or a million in another currency (2026-11-14, the founder: "remove
+ * the cap" over Studio's old ₹10,000, then "stop under 10lacs"). Studio and the products table refuse a price past it in words, never saving
+ * it as this number, as Studio's old cap did.
+ */
+export const PRODUCT_MONEY_MAX = 100_000_000;
+
 /** Whole currency units with two decimals, e.g. 1234.50. */
 /**
  * An amount typed in whole units ("1,250.50", "1.005") as integer cents, read from the digits and never through a float, so 1.005 is 101 and

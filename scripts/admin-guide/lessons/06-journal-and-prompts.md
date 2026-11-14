@@ -89,7 +89,7 @@ The Journal is the most private part of the app. You cannot read it, and you sho
 
 - **No staff view:** no admin screen shows a journal entry or a gratitude line, not even a member's tables, which leave both out. Journal data never reaches brands, staff, the leaderboard or Club picks.
 - **A coach only if she shares it:** a life coach sees the journal or gratitude only as a whole table she switches on for that coach, read only. Nobody can switch it on for her.
-- **The assistant:** it reads the journal only for its owner, only when the owner asks about it, and only through a model that keeps no data.
+- **The assistant:** it reads the journal only for its owner, only when the owner asks about it, and only through a model that keeps no data. It also needs her yes: **Show to AI chat** on the Journal entries table, and on the Gratitude table for her gratitude lines. Both start off.
 - **Logs stay clean:** the Logs page never holds journal words. At most it keeps a bare error line with no person and no path.
 - **Switching it:** in Admin, **Flags**, you can turn the Journal off for everyone, set a rollout share or a minimum role. Use this with care, since it is on for all new accounts.
 - **One person:** in Admin, **People**, open a person and use **What does this person see?** to tick or untick Journal for them.

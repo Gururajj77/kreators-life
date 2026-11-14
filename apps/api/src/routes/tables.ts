@@ -1,14 +1,18 @@
 import { Hono, type Context } from 'hono';
 import {
+  aiPrivateOnly,
+  andList,
   BULK_MAX,
   archiveCall,
+  coachTableKeys,
   dataTableByKey,
   editValue,
-  knownTableKeys,
   listTables,
   parseAiTables,
   parseTableQuery,
   plainCall,
+  TABLE_SWITCHES,
+  tableAppsOn,
   rowEditable,
   tableAllowed,
   tableColumn,
@@ -26,14 +30,17 @@ import {
   type TableView,
 } from '@kreators/shared/dataTables';
 import { eatFromStored } from '@kreators/shared/fitness';
-import { parseCoachShare, parseRepeat } from '@kreators/shared';
+import { MODULE_BY_KEY, parseCoachShare, parseRepeat, type ModuleAccess } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
+import { accessFor, appsOn, loadAccessContext, resolveAccess } from '../access';
 import { caller, type Answer, type Req } from '../assistant/dispatch';
 import { ctxOf, tokenOf, type AppFetch } from '../assistant/run';
 import { activeLink, isCoach } from '../coaching';
 import { ROUTE_TRIPS, tripsOf } from '../d1Batch';
-import { DELETED_NAME, getUser, newId, nowIso, objectBody, personDay } from '../db';
+import { DELETED_NAME, getUser, newId, nowIso, objectBody, orgIdsOf, personDay } from '../db';
 import { loadTable, readPage, subjectOf, viewQuery, type Loaded, type ReadCtx } from '../tablesRead';
+import { tableSwitchesOn } from '../tablesShare';
+import { heldCompanionModels } from '../aiOpen';
 
 /**
  * All tables (2026-11-13, the founder): every list of a person's own data as a table they can sort, filter, search, page, tick, copy,
@@ -43,9 +50,13 @@ import { loadTable, readPage, subjectOf, viewQuery, type Loaded, type ReadCtx } 
  * - The owner: GET /tables, /tables/:table, /tables/:table/csv; POST /tables/:table/edit and /tables/:table/bulk. An edit or a bulk action is
  *   never done here: it is sent to the app's own route as the person, with their own token, through the app itself (the assistant's caller,
  *   `X-Kreators-Via: tables`), so the session, the module switches, the limits, the waits, the xp caps and the owner filters all hold.
- * - A coach (access map `tables/coach`, the Coaching app): only the tables the student switched on for them, read only, checked on every request.
- * - A super admin (access map `tables/admin`): any member's tables but the journal and the body and mind ones, read only, every table opened
- *   written to the audit log (never what it holds). A real session with the admin role: the shared admin key never reaches these.
+ * - A coach (access map `tables/coach`, the Coaching app): only the tables the student switched on for them, read only, checked on every request,
+ *   never one with other people's details (`tableReach`).
+ * - A super admin (access map `tables/admin`): any member's tables but the journal, the body and mind ones and those with other people's
+ *   details, read only, every table opened written to the audit log (never what it holds). A real session with the admin role: the shared
+ *   admin key never reaches these.
+ * - Every view, AI chat's too: a table lists and opens only while its app (`needs`) is on for the person whose tables these are (2026-11-14).
+ *   The owner is told which app to turn on; a coach and an admin get the plain 404, which says nothing of the person's apps.
  */
 
 type Ctx = Context<AppEnv>;
@@ -56,6 +67,63 @@ const NOT_FOUND = { error: 'not found' } as const;
 
 const tableOf = (key: string): DataTable | null => dataTableByKey[key] ?? null;
 const queryOf = (c: Ctx, table: DataTable, view: TableView) => parseTableQuery(table, new URL(c.req.url).searchParams, view);
+
+/**
+ * Which apps are on for someone else (a coach's student, an admin's member), read in the same turn as the reads beside it, so the batch binding
+ * sends them as one round trip: their organizations (one statement) and the flags, which this worker keeps for a few seconds (access.ts).
+ */
+function appsOnFor(db: D1Database, id: string): Promise<(u: UserRow) => string[]> {
+  return Promise.all([orgIdsOf(db, id), loadAccessContext(db)]).then(([orgIds, ctx]) => (u: UserRow) => appsOn(accessFor(u, ctx, orgIds)));
+}
+/** The owner's own apps: what the module gate already read for this request, else read now. */
+async function ownAccess(c: Ctx): Promise<Record<string, ModuleAccess>> {
+  return c.get('gateAccess') ?? (await resolveAccess(c.env.DB, c.get('user'))).access;
+}
+/** The apps on for the person themself, with the settings inside them a table may need (`switch:<key>`, read only when asked for). */
+async function ownOn(c: Ctx, switches: boolean): Promise<{ access: Record<string, ModuleAccess>; on: string[] }> {
+  const [access, more] = await Promise.all([ownAccess(c), switches ? tableSwitchesOn(c.env.DB, c.get('user').id) : Promise.resolve([] as string[])]);
+  return { access, on: [...appsOn(access), ...more] };
+}
+/** The owner's own table, when its app (and any setting inside it, `needsSwitch`) is on for them; else the answer saying why. */
+async function ownTableShut(c: Ctx, table: DataTable): Promise<Response | null> {
+  const { access, on } = await ownOn(c, Boolean(table.needsSwitch));
+  return tableAllowed(table, 'owner', [], on) ? null : appOff(c, table, access, on);
+}
+/**
+ * The owner's read of their own table, behind its app check. A table behind a setting inside its app (Business metrics, `needsSwitch`) reads
+ * the setting and the rows in one turn, so the batch binding sends them as one round trip, and drops the rows when the setting is off (the
+ * review, 2026-11-14: awaited first, it made every such page two). Any other table's check reads nothing (the module gate already read the
+ * apps), so it goes first and a shut table reads no row.
+ */
+async function ownTableRead<T>(c: Ctx, table: DataTable, read: () => Promise<T>): Promise<{ shut: Response } | { got: T }> {
+  if (!table.needsSwitch) {
+    const shut = await ownTableShut(c, table);
+    return shut ? { shut } : { got: await read() };
+  }
+  const [shut, got] = await Promise.all([ownTableShut(c, table), read()]);
+  return shut ? { shut } : { got };
+}
+/**
+ * The owner's answer for a table whose app is hidden or off (a coach and an admin get the plain 404, which says nothing of it): which app to
+ * show in Apps when one of them can be shown, else that none is available on their account (the team switched it off, a rollout, a role), in
+ * the module gate's own words, since Apps cannot show such an app (the review, 2026-11-14).
+ */
+function appOff(c: Ctx, table: DataTable, access: Record<string, ModuleAccess>, on: string[]): Response {
+  const needs = table.needs ?? [];
+  // Its app is on and only the setting inside it is off (Business metrics in Reviews): say which switch, and where it is.
+  if (table.needsSwitch && tableAppsOn({ ...table, needsSwitch: undefined }, on)) {
+    const sw = TABLE_SWITCHES[table.needsSwitch];
+    return c.json({ error: `Turn on ${sw.name} in ${sw.where} to open ${table.name}.`, switchOff: table.needsSwitch }, 404);
+  }
+  const name = (k: string) => MODULE_BY_KEY[k]?.name ?? k;
+  const orList = (xs: string[]) => (xs.length <= 1 ? (xs[0] ?? 'its app') : `${xs.slice(0, -1).join(', ')} or ${xs.at(-1)}`);
+  const showable = needs.filter((k) => access[k]?.available === true);
+  if (showable.length === 0) {
+    const names = needs.map(name);
+    return c.json({ error: `${andList(names) || 'Its app'} ${names.length > 1 ? 'are' : 'is'} not available on your account.`, unavailable: needs }, 404);
+  }
+  return c.json({ error: `Show ${orList(showable.map(name))} in Apps to open ${table.name}.`, off: showable }, 404);
+}
 
 /** The words for a CSV answer: every matching row up to `csvMaxRows`, in the viewer's columns. */
 function csvAnswer(c: Ctx, table: DataTable, got: Loaded, view: TableView, currency: string, today: string): Response {
@@ -84,6 +152,24 @@ function notNowWhy(edit: ColumnEdit, cells: Record<string, Cell>): string {
       return 'Only today or yesterday can be changed here.';
     case 'handInOpen':
       return 'An approved hand-in, or one from a cohort you left, stays as it is.';
+    case 'paperOpen':
+      return cells.status === 'paid' ? 'A paid invoice is marked sent again in Agency before it can change.' : 'A void invoice stays as it is.';
+    case 'retainerOpen':
+      return 'An ended or withdrawn retainer stays as it is.';
+    case 'listingOpen':
+      return 'A listing with an accepted offer, or one that sold, stays as it is.';
+    case 'unpublished':
+      return 'A published listing is closed on its page in Work, where that asks first.';
+    case 'pitchWaiting':
+      return 'The team has started reading it, so it can no longer be changed.';
+    case 'xpOpen':
+      return 'The xp is fixed once the code opens, thirty minutes before the start, and a cancelled one stays as it is.';
+    case 'seatHeld':
+      return 'Only a guest with a seat can be on the list to meet other guests.';
+    case 'madeIt':
+      return 'Only a channel you made can be renamed here.';
+    case 'linkOpen':
+      return 'Coaching that ended or was turned down shares nothing, so it stays as it is.';
     default:
       return 'This one cannot be changed now.';
   }
@@ -117,31 +203,43 @@ export function tablesRoutes(appFetch: AppFetch) {
   });
   /** The tables this person opened to AI chat. */
   const aiTablesOf = (c: Ctx) => parseAiTables(c.get('user').ai_tables_json ?? null);
+  /**
+   * AI chat on a model that may keep what it reads (2026-11-14, the review): the read_table tool marks a model that keeps nothing with `ai=private`,
+   * and every other read marked as AI chat is one that may keep data, so a caller that forgets the mark gets the narrower read. Such a read never
+   * gets a table only a model that keeps nothing may read (`aiPrivateOnly`), and gets an 'own' table as anyone but its owner does (the admin view:
+   * no `ownerOnly` column, no `othersWhere` row, no private badge family). A person who sends either mark themselves reads only their own tables,
+   * as they always may.
+   */
+  const aiKeepsData = (c: Ctx) => viaAi(c) && c.req.query('ai') !== 'private';
 
   // ----------------------------------------------------------------------------------------------------------------------------------
   // A coach's view of one student: only the tables the student shares with them, read only. Registered before the owner's `/:table`.
   // ----------------------------------------------------------------------------------------------------------------------------------
 
-  /** The student and the tables they share with this coach now, or null (404): an active link, the coach permission held now. */
-  async function coachAccess(c: Ctx): Promise<{ student: UserRow; shared: string[] } | null> {
+  /**
+   * The student, the tables they share with this coach now and the apps on for them, or null (404): an active link, the coach permission held
+   * now. A table with other people's details is never in `shared`, whatever was stored (`coachTableKeys`); one whose app is off for the
+   * student is shut by `tableAllowed` with `on`. All in one round trip.
+   */
+  async function coachAccess(c: Ctx): Promise<{ student: UserRow; shared: string[]; on: string[] } | null> {
     const user = c.get('user');
     const studentId = c.req.param('studentId') ?? '';
     if (!isCoach(user) || !ID_RE.test(studentId) || studentId === user.id) return null;
-    const [link, student] = await Promise.all([activeLink(c.env.DB, user.id, studentId), getUser(c.env.DB, studentId)]);
+    const [link, student, onOf] = await Promise.all([activeLink(c.env.DB, user.id, studentId), getUser(c.env.DB, studentId), appsOnFor(c.env.DB, studentId)]);
     if (!link || !student || student.display_name === DELETED_NAME) return null;
-    return { student, shared: knownTableKeys(parseCoachShare(link.share_json).tables) };
+    return { student, shared: coachTableKeys(parseCoachShare(link.share_json).tables), on: onOf(student) };
   }
 
   r.get('/coach/:studentId', async (c) => {
     const got = await coachAccess(c);
     if (!got) return c.json(NOT_FOUND, 404);
-    return c.json({ view: 'coach', subject: subjectOf(got.student), groups: listTables('coach', got.shared) } satisfies TablesListResponse);
+    return c.json({ view: 'coach', subject: subjectOf(got.student), groups: listTables('coach', got.shared, got.on) } satisfies TablesListResponse);
   });
 
   r.get('/coach/:studentId/:table', async (c) => {
     const table = tableOf(c.req.param('table'));
     const got = table ? await coachAccess(c) : null;
-    if (!table || !got || !tableAllowed(table, 'coach', got.shared)) return c.json(NOT_FOUND, 404);
+    if (!table || !got || !tableAllowed(table, 'coach', got.shared, got.on)) return c.json(NOT_FOUND, 404);
     const ctx: ReadCtx = { view: 'coach', subject: subjectOf(got.student), viewerId: c.get('user').id };
     return c.json(await readPage(c.env.DB, table, queryOf(c, table, 'coach'), ctx));
   });
@@ -149,7 +247,7 @@ export function tablesRoutes(appFetch: AppFetch) {
   r.get('/coach/:studentId/:table/csv', async (c) => {
     const table = tableOf(c.req.param('table'));
     const got = table ? await coachAccess(c) : null;
-    if (!table || !got || !tableAllowed(table, 'coach', got.shared)) return c.json(NOT_FOUND, 404);
+    if (!table || !got || !tableAllowed(table, 'coach', got.shared, got.on)) return c.json(NOT_FOUND, 404);
     const subject = subjectOf(got.student);
     const loaded = await loadTable(c.env.DB, table, queryOf(c, table, 'coach'), { view: 'coach', subject, viewerId: c.get('user').id }, { kind: 'all' });
     return csvAnswer(c, table, loaded, 'coach', subject.currency, subject.today);
@@ -159,13 +257,13 @@ export function tablesRoutes(appFetch: AppFetch) {
   // A super admin's view of one member: read only, never the journal or a body and mind table, every table opened in the audit log.
   // ----------------------------------------------------------------------------------------------------------------------------------
 
-  /** The member, or an answer to send: 403 to anyone not an admin (by session), 404 for nobody or a deleted member. */
-  async function adminAccess(c: Ctx): Promise<{ member: UserRow } | Response> {
+  /** The member and the apps on for them, or an answer to send: 403 to anyone not an admin (by session), 404 for nobody or a deleted member. */
+  async function adminAccess(c: Ctx): Promise<{ member: UserRow; on: string[] } | Response> {
     if (c.get('user').role !== 'admin') return c.json({ error: 'forbidden' }, 403);
     const userId = c.req.param('userId') ?? '';
-    const member = ID_RE.test(userId) ? await getUser(c.env.DB, userId) : null;
-    if (!member || member.display_name === DELETED_NAME) return c.json(NOT_FOUND, 404);
-    return { member };
+    const [member, onOf] = ID_RE.test(userId) ? await Promise.all([getUser(c.env.DB, userId), appsOnFor(c.env.DB, userId)]) : [null, null];
+    if (!member || !onOf || member.display_name === DELETED_NAME) return c.json(NOT_FOUND, 404);
+    return { member, on: onOf(member) };
   }
   /**
    * One audit line for a table an admin opened: who, whose and which table, never what it holds. Written for any page read, so no page is
@@ -187,14 +285,14 @@ export function tablesRoutes(appFetch: AppFetch) {
   r.get('/admin/:userId', async (c) => {
     const got = await adminAccess(c);
     if (got instanceof Response) return got;
-    return c.json({ view: 'admin', subject: subjectOf(got.member), groups: listTables('admin') } satisfies TablesListResponse);
+    return c.json({ view: 'admin', subject: subjectOf(got.member), groups: listTables('admin', [], got.on) } satisfies TablesListResponse);
   });
 
   r.get('/admin/:userId/:table', async (c) => {
     const got = await adminAccess(c);
     if (got instanceof Response) return got;
     const table = tableOf(c.req.param('table'));
-    if (!table || !tableAllowed(table, 'admin')) return c.json(NOT_FOUND, 404);
+    if (!table || !tableAllowed(table, 'admin', [], got.on)) return c.json(NOT_FOUND, 404);
     const ctx: ReadCtx = { view: 'admin', subject: subjectOf(got.member), viewerId: c.get('user').id };
     const [page] = await Promise.all([readPage(c.env.DB, table, queryOf(c, table, 'admin'), ctx), auditView(c, got.member.id, table.key, 'tables.view')]);
     return c.json(page);
@@ -204,7 +302,7 @@ export function tablesRoutes(appFetch: AppFetch) {
     const got = await adminAccess(c);
     if (got instanceof Response) return got;
     const table = tableOf(c.req.param('table'));
-    if (!table || !tableAllowed(table, 'admin')) return c.json(NOT_FOUND, 404);
+    if (!table || !tableAllowed(table, 'admin', [], got.on)) return c.json(NOT_FOUND, 404);
     const subject = subjectOf(got.member);
     const [loaded] = await Promise.all([loadTable(c.env.DB, table, queryOf(c, table, 'admin'), { view: 'admin', subject, viewerId: c.get('user').id }, { kind: 'all' }), auditView(c, got.member.id, table.key, 'tables.csv')]);
     return csvAnswer(c, table, loaded, 'admin', subject.currency, subject.today);
@@ -217,11 +315,12 @@ export function tablesRoutes(appFetch: AppFetch) {
   const ownerCtx = (c: Ctx, today?: unknown): ReadCtx => {
     const user = c.get('user');
     const day = personDay(typeof today === 'string' ? today : c.req.query('day'), user.timezone);
-    return { view: 'owner', subject: subjectOf(user, day), viewerId: user.id };
+    // AI chat's read (`X-Kreators-Via: assistant`) binds `{ai}`, which a table reads where its app keeps its own yes for the assistant.
+    return { view: 'owner', subject: subjectOf(user, day), viewerId: user.id, ai: viaAi(c) };
   };
 
-  r.get('/', (c) => {
-    const groups = listTables('owner');
+  r.get('/', async (c) => {
+    const groups = listTables('owner', [], (await ownOn(c, true)).on);
     if (!viaAi(c)) return c.json({ view: 'owner', subject: ownerCtx(c).subject, groups } satisfies TablesListResponse);
     // AI chat lists only what the person opened to it.
     const open = new Set(aiTablesOf(c));
@@ -232,16 +331,32 @@ export function tablesRoutes(appFetch: AppFetch) {
   r.get('/:table', async (c) => {
     const table = tableOf(c.req.param('table'));
     if (!table) return c.json(NOT_FOUND, 404);
-    if (viaAi(c) && !aiTablesOf(c).includes(table.key)) return c.json({ error: `${table.name} is not open to AI chat. Switch on Show to AI chat at the top of that table to let it read it.` }, 403);
-    return c.json(await readPage(c.env.DB, table, queryOf(c, table, 'owner'), ownerCtx(c)));
+    // AI chat's refusals need no read, so nothing is read for them.
+    const aiShut = viaAi(c) && !aiTablesOf(c).includes(table.key);
+    const keeps = aiKeepsData(c);
+    const aiPrivate = keeps && aiPrivateOnly(table);
+    const view: TableView = keeps ? 'admin' : 'owner';
+    // The Companion chat to AI chat leaves out every answer that read a table the person has since shut to it (`heldCompanionModels`).
+    const read = async () => {
+      const aiHeld = viaAi(c) && table.key === 'companionChat' ? await heldCompanionModels(c, !keeps) : undefined;
+      return readPage(c.env.DB, table, queryOf(c, table, view), { ...ownerCtx(c), view, ...(aiHeld ? { aiHeld } : {}) });
+    };
+    const got = await ownTableRead(c, table, () => (aiShut || aiPrivate ? Promise.resolve(null) : read()));
+    if ('shut' in got) return got.shut;
+    if (!got.got) {
+      if (aiShut) return c.json({ error: `${table.name} is not open to AI chat. Switch on Show to AI chat at the top of that table to let it read it.` }, 403);
+      return c.json({ error: `This model may keep what it reads, so it cannot read ${table.name}. Pick a model that keeps nothing to read it.` }, 403);
+    }
+    return c.json(got.got);
   });
 
   r.get('/:table/csv', async (c) => {
     const table = tableOf(c.req.param('table'));
     if (!table) return c.json(NOT_FOUND, 404);
     const ctx = ownerCtx(c);
-    const loaded = await loadTable(c.env.DB, table, queryOf(c, table, 'owner'), ctx, { kind: 'all' });
-    return csvAnswer(c, table, loaded, 'owner', ctx.subject.currency, ctx.subject.today);
+    const got = await ownTableRead(c, table, () => loadTable(c.env.DB, table, queryOf(c, table, 'owner'), ctx, { kind: 'all' }));
+    if ('shut' in got) return got.shut;
+    return csvAnswer(c, table, got.got, 'owner', ctx.subject.currency, ctx.subject.today);
   });
 
   /** The row as the owner sees it now, in the table's Active view (a row in the archive is never edited). */
@@ -347,6 +462,18 @@ export function tablesRoutes(appFetch: AppFetch) {
         choices[row.id] = value === true;
         return { method: 'PUT', path: '/me/legal/consent', body: { choices, source: 'profile' } };
       }
+      case 'pitchWhole': {
+        // The route takes all three each time: the two not changed go as stored, the budget as the amount it reads (whole units, from cents).
+        if (!ID_RE.test(row.id)) return { error: 'That row cannot be changed here.' };
+        const cents = edit.field === 'budgetAmount' ? value : cells.budget;
+        if (typeof cents !== 'number' || !Number.isInteger(cents) || cents < 0) return { error: 'Type an amount, like 1,250.' };
+        const body = {
+          title: edit.field === 'title' ? value : cells.title,
+          pitch: edit.field === 'pitch' ? value : cells.pitch,
+          budgetAmount: `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, '0')}`,
+        };
+        return { method: 'PATCH', path: `/proposals/${encodeURIComponent(row.id)}`, body };
+      }
       default:
         return { error: 'That column cannot be changed here.' };
     }
@@ -356,6 +483,8 @@ export function tablesRoutes(appFetch: AppFetch) {
     const db = c.env.DB;
     const table = tableOf(c.req.param('table'));
     if (!table) return c.json(NOT_FOUND, 404);
+    const shut = await ownTableShut(c, table);
+    if (shut) return shut;
     const body = await objectBody(c);
     const id = rowId(body.id);
     if (!id) return c.json({ error: 'Pick a row.' }, 400);
@@ -394,6 +523,8 @@ export function tablesRoutes(appFetch: AppFetch) {
     const db = c.env.DB;
     const table = tableOf(c.req.param('table'));
     if (!table) return c.json(NOT_FOUND, 404);
+    const shut = await ownTableShut(c, table);
+    if (shut) return shut;
     const spec = table.archive;
     if (!spec) return c.json({ error: 'This table has no archive, so rows here are not archived or deleted.' }, 400);
     const body = await objectBody(c);
@@ -407,7 +538,7 @@ export function tablesRoutes(appFetch: AppFetch) {
     // Built from the registry's own strings; the owner is ?1 and the ids one bound list.
     const where = [table.owner, table.where, action === 'archive' ? spec.activeWhere : spec.archivedWhere].filter(Boolean).join(' AND ');
     const ok = action === 'archive' && spec.only ? `CASE WHEN ${spec.only.where} THEN 1 ELSE 0 END` : '1';
-    if (/\{(today|viewer)\}/.test(`${table.from} ${where} ${ok}`)) return c.json({ error: 'This table has no archive, so rows here are not archived or deleted.' }, 400);
+    if (/\{(today|viewer|ai)\}/.test(`${table.from} ${where} ${ok}`)) return c.json({ error: 'This table has no archive, so rows here are not archived or deleted.' }, 400);
     const found = await db
       // The ids lead (CROSS JOIN keeps them the outer loop), so each is one look-up by its key, never a walk through every row the person has.
       .prepare(`SELECT ${table.idSql} AS id, ${ok} AS ok FROM json_each(?2) AS asked CROSS JOIN ${table.from} WHERE ${table.idSql} = asked.value AND ${where}`)

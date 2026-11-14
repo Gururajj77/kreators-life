@@ -33,8 +33,8 @@ export type CoachSharePart = (typeof COACH_SHARE_PARTS)[number];
  * registry knows (`knownTableKeys`) when it saves them and every time a coach opens a table, and the screen lists only known tables.
  */
 export type CoachShare = Record<CoachSharePart, boolean> & { tables: string[] };
-/** The most table keys a share keeps (more than the registry holds). */
-export const COACH_SHARE_TABLES_MAX = 100;
+/** The most table keys a share keeps: TABLE_LIST_MAX in the registry, well past the tables it holds (dataTables.test.ts holds the two together). */
+export const COACH_SHARE_TABLES_MAX = 400;
 const TABLE_KEY_SHAPE = /^[a-z][A-Za-z0-9]{0,39}$/;
 /** What a stored share reads as when a part is not in it: on, but Patterns off, and no table. */
 export const DEFAULT_COACH_SHARE: CoachShare = { daily: true, pillars: true, routine: true, lifeMap: true, reflection: true, patterns: false, tables: [] };

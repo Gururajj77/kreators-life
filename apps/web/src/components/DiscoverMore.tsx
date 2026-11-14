@@ -316,7 +316,7 @@ function UseSwitches({ kind }: { kind: ExtraKind }) {
     <Section id="more-use" title="Let your results help" lede="Your answers are never shared. Only a short summary is used, and each switch is yours to change any time.">
       <div className="flex flex-col gap-xs">
         <Toggle on={s.steps} onChange={(v) => save.mutate({ steps: v })} label="Shape my next steps" hint="Home’s daily brief picks steps that fit you. Plain rules, no AI." />
-        <Toggle on={s.assistant} onChange={(v) => save.mutate({ assistant: v })} label="Let the assistant learn from them" hint="The assistant uses the summary to choose its tone and the size of a step. Only a model that keeps no data can read it." />
+        <Toggle on={s.assistant} onChange={(v) => save.mutate({ assistant: v })} label="Let the assistant learn from them" hint="The assistant uses the summary to choose its tone and the size of a step. Only a model that keeps no data can read it. Your Discover tables reach AI chat only while this is on too." />
         {kind === 'mind' && <Toggle on={s.mind} onChange={(v) => save.mutate({ mind: v })} label="Include how my mind works" hint="Off until you switch it on. It then shapes next steps and, if the assistant is allowed, helps it pace things for you. It never names a condition." />}
       </div>
     </Section>

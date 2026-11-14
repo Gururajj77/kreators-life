@@ -10,10 +10,12 @@ import { TableShareList } from './TableShareList';
 export function CoachTablesShare({ linkId, coachName, shared, onSaved }: { linkId: string; coachName: string; shared: readonly string[]; onSaved: () => void }) {
   return (
     <TableShareList
+      who="coach"
+      place={`share-coach:${linkId}`}
       shared={shared}
       onSaved={onSaved}
       save={(op) => ('table' in op ? api.shareTableWithCoach(linkId, op.table, op.on) : api.shareWithCoach(linkId, { tables: op.tables }))}
-      intro={<>Each table is off until you switch it on. {coachName} can only read a table you share, never change it. Switch any off at any time, here or with Show to my coach at the top of the table.</>}
+      intro={<>Each table is off until you switch it on. {coachName} can only read a table you share, never change it. Switch any off at any time, here or with Show to my coach at the top of the table. Tables with other people’s details are never shared.</>}
     />
   );
 }

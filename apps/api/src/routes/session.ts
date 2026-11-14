@@ -15,6 +15,8 @@ import {
   awayPlacement,
   parseAway,
   parseRoutineBlocks,
+  repairRoutineBlocks,
+  routineTimesProblem,
   PENALTIES,
   pickFocus,
   placementFlags,
@@ -60,8 +62,43 @@ const json = <T,>(s: string, fb: T): T => {
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const time = (v: unknown, fb: string) => (typeof v === 'string' && TIME_RE.test(v) ? v : fb);
 
+/** A saved routine's two days as they were read, and as they should read once put right. */
+interface RoutineFix { id: string; generalJson: string; exceptionalJson: string; general: RoutineBlock[]; exceptional: RoutineBlock[] }
+/**
+ * A saved routine as it should read: a Food and water, People or Learning block that runs backwards on the person's day (a
+ * routine made before 2026-11-14 when work ended after nine, or the person woke up in the evening) is put right by
+ * repairRoutineBlocks, and nothing else moves. `fix` is set only when something did.
+ */
+function routineRead(r: RRow): { general: RoutineBlock[]; exceptional: RoutineBlock[]; fix: RoutineFix | null } {
+  const savedGeneral = json<RoutineBlock[]>(r.general_json, []);
+  const savedExceptional = json<RoutineBlock[]>(r.exceptional_json, []);
+  const general = repairRoutineBlocks(savedGeneral, 'general');
+  const exceptional = repairRoutineBlocks(savedExceptional, 'exceptional');
+  const fix = general !== savedGeneral || exceptional !== savedExceptional ? { id: r.id, generalJson: r.general_json, exceptionalJson: r.exceptional_json, general, exceptional } : null;
+  return { general, exceptional, fix };
+}
+/**
+ * Keeps a repair once, guarded on the exact words it read, so a newer edit from another tab is never written over. One round
+ * trip, and only for a routine that needed one; a failed write leaves the answer as it is, put right again next time.
+ */
+async function keepRoutineFix(db: D1Database, userId: string, fix: RoutineFix): Promise<void> {
+  try {
+    await db
+      .prepare('UPDATE routines SET general_json = ?, exceptional_json = ? WHERE id = ? AND user_id = ? AND general_json = ? AND exceptional_json = ?')
+      .bind(JSON.stringify(fix.general), JSON.stringify(fix.exceptional), fix.id, userId, fix.generalJson, fix.exceptionalJson)
+      .run();
+  } catch {
+    // Read again next time; the answer already carries the repaired times.
+  }
+}
+
 /** Everything the session holds for one person on a date. Also read for a student by their life coach, who gets only the parts that student shares. */
 export async function latest(db: D1Database, userId: string, date: string): Promise<SessionResponse> {
+  return (await latestRead(db, userId, date)).res;
+}
+
+/** latest, with the routine's repair to keep when it needed one (GET /session keeps it; a coach's read never writes). */
+async function latestRead(db: D1Database, userId: string, date: string): Promise<{ res: SessionResponse; fix: RoutineFix | null }> {
   // Independent reads go out together, so the assistant's get_routine and the screens cost one trip here, not four.
   const [a, r, c, days] = await Promise.all([
     db.prepare("SELECT * FROM assessments WHERE user_id = ? AND kind = 'onboard' ORDER BY created_at DESC LIMIT 1").bind(userId).first<ARow>(),
@@ -91,13 +128,15 @@ export async function latest(db: D1Database, userId: string, date: string): Prom
   const byDay = new Map(days.results.map((d) => [d.day, d]));
   const today = byDay.get(date);
   const week = Array.from({ length: 7 }, (_, i) => shiftDate(date, i - 6)).map((d) => (byDay.has(d) ? byDay.get(d)!.done === 1 : null));
-  return {
+  const blocks = r ? routineRead(r) : null;
+  const res: SessionResponse = {
     assessment,
-    routine: r ? { id: r.id, rampStep: r.ramp_step, general: json<RoutineBlock[]>(r.general_json, []), exceptional: json<RoutineBlock[]>(r.exceptional_json, []), practices: json<Practices>(r.practices_json, { mantra: 'none', breathing: 'box', affirmation: '', reading: '' }), createdAt: r.created_at } : null,
+    routine: r && blocks ? { id: r.id, rampStep: r.ramp_step, general: blocks.general, exceptional: blocks.exceptional, practices: json<Practices>(r.practices_json, { mantra: 'none', breathing: 'box', affirmation: '', reading: '' }), createdAt: r.created_at } : null,
     contract: c ? { minDays: c.min_days, checkinTime: c.checkin_time, penalty: c.penalty, nextWeekly: c.next_weekly, nextMonthly: c.next_monthly, signedName: c.signed_name, signedAt: c.signed_at } : null,
     today: today ? { day: today.day, dayType: today.day_type, steps: json<string[]>(today.steps_json, []), blocks: json<BlockKey[]>(today.blocks_json, []), done: today.done === 1 } : null,
     week: { done: week.filter((d) => d === true).length, days: week },
   };
+  return { res, fix: blocks?.fix ?? null };
 }
 
 /**
@@ -109,7 +148,13 @@ const dateOf = (v: string | undefined, zone: string) => {
   return v && DATE_RE.test(v) && v <= shiftDate(own, 1) ? v : own;
 };
 
-session.get('/', async (c) => c.json(await latest(c.env.DB, c.get('user').id, dateOf(c.req.query('date'), c.get('user').timezone))));
+session.get('/', async (c) => {
+  const user = c.get('user');
+  const { res, fix } = await latestRead(c.env.DB, user.id, dateOf(c.req.query('date'), user.timezone));
+  // A routine that needed putting right is kept once, so Daily, the life map, the assistant and the Companion all read it.
+  if (fix) await keepRoutineFix(c.env.DB, user.id, fix);
+  return c.json(res);
+});
 
 /**
  * The live call with a coach, a paid service (liveCall.ts). GET is the person's open ask, if any. POST is the yes from the
@@ -259,12 +304,15 @@ session.patch('/routine', async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
   const r = await db.prepare('SELECT * FROM routines WHERE user_id = ? ORDER BY created_at DESC LIMIT 1').bind(user.id).first<RRow>();
   if (!r) return c.json({ error: 'no routine yet; run the strategy session first' }, 400);
-  const general = json<RoutineBlock[]>(r.general_json, []);
-  const exceptional = json<RoutineBlock[]>(r.exceptional_json, []);
+  // The saved routine is put right first, so a save never writes a block that runs backwards back.
+  const { general, exceptional } = routineRead(r);
   const next = {
     general: body.general === undefined ? general : parseRoutineBlocks(body.general, general),
     exceptional: body.exceptional === undefined ? exceptional : parseRoutineBlocks(body.exceptional, exceptional),
   };
+  // An edit that makes Food and water, People or Learning end before it starts is refused in words, and nothing is saved.
+  const problem = (body.general !== undefined && routineTimesProblem(next.general)) || (body.exceptional !== undefined && routineTimesProblem(next.exceptional)) || null;
+  if (problem) return c.json({ error: problem }, 400);
   await db.prepare('UPDATE routines SET general_json = ?, exceptional_json = ? WHERE id = ? AND user_id = ?').bind(JSON.stringify(next.general), JSON.stringify(next.exceptional), r.id, user.id).run();
   return c.json(await latest(db, user.id, dateOf(typeof body.date === 'string' ? body.date : undefined, user.timezone)));
 });

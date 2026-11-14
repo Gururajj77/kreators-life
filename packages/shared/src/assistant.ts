@@ -233,6 +233,11 @@ export interface AssistantTurn {
   note?: string;
   /** The client's own record of the receipts a reply made, so the note it sends says what is true now (after an Undo). */
   actions?: string[];
+  /**
+   * What a reply read that not every model may see again (`AssistantReply.reads`), kept with it so a later message can hold its words back
+   * once a table is shut to AI chat, or from a model that may keep data. A reply that does not say is held back as if it read the journal.
+   */
+  reads?: string[];
 }
 export interface AssistantContext {
   /** The screen the person is on. */
@@ -272,6 +277,11 @@ export interface AssistantReply {
   stopped: 'limit' | 'credits' | 'steps' | 'user' | null;
   /** The model failed after some tools ran; the text says so, and the receipts show what did happen. */
   failed?: boolean;
+  /**
+   * What this reply read that not every model may see again: the tables from All tables whose words it was handed (`journal`, `gratitude`, a
+   * `read_table` key), `tool:<name>` for a tracker or Discover read, `discover` for what Discover let it learn. The client keeps it on the turn.
+   */
+  reads: string[];
 }
 export interface AssistantStatus {
   /** A model is set up on the server. */

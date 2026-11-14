@@ -56,8 +56,8 @@ When a model is connected on the server, a model picker shows under the panel's 
 
 - **A free model costs no credits**, but typing still needs a plan.
 - **Some models keep nothing.** Only with one of those can the assistant read the journal and the trackers.
-- **The journal is read only when asked.** The assistant reads it only when Riya asks about it.
-- **A whole table only when she opens it.** The assistant and the Companion read a table from All tables only when Riya switches on **Show to AI chat** for it, at the top of the table or under **AI chat** on her Profile tab. They never change it.
+- **The journal is read only when asked, and only when open.** The assistant and the Companion read it only when Riya asks about it, and only while she has switched on **Show to AI chat** for the Journal entries table. Her gratitude lines need the same switch on the Gratitude table. If one is off, the assistant tells her so and where to switch it on, and reads nothing from it.
+- **A whole table only when she opens it.** The assistant and the Companion read a table from All tables only when Riya switches on **Show to AI chat** for it, at the top of the table or under **AI chat** on her Profile tab. They never change it. The journal, the body and mind tables and any table with other people's details go only to a model that keeps nothing.
 
 The panel says under the picker what the chosen model may read.
 

@@ -87,11 +87,15 @@ function AiSwitch({ table, onError }: { table: string; onError: (e: unknown) => 
   return <Toggle compact on={sw.shown ?? (me.data?.user.aiTables ?? []).includes(table)} onChange={sw.flip} label="Show to AI chat" />;
 }
 
-/** The one line under the switches: who can read the table once shown, that nobody can change it, and the private-model rule where it holds. */
-function captionFor(coaches: readonly CoachLink[], ai: boolean, privateOnly: boolean): string {
+/**
+ * The one line under the switches: who can read the table once shown, that nobody can change it, and the private-model rule where it holds. A
+ * table with other people's details (`others`) never has a coach's switch, and says why beside the rule.
+ */
+function captionFor(coaches: readonly CoachLink[], ai: boolean, privateOnly: boolean, others: boolean): string {
   const who = coaches.length === 0 ? '' : coaches.length === 1 ? coaches[0]!.coach.name : 'Your coaches';
   const readers = who && ai ? `${who} and AI chat` : who || 'AI chat';
-  return `${readers} can read it once shown, never change it.${ai && privateOnly ? ' AI chat reads it only on a model that keeps nothing.' : ''}`;
+  const rule = others ? ' It holds other people’s details, so no coach sees it, and AI chat reads it only on a model that keeps nothing.' : privateOnly ? ' AI chat reads it only on a model that keeps nothing.' : '';
+  return `${readers} can read it once shown, never change it.${ai ? rule : ''}`;
 }
 
 /**
@@ -104,8 +108,10 @@ function captionFor(coaches: readonly CoachLink[], ai: boolean, privateOnly: boo
  * Profile tab (`users.ai_tables_json`). Each tap sends only this table and on or off, so it never puts back a table switched elsewhere; a
  * refusal puts the switch back and says why under the line. Nothing is drawn when there is no coach and AI chat is off.
  */
-export function TableSwitches({ table, coaches, ai, privateOnly }: { table: string; coaches: readonly CoachLink[]; ai: boolean; privateOnly: boolean }) {
+export function TableSwitches({ table, coaches: links, ai, privateOnly, others = false }: { table: string; coaches: readonly CoachLink[]; ai: boolean; privateOnly: boolean; others?: boolean }) {
   const [error, setError] = useState<unknown>(null);
+  // A table with other people's details is never shown to a coach (2026-11-14): no switch for one, whatever coaches the person has.
+  const coaches = others ? [] : links;
   if (coaches.length === 0 && !ai) return null;
   return (
     <div className="cover-share-switches flex min-w-0 flex-col">
@@ -116,7 +122,7 @@ export function TableSwitches({ table, coaches, ai, privateOnly }: { table: stri
         {ai && <AiSwitch table={table} onError={setError} />}
       </div>
       {/* Held to the switches' width (w-0 with min-w-full), so the line wraps under them and never widens the slot. */}
-      <p className="w-0 min-w-full m-0 text-footnote text-ink-soft">{captionFor(coaches, ai, privateOnly)}</p>
+      <p className="w-0 min-w-full m-0 text-footnote text-ink-soft">{captionFor(coaches, ai, privateOnly, others)}</p>
       <ErrorLine e={error} className="mt-xs w-0 min-w-full" />
     </div>
   );

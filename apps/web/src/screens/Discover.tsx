@@ -676,6 +676,7 @@ function UseTab({ settings, onChange }: { settings: { steps: boolean; assistant:
           <li>Only a short summary: your strengths, how each trait reads and your reasoning level.</li>
           <li>The assistant uses it to choose its tone and the size of a step.</li>
           <li>How your mind works, once switched on, shapes next steps and helps the assistant pace things. It only matters if you took that self-check.</li>
+          <li>Your Discover tables in All tables reach AI chat only while this is on and you switch them on there, on a model that keeps nothing.</li>
         </ul>
       </Fold>
     </Section>

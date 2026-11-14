@@ -145,5 +145,7 @@ export type AppEnv = {
   Bindings: Env;
   /** `team` is set by the Agency team gate (agencyTeamAccess.ts) when a team member works on someone's Agency: `user` is then the owner. */
   /** `adminKeyOk` is set only by the admin key's door (`adminKeyDoor` in ops.ts), the one place that key is compared. */
-  Variables: { user: UserRow; team?: TeamActor; logNote?: string; requestId?: string; adminKeyOk?: boolean };
+  /** `gateAccess` is the signed-in person's own app access as the module gate read it (index.ts), set before `team` can swap `user`; read by
+   * All tables (routes/tables.ts) so a page's `needs` costs no second read. Absent on a path the gate does not check. */
+  Variables: { user: UserRow; team?: TeamActor; logNote?: string; requestId?: string; adminKeyOk?: boolean; gateAccess?: Record<string, import('@kreators/shared').ModuleAccess> };
 };

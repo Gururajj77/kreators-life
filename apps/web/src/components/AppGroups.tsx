@@ -1,7 +1,6 @@
 import {
   groupStartsOpen,
   MODULE_GROUP_ACCENT,
-  MODULE_GROUP_BLURB,
   MODULE_GROUPS,
   orderInGroup,
   RELATIONSHIP_BY_KEY,
@@ -15,10 +14,8 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import type { MeResponse } from "@kreators/shared";
-import gsap from "gsap";
 import {
   useEffect,
-  useId,
   useRef,
   useState,
   type CSSProperties,
@@ -41,16 +38,15 @@ import { keys, useMe, useRefreshAll } from "../lib/queries";
 import { tie } from "../lib/text";
 import { AnimatedIcon } from "./AnimatedIcon";
 import { AppIcon } from "./AppIcon";
-import { Avatar } from "./Avatar";
 import { Button } from "./Button";
 import { CheckMark } from "./CheckRow";
 import { Fold } from "./Fold";
+import { GroupAccordion } from "./GroupAccordion";
 import { tick } from "./fx/haptics";
 import { Icon } from "./Icon";
 import { IconButton } from "./IconButton";
 import { SortableList } from "./SortableList";
 import { Toggle } from "./Toggle";
-import { ToggleChevron } from "./ToggleMark";
 
 /**
  * The apps, grouped, each group one big accordion in its pillar's colour. Opening a group shows the apps that are shown, each name
@@ -385,8 +381,6 @@ function Group({
   // Open or closed is remembered for this tab and this person (lib/kept.ts): it stays as left while moving around the app, and resets on
   // a reload, on sign-out, or on another device.
   const [kept, setKept] = useKept<boolean>(scope, group, startOpen);
-  const body = useRef<HTMLDivElement>(null);
-  const id = useId();
   const rel = RELATIONSHIP_BY_KEY[MODULE_GROUP_ACCENT[group]];
   const shown = list.filter((m) => m.on);
   const hidden = list.filter((m) => !m.on);
@@ -428,155 +422,73 @@ function Group({
     </li>
   );
 
-  // A group that starts open shows open at once; only a tap slides it.
-  const first = useRef(true);
-  useEffect(() => {
-    const el = body.current;
-    if (!el) return;
-    // A slide still running would finish after this one and hide the group again.
-    gsap.killTweensOf(el);
-    if (first.current) {
-      first.current = false;
-      if (open) {
-        el.hidden = false;
-        gsap.set(el, { height: "auto", opacity: 1 });
-      }
-      return;
-    }
-    const reduce = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    if (open) {
-      el.hidden = false;
-      if (reduce) gsap.set(el, { height: "auto", opacity: 1 });
-      else
-        gsap.fromTo(
-          el,
-          { height: 0, opacity: 0 },
-          { height: "auto", opacity: 1, duration: 0.32, ease: "power3.out" },
-        );
-    } else if (!el.hidden) {
-      if (reduce) {
-        gsap.set(el, { height: 0, opacity: 0 });
-        el.hidden = true;
-      } else
-        gsap.to(el, {
-          height: 0,
-          opacity: 0,
-          duration: 0.22,
-          ease: "power2.in",
-          onComplete: () => void (el.hidden = true),
-        });
-    }
-  }, [open]);
-
   return (
-    <section
-      aria-labelledby={`${id}-h`}
-      data-pillar={rel.key}
-      className="rounded-card"
-      style={{ background: `var(--soft-${rel.key})` }}
+    <GroupAccordion
+      group={group}
+      open={open}
+      onToggle={() => {
+        if (selecting) setHeld(!open);
+        else setKept((o) => !o);
+      }}
+      count={`${on} of ${list.length} shown`}
+      mood={on > 0 ? "happy" : "sleepy"}
+      controls={controls}
     >
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={`${id}-b`}
-        onClick={() => {
-          tick();
-          if (selecting) setHeld(!open);
-          else setKept((o) => !o);
-        }}
-        className="toy toy-flat flex min-h-[72px] w-full items-center gap-sm rounded-card p-sm text-left"
-      >
-        <Avatar
-          relationship={rel.key}
-          size={44}
-          decorative
-          still
-          mood={on > 0 ? "happy" : "sleepy"}
-        />
-        <span className="min-w-0 flex-1">
-          <span id={`${id}-h`} className="block text-title3 type-figure">
-            {MODULE_GROUPS[group]}
-          </span>
-          <span
-            className="block text-footnote"
-            style={{ color: `var(--deep-${rel.key})` }}
+      {arrange ? (
+        // .fx-inset sets its own margins to 0, so the room either side and under the list comes from a wrapper.
+        <div className="mx-sm mb-sm">
+          <SortableList
+            items={list}
+            keyOf={(m) => m.key}
+            onMove={arrange}
+            className="fx-inset m-0 list-none p-0"
           >
-            {MODULE_GROUP_BLURB[group]}
-          </span>
-        </span>
-        <span
-          className="shrink-0 rounded-pill bg-card-strong px-sm text-caption font-medium leading-[26px]"
-          style={{ color: `var(--deep-${rel.key})` }}
-        >
-          {on} of {list.length} shown
-        </span>
-        <ToggleChevron open={open} size={20} className="text-ink-soft" />
-      </button>
-      {controls}
-      {/* One small gap under the group's toggle, so its hover tint never touches the list (the founder, 2026-11-06). */}
-      <div ref={body} id={`${id}-b`} hidden={!open} className="overflow-hidden">
-        <div className="pt-xs">
-          {arrange ? (
-            // .fx-inset sets its own margins to 0, so the room either side and under the list comes from a wrapper.
-            <div className="mx-sm mb-sm">
-              <SortableList
-                items={list}
-                keyOf={(m) => m.key}
+            {(m, i, handle) => (
+              <ArrangeRow
+                m={m}
+                index={i}
+                count={list.length}
+                color={rel.color}
+                handle={handle}
                 onMove={arrange}
-                className="fx-inset m-0 list-none p-0"
-              >
-                {(m, i, handle) => (
-                  <ArrangeRow
-                    m={m}
-                    index={i}
-                    count={list.length}
-                    color={rel.color}
-                    handle={handle}
-                    onMove={arrange}
-                  />
-                )}
-              </SortableList>
+              />
+            )}
+          </SortableList>
+        </div>
+      ) : (
+        <>
+          {shown.length > 0 ? (
+            // .fx-inset sets its own margins to 0, so the room either side and under the list comes from a wrapper (the founder,
+            // 2026-11-06: space on the left and right inside a group).
+            <div className="mx-sm mb-sm">
+              <ul className="fx-inset m-0 list-none p-0">{shown.map(row)}</ul>
             </div>
           ) : (
-            <>
-              {shown.length > 0 ? (
-                // .fx-inset sets its own margins to 0, so the room either side and under the list comes from a wrapper (the founder,
-                // 2026-11-06: space on the left and right inside a group).
-                <div className="mx-sm mb-sm">
-                  <ul className="fx-inset m-0 list-none p-0">
-                    {shown.map(row)}
-                  </ul>
-                </div>
-              ) : (
-                <p className="m-0 mx-sm mb-sm text-subhead text-ink-soft">
-                  Every app here is hidden.
-                </p>
-              )}
-              {/* The hidden apps at the end of the shown ones: one short fold across the full width, each inside with its eye to show it. */}
-              {hidden.length > 0 && (
-                // The fold lines up with the list above (its wrapper's room), and its rows sit one small gap under its button.
-                <Fold
-                  className="mx-sm mb-sm"
-                  title="Hidden apps"
-                  hint={String(hidden.length)}
-                  defaultOpen={hiddenOpen}
-                  open={selecting ? heldFold : undefined}
-                  onOpenChange={selecting ? setHeldFold : undefined}
-                >
-                  <div className="mt-xs">
-                    <ul className="fx-inset m-0 list-none p-0">
-                      {hidden.map(row)}
-                    </ul>
-                  </div>
-                </Fold>
-              )}
-            </>
+            <p className="m-0 mx-sm mb-sm text-subhead text-ink-soft">
+              Every app here is hidden.
+            </p>
           )}
-        </div>
-      </div>
-    </section>
+          {/* The hidden apps at the end of the shown ones: one short fold across the full width, each inside with its eye to show it. */}
+          {hidden.length > 0 && (
+            // The fold lines up with the list above (its wrapper's room), and its rows sit one small gap under its button.
+            <Fold
+              className="mx-sm mb-sm"
+              title="Hidden apps"
+              hint={String(hidden.length)}
+              defaultOpen={hiddenOpen}
+              open={selecting ? heldFold : undefined}
+              onOpenChange={selecting ? setHeldFold : undefined}
+            >
+              <div className="mt-xs">
+                <ul className="fx-inset m-0 list-none p-0">
+                  {hidden.map(row)}
+                </ul>
+              </div>
+            </Fold>
+          )}
+        </>
+      )}
+    </GroupAccordion>
   );
 }
 

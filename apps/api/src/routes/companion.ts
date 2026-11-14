@@ -26,6 +26,7 @@ import { ToolError } from '../assistant/dispatch';
 import { checkArgs, TOOL_BY_NAME, type Tool } from '../assistant/tools';
 import { chat, MAX_OUT, ModelError, modelKeepsNothing, modelOf, tokensOf, tokensOfMessages, type Message, type ModelConfig, type ToolCall, type ToolSpec } from '../assistant/model';
 import { closeRun, dateFrom, fit, ioFor, markStop, openRun, parseToolArgs, runIdOf, stopAsked, toolsOn, zoneFrom, type AppFetch, type Turn } from '../assistant/run';
+import { heldBack, modelOnly, readsOf, withReads } from '../aiOpen';
 
 /**
  * The Companion: a short chat about how the person is doing. With a plan and a model connected it answers through
@@ -60,7 +61,11 @@ interface Row {
   model?: string | null;
   created_at: string;
 }
-const toMsg = (r: Row): ChatMessage => ({ id: r.id, role: r.role, body: r.body, createdAt: r.created_at, ...(r.model ? { model: r.model } : {}) });
+// The model alone: a line's stored `model` also says what its answer read (aiOpen.ts, `withReads`), which never leaves the server.
+const toMsg = (r: Row): ChatMessage => ({ id: r.id, role: r.role, body: r.body, createdAt: r.created_at, ...(r.model ? { model: modelOnly(r.model) } : {}) });
+
+/** A model the list says may keep data: its lines never read the journal, the trackers or a table only a model that keeps nothing reads. */
+const keepsData = (model: string): boolean => ASSISTANT_MODEL_BY_ID[model]?.private === false;
 
 /** What anyone may be told about the person's day. */
 interface PlainFacts {
@@ -160,7 +165,7 @@ How you talk:
 - If they mention harming themselves, tell them to call their local emergency number or go to the nearest hospital, or call Tele-MANAS on 14416 in India, right away.
 - No links, emoji, tables or headings. Short, plain sentences a teenager can read.
 - ${p.tools.length ? 'You can look at their day with your tools; you cannot change anything.' : 'You cannot change anything in the app.'} If they want something changed, tell them Bumling, the assistant button, can do it.
-- ${p.tools.includes('read_journal') ? 'Read the journal only when they ask about their journal. Never bring it up yourself.' : 'You cannot read their journal or their trackers with this model. If they ask, say a private model can.'}
+- ${p.tools.includes('read_journal') ? 'Read the journal or their gratitude only when they ask about it. Never bring it up yourself. read_journal reads only what they opened to AI chat. When it says a part is not open, tell them what it says. Never guess what their journal holds.' : 'You cannot read their journal or their trackers with this model. If they ask, say a private model can.'}
 
 What you know about them: ${plainLine(p.plain)}.${p.well ? ` ${wellLine(p.well)}.` : ''}`;
 }
@@ -203,9 +208,10 @@ export function companionRoutes(appFetch: AppFetch) {
 
     const now = nowIso();
     const mine: ChatMessage = { id: newId(), role: 'user', body: text, createdAt: now };
-    const save = async (reply: string, model: string): Promise<ChatMessage> => {
+    // A model's line also keeps what its answer read from All tables (`reads`), so a later message holds it back once that table is shut.
+    const save = async (reply: string, model: string, reads?: readonly string[]): Promise<ChatMessage> => {
       const line: ChatMessage = { id: newId(), role: 'assistant', body: reply, createdAt: nowIso(), model };
-      await db.prepare('INSERT INTO chat_messages (id, user_id, role, body, model, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(line.id, user.id, 'assistant', line.body, model, line.createdAt).run();
+      await db.prepare('INSERT INTO chat_messages (id, user_id, role, body, model, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(line.id, user.id, 'assistant', line.body, reads ? withReads(model, reads) : model, line.createdAt).run();
       return line;
     };
     await db.prepare('INSERT INTO chat_messages (id, user_id, role, body, model, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(mine.id, user.id, 'user', text, '', now).run();
@@ -225,10 +231,12 @@ export function companionRoutes(appFetch: AppFetch) {
       let reply: string | null = null;
       if (c.env.AI) {
         try {
-          const history = await db.prepare('SELECT role, body FROM chat_messages WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 12').bind(user.id).all<{ role: string; body: string }>();
+          const history = await db.prepare('SELECT role, body, model FROM chat_messages WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 12').bind(user.id).all<{ role: string; body: string; model: string | null }>();
+          // Our own host keeps nothing, but a line that read a table since shut to AI chat stays out all the same (the switch means it).
+          const lines = history.results.filter((m) => m.role === 'user' || !heldBack(c, readsOf(m.model, keepsData).reads, true));
           const system = `You are the Companion inside kreators.app, a daily game about seven relationships. Be warm, brief (under 90 words), concrete, and end with one question. Never diagnose or give medical advice; if someone mentions self-harm, tell them to contact local emergency services or a crisis line right away. Facts about this person: ${plainLine(facts.plain)}; ${wellLine(facts.well)}.`;
           const res = (await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
-            messages: [{ role: 'system', content: system }, ...history.results.reverse().map((m) => ({ role: m.role, content: m.body }))],
+            messages: [{ role: 'system', content: system }, ...lines.reverse().map((m) => ({ role: m.role, content: m.body }))],
             max_tokens: 220,
           })) as { response?: string };
           reply = typeof res?.response === 'string' && res.response.trim() ? res.response.trim() : null;
@@ -271,10 +279,16 @@ export function companionRoutes(appFetch: AppFetch) {
       .all<{ role: Turn['role']; body: string; model: string | null }>();
     // A model that may keep data never reads a reply that was written from wellbeing: the built-in companion's and a
     // private model's lines (and old lines that do not say who wrote them) stay out; the person's own words go in.
-    const sawNoWellbeing = (m: string | null) => m === 'crisis' || m === cfg.model || ASSISTANT_MODEL_BY_ID[m ?? '']?.private === false;
+    const sawNoWellbeing = (m: string) => m === 'crisis' || m === cfg.model || keepsData(m);
+    // And no model reads a reply written from a table the person has since shut to AI chat (an older private line, which does not say what it
+    // read, is held back while Journal entries or Gratitude is shut, since read_journal read them with no switch before 2026-11-14).
     const turns: Turn[] = history.results
       .reverse()
-      .filter((r) => priv || r.role === 'user' || sawNoWellbeing(r.model))
+      .filter((r) => {
+        if (r.role === 'user') return true;
+        const { model, reads } = readsOf(r.model, keepsData);
+        return (priv || sawNoWellbeing(model)) && !heldBack(c, reads, priv);
+      })
       .map((r) => ({ role: r.role, text: r.body }));
     const fixed = tokensOf(system) + tokensOf(JSON.stringify(specs));
     const messages: Message[] = [{ role: 'system', content: system }, ...fit(turns, limit.contextTokens - fixed - MAX_OUT)];
@@ -283,6 +297,8 @@ export function companionRoutes(appFetch: AppFetch) {
     const runId = runIdOf(body.runId);
     await openRun(db, user.id, runId);
     const tokens = { input: 0, output: 0 };
+    // The tables from All tables whose words this answer was handed, kept with the line (`withReads`).
+    const reads = new Set<string>();
     let reply = '';
     let stopped: CompanionReply['stopped'] = null;
     let failed = false;
@@ -297,6 +313,7 @@ export function companionRoutes(appFetch: AppFetch) {
       if (typeof args === 'string') return JSON.stringify({ error: args });
       try {
         const out = await tool.run(args, io);
+        for (const k of out.reads ?? []) reads.add(k);
         const said = JSON.stringify(out.data ?? { ok: true });
         return said.length <= MAX_RESULT ? said : JSON.stringify({ truncated: true, chars: said.length, note: 'Too long to read in full. Ask for less.' });
       } catch (e) {
@@ -370,7 +387,7 @@ export function companionRoutes(appFetch: AppFetch) {
     // Charged once, through the one ledger: a free model still writes its usage row with the tokens and the model.
     const credits = tokens.input || tokens.output ? await spend(db, user.id, 'companion', creditsFor(tokens, cfg.price), tokens, cfg.model) : undefined;
     const out: CompanionReply = {
-      messages: [mine, await save(withCrisis(reply.slice(0, 4000)), cfg.model)],
+      messages: [mine, await save(withCrisis(reply.slice(0, 4000)), cfg.model, [...reads])],
       model: cfg.model,
       ...(credits ? { credits } : {}),
       stopped,

@@ -18,6 +18,7 @@ import {
   type GratitudeSeen,
 } from '@kreators/shared/gratitude';
 import type { AppEnv } from '../env';
+import { aiTableShut } from '../aiOpen';
 import { DATE_RE, dateNearToday, dayInZone, newId, nowIso, pageOf, paged, shiftDate } from '../db';
 
 export const journal = new Hono<AppEnv>();
@@ -199,6 +200,12 @@ journal.get('/gratitude', async (c) => {
   if (day !== undefined) {
     if (!pastDay(day)) return c.json({ error: 'pick a day that is not in the future' }, 400);
     const open = openToday(day, c.req.query('today'));
+    // AI chat's write_gratitude reads only today or yesterday here, to place new lines. Any other day is a read of the words, so AI chat gets it
+    // only as the page of days below gets it: while Gratitude is open to AI chat, on a model that keeps nothing.
+    if (!open) {
+      const shut = aiTableShut(c, 'gratitude');
+      if (shut) return shut;
+    }
     const [row, offer, usual] = await Promise.all([
       db.prepare('SELECT day, lines_json, updated_at FROM gratitude_days WHERE user_id = ? AND day = ?').bind(user.id, day).first<GratitudeRow>(),
       open ? dayOffer(db, user.id, day) : null,
@@ -206,6 +213,10 @@ journal.get('/gratitude', async (c) => {
     ]);
     return c.json({ gratitude: row ? toGratitude(row) : null, ...(offer ? { prompts: offer.prompts, usual } : {}) });
   }
+  // The page of days is how AI chat reads gratitude (read_journal): only while the person opened the Gratitude table to it, on a model that
+  // keeps nothing (2026-11-14, the founder's yes). One day above stays open: write_gratitude reads it to place new lines and tells the model none.
+  const shut = aiTableShut(c, 'gratitude');
+  if (shut) return shut;
   const from = c.req.query('from');
   const to = c.req.query('to');
   const ask = pageOf(c);
@@ -361,6 +372,10 @@ journal.put('/gratitude/:day', async (c) => {
 });
 
 journal.get('/', async (c) => {
+  // AI chat (read_journal) reads the entries only while the person opened the Journal entries table to it, on a model that keeps nothing
+  // (2026-11-14, the founder's yes). Nothing is read for a refusal, and the screens send no mark, so they never meet one.
+  const shut = aiTableShut(c, 'journal');
+  if (shut) return shut;
   const db = c.env.DB;
   const user = c.get('user');
   const ask = pageOf(c);

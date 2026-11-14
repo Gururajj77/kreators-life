@@ -112,6 +112,7 @@ The privacy card points questions to that officer. Never state a reply time unle
 - **Fitness and supplements:** private to the person.
 - **Agency clients, fees and notes:** owner only.
 - **A life coach:** sees only what the student switched on: the six parts, and whole tables one by one, read only. The journal and supplements reach a coach only that way.
+- **Tables with other people's details:** buyers, guests, leads, clients, applicants, chats, friends and follows, coach notes, the inbox, Agency, Discover and the Companion. Only the person and AI chat on a model that keeps nothing read them, never a coach or staff, not even a super admin. In her orders and certificates, the seller's name shows only to Riya.
 
 > **Pro tip:** before you switch an app on for everyone, look at its card on the build map. If it says it needs a key, set the key first.
 

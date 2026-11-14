@@ -20,18 +20,37 @@ import {
   type TableView,
 } from '@kreators/shared/dataTables';
 import {
+  ASSISTANT_MODEL_BY_ID,
   BADGE_BY_KEY,
   BADGE_FAMILY_META,
   BREATHING,
+  DESIGN_AUTHORITIES,
+  DESIGN_TYPES,
+  DISCOVER_STRENGTHS,
+  discoverProfile,
+  EQ_DIMS,
+  extrasProfile,
+  isExtraKind,
+  LOVE_LANGUAGES,
+  MIND_AREAS,
+  QUESTION_BY_ID,
+  TRAITS,
+  TYPE_NAMES,
+  type DiscoverResult,
   CONSENT_PURPOSES,
   DEFAULT_ZONE,
   isRelationshipKey,
+  KPI_UNITS,
+  kpiShown,
   mantraLine,
+  minuteOf,
   minutesLabel,
   notToDoStreak,
   overrideTemplateId,
   parseRepeat,
   RELATIONSHIP_BY_KEY,
+  REWARD_BY_KEY,
+  repairRoutineBlocks,
   repeatLabel,
   reviewNameFor,
   SCORE_LABEL,
@@ -44,12 +63,14 @@ import {
   type Page,
   type PageSize,
   type PeriodKind,
+  type RoutineBlock,
 } from '@kreators/shared';
 import { EAT_MOMENT_META, eatFromStored, mealLabel, proteinGrams } from '@kreators/shared/fitness';
 import { GRATITUDE_GROUP_NAMES, gratitudePromptByKey } from '@kreators/shared/gratitude';
 import type { UserRow } from './env';
 import { currencyOf, dateNearToday, dayInZone, nameOf } from './db';
 import { blockingForTables, type TablesBlocking } from './timeBlocks';
+import { modelOnly } from './aiOpen';
 
 /**
  * All tables (2026-11-13, the founder): the one reader behind every table a person, their coach or a super admin opens. The registry
@@ -65,6 +86,10 @@ export interface ReadCtx {
   subject: TableSubject;
   /** Who is looking (the coach's `{viewer}` in a coach's view). */
   viewerId: string;
+  /** AI chat is reading, through the owner's own route (`X-Kreators-Via: assistant`): binds `{ai}` (TableSqlContext). */
+  ai?: boolean;
+  /** AI chat's read of the Companion chat: the stored `model` values whose lines it may no longer have (`heldCompanionModels`): binds `{aiHeld}`. */
+  aiHeld?: readonly string[];
 }
 
 /** The person whose tables these are, with their own today and zone. */
@@ -149,6 +174,71 @@ const textOf = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 const joined = (parts: string[], sep = ', '): string | null => (parts.length ? parts.join(sep) : null);
 const SCORE_ORDER: readonly string[] = [...SCORECARD.health, ...SCORECARD.wealth, ...Object.keys(RELATIONSHIP_BY_KEY)];
 const scoreLabel = (k: string): string => (k in SCORE_LABEL ? SCORE_LABEL[k as keyof typeof SCORE_LABEL] : pillarName(k) || k);
+
+/**
+ * The choice a vibe check answer counted as, in words: a pick's option, a scale's label (0 to 4, as stored), or yes and no. Only the index is
+ * stored, so an answer in the person's own words reads as the choice it counted as (the strategy session's Write my own sends the middle one), and
+ * a foundation reads as nothing: their own words replace it on the pyramid, where the foundation they kept lives (the Pyramids table).
+ */
+function vibeAnswerWords(questionId: string, value: number): string | null {
+  const q = QUESTION_BY_ID[questionId];
+  if (!q || q.role === 'foundation' || !Number.isFinite(value)) return null;
+  if (q.format === 'pick') return q.options?.[value]?.label ?? null;
+  if (q.format === 'scale') return q.scale?.labels[Math.max(0, Math.min(4, Math.round(value)))] ?? null;
+  return value ? 'Yes' : 'No';
+}
+
+const BAND_WORDS: Readonly<Record<string, string>> = { low: 'low', mid: 'in the middle', high: 'high' };
+/**
+ * One part of a Discover result in words: the profile the assistant may be given (discoverProfile), never an answer, a score or a time. A
+ * result that cannot be read gives nothing.
+ */
+function discoverWords(part: string, result: Record<string, unknown>): string | null {
+  let p: ReturnType<typeof discoverProfile>;
+  try {
+    p = discoverProfile(result as unknown as DiscoverResult, '');
+  } catch {
+    return null;
+  }
+  switch (part) {
+    case 'strongest':
+      return joined(p.top.map((k) => DISCOVER_STRENGTHS[k]?.name ?? '').filter(Boolean));
+    case 'quietest':
+      return DISCOVER_STRENGTHS[p.growth]?.name ?? null;
+    case 'traits':
+      return joined(TRAITS.map((t) => `${t.name} ${BAND_WORDS[p.bands[t.key]] ?? p.bands[t.key]}`));
+    case 'reasoning':
+      return p.level;
+    case 'emotional':
+      return p.eq ? joined(EQ_DIMS.map((d) => `${d.name} ${BAND_WORDS[p.eq![d.key]] ?? p.eq![d.key]}`)) : null;
+    default:
+      return null;
+  }
+}
+
+const MIND_BAND_WORDS: Readonly<Record<string, string>> = { few: 'few signs', some: 'some signs', many: 'many signs' };
+/**
+ * A finished add-on in words, as extrasProfile sums it up for the assistant: the type, the love languages each way, the mind's three bands (never a
+ * condition's name) and Human design's type, authority, profile and life path. Never the birth date, time, place or name, nor an answer.
+ */
+function addOnWords(kind: Cell, result: unknown): string | null {
+  if (!isExtraKind(kind) || !result || typeof result !== 'object') return null;
+  let x: ReturnType<typeof extrasProfile>;
+  try {
+    x = extrasProfile({ [kind]: result } as Parameters<typeof extrasProfile>[0], true);
+  } catch {
+    return null;
+  }
+  const love = (keys: readonly string[]) => keys.map((k) => LOVE_LANGUAGES[k as keyof typeof LOVE_LANGUAGES]?.name ?? '').filter(Boolean).join(' and ');
+  if (kind === 'type' && x?.type) return `${x.type}${TYPE_NAMES[x.type] ? `, ${TYPE_NAMES[x.type]!.name}` : ''}`;
+  if (kind === 'love' && x?.love) return `Feels cared for through ${love(x.love.receive)}. Shows care through ${love(x.love.give)}.`;
+  if (kind === 'mind' && x?.mind) return joined(MIND_AREAS.map((a) => `${a.name}: ${MIND_BAND_WORDS[x!.mind![a.key]] ?? x!.mind![a.key]}`), '; ');
+  if (kind === 'design' && x?.design) {
+    const d = x.design;
+    return `${DESIGN_TYPES[d.type]?.name ?? d.type}, ${DESIGN_AUTHORITIES[d.authority]?.name ?? d.authority} authority, profile ${d.profile}, life path ${d.lifePath}`;
+  }
+  return null;
+}
 
 /** One server derive for one row, or undefined when the key is not one of these. `fields` holds the table's private selects and cells. */
 function serverDerive(table: DataTable, col: DataColumn, cells: Record<string, Cell>, fields: Record<string, unknown>, extra: { templates: TablesBlocking['templates'] | null; eat: () => ReturnType<typeof eatFromStored> }): Cell | undefined {
@@ -242,14 +332,19 @@ function serverDerive(table: DataTable, col: DataColumn, cells: Record<string, C
       return line ? `${line.charAt(0).toUpperCase()}${line.slice(1)}` : null;
     }
     case 'routineDay':
+      // A saved routine as it should read: a Food and water, People or Learning block that runs backwards on the person's day is
+      // put right the way GET /session puts it right (repairRoutineBlocks), which keeps it from then on.
       return joined(
-        listOf(first).flatMap((b) => {
+        repairRoutineBlocks(listOf(first) as RoutineBlock[], col.from?.[0] === 'exceptional' ? 'exceptional' : 'general').flatMap((b) => {
           const o = objOf(b);
           const name = textOf(o.name);
           if (!name) return [];
           const steps = Array.isArray(o.steps) ? o.steps.filter((s): s is string => typeof s === 'string') : [];
           const minutes = Array.isArray(o.minutes) ? o.minutes.map(Number) : undefined;
-          const span = textOf(o.start) && textOf(o.end) ? ` ${textOf(o.start)} to ${textOf(o.end)}` : '';
+          // The times in words, as a day template's slots read ("9:30 pm to 10:00 pm"), never a bare 21:30.
+          const start = minuteOf(o.start);
+          const end = minuteOf(o.end);
+          const span = start !== null && end !== null ? ` ${slotRangeLabel({ start, end })}` : '';
           const more = steps.length ? ` (${steps.length} ${steps.length === 1 ? 'step' : 'steps'}, ${minutesLabel(stepsMinutes({ steps, minutes }))})` : '';
           return [`${name}${span}${more}`];
         }),
@@ -262,6 +357,50 @@ function serverDerive(table: DataTable, col: DataColumn, cells: Record<string, C
         (x): x is string => Boolean(x),
       );
       return joined(parts, '. ');
+    }
+    case 'kpiAmount': {
+      // A business metric's number in its unit's words, as Reviews shows it: money from cents, hours from minutes, a percent, a count.
+      const unit = fields[col.from?.[0] ?? ''];
+      const n = Number(fields[col.from?.[1] ?? '']);
+      if (!(KPI_UNITS as readonly unknown[]).includes(unit) || !Number.isFinite(n)) return null;
+      const currency = fields[col.from?.[2] ?? ''];
+      return kpiShown(unit as (typeof KPI_UNITS)[number], n, typeof currency === 'string' && currency ? currency : 'INR');
+    }
+    case 'minuteRanges': {
+      // A day's own session hours, as Shop keeps them (an empty list closes the day), in the words a day template's slots use.
+      const ranges = listOf(first).flatMap((r) => {
+        const o = objOf(r);
+        const start = Number(o.startMin);
+        const end = Number(o.endMin);
+        return Number.isInteger(start) && Number.isInteger(end) && end > start ? [slotRangeLabel({ start, end })] : [];
+      });
+      return ranges.length ? ranges.join(', ') : 'Closed all day';
+    }
+    case 'rewardName': {
+      // A reward's name from the catalog, the one list of rewards (a game's unlock is `game_<key>` there too).
+      const key = textOf(first);
+      return key ? (REWARD_BY_KEY[key]?.name ?? 'A reward no longer offered') : null;
+    }
+    case 'vibeQuestion': {
+      // A vibe check answer's question, by the words the vibe check asked it in.
+      const q = QUESTION_BY_ID[textOf(first)];
+      return q ? q.prompt : 'A question no longer asked';
+    }
+    case 'vibeAnswer':
+      return vibeAnswerWords(textOf(first), Number(fields[col.from?.[1] ?? '']));
+    case 'discoverResult':
+      return discoverWords(col.key, objOf(first));
+    case 'discoverAddOn':
+      return addOnWords(cells.addOn ?? null, jsonOf(first));
+    case 'answeredBy': {
+      // Who answered a Companion line, as the Companion names them: nothing for the person's own lines and for old lines from before it was kept.
+      // The model alone: the stored value also says what the answer read (aiOpen.ts, `withReads`).
+      const model = modelOnly(textOf(first));
+      if (cells.who === 'you' || !model) return null;
+      if (model === 'local') return 'The built-in companion';
+      if (model === 'crisis') return 'The crisis line';
+      if (model === 'workers-ai') return 'The built-in model';
+      return ASSISTANT_MODEL_BY_ID[model]?.name ?? model;
     }
     default:
       return undefined;
@@ -355,7 +494,8 @@ async function readMemory(db: D1Database, table: DataTable, ctx: ReadCtx, blocki
         db.prepare('SELECT badge_key, earned_at FROM badge_awards WHERE user_id = ?').bind(uid).all<{ badge_key: string; earned_at: string | null }>(),
         db.prepare('SELECT badge_key, note, awarded_at FROM badge_grants WHERE user_id = ?').bind(uid).all<{ badge_key: string; note: string; awarded_at: string }>(),
       ]);
-      // A coach or an admin never sees the private families (Focus, Reflection, Money), as a public page never does.
+      // A coach, an admin and AI chat on a model that may keep data (read in the admin view) never see the private families (Focus, Reflection,
+      // Money), as a public page never does.
       const shown = (key: string) => {
         const b = BADGE_BY_KEY[key];
         return b && (ctx.view === 'owner' || !BADGE_FAMILY_META[b.family]?.private) ? b : null;
@@ -470,7 +610,7 @@ export async function loadTable(db: D1Database, table: DataTable, query: TableQu
     };
   }
 
-  const sqlCtx = { view: ctx.view, ownerId: uid, viewerId: ctx.viewerId, today: ctx.subject.today, zone: ctx.subject.zone };
+  const sqlCtx = { view: ctx.view, ownerId: uid, viewerId: ctx.viewerId, today: ctx.subject.today, zone: ctx.subject.zone, ai: ctx.ai === true, aiHeld: ctx.aiHeld };
   const built =
     mode.kind === 'one'
       ? tableSql(table, { ...query, count: false }, { ...sqlCtx, id: mode.id })

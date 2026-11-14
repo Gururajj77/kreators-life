@@ -58,6 +58,7 @@ Hiding deletes nothing.
 
 - Your pages, logs and tasks stay put. Show the app again and they are there.
 - A hidden app leaves the sidebar, the phone menu and Home.
+- The tables that belong to it leave **All tables** too, and come back when you show it.
 - Emerging stops reading it. A pattern only runs while every app it reads is showing, so hide Sleep and the app stops looking for links with your sleep.
 
 If you want your data gone, that is a different step: **Erase everything** or **Delete my account** under Your data on the Profile tab. The privacy lesson covers both.

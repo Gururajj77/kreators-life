@@ -136,7 +136,7 @@ What is private goes. Their events, runs and sessions still to come are cancelle
 - **The audit log:** every role, permission, honor, badge, xp, plan, connection, invite and delete is written to the **Audit** tab, with the before and after. So is each of a member's tables you open or download.
 - **Role changes are watched:** every admin's inbox hears about role changes.
 - **Never shown:** the panel never shows anyone's journal, wellbeing or Discover answers. Their Finance shows only through **Tables**, below.
-- **Their tables:** **Tables** on a row opens that member's tables, read only, with your own session, never the admin key. It never opens the journal, gratitude or a body and mind table, and never a deleted member. Each table you open or download is written to the audit log, and their export lists when. Open one only when you need to, such as to answer their question.
+- **Their tables:** **Tables** on a row opens that member's tables, read only, with your own session, never the admin key. It never opens the journal, gratitude or a body and mind table, and never a deleted member. It never lists a table that holds other people's details either, such as their buyers, guests, clients, chats, Agency, Discover or the Companion: those are theirs and AI chat's alone. The tables sit in the same groups as the Apps page, and a table shows only while its app is on for them. Each table you open or download is written to the audit log, and their export lists when. Open one only when you need to, such as to answer their question.
 
 > **Pro tip:** give a permission, not a role, wherever you can. A creator with Moderator is a guide, and nothing else about their account changes.
 

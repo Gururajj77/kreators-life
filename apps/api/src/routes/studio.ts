@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { AFFILIATE_SHARE, INVITE_NOT_FOUND, PRODUCT_KINDS, statusesFor, type Availability, type AvailabilityOverride, type Booking, type Coupon, type Lead, type Lesson, type Order, type Product, type ProductInvite, type ProductKind, type ProductStatus, type QuizQuestion, type StudioAnalytics, type Testimonial, parseFaq } from '@kreators/shared';
-import { formatCount, isUnlockBadgeKey, money } from '@kreators/shared';
+import { formatCount, isUnlockBadgeKey, money, PRODUCT_MONEY_MAX } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
 import { audit, badLink, blockedByName, DELETED_NAME, LINK_PROBLEM, nameOf, newId, noteStmt, notify, nowIso, parseList, pageOf, paged, TEN_A_PAGE, personBy, httpUrl, str } from '../db';
 import { logEvent, sendEmail, track } from '../ops';
@@ -187,6 +187,13 @@ const int = (v: unknown, fallback: number | null, lo = 0, hi = 1_000_000): numbe
   return Number.isFinite(n) ? Math.max(lo, Math.min(hi, Math.round(n))) : fallback;
 };
 
+/**
+ * A money price past PRODUCT_MONEY_MAX (₹10,00,000) is refused in words. Studio had capped a price at ₹10,000 by holding it there quietly;
+ * the founder raised it (2026-11-14: "remove the cap", then "stop under 10lacs"), and a price is never saved as a number it was not.
+ */
+const tooDear = (v: unknown): boolean => v !== null && v !== undefined && Number.isFinite(Number(v)) && Number(v) > PRODUCT_MONEY_MAX;
+const TOO_DEAR = `That price is too high. The most is ${formatCount(PRODUCT_MONEY_MAX / 100)}.`;
+
 const list = (v: unknown, max: number, len: number): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').map((x) => x.trim().slice(0, len)).filter(Boolean).slice(0, max) : []);
 
 /** Up to twenty multiple-choice questions, each with two to six options and one right answer. */
@@ -312,6 +319,7 @@ studio.post('/products', async (c) => {
   const title = str(body.title, 120);
   if (!title) return c.json({ error: 'title required' }, 400);
   if (badLink(body.url)) return c.json({ error: LINK_PROBLEM }, 400);
+  if (tooDear(body.priceCents)) return c.json({ error: TOO_DEAR }, 400);
   const id = newId();
   const now = nowIso();
   await db
@@ -320,7 +328,7 @@ studio.post('/products', async (c) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
-      id, user.id, kind, title, str(body.description, 2000), int(body.pricePoints, 0) ?? 0, int(body.priceCents, 0) ?? 0, str(body.currency, 3, 'INR').toUpperCase() || 'INR',
+      id, user.id, kind, title, str(body.description, 2000), int(body.pricePoints, 0) ?? 0, int(body.priceCents, 0, 0, PRODUCT_MONEY_MAX) ?? 0, str(body.currency, 3, 'INR').toUpperCase() || 'INR',
       httpUrl(body.url, 500) || null, str(body.startsAt, 40) || null, int(body.durationMin, kind === 'session' ? 30 : null, 5, 600), int(body.capacity, null, 1),
       httpUrl(body.meetingUrl, 500) || null, body.status === 'live' ? 'live' : 'draft', str(body.cover, 8, ''), 0, now, now,
       body.pwyw === true ? 1 : 0, JSON.stringify(list(body.intake, 8, 200)), httpUrl(body.replayUrl, 500) || null, int(body.replayPoints, 0) ?? 0, JSON.stringify(await ownedIds(db, user.id, body.bundleIds)), str(body.lockedBody, 20000), int(body.responseDays, kind === 'dm' ? 3 : null, 1, 30), body.leadMagnet === true ? 1 : 0, body.certificate === true ? 1 : 0,
@@ -360,6 +368,7 @@ studio.patch('/products/:id', async (c) => {
   if (!prev) return c.json({ error: 'not found' }, 404);
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
   if (badLink(body.url)) return c.json({ error: LINK_PROBLEM }, 400);
+  if (tooDear(body.priceCents)) return c.json({ error: TOO_DEAR }, 400);
   // Private is for courses only; every other kind is Draft, Live or Archived.
   if ('status' in body && body.status !== prev.status && !(statusesFor(prev.kind) as readonly unknown[]).includes(body.status)) {
     return c.json({ error: body.status === 'private' ? 'Only a course can be private.' : 'That is not a state this product can be in.' }, 400);
@@ -376,7 +385,7 @@ studio.patch('/products/:id', async (c) => {
          pwyw = ?, intake_json = ?, replay_url = ?, replay_points = ?, bundle_json = ?, locked_body = ?, response_days = ?, lead_magnet = ?, certificate = ?, buffer_min = ?, notice_hours = ?, max_days_ahead = ?, period_months = ?, min_points = ?, badge = ? WHERE id = ?`,
     )
     .bind(
-      str(body.title, 120, prev.title) || prev.title, str(body.description, 2000, prev.description), int(body.pricePoints, prev.price_points) ?? prev.price_points, int(body.priceCents, prev.price_cents) ?? prev.price_cents,
+      str(body.title, 120, prev.title) || prev.title, str(body.description, 2000, prev.description), int(body.pricePoints, prev.price_points) ?? prev.price_points, int(body.priceCents, prev.price_cents, 0, PRODUCT_MONEY_MAX) ?? prev.price_cents,
       str(body.currency, 3, prev.currency).toUpperCase() || prev.currency, 'url' in body ? httpUrl(body.url, 500) || null : prev.url, 'startsAt' in body ? str(body.startsAt, 40) || null : prev.starts_at,
       'durationMin' in body ? int(body.durationMin, prev.duration_min, 5, 600) : prev.duration_min, 'capacity' in body ? int(body.capacity, prev.capacity, 1) : prev.capacity,
       'meetingUrl' in body ? httpUrl(body.meetingUrl, 500) || null : prev.meeting_url, status, str(body.cover, 8, prev.cover) || prev.cover, int(body.sortOrder, prev.sort_order) ?? prev.sort_order, nowIso(),

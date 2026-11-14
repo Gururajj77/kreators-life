@@ -2,6 +2,7 @@ import {
   blockMinutes,
   minutesLabel,
   parseRoutineBlocks,
+  routineTimesIssue,
   ROUTINE_NOTE_MAX,
   ROUTINE_STEP_MAX,
   ROUTINE_STEP_MINUTES_MAX,
@@ -17,6 +18,7 @@ import { FIELD } from '../lib/ui';
 import { useRefreshAll } from '../lib/queries';
 import { Button } from './Button';
 import { chip } from './Chat';
+import { ErrorLine } from './ErrorLine';
 import { Icon } from './Icon';
 import { Pencil, X } from 'lucide-react';
 import { clockOf } from '../lib/date';
@@ -32,6 +34,9 @@ export function RoutinePanel({ general, exceptional, date }: { general: RoutineB
   const [day, setDay] = useState<DayType>('general');
   const blocks = day === 'general' ? general : exceptional;
   const [draft, setDraft] = useState<RoutineBlock[] | null>(null);
+  // A block that would run backwards, said under its own times before anything is sent (routineTimesIssue, the server's own
+  // check): which block, which time to change, and the words.
+  const [problem, setProblem] = useState<{ key: RoutineBlock['key']; field: 'start' | 'end'; text: string } | null>(null);
   const refresh = useRefreshAll();
   const save = useMutation({
     mutationFn: (next: RoutineBlock[]) => api.updateRoutine(day === 'general' ? { date, general: next } : { date, exceptional: next }),
@@ -40,7 +45,29 @@ export function RoutinePanel({ general, exceptional, date }: { general: RoutineB
       setDraft(null);
     },
   });
-  const edit = (key: RoutineBlock['key'], change: Partial<RoutineBlock>) => setDraft((d) => d && d.map((b) => (b.key === key ? { ...b, ...change } : b)));
+  const edit = (key: RoutineBlock['key'], change: Partial<RoutineBlock>) => {
+    setProblem(null);
+    setDraft((d) => d && d.map((b) => (b.key === key ? { ...b, ...change } : b)));
+  };
+  const submit = (current: RoutineBlock[]) => {
+    const next = parseRoutineBlocks(current, blocks);
+    const issue = routineTimesIssue(next);
+    if (issue) {
+      // The draft stays as typed; the keyboard goes to the time that needs changing, with the words under it.
+      const { block: bad, field } = issue;
+      save.reset();
+      setProblem({
+        key: bad.key,
+        field,
+        text: field === 'start' ? `${bad.name} starts while you are asleep. Pick a start after ${clockOf(issue.wake)}.` : `${bad.name} ends before it starts. Pick an end after ${clockOf(bad.start)}.`,
+      });
+      // After the words are drawn, so the field is reached with its description in place.
+      requestAnimationFrame(() => document.getElementById(`routine-${field}-${bad.key}`)?.focus());
+      return;
+    }
+    setProblem(null);
+    save.mutate(next);
+  };
   const start = () =>
     setDraft(
       blocks.map((b) => ({
@@ -64,6 +91,7 @@ export function RoutinePanel({ general, exceptional, date }: { general: RoutineB
               onClick={() => {
                 setDay(t);
                 setDraft(null);
+                setProblem(null);
               }}
             >
               {t === 'general' ? 'General day' : 'Exceptional day'}
@@ -120,13 +148,35 @@ export function RoutinePanel({ general, exceptional, date }: { general: RoutineB
                 <div className="mt-xs grid grid-cols-2 gap-xs">
                   <label className="block text-caption text-ink-soft">
                     Starts
-                    <input type="time" value={b.start} onChange={(e) => edit(b.key, { start: e.target.value })} className={`${FIELD} text-ink`} />
+                    <input
+                      id={`routine-start-${b.key}`}
+                      type="time"
+                      value={b.start}
+                      onChange={(e) => edit(b.key, { start: e.target.value })}
+                      aria-invalid={problem?.key === b.key && problem.field === 'start' ? true : undefined}
+                      aria-describedby={problem?.key === b.key && problem.field === 'start' ? 'routine-times-problem' : undefined}
+                      className={`${FIELD} text-ink`}
+                    />
                   </label>
                   <label className="block text-caption text-ink-soft">
                     Ends
-                    <input type="time" value={b.end} onChange={(e) => edit(b.key, { end: e.target.value })} className={`${FIELD} text-ink`} />
+                    <input
+                      id={`routine-end-${b.key}`}
+                      type="time"
+                      value={b.end}
+                      onChange={(e) => edit(b.key, { end: e.target.value })}
+                      aria-invalid={problem?.key === b.key && problem.field === 'end' ? true : undefined}
+                      aria-describedby={problem?.key === b.key && problem.field === 'end' ? 'routine-times-problem' : undefined}
+                      className={`${FIELD} text-ink`}
+                    />
                   </label>
                 </div>
+                {/* The words sit right under the times they are about, where the keyboard lands; drawn only while they stand. */}
+                {problem?.key === b.key && (
+                  <div id="routine-times-problem">
+                    <ErrorLine e={problem.text} className="mt-xs" />
+                  </div>
+                )}
                 {b.key === 'morning' ? (
                   <div className="mt-sm">
                     <p className="m-0 text-caption text-ink-soft">The steps, and the minutes each one takes</p>
@@ -211,10 +261,17 @@ export function RoutinePanel({ general, exceptional, date }: { general: RoutineB
             </p>
           )}
           <div className="mt-sm flex flex-wrap items-center gap-sm">
-            <Button variant="outline" onClick={() => setDraft(null)} disabled={save.isPending}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDraft(null);
+                setProblem(null);
+              }}
+              disabled={save.isPending}
+            >
               Cancel
             </Button>
-            <Button className="ml-auto" onClick={() => save.mutate(parseRoutineBlocks(draft, blocks))} disabled={save.isPending}>
+            <Button className="ml-auto" onClick={() => submit(draft)} disabled={save.isPending}>
               Save my routine
             </Button>
           </div>

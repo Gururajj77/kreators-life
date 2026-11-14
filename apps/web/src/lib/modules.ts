@@ -51,6 +51,16 @@ export const keepForApps =
     return !path || modules.every((m) => m.path !== path || m.on);
   };
 
+/**
+ * The keys of the apps on for the signed-in person: what All tables reads a table's `needs` against on their own lists (the server checks it too),
+ * with `switch:<key>` for each setting inside an app a table needs on too (`needsSwitch`: Business metrics in Reviews; GET /me's `tableSwitches`).
+ */
+export function useAppsOn(): string[] {
+  const { modules } = useModules();
+  const switches = useMe().data?.user.tableSwitches;
+  return useMemo(() => [...modules.filter((m) => m.on && m.available).map((m) => m.key), ...(switches ?? []).map((k) => `switch:${k}`)], [modules, switches]);
+}
+
 export function useModule(key: string): ModuleView | null {
   const { modules } = useModules();
   return modules.find((m) => m.key === key) ?? null;

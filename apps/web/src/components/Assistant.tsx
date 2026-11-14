@@ -1415,7 +1415,8 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
     const line = (m: Omit<Msg, 'id'>): Msg => ({ ...m, id: (ids.current += 1) });
     try {
       const r = await api.assistantSend({ messages: turns, runId, context: { path: loc.pathname, date: todayLocal(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }, ...(model ? { model: model.id } : {}) });
-      setTalk((t) => [...t, { role: 'assistant' as const, text: r.text, note: r.note, actions: r.receipts.map((x) => x.id) }].slice(-40));
+      // What the reply read goes with it, so the server can hold its words back from a later message once a table is shut to AI chat.
+      setTalk((t) => [...t, { role: 'assistant' as const, text: r.text, note: r.note, actions: r.receipts.map((x) => x.id), reads: r.reads ?? [] }].slice(-40));
       setReceipts((m) => ({ ...m, ...Object.fromEntries(r.receipts.map((x) => [x.id, x])) }));
       refreshKeys(r.receipts.flatMap((x) => x.refresh));
       setLog((l) => [

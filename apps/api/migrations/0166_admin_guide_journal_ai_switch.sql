@@ -1,0 +1,452 @@
+-- 0166: Admin guide lessons 06 and 20 brought up to their files after the assistant's journal read joined Show to AI chat (2026-11-14,
+-- the founder's yes): the assistant and the Companion read a member's journal entries only while she has switched on Show to AI chat for
+-- the Journal entries table, and her gratitude only with the same switch on the Gratitude table, still only when she asks and only on a
+-- model that keeps nothing; with a table off it says so and where to switch it on, and reads nothing from it. Every lesson keeps its place.
+-- Made with: node scripts/admin-guide/build.mjs --sync <this file> --only 06,20. Safe to run again.
+UPDATE learning_items SET sequence = 1 WHERE id = 'prog-admin-guide-l01' AND program_id = 'prog-admin-guide';
+UPDATE learning_items SET sequence = 2 WHERE id = 'prog-admin-guide-l02' AND program_id = 'prog-admin-guide';
+UPDATE learning_items SET sequence = 3 WHERE id = 'prog-admin-guide-l03' AND program_id = 'prog-admin-guide';
+UPDATE learning_items SET sequence = 4 WHERE id = 'prog-admin-guide-l24' AND program_id = 'prog-admin-guide';
+UPDATE learning_items SET sequence = 5 WHERE id = 'prog-admin-guide-l04' AND program_id = 'prog-admin-guide';
+UPDATE learning_items SET sequence = 6 WHERE id = 'prog-admin-guide-l05' AND program_id = 'prog-admin-guide';
+UPDATE learning_items SET module_title = 'Journal and prompts', body = 'Riya edits videos all day. By night her head is full of client notes, cuts and half ideas. The Journal is where she puts it down, and nobody else reads it unless she shares it with her coach. Not a brand, and never you, the admin.
+
+In this lesson you''ll learn:
+
+- How Riya opens the Journal and writes her first entry.
+- How the calendar lets her add or fix any past day.
+- How Prompt me gives her a question when she does not know what to write.
+- How Gratitude for today keeps three short lines a day.
+- What an admin can and cannot do with the Journal.
+
+## Where the Journal lives
+
+The Journal is in the Reflection group of apps. It shows on every new account, so Riya does not need to unhide it. She finds it under Apps, in the Reflection group, or she taps Journal from the Wellbeing screen.
+
+The screen opens with a back link to Wellbeing and the title Journal. Under it sits the water and reminders section. On a laptop it is a small bubble at the left instead.
+
+## Step by step: Riya''s first entry
+
+1. Riya opens the Journal and taps **New entry**. It is the one solid button on the screen.
+2. In **Title** she types "Long edit day".
+3. In **Say anything that is on your mind** she writes a few lines. A count of her words shows beside the label.
+4. Under **Emotion** she taps a face: Low, Sad, Neutral, Happy or Overjoyed. She can tap it again to clear it.
+5. She moves the **Stress level** slider from 1 to 5.
+6. Under **Stressor** she taps Work. She can pick more than one, from Work, Money, Family, Health, Loneliness, Relationship, Sleep and Something else.
+7. She taps **Save entry**.
+
+The entry now shows under **My journals**, with its face, the time, the stressors she picked and the first lines of what she wrote.
+
+## The hero and the calendar
+
+Once Riya has an entry, a sky blue card shows at the top. It says how many entries she has so far and how many this month. Two small pills count the positive entries and the heavy ones.
+
+Inside the card is **This month**, a calendar. Every day is a button.
+
+1. Riya taps last Tuesday. A panel opens right under the calendar, never in a popup.
+2. It lists what she wrote that day. She taps one to open it.
+3. If the day is empty, she taps **Write an entry for this day**. If it has entries, the button reads **Add another entry for this day**.
+4. She closes the day with the round close button, or with Escape.
+
+A day in the future cannot take an entry. The server refuses it.
+
+## Prompt me
+
+Some nights Riya stares at the box. Further down the page is a section called **Not sure what to write?**
+
+1. She picks a **Category** from the dropdown, or leaves it on Every category.
+2. She taps **Prompt me**.
+3. A card shows the prompt, its category, and about how many minutes it takes.
+4. She opens **Why this prompt** to see why it helps and how to write it.
+5. She opens **What to expect** to see what may come up.
+6. She taps **Write about this**. The entry sheet opens with the prompt as its title and first line.
+7. If it does not fit, she taps **Another prompt**.
+
+There are sixteen categories, such as Shadow work, Inner child, Gratitude and joy, Energy and boundaries, Money and abundance mindset, 3-6-9 writing and Weekly reset. A line under the card says how many she has seen. None comes back until she has seen them all.
+
+Which prompts she has seen stays on her own device. It is never sent to the server. The heavy categories end with a care note: stop, and talk to a professional or someone you trust.
+
+## Gratitude for today
+
+Right under **New entry** sits **Gratitude for today**: three short lines, each under its own prompt, from one of the seven pillars or the day itself.
+
+1. Riya types a line. It saves as she types, with no button to tap.
+2. On an empty line, she taps the pillar''s name to pick another. The round arrows give her **Another prompt** from the same pillar.
+3. **Make these my usual three** keeps those pillars for each new day.
+
+A prompt she wrote under or skipped comes back only after the rest of that pillar''s prompts. Only today and yesterday can change. Older days are read only, and a dot on the calendar marks a day with lines. It pays nothing.
+
+## Changing or deleting an entry
+
+1. Riya taps an entry in My journals. The sheet opens with her words.
+2. She changes what she likes and taps **Save changes**.
+3. To remove it, she taps **Delete entry**. It turns red and reads **Tap again to delete**.
+4. A second tap deletes it. If she waits a few seconds instead, it goes back to **Delete entry** and nothing changes.
+
+## The rest of the screen
+
+- **By period:** a block that picks a day, a week, a month, a quarter or a half year and shows her journal and wellbeing numbers for it.
+- **Emerging:** patterns from her own logs, when there is one ready. It reads when she wrote, never what she wrote.
+- **How it works:** the steps of the app, folded at the foot.
+
+> **Pro tip:** tell new people to pick an emotion on every entry. The Life app''s emotional area and the Journal''s hero both read it. An entry with no emotion still counts as written, but says less.
+
+> **Result:** Riya has a private page for her thoughts, a calendar to fill any past day, and a prompt whenever she is stuck.
+
+## What the admin checks
+
+The Journal is the most private part of the app. You cannot read it, and you should never try to.
+
+- **No staff view:** no admin screen shows a journal entry or a gratitude line, not even a member''s tables, which leave both out. Journal data never reaches brands, staff, the leaderboard or Club picks.
+- **A coach only if she shares it:** a life coach sees the journal or gratitude only as a whole table she switches on for that coach, read only. Nobody can switch it on for her.
+- **The assistant:** it reads the journal only for its owner, only when the owner asks about it, and only through a model that keeps no data. It also needs her yes: **Show to AI chat** on the Journal entries table, and on the Gratitude table for her gratitude lines. Both start off.
+- **Logs stay clean:** the Logs page never holds journal words. At most it keeps a bare error line with no person and no path.
+- **Switching it:** in Admin, **Flags**, you can turn the Journal off for everyone, set a rollout share or a minimum role. Use this with care, since it is on for all new accounts.
+- **One person:** in Admin, **People**, open a person and use **What does this person see?** to tick or untick Journal for them.
+- **Their data, their call:** a person''s export holds their entries and gratitude, and deleting the account deletes them.
+
+If a member writes to Help about a lost entry, you cannot restore it. A deleted entry is gone for good, and the app says so before it goes.
+
+## The bottom line
+
+The Journal is Riya''s alone. Your job as an admin is to keep it switched on and to keep it private. Help people find Prompt me and the calendar, and never ask them to share what they wrote.', sequence = 7 WHERE id = 'prog-admin-guide-l06' AND program_id = 'prog-admin-guide';
+INSERT OR IGNORE INTO learning_items (id, program_id, module_title, content_type, content_ref, body, sequence, published) VALUES ('prog-admin-guide-l06', 'prog-admin-guide', 'Journal and prompts', 'lesson', NULL, 'Riya edits videos all day. By night her head is full of client notes, cuts and half ideas. The Journal is where she puts it down, and nobody else reads it unless she shares it with her coach. Not a brand, and never you, the admin.
+
+In this lesson you''ll learn:
+
+- How Riya opens the Journal and writes her first entry.
+- How the calendar lets her add or fix any past day.
+- How Prompt me gives her a question when she does not know what to write.
+- How Gratitude for today keeps three short lines a day.
+- What an admin can and cannot do with the Journal.
+
+## Where the Journal lives
+
+The Journal is in the Reflection group of apps. It shows on every new account, so Riya does not need to unhide it. She finds it under Apps, in the Reflection group, or she taps Journal from the Wellbeing screen.
+
+The screen opens with a back link to Wellbeing and the title Journal. Under it sits the water and reminders section. On a laptop it is a small bubble at the left instead.
+
+## Step by step: Riya''s first entry
+
+1. Riya opens the Journal and taps **New entry**. It is the one solid button on the screen.
+2. In **Title** she types "Long edit day".
+3. In **Say anything that is on your mind** she writes a few lines. A count of her words shows beside the label.
+4. Under **Emotion** she taps a face: Low, Sad, Neutral, Happy or Overjoyed. She can tap it again to clear it.
+5. She moves the **Stress level** slider from 1 to 5.
+6. Under **Stressor** she taps Work. She can pick more than one, from Work, Money, Family, Health, Loneliness, Relationship, Sleep and Something else.
+7. She taps **Save entry**.
+
+The entry now shows under **My journals**, with its face, the time, the stressors she picked and the first lines of what she wrote.
+
+## The hero and the calendar
+
+Once Riya has an entry, a sky blue card shows at the top. It says how many entries she has so far and how many this month. Two small pills count the positive entries and the heavy ones.
+
+Inside the card is **This month**, a calendar. Every day is a button.
+
+1. Riya taps last Tuesday. A panel opens right under the calendar, never in a popup.
+2. It lists what she wrote that day. She taps one to open it.
+3. If the day is empty, she taps **Write an entry for this day**. If it has entries, the button reads **Add another entry for this day**.
+4. She closes the day with the round close button, or with Escape.
+
+A day in the future cannot take an entry. The server refuses it.
+
+## Prompt me
+
+Some nights Riya stares at the box. Further down the page is a section called **Not sure what to write?**
+
+1. She picks a **Category** from the dropdown, or leaves it on Every category.
+2. She taps **Prompt me**.
+3. A card shows the prompt, its category, and about how many minutes it takes.
+4. She opens **Why this prompt** to see why it helps and how to write it.
+5. She opens **What to expect** to see what may come up.
+6. She taps **Write about this**. The entry sheet opens with the prompt as its title and first line.
+7. If it does not fit, she taps **Another prompt**.
+
+There are sixteen categories, such as Shadow work, Inner child, Gratitude and joy, Energy and boundaries, Money and abundance mindset, 3-6-9 writing and Weekly reset. A line under the card says how many she has seen. None comes back until she has seen them all.
+
+Which prompts she has seen stays on her own device. It is never sent to the server. The heavy categories end with a care note: stop, and talk to a professional or someone you trust.
+
+## Gratitude for today
+
+Right under **New entry** sits **Gratitude for today**: three short lines, each under its own prompt, from one of the seven pillars or the day itself.
+
+1. Riya types a line. It saves as she types, with no button to tap.
+2. On an empty line, she taps the pillar''s name to pick another. The round arrows give her **Another prompt** from the same pillar.
+3. **Make these my usual three** keeps those pillars for each new day.
+
+A prompt she wrote under or skipped comes back only after the rest of that pillar''s prompts. Only today and yesterday can change. Older days are read only, and a dot on the calendar marks a day with lines. It pays nothing.
+
+## Changing or deleting an entry
+
+1. Riya taps an entry in My journals. The sheet opens with her words.
+2. She changes what she likes and taps **Save changes**.
+3. To remove it, she taps **Delete entry**. It turns red and reads **Tap again to delete**.
+4. A second tap deletes it. If she waits a few seconds instead, it goes back to **Delete entry** and nothing changes.
+
+## The rest of the screen
+
+- **By period:** a block that picks a day, a week, a month, a quarter or a half year and shows her journal and wellbeing numbers for it.
+- **Emerging:** patterns from her own logs, when there is one ready. It reads when she wrote, never what she wrote.
+- **How it works:** the steps of the app, folded at the foot.
+
+> **Pro tip:** tell new people to pick an emotion on every entry. The Life app''s emotional area and the Journal''s hero both read it. An entry with no emotion still counts as written, but says less.
+
+> **Result:** Riya has a private page for her thoughts, a calendar to fill any past day, and a prompt whenever she is stuck.
+
+## What the admin checks
+
+The Journal is the most private part of the app. You cannot read it, and you should never try to.
+
+- **No staff view:** no admin screen shows a journal entry or a gratitude line, not even a member''s tables, which leave both out. Journal data never reaches brands, staff, the leaderboard or Club picks.
+- **A coach only if she shares it:** a life coach sees the journal or gratitude only as a whole table she switches on for that coach, read only. Nobody can switch it on for her.
+- **The assistant:** it reads the journal only for its owner, only when the owner asks about it, and only through a model that keeps no data. It also needs her yes: **Show to AI chat** on the Journal entries table, and on the Gratitude table for her gratitude lines. Both start off.
+- **Logs stay clean:** the Logs page never holds journal words. At most it keeps a bare error line with no person and no path.
+- **Switching it:** in Admin, **Flags**, you can turn the Journal off for everyone, set a rollout share or a minimum role. Use this with care, since it is on for all new accounts.
+- **One person:** in Admin, **People**, open a person and use **What does this person see?** to tick or untick Journal for them.
+- **Their data, their call:** a person''s export holds their entries and gratitude, and deleting the account deletes them.
+
+If a member writes to Help about a lost entry, you cannot restore it. A deleted entry is gone for good, and the app says so before it goes.
+
+## The bottom line
+
+The Journal is Riya''s alone. Your job as an admin is to keep it switched on and to keep it private. Help people find Prompt me and the calendar, and never ask them to share what they wrote.', 7, 1);
+UPDATE learning_items SET sequence = 8 WHERE id = 'prog-admin-guide-l07' AND program_id = 'prog-admin-guide';
+UPDATE learning_items SET sequence = 9 WHERE id = 'prog-admin-guide-l25' AND program_id = 'prog-admin-guide';
+UPDATE learning_items SET sequence = 10 WHERE id = 'prog-admin-guide-l08' AND program_id = 'prog-admin-guide';
+UPDATE learning_items SET sequence = 11 WHERE id = 'prog-admin-guide-l09' AND program_id = 'prog-admin-guide';
+UPDATE learning_items SET sequence = 12 WHERE id = 'prog-admin-guide-l10' AND program_id = 'prog-admin-guide';
+UPDATE learning_items SET sequence = 13 WHERE id = 'prog-admin-guide-l11' AND program_id = 'prog-admin-guide';
+UPDATE learning_items SET sequence = 14 WHERE id = 'prog-admin-guide-l12' AND program_id = 'prog-admin-guide';
+UPDATE learning_items SET sequence = 15 WHERE id = 'prog-admin-guide-l13' AND program_id = 'prog-admin-guide';
+UPDATE learning_items SET sequence = 16 WHERE id = 'prog-admin-guide-l14' AND program_id = 'prog-admin-guide';
+UPDATE learning_items SET sequence = 17 WHERE id = 'prog-admin-guide-l15' AND program_id = 'prog-admin-guide';
+UPDATE learning_items SET sequence = 18 WHERE id = 'prog-admin-guide-l16' AND program_id = 'prog-admin-guide';
+UPDATE learning_items SET sequence = 19 WHERE id = 'prog-admin-guide-l17' AND program_id = 'prog-admin-guide';
+UPDATE learning_items SET sequence = 20 WHERE id = 'prog-admin-guide-l18' AND program_id = 'prog-admin-guide';
+UPDATE learning_items SET sequence = 21 WHERE id = 'prog-admin-guide-l19' AND program_id = 'prog-admin-guide';
+UPDATE learning_items SET module_title = 'The assistant, plans and credits', body = 'Riya has a long day of edits. She wants to log her sleep, add a task to a pyramid and note a payment, without opening three apps. Bumling, the app''s own guide, does it for her from one panel.
+
+In this lesson you''ll learn:
+
+- What the assistant does for free and what needs a plan.
+- How Riya picks a plan, reads her credits and undoes a change.
+- How models and privacy work.
+- How an admin starts a plan or adds credits.
+
+## Open the assistant
+
+The assistant is a round button with Bumling in it, at the bottom right of every screen in the app. On a phone it sits above the tab bar.
+
+1. Riya taps the button.
+2. A panel opens called **Bumling AI assistant**.
+3. The page under it stays in view and updates as things change.
+
+Close folds the panel back into the button and keeps the chat.
+
+## The free half: flows
+
+Flows are short forms that cost nothing. They write through the same steps a tap on a screen uses. Each one says where its answer lands.
+
+Some of them:
+
+- **Check in for today** and **Mark the small act done**, which land on the Daily tab.
+- **Add to a pyramid**, which lands on that pillar in Pillars.
+- **Mark my not to do list** and **Add to my not to do list**.
+- **Log my sleep**, **Log my stress** and **Log mindful minutes**.
+- **Add money in or out** and **Note money owed**, when Finance is on.
+- **Write a review**, when Reviews is on.
+
+A flow is hidden while its app is off. The screen under the panel picks the first few.
+
+## The paid half: typing
+
+Typing what you want, like "move my edit task to Friday", needs a plan.
+
+1. Riya types a line in the box at the bottom.
+2. Bumling does it in the app as Riya, with the same rules as her own taps.
+3. Each change comes back as a row with **Undo**.
+4. Removing something, or settling money owed, waits for her to tap **Confirm** or **Cancel**.
+5. While it works, the send arrow turns into a **Stop** square. What was done before the stop stays, each with Undo.
+
+It can also log movement, the eating check-in and the day''s gratitude. It reads supplements only if Riya switches their table on with **Show to AI chat**, and then only on a model that keeps nothing.
+
+Each reply says **Answered by** and the model''s name, so it is never mixed up with a built-in line.
+
+Without a plan, she can still ask what a word means, like "what is a layer?". Anything else shows the plan card.
+
+## Models and privacy
+
+When a model is connected on the server, a model picker shows under the panel''s header. The list holds free models that can use the app''s tools.
+
+- **A free model costs no credits**, but typing still needs a plan.
+- **Some models keep nothing.** Only with one of those can the assistant read the journal and the trackers.
+- **The journal is read only when asked, and only when open.** The assistant and the Companion read it only when Riya asks about it, and only while she has switched on **Show to AI chat** for the Journal entries table. Her gratitude lines need the same switch on the Gratitude table. If one is off, the assistant tells her so and where to switch it on, and reads nothing from it.
+- **A whole table only when she opens it.** The assistant and the Companion read a table from All tables only when Riya switches on **Show to AI chat** for it, at the top of the table or under **AI chat** on her Profile tab. They never change it. The journal, the body and mind tables and any table with other people''s details go only to a model that keeps nothing.
+
+The panel says under the picker what the chosen model may read.
+
+## Pick a plan
+
+1. Riya opens the Profile tab and taps **Plans and credits**.
+2. She sees her **Plan** and what she **Used today**.
+3. Under **Plans** she reads the three plans, all in rupees, each for 30 days:
+
+- **Pro:** ₹1,499 for 10,000 credits.
+- **Pro Max:** ₹12,499 for 100,000 credits.
+- **Ultra:** ₹49,999 for 400,000 credits.
+
+Plan credits that are left at the end do not carry over.
+
+Under **Top up** are extra credits: ₹899 for 8,000, ₹2,299 for 20,000 and ₹4,499 for 40,000. They are used after the plan''s own and stay until used.
+
+Payments are not live yet. Picking a plan or a top-up charges nothing, and the page says so. Until payments are live, the team switches plans on.
+
+## Read the credits
+
+- **One credit** is a tenth of a US cent of model use, worked out from the words the model read and wrote.
+- **Credits used** shows each day for the last thirty days.
+- **Limits by plan** shows what each agent may read and spend, with Riya''s column marked.
+- **History** lists every credit in and out, newest first.
+
+The Companion uses the same plan and credits. Without a plan, or once credits run out, it still answers free in its built-in way.
+
+## What an admin does
+
+You start plans by hand until payments are live.
+
+1. Open Admin, then the **People** tab.
+2. Search for Riya and tap her row.
+3. Under **Plan and credits**, pick a plan and the number of days, then tap **Start**.
+4. To add extra credits, type the number and tap **Add credits**. Add a line under "Why, for the history" if you like.
+5. To end a plan, pick **No plan** and tap **End plan**. A sheet asks first. Plan credits go; extra credits stay.
+
+You can also tick several rows and use **Start Pro** or **End plan** for all of them. Every change is written to the audit log.
+
+## What an admin checks
+
+- **The model key:** the model is set on the server. Until it is, the picker does not show.
+- **The switch:** the assistant is on for everyone. The team can switch it off under Flags.
+- **Its records:** the assistant keeps tool names, ids and short labels for Undo, never journal text.
+
+> **Pro tip:** when you start a plan for a tester, add a few extra credits with a note. The note shows in their History, so they know where it came from.
+
+> **Result:** Riya logs, plans and fixes things by typing one line, and every change has an Undo.
+
+## The bottom line
+
+The flows are free for everyone. Typing needs a plan, and credits pay for the model. Until payments go live, plans start from Admin, People, and every change you make there is in the audit log.', sequence = 22 WHERE id = 'prog-admin-guide-l20' AND program_id = 'prog-admin-guide';
+INSERT OR IGNORE INTO learning_items (id, program_id, module_title, content_type, content_ref, body, sequence, published) VALUES ('prog-admin-guide-l20', 'prog-admin-guide', 'The assistant, plans and credits', 'lesson', NULL, 'Riya has a long day of edits. She wants to log her sleep, add a task to a pyramid and note a payment, without opening three apps. Bumling, the app''s own guide, does it for her from one panel.
+
+In this lesson you''ll learn:
+
+- What the assistant does for free and what needs a plan.
+- How Riya picks a plan, reads her credits and undoes a change.
+- How models and privacy work.
+- How an admin starts a plan or adds credits.
+
+## Open the assistant
+
+The assistant is a round button with Bumling in it, at the bottom right of every screen in the app. On a phone it sits above the tab bar.
+
+1. Riya taps the button.
+2. A panel opens called **Bumling AI assistant**.
+3. The page under it stays in view and updates as things change.
+
+Close folds the panel back into the button and keeps the chat.
+
+## The free half: flows
+
+Flows are short forms that cost nothing. They write through the same steps a tap on a screen uses. Each one says where its answer lands.
+
+Some of them:
+
+- **Check in for today** and **Mark the small act done**, which land on the Daily tab.
+- **Add to a pyramid**, which lands on that pillar in Pillars.
+- **Mark my not to do list** and **Add to my not to do list**.
+- **Log my sleep**, **Log my stress** and **Log mindful minutes**.
+- **Add money in or out** and **Note money owed**, when Finance is on.
+- **Write a review**, when Reviews is on.
+
+A flow is hidden while its app is off. The screen under the panel picks the first few.
+
+## The paid half: typing
+
+Typing what you want, like "move my edit task to Friday", needs a plan.
+
+1. Riya types a line in the box at the bottom.
+2. Bumling does it in the app as Riya, with the same rules as her own taps.
+3. Each change comes back as a row with **Undo**.
+4. Removing something, or settling money owed, waits for her to tap **Confirm** or **Cancel**.
+5. While it works, the send arrow turns into a **Stop** square. What was done before the stop stays, each with Undo.
+
+It can also log movement, the eating check-in and the day''s gratitude. It reads supplements only if Riya switches their table on with **Show to AI chat**, and then only on a model that keeps nothing.
+
+Each reply says **Answered by** and the model''s name, so it is never mixed up with a built-in line.
+
+Without a plan, she can still ask what a word means, like "what is a layer?". Anything else shows the plan card.
+
+## Models and privacy
+
+When a model is connected on the server, a model picker shows under the panel''s header. The list holds free models that can use the app''s tools.
+
+- **A free model costs no credits**, but typing still needs a plan.
+- **Some models keep nothing.** Only with one of those can the assistant read the journal and the trackers.
+- **The journal is read only when asked, and only when open.** The assistant and the Companion read it only when Riya asks about it, and only while she has switched on **Show to AI chat** for the Journal entries table. Her gratitude lines need the same switch on the Gratitude table. If one is off, the assistant tells her so and where to switch it on, and reads nothing from it.
+- **A whole table only when she opens it.** The assistant and the Companion read a table from All tables only when Riya switches on **Show to AI chat** for it, at the top of the table or under **AI chat** on her Profile tab. They never change it. The journal, the body and mind tables and any table with other people''s details go only to a model that keeps nothing.
+
+The panel says under the picker what the chosen model may read.
+
+## Pick a plan
+
+1. Riya opens the Profile tab and taps **Plans and credits**.
+2. She sees her **Plan** and what she **Used today**.
+3. Under **Plans** she reads the three plans, all in rupees, each for 30 days:
+
+- **Pro:** ₹1,499 for 10,000 credits.
+- **Pro Max:** ₹12,499 for 100,000 credits.
+- **Ultra:** ₹49,999 for 400,000 credits.
+
+Plan credits that are left at the end do not carry over.
+
+Under **Top up** are extra credits: ₹899 for 8,000, ₹2,299 for 20,000 and ₹4,499 for 40,000. They are used after the plan''s own and stay until used.
+
+Payments are not live yet. Picking a plan or a top-up charges nothing, and the page says so. Until payments are live, the team switches plans on.
+
+## Read the credits
+
+- **One credit** is a tenth of a US cent of model use, worked out from the words the model read and wrote.
+- **Credits used** shows each day for the last thirty days.
+- **Limits by plan** shows what each agent may read and spend, with Riya''s column marked.
+- **History** lists every credit in and out, newest first.
+
+The Companion uses the same plan and credits. Without a plan, or once credits run out, it still answers free in its built-in way.
+
+## What an admin does
+
+You start plans by hand until payments are live.
+
+1. Open Admin, then the **People** tab.
+2. Search for Riya and tap her row.
+3. Under **Plan and credits**, pick a plan and the number of days, then tap **Start**.
+4. To add extra credits, type the number and tap **Add credits**. Add a line under "Why, for the history" if you like.
+5. To end a plan, pick **No plan** and tap **End plan**. A sheet asks first. Plan credits go; extra credits stay.
+
+You can also tick several rows and use **Start Pro** or **End plan** for all of them. Every change is written to the audit log.
+
+## What an admin checks
+
+- **The model key:** the model is set on the server. Until it is, the picker does not show.
+- **The switch:** the assistant is on for everyone. The team can switch it off under Flags.
+- **Its records:** the assistant keeps tool names, ids and short labels for Undo, never journal text.
+
+> **Pro tip:** when you start a plan for a tester, add a few extra credits with a note. The note shows in their History, so they know where it came from.
+
+> **Result:** Riya logs, plans and fixes things by typing one line, and every change has an Undo.
+
+## The bottom line
+
+The flows are free for everyone. Typing needs a plan, and credits pay for the model. Until payments go live, plans start from Admin, People, and every change you make there is in the audit log.', 22, 1);
+UPDATE learning_items SET sequence = 23 WHERE id = 'prog-admin-guide-l21' AND program_id = 'prog-admin-guide';
+UPDATE learning_items SET sequence = 24 WHERE id = 'prog-admin-guide-l22' AND program_id = 'prog-admin-guide';
+UPDATE learning_items SET sequence = 25 WHERE id = 'prog-admin-guide-l23' AND program_id = 'prog-admin-guide';

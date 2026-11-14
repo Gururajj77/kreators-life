@@ -46,11 +46,11 @@ Without a plan, you can still type a question about a word, like "what is a laye
 
 ## Privacy and the model
 
-When a model is connected, a model picker shows under the panel's header. Some models keep nothing you send. Only with one of those can the assistant read your journal and your trackers, and it reads the journal only when you ask about it. The panel tells you under the picker what the chosen model may read.
+When a model is connected, a model picker shows under the panel's header. Some models keep nothing you send. Only with one of those can the assistant read your trackers, your journal and your gratitude. It reads the journal and gratitude only when you ask about them, and only while you have switched on **Show to AI chat** for their tables. If one is off, it tells you so and where to switch it on. The panel tells you under the picker what the chosen model may read.
 
-It can also read a whole table from **All tables**, but only one you open to it. Switch on **Show to AI chat** at the top of the table, or under **AI chat** on the Profile tab. Each one starts off, and the assistant and the Companion can read it but never change it.
+It can also read a whole table from **All tables**, but only one you open to it. Switch on **Show to AI chat** at the top of the table, or under **AI chat** on the Profile tab. Each one starts off, and the assistant and the Companion can read it but never change it. A table with other people's details, such as your buyers, guests or chats, goes only to a model that keeps nothing, just like your journal.
 
-If you took the Discover quiz, you choose whether the assistant learns from it. Find **Let your results help** on your Discover results.
+If you took the Discover quiz, you choose whether the assistant learns from it. Find **Let your results help** on your Discover results. Your Discover tables reach AI chat only while that is on too.
 
 ## Plans and credits, in plain words
 

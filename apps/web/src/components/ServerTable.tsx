@@ -133,7 +133,9 @@ function centsField(c: number): string {
 /** The choices a select edit offers: the person's own list or the column's words, with "none" first where a cell may be emptied. */
 function choicesOf(col: DataColumn, options: Readonly<Record<string, ColumnOption[]>>): ColumnOption[] {
   const edit = col.edit;
-  const list = edit?.choices ? (options[col.key] ?? []) : [...(col.options ?? [])];
+  const all = edit?.choices ? (options[col.key] ?? []) : [...(col.options ?? [])];
+  // A state the app moves by itself (a listing sold) is shown in the cell, never offered here.
+  const list = edit?.offer ? all.filter((o) => edit.offer!.includes(o.value)) : all;
   return edit?.nullable && edit.clearLabel && !list.some((o) => o.isNull) ? [{ value: '', label: edit.clearLabel, isNull: true }, ...list] : list;
 }
 
@@ -244,6 +246,13 @@ function EditCell({ col, row, options, onDone, save }: { col: DataColumn; row: T
         onBlur={() => cancel(false)}
         className="min-h-[44px] w-full min-w-[160px] rounded-tile border-2 border-line bg-paper pl-sm text-subhead font-medium"
       >
+        {/* A state the table does not offer (`offer`: a closed listing, which only goes back to Draft or Published here) still shows as where
+            it starts, unpickable, so the select never seems to sit on a choice it is not on, and picking that choice is a real change. */}
+        {edit.offer && first !== '' && !choices.some((o) => o.value === first) && (
+          <option value={first} disabled>
+            {cellText(col, row.cells)}
+          </option>
+        )}
         <SelectOptions choices={choices} />
       </select>
     );

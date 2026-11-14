@@ -34,14 +34,14 @@ Strip the talk and any strategy session is eight steps a student can walk throug
 4. **Current day.** Wake time, work hours, evening habit, what fills the last hour before sleep.
 5. **Scorecard.** Rate out of 10: positive stress, negative stress, emotional state, control over feelings, learning, sleep, nutrition, passive income, spiritual practice, and each of the seven relationships.
 6. **Insecurities.** Name them and rate their weight out of 10. Common ones: social awkwardness, looks, relationship inexperience, overthinking.
-7. **Design the day.** Two day types (general, exceptional). Template anchors: sleep by 12, 9 to 11 p.m. for learning and reflection, last meal by 8, gym before dinner, a morning block (meditation, breathing, visualization, movement, reading).
+7. **Design the day.** Two day types (general, exceptional). Template anchors: sleep by 12, 9 to 11 p.m. for learning and reflection, last meal by 8, gym before dinner, a morning block (meditation, breathing, visualization, movement, reading). The app keeps these anchors whenever the person's day allows them (see Routine and practices below).
 8. **Contract.** Six tracked blocks (morning routine, nutrition and water, office work, passive skills, social upskilling, sleep). Five days a week minimum. Daily check-in to the coach. Monthly review. Penalty for misses.
 
 Add-ons assigned at the end: one mantra (Om Namah Shivaya for material path, Hare Krishna for spiritual), 5 to 10 minutes. Affirmations twice a day, on waking and before sleep.
 
 ## Status: what is built, what is not
 
-The session is in kreators.app at `/session`, self-serve, no coach needed. It is offered by the setup chat (`/onboarding`), which every new account goes through first, and it waits in Pillars for anyone who skips it. The build follows this document; where the code decided something this document left open, the section below says so. Last brought up to date on 2026-11-03.
+The session is in kreators.app at `/session`, self-serve, no coach needed. It is offered by the setup chat (`/onboarding`), which every new account goes through first, and it waits in Pillars for anyone who skips it. The build follows this document; where the code decided something this document left open, the section below says so. Last brought up to date on 2026-11-03, and the routine's times on 2026-11-14.
 
 | Part of this spec | Status | Where |
 | --- | --- | --- |
@@ -204,11 +204,21 @@ The routine preview, built by `routineFor` from the real day, for a normal day a
 | Block | Normal day | Exceptional day |
 | --- | --- | --- |
 | Morning routine | from wake-up for one hour: mantra five to ten minutes, three breathing rounds, two minutes of seeing the day go well, ten minutes of movement, one page of reading | twenty minutes: mantra five minutes, one breathing round, five minutes of movement |
-| Food and water | to 20:00; water through the day, last meal by eight | same |
+| Food and water | from an hour after wake-up to 20:00; water through the day, last meal by eight. When 20:00 is less than two hours after wake-up or comes after lights out, it ends three and a half hours before lights out instead (an hour long at least, never past lights out), and the note says the last meal is by the end of the block | same |
 | Work | the person's work hours; gym before dinner, at their gym time if they gave one | same |
-| People | work end to 21:00; a floor under Courage gets "one small scary thing a day", otherwise one real conversation a day for the focus | same |
-| Learning and reflection | 21:00 to 23:00; a lesson, then the journal | 22:00 on, the journal only |
+| People | work end to 21:00 when the day allows it (see below); a floor under Courage gets "one small scary thing a day", otherwise one real conversation a day for the focus | same |
+| Learning and reflection | 21:00 to 23:00 when the day allows it; a lesson, then the journal | 22:00 to 23:00, the journal only (the last hour of it at most when the day moves it) |
 | Lights out | the sleep time | same |
+
+These are the template's times, and they hold whenever the day allows them: work ends by 20:30, and lights out comes at 23:00 or later. When it does not, People and Learning follow the day instead of running backwards (`dayLayout` in shared is the one rule, for a new routine and for a saved one):
+
+- **After work.** They fill the evening from the end of work up to 23:00. When 23:00 comes after lights out, or leaves less than an hour after work, the evening runs to half an hour before lights out instead. Learning takes up to two hours at its end, and People at least half an hour before it.
+- **Before work.** With less than an hour after work, they sit in the stretch before work instead, its last two and a half hours at most. Learning ends as work starts.
+- **The last hour.** With no hour on either side, they share the last hour of the waking day.
+
+So the founder's own day (up at 08:30, work 10:00 to 21:30, lights out at 00:30) gets People 21:30 to 22:00 and Learning 22:00 to 23:00. Before 2026-11-14 its People block read 21:30 to 21:00.
+
+A routine saved before then is put right when it is read (`repairRoutineBlocks`). A Food and water, People or Learning block that runs backwards, on the day the routine's own blocks describe, is laid out again by the same rule. People and Learning move together and keep their names and notes. The empty blocks the old template left are laid out again too (People 21:00 to 21:00 when work ended at 21:00, Food 20:00 to 20:00 for someone up at 19:00). Nothing else moves. `GET /session` saves the repair once, so a coach, the assistant and All tables see the same fixed times. When a routine is edited on the life map, a Food and water, People or Learning block that ends before it starts, or starts while the person is asleep, is refused in words and nothing is saved: "People ends before it starts. Pick an end after 9:30pm." on the screen, in the person's own time format. A block that crosses midnight inside the waking day is fine, and the morning, work and lights out are never refused.
 
 The ramp is `rampTime`: wake-up and lights-out move thirty minutes earlier for each week the contract was kept, stopping at 06:30 and 23:30; at onboarding the count is zero, so the routine starts on the person's own day. Then Lumen, guide to faith, hosts the practices: a mantra (Om Namah Shivaya, Hare Krishna, "My own mantra" with your own words, or "No mantra yet"), breathing (box, four seven eight, alternate nostril), a line to say on waking and before sleep (`affirmationFor` by default) and one page a morning from a book the person names.
 

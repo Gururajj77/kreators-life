@@ -670,7 +670,7 @@ Q: I don't have time for another app.
 A: That is the point of it. The daily ask is three moves: check in, do one small act, tick one task. It takes a few minutes. It counts reps, not hours. The rest is there when you want it, and switched off when you don't.
 
 Q: Who sees my journal and Discover results?
-A: Only you, unless you share. Your journal, wellbeing numbers and Discover results never reach brands, staff, the leaderboard or Club selection. A life coach never sees your quiz, and sees your journal only if you switch its table on for them. The assistant reads your journal only when you ask, and a short Discover summary only if you switch that on, both through models that keep nothing. Discover is a self-check, not an IQ test or a diagnosis.
+A: Only you, unless you share. Your journal, wellbeing numbers and Discover results never reach brands, staff, the leaderboard or Club selection. A life coach never sees your quiz, and sees your journal only if you switch its table on for them. The assistant reads your journal only when you ask, and only if you switch its table on for AI chat. It reads a short Discover summary only if you switch that on. Both go only to models that keep nothing. Discover is a self-check, not an IQ test or a diagnosis.
 
 Q: I'm not a creator. Is it for me?
 A: Yes, if you are 18 or over. The seven relationships are for everyone: servitude, friends, family, love, yourself, teachers and faith. The creator apps, like the Shop and Win, stay off until you want them.
@@ -932,7 +932,7 @@ Answers copied word for word from the home page's "Fair questions". Google shows
     {
       "@type": "Question",
       "name": "Who sees my journal and Discover results?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Only you, unless you share. Your journal, wellbeing numbers and Discover results never reach brands, staff, the leaderboard or Club selection. A life coach never sees your quiz, and sees your journal only if you switch its table on for them. The assistant reads your journal only when you ask, and a short Discover summary only if you switch that on, both through models that keep nothing. Discover is a self-check, not an IQ test or a diagnosis." }
+      "acceptedAnswer": { "@type": "Answer", "text": "Only you, unless you share. Your journal, wellbeing numbers and Discover results never reach brands, staff, the leaderboard or Club selection. A life coach never sees your quiz, and sees your journal only if you switch its table on for them. The assistant reads your journal only when you ask, and only if you switch its table on for AI chat. It reads a short Discover summary only if you switch that on. Both go only to models that keep nothing. Discover is a self-check, not an IQ test or a diagnosis." }
     },
     {
       "@type": "Question",
@@ -1381,7 +1381,7 @@ Money refunds go back the way you paid, by UPI, card or bank, through Razorpay, 
 ### Privacy and safety
 
 **Who can see my journal on kreators.app?**
-Only you, unless you share. Your journal, wellbeing numbers and Discover results never reach brands, staff, the leaderboard or Club selection. A life coach sees only the numbers and the tables you switch on for them, so your journal only if you switch its table on. The assistant reads your journal only when you ask, through models that keep nothing.
+Only you, unless you share. Your journal, wellbeing numbers and Discover results never reach brands, staff, the leaderboard or Club selection. A life coach sees only the numbers and the tables you switch on for them, so your journal only if you switch its table on. The assistant reads your journal only when you ask, and only if you switch its table on for AI chat. It goes only to models that keep nothing.
 
 **Does kreators.app use my data to train AI?**
 No. kreators.app never uses what you write to train AI models. It does not sell your personal information or share it for advertising on other sites, and it has no third-party advertising trackers. Three privacy choices, about tracked links, videos and marketing email, all start as no until you say yes.

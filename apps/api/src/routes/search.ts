@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { SearchResults } from '@kreators/shared';
 import type { AppEnv } from '../env';
 import { resolveAccess } from '../access';
+import { aiMayRead } from '../aiOpen';
 import { hiddenByBlock, likeFit, liveUser } from '../db';
 
 export const search = new Hono<AppEnv>();
@@ -20,9 +21,14 @@ search.get('/', async (c) => {
   const agency = access.agency?.available === true;
   const community = access.community?.available === true;
   const bond = access.bond?.available === true;
+  // No assistant tool calls search, but it finds journal entries by their words: a call marked as AI chat gets them only while the person
+  // opened the Journal entries table to it and the model keeps nothing (2026-11-14), the rule the journal's own routes keep.
+  const journalOpen = aiMayRead(c, 'journal');
   const [tasks, journal, resources, products, people, items, listings, tools, posts, clubs, aClients, aInvoices, aContracts, aDocs, chans] = await Promise.all([
     db.prepare("SELECT id, title, relationship, status FROM nodes WHERE user_id = ? AND kind = 'task' AND title LIKE ? ORDER BY created_at DESC LIMIT 6").bind(user.id, like).all<SearchResults['tasks'][number]>(),
-    db.prepare('SELECT id, title, created_at AS createdAt FROM journal_entries WHERE user_id = ? AND (title LIKE ? OR body LIKE ?) ORDER BY created_at DESC LIMIT 6').bind(user.id, like, like).all<SearchResults['journal'][number]>(),
+    journalOpen
+      ? db.prepare('SELECT id, title, created_at AS createdAt FROM journal_entries WHERE user_id = ? AND (title LIKE ? OR body LIKE ?) ORDER BY created_at DESC LIMIT 6').bind(user.id, like, like).all<SearchResults['journal'][number]>()
+      : none<SearchResults['journal'][number]>(),
     db.prepare('SELECT id, title, kind FROM resources WHERE published = 1 AND (title LIKE ? OR summary LIKE ? OR tags LIKE ?) LIMIT 6').bind(like, like, like).all<SearchResults['resources'][number]>(),
     db.prepare("SELECT p.id, p.title, p.kind, u.handle AS ownerHandle FROM products p JOIN users u ON u.id = p.owner_id WHERE p.status = 'live' AND (p.title LIKE ? OR p.description LIKE ?) LIMIT 6").bind(like, like).all<SearchResults['products'][number]>(),
     db.prepare(`SELECT u.handle, u.display_name AS name FROM users u WHERE u.handle IS NOT NULL AND ${liveUser()} AND (u.handle LIKE ? OR u.display_name LIKE ?) LIMIT 6`).bind(like, like).all<SearchResults['people'][number]>(),

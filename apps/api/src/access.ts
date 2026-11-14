@@ -158,6 +158,28 @@ export async function resolveAccess(db: D1Database, user: UserRow): Promise<{ se
   return { settings: ctx.settings, access: accessFor(user, ctx, orgIds), orgIds };
 }
 
+/** The keys of the apps on for a person: the gate's own `on` (available, and not hidden by them), never only `available`. All tables reads a table's `needs` against it. */
+export const appsOn = (access: Record<string, ModuleAccess>): string[] => Object.keys(access).filter((k) => access[k]?.on === true);
+
+/**
+ * Which apps are on for each of these people (a coach's students, the other side of a link), by id: every organization they are in, read in
+ * one statement whatever their number, and the flags this worker keeps a few seconds. Started in the same turn as a route's other reads, the
+ * batch binding sends it with them as one round trip.
+ */
+export async function appsOnForMany(db: D1Database, people: readonly Pick<UserRow, 'id' | 'role' | 'modules'>[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  if (people.length === 0) return out;
+  const ids = [...new Set(people.map((p) => p.id))];
+  const [rows, ctx] = await Promise.all([
+    db.prepare("SELECT user_id, organization_id FROM organization_members WHERE status = 'active' AND user_id IN (SELECT value FROM json_each(?))").bind(JSON.stringify(ids)).all<{ user_id: string; organization_id: string }>(),
+    loadAccessContext(db),
+  ]);
+  const orgs = new Map<string, string[]>();
+  for (const r of rows.results) orgs.set(r.user_id, [...(orgs.get(r.user_id) ?? []), r.organization_id]);
+  for (const p of people) if (!out.has(p.id)) out.set(p.id, appsOn(accessFor(p, ctx, orgs.get(p.id) ?? [])));
+  return out;
+}
+
 /** Pure: which modules one person can see and has on, given the loaded context. */
 export function accessFor(user: Pick<UserRow, 'id' | 'role' | 'modules'>, ctx: AccessContext, orgIds: string[]): Record<string, ModuleAccess> {
   const { settings, overrides: ovs } = ctx;

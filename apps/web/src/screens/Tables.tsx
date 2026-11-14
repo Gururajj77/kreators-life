@@ -1,5 +1,5 @@
-import { DATA_TABLE_GROUPS, listTables, type TableGroupKey, type TableListGroup } from '@kreators/shared/dataTables';
-import type { IconName } from '@kreators/shared';
+import { listTables, type TableGroupKey, type TableListGroup } from '@kreators/shared/dataTables';
+import { formatCount, type IconName } from '@kreators/shared';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { ArrowUpRight } from 'lucide-react';
 import { Link, useParams } from 'react-router';
@@ -9,29 +9,60 @@ import { ErrorLine } from '../components/ErrorLine';
 import { Icon } from '../components/Icon';
 import { Screen } from '../components/Screen';
 import { SkeletonList } from '../components/Skeleton';
+import { TableGroups } from '../components/TableGroups';
 import { useTableCoaches } from '../components/TableSwitches';
 import { ApiError } from '../lib/api';
+import { useAppsOn } from '../lib/modules';
 import { useMe } from '../lib/queries';
 import { useSession } from '../lib/store';
 import { subjectKey, tablesApi, type TablesSubject } from '../lib/tablesApi';
 
 /**
  * All tables (2026-11-13, the founder): every list of a person's own data, grouped, each one a row that opens it as a table. The same
- * list serves a coach (only the tables a student shared with them) and a super admin (a member's, never the journal, gratitude or a body
- * and mind table). No row counts here: counting reads every row, and the daily read limit is shared by everyone.
+ * list serves a coach (only the tables a student shared with them) and a super admin (a member's, never the journal, gratitude, a body
+ * and mind table or one with other people's details). Since 2026-11-14 ("put them in toggles based on categories in every place they occur")
+ * the categories sit inside one accordion per app group, as the Apps page draws its groups (components/TableGroups.tsx), and a table shows only
+ * while its app is on for the person whose tables these are. No row counts here: counting reads every row, and the daily read limit is shared
+ * by everyone.
  */
 
-/** Each group's mark (lucide names from the shared registry of icons). */
+/** Each category's mark (lucide names from the shared registry of icons). */
 const GROUP_ICON: Record<TableGroupKey, IconName> = {
   daily: 'ListChecks',
   pillars: 'Triangle',
   reviews: 'CalendarRange',
+  business: 'TrendingUp',
   body: 'HeartPulse',
   journal: 'NotebookPen',
+  coaching: 'Target',
+  selfAi: 'Telescope',
   money: 'Wallet',
+  purchases: 'Backpack',
+  shop: 'ShoppingBag',
+  audience: 'Megaphone',
+  creatorContent: 'TrendingUp',
+  contentFolders: 'FolderCheck',
+  publicPage: 'Link',
+  store: 'ShoppingCart',
+  tools: 'Toolbox',
+  pitches: 'Tv',
+  rewards: 'Gift',
   learning: 'GraduationCap',
+  teaching: 'Presentation',
+  work: 'BriefcaseBusiness',
+  army: 'Clapperboard',
+  win: 'Medal',
+  agency: 'FolderKanban',
+  agencyPaper: 'FileText',
   people: 'UsersRound',
+  community: 'MessagesSquare',
+  bond: 'Handshake',
+  club: 'IdCard',
+  party: 'PartyPopper',
+  runs: 'Footprints',
+  circles: 'UsersRound',
   account: 'IdCard',
+  invites: 'LifeBuoy',
 };
 
 /** Where a subject's tables live in the app. */
@@ -41,47 +72,36 @@ export function tablesPath(s: TablesSubject): string {
   return '/tables';
 }
 
-/** A group's one line, from the registry (a leaf; only these screens download it). */
-function blurbOf(key: TableGroupKey): string {
-  return DATA_TABLE_GROUPS.find((g) => g.key === key)?.blurb ?? '';
-}
+const tablesIn = (cats: readonly TableListGroup[]) => cats.reduce((n, c) => n + c.tables.length, 0);
+const tablesWord = (n: number) => `${formatCount(n)} ${n === 1 ? 'table' : 'tables'}`;
 
 /** `own`: the person's own list. Each line speaks to its owner ("Your entries"), so a coach or an admin sees the names only. */
-function GroupList({ group, base, own }: { group: TableListGroup; base: string; own: boolean }) {
-  const id = `tables-${group.key}`;
+function CategoryList({ group, base, own }: { group: TableListGroup; base: string; own: boolean }) {
   return (
-    <section className="mt-lg" aria-labelledby={id}>
-      <h2 id={id} className="text-title2">
-        {group.name}
-      </h2>
-      {own && blurbOf(group.key) && <p className="mt-xs m-0 text-subhead text-ink-soft">{blurbOf(group.key)}</p>}
-      {/* .fx-inset sets its own margins to 0, so the room above the list comes from a wrapper. */}
-      <div className="mt-sm">
-        <ul className="fx-inset m-0 list-none p-0">
-          {group.tables.map((t) => (
-            <li key={t.key}>
-              <Link to={`${base}/${t.key}`} className="fx-row items-center gap-sm text-ink">
-                <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink-soft" aria-hidden="true">
-                  <AppIcon name={GROUP_ICON[group.key]} size={22} />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-headline">{t.name}</span>
-                  {own && <span className="mt-[2px] block text-footnote text-ink-soft">{t.blurb}</span>}
-                </span>
-                <Icon icon={ArrowUpRight} size={16} className="read-arrow shrink-0 text-ink-mute" />
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
+    <ul className="fx-inset m-0 list-none p-0">
+      {group.tables.map((t) => (
+        <li key={t.key}>
+          <Link to={`${base}/${t.key}`} className="fx-row items-center gap-sm text-ink">
+            <span className="flex size-[44px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink-soft" aria-hidden="true">
+              <AppIcon name={GROUP_ICON[group.key]} size={22} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-headline">{t.name}</span>
+              {own && <span className="mt-[2px] block text-footnote text-ink-soft">{t.blurb}</span>}
+            </span>
+            <Icon icon={ArrowUpRight} size={16} className="read-arrow shrink-0 text-ink-mute" />
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }
 
 function TablesList({ subject }: { subject: TablesSubject }) {
   const token = useSession((s) => s.token);
   const own = subject.view === 'owner';
-  // The person's own list is the registry itself: nothing to ask the server for.
+  const on = useAppsOn();
+  // The person's own list is the registry itself, cut to the apps they have on: nothing to ask the server for.
   const q = useQuery({
     queryKey: ['tables-list', subjectKey(subject)],
     queryFn: () => tablesApi.list(subject),
@@ -89,7 +109,7 @@ function TablesList({ subject }: { subject: TablesSubject }) {
     staleTime: 60_000,
     placeholderData: keepPreviousData,
   });
-  const groups = own ? listTables('owner') : (q.data?.groups ?? []);
+  const groups = own ? listTables('owner', [], on) : (q.data?.groups ?? []);
   const name = q.data?.subject.name ?? '';
   const base = tablesPath(subject);
   const notHere = q.error instanceof ApiError && q.error.status === 404;
@@ -98,8 +118,9 @@ function TablesList({ subject }: { subject: TablesSubject }) {
     subject.view === 'coach'
       ? `${name || 'Your student'} chooses which tables you see. You can only read them.`
       : subject.view === 'admin'
-        ? 'Read only. Each table you open is written to the audit log. The journal, gratitude and body and mind tables are never shown here.'
+        ? 'Read only. Each table you open is written to the audit log. The journal, gratitude, body and mind tables and any with other people’s details are never shown here.'
         : 'Your lists, one table at a time. Sort, filter, copy or download it.';
+  const place = subject.view === 'owner' ? 'own' : `${subject.view}:${subject.id}`;
   return (
     <Screen>
       <AppCover cover="tables" back={back} eyebrow={own ? undefined : name || undefined} title={own ? 'All tables' : 'Their tables'} lede={lede} />
@@ -113,9 +134,13 @@ function TablesList({ subject }: { subject: TablesSubject }) {
           {name || 'Your student'} has not shared a table with you yet. They choose with Show to my coach at the top of each table, or under Your life coach on their Profile tab.
         </p>
       )}
-      {groups.map((g) => (
-        <GroupList key={g.key} group={g} base={base} own={own} />
-      ))}
+      {groups.length > 0 && (
+        <div className="mt-lg">
+          <TableGroups groups={groups} place={place} heading={2} count={(cats) => tablesWord(tablesIn(cats))} mood={() => 'happy'}>
+            {(cat) => <CategoryList group={cat} base={base} own={own} />}
+          </TableGroups>
+        </div>
+      )}
     </Screen>
   );
 }

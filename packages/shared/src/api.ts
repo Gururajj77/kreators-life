@@ -75,6 +75,9 @@ export interface User {
   dailyView?: DailyView;
   /** The tables AI chat may read (All tables, `users.ai_tables_json`, `parseAiTables` in dataTables.ts); optional so an older answer still reads. */
   aiTables?: string[];
+  /** The settings inside an app that are on for them and that a table needs (`TableSwitch` in dataTables.ts: 'businessMetrics'), so the screen's
+   * lists of tables follow them as the server does; optional so an older answer still reads. */
+  tableSwitches?: string[];
   avatarUrl: string;
   socials: Socials;
   publicSettings: PublicSettings;

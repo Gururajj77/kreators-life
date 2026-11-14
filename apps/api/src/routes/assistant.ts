@@ -25,6 +25,7 @@ import { ToolError, type Req } from '../assistant/dispatch';
 import { closeRun, dateFrom, fit, ioFor as ioWith, markStop, openRun, parseToolArgs, runIdOf, stopAsked as stopMarked, toolsOn, zoneFrom, type AppFetch } from '../assistant/run';
 import { latestExtras, latestProfile, settingsOf } from './discover';
 import { checkArgs, TOOL_BY_NAME, type Args, type Tool } from '../assistant/tools';
+import { HELD_BACK, heldBack } from '../aiOpen';
 import { chat, MAX_OUT, ModelError, modelKeepsNothing, modelOf, tokensOf, tokensOfMessages, type Message, type ToolCall, type ToolSpec } from '../assistant/model';
 
 /**
@@ -99,19 +100,26 @@ How you work:
 - After you act, say what changed in one or two short sentences. The screen lists each change with an Undo, so never list ids.
 - When a tool says no, say why in plain words and what they can do instead. Never say something was done when the tool failed.
 - Removing things and settling money wait for the person: the tool puts a card on screen. Tell them to tap Confirm.
-- Read the journal only when they ask about their journal. Never bring it up yourself. If you have no tool for the journal or the trackers, say this model cannot read them and they can pick a private one.
+- Read the journal or their gratitude only when they ask about it. Never bring it up yourself. read_journal reads only what they opened to AI chat. When it says a part is not open, tell them what it says. Never guess what their journal holds. If you have no tool for the journal or the trackers, say this model cannot read them and they can pick a private one.
 - Money amounts go in as they said them, in their own currency.
 - You cannot pay, buy, post, message people, or change settings. Say so and point them to the screen for it.
 - The app's words: seven pillars, each a pyramid of layers (foundation, guiding principle, value goal, goal outcome, project, task); the small act; the not to do list; Daily; reviews by period.
 - Write short, plain sentences a teenager can read. No emoji, no tables, no headings.${p.learned ? `\n\nWhat you have learned about them, because they allowed it: ${p.learned}` : ''}`;
 }
 
+/** What a kept reply says it read: up to forty short names, or none when it does not say (then it is held back as if it read the journal). */
+const readsFrom = (v: unknown): string[] | undefined =>
+  Array.isArray(v) ? v.filter((k): k is string => typeof k === 'string' && k.length > 0 && k.length <= 60).slice(0, 40) : undefined;
+
 function parseTurns(raw: unknown): AssistantTurn[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .slice(-MAX_TURNS)
-    .filter((t): t is { role: string; text: string; note?: unknown } => Boolean(t) && typeof t === 'object' && (t.role === 'user' || t.role === 'assistant') && typeof t.text === 'string')
-    .map((t) => ({ role: t.role as AssistantTurn['role'], text: t.text.trim().slice(0, MAX_TEXT), ...(typeof t.note === 'string' && t.note ? { note: t.note.slice(0, 1000) } : {}) }))
+    .filter((t): t is { role: string; text: string; note?: unknown; reads?: unknown } => Boolean(t) && typeof t === 'object' && (t.role === 'user' || t.role === 'assistant') && typeof t.text === 'string')
+    .map((t) => {
+      const reads = t.role === 'assistant' ? readsFrom(t.reads) : undefined;
+      return { role: t.role as AssistantTurn['role'], text: t.text.trim().slice(0, MAX_TEXT), ...(typeof t.note === 'string' && t.note ? { note: t.note.slice(0, 1000) } : {}), ...(reads ? { reads } : {}) };
+    })
     .filter((t) => t.text);
 }
 
@@ -189,10 +197,18 @@ export function assistantRoutes(appFetch: AppFetch) {
     const learned = dset?.assistant ? learnedForAssistant(await latestProfile(db, user.id), await latestExtras(db, user.id, dset.mind)) : null;
     const system = systemPrompt({ learned, name: user.display_name, date, weekday: new Date(`${date}T12:00:00Z`).toLocaleDateString(LOCALE, { weekday: 'long', timeZone: 'Etc/UTC' }), timeZone, screen: screenOf(path) });
     const fixed = tokensOf(system) + tokensOf(JSON.stringify(specs));
-    const messages: Message[] = [{ role: 'system', content: system }, ...fit(turns, limit.contextTokens - fixed - MAX_OUT)];
+    const priv = modelKeepsNothing(cfg);
+    // An earlier reply that read a table since shut to AI chat, or (for a model that may keep data) anything only a model that keeps nothing may
+    // read, is sent as a line saying it is left out; what it did (the note: plain labels) stays. What Discover let it learn goes once that is off.
+    const sent = turns.map((t) =>
+      t.role === 'assistant' && (heldBack(c, t.reads ?? null, priv) || (!learned && (t.reads ?? []).includes('discover'))) ? { ...t, text: HELD_BACK } : t,
+    );
+    const messages: Message[] = [{ role: 'system', content: system }, ...fit(sent, limit.contextTokens - fixed - MAX_OUT)];
 
     // `read_table` hands the journal, gratitude and the body and mind tables only to a model that keeps nothing by the list too.
-    const io = ioFor(c, date, modelKeepsNothing(cfg));
+    const io = ioFor(c, date, priv);
+    // What this reply reads that not every model may see again, for the client to keep with it (AssistantReply.reads).
+    const reads = new Set<string>(learned ? ['discover'] : []);
     // Stop: the browser names this run, and Stop marks it. A mark that came first (a fast tap) is kept, not reset.
     const runId = runIdOf(body.runId);
     await openRun(db, user.id, runId);
@@ -239,6 +255,7 @@ export function assistantRoutes(appFetch: AppFetch) {
       }
       try {
         const out = await tool.run(args, io);
+        for (const k of out.reads ?? (tool.sensitive ? [`tool:${tool.name}`] : [])) reads.add(k);
         if (tool.risk === 'write') rows.push(await record(db, user.id, tool, { status: 'done', label: out.label ?? tool.title, undo: out.undo ?? null }));
         calls.push({ tool: name, args, ok: true });
         // Never cut JSON in half: a result too long to read is replaced by a note to ask for less.
@@ -337,6 +354,7 @@ export function assistantRoutes(appFetch: AppFetch) {
       calls,
       credits,
       stopped,
+      reads: [...reads],
     };
     return c.json(reply);
   });

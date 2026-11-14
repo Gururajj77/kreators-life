@@ -116,7 +116,7 @@ A team can hold up to 25 people. A member never sees her bank, fees, private not
 - **Allowing or blocking it:** in Admin, People, tap a row and use **What does this person see?** to allow or block Agency for that person. For a whole brand, add an override on Agency under Flags, for a brand. An override never unhides it: the person then unhides it from **Apps** (Contribution), as under Find Agency.
 - **House templates:** only a super admin saves one, from their own paper, with **Save as house template** in More. They are listed under the **Agency templates** tab.
 - **Counts only:** Dev Tools shows how much Agency is used. It never shows client names, amounts or notes.
-- **Owner only:** no staff member or admin can open Riya's clients, fees or notes.
+- **Owner only:** no staff member or admin can open Riya's clients, fees or notes. Her Agency tables in **All tables** are hers and AI chat's alone, never a coach's or yours.
 
 > **Pro tip:** ask a new Agency user to fill Agency settings first. Every paper after that fills itself, and the "Not filled yet" marks go away.
 

@@ -4,13 +4,15 @@ import { COACH_ABOUT_MAX, COACH_ASK_AGAIN_DAYS, COACH_NOTE_MAX, COACH_SHARE_PART
 import type { AppEnv, UserRow } from '../env';
 import { LIMITS } from '../limits';
 import { blockedByName, blockedEither, DATE_RE, getNode, liveUser, nameOf, newId, notify, nowIso, pageOf, paged, personBy, randomCode, str, toNode } from '../db';
-import { activeLink, askToCoach, coachNode, endLink, isCoach, LINK, linkById, logCoach, logPage, notePage, rosterRow, shareChange, studentView, toLink, toPerson, type LinkRow } from '../coaching';
+import { activeLink, askToCoach, coachNode, endLink, isCoach, LINK, linkById, linkFor, linkOut, linksFor, logCoach, logPage, notePage, rosterRow, shareChange, studentAppsOn, studentView, toPerson, type LinkRow } from '../coaching';
+import { dataTableByKey, keepHiddenTables, TABLE_LIST_MAX, tableReach } from '@kreators/shared/dataTables';
 import { sharedTables, tablesChange } from '../tablesShare';
 import { coachPatterns, coachReport } from '../coachReport';
 import { emailProblem, maskEmail, publicUrl } from '../agencyPaper';
 import { limited, sendEmail, sha } from '../ops';
 import { createNode, DATES_PROBLEM, editNode, type NodeBody } from './nodes';
 import { connectionsCameTrue } from '../invites';
+import { appsOnForMany } from '../access';
 
 /**
  * Coaching, the coach's side: the roster, the directory, asking someone to be a student, and what a coach does for
@@ -137,15 +139,18 @@ coach.get('/', async (c) => {
   const students = paged(rows.results, s);
   const asked = paged(asks.results, a);
   const out = paged(sent.results, o);
+  // Each student's apps on, for the tables in their share (only those shown now ever reach a coach): one read for the three lists.
+  const on = await studentAppsOn(db, [...students.items, ...asked.items, ...out.items]);
+  const onOf = (r: LinkRow) => on.get(r.student_id) ?? [];
   const res: CoachHub = {
     coach: true,
     profile,
     counts: { students: counts?.students ?? 0, asks: counts?.asks ?? 0, sent: counts?.sent ?? 0 },
-    students: await Promise.all(students.items.map((r) => rosterRow(db, r))),
+    students: await Promise.all(students.items.map((r) => rosterRow(db, r, onOf(r)))),
     studentsPage: students.page,
-    asks: asked.items.map(toLink),
+    asks: asked.items.map((r) => linkFor(r, onOf(r))),
     asksPage: asked.page,
-    sent: out.items.map(toLink),
+    sent: out.items.map((r) => linkFor(r, onOf(r))),
     sentPage: out.page,
     invite: invite?.token ?? null,
     steps: { line: profile.about.trim().length > 0, invited: Boolean(invite) || (ever?.n ?? 0) > 0, sharing: Boolean(prefs?.read_sharing_at) },
@@ -285,7 +290,7 @@ coach.post('/requests', async (c) => {
   if (!link) return c.json({ error: 'not found' }, 404);
   await logCoach(db, { linkId: link.id, coachId: user.id, studentId: student.id, actorId: user.id, action: 'link.ask', label: `${nameOf(user)} asked to coach ${nameOf(student)}` });
   await notify(db, student.id, 'coach', `${nameOf(user)} would like to be your life coach`, 'Say yes or no on your Profile tab. Nothing is shared until you say yes, and you pick what they see.', '/you#coach');
-  const res: CoachAskResult = { link: toLink(link) };
+  const res: CoachAskResult = { link: (await linkOut(db, link)) ?? undefined };
   return c.json(res, 201);
 });
 
@@ -303,7 +308,7 @@ coach.post('/ask/:coachId', async (c) => {
   if (!link) return c.json({ error: 'not found' }, 404);
   await logCoach(db, { linkId: link.id, coachId: target.id, studentId: user.id, actorId: user.id, action: 'link.ask', label: `${nameOf(user)} asked ${nameOf(target)} to be their life coach` });
   await notify(db, target.id, 'coach', `${nameOf(user)} asked you to be their life coach`, 'Say yes or no under Coaching.', '/coaching#asks-heading');
-  return c.json({ link: toLink(link) }, 201);
+  return c.json({ link: await linkOut(db, link) }, 201);
 });
 
 /** The coach, holding the permission, on an active link with this student; or why not. */
@@ -557,8 +562,7 @@ myCoach.post('/join/:token', async (c) => {
   }
   await logCoach(db, { linkId, coachId: coachRow.id, studentId: user.id, actorId: user.id, action: 'link.join', label: `${nameOf(user)} said yes through ${nameOf(coachRow)}’s invite link`, after: share });
   await notify(db, coachRow.id, 'coach', `${nameOf(user)} joined through your invite link`, 'Open Coaching to see what they share.', '/coaching#students-heading');
-  const fresh = await linkById(db, linkId);
-  return c.json({ link: fresh ? toLink(fresh) : null }, 201);
+  return c.json({ link: await linkOut(db, await linkById(db, linkId)) }, 201);
 });
 
 myCoach.get('/', async (c) => {
@@ -568,7 +572,8 @@ myCoach.get('/', async (c) => {
   // Active first, then asks waiting, newest first. Ended and declined ones live in the change log.
   const rows = await db.prepare(`${LINK} WHERE l.student_id = ? AND l.status IN ('active','pending') ORDER BY CASE l.status WHEN 'active' THEN 0 ELSE 1 END, l.created_at DESC LIMIT ? OFFSET ?`).bind(user.id, ask.limit, ask.offset).all<LinkRow>();
   const pg = paged(rows.results, ask);
-  const res: MyCoachResponse & { linksPage: typeof pg.page } = { links: pg.items.map(toLink), linksPage: pg.page, ...(await notePage(db, { studentId: user.id }, user.id, c, 'note')) };
+  const [links, notes] = await Promise.all([linksFor(db, pg.items), notePage(db, { studentId: user.id }, user.id, c, 'note')]);
+  const res: MyCoachResponse & { linksPage: typeof pg.page } = { links, linksPage: pg.page, ...notes };
   return c.json(res);
 });
 
@@ -600,8 +605,7 @@ myCoach.post('/links/:id/answer', async (c) => {
   const other = user.id === link.coach_id ? link.student_id : link.coach_id;
   if (other === link.coach_id) await notify(db, other, 'coach', yes ? `${studentName} said yes to coaching` : `${studentName} said no to coaching`, yes ? 'Open Coaching to see what they share.' : '', yes ? '/coaching#students-heading' : '/coaching');
   else await notify(db, other, 'coach', yes ? `${coachName} is your life coach now` : `${coachName} said no to coaching`, yes ? 'Pick what they see on your Profile tab, any time.' : '', '/you#coach');
-  const fresh = await linkById(db, link.id);
-  return c.json({ link: fresh ? toLink(fresh) : null });
+  return c.json({ link: await linkOut(db, await linkById(db, link.id)) });
 });
 
 // End a link, or take back an ask, from either side.
@@ -622,32 +626,41 @@ myCoach.patch('/links/:id/share', async (c) => {
   const id = c.req.param('id');
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
   // All tables (2026-11-13): the whole tables this coach may open, read only, each the student's own yes. Known keys only; the list replaces the old one.
-  if (body.tables !== undefined && (!Array.isArray(body.tables) || body.tables.length > 100)) return c.json({ error: 'Send the tables as a list of their names.' }, 400);
+  if (body.tables !== undefined && (!Array.isArray(body.tables) || body.tables.length > TABLE_LIST_MAX)) return c.json({ error: 'Send the tables as a list of their names.' }, 400);
   // One table switched from its own page (2026-11-14, the founder: "in each table give toggle to show it to coach or not"): `{ table, on }`,
   // added to or taken from the list as it stands inside the guarded write below, so it never puts back a table another tab or Profile changed.
   const one = body.table !== undefined || body.on !== undefined;
+  // A table with other people's details (a buyer, a guest, a client, a chat partner) never reaches a coach (2026-11-14, the founder): said in
+  // words to a one-table switch, and dropped from a whole list by `sharedTables`.
+  const named = one && typeof body.table === 'string' ? dataTableByKey[body.table] : undefined;
+  if (named && !tableReach(named).coach) return c.json({ error: `${named.name} holds other people’s details, so it is never shown to a coach.` }, 400);
   if (one && (typeof body.table !== 'string' || typeof body.on !== 'boolean' || body.tables !== undefined || sharedTables([body.table]).length !== 1)) {
     return c.json({ error: 'Name one table and whether your coach may see it.' }, 400);
   }
   // A part switch and a table switch can be saved at the same moment (MyCoach's six beside the tables', or two tabs): each write is guarded on
   // the share it read, so the later one never puts back what the earlier one changed; one that lost the race reads again and applies only its
   // own change, once. Two misses answer 409 and the screen reads the link again.
+  // The student's apps on (2026-11-14, the review): a whole list (Share all, Share none) speaks only for the tables they can see now, so a
+  // table whose app is hidden keeps its switch for when the app comes back, and every answer carries only the tables shown now (`linkFor`).
+  const onNow = appsOnForMany(db, [user]);
+  onNow.catch(() => undefined);
   for (let tries = 0; tries < 2; tries++) {
     const link = await linkById(db, id);
     if (!link || link.student_id !== user.id) return c.json({ error: 'not found' }, 404);
     if (link.status !== 'pending' && link.status !== 'active') return c.json({ error: 'This coaching has ended.' }, 400);
+    const on = (await onNow).get(user.id) ?? [];
     const before = parseCoachShare(link.share_json);
     const after = { ...before, tables: sharedTables(before.tables) };
     for (const k of COACH_SHARE_PARTS) if (typeof body[k] === 'boolean') after[k] = body[k] as boolean;
-    if (body.tables !== undefined) after.tables = sharedTables(body.tables);
+    if (body.tables !== undefined) after.tables = sharedTables(keepHiddenTables(sharedTables(body.tables), after.tables, on));
     if (one) after.tables = sharedTables(body.on ? [...after.tables, body.table] : after.tables.filter((k) => k !== body.table));
     const said = [shareChange(before, after), tablesChange(sharedTables(before.tables), after.tables)].filter(Boolean).join('; ');
-    if (!said) return c.json({ link: toLink(link) });
+    if (!said) return c.json({ link: linkFor(link, on) });
     const res = await db.prepare('UPDATE coach_links SET share_json = ? WHERE id = ? AND share_json = ?').bind(JSON.stringify(after), link.id, link.share_json).run();
     if ((res.meta.changes ?? 0) !== 1) continue;
     await logCoach(db, { linkId: link.id, coachId: link.coach_id, studentId: link.student_id, actorId: user.id, action: 'share.change', label: `${nameOf(user)} ${said}`, before, after });
     const fresh = await linkById(db, link.id);
-    return c.json({ link: fresh ? toLink(fresh) : null });
+    return c.json({ link: fresh ? linkFor(fresh, on) : null });
   }
   return c.json({ error: 'changed' }, 409);
 });
