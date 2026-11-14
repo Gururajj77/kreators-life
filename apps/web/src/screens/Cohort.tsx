@@ -34,6 +34,7 @@ import { Section } from '../components/Section';
 import { CardHead } from '../components/CardHead';
 import { FieldLabel } from '../components/Field';
 import { ToggleChevron } from '../components/ToggleMark';
+import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
 import { CohortDiscussion } from '../components/CohortDiscussion';
 import { MoreMenu } from '../components/MoreMenu';
 import { ConfirmDelete } from '../components/ConfirmDelete';
@@ -386,6 +387,14 @@ function WayIn({ r, all }: { r: LessonResource; all: readonly LessonResource[] }
  * resource"; 2026-11-07: "add ability to select multiple resources like youtube or book or others").
  */
 function LessonCard({ item, n, last, open, onToggle, canEdit, onChange }: { item: LearningItem; n: number; last: boolean; open: boolean; onToggle: () => void; canEdit: boolean; onChange: () => void }) {
+  // An open lesson runs far past the window (1,700 to 3,100px), so its close stays in view beside it as it is read (`StickyClose`,
+  // 2026-11-14, the founder: "the close buttons that need one to scroll back top need the close button to be sticky outside the toggle
+  // tab"): the card is the root, the chevron keeps its slot unseen, the open lesson keeps a lane while the close runs down the card's edge,
+  // and Escape anywhere in it closes it too. A short open lesson is as it always was.
+  const root = useRef<HTMLLIElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const railOn = useTallOpen(root, open);
+  const bodyId = useId();
   const [editing, setEditing] = useState(false);
   const [changing, setChanging] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -402,21 +411,24 @@ function LessonCard({ item, n, last, open, onToggle, canEdit, onChange }: { item
   const ways: LessonResource[] = book ? [{ id: `book-${book.slug}`, kind: 'book', ref: book.slug, label: LESSON_RESOURCE_KIND_META.book.label }] : resources;
   const caption = ways.length > 1 ? RESOURCES_CAPTION : ways[0] ? RESOURCE_CAPTION[ways[0].kind] : (KIND_TIP[item.contentType] ?? 'A step in this program.');
   return (
-    <li className="rounded-tile bg-card shadow-toy-soft">
-      <button type="button" aria-expanded={open} onClick={onToggle} className="toy toy-flat flex min-h-[56px] w-full items-start gap-sm rounded-tile p-sm text-left focus-visible:outline-offset-0">
+    <li ref={root} data-sticky-close-root="" className="rounded-tile bg-card shadow-toy-soft">
+      <button ref={toggle} type="button" aria-expanded={open} aria-controls={bodyId} onClick={onToggle} className="toy toy-flat flex min-h-[56px] w-full items-start gap-sm rounded-tile p-sm text-left focus-visible:outline-offset-0">
         <span className="flex size-[32px] shrink-0 items-center justify-center rounded-pill bg-paper text-subhead font-medium" aria-hidden="true">
           {n}
         </span>
         <span className="min-w-0 flex-1 pt-[4px] text-headline text-balance">
           <Phrases text={tie(item.moduleTitle)} />
         </span>
-        <span className="flex shrink-0 items-center gap-xs pt-[2px]">
+        {/* While the sticky close shows, the chevron keeps its slot unseen, and the tag steps one gap further from it, so the close that
+            runs down the card's edge never touches the tag (the room an app group's count keeps). */}
+        <span className={`flex shrink-0 items-center ${railOn ? 'gap-sm' : 'gap-xs'} pt-[2px]`}>
           <IconTag tone="calm" icon={tag.icon}>{tag.word}</IconTag>
-          <ToggleChevron open={open} size={20} className="text-ink-soft" />
+          <ToggleChevron open={open} size={20} className={`text-ink-soft ${railOn ? 'invisible' : ''}`} />
         </span>
       </button>
+      {railOn && <StickyClose onClose={onToggle} label={`Close ${item.moduleTitle}`} tip="Close the lesson" opener={() => toggle.current} />}
       {open && (
-        <div className="border-t border-line px-sm pt-sm pb-md">
+        <div id={bodyId} className={`border-t border-line px-sm pt-sm pb-md ${STICKY_CLOSE_LANE}`}>
           {videos.map((v, i) => (
             <div key={v.id} className="mt-sm">
               {/* Each video waits behind its own gate; only the first gate's Play is solid, so the lesson keeps one solid button. */}

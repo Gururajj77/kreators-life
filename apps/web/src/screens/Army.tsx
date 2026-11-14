@@ -21,6 +21,7 @@ import type { TagTone } from '@kreators/shared';
 import { shortDate, dateTime } from '../lib/date';
 import { ErrorLine } from '../components/ErrorLine';
 import { ToggleChevron } from '../components/ToggleMark';
+import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
 
 const fmtDate = (d: string | null) => (d ? shortDate(d) : 'no date');
 const fmtWhen = dateTime;
@@ -189,22 +190,28 @@ function OrgCard({ org }: { org: Organization }) {
   // Removing a teammate, or taking back an ask, asks first, with the person it is about.
   const [removing, setRemoving] = useState<{ userId: string; name: string; invited: boolean } | null>(null);
   const owner = org.myRole === 'owner';
+  // Open and taller than the window has, its close stays in view beside the team list (StickyClose, 2026-11-14).
+  const root = useRef<HTMLDivElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const railOn = useTallOpen(root, open);
   return (
-    <div className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <button type="button" aria-expanded={open} aria-controls={`org-people-${org.id}`} onClick={() => setOpen((v) => !v)} className="toy toy-flat flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile text-left">
+    <div ref={root} data-sticky-close-root="" className="rounded-tile bg-card p-sm shadow-toy-soft">
+      <button ref={toggle} type="button" aria-expanded={open} aria-controls={`org-people-${org.id}`} onClick={() => setOpen((v) => !v)} className="toy toy-flat flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile text-left">
         <span className="min-w-0">
           <span className="block text-balance text-card-title [overflow-wrap:anywhere]">{org.name}</span>
           <span className="block text-card-note text-ink-soft">
             {org.type}, you are {org.myRole ?? 'a guest'}
           </span>
         </span>
-        <span className="flex shrink-0 items-center gap-xs text-subhead text-ink-soft">
+        {/* While the sticky close shows, "Hide" and its chevron keep their slot unseen: the close stands where they were. */}
+        <span className={`flex shrink-0 items-center gap-xs text-subhead text-ink-soft ${railOn ? 'invisible' : ''}`}>
           {open ? 'Hide' : 'People'}
           <ToggleChevron open={open} />
         </span>
       </button>
+      {railOn && <StickyClose onClose={() => setOpen(false)} label={`Close the people in ${org.name}`} opener={() => toggle.current} />}
       {open && (
-        <div id={`org-people-${org.id}`} className="mt-sm">
+        <div id={`org-people-${org.id}`} className={`mt-sm ${STICKY_CLOSE_LANE}`}>
           <ul className="flex list-none flex-col gap-xs p-0 m-0">
             {members.data?.members.map((m) => (
               <li key={m.userId} className="flex items-center gap-sm rounded-tile bg-paper p-sm">

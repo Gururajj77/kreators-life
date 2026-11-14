@@ -1,4 +1,5 @@
 import { CloseButton } from '../components/CloseButton';
+import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
 import { DEFAULT_PAGE_SIZE, formatCount, pageQuery, type Page, type PageSize, money } from '@kreators/shared';
 import { MAX_CREDIT_GRANT, PAID_PLANS, PLAN_DAYS, planName, type PlanKey, type TagTone } from '@kreators/shared';
 import { ATTENDEE_XP_MAX, codeProblem, normalizeCode, type AdminAttendeeCode } from '@kreators/shared';
@@ -38,7 +39,7 @@ import {
   type Permission,
   type Role,
 } from '@kreators/shared';
-import { Suspense, useEffect, useState, type ReactNode } from 'react';
+import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { lazyNamed } from '../lib/lazy';
 import { Link, useNavigate } from 'react-router';
 import { Button } from '../components/Button';
@@ -105,6 +106,15 @@ const when = (iso: string | null | undefined) => (iso ? dateTime(iso) : '');
 const day = (iso: string | null | undefined) => (iso ? longDate(iso) : '');
 /** "1 override", "3 overrides", for a bulk removal's question. */
 const count = (n: number, one: string, many: string) => `${formatCount(n)} ${n === 1 ? one : many}`;
+/** The table row that has focus as a row's panel opens: DataTable focuses a clickable row on a tap and opens it on Enter or Space. */
+const focusedRow = (): HTMLElement | null => (document.activeElement instanceof HTMLElement ? document.activeElement.closest('tr') : null);
+/** The row a panel's sticky close hands focus back to: the one it was opened from while it is still in the table, else the row the table
+ *  marks as open (DataTable's `activeKey`), else none. */
+function rowOpener(table: HTMLElement | null, opened: HTMLElement | null): HTMLElement | null {
+  if (!table) return null;
+  if (opened?.isConnected && table.contains(opened)) return opened;
+  return table.querySelector<HTMLElement>('tbody tr.bg-paper');
+}
 
 function readKey(): string {
   try {
@@ -209,6 +219,16 @@ export function Admin() {
   const [orderDetail, setOrderDetail] = useState<{ order: AdminOrder; timeline: OrderEvent[]; webhooks: WebhookEvent[] } | null>(null);
   const [refundReason, setRefundReason] = useState('');
   const [refundError, setRefundError] = useState<string | null>(null);
+  // The person and the order panels open from a table row. Taller than the window, each keeps its close in view beside it (StickyClose,
+  // 2026-11-14), which hands focus back to the row it was opened from. Read only while its tab shows, so a tab change measures it again.
+  const peopleTable = useRef<HTMLDivElement>(null);
+  const personRow = useRef<HTMLElement | null>(null);
+  const personRoot = useRef<HTMLDivElement>(null);
+  const personRail = useTallOpen(personRoot, loaded && tab === 'people' && selected !== null);
+  const ordersTable = useRef<HTMLDivElement>(null);
+  const orderRow = useRef<HTMLElement | null>(null);
+  const orderRoot = useRef<HTMLDivElement>(null);
+  const orderRail = useTallOpen(orderRoot, loaded && tab === 'orders' && orderDetail !== null);
   // webhooks
   const [hooks, setHooks] = useState<WebhookEvent[] | null>(null);
   const [replayOutcome, setReplayOutcome] = useState<Record<string, string>>({});
@@ -475,7 +495,7 @@ export function Admin() {
                   Search
                 </Button>
               </form>
-              <div className="mt-sm">
+              <div ref={peopleTable} className="mt-sm">
                 <DataTable<AdminUser>
                   rows={users}
                   page={pages.users}
@@ -485,7 +505,10 @@ export function Admin() {
                   selectable
                   busy={busy}
                   activeKey={selected?.id ?? null}
-                  onRowClick={(u) => setSelected(u)}
+                  onRowClick={(u) => {
+                    personRow.current = focusedRow();
+                    setSelected(u);
+                  }}
                   empty="Nobody matches. Try another name or email in the search box above."
                   columns={[
                     {
@@ -626,207 +649,211 @@ export function Admin() {
 
 
               {selected && (
-                <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
-                  {/* The name and its close share one row, centred on each other; the id is the line under them. */}
+                <div ref={personRoot} data-sticky-close-root="" className="mt-md rounded-card bg-card p-md shadow-toy-soft">
+                  {/* The name and its close share one row, centred on each other; the id is the line under them. Taller than the window,
+                      the close stays in view beside the panel instead (StickyClose), and this one keeps its slot unseen, so there is one. */}
                   <div className="flex items-center justify-between gap-sm">
                     <h3 className="min-w-0 text-title2">{selected.displayName || 'Anonymous climber'}</h3>
-                    <CloseButton onClick={() => setSelected(null)} label="Close this person" />
+                    <CloseButton onClick={() => setSelected(null)} label="Close this person" className={personRail ? 'invisible' : ''} />
                   </div>
-                  <p className="mt-xs m-0 text-caption text-ink-mute">{selected.id}</p>
+                  {personRail && <StickyClose onClose={() => setSelected(null)} label="Close this person" opener={() => rowOpener(peopleTable.current, personRow.current)} />}
+                  <div className={STICKY_CLOSE_LANE}>
+                    <p className="mt-xs m-0 text-caption text-ink-mute">{selected.id}</p>
 
-                  <p className="mt-md m-0 text-subhead font-semibold">Permissions</p>
-                  <p className="m-0 text-caption text-ink-soft">A job someone is trusted with. Admins hold all but Life coach. A creator can hold Mentor, Life coach, Moderation (a Community guide) and Inviter; the rest need Staff.</p>
-                  <div className="fill-row mt-xs flex flex-wrap gap-xs" role="group" aria-label="Permissions">
-                    {PERMISSIONS.map((p) => {
-                      const on = selected.permissions.includes(p);
-                      return (
-                        <button
-                          key={p}
-                          type="button"
-                          aria-pressed={on}
-                          disabled={busy || (selected.role === 'admin' && p !== 'coach')}
-                          onClick={() => {
-                            const change = async () => applyUser((await adminApi.setPermissions(key, selected.id, on ? selected.permissions.filter((x) => x !== p) : [...selected.permissions, p])).user);
-                            if (!on) return void run(change);
-                            askFirst({
-                              title: `Take ${PERMISSION_NAMES[p]} from ${selected.displayName || 'this person'}?`,
-                              body: p === 'coach' ? 'Every coaching link of theirs ends and their students are told. You can give it back later.' : 'They can no longer do what it lets them do. You can give it back later.',
-                              yes: 'Yes, take it away',
-                              act: change,
-                            });
-                          }}
-                          className={`toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm py-0 md:py-xs text-subhead font-medium ${on || (selected.role === 'admin' && p !== 'coach') ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
-                        >
-                          {PERMISSION_NAMES[p]}
+                    <p className="mt-md m-0 text-subhead font-semibold">Permissions</p>
+                    <p className="m-0 text-caption text-ink-soft">A job someone is trusted with. Admins hold all but Life coach. A creator can hold Mentor, Life coach, Moderation (a Community guide) and Inviter; the rest need Staff.</p>
+                    <div className="fill-row mt-xs flex flex-wrap gap-xs" role="group" aria-label="Permissions">
+                      {PERMISSIONS.map((p) => {
+                        const on = selected.permissions.includes(p);
+                        return (
+                          <button
+                            key={p}
+                            type="button"
+                            aria-pressed={on}
+                            disabled={busy || (selected.role === 'admin' && p !== 'coach')}
+                            onClick={() => {
+                              const change = async () => applyUser((await adminApi.setPermissions(key, selected.id, on ? selected.permissions.filter((x) => x !== p) : [...selected.permissions, p])).user);
+                              if (!on) return void run(change);
+                              askFirst({
+                                title: `Take ${PERMISSION_NAMES[p]} from ${selected.displayName || 'this person'}?`,
+                                body: p === 'coach' ? 'Every coaching link of theirs ends and their students are told. You can give it back later.' : 'They can no longer do what it lets them do. You can give it back later.',
+                                yes: 'Yes, take it away',
+                                act: change,
+                              });
+                            }}
+                            className={`toy min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 px-sm py-0 md:py-xs text-subhead font-medium ${on || (selected.role === 'admin' && p !== 'coach') ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}
+                          >
+                            {PERMISSION_NAMES[p]}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <p className="mt-md m-0 text-subhead font-semibold">Honors</p>
+                    <p className="m-0 text-caption text-ink-soft">An honor shows on their profile and counts for unlocks.</p>
+                    <div className="mt-xs flex flex-wrap gap-xs">
+                      {selected.honors.length === 0 && <span className="text-subhead text-ink-soft">None yet.</span>}
+                      {selected.honors.map((h) => (
+                        <button key={h} type="button" disabled={busy} onClick={() => askFirst({ title: `Take ${HONOR_BY_KEY[h]?.name ?? h} from ${selected.displayName || 'this person'}?`, body: 'The honor comes off their profile. You can grant it again later.', yes: 'Yes, take it away', act: async () => applyUser((await adminApi.revokeHonor(key, selected.id, h)).user) })} className="toy toy-soft inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center gap-xs rounded-pill bg-paper px-sm text-subhead font-medium" aria-label={`Remove ${HONOR_BY_KEY[h]?.name ?? h}`}>
+                          <AppIcon name={HONOR_BY_KEY[h]?.icon} size={16} />
+                          {HONOR_BY_KEY[h]?.name ?? h}
+                          <Icon icon={X} size={14} />
                         </button>
-                      );
-                    })}
-                  </div>
-
-                  <p className="mt-md m-0 text-subhead font-semibold">Honors</p>
-                  <p className="m-0 text-caption text-ink-soft">An honor shows on their profile and counts for unlocks.</p>
-                  <div className="mt-xs flex flex-wrap gap-xs">
-                    {selected.honors.length === 0 && <span className="text-subhead text-ink-soft">None yet.</span>}
-                    {selected.honors.map((h) => (
-                      <button key={h} type="button" disabled={busy} onClick={() => askFirst({ title: `Take ${HONOR_BY_KEY[h]?.name ?? h} from ${selected.displayName || 'this person'}?`, body: 'The honor comes off their profile. You can grant it again later.', yes: 'Yes, take it away', act: async () => applyUser((await adminApi.revokeHonor(key, selected.id, h)).user) })} className="toy toy-soft inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center gap-xs rounded-pill bg-paper px-sm text-subhead font-medium" aria-label={`Remove ${HONOR_BY_KEY[h]?.name ?? h}`}>
-                        <AppIcon name={HONOR_BY_KEY[h]?.icon} size={16} />
-                        {HONOR_BY_KEY[h]?.name ?? h}
-                        <Icon icon={X} size={14} />
-                      </button>
-                    ))}
-                  </div>
-                  <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
-                    <select value={honor} onChange={(e) => setHonor(e.target.value)} aria-label="Honor" className={FIELD_LINE}>
-                      {ADMIN_HONORS.map((h) => (
-                        <option key={h.key} value={h.key}>
-                          {h.name}
-                        </option>
                       ))}
-                    </select>
-                    <Button variant="outline" disabled={busy} onClick={() => run(async () => applyUser((await adminApi.grantHonor(key, selected.id, honor, note)).user))}>
-                      Grant
-                    </Button>
-                  </div>
-                  <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional)" aria-label="Note" className={FIELD} />
-                  <p className="mt-xs m-0 text-caption text-ink-soft">Saved with each honor, points, xp or badge you give, and in the audit log.</p>
+                    </div>
+                    <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
+                      <select value={honor} onChange={(e) => setHonor(e.target.value)} aria-label="Honor" className={FIELD_LINE}>
+                        {ADMIN_HONORS.map((h) => (
+                          <option key={h.key} value={h.key}>
+                            {h.name}
+                          </option>
+                        ))}
+                      </select>
+                      <Button variant="outline" disabled={busy} onClick={() => run(async () => applyUser((await adminApi.grantHonor(key, selected.id, honor, note)).user))}>
+                        Grant
+                      </Button>
+                    </div>
+                    <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional)" aria-label="Note" className={FIELD} />
+                    <p className="mt-xs m-0 text-caption text-ink-soft">Saved with each honor, points, xp or badge you give, and in the audit log.</p>
 
-                  <p className="mt-md m-0 text-subhead font-semibold">Points</p>
-                  <p className="m-0 text-caption text-ink-soft">A whole number. A minus takes some away, down to zero.</p>
-                  <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
-                    <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Amount" className={FIELD_LINE} />
-                    <Button variant="outline" disabled={busy || !Number(amount)} onClick={() => run(async () => applyUser((await adminApi.addPoints(key, selected.id, Number(amount), note)).user))}>
-                      Add
-                    </Button>
-                  </div>
+                    <p className="mt-md m-0 text-subhead font-semibold">Points</p>
+                    <p className="m-0 text-caption text-ink-soft">A whole number. A minus takes some away, down to zero.</p>
+                    <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
+                      <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Amount" className={FIELD_LINE} />
+                      <Button variant="outline" disabled={busy || !Number(amount)} onClick={() => run(async () => applyUser((await adminApi.addPoints(key, selected.id, Number(amount), note)).user))}>
+                        Add
+                      </Button>
+                    </div>
 
-                  <p className="mt-md m-0 text-subhead font-semibold">XP</p>
-                  <p className="m-0 text-caption text-ink-soft">Moves their level and the leaderboard. A minus takes some away, down to zero. The note and your name are kept in the audit log.</p>
-                  <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
-                    <input type="number" value={xpAmount} onChange={(e) => setXpAmount(e.target.value)} aria-label="XP amount" className={FIELD_LINE} />
-                    <Button variant="outline" disabled={busy || !Number(xpAmount)} onClick={() => run(async () => applyUser((await adminApi.addXp(key, selected.id, Number(xpAmount), note)).user))}>
-                      Add
-                    </Button>
-                  </div>
+                    <p className="mt-md m-0 text-subhead font-semibold">XP</p>
+                    <p className="m-0 text-caption text-ink-soft">Moves their level and the leaderboard. A minus takes some away, down to zero. The note and your name are kept in the audit log.</p>
+                    <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
+                      <input type="number" value={xpAmount} onChange={(e) => setXpAmount(e.target.value)} aria-label="XP amount" className={FIELD_LINE} />
+                      <Button variant="outline" disabled={busy || !Number(xpAmount)} onClick={() => run(async () => applyUser((await adminApi.addXp(key, selected.id, Number(xpAmount), note)).user))}>
+                        Add
+                      </Button>
+                    </div>
 
-                  <p className="mt-md m-0 text-subhead font-semibold">Badges given by hand</p>
-                  <p className="m-0 text-caption text-ink-soft">They count for unlocks, the profile and the leaderboard. A badge the person earned is never taken away here.</p>
-                  <div className="mt-xs flex flex-wrap gap-xs">
-                    {selected.grantedBadges.length === 0 && <span className="text-subhead text-ink-soft">None given.</span>}
-                    {selected.grantedBadges.map((b) => (
-                      <button key={b} type="button" disabled={busy} onClick={() => askFirst({ title: `Take ${BADGES.find((x) => x.key === b)?.name ?? b} from ${selected.displayName || 'this person'}?`, body: 'The badge you gave comes off. One they earned stays. You can give it again later.', yes: 'Yes, take it away', act: async () => applyUser((await adminApi.revokeBadge(key, selected.id, b)).user) })} className="toy toy-soft inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center gap-xs rounded-pill bg-paper px-sm text-subhead font-medium" aria-label={`Remove ${BADGES.find((x) => x.key === b)?.name ?? b}`}>
-                        <AppIcon name={BADGES.find((x) => x.key === b)?.icon} size={16} />
-                        {BADGES.find((x) => x.key === b)?.name ?? b}
-                        <Icon icon={X} size={14} />
-                      </button>
-                    ))}
-                  </div>
-                  <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
-                    <select value={badgeKey} onChange={(e) => setBadgeKey(e.target.value)} aria-label="Badge" className={FIELD_LINE}>
-                      {BADGES.map((b) => (
-                        <option key={b.key} value={b.key}>
-                          {b.name} ({b.family})
-                        </option>
+                    <p className="mt-md m-0 text-subhead font-semibold">Badges given by hand</p>
+                    <p className="m-0 text-caption text-ink-soft">They count for unlocks, the profile and the leaderboard. A badge the person earned is never taken away here.</p>
+                    <div className="mt-xs flex flex-wrap gap-xs">
+                      {selected.grantedBadges.length === 0 && <span className="text-subhead text-ink-soft">None given.</span>}
+                      {selected.grantedBadges.map((b) => (
+                        <button key={b} type="button" disabled={busy} onClick={() => askFirst({ title: `Take ${BADGES.find((x) => x.key === b)?.name ?? b} from ${selected.displayName || 'this person'}?`, body: 'The badge you gave comes off. One they earned stays. You can give it again later.', yes: 'Yes, take it away', act: async () => applyUser((await adminApi.revokeBadge(key, selected.id, b)).user) })} className="toy toy-soft inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center gap-xs rounded-pill bg-paper px-sm text-subhead font-medium" aria-label={`Remove ${BADGES.find((x) => x.key === b)?.name ?? b}`}>
+                          <AppIcon name={BADGES.find((x) => x.key === b)?.icon} size={16} />
+                          {BADGES.find((x) => x.key === b)?.name ?? b}
+                          <Icon icon={X} size={14} />
+                        </button>
                       ))}
-                    </select>
-                    <Button variant="outline" disabled={busy || selected.grantedBadges.includes(badgeKey)} onClick={() => run(async () => applyUser((await adminApi.grantBadge(key, selected.id, badgeKey, note)).user))}>
-                      Give
-                    </Button>
-                  </div>
+                    </div>
+                    <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
+                      <select value={badgeKey} onChange={(e) => setBadgeKey(e.target.value)} aria-label="Badge" className={FIELD_LINE}>
+                        {BADGES.map((b) => (
+                          <option key={b.key} value={b.key}>
+                            {b.name} ({b.family})
+                          </option>
+                        ))}
+                      </select>
+                      <Button variant="outline" disabled={busy || selected.grantedBadges.includes(badgeKey)} onClick={() => run(async () => applyUser((await adminApi.grantBadge(key, selected.id, badgeKey, note)).user))}>
+                        Give
+                      </Button>
+                    </div>
 
-                  <p className="mt-md m-0 text-subhead font-semibold">Plan and credits</p>
-                  <p className="m-0 text-caption text-ink-soft">
-                    {planName(selected.plan)}
-                    {selected.planUntil ? ` until ${selected.planUntil.slice(0, 10)}` : ''}. {formatCount(selected.planCredits)} plan credits, {formatCount(selected.extraCredits)} extra. Payments are not live, so plans start here. A new plan grants its credits fresh; extra credits stay until used.
-                  </p>
-                  <div className="mt-xs grid grid-cols-[1fr_auto_auto] gap-xs">
-                    <select value={plan} onChange={(e) => setPlan(e.target.value as PlanKey)} aria-label="Plan" className={FIELD_LINE}>
-                      {PLAN_KEYS.map((k) => (
-                        <option key={k} value={k}>
-                          {planName(k)}
-                        </option>
-                      ))}
-                    </select>
-                    <input type="number" min={1} max={366} value={planDays} onChange={(e) => setPlanDays(e.target.value)} aria-label="Days" className="w-[96px] rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
-                    <Button variant="outline" disabled={busy || (plan !== 'none' && !(Number(planDays) >= 1))} onClick={() => {
-                        const change = async () => applyUser((await adminApi.setPlan(key, selected.id, plan, Number(planDays) || PLAN_DAYS)).user);
-                        if (plan === 'none') askFirst({ title: `End ${selected.displayName || 'this person'}'s plan?`, body: 'Their plan ends now and its plan credits go. Extra credits stay.', yes: 'Yes, end the plan', act: change });
-                        else void run(change);
-                      }}
-                    >
-                      {plan === 'none' ? 'End plan' : 'Start'}
-                    </Button>
-                  </div>
-                  <p className="mt-xs m-0 text-caption text-ink-soft">The plan runs this many days from now, 1 to 366.</p>
-                  <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
-                    <input type="number" min={1} max={MAX_CREDIT_GRANT} value={grant} onChange={(e) => setGrant(e.target.value)} aria-label="Credits to add" className={FIELD_LINE} />
-                    <Button variant="outline" disabled={busy || !(Number.isInteger(Number(grant)) && Number(grant) >= 1 && Number(grant) <= MAX_CREDIT_GRANT)} onClick={() => run(async () => applyUser((await adminApi.addCredits(key, selected.id, Number(grant), grantNote)).user))}>
-                      Add credits
-                    </Button>
-                  </div>
-                  <p className="mt-xs m-0 text-caption text-ink-soft">Extra credits, from 1 to {formatCount(MAX_CREDIT_GRANT)} at a time.</p>
-                  <input value={grantNote} onChange={(e) => setGrantNote(e.target.value)} placeholder="Why, for the history (optional)" aria-label="Why the credits" className={FIELD} />
-                  <p className="mt-xs m-0 text-caption text-ink-soft">They see it in their credit history. Empty reads Added by the team.</p>
+                    <p className="mt-md m-0 text-subhead font-semibold">Plan and credits</p>
+                    <p className="m-0 text-caption text-ink-soft">
+                      {planName(selected.plan)}
+                      {selected.planUntil ? ` until ${selected.planUntil.slice(0, 10)}` : ''}. {formatCount(selected.planCredits)} plan credits, {formatCount(selected.extraCredits)} extra. Payments are not live, so plans start here. A new plan grants its credits fresh; extra credits stay until used.
+                    </p>
+                    <div className="mt-xs grid grid-cols-[1fr_auto_auto] gap-xs">
+                      <select value={plan} onChange={(e) => setPlan(e.target.value as PlanKey)} aria-label="Plan" className={FIELD_LINE}>
+                        {PLAN_KEYS.map((k) => (
+                          <option key={k} value={k}>
+                            {planName(k)}
+                          </option>
+                        ))}
+                      </select>
+                      <input type="number" min={1} max={366} value={planDays} onChange={(e) => setPlanDays(e.target.value)} aria-label="Days" className="w-[96px] rounded-tile border-2 border-line bg-paper px-sm py-sm text-body" />
+                      <Button variant="outline" disabled={busy || (plan !== 'none' && !(Number(planDays) >= 1))} onClick={() => {
+                          const change = async () => applyUser((await adminApi.setPlan(key, selected.id, plan, Number(planDays) || PLAN_DAYS)).user);
+                          if (plan === 'none') askFirst({ title: `End ${selected.displayName || 'this person'}'s plan?`, body: 'Their plan ends now and its plan credits go. Extra credits stay.', yes: 'Yes, end the plan', act: change });
+                          else void run(change);
+                        }}
+                      >
+                        {plan === 'none' ? 'End plan' : 'Start'}
+                      </Button>
+                    </div>
+                    <p className="mt-xs m-0 text-caption text-ink-soft">The plan runs this many days from now, 1 to 366.</p>
+                    <div className="mt-xs grid grid-cols-[1fr_auto] gap-xs">
+                      <input type="number" min={1} max={MAX_CREDIT_GRANT} value={grant} onChange={(e) => setGrant(e.target.value)} aria-label="Credits to add" className={FIELD_LINE} />
+                      <Button variant="outline" disabled={busy || !(Number.isInteger(Number(grant)) && Number(grant) >= 1 && Number(grant) <= MAX_CREDIT_GRANT)} onClick={() => run(async () => applyUser((await adminApi.addCredits(key, selected.id, Number(grant), grantNote)).user))}>
+                        Add credits
+                      </Button>
+                    </div>
+                    <p className="mt-xs m-0 text-caption text-ink-soft">Extra credits, from 1 to {formatCount(MAX_CREDIT_GRANT)} at a time.</p>
+                    <input value={grantNote} onChange={(e) => setGrantNote(e.target.value)} placeholder="Why, for the history (optional)" aria-label="Why the credits" className={FIELD} />
+                    <p className="mt-xs m-0 text-caption text-ink-soft">They see it in their credit history. Empty reads Added by the team.</p>
 
-                  <Button variant="ghost" className="mt-md" disabled={busy} onClick={() => run(async () => { await refreshFlags(); setPreview(await adminApi.previewAccess(key, selected.id)); })}>
-                    What does this person see?
-                  </Button>
-                  {preview && (
-                    <>
-                      <p className="mt-sm m-0 text-caption text-ink-soft">Tick to allow, untick to block. Struck through means not allowed, and locked apps cannot be blocked. Reset returns an app to the usual rules.</p>
-                      {/* Every app, by the groups in their one order, each with its own even rows (TileGroups). */}
-                      <TileGroups
-                        className="mt-sm"
-                        list
-                        cols={APP_LIST_COLS}
-                        groups={MODULE_GROUP_ORDER.map((g) => ({ key: g, name: MODULE_GROUPS[g], tiles: MODULES.filter((m) => m.group === g) }))}
-                        render={(m, tileClass) => {
-                          const a = preview.access[m.key];
-                          const allowed = Boolean(a?.available);
-                          const mine = overrides.filter((o) => o.flagKey === m.key && o.subjectType === 'user' && o.subjectId === selected.id);
-                          const setAccess = (allow: boolean) =>
-                            run(async () => {
-                              for (const o of mine) await adminApi.removeOverride(key, o.id);
-                              await adminApi.addOverride(key, m.key, { subjectType: 'user', subjectId: selected.id, enabled: allow, reason: 'Set from People' });
-                              await refreshFlags();
-                              setPreview(await adminApi.previewAccess(key, selected.id));
-                            });
-                          const reset = () =>
-                            askFirst({
-                              title: `Reset ${m.name} for ${selected.displayName || 'this person'}?`,
-                              body: 'What you set for them goes, and the usual rules decide again.',
-                              yes: 'Yes, reset it',
-                              act: async () => {
+                    <Button variant="ghost" className="mt-md" disabled={busy} onClick={() => run(async () => { await refreshFlags(); setPreview(await adminApi.previewAccess(key, selected.id)); })}>
+                      What does this person see?
+                    </Button>
+                    {preview && (
+                      <>
+                        <p className="mt-sm m-0 text-caption text-ink-soft">Tick to allow, untick to block. Struck through means not allowed, and locked apps cannot be blocked. Reset returns an app to the usual rules.</p>
+                        {/* Every app, by the groups in their one order, each with its own even rows (TileGroups). */}
+                        <TileGroups
+                          className="mt-sm"
+                          list
+                          cols={APP_LIST_COLS}
+                          groups={MODULE_GROUP_ORDER.map((g) => ({ key: g, name: MODULE_GROUPS[g], tiles: MODULES.filter((m) => m.group === g) }))}
+                          render={(m, tileClass) => {
+                            const a = preview.access[m.key];
+                            const allowed = Boolean(a?.available);
+                            const mine = overrides.filter((o) => o.flagKey === m.key && o.subjectType === 'user' && o.subjectId === selected.id);
+                            const setAccess = (allow: boolean) =>
+                              run(async () => {
                                 for (const o of mine) await adminApi.removeOverride(key, o.id);
+                                await adminApi.addOverride(key, m.key, { subjectType: 'user', subjectId: selected.id, enabled: allow, reason: 'Set from People' });
                                 await refreshFlags();
                                 setPreview(await adminApi.previewAccess(key, selected.id));
-                              },
-                            });
-                          return (
-                            <li key={m.key} className={`flex items-center gap-xs rounded-inner-sm px-xs py-xs ${allowed ? 'bg-paper' : 'bg-line'} ${tileClass}`}>
-                              <label className="toy toy-flat flex min-h-[44px] min-w-0 flex-1 cursor-pointer items-center gap-xs rounded-inner-sm px-xs">
-                                <input type="checkbox" checked={allowed} disabled={busy || Boolean(m.locked)} onChange={(e) => void setAccess(e.target.checked)} className="size-[20px] shrink-0" aria-label={`Allow ${m.name}`} />
-                                <span className="min-w-0">
-                                  <span className={`block truncate text-subhead font-semibold ${allowed ? '' : 'text-ink-soft line-through'}`}>
-                                    <span className="inline-flex items-center gap-xs align-middle">
-                                      <AppIcon name={m.icon} size={16} />
-                                      {m.name}
+                              });
+                            const reset = () =>
+                              askFirst({
+                                title: `Reset ${m.name} for ${selected.displayName || 'this person'}?`,
+                                body: 'What you set for them goes, and the usual rules decide again.',
+                                yes: 'Yes, reset it',
+                                act: async () => {
+                                  for (const o of mine) await adminApi.removeOverride(key, o.id);
+                                  await refreshFlags();
+                                  setPreview(await adminApi.previewAccess(key, selected.id));
+                                },
+                              });
+                            return (
+                              <li key={m.key} className={`flex items-center gap-xs rounded-inner-sm px-xs py-xs ${allowed ? 'bg-paper' : 'bg-line'} ${tileClass}`}>
+                                <label className="toy toy-flat flex min-h-[44px] min-w-0 flex-1 cursor-pointer items-center gap-xs rounded-inner-sm px-xs">
+                                  <input type="checkbox" checked={allowed} disabled={busy || Boolean(m.locked)} onChange={(e) => void setAccess(e.target.checked)} className="size-[20px] shrink-0" aria-label={`Allow ${m.name}`} />
+                                  <span className="min-w-0">
+                                    <span className={`block truncate text-subhead font-semibold ${allowed ? '' : 'text-ink-soft line-through'}`}>
+                                      <span className="inline-flex items-center gap-xs align-middle">
+                                        <AppIcon name={m.icon} size={16} />
+                                        {m.name}
+                                      </span>
                                     </span>
+                                    {a && !a.available && <span className="block text-caption2 text-ink-soft no-underline">{a.reason === 'override' ? 'Blocked for this person' : a.reason === 'role' ? 'Needs a higher role' : a.reason === 'rollout' ? 'Not rolled out to them yet' : 'Switched off for everyone'}</span>}
+                                    {a?.available && mine.length > 0 && <span className="block text-caption2 text-ink-soft">Allowed for this person</span>}
                                   </span>
-                                  {a && !a.available && <span className="block text-caption2 text-ink-soft no-underline">{a.reason === 'override' ? 'Blocked for this person' : a.reason === 'role' ? 'Needs a higher role' : a.reason === 'rollout' ? 'Not rolled out to them yet' : 'Switched off for everyone'}</span>}
-                                  {a?.available && mine.length > 0 && <span className="block text-caption2 text-ink-soft">Allowed for this person</span>}
-                                </span>
-                              </label>
-                              {mine.length > 0 && (
-                                <button type="button" onClick={reset} disabled={busy} className="inline-flex min-h-[44px] shrink-0 items-center rounded-pill px-xs text-caption font-medium text-ink-soft underline underline-offset-4">
-                                  Reset
-                                </button>
-                              )}
-                            </li>
-                          );
-                        }}
-                      />
-                    </>
-                  )}
+                                </label>
+                                {mine.length > 0 && (
+                                  <button type="button" onClick={reset} disabled={busy} className="inline-flex min-h-[44px] shrink-0 items-center rounded-pill px-xs text-caption font-medium text-ink-soft underline underline-offset-4">
+                                    Reset
+                                  </button>
+                                )}
+                              </li>
+                            );
+                          }}
+                        />
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
             </section>
@@ -1299,7 +1326,7 @@ export function Admin() {
                   }}
                 />
               </div>
-              <div className="mt-sm">
+              <div ref={ordersTable} className="mt-sm">
                 <DataTable<AdminOrder>
                   rows={orders ?? []}
                   page={pages.orders}
@@ -1308,7 +1335,10 @@ export function Admin() {
                   label="Orders"
                   busy={busy}
                   activeKey={orderDetail?.order.id ?? null}
-                  onRowClick={(o) => void openOrder(o.id)}
+                  onRowClick={(o) => {
+                    orderRow.current = focusedRow();
+                    void openOrder(o.id);
+                  }}
                   empty="No orders match."
                   columns={[
                     { key: 'product', label: 'Product', get: (o) => o.productTitle, wrap: true, render: (o) => <><span className="block font-semibold">{o.productTitle}</span><span className="block text-caption text-ink-mute">#{o.id.slice(0, 8)}</span></> },
@@ -1322,78 +1352,82 @@ export function Admin() {
                 />
               </div>
               {orderDetail && (
-                <div className="mt-md rounded-card bg-card p-md shadow-toy-soft">
+                <div ref={orderRoot} data-sticky-close-root="" className="mt-md rounded-card bg-card p-md shadow-toy-soft">
+                  {/* Taller than the window, the close stays in view beside the panel instead (StickyClose); this one keeps its slot unseen. */}
                   <div className="flex items-center justify-between gap-sm">
                     <h3 className="min-w-0 text-title2">
                       {orderDetail.order.productTitle} <span className="text-subhead text-ink-mute">#{orderDetail.order.id.slice(0, 8)}</span>
                     </h3>
-                    <CloseButton onClick={() => setOrderDetail(null)} label="Close this order" />
+                    <CloseButton onClick={() => setOrderDetail(null)} label="Close this order" className={orderRail ? 'invisible' : ''} />
                   </div>
-                  <p className="mt-xs m-0 text-subhead text-ink-soft">
-                    <Pill tone={statusTone(orderDetail.order.status)}>{orderDetail.order.status}</Pill> {orderDetail.order.provider}
-                    {orderDetail.order.providerOrderId ? `, ${orderDetail.order.providerOrderId}` : ''}
-                    {orderDetail.order.paidAt ? `, paid ${dateTime(orderDetail.order.paidAt)}` : ''}
-                  </p>
-                  <p className="mt-md m-0 text-subhead font-semibold">Timeline</p>
-                  {orderDetail.timeline.length === 0 && <p className="m-0 text-subhead text-ink-soft">Nothing logged for this order yet.</p>}
-                  <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
-                    {orderDetail.timeline.map((t) => (
-                      <li key={t.id} className="rounded-tile bg-paper px-sm py-xs text-caption">
-                        <span>{t.type}</span>
-                        {t.data ? <span className="block break-words text-ink-soft">{t.data}</span> : null}
-                        <span className="block text-ink-mute">{dateTime(t.createdAt)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  {orderDetail.webhooks.length > 0 && (
-                    <>
-                      <p className="mt-md m-0 text-subhead font-semibold">Provider webhooks</p>
-                      <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
-                        {orderDetail.webhooks.map((h) => (
-                          <li key={h.id} className="rounded-tile bg-paper px-sm py-xs text-caption">
-                            {h.type}
-                            <span className="block text-ink-soft">{h.processedAt ? `processed ${dateTime(h.processedAt)}` : 'not processed yet'}</span>
-                            {h.error && <span className="block text-r1">{h.error}</span>}
-                          </li>
-                        ))}
-                      </ul>
-                    </>
-                  )}
-                  {orderDetail.order.status !== 'refunded' && (
-                    <div className="mt-md">
-                      <Label text="Refund reason">
-                        <input value={refundReason} onChange={(e) => setRefundReason(e.target.value)} className={FIELD} />
-                      </Label>
-                      <ErrorLine e={refundError} className="mt-xs" />
-                      <Button
-                        variant="outline"
-                        className="mt-xs"
-                        disabled={busy}
-                        onClick={() => {
-                          const id = orderDetail.order.id;
-                          askFirst({
-                            title: `Refund ${orderDetail.order.points > 0 ? `${formatCount(orderDetail.order.points)} points` : money(orderDetail.order.cents, orderDetail.order.currency)} in full?`,
-                            body: `${orderDetail.order.buyerName} gets the whole amount back and the order is marked refunded. This cannot be undone.`,
-                            yes: 'Yes, refund it',
-                            keep: 'Keep the order',
-                            act: async () => {
-                              setRefundError(null);
-                              try {
-                                await adminApi.refundOrder(key, id, refundReason);
-                              } catch (e) {
-                                setRefundError(e instanceof Error ? e.message : 'The refund was refused.');
-                                throw e;
-                              }
-                              setOrderDetail(await adminApi.order(key, id));
-                              setOrders((list) => (list ?? []).map((x) => (x.id === id ? { ...x, status: 'refunded' } : x)));
-                            },
-                          });
-                        }}
-                      >
-                        Refund in full
-                      </Button>
-                    </div>
-                  )}
+                  {orderRail && <StickyClose onClose={() => setOrderDetail(null)} label="Close this order" opener={() => rowOpener(ordersTable.current, orderRow.current)} />}
+                  <div className={STICKY_CLOSE_LANE}>
+                    <p className="mt-xs m-0 text-subhead text-ink-soft">
+                      <Pill tone={statusTone(orderDetail.order.status)}>{orderDetail.order.status}</Pill> {orderDetail.order.provider}
+                      {orderDetail.order.providerOrderId ? `, ${orderDetail.order.providerOrderId}` : ''}
+                      {orderDetail.order.paidAt ? `, paid ${dateTime(orderDetail.order.paidAt)}` : ''}
+                    </p>
+                    <p className="mt-md m-0 text-subhead font-semibold">Timeline</p>
+                    {orderDetail.timeline.length === 0 && <p className="m-0 text-subhead text-ink-soft">Nothing logged for this order yet.</p>}
+                    <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+                      {orderDetail.timeline.map((t) => (
+                        <li key={t.id} className="rounded-tile bg-paper px-sm py-xs text-caption">
+                          <span>{t.type}</span>
+                          {t.data ? <span className="block break-words text-ink-soft">{t.data}</span> : null}
+                          <span className="block text-ink-mute">{dateTime(t.createdAt)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    {orderDetail.webhooks.length > 0 && (
+                      <>
+                        <p className="mt-md m-0 text-subhead font-semibold">Provider webhooks</p>
+                        <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
+                          {orderDetail.webhooks.map((h) => (
+                            <li key={h.id} className="rounded-tile bg-paper px-sm py-xs text-caption">
+                              {h.type}
+                              <span className="block text-ink-soft">{h.processedAt ? `processed ${dateTime(h.processedAt)}` : 'not processed yet'}</span>
+                              {h.error && <span className="block text-r1">{h.error}</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                    {orderDetail.order.status !== 'refunded' && (
+                      <div className="mt-md">
+                        <Label text="Refund reason">
+                          <input value={refundReason} onChange={(e) => setRefundReason(e.target.value)} className={FIELD} />
+                        </Label>
+                        <ErrorLine e={refundError} className="mt-xs" />
+                        <Button
+                          variant="outline"
+                          className="mt-xs"
+                          disabled={busy}
+                          onClick={() => {
+                            const id = orderDetail.order.id;
+                            askFirst({
+                              title: `Refund ${orderDetail.order.points > 0 ? `${formatCount(orderDetail.order.points)} points` : money(orderDetail.order.cents, orderDetail.order.currency)} in full?`,
+                              body: `${orderDetail.order.buyerName} gets the whole amount back and the order is marked refunded. This cannot be undone.`,
+                              yes: 'Yes, refund it',
+                              keep: 'Keep the order',
+                              act: async () => {
+                                setRefundError(null);
+                                try {
+                                  await adminApi.refundOrder(key, id, refundReason);
+                                } catch (e) {
+                                  setRefundError(e instanceof Error ? e.message : 'The refund was refused.');
+                                  throw e;
+                                }
+                                setOrderDetail(await adminApi.order(key, id));
+                                setOrders((list) => (list ?? []).map((x) => (x.id === id ? { ...x, status: 'refunded' } : x)));
+                              },
+                            });
+                          }}
+                        >
+                          Refund in full
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </section>

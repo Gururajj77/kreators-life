@@ -11,6 +11,7 @@ import { useCelebrate } from './Celebration';
 import { WeekDots } from './Charts';
 import { CheckRow } from './CheckRow';
 import { DELETE_BTN } from './ConfirmDelete';
+import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from './StickyClose';
 import { ToggleChevron, ToggleIcon } from './ToggleMark';
 import { Ellipsis } from 'lucide-react';
 import { FIELD } from '../lib/ui';
@@ -243,21 +244,29 @@ function localDayOf(iso: string): string {
 /**
  * Yesterday can still be marked (the server takes today or yesterday), and an unmarked yesterday ends a streak. So when
  * an item that existed yesterday has nothing for it, one quiet line says how many; it opens in place with Kept and Slipped
- * for each, marked for yesterday and counted as of the person's today. Only yesterday, never earlier.
+ * for each, marked for yesterday and counted as of the person's today. Only yesterday, never earlier. Open and taller than
+ * the room the window has, its close stays in view beside the list (`StickyClose`, 2026-11-14): the chevron keeps its slot
+ * unseen, and the list keeps a lane while the close runs down its own edge, so it never sits on a Kept or a Slipped.
  */
 function YesterdayMarks({ items, date, queue }: { items: NotToDo[]; date: string; queue: Queue }) {
   const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
   const yesterday = shiftDay(date, -1);
   const unmarked = items.filter((i) => i.week[5] === null && localDayOf(i.createdAt) !== '' && localDayOf(i.createdAt) <= yesterday);
   // The server takes a day only within WAIT.dateWindowDays of its UTC date (`dateNearToday`); a device far
   // behind UTC late in its evening can be two days back on its yesterday, so the line hides then.
   const utcDay = new Date().toISOString().slice(0, 10);
   const near = Math.abs(Date.parse(`${yesterday}T00:00:00Z`) - Date.parse(`${utcDay}T00:00:00Z`)) <= WAIT.dateWindowDays * 86_400_000;
-  if (!near || unmarked.length === 0) return null;
+  const shown = near && unmarked.length > 0;
+  // Measured only while the line is drawn, so a line that comes back while still open is measured again.
+  const railOn = useTallOpen(root, open, shown);
+  if (!shown) return null;
   const mark = (item: NotToDo, status: NotToDoStatus) => queue.run(`ntd-y-${item.id}`, () => api.notToDoDay(item.id, yesterday, date, status));
   return (
-    <div className="mt-xs">
+    <div ref={root} data-sticky-close-root="" className="mt-xs">
       <button
+        ref={toggle}
         type="button"
         aria-expanded={open}
         aria-controls="ntd-yesterday"
@@ -265,10 +274,11 @@ function YesterdayMarks({ items, date, queue }: { items: NotToDo[]; date: string
         className="inline-flex min-h-[44px] items-center gap-xs text-caption text-ink-soft hover:text-ink"
       >
         Yesterday: {unmarked.length} not marked
-        <ToggleChevron open={open} size={14} />
+        <ToggleChevron open={open} size={14} className={railOn ? 'invisible' : ''} />
       </button>
+      {railOn && <StickyClose onClose={() => setOpen(false)} label="Close yesterday's marks" opener={() => toggle.current} />}
       {open && (
-        <ul id="ntd-yesterday" aria-label="Mark yesterday" className="m-0 flex list-none flex-col gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
+        <ul id="ntd-yesterday" aria-label="Mark yesterday" className={`m-0 flex list-none flex-col gap-sm rounded-tile bg-card p-sm shadow-toy-soft ${STICKY_CLOSE_LANE}`}>
           {unmarked.map((item) => {
             const busy = queue.isPending(`ntd-y-${item.id}`);
             const hint = queue.hint(`ntd-y-${item.id}`);

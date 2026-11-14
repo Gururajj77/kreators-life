@@ -1,9 +1,9 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import gsap from 'gsap';
 import { Check, Clock, Pencil } from 'lucide-react';
 import { Icon } from './Icon';
 import { ToggleIcon } from './ToggleMark';
-import { CloseButton } from './CloseButton';
+import { StickyClose } from './StickyClose';
 
 /** What tapping a row's words opens, for a row that has something to open (a task's plan or its edit sheet). */
 export interface CheckRowOpen {
@@ -488,99 +488,32 @@ function useMarksUnder(hasMarks: boolean) {
   return { mode, cornerFirst: cornerFirst && mode !== 'under1' && mode !== 'under2', on: mode === 'under1' || mode === 'under2', wraps: mode === 'under2', card, title: titleCol, right, pair, marks: marksEl };
 }
 
-/** The room a row's close needs at its right to stand outside the card: a gap, the 44px button, a gap. */
-const OUTSIDE_ROOM = 60;
-/** How far past the row a painted box round it may reach and still be its group's box (a time block's box, a fold's card). */
-const GROUP_REACH = 40;
-
-/** The right edge of the painted box the row sits in (a time block's `tb-box` and its padding), when one reaches just past the row. */
-function groupRight(row: HTMLElement): number {
-  const right = row.getBoundingClientRect().right;
-  let edge = right;
-  let a = row.parentElement;
-  for (let depth = 0; a && depth < 6 && a !== document.body; depth += 1, a = a.parentElement) {
-    const r = a.getBoundingClientRect().right;
-    if (r - right > GROUP_REACH) break;
-    if (r <= edge + 0.5) continue;
-    const cs = getComputedStyle(a);
-    const painted = cs.backgroundImage !== 'none' || !/rgba\([^)]*,\s*0\)|transparent/.test(cs.backgroundColor) || parseFloat(cs.borderRightWidth) > 0;
-    if (painted) edge = r;
-  }
-  return edge;
-}
-
 /**
- * The close of a row whose plan is open in place (2026-11-13, the founder: "put the close button outside on scroll in daily tasks"). Drawn
+ * The close of a row whose plan is open in place (2026-11-13, the founder: "put the close button outside on scroll in daily tasks"), drawn
+ * by the one sticky close every inline toggle now shares (`StickyClose` in StickyClose.tsx, 2026-11-14), as its `row` variant. Drawn
  * inside the row's own element (a task's `li`, which is `relative` and holds the card and the plan under it), right after the card in the
  * page's order, so the keyboard meets it straight after the card's own control and before the plan's fields; it sits in a rail as tall as
  * the two, so the button is sticky: it starts level with the card's first line and stays in view while the plan scrolls by, stopping at
- * the plan's end. Where the page has a margin at the row's right (60px or more past the row, or past the painted box round it such as a
- * time block's, before the window's edge or On this page when it shows) the rail stands in that margin and the button is the 44px round
- * `CloseButton` with its name as a tip; where it has none (a phone, a tablet's column, a narrow laptop) the rail runs down the row's own
- * right edge with the 32px one where the small edit button was, named but with no tip (a tip there would sit on the card's words), and
- * the open plan keeps a lane for it (`.row-lane`, padded only while the row says `data-row-close="in"`), so it never covers a field. A
- * tap or Enter hands focus to the card's control and brings the card back into view when the plan was scrolled past it.
+ * the plan's end (and 52px lower while the row sits in a tall fold whose own close shows, so the two never meet). Where the page has a
+ * margin at the row's right (60px or more past the row, or past the painted box round it such as a time block's, before the window's
+ * edge or On this page when it shows) the rail stands in that margin and the button is the 44px round `CloseButton` with "Close the plan"
+ * as a tip; where it has none (a phone, a tablet's column, a narrow laptop) the rail runs down the row's own right edge with the 32px one
+ * where the small edit button was, named but with no tip (a tip there would sit on the card's words), and the open plan keeps a lane for
+ * it (`.row-lane`, padded only while the row says `data-row-close="in"`), so it never covers a field. A tap or Enter hands focus to the
+ * card's control and brings the card back into view when the plan was scrolled past it. Escape is the row's own (TaskRow), so the rail
+ * leaves it alone. The row carries `data-sticky-close-root` and `data-sticky-close` while it shows, and the button `data-row-close-btn`
+ * (scripts/smoke/drive-tips.mjs) beside `data-sticky-close-btn`.
  */
 export function RowClose({ onClose, label = 'Close the plan' }: { onClose: () => void; /** Its name, with the task's title ("Close the plan for Call the bank"); its tip says only "Close the plan", so it fits the margin. */ label?: string }) {
-  const rail = useRef<HTMLSpanElement>(null);
-  const [out, setOut] = useState(false);
-  const [shift, setShift] = useState(0);
-  useLayoutEffect(() => {
-    const row = rail.current?.parentElement;
-    if (!row) return;
-    const measure = () => {
-      const contents = document.querySelector('.page-contents')?.getBoundingClientRect();
-      const limit = contents && contents.width > 0 ? contents.left : document.documentElement.clientWidth;
-      const right = row.getBoundingClientRect().right;
-      const edge = groupRight(row);
-      setShift(Math.round(edge - right));
-      setOut(limit - edge >= OUTSIDE_ROOM);
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(row);
-    window.addEventListener('resize', measure);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener('resize', measure);
-    };
-  }, []);
-  // The row says which way it is drawn, so its plan keeps a lane only when the button runs down its edge.
-  useLayoutEffect(() => {
-    const row = rail.current?.parentElement;
-    if (!row) return;
-    row.dataset.rowClose = out ? 'out' : 'in';
-    return () => {
-      delete row.dataset.rowClose;
-    };
-  }, [out]);
   return (
-    <span ref={rail} data-mode={out ? 'out' : 'in'} className="row-close-rail" style={out && shift > 0 ? ({ '--row-close-shift': `${shift}px` } as CSSProperties) : undefined}>
-      <span className="row-close-slot">
-        <CloseButton
-          data-row-close-btn=""
-          label={label}
-          small={!out}
-          tip={out ? 'Close the plan' : false}
-          className="row-close"
-          // A mouse or a finger leaves focus where it was; the keyboard's Enter focuses the card's control below, like a tap.
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => {
-            const row = rail.current?.parentElement;
-            const opener = row?.querySelector<HTMLElement>('[data-row-open]');
-            opener?.focus({ preventScroll: true });
-            onClose();
-            // Closed from deep in the plan, the card would be above the window: bring it back under the top bar.
-            requestAnimationFrame(() => {
-              const card = opener?.closest('.check-line');
-              if (!card) return;
-              const bar = document.querySelector('.fx-condensed[data-on]')?.getBoundingClientRect().height ?? 0;
-              const top = card.getBoundingClientRect().top - bar - 8;
-              if (top < 0) window.scrollBy({ top });
-            });
-          }}
-        />
-      </span>
-    </span>
+    <StickyClose
+      variant="row"
+      onClose={onClose}
+      label={label}
+      tip="Close the plan"
+      escape={false}
+      opener={(row) => row.querySelector<HTMLElement>('[data-row-open]')}
+      anchor={(opener) => opener?.closest('.check-line') ?? null}
+    />
   );
 }

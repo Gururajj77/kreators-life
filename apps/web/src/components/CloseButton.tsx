@@ -7,7 +7,8 @@ type Rest = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'type' | '
 /**
  * The one round close button for a panel in the page that is not a Sheet (a Sheet draws its own, in its rail outside the card): 44px, glass, an X that turns a quarter as a
  * mouse points at it or the keyboard reaches it, with its words for screen readers and as a tooltip. Still under reduced motion.
- * `small` is the 32px one a task's open plan wears where it runs down the plan's own edge (a phone, a narrow column: `RowClose`), still
+ * `small` is the 32px one a sticky close wears where it runs down the open content's own edge (a phone, a narrow column: `StickyClose`,
+ * under a task's plan `RowClose`, a tall fold, an app group, How it works), still
  * 44 by 44 to tap through `.tap-pad`; `tip={false}` keeps its name off the page as a tooltip (it is still its `aria-label`) where any
  * tip would sit on the card's own words, and a string shows those shorter words as the tip ("Close the plan") beside a longer name.
  */

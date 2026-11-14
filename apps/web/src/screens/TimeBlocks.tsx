@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { tbClass, tbStyle } from '../lib/blockColor';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Copy, Star, Trash2 } from 'lucide-react';
@@ -30,6 +30,7 @@ import { StatusTag } from '../components/StatusTag';
 import { CheckRow } from '../components/CheckRow';
 import { Segmented } from '../components/fx/Segmented';
 import { SortableList } from '../components/SortableList';
+import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
 import { ToggleChevron } from '../components/ToggleMark';
 import { HowItWorks } from '../components/HowTo';
 import { Skeleton } from '../components/Skeleton';
@@ -457,50 +458,28 @@ function Loaded({
         <ul className="m-0 flex list-none flex-col gap-xs p-0">
           {data.templates.map((t) => {
             const open = openTpl === t.id;
-            const bodyId = `tpl-body-${t.id}`;
             return (
-              <li key={t.id} id={`tpl-${t.id}`} className="scroll-mt-xl rounded-card bg-card shadow-toy-soft">
-                {/* The button holds only the name and the chevron, so its name is the template's; the tags (Default with the pillars)
-                    and the strip sit under it, and the why and its book only once the card is open. */}
-                <button type="button" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpenTpl(open ? null : t.id)} className="toy toy-flat flex min-h-[44px] w-full items-start justify-between gap-sm rounded-card px-md pt-md pb-xs text-left">
-                  <span className={`flex min-w-0 items-center gap-xs text-headline ${tbClass(colorOf(t))}`} style={tbStyle(colorOf(t))}>
-                    {colorOf(t) && <span className="tb-dot shrink-0" aria-hidden="true" />}
-                    <span className="min-w-0">{t.name}</span>
-                  </span>
-                  <ToggleChevron open={open} className="shrink-0 text-ink-soft" />
-                </button>
-                <div className="flex flex-col gap-xs px-md pb-md">
-                  <span className="fill-row flex flex-wrap items-center gap-xs">
-                    <PillarTag pillar={t.lead} lead="Leads with " />
-                    {t.second && <PillarTag pillar={t.second} lead="Then " />}
-                    {t.isDefault && <StatusTag tone="info">Default</StatusTag>}
-                  </span>
-                  <DayStrip slots={t.slots} blocks={blocks} className="w-full" />
-                </div>
-                {open && (
-                  <div id={bodyId} className="border-t border-line p-md">
-                    {(t.why || t.source) && (
-                      <p className="m-0 mb-sm text-footnote text-ink-soft">
-                        {t.why}
-                        {t.source ? (
-                          <span className="block text-caption text-ink-mute">
-                            <SourceText text={t.source} />
-                          </span>
-                        ) : null}
-                      </p>
-                    )}
-                    <TemplateEditor
-                      template={t}
-                      blocks={ordered}
-                      pending={saveTpl.isPending || newTpl.isPending}
-                      error={saveTpl.error ?? newTpl.error ?? makeDefault.error}
-                      onSave={(d) => saveTpl.mutate({ id: t.id, d })}
-                      onSaveAsNew={(d) => newTpl.mutate({ ...d, name: d.name.toLowerCase() === t.name.toLowerCase() ? freeName(`${d.name} copy`, names) : freeName(d.name, names) })}
-                      menu={tplMenu(t)}
-                    />
-                  </div>
+              <TemplateCard key={t.id} template={t} color={colorOf(t)} blocks={blocks} open={open} onToggle={() => setOpenTpl(open ? null : t.id)} onClose={() => setOpenTpl(null)}>
+                {(t.why || t.source) && (
+                  <p className="m-0 mb-sm text-footnote text-ink-soft">
+                    {t.why}
+                    {t.source ? (
+                      <span className="block text-caption text-ink-mute">
+                        <SourceText text={t.source} />
+                      </span>
+                    ) : null}
+                  </p>
                 )}
-              </li>
+                <TemplateEditor
+                  template={t}
+                  blocks={ordered}
+                  pending={saveTpl.isPending || newTpl.isPending}
+                  error={saveTpl.error ?? newTpl.error ?? makeDefault.error}
+                  onSave={(d) => saveTpl.mutate({ id: t.id, d })}
+                  onSaveAsNew={(d) => newTpl.mutate({ ...d, name: d.name.toLowerCase() === t.name.toLowerCase() ? freeName(`${d.name} copy`, names) : freeName(d.name, names) })}
+                  menu={tplMenu(t)}
+                />
+              </TemplateCard>
             );
           })}
         </ul>
@@ -527,38 +506,20 @@ function Loaded({
             {ordered.map((b) => {
               const open = openBlock === b.id;
               return (
-                <li key={b.id}>
-                  <button type="button" aria-expanded={open} aria-controls={`blk-${b.id}`} onClick={() => setOpenBlock(open ? null : b.id)} className={`fx-row ${tbClass(b.color)}`} style={tbStyle(b.color)}>
-                    <span className="flex size-[48px] shrink-0 items-center justify-center" aria-hidden="true">
-                      <span className="tb-dot" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-headline">{b.name}</span>
-                      <span className="mt-[2px] flex flex-wrap items-center gap-xs">
-                        {b.tag && <span className="text-footnote text-ink-soft">{b.tag}</span>}
-                        {b.area && <AreaTag area={b.area} />}
-                        {b.pillar && <PillarTag pillar={b.pillar} />}
-                      </span>
-                    </span>
-                    <ToggleChevron open={open} className="text-ink-soft" />
-                  </button>
-                  {open && (
-                    <div id={`blk-${b.id}`} className="px-sm pb-md">
-                      <BlockEditor
-                        block={b}
-                        pending={saveBlock.isPending}
-                        error={saveBlock.error}
-                        onSave={(d) => saveBlock.mutate({ id: b.id, d })}
-                        aside={
-                          // One action, so one round button (as MoreMenu draws a lone item); it asks twice in place.
-                          <TapTwiceIcon armed={blockAsk.isArmed(b.id)} onClick={() => blockAsk.tap(b.id, () => deleteBlock(b))} disabled={remove.isPending} label={blockLoss(b)} tip={blockLoss(b)} className="mf-round toy shrink-0 disabled:opacity-50">
-                            <Icon icon={Trash2} size={20} />
-                          </TapTwiceIcon>
-                        }
-                      />
-                    </div>
-                  )}
-                </li>
+                <BlockRow key={b.id} block={b} open={open} onToggle={() => setOpenBlock(open ? null : b.id)} onClose={() => setOpenBlock(null)}>
+                  <BlockEditor
+                    block={b}
+                    pending={saveBlock.isPending}
+                    error={saveBlock.error}
+                    onSave={(d) => saveBlock.mutate({ id: b.id, d })}
+                    aside={
+                      // One action, so one round button (as MoreMenu draws a lone item); it asks twice in place.
+                      <TapTwiceIcon armed={blockAsk.isArmed(b.id)} onClick={() => blockAsk.tap(b.id, () => deleteBlock(b))} disabled={remove.isPending} label={blockLoss(b)} tip={blockLoss(b)} className="mf-round toy shrink-0 disabled:opacity-50">
+                        <Icon icon={Trash2} size={20} />
+                      </TapTwiceIcon>
+                    }
+                  />
+                </BlockRow>
               );
             })}
           </ul>
@@ -592,6 +553,115 @@ function Loaded({
 
       {remove.error ? <ErrorLine e={remove.error} /> : null}
     </>
+  );
+}
+
+/**
+ * A day template's card: its name is the toggle, the pillars and the day's strip always sit under it, and the why, its book and the editor
+ * (`children`) only once it is open. Open and taller than the room the window has, its close stays in view beside it (`StickyClose`,
+ * 2026-11-14, the founder: "the close buttons that need one to scroll back top need the close button to be sticky outside the toggle
+ * tab"): in the margin at the card's right where there is one, else down the card's own right edge, where the strip and the editor keep a
+ * lane for it; the chevron keeps its slot unseen meanwhile, and Escape anywhere in the card closes it too. A short card is as it was.
+ */
+function TemplateCard({
+  template: t,
+  color,
+  blocks,
+  open,
+  onToggle,
+  onClose,
+  children,
+}: {
+  template: DayTemplate;
+  color: ReturnType<typeof templateColor>;
+  blocks: ReadonlyMap<string, TimeBlock>;
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const root = useRef<HTMLLIElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const railOn = useTallOpen(root, open);
+  const bodyId = `tpl-body-${t.id}`;
+  return (
+    <li ref={root} id={`tpl-${t.id}`} data-sticky-close-root="" className="scroll-mt-xl rounded-card bg-card shadow-toy-soft">
+      {/* The button holds only the name and the chevron, so its name is the template's; the tags (Default with the pillars)
+          and the strip sit under it, and the why and its book only once the card is open. */}
+      <button ref={toggle} type="button" aria-expanded={open} aria-controls={bodyId} onClick={onToggle} className="toy toy-flat flex min-h-[44px] w-full items-start justify-between gap-sm rounded-card px-md pt-md pb-xs text-left">
+        <span className={`flex min-w-0 items-center gap-xs text-headline ${tbClass(color)}`} style={tbStyle(color)}>
+          {color && <span className="tb-dot shrink-0" aria-hidden="true" />}
+          <span className="min-w-0">{t.name}</span>
+        </span>
+        {/* While the sticky close shows, the chevron keeps its slot unseen, as a task card's edit button does. */}
+        <ToggleChevron open={open} className={`shrink-0 text-ink-soft ${railOn ? 'invisible' : ''}`} />
+      </button>
+      {railOn && <StickyClose onClose={onClose} label={`Close ${t.name}`} opener={() => toggle.current} />}
+      {/* The tags and the strip keep the lane too, so a close running down the card's edge never sits on a tag's words. */}
+      <div className={`flex flex-col gap-xs px-md pb-md ${STICKY_CLOSE_LANE}`}>
+        <span className="fill-row flex flex-wrap items-center gap-xs">
+          <PillarTag pillar={t.lead} lead="Leads with " />
+          {t.second && <PillarTag pillar={t.second} lead="Then " />}
+          {t.isDefault && <StatusTag tone="info">Default</StatusTag>}
+        </span>
+        <DayStrip slots={t.slots} blocks={blocks} className="w-full" />
+      </div>
+      {open && (
+        <div id={bodyId} className={`border-t border-line p-md ${STICKY_CLOSE_LANE}`}>
+          {children}
+        </div>
+      )}
+    </li>
+  );
+}
+
+/**
+ * A block's row in the list: its name, tag, area and pillar are the toggle, and the editor (`children`) opens under it. Open and taller
+ * than the room the window has, its close stays in view down the row's right edge (`StickyClose`, 2026-11-14), the editor keeping a lane
+ * for it and the chevron its slot unseen. The list (`.fx-inset`) clips its rows to its rounded corners with `overflow: hidden`, which also
+ * makes it a scroll box, where a sticky close would never stick and a close in the margin would be cut off; while a row is open the list
+ * clips with `overflow: clip` instead (the same corners, at rest and open alike, and no scroll box), so the close runs down the row's own
+ * edge and sticks under the top bar.
+ */
+function BlockRow({ block: b, open, onToggle, onClose, children }: { block: TimeBlock; open: boolean; onToggle: () => void; onClose: () => void; children: ReactNode }) {
+  const root = useRef<HTMLLIElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const railOn = useTallOpen(root, open);
+  // Set in the commit that opens the row, so the close measures the list as it will be when it mounts in the next one. Only one row is
+  // open at a time, and a row that closes puts the list back before the next one opens (layout cleanups run before layout effects).
+  useLayoutEffect(() => {
+    const list = root.current?.parentElement;
+    if (!open || !list) return;
+    const was = list.style.overflow;
+    list.style.overflow = 'clip';
+    return () => {
+      list.style.overflow = was;
+    };
+  }, [open]);
+  return (
+    <li ref={root} data-sticky-close-root="">
+      <button ref={toggle} type="button" aria-expanded={open} aria-controls={`blk-${b.id}`} onClick={onToggle} className={`fx-row ${tbClass(b.color)}`} style={tbStyle(b.color)}>
+        <span className="flex size-[48px] shrink-0 items-center justify-center" aria-hidden="true">
+          <span className="tb-dot" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-headline">{b.name}</span>
+          <span className="mt-[2px] flex flex-wrap items-center gap-xs">
+            {b.tag && <span className="text-footnote text-ink-soft">{b.tag}</span>}
+            {b.area && <AreaTag area={b.area} />}
+            {b.pillar && <PillarTag pillar={b.pillar} />}
+          </span>
+        </span>
+        {/* While the sticky close shows, the chevron keeps its slot unseen, as a task card's edit button does. */}
+        <ToggleChevron open={open} className={`text-ink-soft ${railOn ? 'invisible' : ''}`} />
+      </button>
+      {railOn && <StickyClose onClose={onClose} label={`Close ${b.name}`} opener={() => toggle.current} />}
+      {open && (
+        <div id={`blk-${b.id}`} className={`px-sm pb-md ${STICKY_CLOSE_LANE}`}>
+          {children}
+        </div>
+      )}
+    </li>
   );
 }
 

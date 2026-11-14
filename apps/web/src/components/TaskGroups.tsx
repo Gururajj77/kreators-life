@@ -19,6 +19,7 @@ import { tick } from './fx/haptics';
 import { Pager, usePage } from './Pager';
 import { SkeletonList } from './Skeleton';
 import { StatusTag } from './StatusTag';
+import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from './StickyClose';
 import { ToggleChevron } from './ToggleMark';
 import { dayPlacement, placedRange, type DayPlacement } from './PlaceMyDay';
 import { minuteNowOn, useDailyAnswer } from './useDailyAnswer';
@@ -171,8 +172,18 @@ function countLine(g: Group): string {
   return `${n} · ${spanLabel(g.plannedMin)} of ${spanLabel(g.minutes)}`;
 }
 
+/**
+ * One box. Open and taller than the room the window has (a block with many tasks, a task's plan open inside it), its close stays in view
+ * beside it (`StickyClose`, 2026-11-14, the founder: "the close buttons that need one to scroll back top need the close button to be sticky
+ * outside the toggle tab"): the rail sits in the box itself, right after the header, never inside the sliding body (whose clip would cut it
+ * off while it slides), the chevron keeps its slot unseen, the body keeps a lane while the close runs down the box's edge, and Escape
+ * anywhere in the box closes it. A task's plan close inside it (RowClose) sits one step lower, so the two never meet.
+ */
 function Box({ g, open, onToggle, renderTask, by, extra }: { g: Group; open: boolean; onToggle: () => void; renderTask: (t: Node) => ReactNode; by: GroupBy; /** Under the tasks: a content day's steps for this block. */ extra?: ReactNode }) {
   const body = useRef<HTMLDivElement>(null);
+  const root = useRef<HTMLElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const railOn = useTallOpen(root, open);
   const id = useId();
   const area = g.area ? LIFE_AREAS[g.area] : null;
   // An area box wears its area's pillar colour, like the app groups; a block box its own swatch (the "Time blocks" block in app.css).
@@ -224,6 +235,8 @@ function Box({ g, open, onToggle, renderTask, by, extra }: { g: Group; open: boo
   const note = g.note ? g.note : g.kind === 'block' ? [g.ranges.map((r) => slotRange(r)).join(', '), g.inDay ? '' : 'Not in today’s plan'].filter(Boolean).join('. ') : area ? area.blurb : by === 'block' ? 'Tasks with no block yet.' : 'Tasks with no area of life yet.';
   return (
     <section
+      ref={root}
+      data-sticky-close-root=""
       aria-labelledby={`${id}-h`}
       data-group-key={g.key}
       data-pillar={areaBox ? area.relationship : undefined}
@@ -231,6 +244,7 @@ function Box({ g, open, onToggle, renderTask, by, extra }: { g: Group; open: boo
       style={areaBox ? { background: `var(--soft-${area.relationship})` } : g.kind === 'block' ? tbStyle(g.color) : undefined}
     >
       <button
+        ref={toggle}
         type="button"
         aria-expanded={open}
         aria-controls={`${id}-b`}
@@ -256,11 +270,22 @@ function Box({ g, open, onToggle, renderTask, by, extra }: { g: Group; open: boo
           <span className="block text-footnote text-ink-soft">{note}</span>
         </span>
         <span className={`shrink-0 rounded-pill bg-card-strong px-sm text-caption font-medium leading-[26px] ${over ? 'text-ink' : 'text-ink-soft'}`}>{over ? `${countLine(g)}, over` : countLine(g)}</span>
-        <ToggleChevron open={open} size={20} className="text-ink-soft" />
+        {/* While the sticky close shows, the chevron keeps its slot unseen, as a task card's edit button does. */}
+        <ToggleChevron open={open} size={20} className={`text-ink-soft ${railOn ? 'invisible' : ''}`} />
       </button>
+      {railOn && (
+        <StickyClose
+          onClose={() => {
+            tick();
+            onToggle();
+          }}
+          label={`Close ${g.name}`}
+          opener={() => toggle.current}
+        />
+      )}
       {/* The gap under the header sits on an inner wrapper, never on the element GSAP takes to height 0, so the header's hover tint
           never meets the first row (the same fix as AppGroups). */}
-      <div ref={body} id={`${id}-b`} className="overflow-hidden">
+      <div ref={body} id={`${id}-b`} className={`overflow-hidden ${STICKY_CLOSE_LANE}`}>
         <div className="pt-xs">
           {g.tasks.length === 0 ? (
             <p className={`m-0 px-md text-subhead text-ink-soft ${extra ? '' : 'pb-md'}`}>Nothing here yet.</p>

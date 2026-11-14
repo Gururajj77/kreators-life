@@ -1,7 +1,7 @@
 import { ATTENDEE_CODE_MAX, ATTENDEE_CODE_MIN, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, attendeeXpLocked, BADGES, kmLabel, normalizeCode, paceLabel, RELATIONSHIP_BY_KEY, RUN_BADGES, RUN_PACE_META, RUN_PACES, RUN_REWARD, type Run as RunItem, type RunClub, type RunCollab, type RunCollabApplication, type RunPace, type RunResponse, type RunTracking, type TagTone } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Footprints, Gift } from 'lucide-react';
-import { Fragment, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
 import { Icon } from '../components/Icon';
 import { EventPanel } from '../components/EventPanel';
 import { Dot } from '../components/Channels';
@@ -32,6 +32,7 @@ import { Reveal } from '../components/fx/Reveal';
 import { ToggleChevron } from '../components/ToggleMark';
 import { RunMoveTool } from '../components/RunMoveTool';
 import { StickyAction } from '../components/StickyAction';
+import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
 
 const day = shortDate;
 const REL = RELATIONSHIP_BY_KEY.friendship;
@@ -700,23 +701,28 @@ function RunCodeEditor({ r, onRecode, busy }: { r: RunItem; onRecode: (change: {
   );
 }
 
-/** The run's discussion (under Discussions), then its photos and the people to meet, opened on request so a list of runs does not poll for each. */
+/** The run's discussion (under Discussions), then its photos and the people to meet, opened on request so a list of runs does not poll for each.
+ *  Open and taller than the window (a phone), its close stays in view beside it (`StickyClose`, 2026-11-14): the chevron keeps its slot unseen. */
 function RunTalk({ runId }: { runId: string }) {
   const [open, setOpen] = useState(false);
+  const root = useRef<HTMLLIElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const railOn = useTallOpen(root, open);
   return (
     // A note about the run's photo folder opens the club on `#run-photos-<id>`, which lands here and opens it (lib/useLandOnHash.ts).
-    <li id={`run-photos-${runId}`} className="list-none">
+    <li ref={root} id={`run-photos-${runId}`} data-sticky-close-root="" className="list-none">
       <span className="flex flex-wrap items-center gap-xs">
         <Link to={`/run?tab=talk&run=${runId}`} className="inline-flex min-h-[44px] items-center px-xs text-subhead font-semibold underline underline-offset-4 hover:text-ink-soft">
           Open the discussion
         </Link>
-        <button type="button" aria-expanded={open} aria-controls={`run-people-${runId}`} data-land-open="" onClick={() => setOpen((v) => !v)} className="toy toy-flat inline-flex min-h-[44px] items-center gap-xs rounded-pill px-md text-subhead font-medium underline underline-offset-4">
+        <button ref={toggle} type="button" aria-expanded={open} aria-controls={`run-people-${runId}`} data-land-open="" onClick={() => setOpen((v) => !v)} className="toy toy-flat inline-flex min-h-[44px] items-center gap-xs rounded-pill px-md text-subhead font-medium underline underline-offset-4">
           {open ? 'Hide photos and people' : 'Photos and people'}
-          <ToggleChevron open={open} />
+          <ToggleChevron open={open} className={railOn ? 'invisible' : ''} />
         </button>
       </span>
+      {railOn && <StickyClose onClose={() => setOpen(false)} label="Close photos and people" opener={() => toggle.current} />}
       {open && (
-        <div id={`run-people-${runId}`}>
+        <div id={`run-people-${runId}`} className={STICKY_CLOSE_LANE}>
           <EventPanel app="run" id={runId} talk={false} />
         </div>
       )}

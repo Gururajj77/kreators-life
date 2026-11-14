@@ -1,7 +1,7 @@
 import { canModerate, canMute, communityRankOf, isStaffFor, FEED_FILTER_META, FEED_FILTERS, FEED_SORT_META, FEED_SORTS, MAX_PINNED, POST_CATEGORIES, REACTION_META, REACTIONS, SOCIAL_REWARDS, type CommunityPost, type CommunityReply, type FeedFilter, type FeedSort, type ReactionCounts, type ReactionKind, DEFAULT_PAGE_SIZE, pageQuery, type PageSize } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Inert } from '../components/Inert';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Button } from '../components/Button';
 import { useCelebrate } from '../components/Celebration';
@@ -27,6 +27,7 @@ import { Fold } from '../components/Fold';
 import { AskSheet, type Ask } from '../components/Channels';
 import { ConfirmDelete } from '../components/ConfirmDelete';
 import { ToggleChevron } from '../components/ToggleMark';
+import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
 import { shortDate } from '../lib/date';
 
 const FILTER_ITEMS = FEED_FILTERS.map((f) => ({ key: f, label: FEED_FILTER_META[f] }));
@@ -404,6 +405,79 @@ function PostSheet({ open, product, onClose, onSaved }: { open: boolean; product
   );
 }
 
+/** A reply and every reply under it on the page, as a tree: an answer sits under what it answers, and one whose parent is on an earlier
+ *  page starts a tree of its own (it keeps its indent by its depth). `count` is every reply under it on the page. */
+interface Thread {
+  r: CommunityReply;
+  kids: Thread[];
+  count: number;
+}
+function threadsOf(replies: readonly CommunityReply[]): Thread[] {
+  const top: Thread[] = [];
+  const stack: Thread[] = [];
+  for (const r of replies) {
+    const t: Thread = { r, kids: [], count: 0 };
+    while (stack.length > 0 && (stack[stack.length - 1]?.r.depth ?? 0) >= r.depth) stack.pop();
+    const parent = stack[stack.length - 1];
+    if (parent) parent.kids.push(t);
+    else top.push(t);
+    for (const s of stack) s.count += 1;
+    stack.push(t);
+  }
+  return top;
+}
+
+/**
+ * One reply and the replies under it. Fold hides everything under it; open and taller than the sheet's panel, a close stays in view beside
+ * the thread as the panel scrolls (`StickyClose`, 2026-11-14, the founder: "the close buttons that need one to scroll back top need the
+ * close button to be sticky"), folding it and handing focus back to Fold: the reply's card and the replies under it keep the lane the close
+ * runs down, and Fold's chevron keeps its slot unseen. At rest each reply is the card it always was, indented by its depth.
+ */
+function ReplyThread({ t, folded, onFold, reacting, onReact, onReply, onBlock }: { t: Thread; folded: Set<string>; onFold: (id: string, shut: boolean) => void; reacting: boolean; onReact: (id: string, kind: ReactionKind) => void; onReply: (r: CommunityReply) => void; onBlock: (r: CommunityReply) => void }) {
+  const { r, kids, count } = t;
+  const open = count > 0 && !folded.has(r.id);
+  const root = useRef<HTMLLIElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const railOn = useTallOpen(root, open);
+  return (
+    <li ref={root} data-sticky-close-root="">
+      <div id={`reply-${r.id}`} style={{ marginLeft: `calc(var(--spacing-md) * ${r.depth})` }} className={`rounded-tile bg-card p-sm shadow-toy-soft ${r.depth > 0 ? 'border-l-4 border-line' : ''} ${STICKY_CLOSE_LANE}`}>
+        <p className="m-0 text-subhead font-semibold">
+          {r.authorName}
+          {r.anonymous && <IconTag className="ml-xs" tone="neutral" icon="UserRound">{r.mine ? 'Anonymous, you' : 'Anonymous'}</IconTag>}{' '}
+          <span className="text-ink-soft">{shortDate(r.createdAt)}</span>
+        </p>
+        <p className="mt-xs m-0 text-callout"><Inert text={r.body} /></p>
+        <div className="mt-xs flex flex-wrap items-center gap-xs">
+          <Reactions counts={r.reactions} mine={r.myReaction} busy={reacting} onPick={(kind) => onReact(r.id, kind)} />
+          <Button variant="ghost" size="sm" onClick={() => onReply(r)}>
+            Reply
+          </Button>
+          {count > 0 && (
+            <Button ref={toggle} variant="ghost" size="sm" aria-expanded={open} onClick={() => onFold(r.id, open)}>
+              {open ? 'Fold' : `Show ${count} ${count === 1 ? 'reply' : 'replies'}`}
+              <ToggleChevron open={open} size={14} className={railOn ? 'invisible' : ''} />
+            </Button>
+          )}
+          {!r.mine && (
+            <Button variant="ghost" size="sm" onClick={() => onBlock(r)}>
+              Block
+            </Button>
+          )}
+        </div>
+      </div>
+      {railOn && <StickyClose onClose={() => onFold(r.id, true)} label={`Close the replies to ${r.authorName}`} opener={() => toggle.current} />}
+      {open && (
+        <ul className={`mt-xs flex list-none flex-col gap-xs p-0 m-0 ${STICKY_CLOSE_LANE}`}>
+          {kids.map((k) => (
+            <ReplyThread key={k.r.id} t={k} folded={folded} onFold={onFold} reacting={reacting} onReact={onReact} onReply={onReply} onBlock={onBlock} />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
 /** `onAsk` hands a block up to the feed's own ask sheet, which sits beside this one rather than inside it. */
 function RepliesSheet({ post, onClose, onSaved, onAsk }: { post: CommunityPost | null; onClose: () => void; onSaved: (xp: number) => void; onAsk: (a: Ask) => void }) {
   const [rp, setRp] = useState<{ page: number; size: PageSize }>({ page: 1, size: DEFAULT_PAGE_SIZE });
@@ -440,20 +514,14 @@ function RepliesSheet({ post, onClose, onSaved, onAsk }: { post: CommunityPost |
     },
   });
   const replies = q.data?.replies ?? [];
-  // A folded reply hides everything under it: the ones after it that sit deeper, until a reply at its level or above.
-  const visible: CommunityReply[] = [];
-  let hideBelow: number | null = null;
-  for (const r of replies) {
-    if (hideBelow !== null && r.depth > hideBelow) continue;
-    hideBelow = folded.has(r.id) ? r.depth : null;
-    visible.push(r);
-  }
-  const kidsOf = (id: string, depth: number) => {
-    const i = replies.findIndex((x) => x.id === id);
-    let n = 0;
-    for (let k = i + 1; k < replies.length && (replies[k]?.depth ?? 0) > depth; k++) n++;
-    return n;
-  };
+  const threads = threadsOf(replies);
+  const fold = (id: string, shut: boolean) =>
+    setFolded((f) => {
+      const n = new Set(f);
+      if (shut) n.add(id);
+      else n.delete(id);
+      return n;
+    });
   return (
     <Sheet open={post !== null} onClose={onClose} title={post ? `${post.replies} ${post.replies === 1 ? 'reply' : 'replies'}` : ''}>
       {post && (
@@ -463,36 +531,9 @@ function RepliesSheet({ post, onClose, onSaved, onAsk }: { post: CommunityPost |
             <Inert text={post.body} />
           </p>
           <ul className="mt-md flex list-none flex-col gap-xs p-0 m-0">
-            {visible.map((r) => {
-              const kids = kidsOf(r.id, r.depth);
-              return (
-                <li key={r.id} id={`reply-${r.id}`} style={{ marginLeft: `calc(var(--spacing-md) * ${r.depth})` }} className={`rounded-tile bg-card p-sm shadow-toy-soft ${r.depth > 0 ? 'border-l-4 border-line' : ''}`}>
-                  <p className="m-0 text-subhead font-semibold">
-                    {r.authorName}
-                    {r.anonymous && <IconTag className="ml-xs" tone="neutral" icon="UserRound">{r.mine ? 'Anonymous, you' : 'Anonymous'}</IconTag>}{' '}
-                    <span className="text-ink-soft">{shortDate(r.createdAt)}</span>
-                  </p>
-                  <p className="mt-xs m-0 text-callout"><Inert text={r.body} /></p>
-                  <div className="mt-xs flex flex-wrap items-center gap-xs">
-                    <Reactions counts={r.reactions} mine={r.myReaction} busy={react.isPending} onPick={(kind) => react.mutate({ id: r.id, kind })} />
-                    <Button variant="ghost" size="sm" onClick={() => setTo(r)}>
-                      Reply
-                    </Button>
-                    {kids > 0 && (
-                      <Button variant="ghost" size="sm" aria-expanded={!folded.has(r.id)} onClick={() => setFolded((f) => { const n = new Set(f); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; })}>
-                        {folded.has(r.id) ? `Show ${kids} ${kids === 1 ? 'reply' : 'replies'}` : 'Fold'}
-                        <ToggleChevron open={!folded.has(r.id)} size={14} />
-                      </Button>
-                    )}
-                    {!r.mine && (
-                      <Button variant="ghost" size="sm" onClick={() => onAsk({ title: `Block ${r.authorName}?`, body: "You will not see each other's posts or replies.", action: 'Yes, block', run: () => blockAuthor.mutate(r.id) })}>
-                        Block
-                      </Button>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
+            {threads.map((t) => (
+              <ReplyThread key={t.r.id} t={t} folded={folded} onFold={fold} reacting={react.isPending} onReact={(id, kind) => react.mutate({ id, kind })} onReply={setTo} onBlock={(r) => onAsk({ title: `Block ${r.authorName}?`, body: "You will not see each other's posts or replies.", action: 'Yes, block', run: () => blockAuthor.mutate(r.id) })} />
+            ))}
           </ul>
           <PagerBar page={q.data?.page} onPage={(page, size) => setRp({ page, size })} label="replies" />
           <form

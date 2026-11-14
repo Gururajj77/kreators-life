@@ -3,6 +3,7 @@ import { HOW_TO } from '@kreators/shared/help';
 import gsap from 'gsap';
 import { useLayoutEffect, useRef, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { Link } from 'react-router';
+import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from './StickyClose';
 import { ToggleChevron } from './ToggleMark';
 
 /**
@@ -28,7 +29,7 @@ function Chevron({ open, className = '' }: { open: boolean; className?: string }
 }
 
 /** Content that has just been opened slides in. Reduced motion lands it in place. */
-function Reveal({ children }: { children: ReactNode }) {
+function Reveal({ children, className }: { children: ReactNode; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const el = ref.current;
@@ -42,24 +43,36 @@ function Reveal({ children }: { children: ReactNode }) {
       tween.kill();
     };
   }, []);
-  return <div ref={ref}>{children}</div>;
+  return (
+    <div ref={ref} className={className}>
+      {children}
+    </div>
+  );
 }
 
-/** One of the smaller toggles inside the card: a flat row that tints on hover and darkens while open. */
-function Fold({ id, title, hint, open, onToggle, children }: { id: string; title: string; hint: string; open: boolean; onToggle: () => void; children: ReactNode }) {
+/**
+ * One of the smaller toggles inside the card: a flat row that tints on hover and darkens while open. Open and taller than the room the
+ * window has (an app's "Words we use" runs to thousands of pixels on a phone), it keeps its own close in view too (`StickyClose`), lined up
+ * with the card's in one column, a step under it: its chevron keeps its slot unseen, and Escape inside it folds only it.
+ */
+function Fold({ id, title, hint, closeLabel, open, onToggle, onClose, children }: { id: string; title: string; hint: string; closeLabel: string; open: boolean; onToggle: () => void; onClose: () => void; children: ReactNode }) {
+  const root = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  const railOn = useTallOpen(root, open);
   return (
-    <div>
+    <div ref={root} data-sticky-close-root="">
       <h3 className="m-0 text-headline">
-        <button type="button" aria-expanded={open} aria-controls={id} onClick={onToggle} className="toy toy-flat flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile bg-paper px-sm text-left aria-expanded:bg-line">
+        <button ref={button} type="button" aria-expanded={open} aria-controls={id} onClick={onToggle} className="toy toy-flat flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile bg-paper px-sm text-left aria-expanded:bg-line">
           <span className="min-w-0">
             <span className="text-headline">{title}</span>
             <span className="ml-xs text-subhead text-ink-soft">{hint}</span>
           </span>
-          <Chevron open={open} />
+          <Chevron open={open} className={railOn ? 'invisible' : ''} />
         </button>
       </h3>
+      {railOn && <StickyClose onClose={onClose} label={closeLabel} opener={() => button.current} />}
       {open && (
-        <Reveal>
+        <Reveal className={STICKY_CLOSE_LANE}>
           <div id={id} className="mt-xs">
             {children}
           </div>
@@ -72,10 +85,16 @@ function Fold({ id, title, hint, open, onToggle, children }: { id: string; title
 /**
  * "How it works" at the bottom of an app's main screen: one card that is a button. Tap it and the
  * steps from HOW_TO and the words the app leans on open together, each as its own smaller toggle;
- * tap it again and everything folds away.
+ * tap it again and everything folds away. Open and taller than the room the window has, its close stays
+ * in view beside it (`StickyClose`, 2026-11-14, the founder: "the close buttons that need one to scroll
+ * back top need the close button to be sticky outside the toggle tab"): the card's round chevron keeps its
+ * slot unseen, the steps keep a lane while the close runs down the section's edge, and Escape closes it.
  */
 export function HowItWorksPanel({ howKey, name, open, setOpen, steps, setSteps, words, setWords }: PanelProps) {
   const how = HOW_TO[howKey];
+  const root = useRef<HTMLElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const railOn = useTallOpen(root, open && Boolean(how));
   if (!how) return null;
   const toggleAll = () => {
     if (open) {
@@ -88,9 +107,10 @@ export function HowItWorksPanel({ howKey, name, open, setOpen, steps, setSteps, 
   };
   const count = `${how.steps.length} steps${how.terms.length > 0 ? ` and ${how.terms.length} ${how.terms.length === 1 ? 'word' : 'words'}` : ''}`;
   return (
-    <section className="span-all mt-lg" aria-labelledby="how-heading">
+    <section ref={root} data-sticky-close-root="" className="span-all mt-lg" aria-labelledby="how-heading">
       <h2 id="how-heading" className="m-0" data-contents="How it works">
         <button
+          ref={toggle}
           type="button"
           aria-expanded={open}
           aria-controls="how-panel"
@@ -104,15 +124,17 @@ export function HowItWorksPanel({ howKey, name, open, setOpen, steps, setSteps, 
               <span className="inline-block">{`${count} for ${name}.`}</span> <span className="inline-block">{open ? 'Tap to fold them away.' : 'Tap to open them.'}</span>
             </span>
           </span>
-          <span className="flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-ink text-on-ink" aria-hidden="true">
+          {/* While the sticky close shows, the round chevron keeps its slot unseen, as a task card's edit button does. */}
+          <span className={`flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-ink text-on-ink ${railOn ? 'invisible' : ''}`} aria-hidden="true">
             <Chevron open={open} />
           </span>
         </button>
       </h2>
+      {railOn && <StickyClose onClose={() => setOpen(false)} label="Close How it works" opener={() => toggle.current} />}
       {open && (
-        <Reveal>
+        <Reveal className={STICKY_CLOSE_LANE}>
           <div id="how-panel" className="mt-sm flex flex-col gap-sm rounded-card bg-card p-md shadow-toy-soft">
-            <Fold id="how-steps" title="The steps" hint={`${how.steps.length}`} open={steps} onToggle={() => setSteps((v) => !v)}>
+            <Fold id="how-steps" title="The steps" hint={`${how.steps.length}`} closeLabel="Close the steps" open={steps} onToggle={() => setSteps((v) => !v)} onClose={() => setSteps(false)}>
               <ol className="m-0 flex list-none flex-col gap-xs p-0">
                 {how.steps.map((t, i) => (
                   <li key={t} className="flex gap-sm rounded-tile bg-paper p-sm">
@@ -125,7 +147,7 @@ export function HowItWorksPanel({ howKey, name, open, setOpen, steps, setSteps, 
               </ol>
             </Fold>
             {how.terms.length > 0 && (
-              <Fold id="how-words" title="Words we use" hint={`${how.terms.length}`} open={words} onToggle={() => setWords((v) => !v)}>
+              <Fold id="how-words" title="Words we use" hint={`${how.terms.length}`} closeLabel="Close the words we use" open={words} onToggle={() => setWords((v) => !v)} onClose={() => setWords(false)}>
                 <dl className="m-0 flex flex-col gap-xs">
                   {how.terms.map((t) => (
                     <div key={t} className="m-0 rounded-tile bg-paper p-sm text-subhead">

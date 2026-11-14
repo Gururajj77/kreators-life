@@ -20,6 +20,7 @@ import { Check, ChevronLeft, ChevronRight, Droplet, Undo2, X } from 'lucide-reac
 import { FIELD } from '../lib/ui';
 import { Toggle } from './Toggle';
 import { ToggleChevron } from './ToggleMark';
+import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from './StickyClose';
 import { ChipSelect } from './ChipSelect';
 import { AnimatedIcon } from './AnimatedIcon';
 import { useWide } from '../lib/useWide';
@@ -345,20 +346,26 @@ export function WaterBlock({ tasks = true, summary = true, heading = true, onClo
 
 /**
  * On a phone: a section inside Daily and Journal, never a floating button. Water comes first, so its tap sits in
- * the collapsed row; the rest opens under it.
+ * the collapsed row; the rest opens under it. Open and taller than the room the window has (the card's Reminders or Settings on a phone), its
+ * close stays in view beside it (`StickyClose`, 2026-11-14): the chevron keeps its slot unseen, and the row with + Glass and Undo and the
+ * card keep a lane while the close runs down the section's own edge, so it never sits on a button (the bar keeps its width: a lane's
+ * padding would paint its track past its level).
  */
 export function RemindersSection({ always = false, tasks = true, quiet = false }: { always?: boolean; tasks?: boolean; /** The screen already has its one solid button (Journal's New entry), so "+ Glass" takes the outline look. */ quiet?: boolean }) {
   const { q, day, refresh } = useReminders();
   const [open, setOpen] = useState(false);
+  const root = useRef<HTMLElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const railOn = useTallOpen(root, open);
   const w = q.data?.water;
   const drink = useMutation({ mutationFn: () => api.drinkWater(day), onSuccess: refresh });
   const undo = useMutation({ mutationFn: () => api.undoWater(day), onSuccess: refresh });
   return (
     // `#water` and `#reminders` land here and open it (Emerging's Add a glass, a reminder note; lib/useLandOnHash.ts), on Home at every width.
-    <section id="water" data-land="reminders" className={`span-all mt-md w-full rounded-card bg-card p-md shadow-toy-soft ${always ? '' : 'lg:hidden'}`} aria-label="Water and reminders" data-pillar="lover_partner">
+    <section ref={root} id="water" data-land="reminders" data-sticky-close-root="" className={`span-all mt-md w-full rounded-card bg-card p-md shadow-toy-soft ${always ? '' : 'lg:hidden'}`} aria-label="Water and reminders" data-pillar="lover_partner">
       {/* One wide cell: what it is and where today stands on the left, the tap on the right. On a phone the tap drops under it, full width. */}
-      <div className="flex flex-col gap-sm sm:flex-row sm:items-center sm:justify-between">
-        <button type="button" aria-expanded={open} aria-controls="reminders-body" data-land-open="" onClick={() => setOpen((v) => !v)} className="toy toy-flat flex min-h-[44px] min-w-0 flex-1 items-center gap-sm rounded-inner-sm px-xs py-xs text-left">
+      <div className={`flex flex-col gap-sm sm:flex-row sm:items-center sm:justify-between ${STICKY_CLOSE_LANE}`}>
+        <button ref={toggle} type="button" aria-expanded={open} aria-controls="reminders-body" data-land-open="" onClick={() => setOpen((v) => !v)} className="toy toy-flat flex min-h-[44px] min-w-0 flex-1 items-center gap-sm rounded-inner-sm px-xs py-xs text-left">
           <span className="flex size-[44px] shrink-0 items-center justify-center rounded-inner-sm bg-r4/20 text-r4">
             <Drop size={24} />
           </span>
@@ -366,7 +373,8 @@ export function RemindersSection({ always = false, tasks = true, quiet = false }
             <span className="block text-card-title">Water and reminders</span>
             <span className="block text-card-note text-ink-soft">{w ? `${w.glasses} of ${w.goalGlasses} glasses today · ${litres(w.ml)} of ${litres(w.goalMl)}` : 'Loading'}</span>
           </span>
-          <ToggleChevron open={open} size={16} strokeWidth={3} />
+          {/* While the sticky close shows, the chevron keeps its slot unseen, as a task card's edit button does. */}
+          <ToggleChevron open={open} size={16} strokeWidth={3} className={railOn ? 'invisible' : ''} />
         </button>
         <div className="flex gap-xs sm:shrink-0">
           {/* The water green (the founder, 2026-11-06), the same as the card's + glass; Journal keeps the outline, its New entry is the solid button. */}
@@ -382,9 +390,10 @@ export function RemindersSection({ always = false, tasks = true, quiet = false }
           </span>
         </div>
       </div>
+      {railOn && <StickyClose onClose={() => setOpen(false)} label="Close Water and reminders" opener={() => toggle.current} />}
       <WaterFill className="mt-sm" value={w?.ml} max={w?.goalMl} />
       {open && (
-        <div id="reminders-body" className="mt-sm">
+        <div id="reminders-body" className={`mt-sm ${STICKY_CLOSE_LANE}`}>
           <WaterBlock heading={false} summary={false} tasks={tasks} />
         </div>
       )}

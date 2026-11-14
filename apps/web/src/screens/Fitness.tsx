@@ -2,7 +2,7 @@ import { formatCount } from '@kreators/shared';
 import { eatSummary, EFFORT_LEVELS, MOVE_KIND_META, MOVE_KINDS, MOVE_WEEK_TARGET, moveLine, type EatLog, type MoveKind, type MoveLog } from '@kreators/shared/fitness';
 import { useMutation } from '@tanstack/react-query';
 import { ArrowUpRight } from 'lucide-react';
-import { Fragment, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { AnimatedIcon } from '../components/AnimatedIcon';
 import { AppIcon } from '../components/AppIcon';
@@ -24,6 +24,7 @@ import { Segmented } from '../components/fx/Segmented';
 import { Sheet } from '../components/Sheet';
 import { SkeletonList } from '../components/Skeleton';
 import { StatusTag } from '../components/StatusTag';
+import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
 import { SupplementsSection } from '../components/Supplements';
 import { api } from '../lib/api';
 import { dayLabel, lastDays, shortDay, todayLocal, weekday } from '../lib/date';
@@ -289,85 +290,123 @@ function DaySheet({ date, loading, moves, eat, proteinGoal, near, onClose, onCha
         {moves.length > 0 && (
           <ul className="flex list-none flex-col gap-xs p-0 m-0" aria-label="Movement">
             {moves.map((m) => (
-              <li key={m.id} className="rounded-tile bg-card p-sm shadow-toy-soft">
-                <div className="flex items-center gap-sm">
-                  <KindBadge kind={m.kind} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-card-title">{moveLine(m)}</span>
-                    <span className="block text-card-note text-ink-soft">{[m.effort ? EFFORT_LEVELS[m.effort - 1] : '', m.source === 'club' ? 'Club run' : '', m.note].filter(Boolean).join(' · ') || 'Logged by you'}</span>
-                  </span>
-                  {near && m.source === 'self' && (
-                    <button type="button" id={`move-change-${m.id}`} aria-expanded={editing === m.id} onClick={() => setEditing(editing === m.id ? null : m.id)} className="toy toy-flat inline-flex min-h-[44px] items-center rounded-pill px-sm text-subhead font-semibold">
-                      {editing === m.id ? 'Close' : 'Change'}
-                    </button>
-                  )}
-                  <TapTwiceIcon armed={ask.isArmed(m.id)} ask="Tap again to remove" onClick={() => tapRemove({ kind: 'move', id: m.id })} disabled={remove.isPending} label={`Remove ${moveLine(m)}`} tip="Remove" className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1">
-                    <AnimatedIcon name="trash" size={20} />
-                  </TapTwiceIcon>
-                </div>
-                {editing === m.id && (
-                  <div className="mt-md">
-                    <MoveForm
-                      kinds={MOVE_KINDS}
-                      initial={m}
-                      saveLabel="Save the change"
-                      onSave={(body) => api.editMove(m.id, body)}
-                      onDone={() => {
-                        setEditing(null);
-                        onChanged();
-                        backTo(`move-change-${m.id}`);
-                      }}
-                    />
-                  </div>
-                )}
-              </li>
+              <MoveRow
+                key={m.id}
+                m={m}
+                near={near}
+                editing={editing === m.id}
+                onToggle={() => setEditing(editing === m.id ? null : m.id)}
+                onFold={() => setEditing(null)}
+                armed={ask.isArmed(m.id)}
+                busy={remove.isPending}
+                onRemove={() => tapRemove({ kind: 'move', id: m.id })}
+                onSaved={() => {
+                  setEditing(null);
+                  onChanged();
+                  backTo(`move-change-${m.id}`);
+                }}
+              />
             ))}
           </ul>
         )}
         {eat && (
-          <div className="rounded-tile bg-card p-sm shadow-toy-soft">
-            <div className="flex items-center gap-sm">
-              <span className="min-w-0 flex-1">
-                <span className="block text-card-title">{eat.fasting ? 'A fasting day' : eat.dayScore === null ? 'Eating check-in' : `Eating score ${eat.dayScore}`}</span>
-                <span className="block text-card-note text-ink-soft">
-                  {/* Each fact kept whole, so a phone never parts "protein" from its grams. */}
-                  {[...eatSummary(eat, eat.legacy).filter((p, i) => !(eat.fasting && i === 0)), ...(eat.note ? [eat.note] : [])].map((p, i, all) => (
-                    <Fragment key={i}>
-                      <span className="inline-block">{i < all.length - 1 ? `${p} ·` : p}</span>{' '}
-                    </Fragment>
-                  ))}
-                </span>
-              </span>
-              {near && (
-                <button type="button" id="eat-change" aria-expanded={eatOpen} onClick={() => setEatOpen((v) => !v)} className="toy toy-flat inline-flex min-h-[44px] items-center rounded-pill px-sm text-subhead font-semibold">
-                  {eatOpen ? 'Close' : 'Change'}
-                </button>
-              )}
-              <TapTwiceIcon armed={ask.isArmed(eat.id)} ask="Tap again to remove" onClick={() => tapRemove({ kind: 'eat', id: eat.id })} disabled={remove.isPending} label="Remove this day’s eating check-in" tip="Remove" className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1">
-                <AnimatedIcon name="trash" size={20} />
-              </TapTwiceIcon>
-            </div>
-            {eatOpen && date && (
-              <div className="mt-md">
-                <EatForm
-                  day={date}
-                  existing={eat}
-                  proteinGoal={proteinGoal}
-                  lastScoop={eat.protein?.scoopG ?? null}
-                  onGoalSaved={onChanged}
-                  onSaved={() => {
-                    setEatOpen(false);
-                    onChanged();
-                    backTo('eat-change');
-                  }}
-                />
-              </div>
-            )}
-          </div>
+          <EatCard
+            eat={eat}
+            date={date}
+            near={near}
+            open={eatOpen}
+            onToggle={() => setEatOpen((v) => !v)}
+            onFold={() => setEatOpen(false)}
+            armed={ask.isArmed(eat.id)}
+            busy={remove.isPending}
+            onRemove={() => tapRemove({ kind: 'eat', id: eat.id })}
+            proteinGoal={proteinGoal}
+            onGoalSaved={onChanged}
+            onSaved={() => {
+              setEatOpen(false);
+              onChanged();
+              backTo('eat-change');
+            }}
+          />
         )}
         {!near && (moves.length > 0 || eat) && <p className="m-0 text-caption text-ink-soft">Only today and yesterday can change. Older days can still be removed.</p>}
         {remove.isError && <ErrorLine e={remove.error} />}
       </div>
     </Sheet>
+  );
+}
+
+/**
+ * A movement on the day's sheet, whose Change opens its form in place. Open and taller than the sheet's panel, its close stays in view
+ * beside the form as the panel scrolls (`StickyClose`, 2026-11-14, the founder: "the close buttons that need one to scroll back top need
+ * the close button to be sticky"): the row (Change and the trash at its right) and the form each keep the lane it runs down, and Change
+ * keeps reading Close at the top, the toggle the close hands focus back to.
+ */
+function MoveRow({ m, near, editing, onToggle, onFold, armed, busy, onRemove, onSaved }: { m: MoveLog; near: boolean; editing: boolean; onToggle: () => void; onFold: () => void; armed: boolean; busy: boolean; onRemove: () => void; onSaved: () => void }) {
+  const root = useRef<HTMLLIElement>(null);
+  const railOn = useTallOpen(root, editing);
+  const changeId = `move-change-${m.id}`;
+  return (
+    <li ref={root} data-sticky-close-root="" className="rounded-tile bg-card p-sm shadow-toy-soft">
+      <div className={`flex items-center gap-sm ${STICKY_CLOSE_LANE}`}>
+        <KindBadge kind={m.kind} />
+        <span className="min-w-0 flex-1">
+          <span className="block text-card-title">{moveLine(m)}</span>
+          <span className="block text-card-note text-ink-soft">{[m.effort ? EFFORT_LEVELS[m.effort - 1] : '', m.source === 'club' ? 'Club run' : '', m.note].filter(Boolean).join(' · ') || 'Logged by you'}</span>
+        </span>
+        {near && m.source === 'self' && (
+          <button type="button" id={changeId} aria-expanded={editing} onClick={onToggle} className="toy toy-flat inline-flex min-h-[44px] items-center rounded-pill px-sm text-subhead font-semibold">
+            {editing ? 'Close' : 'Change'}
+          </button>
+        )}
+        <TapTwiceIcon armed={armed} ask="Tap again to remove" onClick={onRemove} disabled={busy} label={`Remove ${moveLine(m)}`} tip="Remove" className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1">
+          <AnimatedIcon name="trash" size={20} />
+        </TapTwiceIcon>
+      </div>
+      {railOn && <StickyClose onClose={onFold} label={`Close the change to ${moveLine(m)}`} opener={() => document.getElementById(changeId)} />}
+      {editing && (
+        <div className={`mt-md ${STICKY_CLOSE_LANE}`}>
+          <MoveForm kinds={MOVE_KINDS} initial={m} saveLabel="Save the change" onSave={(body) => api.editMove(m.id, body)} onDone={onSaved} />
+        </div>
+      )}
+    </li>
+  );
+}
+
+/** The day's eating check-in, whose Change opens the form in place; tall, its close stays in view beside it, as a movement's does. The
+ *  form's own folds (More, Protein) get their own closes, a step lower. */
+function EatCard({ eat, date, near, open, onToggle, onFold, armed, busy, onRemove, proteinGoal, onGoalSaved, onSaved }: { eat: EatLog; date: string | null; near: boolean; open: boolean; onToggle: () => void; onFold: () => void; armed: boolean; busy: boolean; onRemove: () => void; proteinGoal: number | null; onGoalSaved: () => void; onSaved: () => void }) {
+  const root = useRef<HTMLDivElement>(null);
+  const railOn = useTallOpen(root, open && date !== null);
+  return (
+    <div ref={root} data-sticky-close-root="" className="rounded-tile bg-card p-sm shadow-toy-soft">
+      <div className={`flex items-center gap-sm ${STICKY_CLOSE_LANE}`}>
+        <span className="min-w-0 flex-1">
+          <span className="block text-card-title">{eat.fasting ? 'A fasting day' : eat.dayScore === null ? 'Eating check-in' : `Eating score ${eat.dayScore}`}</span>
+          <span className="block text-card-note text-ink-soft">
+            {/* Each fact kept whole, so a phone never parts "protein" from its grams. */}
+            {[...eatSummary(eat, eat.legacy).filter((p, i) => !(eat.fasting && i === 0)), ...(eat.note ? [eat.note] : [])].map((p, i, all) => (
+              <Fragment key={i}>
+                <span className="inline-block">{i < all.length - 1 ? `${p} ·` : p}</span>{' '}
+              </Fragment>
+            ))}
+          </span>
+        </span>
+        {near && (
+          <button type="button" id="eat-change" aria-expanded={open} onClick={onToggle} className="toy toy-flat inline-flex min-h-[44px] items-center rounded-pill px-sm text-subhead font-semibold">
+            {open ? 'Close' : 'Change'}
+          </button>
+        )}
+        <TapTwiceIcon armed={armed} ask="Tap again to remove" onClick={onRemove} disabled={busy} label="Remove this day’s eating check-in" tip="Remove" className="toy toy-flat flex size-[44px] shrink-0 items-center justify-center rounded-pill text-ink-soft hover:text-r1">
+          <AnimatedIcon name="trash" size={20} />
+        </TapTwiceIcon>
+      </div>
+      {railOn && <StickyClose onClose={onFold} label="Close the change to this day’s eating check-in" opener={() => document.getElementById('eat-change')} />}
+      {open && date && (
+        <div className={`mt-md ${STICKY_CLOSE_LANE}`}>
+          <EatForm day={date} existing={eat} proteinGoal={proteinGoal} lastScoop={eat.protein?.scoopG ?? null} onGoalSaved={onGoalSaved} onSaved={onSaved} />
+        </div>
+      )}
+    </div>
   );
 }

@@ -19,6 +19,7 @@ import { Hero, HeroNumber } from '../components/Hero';
 import { Pager, usePage } from '../components/Pager';
 import { Screen } from '../components/Screen';
 import { Section } from '../components/Section';
+import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
 import { SkeletonList } from '../components/Skeleton';
 import { Toggle } from '../components/Toggle';
 import { api } from '../lib/api';
@@ -368,63 +369,76 @@ function StepRow({ done, title, action }: { done: boolean; title: string; action
 /** A new coach's first steps: each ticks itself by doing it, pays nothing, and the list folds away when they are done. */
 function FirstSteps({ steps, sections, onLine, onBox }: { steps: NonNullable<CoachHub['steps']>; sections: CoachSections; onLine: () => void; onBox: () => void }) {
   const [readOpen, setReadOpen] = useState(false);
+  // Open and taller than the window has, "how sharing works" keeps its close in view beside it (StickyClose, 2026-11-14). The root
+  // holds the steps and what Read it opened, so the rail starts level with Read it and runs down to the reading's end.
+  const readRoot = useRef<HTMLDivElement>(null);
+  const readToggle = useRef<HTMLButtonElement>(null);
+  const railOn = useTallOpen(readRoot, readOpen);
   const sharing = steps.sharing || sections.readSharing;
   if (steps.line && steps.invited && sharing && !readOpen) return null;
   return (
     <Section id="steps-heading" title="First steps" lede="Each one ticks itself when you do it.">
-      <ul className="m-0 flex list-none flex-col gap-xs p-0">
-        <StepRow
-          done={steps.line}
-          title="Fill your directory card"
-          action={
-            !steps.line && (
-              <Button size="sm" variant="outline" onClick={onLine}>
-                Write it
+      <div ref={readRoot} data-sticky-close-root="">
+        {/* While the sticky close runs down the steps' edge they keep a lane for it, so it never sits on a step's button. */}
+        <ul className={`m-0 flex list-none flex-col gap-xs p-0 ${STICKY_CLOSE_LANE}`}>
+          <StepRow
+            done={steps.line}
+            title="Fill your directory card"
+            action={
+              !steps.line && (
+                <Button size="sm" variant="outline" onClick={onLine}>
+                  Write it
+                </Button>
+              )
+            }
+          />
+          <StepRow
+            done={steps.invited}
+            title="Invite your first student"
+            action={
+              !steps.invited && (
+                <Button size="sm" variant="outline" onClick={onBox}>
+                  Add one
+                </Button>
+              )
+            }
+          />
+          <StepRow
+            done={sharing}
+            title="Read how sharing works"
+            action={
+              <Button
+                ref={readToggle}
+                size="sm"
+                variant="outline"
+                expanded={readOpen}
+                aria-controls="coach-sharing-read"
+                onClick={() => {
+                  setReadOpen((o) => !o);
+                  sections.markRead();
+                }}
+              >
+                {readOpen ? 'Close' : 'Read it'}
               </Button>
-            )
-          }
-        />
-        <StepRow
-          done={steps.invited}
-          title="Invite your first student"
-          action={
-            !steps.invited && (
-              <Button size="sm" variant="outline" onClick={onBox}>
-                Add one
-              </Button>
-            )
-          }
-        />
-        <StepRow
-          done={sharing}
-          title="Read how sharing works"
-          action={
-            <Button
-              size="sm"
-              variant="outline"
-              expanded={readOpen}
-              onClick={() => {
-                setReadOpen((o) => !o);
-                sections.markRead();
-              }}
-            >
-              {readOpen ? 'Close' : 'Read it'}
-            </Button>
-          }
-        />
-      </ul>
-      {readOpen && (
-        <div className="mt-xs rounded-tile bg-card p-sm shadow-toy-soft">
-          <p className="m-0 text-subhead">Each student has six switches of their own. You see only what is on, read fresh every time, and it stops at once when they switch it off.</p>
-          <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0 text-subhead text-ink-soft">
-            {COACH_SHARE_PARTS.map((k) => (
-              <li key={k}>
-                <span className="font-semibold text-ink">{COACH_SHARE_META[k].name}.</span> {COACH_SHARE_META[k].blurb}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+            }
+          />
+        </ul>
+        {railOn && <StickyClose onClose={() => setReadOpen(false)} label="Close how sharing works" opener={() => readToggle.current} />}
+        {readOpen && (
+          <div className={`mt-xs ${STICKY_CLOSE_LANE}`}>
+            <div id="coach-sharing-read" className="rounded-tile bg-card p-sm shadow-toy-soft">
+              <p className="m-0 text-subhead">Each student has six switches of their own. You see only what is on, read fresh every time, and it stops at once when they switch it off.</p>
+              <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0 text-subhead text-ink-soft">
+                {COACH_SHARE_PARTS.map((k) => (
+                  <li key={k}>
+                    <span className="font-semibold text-ink">{COACH_SHARE_META[k].name}.</span> {COACH_SHARE_META[k].blurb}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+      </div>
     </Section>
   );
 }

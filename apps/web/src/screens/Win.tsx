@@ -1,6 +1,6 @@
 import { bountyPayout, detectPlatform, SOCIAL_PLATFORM_META, type Bounty, type BountySubmission, formatCount } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { MediaSection, useMediaMenuItem } from '../components/MediaSection';
 import { MoreMenu } from '../components/MoreMenu';
@@ -25,6 +25,7 @@ import { Reveal } from '../components/fx/Reveal';
 import { CardHead } from '../components/CardHead';
 import { ToggleChevron } from '../components/ToggleMark';
 import { StickyAction } from '../components/StickyAction';
+import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
 
 type Rule = Pick<Bounty, 'ratePerThousand' | 'maxPayoutPoints' | 'minViews'>;
 
@@ -564,6 +565,11 @@ function MySubmission({ s, onDone }: { s: BountySubmission; onDone: () => void }
   });
   const dispute = useMutation({ mutationFn: () => api.disputeBounty(s.id, disputeNote), onSuccess: onDone });
   const auto = SOCIAL_PLATFORM_META[s.platform].auto;
+  // Open and taller than the window has, the numbers form keeps its close in view beside it (StickyClose, 2026-11-14). Its root holds
+  // only the row with Report numbers and the form, so the rail runs down them and nothing else on the card.
+  const reportRoot = useRef<HTMLDivElement>(null);
+  const reportToggle = useRef<HTMLButtonElement>(null);
+  const railOn = useTallOpen(reportRoot, reporting);
   return (
     <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
       <CardHead tag={<StatusPill status={s.status} />}>
@@ -592,55 +598,63 @@ function MySubmission({ s, onDone }: { s: BountySubmission; onDone: () => void }
         </p>
       )}
       <ErrorLine e={refresh.isError ? refresh.error : report.isError ? report.error : dispute.isError ? dispute.error : null} />
-      {s.status !== 'paid' && (
-        <div className="mt-sm flex flex-wrap gap-xs">
-          {auto && (
-            <Button variant="outline" onClick={() => refresh.mutate()} disabled={refresh.isPending}>
-              Refresh numbers
-            </Button>
+      {(s.status !== 'paid' || reporting) && (
+        <div ref={reportRoot} data-sticky-close-root="">
+          {s.status !== 'paid' && (
+            <div className={`mt-sm flex flex-wrap gap-xs ${STICKY_CLOSE_LANE}`}>
+              {auto && (
+                <Button variant="outline" onClick={() => refresh.mutate()} disabled={refresh.isPending}>
+                  Refresh numbers
+                </Button>
+              )}
+              <Button ref={reportToggle} variant={auto ? 'ghost' : 'outline'} onClick={() => setReporting((v) => !v)} aria-expanded={reporting} aria-controls="win-report-numbers">
+                Report numbers
+                {/* While the sticky close shows, the chevron keeps its slot unseen. */}
+                <ToggleChevron open={reporting} className={railOn ? 'invisible' : ''} />
+              </Button>
+            </div>
           )}
-          <Button variant={auto ? 'ghost' : 'outline'} onClick={() => setReporting((v) => !v)} aria-expanded={reporting} aria-controls="win-report-numbers">
-            Report numbers
-            <ToggleChevron open={reporting} />
-          </Button>
+          {railOn && <StickyClose onClose={() => setReporting(false)} label="Close Report numbers" opener={() => reportToggle.current} />}
+          {reporting && (
+            <div className={`mt-sm ${STICKY_CLOSE_LANE}`}>
+              <form
+                id="win-report-numbers"
+                className="flex flex-col gap-sm rounded-tile bg-paper p-sm"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  report.mutate();
+                }}
+              >
+                <p className="m-0 text-subhead text-ink-soft">Type what the platform shows. A reviewer checks it before anything pays, and you can report every six hours.</p>
+                <div className="grid grid-cols-2 gap-xs">
+                  <label className="block">
+                    <span className="block text-caption">Views</span>
+                    <input type="number" min={0} value={views} onChange={(e) => setViews(e.target.value)} required className={FIELD} />
+                  </label>
+                  <label className="block">
+                    <span className="block text-caption">Likes</span>
+                    <input type="number" min={0} value={likes} onChange={(e) => setLikes(e.target.value)} className={FIELD} />
+                  </label>
+                  <label className="block">
+                    <span className="block text-caption">Comments</span>
+                    <input type="number" min={0} value={comments} onChange={(e) => setComments(e.target.value)} className={FIELD} />
+                  </label>
+                  <label className="block">
+                    <span className="block text-caption">Shares</span>
+                    <input type="number" min={0} value={shares} onChange={(e) => setShares(e.target.value)} className={FIELD} />
+                  </label>
+                </div>
+                <label className="block">
+                  <span className="block text-caption">Note, for example a link to a screenshot</span>
+                  <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} className={FIELD} />
+                </label>
+                <Button type="submit" disabled={report.isPending}>
+                  Send numbers
+                </Button>
+              </form>
+            </div>
+          )}
         </div>
-      )}
-      {reporting && (
-        <form
-          id="win-report-numbers"
-          className="mt-sm flex flex-col gap-sm rounded-tile bg-paper p-sm"
-          onSubmit={(e) => {
-            e.preventDefault();
-            report.mutate();
-          }}
-        >
-          <p className="m-0 text-subhead text-ink-soft">Type what the platform shows. A reviewer checks it before anything pays, and you can report every six hours.</p>
-          <div className="grid grid-cols-2 gap-xs">
-            <label className="block">
-              <span className="block text-caption">Views</span>
-              <input type="number" min={0} value={views} onChange={(e) => setViews(e.target.value)} required className={FIELD} />
-            </label>
-            <label className="block">
-              <span className="block text-caption">Likes</span>
-              <input type="number" min={0} value={likes} onChange={(e) => setLikes(e.target.value)} className={FIELD} />
-            </label>
-            <label className="block">
-              <span className="block text-caption">Comments</span>
-              <input type="number" min={0} value={comments} onChange={(e) => setComments(e.target.value)} className={FIELD} />
-            </label>
-            <label className="block">
-              <span className="block text-caption">Shares</span>
-              <input type="number" min={0} value={shares} onChange={(e) => setShares(e.target.value)} className={FIELD} />
-            </label>
-          </div>
-          <label className="block">
-            <span className="block text-caption">Note, for example a link to a screenshot</span>
-            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} className={FIELD} />
-          </label>
-          <Button type="submit" disabled={report.isPending}>
-            Send numbers
-          </Button>
-        </form>
       )}
       {s.status === 'rejected' && (
         <form

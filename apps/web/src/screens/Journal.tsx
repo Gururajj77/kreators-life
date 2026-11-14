@@ -1,6 +1,6 @@
 import { addDays, MODULE_BY_KEY, MOODS, STRESSORS, type JournalEntry } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState, type RefObject } from 'react';
 import gsap from 'gsap';
 import { PeriodPanel } from '../components/PeriodPanel';
 import { Avatar } from '../components/Avatar';
@@ -27,6 +27,7 @@ import { AppIcon } from '../components/AppIcon';
 import { EmergenceSlot } from '../components/EmergenceSlot';
 import { GratitudeCard, GratitudeLines } from '../components/GratitudeCard';
 import { StickyAction } from '../components/StickyAction';
+import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
 
 // The prompt list is a large block of text, so it downloads only when the Journal opens.
 const JournalPrompt = lazyNamed(() => import('../components/JournalPrompt'), 'JournalPrompt');
@@ -45,6 +46,8 @@ export function Journal() {
   // Gratitude for the day: the day on show in its card (today, or a day opened from the calendar) and its heading, for focus.
   const [gratDay, setGratDay] = useState(todayLocal());
   const gratHead = useRef<HTMLHeadingElement>(null);
+  // The calendar's days, so the day panel can hand focus back to the day that opened it.
+  const calendar = useRef<HTMLDivElement>(null);
   const openGratitude = (date: string) => {
     setGratDay(date);
     window.requestAnimationFrame(() => {
@@ -94,7 +97,7 @@ export function Journal() {
           <div className="mt-md rounded-tile bg-ink-fixed/20 p-sm max-[380px]:px-0">
             {/* Under 380px the tile gives its sides to the calendar, so each day stays a 44px target; the eyebrow keeps its inset. */}
             <p className="m-0 text-eyebrow uppercase opacity-90 max-[380px]:px-sm">This month</p>
-            <div className="mt-xs">
+            <div ref={calendar} className="mt-xs">
               <CalendarGrid onFill month={month} today={todayLocal()} maxDate={todayLocal()} selected={day} onMonth={setMonth} onPick={setDay} marks={marks} dots={gratitudeDots} dotLabel="gratitude written" label="Journal calendar. A dot under a day means gratitude was written. Tap a day to read, add or change what it holds." />
             </div>
           </div>
@@ -103,6 +106,7 @@ export function Journal() {
       {/* The day tapped on the calendar opens here, under it, never in a popup: its entries and a way to write another. */}
       <DayPanel
         date={day}
+        calendar={calendar}
         onClose={() => setDay(null)}
         onOpen={(e) => {
           setNewFor(undefined);
@@ -197,8 +201,10 @@ export function Journal() {
  * One day of the calendar, shown in a card right under it (the day keeps its ring on the calendar): what was written that day, a way to
  * open each entry, and a way to add another. Focus moves to its heading when a day is picked; Escape or the close button folds it and
  * hands focus back to the day that opened it. New entry stays the screen's one solid button, so the panel's button is an outline.
+ * Taller than the window has room for (a day of many entries and its gratitude, a phone on its side), its close stays in view beside it
+ * as the page scrolls (`StickyClose`, 2026-11-14, as a task's open plan on Daily), standing in for the one at its top, so there are never two.
  */
-function DayPanel({ date, onClose, onOpen, onNew, onGratitude }: { date: string | null; onClose: () => void; onOpen: (e: JournalEntry) => void; onNew: (date: string) => void; onGratitude: (date: string) => void }) {
+function DayPanel({ date, calendar, onClose, onOpen, onNew, onGratitude }: { date: string | null; calendar: RefObject<HTMLElement | null>; onClose: () => void; onOpen: (e: JournalEntry) => void; onNew: (date: string) => void; onGratitude: (date: string) => void }) {
   const q = useQuery({ queryKey: ['journal-day', date], queryFn: () => api.journalDay(date!), enabled: Boolean(date) });
   const entries = q.data?.entries ?? [];
   // The day's gratitude, read only here; today and yesterday open in the gratitude card to change.
@@ -210,6 +216,7 @@ function DayPanel({ date, onClose, onOpen, onNew, onGratitude }: { date: string 
   const box = useRef<HTMLElement>(null);
   const head = useRef<HTMLHeadingElement>(null);
   const back = useRef<HTMLElement | null>(null);
+  const railOn = useTallOpen(box, Boolean(date));
   useEffect(() => {
     if (!date) return;
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -229,8 +236,11 @@ function DayPanel({ date, onClose, onOpen, onNew, onGratitude }: { date: string 
     };
   }, [date]);
   if (!date) return null;
+  // What takes focus back on a close: the day on the calendar that opened the panel, else what had focus before it opened (a tap in
+  // Safari focuses no button, so that can be the page itself, which takes nothing).
+  const opener = () => dayButton(calendar.current, date) ?? (back.current?.isConnected && back.current !== document.body ? back.current : null);
   const close = () => {
-    const to = back.current;
+    const to = opener();
     back.current = null;
     onClose();
     to?.focus({ preventScroll: true });
@@ -241,57 +251,78 @@ function DayPanel({ date, onClose, onOpen, onNew, onGratitude }: { date: string 
       aria-labelledby="journal-day-heading"
       className="mt-md rounded-card bg-card p-md shadow-toy-soft"
       onKeyDown={(e) => {
+        // While the sticky close shows it owns Escape, and also brings the day back into view.
+        if (railOn) return;
         if (e.key === 'Escape' && !e.defaultPrevented && box.current?.contains(e.target as Node)) {
           e.preventDefault();
           close();
         }
       }}
     >
-      <div className="flex items-start justify-between gap-sm">
-        <h2 id="journal-day-heading" ref={head} tabIndex={-1} className="m-0 min-w-0 text-title3 outline-none">
-          {pretty}
-        </h2>
-        <CloseButton onClick={close} label="Close this day" />
-      </div>
-      <div className="mt-sm flex flex-col gap-sm">
-        {q.isPending && <SkeletonList count={1} lines={2} label="Opening" />}
-        {q.data && entries.length === 0 && <p className="m-0 text-subhead text-ink-soft">Nothing written on this day yet.</p>}
-        {entries.length > 0 && (
-          <ul className="m-0 flex list-none flex-col gap-xs p-0">
-            {entries.map((e) => {
-              const m = e.emotion ? MOODS.find((x) => x.value === e.emotion) : null;
-              return (
-                <li key={e.id}>
-                  <button type="button" onClick={() => onOpen(e)} className="toy toy-soft flex w-full items-center gap-sm rounded-tile bg-paper p-sm text-left">
-                    {m && <MoodFace value={m.value} size={36} />}
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-card-title">{e.title}</span>
-                      <span className="block truncate text-card-note text-ink-soft">{e.body}</span>
-                    </span>
-                    <span className="text-subhead text-ink-soft">Edit</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+      {/* The sticky close's root sits inside the card's padding, so its close stands level with the heading: past the card where the page
+          has room, else down the card where the close at the top sits. */}
+      <div data-sticky-close-root="">
+        <div className="flex items-start justify-between gap-sm">
+          <h2 id="journal-day-heading" ref={head} tabIndex={-1} className="m-0 min-w-0 text-title3 outline-none">
+            {pretty}
+          </h2>
+          <CloseButton onClick={close} label="Close this day" className={railOn ? 'invisible' : ''} />
+        </div>
+        {railOn && (
+          <StickyClose
+            onClose={() => {
+              back.current = null;
+              onClose();
+            }}
+            label="Close this day"
+            opener={opener}
+          />
         )}
-        <Button variant="outline" full onClick={() => onNew(date)}>
-          {entries.length > 0 ? 'Add another entry for this day' : 'Write an entry for this day'}
-        </Button>
-        {g.data && (thankful.length > 0 || canChange) && (
-          <div className="mt-xs flex flex-col gap-sm rounded-tile bg-paper p-sm">
-            <h3 className="m-0 text-headline">Gratitude</h3>
-            {thankful.length > 0 ? <GratitudeLines lines={thankful} /> : <p className="m-0 text-subhead text-ink-soft">No gratitude written on this day yet.</p>}
-            {canChange && (
-              <Button variant="outline" full onClick={() => onGratitude(date)}>
-                {thankful.length > 0 ? 'Change this day’s gratitude' : 'Write gratitude for this day'}
-              </Button>
-            )}
-          </div>
-        )}
+        <div className={`mt-sm flex flex-col gap-sm ${STICKY_CLOSE_LANE}`}>
+          {q.isPending && <SkeletonList count={1} lines={2} label="Opening" />}
+          {q.data && entries.length === 0 && <p className="m-0 text-subhead text-ink-soft">Nothing written on this day yet.</p>}
+          {entries.length > 0 && (
+            <ul className="m-0 flex list-none flex-col gap-xs p-0">
+              {entries.map((e) => {
+                const m = e.emotion ? MOODS.find((x) => x.value === e.emotion) : null;
+                return (
+                  <li key={e.id}>
+                    <button type="button" onClick={() => onOpen(e)} className="toy toy-soft flex w-full items-center gap-sm rounded-tile bg-paper p-sm text-left">
+                      {m && <MoodFace value={m.value} size={36} />}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-card-title">{e.title}</span>
+                        <span className="block truncate text-card-note text-ink-soft">{e.body}</span>
+                      </span>
+                      <span className="text-subhead text-ink-soft">Edit</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <Button variant="outline" full onClick={() => onNew(date)}>
+            {entries.length > 0 ? 'Add another entry for this day' : 'Write an entry for this day'}
+          </Button>
+          {g.data && (thankful.length > 0 || canChange) && (
+            <div className="mt-xs flex flex-col gap-sm rounded-tile bg-paper p-sm">
+              <h3 className="m-0 text-headline">Gratitude</h3>
+              {thankful.length > 0 ? <GratitudeLines lines={thankful} /> : <p className="m-0 text-subhead text-ink-soft">No gratitude written on this day yet.</p>}
+              {canChange && (
+                <Button variant="outline" full onClick={() => onGratitude(date)}>
+                  {thankful.length > 0 ? 'Change this day’s gratitude' : 'Write gratitude for this day'}
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </section>
   );
+}
+
+/** The calendar's button for `day` (its face carries the day as its title): the day that opened the panel. */
+function dayButton(calendar: HTMLElement | null, day: string): HTMLElement | null {
+  return calendar?.querySelector(`[title="${day}"]`)?.closest('button') ?? null;
 }
 
 function EntrySheet({ entry, date, start, onClose, onSaved }: { entry: JournalEntry | null | 'new'; date?: string; start?: { title: string; body: string } | null; onClose: () => void; onSaved: () => void }) {

@@ -18,6 +18,7 @@ import { Icon } from '../components/Icon';
 import { LifeDashboardBlock } from '../components/LifeDashboardBlock';
 import { focusHeading, InsightGrid, SetAsideFold, SetAsideList, useHiddenInsights, useInsights } from '../components/Emergence';
 import { ToggleChevron } from '../components/ToggleMark';
+import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { focusHeadingAfter } from '../lib/focusHeading';
@@ -151,10 +152,13 @@ export function Insights() {
   const board = useQuery({ queryKey: ['insights', 'dashboard', today, ...windowKey], queryFn: () => api.insightsDashboard(today, period), enabled: Boolean(token), staleTime: 5 * 60 * 1000 });
   const reviewsOn = useModule('reviews')?.on ?? false;
   const [hidden, hide, show] = useHiddenInsights();
-  // "N set aside" under the counts opens those cards in place, each with Show again (2026-11-06).
+  // "N set aside" under the counts opens those cards in place, each with Show again (2026-11-06). Open and taller than the room the window
+  // has, its close stays in view beside the list (`StickyClose`, 2026-11-14): the counts and the list are its root, the chevron keeps its
+  // slot unseen, and both keep a lane while the close runs down the root's own edge, so it never sits on Still watching's words or a Show again.
   const [asideOpen, setAsideOpen] = useState(false);
   const asideId = useId();
   const asideBtn = useRef<HTMLButtonElement>(null);
+  const asideRoot = useRef<HTMLDivElement>(null);
   const [raw, setFilter] = useParamState('show', 'all');
   const filter: Filter = FILTERS.some((f) => f.value === raw) ? (raw as Filter) : 'all';
   const all = q.data?.insights ?? [];
@@ -164,6 +168,7 @@ export function Insights() {
   const ready = found.filter((i) => !isHabitKey(i));
   const shown = ready.filter((i) => !hidden.has(i.id));
   const aside = found.filter((i) => !i.tie && hidden.has(i.id));
+  const asideRail = useTallOpen(asideRoot, asideOpen && aside.length > 0 && !q.isLoading && !q.error);
   const [rawHabits, setHabits] = useParamState('habits', 'all');
   const habitFilter: HabitFilter = HABIT_FILTERS.some((f) => f.value === rawHabits) ? (rawHabits as HabitFilter) : 'all';
   const ties = all.filter((i) => i.state === 'ready' && i.tie && !hidden.has(i.id));
@@ -237,43 +242,48 @@ export function Insights() {
         <ErrorLine e={q.error} className="mt-lg" />
       ) : (
         <>
-          <div className="mt-lg grid grid-cols-2 gap-sm">
-            <StatTile label="Patterns found" value={formatCount(found.length)} hint={aside.length > 0 ? undefined : period ? 'In this period' : 'From your own logs'}>
-              {aside.length > 0 && (
-                <button
-                  ref={asideBtn}
-                  type="button"
-                  aria-expanded={asideOpen}
-                  aria-controls={asideId}
-                  onClick={() => setAsideOpen((o) => !o)}
-                  className="toy toy-flat -ml-sm mt-xs inline-flex min-h-[44px] items-center gap-xs rounded-pill px-sm text-caption text-ink-soft"
-                >
-                  {formatCount(aside.length)} set aside
-                  <ToggleChevron open={asideOpen} size={14} />
-                </button>
-              )}
-            </StatTile>
-            <StatTile label="Still watching" value={formatCount(watching.length)} hint="Waiting for more days" />
-          </div>
-          {asideOpen && aside.length > 0 && (
-            <div className="mt-sm">
-              <SetAsideList
-                id={asideId}
-                list={aside}
-                onShow={(x) => {
-                  // The row leaves the list: focus goes back to the count, or, after the last one, the list closes (so the next Not now
-                  // starts it closed) and focus moves to the section's heading, since the count goes too.
-                  const last = aside.length <= 1;
-                  show(x);
-                  if (!last) asideBtn.current?.focus();
-                  else {
-                    setAsideOpen(false);
-                    focusHeading('emerging-found');
-                  }
-                }}
-              />
+          {/* A plain block round the counts and the list they open (margins pass through it), so the sticky close has one root to run down. */}
+          <div ref={asideRoot} data-sticky-close-root="">
+            <div className={`mt-lg grid grid-cols-2 gap-sm ${STICKY_CLOSE_LANE}`}>
+              <StatTile label="Patterns found" value={formatCount(found.length)} hint={aside.length > 0 ? undefined : period ? 'In this period' : 'From your own logs'}>
+                {aside.length > 0 && (
+                  <button
+                    ref={asideBtn}
+                    type="button"
+                    aria-expanded={asideOpen}
+                    aria-controls={asideId}
+                    onClick={() => setAsideOpen((o) => !o)}
+                    className="toy toy-flat -ml-sm mt-xs inline-flex min-h-[44px] items-center gap-xs rounded-pill px-sm text-caption text-ink-soft"
+                  >
+                    {formatCount(aside.length)} set aside
+                    {/* While the sticky close shows, the chevron keeps its slot unseen, as a task card's edit button does. */}
+                    <ToggleChevron open={asideOpen} size={14} className={asideRail ? 'invisible' : ''} />
+                  </button>
+                )}
+              </StatTile>
+              <StatTile label="Still watching" value={formatCount(watching.length)} hint="Waiting for more days" />
             </div>
-          )}
+            {asideRail && <StickyClose onClose={() => setAsideOpen(false)} label="Close the cards set aside" opener={() => asideBtn.current} />}
+            {asideOpen && aside.length > 0 && (
+              <div className={`mt-sm ${STICKY_CLOSE_LANE}`}>
+                <SetAsideList
+                  id={asideId}
+                  list={aside}
+                  onShow={(x) => {
+                    // The row leaves the list: focus goes back to the count, or, after the last one, the list closes (so the next Not now
+                    // starts it closed) and focus moves to the section's heading, since the count goes too.
+                    const last = aside.length <= 1;
+                    show(x);
+                    if (!last) asideBtn.current?.focus();
+                    else {
+                      setAsideOpen(false);
+                      focusHeading('emerging-found');
+                    }
+                  }}
+                />
+              </div>
+            )}
+          </div>
           <Section
             id="emerging-found"
             title="What stands out"

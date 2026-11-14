@@ -895,50 +895,102 @@
   outline: 3px solid var(--color-ink);
   outline-offset: 2px;
 }
-/* A task's plan open in place on Daily closes from outside its card (RowClose in CheckRow.tsx; 2026-11-13, the founder: "put the close
-   button outside on scroll in daily tasks"). The rail is as tall as the row (the card and the plan under it, a whole `li`) less 8px at its
-   foot, and its slot sticks to the window's top inside it, so the button stays in view down the plan and stops at the plan's end. With a
-   margin at the row's right (`out`) the rail stands 8px past the row, or past the painted box round it (`--row-close-shift`, a time
-   block's box), and the 44px round close is centred on the card's first 56px row by its slot; without one (`in`, a phone or a tablet's
-   column) it runs down the row's own right edge, the 32px close with a 44px hit area where the card's small edit button sits (kept in
-   its slot, unseen), and the plan's parts keep a lane for it (`.row-lane`), so no field is covered. */
-.row-close-rail {
+/* Sticky closes (components/StickyClose.tsx; 2026-11-14, the founder: "the close buttons that need one to scroll back top need the close
+   button to be sticky outside the toggle tab, follow it in the same way of tasks"). Every inline toggle whose open content is taller than the
+   window has (a task's plan on Daily, RowClose in CheckRow.tsx, 2026-11-13; a Fold, an app group, How it works, a hand-made panel) closes
+   from a rail inside its root (`data-sticky-close-root`, positioned while the rail shows): as tall as the root less 8px at its foot, its
+   slot sticking to the window's top inside it, so the button stays in view down the content and stops at its end. With a margin at the
+   root's right (`out`) the rail stands 8px past the root, or past the painted box round it (`--sticky-close-shift`, a time block's box),
+   with the 44px round close; without one (`in`, a phone or a tablet's column) it runs down the root's own right edge, the 32px close with
+   a 44px hit area where the toggle's own mark or a task card's small edit button sits (kept in its slot, unseen), and the content keeps a
+   lane for it (`.row-lane` in a task's plan, `.sticky-close-lane` for the rest), so no field is covered. The slot clears the condensed
+   title bar, a sticky top bar (`--sc-bar`, measured: the site's header from the tablet up, a whole-page chat's header, the coach's share
+   row), sticks to the top of a popup's scrolling panel instead (`data-panel`), and sits 52px lower per open root round it
+   (`--sticky-close-depth`), so two closes never meet. A rail inside another open root lines up with the outermost one's (`data-nest`,
+   `--sticky-close-x` measured from that rail as drawn): one column, one size, a step lower per level. */
+@layer components {
+  :where([data-sticky-close]) {
+    position: relative;
+  }
+}
+.sticky-close-rail {
   position: absolute;
   top: 0;
   bottom: var(--spacing-xs);
   z-index: 15;
   pointer-events: none;
 }
-.row-close-rail[data-mode='out'] {
-  left: calc(100% + var(--row-close-shift, 0px) + var(--spacing-xs));
+.sticky-close-rail[data-mode='out'] {
+  left: calc(100% + var(--sticky-close-shift, 0px) + var(--spacing-xs));
   width: 44px;
 }
-.row-close-rail[data-mode='in'] {
+.sticky-close-rail[data-mode='in'] {
   right: var(--spacing-xs);
   width: 32px;
 }
-.row-close-slot {
+/* Nested: the outermost close's column, whichever side it stands (its width still follows `data-mode`, which is that close's). */
+.sticky-close-rail[data-nest] {
+  left: var(--sticky-close-x, 0px);
+  right: auto;
+}
+.sticky-close-slot {
   position: sticky;
-  top: calc(env(safe-area-inset-top) + var(--spacing-xs));
+  top: calc(max(var(--sc-cond, env(safe-area-inset-top)), var(--sc-bar, 0px)) + var(--spacing-xs) + var(--sticky-close-depth, 0) * 52px);
   display: flex;
   pointer-events: none;
+  transition: opacity 120ms ease;
 }
-.row-close-slot > .row-close {
+.sticky-close-slot > .close-btn {
   pointer-events: auto;
 }
-/* Under the condensed title bar where a screen has one (Daily has none). */
-body:has(.fx-condensed[data-on]) .row-close-slot {
-  top: calc(env(safe-area-inset-top) + 52px + var(--spacing-xs));
+/* A nested close tucks away for the moment its own content's end pushes it onto the close round it (`data-tuck`), unless the keyboard is
+   on it. */
+.sticky-close-rail[data-tuck] > .sticky-close-slot:not(:has(:focus-visible)) {
+  opacity: 0;
 }
-.row-close-rail[data-mode='out'] .row-close-slot {
+.sticky-close-rail[data-tuck] > .sticky-close-slot:not(:has(:focus-visible)) > .close-btn {
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sticky-close-slot {
+    transition: none;
+  }
+}
+/* Under a popup (a Sheet, `aria-modal`) the page's own closes step aside: the page cannot be used while it is open, and a close seen
+   through the scrim would sit on the popup's own (the month calendar's day sheet over its open fold). */
+html:has([role='dialog'][aria-modal='true']) .sticky-close-rail:not([aria-modal='true'] .sticky-close-rail) {
+  visibility: hidden;
+}
+/* Under the condensed title bar where a screen has one (Daily has none). */
+body:has(.fx-condensed[data-on]) .sticky-close-slot {
+  --sc-cond: calc(env(safe-area-inset-top) + 52px);
+}
+/* In a popup's panel the slot sticks to the panel's own top, which no bar covers. */
+.sticky-close-rail[data-panel] .sticky-close-slot {
+  top: calc(var(--spacing-xs) + var(--sticky-close-depth, 0) * 52px);
+}
+/* A task's row: centred on the card's first 56px row standing out, where the small edit button was running down it. */
+.row-close-rail[data-mode='out'] .sticky-close-slot {
   height: 56px;
   align-items: center;
 }
-.row-close-rail[data-mode='in'] .row-close-slot {
+.row-close-rail[data-mode='in'] .sticky-close-slot {
   padding-top: var(--spacing-xs);
 }
-/* The lane: the button's 32px and a gap either side, from the row's edge (the plan's own 16px padding grows to 48px). */
-[data-row-close='in'] .row-lane {
+/* Any other toggle: at rest centred on the toggle itself (`--sticky-close-head` its height, `--sticky-close-lead` how far under the root's
+   top it starts), where its chevron or plus was; the slot is only the button's height, so once it sticks the button sits just under the
+   bar, however tall the toggle (How it works' card, an app group's header). */
+.sticky-close-rail:not(.row-close-rail)[data-mode='out'] .sticky-close-slot {
+  margin-top: calc(var(--sticky-close-lead, 0px) + max(0px, (var(--sticky-close-head, 44px) - 44px) / 2));
+}
+.sticky-close-rail:not(.row-close-rail)[data-mode='in'] .sticky-close-slot {
+  margin-top: calc(var(--sticky-close-lead, 0px) + max(0px, (var(--sticky-close-head, 44px) - 32px) / 2));
+}
+/* The lane: the button's 32px and a gap either side, from the root's edge (a task's plan's own 16px padding grows to 48px; an open
+   content's wrapper, a direct child of the root, takes 48px). A nested root whose close stands in the lane round it keeps none of its own
+   (`data-sticky-close-nest`). */
+[data-row-close='in']:not([data-sticky-close-nest]) .row-lane,
+[data-sticky-close='in']:not([data-sticky-close-nest]) > .sticky-close-lane {
   padding-right: calc(var(--spacing-md) + var(--spacing-lg));
 }
 .check-preview {

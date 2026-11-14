@@ -1,6 +1,6 @@
 import { blockTimeLabel, PERIOD_KINDS, PERIOD_META, REVIEW_REMINDER_TIME, REVIEW_SCHEDULE_NAME_MAX, addDays, type Period, type PeriodKind, type Repeat, type ReviewSchedule } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
 import gsap from 'gsap';
 import { Bell, Check, type LucideIcon } from 'lucide-react';
 import { api } from '../lib/api';
@@ -18,6 +18,7 @@ import { RepeatPicker } from './RepeatPicker';
 import { SkeletonList } from './Skeleton';
 import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
+import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from './StickyClose';
 import { Toggle } from './Toggle';
 import { FIELD } from '../lib/ui';
 
@@ -47,6 +48,8 @@ export function ReviewCalendar({ today, onOpenPeriod }: { today: string; onOpenP
   const [month, setMonth] = useState(today.slice(0, 7));
   const [picked, setPicked] = useState<string | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
+  // The calendar's days, so the day panel can hand focus back to the day that opened it.
+  const calendar = useRef<HTMLDivElement>(null);
   const q = useAuthed(['reviews', 'schedule', month], () => api.reviewSchedule(month));
   const d = q.data;
   const refresh = () => qc.invalidateQueries({ queryKey: ['reviews', 'schedule'] });
@@ -90,7 +93,7 @@ export function ReviewCalendar({ today, onOpenPeriod }: { today: string; onOpenP
         Review calendar
       </h2>
       <p className="mt-xs m-0 text-balance text-subhead text-ink-soft">{COPY.lede}</p>
-      <div className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
+      <div ref={calendar} className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
         <CalendarGrid month={month} marks={marks} dots={dots} dotLabel="a daily review written" label="Review calendar" today={today} selected={picked} onPick={(day) => setPicked(day)} onMonth={(m) => {
             setMonth(m);
             setPicked(null);
@@ -100,6 +103,7 @@ export function ReviewCalendar({ today, onOpenPeriod }: { today: string; onOpenP
       {/* The day tapped opens here, under the calendar, never in a popup; the day keeps its ring on the grid. */}
       <DayPanel
         day={picked}
+        calendar={calendar}
         data={picked ? d?.days[picked] : undefined}
         loading={q.isPending}
         schedules={schedules}
@@ -187,11 +191,14 @@ type DayData = { scheduled: { id: string; kind: PeriodKind; time: string; name: 
  * One day of the calendar, in a card right under it: the reminders that fall on it (Edit opens the schedule form, Remove is a second tap,
  * `RemoveTwice`) and the reviews written for a period that ended on it. Focus moves to its heading when a day is picked; Escape or
  * the close button folds it and hands focus back to the day that opened it. Its buttons are outlines, so the screen keeps one solid one.
+ * Taller than the window has room for (a day of many reminders, a phone on its side), its close stays in view beside it as the page
+ * scrolls (`StickyClose`, 2026-11-14, as a task's open plan on Daily), standing in for the one at its top, so there are never two.
  */
-function DayPanel({ day, data, loading, schedules, onClose, onAdd, onEdit, onOpen, onChanged }: { day: string | null; data: DayData | undefined; loading: boolean; schedules: ReviewSchedule[]; onClose: () => void; onAdd: (day: string) => void; onEdit: (s: ReviewSchedule) => void; onOpen: (p: Period) => void; onChanged: () => void }) {
+function DayPanel({ day, calendar, data, loading, schedules, onClose, onAdd, onEdit, onOpen, onChanged }: { day: string | null; calendar: RefObject<HTMLElement | null>; data: DayData | undefined; loading: boolean; schedules: ReviewSchedule[]; onClose: () => void; onAdd: (day: string) => void; onEdit: (s: ReviewSchedule) => void; onOpen: (p: Period) => void; onChanged: () => void }) {
   const box = useRef<HTMLElement>(null);
   const head = useRef<HTMLHeadingElement>(null);
   const back = useRef<HTMLElement | null>(null);
+  const railOn = useTallOpen(box, Boolean(day));
   const remove = useMutation({
     mutationFn: (id: string) => api.reviewScheduleRemove(id),
     onSuccess: () => {
@@ -220,8 +227,11 @@ function DayPanel({ day, data, loading, schedules, onClose, onAdd, onEdit, onOpe
     };
   }, [day]);
   if (!day) return null;
+  // What takes focus back on a close: the day on the calendar that opened the panel, else what had focus before it opened (a tap in
+  // Safari focuses no button, so that can be the page itself, which takes nothing).
+  const opener = () => dayButton(calendar.current, day) ?? (back.current?.isConnected && back.current !== document.body ? back.current : null);
   const close = () => {
-    const to = back.current;
+    const to = opener();
     back.current = null;
     onClose();
     to?.focus({ preventScroll: true });
@@ -234,66 +244,87 @@ function DayPanel({ day, data, loading, schedules, onClose, onAdd, onEdit, onOpe
       aria-labelledby="rcal-day-heading"
       className="mt-sm rounded-card bg-card p-md shadow-toy-soft"
       onKeyDown={(e) => {
+        // While the sticky close shows it owns Escape, and also brings the day back into view.
+        if (railOn) return;
         if (e.key === 'Escape' && !e.defaultPrevented && box.current?.contains(e.target as Node)) {
           e.preventDefault();
           close();
         }
       }}
     >
-      <div className="flex items-start justify-between gap-sm">
-        <h3 id="rcal-day-heading" ref={head} tabIndex={-1} className="m-0 min-w-0 text-title3 outline-none">
-          {prettyDate(day)}
-        </h3>
-        <CloseButton onClick={close} label="Close this day" />
-      </div>
-      <div className="mt-sm flex flex-col gap-sm">
-        {loading && data === undefined ? (
-          <SkeletonList count={1} label="Loading this day" />
-        ) : (
-          scheduled.length === 0 && written.length === 0 && <p className="m-0 text-subhead text-ink-soft">Nothing on this day yet.</p>
+      {/* The sticky close's root sits inside the card's padding, so its close stands level with the heading: past the card where the page
+          has room, else down the card where the close at the top sits. */}
+      <div data-sticky-close-root="">
+        <div className="flex items-start justify-between gap-sm">
+          <h3 id="rcal-day-heading" ref={head} tabIndex={-1} className="m-0 min-w-0 text-title3 outline-none">
+            {prettyDate(day)}
+          </h3>
+          <CloseButton onClick={close} label="Close this day" className={railOn ? 'invisible' : ''} />
+        </div>
+        {railOn && (
+          <StickyClose
+            onClose={() => {
+              back.current = null;
+              onClose();
+            }}
+            label="Close this day"
+            opener={opener}
+          />
         )}
-        {scheduled.map((s) => {
-          const full = schedules.find((x) => x.id === s.id);
-          const series = Boolean(full?.repeat);
-          return (
-            <div key={`${day}-${s.id}`} className="rounded-tile bg-paper p-sm">
-              <p className="m-0 text-card-title">
-                <Inert text={nameOf(s)} />
-              </p>
-              <p className="m-0 text-card-note text-ink-soft">{`Reminder at ${timeText(s.time)}${full ? `, ${full.label.toLowerCase()}` : ''}`}</p>
-              <div className="mt-xs flex flex-wrap items-center gap-xs">
-                <RemoveTwice series={series} size="sm" pending={remove.isPending} onArm={() => remove.reset()} onRemove={() => remove.mutate(s.id)} />
-                {full && (
-                  <Button variant="outline" size="sm" className="ml-auto" onClick={() => onEdit(full)}>
-                    Edit
-                  </Button>
-                )}
+        <div className={`mt-sm flex flex-col gap-sm ${STICKY_CLOSE_LANE}`}>
+          {loading && data === undefined ? (
+            <SkeletonList count={1} label="Loading this day" />
+          ) : (
+            scheduled.length === 0 && written.length === 0 && <p className="m-0 text-subhead text-ink-soft">Nothing on this day yet.</p>
+          )}
+          {scheduled.map((s) => {
+            const full = schedules.find((x) => x.id === s.id);
+            const series = Boolean(full?.repeat);
+            return (
+              <div key={`${day}-${s.id}`} className="rounded-tile bg-paper p-sm">
+                <p className="m-0 text-card-title">
+                  <Inert text={nameOf(s)} />
+                </p>
+                <p className="m-0 text-card-note text-ink-soft">{`Reminder at ${timeText(s.time)}${full ? `, ${full.label.toLowerCase()}` : ''}`}</p>
+                <div className="mt-xs flex flex-wrap items-center gap-xs">
+                  <RemoveTwice series={series} size="sm" pending={remove.isPending} onArm={() => remove.reset()} onRemove={() => remove.mutate(s.id)} />
+                  {full && (
+                    <Button variant="outline" size="sm" className="ml-auto" onClick={() => onEdit(full)}>
+                      Edit
+                    </Button>
+                  )}
+                </div>
               </div>
+            );
+          })}
+          {written.map((w) => (
+            <div key={`${w.kind}-${w.start}`} className="flex items-center justify-between gap-sm rounded-tile bg-paper p-sm">
+              <div className="min-w-0">
+                <StatusTag tone="good">Written</StatusTag>
+                <p className="mt-xs m-0 text-subhead text-ink-soft">{tie(`${w.name ?? PERIOD_META[w.kind].name} for ${w.start === w.end ? prettyDate(w.start) : `${prettyDate(w.start)} to ${prettyDate(w.end)}`}`)}</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => onOpen({ kind: w.kind, start: w.start, end: w.end })}>
+                Open it
+              </Button>
             </div>
-          );
-        })}
-        {written.map((w) => (
-          <div key={`${w.kind}-${w.start}`} className="flex items-center justify-between gap-sm rounded-tile bg-paper p-sm">
-            <div className="min-w-0">
-              <StatusTag tone="good">Written</StatusTag>
-              <p className="mt-xs m-0 text-subhead text-ink-soft">{tie(`${w.name ?? PERIOD_META[w.kind].name} for ${w.start === w.end ? prettyDate(w.start) : `${prettyDate(w.start)} to ${prettyDate(w.end)}`}`)}</p>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => onOpen({ kind: w.kind, start: w.start, end: w.end })}>
-              Open it
-            </Button>
-          </div>
-        ))}
-        {remove.isError && (
-          <p role="alert" className="m-0 text-subhead text-r1">
-            {(remove.error as Error | null)?.message || 'That did not work. Try again.'}
-          </p>
-        )}
-        <Button variant="outline" full onClick={() => onAdd(day)}>
-          Add a review reminder on this day
-        </Button>
+          ))}
+          {remove.isError && (
+            <p role="alert" className="m-0 text-subhead text-r1">
+              {(remove.error as Error | null)?.message || 'That did not work. Try again.'}
+            </p>
+          )}
+          <Button variant="outline" full onClick={() => onAdd(day)}>
+            Add a review reminder on this day
+          </Button>
+        </div>
       </div>
     </section>
   );
+}
+
+/** The calendar's button for `day` (its face carries the day as its title): the day that opened the panel. */
+function dayButton(calendar: HTMLElement | null, day: string): HTMLElement | null {
+  return calendar?.querySelector(`[title="${day}"]`)?.closest('button') ?? null;
 }
 
 function ScheduleForm({ state, today, onClose, onSaved }: { state: FormState | null; today: string; onClose: () => void; onSaved: () => void }) {

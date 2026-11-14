@@ -1,6 +1,7 @@
 import { type MeResponse, type ModuleGroup } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { EyeOff } from 'lucide-react';
 import { AppGroups, HiddenAppsPanel, showInCache, useFits, useHiddenApps, type AppChange, type AppPicks } from '../components/AppGroups';
 import { Button } from '../components/Button';
@@ -9,6 +10,7 @@ import { ToggleIcon } from '../components/ToggleMark';
 import { CondensedTitle } from '../components/fx/CondensedTitle';
 import { Screen } from '../components/Screen';
 import { SearchBox } from '../components/SearchBox';
+import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
 import { api } from '../lib/api';
 import { useGroupOrder, useModules, type ModuleView } from '../lib/modules';
 import { keys, useMe, useRefreshAll } from '../lib/queries';
@@ -153,6 +155,20 @@ export function Apps() {
   const fits = useFits();
   const panel = useId();
   const label = showHidden ? 'Close hidden apps' : `Hidden apps (${hidden})`;
+  // The hidden apps panel can run past the window (a new account hides most apps): while it does, its close stays in view beside it as the
+  // page scrolls (StickyClose, 2026-11-14, the founder), and the round button keeps its slot unseen, as a task card's edit button does, so
+  // there is never a second close. It hides only once the rail is drawn (its root says `data-sticky-close`), so while the rail's chunk
+  // loads, or if it never comes, the round button is still there to close the panel; meanwhile it names no tip (its name stays), so a
+  // still mouse never leaves "Close hidden apps" hanging over its empty slot. The root holds the row and the panel and nothing after them,
+  // so the rail stops at the panel's end.
+  const hiddenRoot = useRef<HTMLDivElement>(null);
+  const eye = useRef<HTMLButtonElement>(null);
+  const railOn = useTallOpen(hiddenRoot, showHidden && !selecting);
+  // The round button is unseen while the rail shows, so it cannot take focus until it is drawn again: draw it, then hand it the keyboard.
+  const closeHidden = () => {
+    flushSync(() => setShowHidden(false));
+    eye.current?.focus({ preventScroll: true });
+  };
 
   // Escape leaves too, unless a dialog is open: then it belongs to the dialog.
   useEffect(() => {
@@ -192,56 +208,63 @@ export function Apps() {
 
       {/* One wrapper from the count to the end of the list, so the row can stick for as long as the list lasts. */}
       <div className={`span-all mt-xs ${selecting ? '@container' : ''}`} data-apps-selecting={selecting ? '' : undefined}>
-        <div ref={row} className={selecting ? `${ROW_SELECTING} ${stuck ? 'apps-row-stuck' : ''}` : ROW_REST}>
-          <p role="status" aria-live="polite" className={`m-0 min-w-0 text-subhead ${selecting ? `${WORDS_SELECTING} ${sel.refused ? 'text-r1' : 'text-ink-soft'}` : WORDS_REST}`}>
-            {selecting ? sel.line : `${on} shown${hidden > 0 ? `, ${hidden} hidden` : ''}. Open a group to see its apps, or hide one.`}
-          </p>
-          <div className={selecting ? BUTTONS_SELECTING : BUTTONS_REST}>
-            {!selecting && roundShown && (
-              <button type="button" className="mf-round toy shrink-0" data-at="br" data-tip={label} aria-label={label} aria-expanded={showHidden} aria-controls={panel} onClick={() => setShowHidden((v) => !v)}>
-                <ToggleIcon open={showHidden} icon={EyeOff} />
-              </button>
-            )}
-            {/* All outline: they are equal choices, and this page has no solid button. Select stays last, so the others come and go at its left. */}
-            {selecting && sel.toHide > 0 && (
-              <Button variant="outline" size="sm" disabled={sel.writing} aria-label={`Hide ${appsWord(sel.toHide)}`} onClick={() => sel.act(false)}>
-                Hide {sel.toHide}
-              </Button>
-            )}
-            {selecting && sel.toShow > 0 && (
-              <Button variant="outline" size="sm" disabled={sel.writing} aria-label={`Show ${appsWord(sel.toShow)}`} onClick={() => sel.act(true)}>
-                Show {sel.toShow}
-              </Button>
-            )}
-            {selecting && (
-              <Button variant="outline" size="sm" aria-pressed={sel.allTicked} onClick={sel.selectAll}>
-                {/* The longer word keeps the button's width on one line (invisible, and in no name), so nothing beside it shifts when it turns into Clear. */}
-                <span className="grid justify-items-center after:invisible after:col-start-1 after:row-start-1 @min-[34rem]:after:content-['Select_all']">
-                  <span className="col-start-1 row-start-1">{sel.allTicked ? 'Clear' : 'Select all'}</span>
+        {/* The hidden apps panel's root (StickyClose): the row with its round button, then the panel. While selecting it draws no box
+            (`contents`), so the row sticks for as long as the list lasts, as before. While its rail shows it reaches 12px above the row,
+            taken back by its padding, so the rail starts level with the round button (whose 44px reaches 12px past the row) and nothing
+            moves. Its children take a lane only while the rail runs down its own edge (a phone, a tablet). */}
+        <div ref={hiddenRoot} data-sticky-close-root="" className={selecting ? 'contents' : railOn ? '-mt-sm pt-sm' : undefined}>
+          <div ref={row} className={selecting ? `${ROW_SELECTING} ${stuck ? 'apps-row-stuck' : ''}` : `${ROW_REST} ${STICKY_CLOSE_LANE}`}>
+            <p role="status" aria-live="polite" className={`m-0 min-w-0 text-subhead ${selecting ? `${WORDS_SELECTING} ${sel.refused ? 'text-r1' : 'text-ink-soft'}` : WORDS_REST}`}>
+              {selecting ? sel.line : `${on} shown${hidden > 0 ? `, ${hidden} hidden` : ''}. Open a group to see its apps, or hide one.`}
+            </p>
+            <div className={selecting ? BUTTONS_SELECTING : BUTTONS_REST}>
+              {!selecting && roundShown && (
+                <button ref={eye} type="button" className="mf-round toy shrink-0 [[data-sticky-close]_&]:invisible" data-at="br" data-tip={railOn ? undefined : label} aria-label={label} aria-expanded={showHidden} aria-controls={panel} onClick={() => setShowHidden((v) => !v)}>
+                  <ToggleIcon open={showHidden} icon={EyeOff} />
+                </button>
+              )}
+              {/* All outline: they are equal choices, and this page has no solid button. Select stays last, so the others come and go at its left. */}
+              {selecting && sel.toHide > 0 && (
+                <Button variant="outline" size="sm" disabled={sel.writing} aria-label={`Hide ${appsWord(sel.toHide)}`} onClick={() => sel.act(false)}>
+                  Hide {sel.toHide}
+                </Button>
+              )}
+              {selecting && sel.toShow > 0 && (
+                <Button variant="outline" size="sm" disabled={sel.writing} aria-label={`Show ${appsWord(sel.toShow)}`} onClick={() => sel.act(true)}>
+                  Show {sel.toShow}
+                </Button>
+              )}
+              {selecting && (
+                <Button variant="outline" size="sm" aria-pressed={sel.allTicked} onClick={sel.selectAll}>
+                  {/* The longer word keeps the button's width on one line (invisible, and in no name), so nothing beside it shifts when it turns into Clear. */}
+                  <span className="grid justify-items-center after:invisible after:col-start-1 after:row-start-1 @min-[34rem]:after:content-['Select_all']">
+                    <span className="col-start-1 row-start-1">{sel.allTicked ? 'Clear' : 'Select all'}</span>
+                  </span>
+                </Button>
+              )}
+              <Button
+                ref={selectButton}
+                variant="outline"
+                size="sm"
+                aria-pressed={selecting}
+                onClick={() => {
+                  if (sel.sameTap()) return;
+                  sel.turn(!selecting);
+                }}
+              >
+                <span className="grid justify-items-center after:invisible after:col-start-1 after:row-start-1 @min-[34rem]:after:content-['Select']">
+                  <span className="col-start-1 row-start-1">{selecting ? 'Done' : 'Select'}</span>
                 </span>
               </Button>
-            )}
-            <Button
-              ref={selectButton}
-              variant="outline"
-              size="sm"
-              aria-pressed={selecting}
-              onClick={() => {
-                if (sel.sameTap()) return;
-                sel.turn(!selecting);
-              }}
-            >
-              <span className="grid justify-items-center after:invisible after:col-start-1 after:row-start-1 @min-[34rem]:after:content-['Select']">
-                <span className="col-start-1 row-start-1">{selecting ? 'Done' : 'Select'}</span>
-              </span>
-            </Button>
+            </div>
           </div>
+          {railOn && <StickyClose onClose={closeHidden} label="Close hidden apps" opener={() => eye.current} />}
+          {showHidden && !selecting && (
+            <div className={`mt-sm ${STICKY_CLOSE_LANE}`}>
+              <HiddenAppsPanel groups={groupOrder} id={panel} fits={fits} />
+            </div>
+          )}
         </div>
-        {showHidden && !selecting && (
-          <div className="mt-sm">
-            <HiddenAppsPanel groups={groupOrder} id={panel} fits={fits} />
-          </div>
-        )}
         {/* A gap past the buttons' reach, so they never crowd the search. */}
         <div className={showHidden && !selecting ? 'mt-md' : 'mt-lg'}>
           <SearchBox placeholder="Search tasks, journals, library, products, people" />

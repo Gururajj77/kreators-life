@@ -2,7 +2,8 @@ import { QuoteOfTheDay } from '../components/QuoteOfTheDay';
 import { RemindersSection } from '../components/Reminders';
 import { badgeRoleOf, greetingFor, knowledgeKindIcon, LIFE_AREAS, MODULE_BY_KEY, MODULE_GROUP_ACCENT, MODULE_GROUPS, money, MOODS, RELATIONSHIP_BY_KEY, STRESS_LEVELS, type HomeResponse, type ModuleGroup, type RelationshipKey, formatCount } from '@kreators/shared';
 import type { CSSProperties, ReactNode } from 'react';
-import { Suspense, useCallback, useEffect, useId, useState } from 'react';
+import { Suspense, useCallback, useEffect, useId, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Link } from 'react-router';
 import type { LucideIcon } from 'lucide-react';
 import { ArrowDownLeft, ArrowDownRight, ArrowRight, ArrowUpRight, CalendarClock, CalendarDays, Check, Clock, Coins, Compass, EyeOff, FaceSlightlySmiling, Flame, Footprints, HandCoins, HeartPulse, MessageCircle, MessageCirclePlus, NotebookPen, PartyPopper, Pencil, Receipt, Sparkles, Star, UserRound, Users, UsersRound } from 'lucide-react';
@@ -27,6 +28,8 @@ import { SearchBox } from '../components/SearchBox';
 import { DailyBrief } from '../components/DailyBrief';
 import { EmergenceSlot } from '../components/EmergenceSlot';
 import { Section, SeeAll } from '../components/Section';
+import { SectionHead } from '../components/SectionHead';
+import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
 import { Segmented } from '../components/fx/Segmented';
 import { useParamState } from '../lib/useParamState';
 import { api } from '../lib/api';
@@ -62,10 +65,15 @@ const tagLabel = (t: string) => RELATIONSHIP_BY_KEY[t as keyof typeof RELATIONSH
  * On a phone, Home runs long: this folds a few less-checked-daily sections behind one toggle, closed to start.
  * On a laptop, Home already flows into two columns and the grid pairs half-width sections up, so here the
  * sections render exactly as they always did, with no toggle and no extra wrapper in the way of that pairing.
+ * On the phone the toggle and what it opened sit in one plain block (a phone's Home is one column, so it changes nothing), the root of a
+ * close that stays in view beside them while they run past the window (StickyClose, 2026-11-14, the founder), where the chevron was.
  */
 function MoreOnHome({ children }: { children: ReactNode }) {
   const [isPhone, setIsPhone] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const railOn = useTallOpen(root, open, isPhone);
+  const id = useId();
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)');
     const sync = () => setIsPhone(mq.matches);
@@ -75,12 +83,17 @@ function MoreOnHome({ children }: { children: ReactNode }) {
   }, []);
   if (!isPhone) return <div className="contents">{children}</div>;
   return (
-    <div className="contents">
-      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="toy toy-flat col-span-full mt-lg flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile bg-paper px-sm text-left text-headline aria-expanded:bg-line">
+    <div ref={root} data-sticky-close-root="">
+      <button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)} className="toy toy-flat col-span-full mt-lg flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile bg-paper px-sm text-left text-headline aria-expanded:bg-line">
         More on Home
-        <ToggleChevron open={open} className="text-ink-soft" />
+        <ToggleChevron open={open} className={`text-ink-soft ${railOn ? 'invisible' : ''}`} />
       </button>
-      {open && children}
+      {railOn && <StickyClose onClose={() => setOpen(false)} label="Close More on Home" />}
+      {open && (
+        <div id={id} className={STICKY_CLOSE_LANE}>
+          {children}
+        </div>
+      )}
     </div>
   );
 }
@@ -130,6 +143,17 @@ export function Home() {
   const hiddenPanel = useId();
   const fits = useFits();
   const hiddenLabel = showHidden ? 'Close hidden apps' : `Hidden apps (${hiddenApps})`;
+  // While the hidden-apps panel runs past the window its close stays in view beside it (StickyClose, 2026-11-14, the founder), and the round
+  // button keeps its slot unseen once the rail is drawn (its root says `data-sticky-close`), so there is never a second close and, while the
+  // rail's chunk loads, still one (with no tip meanwhile, so none is left hanging over its empty slot). Unseen, it cannot take focus: a close
+  // draws it again, then hands it the keyboard.
+  const goRoot = useRef<HTMLDivElement>(null);
+  const goEye = useRef<HTMLButtonElement>(null);
+  const goRail = useTallOpen(goRoot, showHidden);
+  const closeHiddenApps = () => {
+    flushSync(() => setShowHidden(false));
+    goEye.current?.focus({ preventScroll: true });
+  };
   const [xpView, setXpView] = useParamState('xp', 'day');
   const d = q.data;
   // The three half-width extras pair up in two columns; when one is left over it takes the whole row, so nothing stands alone.
@@ -780,47 +804,61 @@ export function Home() {
             </Section>
           )}
 
-          <Section
-            id="home-go"
-            title="Go to"
-            lede="Every app you have not hidden."
-            action={
-              <div className="flex items-center gap-xs">
-                {(hiddenApps > 0 || showHidden) && (
-                  <button type="button" className="mf-round toy shrink-0" data-at="tr" data-tip={hiddenLabel} aria-label={hiddenLabel} aria-expanded={showHidden} aria-controls={hiddenPanel} onClick={() => setShowHidden((v) => !v)}>
-                    <ToggleIcon open={showHidden} icon={EyeOff} />
-                  </button>
-                )}
-                <SeeAll to="/apps">All apps</SeeAll>
+          {/* Section's own markup by hand (SectionHead), so the heading with the round button and the panel it opens can share one root
+              for the panel's close (StickyClose) and the tiles stay outside it, where the close never follows. The spacing is Section's:
+              12px under the heading, and 16px from the panel to the first group (the panel's bottom margin meets the groups' 12px). While the
+              rail shows the root reaches 12px above the heading, taken back by its padding, so the rail starts level with the round button
+              and nothing moves; the heading and the panel take a lane only while the rail runs down the root's own edge (a phone, a tablet). */}
+          <section className="mt-lg span-all" aria-labelledby="home-go">
+            <div ref={goRoot} data-sticky-close-root="" className={goRail ? '-mt-sm pt-sm' : undefined}>
+              <div className={STICKY_CLOSE_LANE}>
+                <SectionHead
+                  id="home-go"
+                  title="Go to"
+                  lede="Every app you have not hidden."
+                  action={
+                    <div className="flex items-center gap-xs">
+                      {(hiddenApps > 0 || showHidden) && (
+                        <button ref={goEye} type="button" className="mf-round toy shrink-0 [[data-sticky-close]_&]:invisible" data-at="tr" data-tip={goRail ? undefined : hiddenLabel} aria-label={hiddenLabel} aria-expanded={showHidden} aria-controls={hiddenPanel} onClick={() => setShowHidden((v) => !v)}>
+                          <ToggleIcon open={showHidden} icon={EyeOff} />
+                        </button>
+                      )}
+                      <SeeAll to="/apps">All apps</SeeAll>
+                    </div>
+                  }
+                />
               </div>
-            }
-            span
-          >
-            {showHidden && (
-              <Suspense fallback={null}>
-                <HiddenAppsPanel groups={shortcutGroups} id={hiddenPanel} fits={fits} empty="No hidden apps. Hide one under Apps." />
-              </Suspense>
-            )}
-            {shortcutGroups.map((g) => {
-              const list = modules.filter((m) => m.on && m.group === g);
-              if (list.length === 0) return null;
-              return (
-                <div key={g} data-pillar={MODULE_GROUP_ACCENT[g]} className="mt-md first:mt-0">
-                  <p className="m-0 text-eyebrow uppercase text-ink-soft">{MODULE_GROUPS[g]}</p>
-                  {/* The top margin sits on a wrapper: a scroll-row bleeds into the gutters with margins of its own. */}
-                  <div className="mt-xs">
-                    <ul className={`scroll-row list-none snap-x snap-proximity scroll-px-md gap-sm md:m-0 md:grid md:snap-none md:overflow-visible md:p-0 ${evenGrid(list.length, GO_COLS)}`}>
-                      {list.map((m, i) => (
-                        <li key={m.key} className={`flex flex-[1_0_145px] snap-start ${evenTile(i, list.length, GO_COLS)}`}>
-                          <AppTile app={m} />
-                        </li>
-                      ))}
-                    </ul>
+              {goRail && <StickyClose onClose={closeHiddenApps} label="Close hidden apps" opener={() => goEye.current} />}
+              {showHidden && (
+                <Suspense fallback={null}>
+                  <div className={`mt-sm mb-md ${STICKY_CLOSE_LANE}`}>
+                    <HiddenAppsPanel groups={shortcutGroups} id={hiddenPanel} fits={fits} empty="No hidden apps. Hide one under Apps." />
                   </div>
-                </div>
-              );
-            })}
-          </Section>
+                </Suspense>
+              )}
+            </div>
+            <div className="mt-sm empty:hidden">
+              {shortcutGroups.map((g) => {
+                const list = modules.filter((m) => m.on && m.group === g);
+                if (list.length === 0) return null;
+                return (
+                  <div key={g} data-pillar={MODULE_GROUP_ACCENT[g]} className="mt-md first:mt-0">
+                    <p className="m-0 text-eyebrow uppercase text-ink-soft">{MODULE_GROUPS[g]}</p>
+                    {/* The top margin sits on a wrapper: a scroll-row bleeds into the gutters with margins of its own. */}
+                    <div className="mt-xs">
+                      <ul className={`scroll-row list-none snap-x snap-proximity scroll-px-md gap-sm md:m-0 md:grid md:snap-none md:overflow-visible md:p-0 ${evenGrid(list.length, GO_COLS)}`}>
+                        {list.map((m, i) => (
+                          <li key={m.key} className={`flex flex-[1_0_145px] snap-start ${evenTile(i, list.length, GO_COLS)}`}>
+                            <AppTile app={m} />
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
         </>
       )}
     </Screen>

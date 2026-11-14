@@ -1,7 +1,7 @@
 import { PROPOSAL_STAGES, type Proposal, type ProposalStage, money, typedCents } from '@kreators/shared';
 import { longDate } from '../lib/date';
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from '../components/Button';
 import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
@@ -14,6 +14,7 @@ import { MoreMenu } from '../components/MoreMenu';
 import { FIELD, RED_YES_LG } from '../lib/ui';
 import { ErrorLine } from '../components/ErrorLine';
 import { ToggleChevron } from '../components/ToggleMark';
+import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
 
 /** A budget as typed ("1,50,000", "₹ 2500.50"), read from its digits with `typedCents` and kept in whole units the way the column stores it; anything unreadable is 0. */
 const budgetUnits = (typed: string): number => {
@@ -74,6 +75,11 @@ function ProposalCard({ p, reviewer, mine, onChange, onEdit, onWithdraw }: { p: 
   const [open, setOpen] = useState(false);
   const [stage, setStage] = useState<ProposalStage>(p.stage);
   const [note, setNote] = useState('');
+  // Open and taller than the window has, its close stays in view beside the pitch and its log (StickyClose, 2026-11-14).
+  const root = useRef<HTMLLIElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const railOn = useTallOpen(root, open);
+  const panelId = `proposal-${p.id}`;
   const move = useMutation({
     mutationFn: () => api.moveProposal(p.id, { stage, note }),
     onSuccess: () => {
@@ -82,10 +88,11 @@ function ProposalCard({ p, reviewer, mine, onChange, onEdit, onWithdraw }: { p: 
     },
   });
   return (
-    <li className="rounded-tile bg-card p-sm shadow-toy-soft">
-      {/* The title at the top left and the stage in the same top right place on every pitch, never wrapping under a long title. */}
-      <div className="flex items-start gap-xs">
-      <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="toy-flat flex min-h-[44px] min-w-0 flex-1 items-start gap-sm text-left">
+    <li ref={root} data-sticky-close-root="" className="rounded-tile bg-card p-sm shadow-toy-soft">
+      {/* The title at the top left and the stage in the same top right place on every pitch, never wrapping under a long title. While
+          the sticky close runs down the card's edge the row keeps a lane for it, so it never sits on the More menu or the stage. */}
+      <div className={`flex items-start gap-xs ${STICKY_CLOSE_LANE}`}>
+      <button ref={toggle} type="button" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((v) => !v)} className="toy-flat flex min-h-[44px] min-w-0 flex-1 items-start gap-sm text-left">
         <span className="min-w-0 flex-1">
           <span className="block text-balance text-card-title">{p.title}</span>
           {/* Each part kept whole, so a narrow card breaks at a comma and never leaves "2026" short under it. */}
@@ -97,7 +104,8 @@ function ProposalCard({ p, reviewer, mine, onChange, onEdit, onWithdraw }: { p: 
         </span>
         <span className="flex shrink-0 items-center gap-xs">
           <StagePill stage={p.stage} />
-          <ToggleChevron open={open} size={20} strokeWidth={3} />
+          {/* While the sticky close shows, the chevron keeps its slot unseen. */}
+          <ToggleChevron open={open} size={20} strokeWidth={3} className={railOn ? 'invisible' : ''} />
         </span>
       </button>
       {mine && p.stage === 'submitted' && (
@@ -111,8 +119,9 @@ function ProposalCard({ p, reviewer, mine, onChange, onEdit, onWithdraw }: { p: 
         />
       )}
       </div>
+      {railOn && <StickyClose onClose={() => setOpen(false)} label={`Close ${p.title}`} opener={() => toggle.current} />}
       {open && (
-        <div className="mt-sm">
+        <div id={panelId} className={`mt-sm ${STICKY_CLOSE_LANE}`}>
           <p className="m-0 whitespace-pre-wrap text-prose">{p.pitch}</p>
           {p.log.length > 0 && (
             <ol className="mt-sm flex list-none flex-col gap-xs border-l-2 border-line p-0 pl-sm m-0">
