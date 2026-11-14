@@ -22,7 +22,7 @@ First, Riya picks her page name under **My page**, so people can find her produc
 3. She types the **Title**, "Reels that hold", and a **Price in points**. Zero makes it free.
 4. She taps **Create draft**. The product page opens.
 5. Under **Lessons** she taps **Add lesson**, or **Draft from notes** to turn an outline into draft lessons. Each lesson has text, an optional video link, a drip day and an optional quiz.
-6. In the form she can add a money price and set **Who can buy**: **Xp of at least**, **Points of at least** and **Holds the badge**. Empty means anyone.
+6. In the form she can add a money price, up to ₹10,00,000, and set **Who can buy**: **Xp of at least**, **Points of at least** and **Holds the badge**. Empty means anyone. A higher money price is not saved, and the form says why.
 
 ## The four states of a course
 

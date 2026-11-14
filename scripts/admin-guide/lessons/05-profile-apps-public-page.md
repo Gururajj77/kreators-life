@@ -31,7 +31,7 @@ Tags never show on her public page.
 1. Each group shows how many apps it shows, like "3 of 7 shown". Riya opens Creation.
 2. Each app has a round eye that hides it, and hidden apps wait under **Hidden apps** at the end of the group. Nothing is deleted.
 3. An app that fits her answers says **Fits you**, and why.
-4. Each group has a switch, **Starts open on Apps and in the menu**. She turns it on for Contribution and Creation, the two she uses most.
+4. Each group has a switch, **Starts open on Apps and in the menu**. She turns it on for Contribution and Creation, the two she uses most. It sets the Apps page and the menu only: the groups in **All tables** always start closed.
 5. She taps **Arrange apps**. Now she can drag an app by its handle, or use **Move up** and **Move down**. Apps stay inside their group. She taps **Done**.
 6. To undo an order, the group's More menu has **Reset order**.
 

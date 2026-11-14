@@ -76,7 +76,7 @@ Each pillar's guide asks three quick questions. **Write my own** lets her answer
 - **Pillar cards:** each card on Pillars now shows where that relationship sits on the map.
 - **A pillar's page:** **Tasks to do** with **Add a task**, then **The pyramid**, where each layer opens to change it or add to it.
 - **The life map:** at the bottom of Pillars, under "Your life map". It holds Month one, Where each one sits, Part of your life?, The whole map, Day zero scores, What gets in the way, Your routine and The contract.
-- **Your routine:** she can change any block's times, add or remove morning steps and set their minutes.
+- **Your routine:** she can change any block's times, add or remove morning steps and set their minutes. A block that would end before it starts, or start while she is asleep, is not saved, and the field says why.
 - **Again later:** **Run the session again** and **Build the pillars for your focus** sit at the top of the life map.
 
 > **Result:** Riya has a map, one or two focus pillars, a routine, a signed contract and her first pyramids. Her first tasks will show on Daily.
@@ -89,6 +89,7 @@ The strategy session and Pillars are core. You cannot switch them off for anyone
 2. **Coaches:** a life coach sees only what Riya shares on that link. There are six switches: Daily and streaks, Pillars and pyramids, Routine and contract, Life map answers, Reflection and Patterns. She can turn any off. She can also switch on whole tables for them, one by one, read only.
 3. **Making a coach:** use the **Life coaches** tab in Admin to answer people who asked to coach.
 4. **The live call:** a person asks from the contract or the life map, every admin hears once in the inbox, and the team writes to set a time. Once payments are live it is paid first, and only the signed webhook marks it paid.
+5. **An older routine:** each block now fits the real day, so when work runs late, people and learning move to the time that is left. A routine saved before 14 November 2026 with a block that ran backwards, or an empty one, is put right the next time it is opened. If a member asks why an evening block moved, that is why.
 
 ## The bottom line
 

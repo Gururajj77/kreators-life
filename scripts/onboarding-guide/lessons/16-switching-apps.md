@@ -45,7 +45,7 @@ To change several at once, tap **Select** beside the count. Each eye becomes a t
 The **Features** part of the Profile tab shows the same groups, all open. It adds three things the Apps page does not have.
 
 - **Fits you:** an app that matches your setup answers says so, with the reason. It is a hint, never a push.
-- **Starts open on Apps and in the menu:** each group has this switch. Turn it on for the groups you use most. By default, Contribution and Essentials start open, and the rest start closed.
+- **Starts open on Apps and in the menu:** each group has this switch. Turn it on for the groups you use most. By default, Contribution and Essentials start open, and the rest start closed. It never changes **All tables**, where every group starts closed.
 - **Arrange apps:** tap it and each app gets a drag handle, plus **Move up** and **Move down** buttons. Put the app you use most at the top. Apps move only inside their own group. Tap **Done** when you are happy.
 
 A group you arranged also gets **Reset order** in its More menu, in case you want the old order back.

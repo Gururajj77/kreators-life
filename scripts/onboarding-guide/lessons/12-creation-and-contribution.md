@@ -39,7 +39,7 @@ These apps are about making things and running your own small business.
 Say you cut reels that keep people watching, and friends keep asking how. In the **Shop**, you can turn that into a course.
 
 1. Tap **New product** and pick **Course**.
-2. Add a title and a price in points, or zero to make it free.
+2. Add a title and a price in points, or zero to make it free. You can add a money price too, up to ₹10,00,000.
 3. Add your lessons.
 4. Choose who can see it.
 

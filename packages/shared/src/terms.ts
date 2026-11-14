@@ -134,7 +134,7 @@ export const TERMS: Record<string, string> = {
   'top-up': 'Extra credits on top of your plan. They stay until you use them, after the plan\'s own credits are gone.',
   core: 'Where you usually live on the map, in one relationship.',
   floor: 'Where you drop to under stress, in one relationship. A floor under Courage marks that pillar as a good place to start.',
-  routine: 'Six blocks a day, built from your real day and moved thirty minutes a week. The morning block counts only when every step is ticked.',
+  routine: 'Six blocks a day, built from your real day so each fits between waking up and lights out, and moved thirty minutes a week. The morning block counts only when every step is ticked.',
   contract: 'Your signed deal: days a week, a check-in time, and what a short week costs.',
   'life coach': 'Someone the team made a life coach. Once you both say yes, they see only the parts and tables you switch on, leave you notes and add tasks. Their badge says Life coach.',
   student: 'Someone a life coach works with, once both said yes. In the setup chat, Student means someone at school or college.',

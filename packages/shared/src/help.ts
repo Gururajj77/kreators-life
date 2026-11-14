@@ -1,6 +1,7 @@
 import { INVITE_ACTIVE_DAYS, MAX_CHANNEL_MEMBERS, MAX_MENTIONS, MAX_PINNED } from './community.ts';
 import { ATTENDEE_CLAIMS_PER_DAY, ATTENDEE_XP_DEFAULT, ATTENDEE_XP_MAX, CIRCLE_MINUTES, RUN_CODE_WINDOW } from './events.ts';
 import { MAX_COACHES } from './coaching.ts';
+import { money, PRODUCT_MONEY_MAX } from './money.ts';
 
 // ---------------------------------------------------------------------------
 // How each app works, in three to five steps
@@ -69,7 +70,7 @@ export const HOW_TO: Record<string, HowTo> = {
   },
   tower: {
     steps: [
-      'Pillars has its own setup, the strategy session, for whenever you want it: a few minutes that place all seven relationships on the map (where you usually live, where you drop under stress), score your health and wealth, and build a routine and a contract from your real day. Your life map, under Pillars, keeps every answer and can be run again. Or set up one pillar at a time with a short vibe check, three taps each.',
+      'Pillars has its own setup, the strategy session, for whenever you want it: a few minutes that place all seven relationships on the map (where you usually live, where you drop under stress), score your health and wealth, and build a routine and a contract from your real day. Your life map, under Pillars, keeps every answer and can be run again. Change your routine’s times there too: each block must fit between waking up and lights out. Or set up one pillar at a time with a short vibe check, three taps each.',
       'Each pillar is a pyramid with six layers. The foundation is the one thing you will not let break. The guiding principle is a line you live by so it holds. The value goal is how you want to feel more often. The goal outcome is what you would see when that is real. Then a project, and tasks at the tip.',
       'Your answers build the first four layers; you pick or write the project and its tasks. Tick a task on Daily and the glow runs up to the foundation: 20 xp for the task, then a smaller ripple to each layer above it. Clear every task in a project for 30 xp more.',
       'Every pillar has a level and a character that grows with it. The weakest pillar is the one that sends your small act.',
@@ -324,7 +325,7 @@ export const HOW_TO: Record<string, HowTo> = {
       'Sell what you make: downloads, courses with drip and quizzes, memberships, sessions with booking, events with replays, payment links, bundles, locked posts and paid questions.',
       'Make a product in a minute and share its link. It also sits on your public page. A course can stay Private, for people you invite, until you make it Public.',
       'Set who can buy: anyone, or people with a points balance, a badge, or both.',
-      'Points move instantly. Money checkout is in test mode until a payment provider is connected, and a money order is only paid once the provider confirms it.',
+      `Points move instantly. A money price can be up to ${money(PRODUCT_MONEY_MAX, 'INR')}. Money checkout is in test mode until a payment provider is connected, and a money order is only paid once the provider confirms it.`,
       'Coupons, availability, orders, customers and testimonials live under the Shop sections. A buyer can also type a discount code from the team under Have a discount code; the price shown is the price charged, and you are still paid the full price.',
     ],
     terms: ['unlock', 'points', 'discount code'],
@@ -500,7 +501,7 @@ export const HOW_TO: Record<string, HowTo> = {
   },
   tables: {
     steps: [
-      'All tables shows your own data as tables, from tasks and moods to your shop, clients, events and chats. They are grouped like the Apps page: one toggle for each group, with parts like Daily, Journal and Money inside. A table shows only while its app is shown, and Business metrics only while its switch in Reviews is on too. Open one to see its rows.',
+      'All tables shows your own data as tables, from tasks and moods to your shop, clients, events and chats. They are grouped like the Apps page: one toggle for each group, closed until you open it, with parts like Daily, Journal and Money inside. A table shows only while its app is shown, and Business metrics only while its switch in Reviews is on too. Open one to see its rows.',
       'Tap a column’s name to sort by it. Pick a filter or type in the search box to narrow it down. A page shows 10 rows at first. Pick 25, 50 or 100 at the bottom left, and move between pages at the bottom right.',
       // The number is CSV_MAX_ROWS in dataTables.ts (a test holds the two together; importing it would load the registry with this panel).
       'Tick rows to copy them or to download them as a CSV file. Download all gets every row that matches, up to 5,000 (fewer on a wide table), ten files a day.',
