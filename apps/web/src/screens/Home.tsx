@@ -1,6 +1,6 @@
 import { QuoteOfTheDay } from '../components/QuoteOfTheDay';
 import { RemindersSection } from '../components/Reminders';
-import { badgeRoleOf, greetingFor, knowledgeKindIcon, LIFE_AREAS, MODULE_BY_KEY, MODULE_GROUP_ACCENT, MODULE_GROUPS, money, MOODS, RELATIONSHIP_BY_KEY, STRESS_LEVELS, type HomeResponse, type ModuleGroup, type RelationshipKey, formatCount } from '@kreators/shared';
+import { badgeRoleOf, greetingFor, knowledgeKindIcon, LIFE_AREAS, MODULE_BY_KEY, MODULE_GROUP_ACCENT, MODULE_GROUPS, money, MOODS, orderInGroup, RELATIONSHIP_BY_KEY, STRESS_LEVELS, type HomeResponse, type ModuleGroup, type RelationshipKey, formatCount } from '@kreators/shared';
 import type { CSSProperties, ReactNode } from 'react';
 import { Suspense, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
@@ -37,7 +37,7 @@ import { BENTO_SIZE, evenGrid, evenTile } from '../lib/bento';
 import { tie } from '../lib/text';
 import { useWide } from '../lib/useWide';
 import { prettyDate, todayLocal, weekday, eventTime } from '../lib/date';
-import { keepForApps, useFits, useGroupOrder, useHiddenApps, useModules } from '../lib/modules';
+import { keepForApps, useAppPrefs, useFits, useGroupOrder, useHiddenApps, useModules } from '../lib/modules';
 import { useAuthed, useMe } from '../lib/queries';
 import { SkeletonList } from '../components/Skeleton';
 import { StatusTag } from '../components/StatusTag';
@@ -50,7 +50,10 @@ import { useFocusPortal } from '../lib/focusPortal';
 
 /** Go to's hidden-apps panel, downloaded only when its button is first opened (Home is in the first download). */
 const HiddenAppsPanel = lazyNamed(() => import('../components/AppGroups'), 'HiddenAppsPanel');
-const SHORTCUT_ORDER: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'manage'];
+// Go to's groups, every one (2026-11-15, the founder: "in home the apps are still not updated"): Essentials too, so Leaderboard, Inbox, All tables
+// and Help sit on Home like every other app. Its locked main tabs (Home, Daily, Pillars, Search, the assistant) are the tab bar's, never a tile,
+// as in the sidebar (`!m.locked` where the tiles are listed).
+const SHORTCUT_ORDER: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'core', 'manage'];
 const when = eventTime;
 // Even rows (lib/bento.ts): the reads four to a row across the whole width (one on a phone and a tablet). The Go to tiles are one sideways row on a phone
 // (the columns below only start from the tablet, `md:grid`), then three, four and five to a row, so a tile keeps about 145px or more.
@@ -137,6 +140,8 @@ export function Home() {
   // A steady ref callback, so the slot is set once and the living clock is not moved out and back on every render.
   const setFocusSlot = useCallback((el: HTMLDivElement | null) => setTarget(el, 'home'), [setTarget]);
   const shortcutGroups = useGroupOrder(SHORTCUT_ORDER);
+  // Inside each group, the apps in the order the person arranged under Profile, Features, then the default order, as Apps and the sidebar show them.
+  const appPrefs = useAppPrefs();
   // Go to's hidden-apps button, as on Apps: one inline panel under the title with every hidden app, the ones that fit the person first.
   const hiddenApps = useHiddenApps(shortcutGroups).reduce((n, x) => n + x.list.length, 0);
   const [showHidden, setShowHidden] = useState(false);
@@ -839,7 +844,7 @@ export function Home() {
             </div>
             <div className="mt-sm empty:hidden">
               {shortcutGroups.map((g) => {
-                const list = modules.filter((m) => m.on && m.group === g);
+                const list = orderInGroup(modules.filter((m) => m.on && !m.locked && m.group === g), appPrefs.order[g]);
                 if (list.length === 0) return null;
                 return (
                   <div key={g} data-pillar={MODULE_GROUP_ACCENT[g]} className="mt-md first:mt-0">
