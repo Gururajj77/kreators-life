@@ -1,8 +1,7 @@
-import { groupStartsOpen, MODULE_GROUP_ACCENT, MODULE_GROUP_ORDER, RELATIONSHIP_BY_KEY, type ModuleGroup } from '@kreators/shared';
+import { MODULE_GROUP_ACCENT, MODULE_GROUP_ORDER, RELATIONSHIP_BY_KEY, type ModuleGroup } from '@kreators/shared';
 import { andList, type TableListGroup } from '@kreators/shared/dataTables';
 import { useId, type ReactNode } from 'react';
 import { useKept } from '../lib/kept';
-import { useAppPrefs } from '../lib/modules';
 import { useMe } from '../lib/queries';
 import { GroupAccordion } from './GroupAccordion';
 import { Phrases } from './Phrases';
@@ -23,7 +22,8 @@ const namesOf = (categories: readonly TableListGroup[]): ReactNode => <Phrases t
  * Every list of tables, drawn the way the Apps page draws apps (2026-11-14, the founder: "put them in toggles based on categories in every place
  * they occur for both coaches, admins and the user themselves, in the same ways apps are in toggles"): one accordion per app group in its pillar's
  * colour (GroupAccordion, the Apps page's own look), its line naming the categories inside, a count in its pill, and inside each category's tables
- * under a quiet eyebrow. Each starts open or closed as the viewer's app prefs say for that group (`groupStartsOpen`), and what was opened is kept
+ * under a quiet eyebrow. Every group starts closed (2026-11-14, the founder: "keep all the tables hidden state by default, not follow this from
+ * profile"), whatever the viewer's app prefs say for the Apps page, and what was opened is kept
  * for the tab and the viewer, one memory per place (`place`: the person's own list, a student's, a member's, a share list), as AppGroups keeps its.
  * A group is a plain labelled group, never a region, since Profile draws these group names again beside Features (the review, 2026-11-14); a
  * page whose groups are its sections passes `heading`, and each group's toggle sits in a heading of that level, each category's name one under it.
@@ -82,9 +82,8 @@ function Group({
   heading?: 2;
   children: (category: TableListGroup, group: ModuleGroup) => ReactNode;
 }) {
-  const prefs = useAppPrefs();
-  // Open or closed is remembered for this tab and this person (lib/kept.ts), from where their app prefs start this group.
-  const [open, setOpen] = useKept<boolean>(scope, group, () => groupStartsOpen(prefs, group));
+  // Closed until opened, never from Profile's "Starts open" picks; what was opened is remembered for this tab and this person (lib/kept.ts).
+  const [open, setOpen] = useKept<boolean>(scope, group, false);
   const rel = RELATIONSHIP_BY_KEY[MODULE_GROUP_ACCENT[group]];
   return (
     <GroupAccordion group={group} open={open} onToggle={() => setOpen((o) => !o)} count={count} mood={mood} blurb={namesOf(categories)} region={false} heading={heading}>
