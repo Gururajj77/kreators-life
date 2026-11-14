@@ -217,9 +217,9 @@ const FEATURE_HEAD: Readonly<Record<string, { title: string; description: string
   leaderboard: { title: 'Leaderboard: climb on effort', description: 'Leaderboard on kreators.app: opt in to climb on xp, streaks and badges. Never on follower counts, and never on your journal or your wellbeing.' },
   tables: {
     title: 'All tables: your data as tables',
-    description: 'All tables on kreators.app shows your own lists, from tasks and moods to money and clients, as tables you can sort, filter, search, copy and download as CSV files.',
+    description: 'All tables on kreators.app shows your own lists, from tasks and moods to money and clients, as tables you can sort, search, edit, copy and download as CSV files.',
     opening:
-      'All tables is the kreators.app page that shows your own data as tables, grouped like the Apps page, from Daily, Journal and Money to your Shop, Agency, events and chats. Sort by any column, filter, search, and pick 10, 25, 50 or 100 rows a page. Copy the rows you tick or download them as a CSV file. A life coach sees a table only if you switch it on for them, and never one with other people’s details.',
+      'All tables is the kreators.app page that shows your own data as tables, grouped like the Apps page, from Daily, Journal and Money to your Shop, Agency, events and chats. Sort by any column, filter, search, and pick 10, 25, 50 or 100 rows a page. Copy the rows you tick or download them as a CSV file, and edit or remove your own rows by the app’s own rules. A life coach sees a table only if you switch it on for them, and never one with other people’s details.',
   },
   help: { title: 'Help: answers and the team', description: 'Help on kreators.app: common questions answered, and a support ticket when you need a person. The reply comes to your own inbox inside the app.' },
   assistant: {

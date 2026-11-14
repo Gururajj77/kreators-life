@@ -244,6 +244,8 @@ party.post('/events/:id/cancel-rsvp', async (c) => {
   if (!row) return c.json({ error: 'not found' }, 404);
   const mine = await db.prepare('SELECT * FROM event_registrations WHERE event_id = ? AND user_id = ?').bind(row.id, user.id).first<RegRow>();
   if (!mine || mine.status === 'cancelled') return c.json({ error: 'you are not registered' }, 400);
+  // Once the event has ended the seat stays as it was: a ticket is never refunded after the event (2026-11-14, a gap All tables would have shown).
+  if (Date.parse(row.ends_at) <= Date.now()) return c.json({ error: 'This event is over, so your seat stays as it was.' }, 400);
   // The status moves first, guarded on the status that was read, so two taps at once cancel, refund and free a seat once.
   const flip = await db.prepare("UPDATE event_registrations SET status = 'cancelled' WHERE id = ? AND status = ?").bind(mine.id, mine.status).run();
   if (flip.meta.changes !== 1) return c.json({ error: 'you are not registered' }, 400);
@@ -329,35 +331,83 @@ party.post('/events/:id/claim', async (c) => {
   return c.json(got, 201);
 });
 
+/**
+ * A guest's score and words after an event. Each part not sent keeps what was saved (2026-11-14, All tables' Edit, which changes one at a time):
+ * the score, the words, and the list-to-meet switch, which moves only when `networking` is sent as yes or no. The screen sends all three, as
+ * before. The row keeps its id when it changes.
+ */
 party.post('/events/:id/feedback', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const reg = await db.prepare("SELECT status FROM event_registrations WHERE event_id = ? AND user_id = ? AND status IN ('registered','attended')").bind(c.req.param('id'), user.id).first();
   if (!reg) return c.json({ error: 'only people who registered can leave feedback' }, 403);
   const body = await c.req.json<{ rating?: number; comment?: string; networking?: boolean }>().catch(() => ({}) as Record<string, never>);
-  const rating = num(body.rating, null, 1, 5);
+  const had = await db.prepare('SELECT rating, comment FROM event_feedback WHERE event_id = ? AND user_id = ?').bind(c.req.param('id'), user.id).first<{ rating: number; comment: string }>();
+  const rating = body.rating === undefined && had ? had.rating : num(body.rating, null, 1, 5);
   if (rating === null) return c.json({ error: 'a rating from one to five' }, 400);
+  const comment = body.comment === undefined && had ? had.comment : str(body.comment, 1000);
   await db.batch([
-    db.prepare('INSERT OR REPLACE INTO event_feedback (id, event_id, user_id, rating, comment, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(newId(), c.req.param('id'), user.id, rating, str(body.comment, 1000), nowIso()),
-    db.prepare('UPDATE event_registrations SET networking_opt_in = ? WHERE event_id = ? AND user_id = ?').bind(body.networking ? 1 : 0, c.req.param('id'), user.id),
+    db
+      .prepare('INSERT INTO event_feedback (id, event_id, user_id, rating, comment, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (event_id, user_id) DO UPDATE SET rating = excluded.rating, comment = excluded.comment, created_at = excluded.created_at')
+      .bind(newId(), c.req.param('id'), user.id, rating, comment, nowIso()),
+    ...(typeof body.networking === 'boolean' ? [db.prepare('UPDATE event_registrations SET networking_opt_in = ? WHERE event_id = ? AND user_id = ?').bind(body.networking ? 1 : 0, c.req.param('id'), user.id)] : []),
   ]);
   return c.json({ ok: true }, 201);
 });
 
+// Take your feedback back (2026-11-14, All tables). Leave it again on the event's page while you hold a seat.
+party.delete('/events/:id/feedback', async (c) => {
+  const res = await c.env.DB.prepare('DELETE FROM event_feedback WHERE event_id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
+  return c.json({ ok: true });
+});
+
+/**
+ * The host changes an event: its status (the screen's Mark done and Cancel), and since 2026-11-14 (All tables' Edit) its title, words and place.
+ * Each part changes only when it is sent. Events staff keep the status moves they always had; the words are the host's own, so staff never
+ * rewrite a host's event (the review of 2026-11-14). A cancelled event stays as it is: never live or done again, its seats already refunded. A
+ * new place is told to everyone holding a seat or waiting for one, in one note per guest and event rewritten in place (`venue-<event>-<guest>`),
+ * so changing the place again and again never piles up notes.
+ */
 party.patch('/events/:id', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const row = await db.prepare('SELECT * FROM events WHERE id = ?').bind(c.req.param('id')).first<{ id: string; host_user_id: string; title: string; status: string }>();
+  const row = await db.prepare('SELECT * FROM events WHERE id = ?').bind(c.req.param('id')).first<{ id: string; host_user_id: string; title: string; description: string; venue: string; status: string }>();
   if (!row) return c.json({ error: 'not found' }, 404);
   if (row.host_user_id !== user.id && !can(user, 'events')) return c.json({ error: 'the host changes an event' }, 403);
-  const body = await c.req.json<{ status?: string }>().catch(() => ({}) as { status?: string });
-  const status = oneOf(body.status, ['published', 'cancelled', 'done'] as const, 'published');
-  // The event's status moves first and only when it changes. A cancel always goes on to the seats, moved or not: each guest moves once, so two taps at
-  // once refund once, and a second tap after a stop finishes what the first one left (the cron does too, `finishCancelledEvents`).
-  const moved = await db.prepare('UPDATE events SET status = ? WHERE id = ? AND status != ?').bind(status, row.id, status).run();
-  if (moved.meta.changes === 1) await audit(db, user.id, 'event.status', 'event', row.id, row.status, status);
-  // A big event's seats may take more trips than one tap has: what is left is finished by the next ticks (`finishCancelledEvents`), each guest once.
-  if (status === 'cancelled') await cancelEventSeats(db, row, await routeTurn(db, () => tripsOf(db), ROUTE_TRIPS)());
+  const body = await c.req.json<{ status?: unknown; title?: unknown; description?: unknown; venue?: unknown }>().catch(() => ({}) as Record<string, never>);
+  const words = body.title !== undefined || body.description !== undefined || body.venue !== undefined;
+  if (body.status === undefined && !words) return c.json({ error: 'Say what to change.' }, 400);
+  if (words && row.host_user_id !== user.id) return c.json({ error: 'Only the host changes an event’s title, words and place.' }, 403);
+  if (row.status === 'cancelled' && (words || body.status !== 'cancelled')) return c.json({ error: 'A cancelled event stays as it is.' }, 400);
+  if (words) {
+    const title = body.title === undefined ? row.title : str(body.title, 120);
+    if (body.title !== undefined && !title) return c.json({ error: 'Give it a title.' }, 400);
+    const description = body.description === undefined ? row.description : str(body.description, 3000);
+    const venue = body.venue === undefined ? row.venue : str(body.venue, 200);
+    // Guarded on the event not being cancelled meanwhile.
+    const res = await db.prepare("UPDATE events SET title = ?, description = ?, venue = ? WHERE id = ? AND status != 'cancelled'").bind(title, description, venue, row.id).run();
+    if (!res.meta.changes) return c.json({ error: 'A cancelled event stays as it is.' }, 400);
+    await audit(db, user.id, 'event.edit', 'event', row.id, { title: row.title, venue: row.venue }, { title, venue });
+    if (venue !== row.venue) {
+      const guests = await db.prepare("SELECT user_id FROM event_registrations WHERE event_id = ? AND status IN ('registered','attended','waitlisted') AND user_id != ? LIMIT 500").bind(row.id, row.host_user_id).all<{ user_id: string }>();
+      const at = nowIso();
+      await inBatches(
+        db,
+        guests.results.map((g) => noteStmt(db, { id: `venue-${row.id}-${g.user_id}`, userId: g.user_id, kind: 'party', title: `New place for ${title}`, body: venue || 'The host took the place off. Open the event to see more.', link: `/party/${row.id}`, at }, 'renew')),
+      );
+    }
+  }
+  if (body.status !== undefined) {
+    const status = oneOf(body.status, ['published', 'cancelled', 'done'] as const, 'published');
+    // The event's status moves first and only when it changes. A cancel always goes on to the seats, moved or not: each guest moves once, so two taps at
+    // once refund once, and a second tap after a stop finishes what the first one left (the cron does too, `finishCancelledEvents`). A cancelled one
+    // never moves back (the guard in the statement holds it even when a cancel lands between the read and here).
+    const moved = await db.prepare("UPDATE events SET status = ? WHERE id = ? AND status != ? AND (status != 'cancelled' OR ? = 'cancelled')").bind(status, row.id, status, status).run();
+    if (moved.meta.changes === 1) await audit(db, user.id, 'event.status', 'event', row.id, row.status, status);
+    // A big event's seats may take more trips than one tap has: what is left is finished by the next ticks (`finishCancelledEvents`), each guest once.
+    if (status === 'cancelled') await cancelEventSeats(db, row, await routeTurn(db, () => tripsOf(db), ROUTE_TRIPS)());
+  }
   return c.json({ ok: true });
 });
 

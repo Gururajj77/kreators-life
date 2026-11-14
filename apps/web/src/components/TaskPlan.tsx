@@ -163,10 +163,13 @@ export function OpenKindSelect({ value, onChange }: { value: OpenKind | null; on
 /** Four coloured buttons, P0 to P3, and a way to clear it. */
 export function PriorityPicker({ value, onChange }: { value: Priority | null; onChange: (p: Priority | null) => void }) {
   return (
-    <div>
+    <div className="@container">
       <span className="block text-subhead font-semibold">Priority</span>
-      {/* Two columns of equal buttons on a phone (P0 and P1, then P2 and P3), four in a row from the tablet width. */}
-      <div className="mt-xs grid grid-cols-2 gap-xs sm:grid-cols-4" role="group" aria-label="Priority">
+      {/* Two columns of equal buttons (P0 and P1, then P2 and P3), four in a row once the picker itself is 27rem wide. Read from its own
+          width, never the window's: the pills keep their words on one line and "P3 Whenever" needs about 104px, so a form in a tablet's
+          column beside the sticky close's lane (392px), a task's open plan beside its close (400px) or a phone on its side (416 to 424px)
+          takes the two rows, where four pressed the words into or through the pill's edge (2026-11-14). A laptop and a sheet keep four. */}
+      <div className="mt-xs grid grid-cols-2 gap-xs @min-[27rem]:grid-cols-4" role="group" aria-label="Priority">
         {PRIORITIES.map((p) => (
           <button key={p.value} type="button" aria-pressed={value === p.value} onClick={() => onChange(value === p.value ? null : p.value)} className={`pri-${p.value} pri-chip toy min-h-[36px] md:min-h-[44px] tap-pad w-full whitespace-nowrap rounded-pill px-xs text-subhead font-medium`}>
             {p.tag} {p.name}

@@ -1,9 +1,10 @@
 import { TRACKED_EVENTS, type TrackedEvent } from '@kreators/shared';
 import type { Context, Next } from 'hono';
-import { LIMITS, type LimitName } from './limits';
+import { LIMITS, VIA_TABLES, type LimitName } from './limits';
 import type { AppEnv, Env } from './env';
 import { newId, nowIso, sessionUser } from './db';
 import { fetchT, TIMEOUT } from './http';
+import { tablesCalls } from './assistant/dispatch';
 
 /**
  * The operator's plumbing: transactional email through an outbox, an event timeline per order or booking,
@@ -93,9 +94,12 @@ export async function limitKey(env: { CLICK_SALT?: string }, raw: string): Promi
 }
 
 /** Middleware: the named limit from limits.ts, per address, or per person once there is a session. */
-export function rateLimit(name: LimitName, by?: 'address', when?: 'discountCode' | 'appPrefs' | 'datePrefs' | 'dailyView' | 'adminKey' | 'session') {
-  const { max, windowSec } = LIMITS[name];
+export function rateLimit(route: LimitName, by?: 'address', when?: 'discountCode' | 'appPrefs' | 'datePrefs' | 'dailyView' | 'adminKey' | 'session') {
   return async (c: Context<AppEnv>, next: Next) => {
+    // A row call All tables makes as the person spends Tables' own budget in place of `prefs` (VIA_TABLES in limits.ts). Only the Request its door
+    // built in this Worker counts (`tablesCalls`); the `X-Kreators-Via: tables` header alone moves nothing, since anyone can send it.
+    const name = (tablesCalls.has(c.req.raw) && VIA_TABLES[route]) || route;
+    const { max, windowSec } = LIMITS[name];
     if (when === 'adminKey') return adminKeyDoor(c, next, `${name}:ip:${await limitKey(c.env, ipOf(c))}`, max, windowSec);
     // A limit that counts only code tries looks at the body (Hono keeps it, so the route still reads it).
     if (when === 'discountCode') {

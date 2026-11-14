@@ -146,10 +146,19 @@ describe('All tables: Work, Win, Army, TV, Fund and Club (2026-11-14)', () => {
   });
 
   it('changes only through Work’s and the pitches’ own routes, and only while the app would take it', () => {
-    expect(editable('workListings')).toEqual(['status', 'clubOnly']);
+    // Contribution's Edit (2026-11-14): a listing's words, a reviewer's step, a campaign's name and days, a reward's terms and an entry's link,
+    // each through its app's own route (dataTables.contribution.test.ts holds their rules).
+    expect(editable('workListings')).toEqual(['title', 'status', 'clubOnly', 'place', 'deadline', 'about', 'deliverables', 'eligibility']);
+    expect(editable('workApplicants')).toEqual(['status']);
+    expect(editable('armyCampaigns')).toEqual(['campaign', 'stage', 'starts', 'due']);
+    expect(editable('winRewards')).toEqual(['title', 'status', 'deliverable', 'platform', 'pool', 'rate', 'cap', 'minViews', 'brief', 'rules', 'eligibility']);
+    expect(editable('winEntries')).toEqual(['link']);
     expect(editable('tvPitches')).toEqual(['title', 'budget', 'pitch']);
     expect(editable('fundApplications')).toEqual(['title', 'budget', 'pitch']);
-    for (const k of BATCH.filter((x) => !['workListings', 'tvPitches', 'fundApplications'].includes(x))) {
+    // A Club application's note, while it waits for a reviewer (Connection's Edit, 2026-11-14; dataTables.connectionActions.test.ts).
+    expect(editable('clubMembership')).toEqual(['note']);
+    const EDITED = ['workListings', 'workApplicants', 'armyCampaigns', 'winRewards', 'winEntries', 'tvPitches', 'fundApplications', 'clubMembership'];
+    for (const k of BATCH.filter((x) => !EDITED.includes(x))) {
       expect(editable(k), k).toEqual([]);
       expect(dataTableByKey[k]!.readOnlyWhy, k).toBeTruthy();
     }

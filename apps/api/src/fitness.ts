@@ -1,8 +1,8 @@
 import type { Context } from 'hono';
-import { eatDayScore, eatExtra, eatFromStored, eatHowWell, isMoveKind, MOVE_KIND_META, MOVE_METRES_MAX, parseEat, parseMove, parseProteinGoal, proteinFromStored, proteinGrams, type EatLog, type MoveInput, type MoveKind, type MoveLog } from '@kreators/shared/fitness';
+import { eatDayScore, eatExtra, eatFromStored, eatHowWell, isMoveKind, MOVE_KIND_META, MOVE_METRES_MAX, parseEat, parseMove, parseProteinGoal, proteinFromStored, proteinGrams, typedMetres, type EatLog, type MoveInput, type MoveKind, type MoveLog } from '@kreators/shared/fitness';
 import { localStamp } from '@kreators/shared';
 import type { AppEnv } from './env';
-import { DATE_RE, dateNearOwnDay, dayInZone, newId, nowIso, objectBody } from './db';
+import { DATE_RE, dateNearOwnDay, dayInZone, GONE_NOW, newId, nowIso, objectBody } from './db';
 
 /**
  * Fitness's movement and eating logs, one set of helpers for its own routes (/fitness) and Kreators Run's tool (/run/move): one action,
@@ -103,7 +103,9 @@ export async function removeMoveFrom(c: Context<AppEnv>, kinds?: readonly MoveKi
     const m = toMove(row);
     if (m.source !== 'self' || !kinds.includes(m.kind)) return c.json({ error: 'not found' }, 404);
   }
-  await db.prepare("DELETE FROM wellbeing_logs WHERE id = ? AND user_id = ? AND kind = 'move'").bind(row.id, userId).run();
+  const res = await db.prepare("DELETE FROM wellbeing_logs WHERE id = ? AND user_id = ? AND kind = 'move'").bind(row.id, userId).run();
+  // Another tab, or a second send, took it between the read above and here: said, never a quiet yes, so All tables counts it once.
+  if (!res.meta.changes) return c.json({ error: GONE_NOW }, 409);
   return c.json({ ok: true });
 }
 
@@ -117,8 +119,15 @@ export async function editMoveFrom(c: Context<AppEnv>): Promise<Response> {
   if (old.source === 'club') return c.json({ error: 'This came from a club run with a start code. You can remove it here, not change it.' }, 400);
   if (!dateNearOwnDay(old.date, c.get('user').timezone)) return c.json({ error: 'Only today’s and yesterday’s can change. You can still remove it.' }, 400);
   const body = await objectBody(c);
+  // The distance typed in km (All tables' one cell, 2026-11-14), read as the movement form reads it (`typedMetres`); empty takes it off.
+  if (body.km !== undefined) {
+    const metres = body.km === null ? null : typeof body.km === 'string' ? typedMetres(body.km) : 'bad';
+    if (metres === 'bad') return c.json({ error: 'Type the distance in km, like 5.2.' }, 400);
+    body.metres = metres;
+  }
   const m = parseMove(body, { kind: old.kind, minutes: old.minutes, metres: old.metres, effort: old.effort, note: old.note });
   if (typeof m === 'string') return c.json({ error: m }, 400);
+  if (body.km !== undefined && body.km !== null && body.km !== '' && m.metres === null) return c.json({ error: `${MOVE_KIND_META[m.kind].name} has no distance here.` }, 400);
   await db.prepare("UPDATE wellbeing_logs SET value = ?, extra = ?, note = ? WHERE id = ? AND user_id = ? AND kind = 'move'").bind(m.minutes, moveExtra(m), m.note, row.id, userId).run();
   return c.json({ move: toMove({ ...row, value: m.minutes, extra: moveExtra(m), note: m.note }) });
 }

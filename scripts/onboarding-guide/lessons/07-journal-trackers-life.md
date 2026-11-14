@@ -46,7 +46,7 @@ No prompt comes back until you have seen the whole set. The heavier categories e
 Right under **New entry** sits **Gratitude for today**: three short lines on what went right. Each line has its own prompt, from one of your seven pillars or from the day itself.
 
 - **It saves as you type.** There is no button to tap.
-- **Today or yesterday only.** Older days are read only.
+- **Today or yesterday here.** On Journal, older days are read only. In **All tables**, you can change or clear an older day.
 - **A dot on the calendar** marks a day with gratitude. Tap the day to read its lines.
 - **Pick another pillar:** on an empty line, tap the pillar's name and choose from the list.
 - **Another prompt:** the round arrows give you a new one from the same pillar.

@@ -149,7 +149,7 @@ export const TERMS: Record<string, string> = {
   'friend code': 'Eight letters and numbers, yours alone. Someone types it in Bond or scans your QR code, and you get a friend request.',
   'invite code': 'Lets one new account join while joining is by invite. Shared as a link or a code, it works once, and who joins is credited to its maker.',
   waitlist: 'Leave your name and email when you have no invite code. When the team says yes, a code comes by email.',
-  table: 'One kind of your own data, like your tasks or your moods, in rows you can sort, filter, copy and download. All tables lists them.',
+  table: 'One kind of your own data, like your tasks or your moods, in rows you can sort, filter, copy, download, change and remove. All tables lists them.',
 };
 
 /** True for the username an account is given at sign-up, before the person picks their own. */

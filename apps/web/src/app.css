@@ -928,6 +928,12 @@
   right: var(--spacing-xs);
   width: 32px;
 }
+/* A toggle's close runs 4px from the root's edge (a task's row keeps its edit button's place, 8px in): where the toggle's mark was, it then
+   keeps the 8px the spacing allows from what ends the toggle's line (an app group's "12 of 12 shown", a lesson's tag), which at 8px in it
+   came within 4px of, its 44px hit area on them (2026-11-14). The lane under it keeps the same 8px (`.sticky-close-lane` below). */
+.sticky-close-rail[data-mode='in']:not(.row-close-rail, [data-nest]) {
+  right: calc(var(--spacing-xs) / 2);
+}
 /* Nested: the outermost close's column, whichever side it stands (its width still follows `data-mode`, which is that close's). */
 .sticky-close-rail[data-nest] {
   left: var(--sticky-close-x, 0px);
@@ -987,11 +993,32 @@ body:has(.fx-condensed[data-on]) .sticky-close-slot {
   margin-top: calc(var(--sticky-close-lead, 0px) + max(0px, (var(--sticky-close-head, 44px) - 32px) / 2));
 }
 /* The lane: the button's 32px and a gap either side, from the root's edge (a task's plan's own 16px padding grows to 48px; an open
-   content's wrapper, a direct child of the root, takes 48px). A nested root whose close stands in the lane round it keeps none of its own
-   (`data-sticky-close-nest`). */
-[data-row-close='in']:not([data-sticky-close-nest]) .row-lane,
-[data-sticky-close='in']:not([data-sticky-close-nest]) > .sticky-close-lane {
+   content's wrapper, a direct child of the root, takes 44px: the close 4px in and its 32px, then the 8px the spacing allows). A nested root
+   whose close stands in the lane round it keeps none of its own (`data-sticky-close-nest`). */
+[data-row-close='in']:not([data-sticky-close-nest]) .row-lane {
   padding-right: calc(var(--spacing-md) + var(--spacing-lg));
+}
+[data-sticky-close='in']:not([data-sticky-close-nest]) > .sticky-close-lane {
+  padding-right: calc(var(--spacing-lg) + var(--spacing-sm));
+}
+/* A card keeps its full width and the lane sits inside it, as a task's plan keeps it (2026-11-14): when what the toggle opened is one card
+   (Add a task's form, How it works' panel, the month calendar, a Help group's card) or one list of cards (Help's words, each its own
+   tile), the card, or each card of the list, reaches back over the wrapper's lane to the root's edge and keeps the lane in its own
+   padding, so its edge still meets the toggle's above it instead of stopping 44px short with a strip of page beside it, and the words
+   inside lose 28px of their width, not 44. The wrapper (or the list) keeps its lane, so the width the words' boxes sit in still changes
+   when the close comes or goes, and the rectangle fixer (lib/rectText.ts, which pins its own padding on a block of words and measures it
+   again only when that width changes) evens them out at the width they now have. A list item with no fill keeps the list's lane, so
+   nothing in the list runs under the close. Only a block that fills its row reaches back (a box with a width of its own, an inline one,
+   a grid or a row of tiles side by side keep the wrapper's lane, where a reach would run into the next tile). */
+[data-sticky-close='in']:not([data-sticky-close-nest])
+  > .sticky-close-lane
+  > :only-child:is(div, form, section, article, ul, ol, dl, fieldset):is(.bg-card, .bg-card-strong, .bg-paper):not([class^='w-'], [class*=' w-'], [class*=':w-'], [class*='inline']),
+[data-sticky-close='in']:not([data-sticky-close-nest])
+  > .sticky-close-lane
+  > :only-child:is(ul, ol):not(.bg-card, .bg-card-strong, .bg-paper, [class*='grid'], [class*='flex-row'], [class*='flex-wrap'], [class*='columns-']):is([class*='flex-col'], :not([class*='flex']))
+  > li:is(.bg-card, .bg-card-strong, .bg-paper) {
+  margin-right: calc((var(--spacing-lg) + var(--spacing-sm)) * -1);
+  padding-right: calc(var(--spacing-lg) + var(--spacing-sm));
 }
 .check-preview {
   opacity: 0;
@@ -6484,6 +6511,30 @@ li.sort-lifted {
   bottom: 0;
   background: var(--tb, var(--color-ink-soft));
 }
+/* A template's slots (TemplateEditor in an open template card, `.tb-slots` its body) lay out by the room the list has, never the window's
+   width (2026-11-14): beside the sidebar on a tablet the `sm:` row tried one line, then wrapped each slot unevenly onto three, and on a
+   phone beside the sticky close's lane two times shared 278px, which cut "07:00 AM" to "07:00 A". From 37rem a slot is one line as
+   before (a laptop); under it the block, its length and the remove on one line and the two times on the next, in every row alike; under
+   21rem, where two times side by side would fall under about 145px each, the end time takes a line of its own under the start, "to"
+   after the start, both one width. */
+.tb-slots {
+  container: tb-slots / inline-size;
+}
+@container tb-slots (width < 37rem) {
+  .tb-slots ul > li > span:has(> label > input[type='time']) {
+    order: 3;
+    flex: 0 1 100%;
+  }
+  .tb-slots ul > li:has(> span > label > input[type='time']) > span:last-child {
+    order: 2;
+  }
+}
+@container tb-slots (width < 21rem) {
+  .tb-slots ul > li > span:has(> label > input[type='time']) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
 /* The colour picker's swatch: a 44px round button holding the colour, ringed in ink while picked. */
 .tb-swatch {
   display: inline-flex;
@@ -6806,5 +6857,114 @@ body:has([data-assistant-panel]) .page-contents {
   }
   :root[data-kb-up] .follow-action {
     display: none;
+  }
+}
+
+/* Back to top (components/BackToTop.tsx; the founder, 2026-11-14: "also add back to top button on the left of the ai chat assistant button,
+   keep it minimal and small and not interfering with any part of the page for all screens"). A 36px round button on the strong card, its
+   up arrow and a 2px ring (the track a hairline, the arc in the arrow's colour, filled as far as the page is scrolled), 44 by 44 to tap.
+   Where it sits follows the assistant's 60px round button (AssistantButton.tsx: right-md, its foot 16px up, or 96px up on a phone inside
+   the app, over the tab bar): just left of it and centred on it, 8px apart (right 16 + 60 + 8 = 84px, foot 16 or 96 + 12px); where that
+   button is not shown (the Companion, the team switched it off, focus mode, pages outside the app) in its place, centred on where it would
+   be (right 16 + 12 = 28px). On a phone page with the site's footer (the public site, a client's paper) it keeps the assistant's 96px too,
+   clear of the paper's own bar at the foot (JumpToBar) and of FollowStart's, over which it rises anyway; on a phone page with neither the
+   tab bar nor the footer (Admin, a public page, a product page) it sits 16px up. It rises with the assistant over a held bar
+   (`.lift-over-sticky`), under the assistant (40) and every scrim, over the tab bar and the bars at the foot (30). It shows only past a
+   screen of scrolling on a page two screens tall, away from the footer (the component), and steps aside while something else holds that
+   corner or the page: a sheet, the assistant's panel, the privacy card or bar, the attendee bar, a phone's keyboard, in print, or while a
+   sticky close's 44px hit area meets its own (the component: on a laptop about 1100 to 1350px wide an open toggle's close stands in this
+   column and passes through this corner as the toggle's line nears the window's foot).
+   While it fades out it takes no tap, so the tap goes to what it is stepping aside for. */
+.back-to-top {
+  position: fixed;
+  right: calc(var(--spacing-md) + var(--spacing-sm));
+  bottom: calc(var(--spacing-md) + var(--spacing-sm));
+  z-index: 39;
+  opacity: 0;
+  transition:
+    opacity 160ms var(--ease-open),
+    translate 200ms var(--ease-open);
+}
+.back-to-top[data-show] {
+  opacity: 1;
+}
+.back-to-top:not([data-show]) {
+  pointer-events: none;
+}
+:root:has(button[aria-label='Open the assistant']) .back-to-top {
+  right: calc(var(--spacing-md) + 60px + var(--spacing-xs));
+}
+@media not all and (min-width: 48rem) and (min-height: 30rem) {
+  .back-to-top {
+    bottom: calc(var(--spacing-md) + var(--spacing-sm) + env(safe-area-inset-bottom));
+  }
+  :root:has(nav[data-tabbar]) .back-to-top,
+  :root:has(.site-footer) .back-to-top {
+    bottom: calc(var(--spacing-xl) + var(--spacing-lg) + var(--spacing-sm) + env(safe-area-inset-bottom));
+  }
+}
+body:has(.dialog-frame) .back-to-top,
+body:has([role='dialog'][aria-modal='true']) .back-to-top,
+body:has([role='dialog'].lift-over-sticky) .back-to-top,
+body:has(section[aria-label='Finish setting up']) .back-to-top,
+:root[data-kb-up] .back-to-top {
+  display: none;
+}
+.btt-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  rotate: -90deg;
+  pointer-events: none;
+}
+.btt-ring circle {
+  fill: none;
+  stroke-width: 2;
+}
+.btt-track {
+  stroke: var(--color-line);
+}
+.btt-arc {
+  stroke: currentColor;
+  /* The circle's length, 2 x pi x 17 (RING in BackToTop.tsx), so the arc is empty at the top of the page and whole at its end. */
+  stroke-dasharray: 106.81;
+  stroke-dashoffset: 106.81;
+}
+/* The room the button needs at the page's foot, drawn after the page only while the page is long enough to show it: its top (64px up, or
+   144px on a phone inside the app, each and the safe area on a phone) and 8px more, less what the page keeps (32px; 120px on the
+   Companion's phone screen, with no safe area, so its spacer adds it; 168px and the safe area on every other app screen on a phone, where
+   none is needed; none at all with the site's footer, which the button steps aside for). */
+.btt-room {
+  height: calc(var(--spacing-md) + var(--spacing-sm) + 36px + var(--spacing-xs) - var(--spacing-lg));
+}
+@media not all and (min-width: 48rem) and (min-height: 30rem) {
+  .btt-room {
+    height: calc(var(--spacing-md) + var(--spacing-sm) + 36px + var(--spacing-xs) - var(--spacing-lg) + env(safe-area-inset-bottom));
+  }
+  :root:has(nav[data-tabbar]) .btt-room {
+    height: calc(var(--spacing-xl) + var(--spacing-lg) + var(--spacing-sm) + 36px + var(--spacing-xs) - var(--spacing-2xl) + env(safe-area-inset-bottom));
+  }
+  :root:has(nav[data-tabbar]):has(button[aria-label='Open the assistant']) .btt-room {
+    display: none;
+  }
+}
+:root:has(.site-footer) .btt-room {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .back-to-top {
+    transition: none;
+  }
+}
+@media (forced-colors: active) {
+  .back-to-top-btn {
+    border: 1px solid ButtonText;
+  }
+  .btt-track {
+    stroke: GrayText;
+  }
+  .btt-arc {
+    stroke: ButtonText;
   }
 }

@@ -64,7 +64,7 @@ Right under **New entry** sits **Gratitude for today**: three short lines, each 
 2. On an empty line, she taps the pillar's name to pick another. The round arrows give her **Another prompt** from the same pillar.
 3. **Make these my usual three** keeps those pillars for each new day.
 
-A prompt she wrote under or skipped comes back only after the rest of that pillar's prompts. Only today and yesterday can change. Older days are read only, and a dot on the calendar marks a day with lines. It pays nothing.
+A prompt she wrote under or skipped comes back only after the rest of that pillar's prompts. On Journal only today and yesterday can change, and a dot on the calendar marks a day with lines. In **All tables**, Riya can change or clear an older day herself, never a day still to come or one before she joined. It pays nothing.
 
 ## Changing or deleting an entry
 

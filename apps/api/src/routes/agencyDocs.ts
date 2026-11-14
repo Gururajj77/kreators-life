@@ -454,7 +454,11 @@ agencyDocs.patch('/invoices/:id', async (c) => {
   if (!row) return c.json({ error: 'not found' }, 404);
   const body = await objectBody(c);
   if (typeof body.status === 'string') {
-    const invoice = await setInvoiceStatus(db, user.id, row.id, body.status);
+    // `ifStatus` (2026-11-14, for All tables' void): the move lands only on the state the caller read, so an invoice paid a moment ago is never
+    // voided by a choice made while it was still sent. setInvoiceStatus then guards its own write on the state it reads.
+    if (typeof body.ifStatus === 'string' && body.ifStatus !== row.status) return c.json({ error: 'This invoice changed a moment ago. Read it again.' }, 409);
+    const invoice = await setInvoiceStatus(db, user.id, row.id, body.status, typeof body.ifStatus === 'string' ? body.ifStatus : undefined);
+    if (invoice && typeof body.ifStatus === 'string' && invoice.status !== body.status) return c.json({ error: 'This invoice changed a moment ago. Read it again.' }, 409);
     return invoice ? c.json({ invoice }) : c.json({ error: 'not found' }, 404);
   }
   if (row.status === 'paid') return c.json({ error: 'a paid invoice must be marked sent again before it can change' }, 400);
@@ -763,6 +767,9 @@ agencyDocs.patch('/contracts/:id', async (c) => {
   }
   if (typeof body.status === 'string') {
     const next = oneOf(body.status, ['draft', 'sent', 'void'] as const, row.status === 'signed' ? 'draft' : (row.status as 'draft' | 'sent' | 'void'));
+    // `ifStatus` (2026-11-14, for All tables' void): only from the state the caller read, so one signed a moment ago is never voided by a
+    // choice made while it was still sent. The moves below are then guarded on the state this route read.
+    if (typeof body.ifStatus === 'string' && body.ifStatus !== row.status) return c.json({ error: 'This agreement changed a moment ago (it may have just been signed). Read it again.' }, 409);
     if (row.status === 'signed' && next !== 'void') return c.json({ error: 'a signed agreement can only be voided' }, 400);
     if (row.status === 'void' && next !== 'void') return c.json({ error: 'a voided agreement cannot be sent again; make a copy' }, 400);
     // Every move is guarded on the status that was read, so a client signing at that moment is never undone by a take-back,

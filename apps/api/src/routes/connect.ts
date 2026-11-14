@@ -164,16 +164,19 @@ connect.post('/:app/:id/messages', async (c) => {
   return c.json({ ok: true }, 201);
 });
 
-// A line comes down when its author asks, or when the host or events staff do.
+// A line comes down when its author asks, or when the host or events staff do. Its author may always take it down, even with their seat gone
+// (2026-11-14, All tables); anyone else needs a place at the event. Guarded, so a second send changes nothing.
 connect.delete('/:app/:id/messages/:mid', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const g = await guarded(c);
-  if ('error' in g) return g.error;
-  const row = await db.prepare('SELECT user_id FROM event_messages WHERE id = ? AND app = ? AND event_id = ? AND removed_by IS NULL').bind(c.req.param('mid'), g.ev.app, g.ev.id).first<{ user_id: string }>();
-  if (!row) return c.json({ error: 'not found' }, 404);
-  if (row.user_id !== user.id && g.ev.role !== 'host') return c.json({ error: 'only its author or the host can take a line down' }, 403);
-  await db.prepare('UPDATE event_messages SET removed_by = ? WHERE id = ?').bind(user.id, c.req.param('mid')).run();
+  const ev = await eventFor(db, user, c.req.param('app') ?? '', c.req.param('id') ?? '');
+  if (!ev) return c.json({ error: 'not found' }, 404);
+  const row = await db.prepare('SELECT user_id FROM event_messages WHERE id = ? AND app = ? AND event_id = ? AND removed_by IS NULL').bind(c.req.param('mid'), ev.app, ev.id).first<{ user_id: string }>();
+  const mine = row?.user_id === user.id;
+  if (!row || (!mine && !ev.role)) return c.json({ error: 'not found' }, 404);
+  if (!mine && ev.role !== 'host') return c.json({ error: 'only its author or the host can take a line down' }, 403);
+  const res = await db.prepare('UPDATE event_messages SET removed_by = ? WHERE id = ? AND removed_by IS NULL').bind(user.id, c.req.param('mid')).run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
   return c.json({ ok: true });
 });
 

@@ -2,7 +2,7 @@ import { openTurn, type Turn } from '../cronTick';
 import { Hono } from 'hono';
 import { DOC_COMMENT_MAX, isCurrency, monthShift, emptyInvoiceDoc, invoiceForClient, EXPENSE_CATEGORIES, INCOME_CATEGORIES, INVOICE_STATUSES, invoiceTotals, parseInvoiceDoc, type InvoiceDoc, type FinanceBudget, type FinanceDue, type FinanceGoal, type FinanceRecurring, type FinanceSplit, type FinanceSummary, type FinanceTransaction, type Invoice, type InvoiceItem, type Page } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { currencyOf, DATE_RE, dayInZone, nameOf, personDay, shiftDate, newId, notify, nowIso, num, oneOf, pageOf, paged, randomCode, str } from '../db';
+import { currencyOf, DATE_RE, dayInZone, GONE_NOW, nameOf, personDay, shiftDate, newId, notify, nowIso, num, objectBody, oneOf, pageOf, paged, randomCode, str } from '../db';
 
 /** Finance: a creator's money in and out, budgets and invoices. Nothing here touches points or payouts. */
 export const finance = new Hono<AppEnv>();
@@ -212,17 +212,52 @@ finance.post('/transactions', async (c) => {
   return c.json({ transaction: row ? toTx(row) : null }, 201);
 });
 
-// Replace the splits on a transaction, for example to mark an editor's share paid.
+/** Money the app booked (from an invoice, a due being settled or a month's recurring entry) is changed where it came from, never here. */
+const BOOKED_STAYS = 'The app booked this one from an invoice, a due or a monthly entry, so it stays as it was booked. Change it where it came from.';
+
+// Change a money entry: who and the note on any entry, and its splits (for example to mark an editor's share paid). The amount, in or out,
+// the category and the day change only on an entry the person typed themselves (2026-11-14, All tables, the founder: "each entry for the
+// original user"), so a paid invoice's income always matches its invoice. Each field alone keeps the rest.
 finance.patch('/transactions/:id', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const prev = await db.prepare('SELECT * FROM finance_transactions WHERE id = ? AND user_id = ?').bind(c.req.param('id'), user.id).first<TxRow>();
   if (!prev) return c.json({ error: 'not found' }, 404);
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
-  await db
-    .prepare('UPDATE finance_transactions SET counterparty = ?, note = ?, splits_json = ? WHERE id = ?')
-    .bind(str(body.counterparty, 80, prev.counterparty), str(body.note, 300, prev.note), 'splits' in body ? JSON.stringify(cleanSplits(body.splits, prev.amount_cents)) : prev.splits_json, prev.id)
+  const typed = ['amountCents', 'kind', 'category', 'date'].some((k) => k in body);
+  let amount = prev.amount_cents;
+  let kind = prev.kind;
+  let category = prev.category;
+  let date = prev.date;
+  if (typed) {
+    if (prev.source !== 'manual') return c.json({ error: BOOKED_STAYS }, 409);
+    if ('amountCents' in body) {
+      const n = Number(body.amountCents);
+      if (!Number.isInteger(n) || n <= 0 || n > 1_000_000_000) return c.json({ error: 'an amount above zero' }, 400);
+      amount = n;
+    }
+    if ('kind' in body) {
+      if (body.kind !== 'income' && body.kind !== 'expense') return c.json({ error: 'Pick money in or money out.' }, 400);
+      kind = body.kind;
+    }
+    const cats: readonly string[] = kind === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+    if ('category' in body) {
+      if (!cats.includes(String(body.category))) return c.json({ error: kind === 'income' ? 'That category is for money out. Pick one for money in.' : 'That category is for money in. Pick one for money out.' }, 400);
+      category = String(body.category);
+      // Money in or out changed alone: a category that no longer fits goes to that side's Other.
+    } else if (!cats.includes(category)) category = cats[cats.length - 1] as string;
+    if ('date' in body) {
+      if (typeof body.date !== 'string' || !DATE_RE.test(body.date)) return c.json({ error: 'Pick a real day.' }, 400);
+      date = body.date;
+    }
+    const split = parseSplits(prev.splits_json).reduce((s, x) => s + x.cents, 0);
+    if (!('splits' in body) && split > amount) return c.json({ error: 'Its splits add up to more than that. Change the splits in Finance first.' }, 400);
+  }
+  const res = await db
+    .prepare(`UPDATE finance_transactions SET counterparty = ?, note = ?, splits_json = ?, amount_cents = ?, kind = ?, category = ?, date = ? WHERE id = ? AND user_id = ?${typed ? " AND source = 'manual'" : ''}`)
+    .bind(str(body.counterparty, 80, prev.counterparty), str(body.note, 300, prev.note), 'splits' in body ? JSON.stringify(cleanSplits(body.splits, amount)) : prev.splits_json, amount, kind, category, date, prev.id, user.id)
     .run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
   const row = await db.prepare('SELECT * FROM finance_transactions WHERE id = ?').bind(prev.id).first<TxRow>();
   return c.json({ transaction: row ? toTx(row) : null });
 });
@@ -255,9 +290,13 @@ finance.post('/dues/:id/settle', async (c) => {
   const now = nowIso();
   // The person's own day, from the device (?day=), so a due settled late in the evening is booked on their day, not the server's.
   const today = personDay(c.req.query('day'), user.timezone);
-  // The status moves first and only from open: two taps at once settle (and book the money) once.
-  const moved = await db.prepare("UPDATE finance_dues SET status = 'settled', settled_at = ? WHERE id = ? AND user_id = ? AND status = 'open'").bind(now, d.id, user.id).run();
-  if (moved.meta.changes !== 1) return c.json({ error: 'not found, or already settled' }, 409);
+  // The status moves first and only from open: two taps at once settle (and book the money) once. It moves only from the amount and currency
+  // this read saw too, so a change to the due in another tab (All tables) in between never leaves the books holding another amount than the due.
+  const moved = await db
+    .prepare("UPDATE finance_dues SET status = 'settled', settled_at = ? WHERE id = ? AND user_id = ? AND status = 'open' AND amount_cents = ? AND currency = ?")
+    .bind(now, d.id, user.id, d.amount_cents, d.currency)
+    .run();
+  if (moved.meta.changes !== 1) return c.json({ error: 'It was settled or changed a moment ago. Read it again.' }, 409);
   const stmts = [
     db
       .prepare("INSERT INTO finance_transactions (id, user_id, kind, amount_cents, currency, category, counterparty, note, date, source, ref, splits_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'due', ?, '[]', ?)")
@@ -275,8 +314,44 @@ finance.post('/dues/:id/settle', async (c) => {
   return c.json({ ok: true });
 });
 
+// Change a due while it is still open (2026-11-14, All tables): who, how much, the note and the due day, each alone keeping the rest. A settled
+// one stays as it was booked, guarded in the write itself, so a settle in another tab is never written over.
+finance.patch('/dues/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const prev = await db.prepare('SELECT * FROM finance_dues WHERE id = ? AND user_id = ?').bind(c.req.param('id'), user.id).first<DueRow>();
+  if (!prev) return c.json({ error: 'not found' }, 404);
+  const settled = 'A settled due stays as it was booked.';
+  if (prev.status !== 'open') return c.json({ error: settled }, 409);
+  const body = await objectBody(c);
+  const counterparty = 'counterparty' in body ? str(body.counterparty, 80) : prev.counterparty;
+  if (!counterparty) return c.json({ error: 'Say who.' }, 400);
+  let amount = prev.amount_cents;
+  if ('amountCents' in body) {
+    const n = Number(body.amountCents);
+    if (!Number.isInteger(n) || n <= 0 || n > 1_000_000_000) return c.json({ error: 'an amount above zero' }, 400);
+    amount = n;
+  }
+  let dueDate = prev.due_date;
+  if ('dueDate' in body) {
+    if (body.dueDate === null || body.dueDate === '') dueDate = null;
+    else if (typeof body.dueDate === 'string' && DATE_RE.test(body.dueDate)) dueDate = body.dueDate;
+    else return c.json({ error: 'Pick a real day.' }, 400);
+  }
+  const note = 'note' in body ? str(body.note, 300) : prev.note;
+  const res = await db
+    .prepare("UPDATE finance_dues SET counterparty = ?, amount_cents = ?, note = ?, due_date = ? WHERE id = ? AND user_id = ? AND status = 'open'")
+    .bind(counterparty, amount, note, dueDate, prev.id, user.id)
+    .run();
+  if (!res.meta.changes) return c.json({ error: settled }, 409);
+  const row = await db.prepare('SELECT * FROM finance_dues WHERE id = ?').bind(prev.id).first<DueRow>();
+  return c.json({ due: row ? toDue(row) : null });
+});
+
+// A delete that found nothing answers 409 in words (`GONE_NOW`), never a quiet yes, so All tables counts each row once.
 finance.delete('/dues/:id', async (c) => {
-  await c.env.DB.prepare('DELETE FROM finance_dues WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  const res = await c.env.DB.prepare('DELETE FROM finance_dues WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: GONE_NOW }, 409);
   return c.json({ ok: true });
 });
 
@@ -302,14 +377,59 @@ finance.post('/recurring', async (c) => {
   return c.json({ recurring: row ? toRec(row) : null }, 201);
 });
 
+// Switch a monthly entry on or off (Finance sends `active`), and since 2026-11-14 (All tables) change its amount, category, who, note or day of
+// the month, each alone keeping the rest. A new day keeps the month the next entry is due in, so a month is never booked twice and never skipped:
+// a day already gone this month is booked on the next run, as a missed month always was.
 finance.patch('/recurring/:id', async (c) => {
-  const body = await c.req.json<{ active?: boolean }>().catch(() => ({}) as { active?: boolean });
-  await c.env.DB.prepare('UPDATE finance_recurring SET active = ? WHERE id = ? AND user_id = ?').bind(body.active === false ? 0 : 1, c.req.param('id'), c.get('user').id).run();
+  const db = c.env.DB;
+  const user = c.get('user');
+  const prev = await db.prepare('SELECT * FROM finance_recurring WHERE id = ? AND user_id = ?').bind(c.req.param('id'), user.id).first<RecRow>();
+  if (!prev) return c.json({ error: 'not found' }, 404);
+  const body = await objectBody(c);
+  let amount = prev.amount_cents;
+  if ('amountCents' in body) {
+    const n = Number(body.amountCents);
+    if (!Number.isInteger(n) || n <= 0 || n > 1_000_000_000) return c.json({ error: 'an amount above zero' }, 400);
+    amount = n;
+  }
+  let category = prev.category;
+  if ('category' in body) {
+    const cats: readonly string[] = prev.kind === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+    if (!cats.includes(String(body.category))) return c.json({ error: prev.kind === 'income' ? 'That category is for money out. Pick one for money in.' : 'That category is for money in. Pick one for money out.' }, 400);
+    category = String(body.category);
+  }
+  let day = prev.day_of_month;
+  let next = prev.next_date;
+  if ('dayOfMonth' in body) {
+    const n = Number(body.dayOfMonth);
+    if (!Number.isInteger(n) || n < 1 || n > 28) return c.json({ error: 'A day from 1 to 28.' }, 400);
+    day = n;
+    next = `${prev.next_date.slice(0, 7)}-${String(n).padStart(2, '0')}`;
+  }
+  // The day and the next date are written only when they change, and then only from the next date this read saw: the cron moves next_date
+  // on as it books a month (guarded on the date it read), so a write from a stale read would put a booked month back and book it twice.
+  const moves = day !== prev.day_of_month || next !== prev.next_date;
+  const res = await db
+    .prepare(`UPDATE finance_recurring SET active = ?, amount_cents = ?, category = ?, counterparty = ?, note = ?${moves ? ', day_of_month = ?, next_date = ?' : ''} WHERE id = ? AND user_id = ?${moves ? ' AND next_date = ? AND day_of_month = ?' : ''}`)
+    .bind(
+      'active' in body ? (body.active === false ? 0 : 1) : prev.active,
+      amount,
+      category,
+      str(body.counterparty, 80, prev.counterparty),
+      str(body.note, 300, prev.note),
+      ...(moves ? [day, next] : []),
+      prev.id,
+      user.id,
+      ...(moves ? [prev.next_date, prev.day_of_month] : []),
+    )
+    .run();
+  if (!res.meta.changes) return moves ? c.json({ error: 'A month was booked from it a moment ago. Read it again and pick the day once more.' }, 409) : c.json({ error: 'not found' }, 404);
   return c.json({ ok: true });
 });
 
 finance.delete('/recurring/:id', async (c) => {
-  await c.env.DB.prepare('DELETE FROM finance_recurring WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  const res = await c.env.DB.prepare('DELETE FROM finance_recurring WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: GONE_NOW }, 409);
   return c.json({ ok: true });
 });
 
@@ -346,13 +466,66 @@ finance.post('/goals/:id/add', async (c) => {
   return c.json({ ok: true });
 });
 
-finance.delete('/goals/:id', async (c) => {
-  await c.env.DB.prepare('DELETE FROM finance_goals WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+// Change a goal (2026-11-14, All tables): its name, target, by-day and, on a saving goal, how much is put aside so far (an earning goal counts
+// the money in by itself). Each field alone keeps the rest.
+finance.patch('/goals/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const prev = await db.prepare('SELECT * FROM finance_goals WHERE id = ? AND user_id = ?').bind(c.req.param('id'), user.id).first<GoalRow>();
+  if (!prev) return c.json({ error: 'not found' }, 404);
+  const body = await objectBody(c);
+  const title = 'title' in body ? str(body.title, 120) : prev.title;
+  if (!title) return c.json({ error: 'a name for the goal' }, 400);
+  const whole = (v: unknown, least: number): number | null => {
+    const n = Number(v);
+    return Number.isInteger(n) && n >= least && n <= 1_000_000_000_000 ? n : null;
+  };
+  const target = 'targetCents' in body ? whole(body.targetCents, 1) : prev.target_cents;
+  if (target === null) return c.json({ error: 'a target above zero' }, 400);
+  let saved = prev.saved_cents;
+  if ('savedCents' in body) {
+    if (prev.kind !== 'save') return c.json({ error: 'An earning goal counts your money in by itself.' }, 400);
+    const n = whole(body.savedCents, 0);
+    if (n === null) return c.json({ error: 'an amount of zero or more' }, 400);
+    saved = n;
+  }
+  let deadline = prev.deadline;
+  if ('deadline' in body) {
+    if (body.deadline === null || body.deadline === '') deadline = null;
+    else if (typeof body.deadline === 'string' && DATE_RE.test(body.deadline)) deadline = body.deadline;
+    else return c.json({ error: 'Pick a real day.' }, 400);
+  }
+  const res = await db.prepare('UPDATE finance_goals SET title = ?, target_cents = ?, saved_cents = ?, deadline = ? WHERE id = ? AND user_id = ?').bind(title, target, saved, deadline, prev.id, user.id).run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
   return c.json({ ok: true });
 });
 
+finance.delete('/goals/:id', async (c) => {
+  const res = await c.env.DB.prepare('DELETE FROM finance_goals WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: GONE_NOW }, 409);
+  return c.json({ ok: true });
+});
+
+// Only an entry the person typed themselves goes (2026-11-14, the route gap All tables found): money the app booked from an invoice, a due or a
+// month's recurring entry stays, so a paid invoice's income is never lost from the books. The assistant's Undo of an entry it added is a typed
+// one. Safe to send twice: a row already gone changes nothing and answers 409 in words, like the deletes above.
 finance.delete('/transactions/:id', async (c) => {
-  await c.env.DB.prepare('DELETE FROM finance_transactions WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  const db = c.env.DB;
+  const user = c.get('user');
+  const id = c.req.param('id');
+  const res = await db.prepare("DELETE FROM finance_transactions WHERE id = ? AND user_id = ? AND source = 'manual'").bind(id, user.id).run();
+  if (!res.meta.changes) return c.json({ error: (await db.prepare('SELECT 1 FROM finance_transactions WHERE id = ? AND user_id = ?').bind(id, user.id).first()) ? BOOKED_STAYS : GONE_NOW }, 409);
+  return c.json({ ok: true });
+});
+
+// One budget off (2026-11-14, All tables): its spending stays in money in and out. A table names a row by letters, digits and dashes, so the
+// category comes as its own words or with dashes for its spaces ("Other-expense").
+finance.delete('/budgets/:category', async (c) => {
+  const raw = c.req.param('category');
+  const category = EXPENSE_CATEGORIES.find((k) => k === raw || k.replace(/ /g, '-') === raw);
+  if (!category) return c.json({ error: 'not found' }, 404);
+  const res = await c.env.DB.prepare('DELETE FROM finance_budgets WHERE user_id = ? AND category = ?').bind(c.get('user').id, category).run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
   return c.json({ ok: true });
 });
 
@@ -437,10 +610,14 @@ export async function updateDraftInvoice(db: D1Database, userId: string, invoice
   return row ? toInvoice(row) : null;
 }
 
-/** Changes an invoice's status. Marking one paid books the income; taking a paid one back out removes it. Null when it is not the person's. */
-export async function setInvoiceStatus(db: D1Database, userId: string, invoiceId: string, wanted: unknown): Promise<Invoice | null> {
+/**
+ * Changes an invoice's status. Marking one paid books the income; taking a paid one back out removes it. Null when it is not the person's.
+ * `from` (2026-11-14, Agency's `ifStatus` for All tables): move only an invoice still in that state; else it comes back unchanged.
+ */
+export async function setInvoiceStatus(db: D1Database, userId: string, invoiceId: string, wanted: unknown, from?: string): Promise<Invoice | null> {
   const prev = await db.prepare(`${INV_SELECT} WHERE i.id = ? AND i.user_id = ?`).bind(invoiceId, userId).first<InvRow>();
   if (!prev) return null;
+  if (from !== undefined && prev.status !== from) return toInvoice(prev);
   const status = oneOf(wanted, INVOICE_STATUSES, prev.status);
   const now = nowIso();
   if (status === prev.status) return toInvoice(prev);

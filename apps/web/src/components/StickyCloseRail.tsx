@@ -9,8 +9,24 @@ import { STICKY_CLOSE_CHANGED, boxesAbove, scrollPanel, topBars, type StickyClos
  * here every reading only it uses (an export from StickyClose.tsx that only this file reads still ships in the entry).
  */
 
-/** A target inside one of these keeps its Escape: a popup, a menu or a control whose own popup is open. */
-const POPUP = '[role="listbox"], [role="menu"], [role="dialog"], [aria-modal="true"], [aria-haspopup][aria-expanded="true"], [role="combobox"][aria-expanded="true"]';
+/** A target inside one of these keeps its Escape: a popup, a menu or a control whose own popup is open, or a mode of the page that ends on
+ *  Escape and so owns the key over every close inside it (`data-owns-escape`: Apps' Select, whose Escape leaves Select and hands focus to
+ *  Done, never to a group's toggle; 2026-11-14). */
+const POPUP = '[role="listbox"], [role="menu"], [role="dialog"], [aria-modal="true"], [aria-haspopup][aria-expanded="true"], [role="combobox"][aria-expanded="true"], [data-owns-escape]';
+/** A field that takes typed words: a text area, an editable region, or an input that is not a box, a choice, a button, a slider, a colour,
+ *  a file or a picker of a day or a time (those come filled in). */
+const TYPED =
+  'textarea, [contenteditable]:not([contenteditable="false"]), input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="url"], input[type="tel"], input[type="password"], input[type="number"]';
+const holdsWords = (el: Element) => (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? el.value : (el.textContent ?? '')).trim() !== '';
+/** Escape never throws typed words away (2026-11-14): closing unmounts what the toggle opened, a half-written "Add a task" with it. So it
+ *  closes nothing from a field that holds words (the key is the field's: a search may clear itself on it), nor from anywhere in a form in
+ *  the root one of whose fields does (Escape on a form's button would lose the title too). The close itself still closes, in one tap. */
+function keepsWords(t: Element, root: HTMLElement): boolean {
+  const field = t.closest(TYPED);
+  if (field && holdsWords(field)) return true;
+  const form = t.closest('form');
+  return Boolean(form && root.contains(form) && [...form.querySelectorAll(TYPED)].some(holdsWords));
+}
 /** How close a nested close may come to the one round it before it tucks away: the 8px a stuck pair keeps (52px a level, 44px a button). */
 const TUCK_GAP = 8;
 /** The room the close needs at the root's right to stand outside it: a gap, the 44px button, a gap. */
@@ -127,12 +143,20 @@ export function StickyCloseRail({ onClose, label, tip, opener, anchor, escape = 
   latest.current = { onClose, opener, anchor };
   const openerOf = (root: HTMLElement) => latest.current.opener?.(root) ?? root.querySelector<HTMLElement>('[aria-expanded]');
 
-  const close = () => {
+  // Whether the press that clicks the close came from a mouse or a finger (a pointerdown on it), not the keyboard's Enter or Space.
+  const byPointer = useRef(false);
+  const close = (pointer = false) => {
     const root = rail.current?.parentElement;
     if (!root) return;
     const toggle = openerOf(root);
     const back = latest.current.anchor;
-    toggle?.focus({ preventScroll: true });
+    // The keyboard's ring follows the keyboard only (2026-11-14): after Enter, Space or Escape the toggle shows it; after a mouse or a
+    // finger it does not, even when focus was in a field (which always matches :focus-visible, so a toggle focused from it would show the
+    // ring too). The press itself moves focus off the field (the button takes it where the browser gives a pressed button focus), a field
+    // still focused (Safari gives a button none) lets go, and the toggle is focused with no ring where the browser takes that option.
+    const was = document.activeElement;
+    if (pointer && was instanceof HTMLElement && was !== toggle && root.contains(was)) was.blur();
+    toggle?.focus({ preventScroll: true, ...(pointer ? { focusVisible: false } : {}) } as FocusOptions);
     latest.current.onClose();
     // Closed from deep in the content, the toggle would be above the window: bring it back under the top bar.
     bringBackSoon(() => (back ? back(toggle, root) : toggle));
@@ -262,15 +286,16 @@ export function StickyCloseRail({ onClose, label, tip, opener, anchor, escape = 
   // Escape anywhere in the root closes it, read on the document once React and the content had their turn: a native listener, since a
   // React handler would also hear a key from a Sheet opened inside (React's events bubble through portals), and on the document, so a
   // control in the content that closes on Escape itself (and says so with preventDefault) keeps the key. The nearest open root owns it,
-  // and a row being dragged (SortableList, whose Escape puts it back, read on the window after this) keeps it too.
+  // and a row being dragged (SortableList, whose Escape puts it back, read on the window after this) keeps it too, as do typed words
+  // (`keepsWords`) and a word an input method is still composing.
   useEffect(() => {
     if (!escape) return;
     const root = rail.current?.parentElement;
     if (!root) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented || document.documentElement.classList.contains('kanban-drag')) return;
+      if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing || document.documentElement.classList.contains('kanban-drag')) return;
       const t = e.target instanceof Element ? e.target : null;
-      if (!t || !root.contains(t) || t.closest('[data-sticky-close]') !== root || t.closest(POPUP)) return;
+      if (!t || !root.contains(t) || t.closest('[data-sticky-close]') !== root || t.closest(POPUP) || keepsWords(t, root)) return;
       e.preventDefault();
       closeRef.current();
     };
@@ -305,9 +330,18 @@ export function StickyCloseRail({ onClose, label, tip, opener, anchor, escape = 
           small={!geo.out}
           tip={geo.out ? (tip ?? label) : false}
           className={row ? 'row-close' : 'sticky-close'}
-          // A mouse or a finger leaves focus where it was; the keyboard's Enter focuses the toggle, like a tap.
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={close}
+          // Either way the toggle takes focus after it; only the keyboard's way shows its ring (`close`).
+          onPointerDown={() => {
+            byPointer.current = true;
+          }}
+          onKeyDown={() => {
+            byPointer.current = false;
+          }}
+          onClick={() => {
+            const pointer = byPointer.current;
+            byPointer.current = false;
+            close(pointer);
+          }}
         />
       </span>
     </span>

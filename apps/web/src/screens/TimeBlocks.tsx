@@ -561,7 +561,9 @@ function Loaded({
  * (`children`) only once it is open. Open and taller than the room the window has, its close stays in view beside it (`StickyClose`,
  * 2026-11-14, the founder: "the close buttons that need one to scroll back top need the close button to be sticky outside the toggle
  * tab"): in the margin at the card's right where there is one, else down the card's own right edge, where the strip and the editor keep a
- * lane for it; the chevron keeps its slot unseen meanwhile, and Escape anywhere in the card closes it too. A short card is as it was.
+ * lane for it; the chevron keeps its slot unseen meanwhile, and Escape in the card closes it too, but never from the editor's form, whose
+ * words a close would throw away. The slots lay out by the room the editor has (`tb-slots`), so the lane never cuts a time short. A
+ * short card is as it was.
  */
 function TemplateCard({
   template: t,
@@ -607,7 +609,8 @@ function TemplateCard({
         <DayStrip slots={t.slots} blocks={blocks} className="w-full" />
       </div>
       {open && (
-        <div id={bodyId} className={`border-t border-line p-md ${STICKY_CLOSE_LANE}`}>
+        // `tb-slots`: the slots inside lay out by the room this body has, so the lane a close keeps never cuts a time (app.css).
+        <div id={bodyId} className={`tb-slots border-t border-line p-md ${STICKY_CLOSE_LANE}`}>
           {children}
         </div>
       )}

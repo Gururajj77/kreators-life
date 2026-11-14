@@ -69,9 +69,9 @@ On a phone, the tab bar sits at the bottom with five tabs:
 - **Apps:** every app you have, in groups.
 - **Profile:** your tags, your account, your badges and your data.
 
-At the top left sits the kreators.app logo, which takes you Home. At the top right are two buttons: the theme switch, for light or dark, and the apps menu. On a laptop, the tabs and your apps live in a sidebar on the left. You can fold it into a thin row of icons.
+At the top left sits the kreators.app logo, which takes you Home. At the top right are three buttons: the bell for your Inbox, the theme switch, for light or dark, and the apps menu. On a laptop, the tabs and your apps live in a sidebar on the left. You can fold it into a thin row of icons.
 
-The round button with Bumling at the bottom right is the assistant. A later lesson covers it.
+The round button with Bumling at the bottom right is the assistant. A later lesson covers it. On a long page, once you scroll down, a smaller round button with an up arrow shows just left of it. Tap it to go back to the top. Its thin ring fills as you scroll.
 
 ## Getting started
 

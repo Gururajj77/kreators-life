@@ -218,7 +218,7 @@ function ContentCard({ item, onChange }: { item: ContentItem; onChange: () => vo
           </button>
         </div>
       )}
-      <ConfirmDelete open={deleting} title="Delete this post?" body="The post and its tracked links go. Sales already credited stay. This cannot be undone." pending={remove.isPending} failed={remove.isError} onYes={() => remove.mutate()} onClose={() => setDeleting(false)} />
+      <ConfirmDelete open={deleting} title="Delete this post?" body="The post goes. Its tracked links keep working, and sales already credited stay. This cannot be undone." pending={remove.isPending} failed={remove.isError} onYes={() => remove.mutate()} onClose={() => setDeleting(false)} />
     </li>
   );
 }
@@ -258,7 +258,7 @@ function LinkCard({ link, goBase, onChange }: { link: TrackedLink; goBase: strin
           Remove
         </button>
       </div>
-      <ConfirmDelete open={deleting} title="Delete this link?" body="The link stops working. Sales already credited stay. This cannot be undone." pending={remove.isPending} failed={remove.isError} onYes={() => remove.mutate()} onClose={() => setDeleting(false)} />
+      <ConfirmDelete open={deleting} title="Delete this link?" body="The link stops working, and any Auto-DM that sends it goes too. Sales already credited stay. This cannot be undone." pending={remove.isPending} failed={remove.isError} onYes={() => remove.mutate()} onClose={() => setDeleting(false)} />
       {/* The QR code folds out inside the link's own card (2026-11-06: no sheet for a picture and a copy button). */}
       <Fold title="QR code" open={qrOpen} onOpenChange={setQrOpen} className="mt-sm">
         <div className="flex flex-col items-center gap-sm rounded-tile bg-paper p-sm">

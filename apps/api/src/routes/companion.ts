@@ -410,5 +410,13 @@ export function companionRoutes(appFetch: AppFetch) {
     return c.json({ ok: true });
   });
 
+  // One line of the chat, the person's own or an answer to them (All tables, 2026-11-14, the founder: "delete one Companion chat line"). It is
+  // the person's own chat, so either may go; the lines around it stay. Owner only; a second send finds nothing and says so.
+  companion.delete('/messages/:id', async (c) => {
+    const gone = await c.env.DB.prepare('DELETE FROM chat_messages WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+    if (!(gone.meta.changes ?? 0)) return c.json({ error: 'not found' }, 404);
+    return c.json({ ok: true });
+  });
+
   return companion;
 }

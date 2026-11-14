@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 import { MediaSection } from '../components/MediaSection';
 import { AppCover } from '../components/AppCover';
 import { Screen } from '../components/Screen';
@@ -56,7 +57,15 @@ export function Circles() {
       void q.refetch();
     },
   });
-  const leave = useMutation({ mutationFn: (id: string) => api.leaveCircle(id), onSuccess: () => q.refetch() });
+  // Leaving asks first in a sheet, with its own red yes (CLAUDE.md, Confirmations: leaving is one of the sheet's kinds; the review of 2026-11-14).
+  const [leaving, setLeaving] = useState<CircleEvent | null>(null);
+  const leave = useMutation({
+    mutationFn: (id: string) => api.leaveCircle(id),
+    onSuccess: () => {
+      setLeaving(null);
+      void q.refetch();
+    },
+  });
   const match = useMutation({ mutationFn: (id: string) => api.matchCircle(id), onSuccess: () => refresh() });
   const ready = (d?.interests.length ?? 0) >= 2 && Boolean(d?.city);
 
@@ -164,7 +173,17 @@ export function Circles() {
         {d && d.events.length === 0 && <p className="mt-xs m-0 text-subhead text-ink-soft">No circles here yet. The team opens them city by city; check Explore for other cities.</p>}
         <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
           {d?.events.map((e) => (
-            <EventCard key={e.id} e={e} ready={ready} busy={join.isPending || leave.isPending} onJoin={() => setJoining(e)} onLeave={() => leave.mutate(e.id)} />
+            <EventCard
+              key={e.id}
+              e={e}
+              ready={ready}
+              busy={join.isPending || leave.isPending}
+              onJoin={() => setJoining(e)}
+              onLeave={() => {
+                leave.reset();
+                setLeaving(e);
+              }}
+            />
           ))}
         </ul>
         <Pager page={d?.eventsPage} prefix="up" label="upcoming circles" only={TEN_A_PAGE} />
@@ -185,6 +204,18 @@ export function Circles() {
           setCodeError(error);
           void q.refetch();
         }}
+      />
+      <ConfirmDelete
+        open={leaving !== null}
+        title={leaving ? `Leave ${leaving.title}?` : 'Leave this circle?'}
+        body="Your place at it goes. Sign up again while it takes sign-ups."
+        yes="Yes, leave the circle"
+        keep="Keep my place"
+        pending={leave.isPending}
+        failed={leave.isError}
+        error={leave.error instanceof Error ? leave.error.message : undefined}
+        onYes={() => leaving && leave.mutate(leaving.id)}
+        onClose={() => setLeaving(null)}
       />
       <JoinSheet event={joining} onClose={() => setJoining(null)} busy={join.isPending} error={join.isError ? (join.error instanceof Error ? join.error.message : 'Could not join.') : null} onJoin={(status) => joining && join.mutate({ id: joining.id, status })} />
     </Screen>

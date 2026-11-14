@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { FOCUS_MAX_MINUTES, LOCALE, FOCUS_VIEWS, isFocusMode, isFocusView, type FocusRoundRow, weekStart, wellbeingLabel, type FocusBucket, type FocusResponse, type FocusTask, type FocusView, type LogKind, type RelationshipKey, type WellbeingLog, type WellbeingSummary, parseFocusSettings } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { DATE_RE, dateNearOwnDay, dateNearToday, likeFit, newId, nowIso, pageOf, paged, shiftDate, streakNow, TEN_A_PAGE } from '../db';
+import { DATE_RE, dateNearOwnDay, dateNearToday, GONE_NOW, likeFit, newId, nowIso, pageOf, paged, shiftDate, streakNow, TEN_A_PAGE } from '../db';
 import { parseMove } from '@kreators/shared/fitness';
 import { moveExtra } from '../fitness';
 
@@ -216,16 +216,73 @@ wellbeing.patch('/focus/:id', async (c) => {
   return c.json({ ok: true });
 });
 
+/** How a mindful log was made, as Mindfulness keeps it in `extra.kind`: a break or a breath from the panel, or none for one logged by hand. */
+const MINDFUL_FROM: Readonly<Record<string, string>> = Object.assign(Object.create(null) as Record<string, string>, { break: 'break', breathe: 'breathe' });
+
+// Change a mindful-minutes log (All tables, 2026-11-14, the founder: edit as well as delete): its minutes, and how it was made (`kind`: a
+// break, a breath, or null for one logged by hand). A log a focus round wrote keeps the round in step: its minutes change with the round's in
+// one batch, and it stays a focus round's (its kind is never changed here; Focus sessions is where the round lives). Owner only; pays nothing.
+wellbeing.patch('/mindful/:id', async (c) => {
+  const db = c.env.DB;
+  const userId = c.get('user').id;
+  const id = c.req.param('id');
+  const body = await c.req.json<{ minutes?: unknown; kind?: unknown }>().catch(() => ({}) as { minutes?: unknown; kind?: unknown });
+  const [log, owned] = await Promise.all([
+    db.prepare("SELECT id, extra FROM wellbeing_logs WHERE id = ? AND user_id = ? AND kind = 'mindful'").bind(id, userId).first<{ id: string; extra: string }>(),
+    db.prepare('SELECT 1 AS x FROM focus_rounds WHERE log_id = ? AND user_id = ?').bind(id, userId).first(),
+  ]);
+  if (!log) return c.json({ error: 'not found' }, 404);
+  const roundSays = 'A focus round’s minutes stay a focus round’s. Change its minutes here, or the round under Focus sessions.';
+  if (body.kind !== undefined && owned) return c.json({ error: roundSays }, 400);
+  const stmts: D1PreparedStatement[] = [];
+  if (body.minutes !== undefined) {
+    const m = typeof body.minutes === 'number' ? Math.round(body.minutes) : Number.NaN;
+    if (!Number.isFinite(m) || m < 1 || m > FOCUS_MAX_MINUTES) return c.json({ error: `Mindful minutes are 1 to ${FOCUS_MAX_MINUTES} at a time.` }, 400);
+    stmts.push(db.prepare("UPDATE wellbeing_logs SET value = ? WHERE id = ? AND user_id = ? AND kind = 'mindful'").bind(m, log.id, userId));
+    // The round that wrote it, if any, moves with it (the same pair PATCH /focus/:id keeps from the other side).
+    stmts.push(db.prepare('UPDATE focus_rounds SET minutes = ? WHERE log_id = ? AND user_id = ?').bind(m, log.id, userId));
+  }
+  if (body.kind !== undefined) {
+    if (body.kind === 'focus') return c.json({ error: 'Only a focus round counts as one. Add a session in Mindfulness.' }, 400);
+    const kind = body.kind === null ? null : typeof body.kind === 'string' ? (MINDFUL_FROM[body.kind] ?? '') : '';
+    if (kind === '') return c.json({ error: 'Pick a break, a breath, or logged by hand.' }, 400);
+    let extra: Record<string, unknown> = {};
+    try {
+      const v = JSON.parse(log.extra || '{}') as unknown;
+      if (v && typeof v === 'object' && !Array.isArray(v)) extra = v as Record<string, unknown>;
+    } catch {
+      extra = {};
+    }
+    const next = { ...extra };
+    if (kind === null) delete next.kind;
+    else next.kind = kind;
+    // Guarded on what was read and on no round owning it, inside the statement: a round's log stays a focus round's.
+    stmts.push(
+      db
+        .prepare("UPDATE wellbeing_logs SET extra = ? WHERE id = ? AND user_id = ? AND kind = 'mindful' AND extra IS ? AND NOT EXISTS (SELECT 1 FROM focus_rounds f WHERE f.log_id = wellbeing_logs.id AND f.user_id = ?)")
+        .bind(JSON.stringify(next), log.id, userId, log.extra, userId),
+    );
+  }
+  if (stmts.length === 0) return c.json({ error: 'nothing to change' }, 400);
+  const done = await db.batch(stmts);
+  // A kind that did not land: a round took the log, or another tab changed it, between the read and the write.
+  if (body.kind !== undefined && !done[done.length - 1]!.meta.changes) return c.json({ error: 'changed' }, 409);
+  if (body.minutes !== undefined && !done[0]!.meta.changes) return c.json({ error: 'not found' }, 404);
+  return c.json({ ok: true });
+});
+
 // Delete a round, and its mindful-minutes log when it had one. Only the person's own.
 wellbeing.delete('/focus/:id', async (c) => {
   const db = c.env.DB;
   const userId = c.get('user').id;
   const round = await db.prepare('SELECT id, log_id FROM focus_rounds WHERE id = ? AND user_id = ?').bind(c.req.param('id'), userId).first<{ id: string; log_id: string | null }>();
   if (!round) return c.json({ error: 'not found' }, 404);
-  await db.batch([
+  const [gone] = await db.batch([
     db.prepare('DELETE FROM focus_rounds WHERE id = ? AND user_id = ?').bind(round.id, userId),
     ...(round.log_id ? [db.prepare('DELETE FROM wellbeing_logs WHERE id = ? AND user_id = ?').bind(round.log_id, userId)] : []),
   ]);
+  // Another tab, or a second send, took it between the read above and here: said, never a quiet yes, so All tables counts it once.
+  if (!gone?.meta.changes) return c.json({ error: GONE_NOW }, 409);
   return c.json({ ok: true });
 });
 
@@ -380,11 +437,17 @@ wellbeing.post('/:kind', async (c) => {
   return c.json({ log: row ? toLog(row) : null, summary: await summaryFor(db, user.id, date, streakNow(user.streak, user.last_checkin, date)) }, 201);
 });
 
-// The kind in the path is part of the address: a sleep id under /mood/ deletes nothing and says so.
+// The kind in the path is part of the address: a sleep id under /mood/ deletes nothing and says so. Mindful minutes a focus round wrote go
+// with the round's mark in the same batch (2026-11-14): the round stays, no longer counted as mindful minutes, so it never points at a log
+// that is gone (`focus_rounds.log_id`).
 wellbeing.delete('/:kind/:id', async (c) => {
+  const db = c.env.DB;
   const kind = c.req.param('kind');
   if (!isKind(kind)) return c.json({ error: 'unknown log' }, 404);
-  const res = await c.env.DB.prepare('DELETE FROM wellbeing_logs WHERE id = ? AND user_id = ? AND kind = ?').bind(c.req.param('id'), c.get('user').id, kind).run();
+  const id = c.req.param('id');
+  const userId = c.get('user').id;
+  const del = db.prepare('DELETE FROM wellbeing_logs WHERE id = ? AND user_id = ? AND kind = ?').bind(id, userId, kind);
+  const res = kind === 'mindful' ? (await db.batch([db.prepare('UPDATE focus_rounds SET log_id = NULL WHERE log_id = ? AND user_id = ?').bind(id, userId), del]))[1]! : await del.run();
   if (res.meta.changes === 0) return c.json({ error: 'not found' }, 404);
   return c.json({ ok: true });
 });

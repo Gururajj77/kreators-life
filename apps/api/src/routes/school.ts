@@ -283,6 +283,30 @@ export async function uninviteFromProgram(db: D1Database, programId: string, use
   return true;
 }
 
+/**
+ * The invited person turns an invite down (2026-11-14, the founder's yes, from All tables): their own invite, only while not taken up (no place
+ * in one of its cohorts, the rule a block's take-back keeps, blockAsks.ts), guarded on the row, so a second send changes nothing twice (404).
+ * Nobody is told, as a no to the team's friend suggestion; a team row in Connect people that pointed at it ends with it.
+ */
+school.delete('/programs/:id/invite', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const programId = c.req.param('id');
+  const now = nowIso();
+  const [gone] = await db.batch([
+    db
+      .prepare("DELETE FROM program_invites WHERE program_id = ?1 AND user_id = ?2 AND NOT EXISTS (SELECT 1 FROM enrollments e JOIN cohorts k ON k.id = e.cohort_id WHERE k.program_id = ?1 AND e.learner_user_id = ?2 AND e.status != 'withdrawn')")
+      .bind(programId, user.id),
+    db.prepare("UPDATE team_connections SET ended_at = ? WHERE kind = 'program' AND ref_id = ? AND first_user_id = ? AND ended_at IS NULL AND came_true_at IS NULL AND changes() = 1").bind(now, programId, user.id),
+  ]);
+  if (!gone?.meta.changes) {
+    const invited = await db.prepare('SELECT 1 AS x FROM program_invites WHERE program_id = ? AND user_id = ?').bind(programId, user.id).first();
+    return invited ? c.json({ error: 'You joined one of its cohorts, so the invite stays.' }, 409) : c.json({ error: 'There is no invite of yours to that program.' }, 404);
+  }
+  await audit(db, user.id, 'program.decline', 'program', programId, '', '');
+  return c.json({ ok: true });
+});
+
 // Taking an invite back. Someone who already enrolled keeps their seat, as with an archived program.
 school.delete('/programs/:id/invites/:userId', async (c) => {
   const db = c.env.DB;
@@ -709,6 +733,40 @@ school.patch('/cohorts/:id/manager', async (c) => {
   return c.json({ ok: true, managerId: person.id, managerName: nameOf(person) });
 });
 
+/**
+ * A cohort's name and seats (2026-11-14, from All tables): whoever runs it (cohortRole's manager, as for its sessions). The name as the cohort
+ * was opened with (1 to 80 characters); seats from 1 to 1,000 and never fewer than the people in it now, checked inside the one guarded write,
+ * so a place taken at that moment is never squeezed out. Its dates stay as it opened. Audited with the old name and what changed.
+ */
+school.patch('/cohorts/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const id = c.req.param('id');
+  const role = await cohortRole(db, user, id);
+  if (!role) return c.json({ error: 'not found' }, 404);
+  if (!role.manager) return c.json({ error: 'Whoever runs this cohort changes it.' }, 403);
+  const body = await objectBody(c);
+  const prev = await db.prepare("SELECT name, capacity, (SELECT COUNT(*) FROM enrollments e WHERE e.cohort_id = k.id AND e.status != 'withdrawn') AS joined FROM cohorts k WHERE k.id = ?").bind(id).first<{ name: string; capacity: number; joined: number }>();
+  if (!prev) return c.json({ error: 'not found' }, 404);
+  if ('name' in body && !str(body.name, 80)) return c.json({ error: 'Give the cohort a name.' }, 400);
+  const name = 'name' in body ? str(body.name, 80) : prev.name;
+  let seats = prev.capacity;
+  if ('capacity' in body) {
+    const n = typeof body.capacity === 'number' ? body.capacity : Number.NaN;
+    if (!Number.isInteger(n) || n < 1 || n > 1000) return c.json({ error: 'Seats go from 1 to 1,000.' }, 400);
+    if (n < prev.joined) return c.json({ error: `${formatCount(prev.joined)} people are in it, so it needs at least that many seats.` }, 400);
+    seats = n;
+  }
+  const res = await db
+    .prepare("UPDATE cohorts SET name = ?1, capacity = ?2 WHERE id = ?3 AND ?2 >= (SELECT COUNT(*) FROM enrollments e WHERE e.cohort_id = ?3 AND e.status != 'withdrawn')")
+    .bind(name, seats, id)
+    .run();
+  if (!res.meta.changes) return c.json({ error: 'Someone joined a moment ago, so it needs more seats. Read it again.' }, 409);
+  const changed = [name !== prev.name ? 'name' : '', seats !== prev.capacity ? 'seats' : ''].filter(Boolean);
+  if (changed.length) await audit(db, user.id, 'cohort.edit', 'cohort', id, prev.name, changed.join(', '));
+  return c.json({ ok: true, name, capacity: seats });
+});
+
 // Enrol: capacity is checked and the seat taken in one statement.
 school.post('/cohorts/:id/enroll', async (c) => {
   const db = c.env.DB;
@@ -880,6 +938,24 @@ school.post('/assignments/:id/submit', async (c) => {
   return c.json({ ok: true }, 201);
 });
 
+/**
+ * Take a hand-in back (2026-11-14, from All tables): the learner's own, only while it waits and nobody has written feedback on it, in one
+ * guarded statement, so a second send deletes nothing more (409 in words, or 404 for someone else's). It can be handed in again from the cohort.
+ */
+school.delete('/submissions/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const id = c.req.param('id');
+  const res = await db
+    .prepare("DELETE FROM submissions WHERE id = ?1 AND learner_user_id = ?2 AND status = 'submitted' AND NOT EXISTS (SELECT 1 FROM submission_feedback f WHERE f.submission_id = ?1)")
+    .bind(id, user.id)
+    .run();
+  if (res.meta.changes) return c.json({ ok: true });
+  const still = await db.prepare('SELECT status FROM submissions WHERE id = ? AND learner_user_id = ?').bind(id, user.id).first<{ status: string }>();
+  if (!still) return c.json({ error: 'not found' }, 404);
+  return c.json({ error: 'Someone gave feedback on it, so it stays.' }, 409);
+});
+
 school.post('/submissions/:id/feedback', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
@@ -928,6 +1004,28 @@ school.post('/sessions/:id/attendance', async (c) => {
     if (!enrolled) return c.json({ error: 'you are not in this cohort' }, 403);
   }
   await db.prepare("INSERT OR IGNORE INTO attendance (session_id, user_id, status, checked_in_at) VALUES (?, ?, 'present', ?)").bind(s.id, target, nowIso()).run();
+  return c.json({ ok: true });
+});
+
+/**
+ * Leave a cohort (2026-11-14, the founder's yes, from All tables): the learner's own place, only while they are in it, moved to withdrawn in
+ * one guarded statement, so a second send leaves nothing twice. No refund: the points or money paid stay paid, and a discount code's use stays
+ * used. The seat comes free (every count leaves withdrawn out), their hand-ins stay as they were, and they cannot join this cohort again (enrol
+ * takes one row a person). Whoever runs it is told; audited.
+ */
+school.post('/enrollments/:id/leave', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const id = c.req.param('id');
+  const res = await db.prepare("UPDATE enrollments SET status = 'withdrawn' WHERE id = ? AND learner_user_id = ? AND status = 'enrolled'").bind(id, user.id).run();
+  const e = await db
+    .prepare('SELECT e.status, k.id AS cohort_id, k.name, k.manager_user_id FROM enrollments e JOIN cohorts k ON k.id = e.cohort_id WHERE e.id = ? AND e.learner_user_id = ?')
+    .bind(id, user.id)
+    .first<{ status: string; cohort_id: string; name: string; manager_user_id: string | null }>();
+  if (!e) return c.json({ error: 'not found' }, 404);
+  if (!res.meta.changes) return c.json({ error: e.status === 'withdrawn' ? 'You left this cohort already.' : 'You finished this program, so your place stays.' }, 409);
+  await audit(db, user.id, 'enrollment.leave', 'enrollment', id, 'enrolled', 'withdrawn');
+  if (e.manager_user_id && e.manager_user_id !== user.id) await notify(db, e.manager_user_id, 'school', `${nameOf(user)} left ${e.name}`, '', `/school/${e.cohort_id}`);
   return c.json({ ok: true });
 });
 

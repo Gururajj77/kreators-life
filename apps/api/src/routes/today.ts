@@ -790,6 +790,34 @@ today.delete('/not-to-do/:id', async (c) => {
   return c.json({ ok: true });
 });
 
+// Rename an item or move it to another pillar (2026-11-14, All tables: the owner's own edit, never a coach's or AI chat's). Each field only when
+// sent, checked as the create route checks it. The xp its kept days already earned stays where it went; a kept day after this pays the new
+// pillar. Owner only, in the statement itself; an id that is not the person's answers 404. Limit `prefs`.
+today.patch('/not-to-do/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const body = await c.req.json<{ title?: unknown; relationship?: unknown }>().catch(() => ({}) as { title?: unknown; relationship?: unknown });
+  const sets: string[] = [];
+  const binds: unknown[] = [];
+  if ('title' in body) {
+    const title = typeof body.title === 'string' ? body.title.trim() : '';
+    if (!title) return c.json({ error: 'Say what you are staying away from.' }, 400);
+    if (title.length > NOT_TO_DO_TITLE_MAX) return c.json({ error: `Keep it to ${NOT_TO_DO_TITLE_MAX} characters.` }, 400);
+    sets.push('title = ?');
+    binds.push(title);
+  }
+  if ('relationship' in body) {
+    const r = body.relationship;
+    if (r !== null && !(typeof r === 'string' && RELATIONSHIPS.some((x) => x.key === r))) return c.json({ error: 'Pick one of the seven pillars, or none.' }, 400);
+    sets.push('relationship = ?');
+    binds.push(r);
+  }
+  if (!sets.length) return c.json({ error: 'Send a title or a pillar to change.' }, 400);
+  const r = await db.prepare(`UPDATE not_to_do SET ${sets.join(', ')} WHERE id = ? AND user_id = ?`).bind(...binds, c.req.param('id'), user.id).run();
+  if (!r.meta.changes) return c.json({ error: 'not found' }, 404);
+  return c.json({ ok: true });
+});
+
 // What kind of day it is (DAY_TYPES in shared): one row per person per day, owner only. It only changes how Daily sorts tasks.
 // The day comes from the device: `today` is the person's own today (near the server's), and `date` is that day or the next.
 function dayTypeDay(date: unknown, today: unknown): string | null {

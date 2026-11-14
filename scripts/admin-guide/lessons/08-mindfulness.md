@@ -65,7 +65,7 @@ These settings are saved on her account, so they follow her to her laptop.
 - **Today:** under the panel, today's sessions, newest first. Each has **Continue** to start the same clock again. She taps a row to change its length or task, or to delete it.
 - **Add a session I forgot:** adds one for today or yesterday.
 - **How productive you were:** focus time and tasks ticked, by Days, Weeks or Months, in Minutes or Hours.
-- **Sessions:** her mindful logs. Each has a trash button. One tap turns it red with **Tap again to delete**; a second tap deletes the session, and a wait of a few seconds puts it back.
+- **Sessions:** her mindful logs. Each has a trash button. One tap turns it red with **Tap again to delete**; a second tap deletes the session, and a wait of a few seconds puts it back. To change a session's minutes, she opens its table in **All tables**.
 
 > **Pro tip:** on a laptop, Space starts or pauses, S stops and K skips in Pomodoro. Press ? to see the list. Keys never fire while she types in a box.
 

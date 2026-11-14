@@ -34,6 +34,38 @@ club.post('/apply', async (c) => {
   return c.json({ ok: true }, 201);
 });
 
+/**
+ * Change your note, or withdraw the application, while it waits for a reviewer (2026-11-14, All tables: Edit and Delete for the owner). Each
+ * write is guarded on the application still waiting, so a reviewer's decision made a moment before is never changed or undone.
+ */
+const whyNotWaiting = async (db: D1Database, userId: string) => {
+  const prev = await db.prepare('SELECT status FROM memberships WHERE user_id = ?').bind(userId).first<{ status: string }>();
+  return prev ? { error: 'A reviewer already decided, so it stays as it is.', code: 409 as const } : { error: 'not found', code: 404 as const };
+};
+club.patch('/apply', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const body = await c.req.json<{ note?: unknown }>().catch(() => ({}) as { note?: unknown });
+  if (typeof body.note !== 'string') return c.json({ error: 'Say what your note should be.' }, 400);
+  if (body.note.trim().length > 2000) return c.json({ error: 'Keep your note to 2,000 characters.' }, 400);
+  const res = await db.prepare("UPDATE memberships SET note = ? WHERE user_id = ? AND status = 'applied'").bind(str(body.note, 2000), user.id).run();
+  if (!res.meta.changes) {
+    const why = await whyNotWaiting(db, user.id);
+    return c.json({ error: why.error }, why.code);
+  }
+  return c.json({ ok: true });
+});
+club.delete('/apply', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const res = await db.prepare("DELETE FROM memberships WHERE user_id = ? AND status = 'applied'").bind(user.id).run();
+  if (!res.meta.changes) {
+    const why = await whyNotWaiting(db, user.id);
+    return c.json({ error: why.error }, why.code);
+  }
+  return c.json({ ok: true });
+});
+
 club.post('/memberships/:id', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');

@@ -24,7 +24,7 @@ import { hashPassword, randomHex, safeEqual } from './auth';
 import { sendEmail, track } from '../ops';
 import { deleteAccount, StillClosing } from '../account';
 import { askToCoach, isCoach } from '../coaching';
-import { currencyOf, parseSocials } from '../db';
+import { currencyOf, GONE_NOW, parseSocials } from '../db';
 import { appPrefsProblem, dailyViewProblem, parseDailyView, datePrefsProblem, isAutoHandle, isCurrency, MAX_INTERESTS, parseAppPrefs, parseDatePrefs, parseIdentities, parseLinkBlocks, passwordProblem, TRACKED_EVENTS, type TrackedEvent } from '@kreators/shared';
 import type { Organization, PortfolioItem } from '@kreators/shared';
 
@@ -278,8 +278,32 @@ me.post('/portfolio', async (c) => {
   return c.json({ item: row ? toPortfolio(row) : null }, 201);
 });
 
+// Change a piece of work on your Public page (2026-11-14, All tables): its title, its words, its link and who sees it, each alone keeping the
+// rest, with POST's own rules (a link that is not http or https is refused out loud).
+me.patch('/portfolio/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const prev = await db.prepare('SELECT * FROM portfolio_items WHERE id = ? AND user_id = ?').bind(c.req.param('id'), user.id).first<PortfolioRow>();
+  if (!prev) return c.json({ error: 'not found' }, 404);
+  const body = await objectBody(c);
+  const title = 'title' in body ? str(body.title, 120) : prev.title;
+  if (!title) return c.json({ error: 'a title for the piece' }, 400);
+  const url = 'url' in body ? httpUrl(body.url) : prev.url;
+  if (!url) return c.json({ error: LINK_PROBLEM }, 400);
+  if ('visibility' in body && body.visibility !== 'public' && body.visibility !== 'private') return c.json({ error: 'Pick who sees it.' }, 400);
+  const visibility = 'visibility' in body ? (body.visibility === 'private' ? 'private' : 'public') : prev.visibility;
+  const res = await db
+    .prepare('UPDATE portfolio_items SET title = ?, description = ?, url = ?, visibility = ? WHERE id = ? AND user_id = ?')
+    .bind(title, 'description' in body ? str(body.description, 500) : prev.description, url, visibility, prev.id, user.id)
+    .run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
+  const row = await db.prepare('SELECT * FROM portfolio_items WHERE id = ?').bind(prev.id).first<PortfolioRow>();
+  return c.json({ item: row ? toPortfolio(row) : null });
+});
+
 me.delete('/portfolio/:id', async (c) => {
-  await c.env.DB.prepare('DELETE FROM portfolio_items WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  const res = await c.env.DB.prepare('DELETE FROM portfolio_items WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: GONE_NOW }, 409);
   return c.json({ ok: true });
 });
 

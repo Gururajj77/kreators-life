@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Organization, OrganizationMember } from '@kreators/shared';
 import { CONNECT_ADMIN_ONLY, type OrgInvite } from '@kreators/shared/connect';
 import type { AppEnv, UserRow } from '../env';
-import { audit, blockedByName, can, DELETED_NAME, nameOf, newId, noteStmt, notify, nowIso, objectBody, oneOf, orgRole, str } from '../db';
+import { audit, blockedByName, can, DELETED_NAME, nameOf, newId, noteStmt, notifyMany, nowIso, objectBody, oneOf, orgRole, str } from '../db';
 import { connectionsCameTrue } from '../invites';
 import { adminHolds } from '../connectRank';
 
@@ -112,7 +112,39 @@ orgs.delete('/:id/members/:userId', async (c) => {
   // By rank (connectRank.ts): an ask an admin or the key made through Connect people is an admin's to take back, or the brand's own
   // owner's, never talent staff's, so Connect people's 403 is not one step from a 200 here (2026-11-10, the break-it check).
   if (!owner && user.role !== 'admin' && (await adminHolds(db, 'org', id, c.req.param('userId')))) return c.json({ error: CONNECT_ADMIN_ONLY }, 403);
-  await withdrawFromOrg(db, id, c.req.param('userId'), ['active', 'invited']);
+  // Says whether a row went (2026-11-14, for All tables): an owner stays, and someone already off the team is not taken off twice.
+  if (!(await withdrawFromOrg(db, id, c.req.param('userId'), ['active', 'invited']))) return c.json({ error: 'They are not on this team, or they own it, so nothing changed.' }, 404);
+  return c.json({ ok: true });
+});
+
+/**
+ * Leave a brand's team (2026-11-14, from All tables): the person's own membership, never the last owner (who would leave a brand nobody runs;
+ * 409 in words), in one guarded statement, so a second send leaves nothing twice (404). The team's Connect row ends with it, and the owners
+ * still on the team are told. Core, like the answer to an ask: Army being off never keeps someone on a team.
+ */
+orgs.delete('/:id/membership', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const id = c.req.param('id');
+  const org = await db.prepare('SELECT id, name FROM organizations WHERE id = ?').bind(id).first<{ id: string; name: string }>();
+  if (!org) return c.json({ error: 'not found' }, 404);
+  const now = nowIso();
+  const [gone] = await db.batch([
+    db
+      .prepare(
+        "DELETE FROM organization_members WHERE organization_id = ?1 AND user_id = ?2 AND status = 'active' AND (role != 'owner' OR (SELECT COUNT(*) FROM organization_members o WHERE o.organization_id = ?1 AND o.role = 'owner' AND o.status = 'active') > 1)",
+      )
+      .bind(id, user.id),
+    db.prepare("UPDATE team_connections SET ended_at = ? WHERE kind = 'org' AND ref_id = ? AND first_user_id = ? AND ended_at IS NULL AND changes() = 1").bind(now, id, user.id),
+  ]);
+  if (!gone?.meta.changes) {
+    const role = await orgRole(db, id, user.id);
+    return role === 'owner' ? c.json({ error: 'You are its only owner, so you stay with it.' }, 409) : c.json({ error: 'You are not on this team.' }, 404);
+  }
+  const owners = await db.prepare("SELECT user_id FROM organization_members WHERE organization_id = ? AND role = 'owner' AND status = 'active' LIMIT 20").bind(id).all<{ user_id: string }>();
+  // One round trip for every owner (`notifyMany`), so a leave costs the same however many own the brand (a table's bulk remove sends several).
+  await notifyMany(db, owners.results.map((o) => o.user_id), 'org', `${nameOf(user)} left ${org.name}`, 'They no longer see its campaigns in Army.', '/army');
+  await audit(db, user.id, 'org.leave', 'organization', id, '', '');
   return c.json({ ok: true });
 });
 
@@ -167,7 +199,7 @@ myOrgInvites.post('/:orgId/answer', async (c) => {
   }
   await db.prepare("UPDATE team_connections SET answered_at = ? WHERE kind = 'org' AND ref_id = ? AND first_user_id = ? AND ended_at IS NULL AND answered_at IS NULL").bind(now, orgId, user.id).run();
   const owners = await db.prepare("SELECT user_id FROM organization_members WHERE organization_id = ? AND role = 'owner' AND status = 'active' LIMIT 20").bind(orgId).all<{ user_id: string }>();
-  for (const o of owners.results) await notify(db, o.user_id, 'org', `${nameOf(user)} joined ${org.name}`, 'They can see its campaigns in Army now.', '/army');
+  await notifyMany(db, owners.results.map((o) => o.user_id), 'org', `${nameOf(user)} joined ${org.name}`, 'They can see its campaigns in Army now.', '/army');
   await audit(db, user.id, 'org.invite.answer', 'organization', orgId, '', { yes: true });
   // A team's ask that came true pays once (invites.ts).
   await connectionsCameTrue(db, 'org', { refId: orgId, userId: user.id });

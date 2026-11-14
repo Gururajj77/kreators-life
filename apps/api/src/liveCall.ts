@@ -92,6 +92,23 @@ export async function askForCall(db: D1Database, env: Env, user: UserRow): Promi
 }
 
 /**
+ * Withdraw an ask (2026-11-14, All tables, the owner's own): only while it is `asked`, so no payment window was ever opened for it and nothing
+ * was charged. The status moves first, guarded on `asked` and on the owner in the statement itself, and only the move that happened tells the
+ * team, so two taps withdraw it once and tell them once. One being paid for, paid, booked or done stays for the books. The person can ask again.
+ */
+export async function withdrawCall(db: D1Database, user: UserRow, id: string): Promise<'withdrawn' | 'gone' | 'already' | 'moved'> {
+  const now = nowIso();
+  const moved = await db.prepare("UPDATE call_requests SET status = 'cancelled', updated_at = ? WHERE id = ? AND user_id = ? AND status = 'asked'").bind(now, id, user.id).run();
+  if (moved.meta.changes !== 1) {
+    const row = await db.prepare('SELECT status FROM call_requests WHERE id = ? AND user_id = ?').bind(id, user.id).first<{ status: LiveCallStatus }>();
+    return !row ? 'gone' : row.status === 'cancelled' ? 'already' : 'moved';
+  }
+  await logEvent(db, 'call', id, 'call.withdrawn');
+  await tellAdmins(db, `${nameOf(user)} withdrew their ask for a live call`, 'Nothing was charged, so there is no time to set and nothing to pay back.');
+  return 'withdrawn';
+}
+
+/**
  * One provider event for a live call, from the payment webhook (after its signature was checked) or the admin's replay.
  * Answers null when the event is not about a call, so the caller goes on to orders.
  */

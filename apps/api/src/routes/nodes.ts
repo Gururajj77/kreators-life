@@ -3,7 +3,7 @@ import { addDays, daysBetween, DONE_PAGE_SIZE, DONE_PAGE_SIZES, isNodeKind, isRe
 import type { AppEnv } from '../env';
 import { TIME_RE } from '@kreators/shared';
 import { ancestorsOf, DATE_RE, diffBadges, getNode, newId, nowIso, pageOf, paged, readyFromNow, toNode, type NodeRow, taskGate, readyAtFor, withSubtasks, badgeState, getUser, keptStats, statsAfterTick, storeStats } from '../db';
-import { dateNearToday, personDay, shiftDate } from '../db';
+import { dateNearToday, GONE_NOW, personDay, shiftDate } from '../db';
 import { hiddenUntilFor, parseTaskHide, taskHideProblem } from '@kreators/shared';
 import { blockFromBody, dayPlan, loadBlocking } from '../timeBlocks';
 import { blockDayMinutes, parsePlaceDay, type BreakdownResponse, type PlaceDayResponse } from '@kreators/shared';
@@ -471,7 +471,8 @@ nodes.patch('/subtasks/:sid', async (c) => {
 });
 
 nodes.delete('/subtasks/:sid', async (c) => {
-  await c.env.DB.prepare('DELETE FROM subtasks WHERE id = ? AND user_id = ?').bind(c.req.param('sid'), c.get('user').id).run();
+  const res = await c.env.DB.prepare('DELETE FROM subtasks WHERE id = ? AND user_id = ?').bind(c.req.param('sid'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: GONE_NOW }, 409);
   return c.json({ ok: true });
 });
 
@@ -494,7 +495,8 @@ nodes.delete('/:id', async (c) => {
     )
     .bind(row.id, user.id, onlyArchived)
     .run();
-  if (onlyArchived && !(done.meta.changes ?? 0)) return c.json({ error: 'It is not in your archive any more.' }, 409);
+  // Nothing went: brought back from the archive, or another tab (or a second send of the same delete) took it between the read above and here.
+  if (!(done.meta.changes ?? 0)) return c.json({ error: onlyArchived ? 'It is not in your archive any more.' : GONE_NOW }, 409);
   return c.json({ ok: true });
 });
 

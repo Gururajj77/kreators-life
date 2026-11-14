@@ -179,6 +179,9 @@ describe('All tables: You (2026-11-14)', () => {
       lifeCoaches: ['daily', 'pillars', 'routine', 'lifeMap', 'reflection', 'patterns'],
       coachCard: ['about', 'open'],
       calendarLink: ['on'],
+      // Essentials (2026-11-14): a code's private label, and a message the team has not answered (dataTables.essentials.test.ts).
+      inviteCodes: ['label'],
+      teamMessages: ['subject', 'words'],
     });
     for (const k of BATCH) if (editable(k).length === 0) expect(dataTableByKey[k]!.readOnlyWhy, k).toBeTruthy();
     const coaches = dataTableByKey.lifeCoaches!;

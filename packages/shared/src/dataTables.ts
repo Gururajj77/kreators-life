@@ -49,7 +49,12 @@
 //                                           X-Table-Capped: 1 when more matched. Limits `tablesCsv` (30 an hour) and `tablesCsvDay` (10 a
 //                                           day), per person across the owner's, coach's and admin's downloads.
 //   POST /tables/:table/edit             body TableEditRequest -> TableEditResponse. Limit `prefs`. Delegated to the app's own route.
-//   POST /tables/:table/bulk             body TableBulkRequest -> TableBulkResponse. Limit `prefs`. Only on a table with `archive`.
+//   POST /tables/:table/bulk             body TableBulkRequest -> TableBulkResponse. Limit `prefs`. Archive, Restore and Delete forever only on
+//                                        a table with `archive`; `remove` only on a table with `remove`. The same route also answers two reads
+//                                        that write nothing: { action: 'preview', ids } -> TablePreviewResponse (what a remove would do to each),
+//                                        and { action: 'matching', query, not } -> TableMatchingResponse ("Select all N that match").
+//   Edit and remove are the owner's alone: a coach's and an admin's mounts have no write route, and a call marked
+//   `X-Kreators-Via: assistant` is refused on every POST here (AI chat reads, never changes).
 //
 // A coach's view of one student (access map `'tables/coach': ['coaching']`; read only):
 //   GET  /tables/coach/:studentId                 -> TablesListResponse (view 'coach'): only the tables the student shares with them.
@@ -99,6 +104,15 @@
 // dispatch caller). The route's own session, module switch, limits, waits and owner filters hold. Its 4xx answers pass through as they
 // are ({ error } and the status). Then the server re-reads the row (by id, or as the recipe says for one that replaces its row).
 //
+// Remove (owner only, Active view, a table with `remove`; 2026-11-14): at most BULK_MAX ids a call. One read takes every row asked about,
+// by the owner and its id, in the Active view, with the remove's SQL rules worked out in the same statement (`ruleSelects`); `removeStateOf`
+// then says each row's outcome or why it stays (a row not found: "It is not in your list."). Each row to change is one delegated call to its
+// outcome's route (`removeCallFor`, or the server's own builder for a `recipe`), in sequence, while tripsOf(db) stays clear of ROUTE_TRIPS;
+// what is not reached comes back in `left`. The route's own refusal for a row comes back in `skipped` with its words. `preview` is the same
+// read and no call. `matching` reads the ids the screen's query finds (its sort, the owner's rows, `not` left out), BULK_MAX at most, and
+// how many match. Every row a page reads for its owner in the Active view carries `remove` (what it would get, or why it stays) and, when no
+// cell of it can change now, `noEdit` (why), so the bar greys its buttons with the reason before asking.
+//
 // Bulk (owner only, `archive` tables): at most BULK_MAX ids. Archive acts on Active-view rows that meet `archive.only` (others go to
 // `skipped` with its `why`), Restore and Delete forever on Archived-view rows only (the server checks `archive.archivedWhere` itself
 // before it calls DELETE, and the delete route is asked to take only a row still archived: a task's `DELETE /nodes/:id?archived=1` and an
@@ -110,7 +124,7 @@
 // the delegated route (a newer save elsewhere); 429 from a limit.
 // ===================================================================================================================================
 
-import { byKey, PAGE_SIZES, RELATIONSHIPS } from './core.ts';
+import { byKey, formatCount, PAGE_SIZES, RELATIONSHIPS } from './core.ts';
 import type { Page, PageSize } from './core.ts';
 import { addDays, asDay, DATE_PATTERN, fromDay, zonedToUtc } from './dates.ts';
 import { money, PRODUCT_MONEY_MAX } from './money.ts';
@@ -256,8 +270,10 @@ export type EditRecipe = 'plain' | 'withToday' | 'todayQuery' | 'wellbeingDay' |
  *  - seatHeld:      cells.status is 'registered' or 'attended' (a guest with a seat, who alone is on an event's list to meet others).
  *  - madeIt:        cells.madeIt is true (a channel the person made: its name and topic are its maker's to change, in Community a guide's).
  *  - linkOpen:      cells.status is 'pending' or 'active' (a coach link: what the student shares changes only while it is asked or running).
+ *  - past:          the table's `dayCell` is the subject's today or any day before it, never a day still to come (2026-11-14, the founder: water,
+ *                   gratitude, supplement ticks and routine days may change on any past day; their routes take the same rule).
  */
-export type EditWhen = 'open' | 'project' | 'recent' | 'recentOwnMove' | 'recentEat' | 'handInOpen' | 'paperOpen' | 'retainerOpen' | 'listingOpen' | 'unpublished' | 'pitchWaiting' | 'xpOpen' | 'seatHeld' | 'madeIt' | 'linkOpen';
+export type EditWhen = 'open' | 'project' | 'recent' | 'recentOwnMove' | 'recentEat' | 'handInOpen' | 'paperOpen' | 'retainerOpen' | 'listingOpen' | 'unpublished' | 'pitchWaiting' | 'xpOpen' | 'seatHeld' | 'madeIt' | 'linkOpen' | 'past';
 
 export interface ColumnEdit {
   method: 'PATCH' | 'PUT' | 'POST';
@@ -296,6 +312,17 @@ export interface ColumnEdit {
   gone?: boolean;
   /** One line the screen shows beside the input while it is open (what a save does). */
   note?: string;
+  /**
+   * Why a row's cell cannot change now, when `when` says no, in this table's own words ("Paid invoices stay for the books."). Left out, the
+   * words for its `when` (`editWhenWhy`) are said. The screen greys Edit with it, and the edit route refuses with it.
+   */
+  why?: string;
+  /**
+   * The row's own cell must hold one of these values for this cell to change now, beside `when` (2026-11-14, the integration: an answer offered
+   * only while it waits, a friend request someone sent you or a room's invitation, so a row already answered never offers it). Set `why` with it;
+   * a test holds that.
+   */
+  whenCell?: { cell: string; is: readonly Cell[] };
 }
 
 export interface DataColumn {
@@ -366,6 +393,116 @@ export interface ArchiveSpec {
 }
 
 /**
+ * Removing a row (2026-11-14, the founder: "edit and delete buttons should also be there in select and multi select and select all"): what the
+ * selection bar's second button does, in the app's own word. Owner only, the Active view only, never a coach, an admin or AI chat. Like an edit,
+ * a remove is never done in the tables route: each row is one call to the app's own route as the person (`X-Kreators-Via: tables`), so the
+ * session, the module switch, the limits, the waits and the owner filters all hold, and the app's own rule decides (a paid invoice is voided,
+ * never deleted, because Agency's route says so, not because the table does).
+ */
+
+/** What removing is called in the app: the button carries the word, the sheet and the status line say it ("3 rows taken down"). */
+export type RemoveVerb = 'Delete' | 'Take down' | 'Withdraw' | 'Cancel' | 'Void' | 'Leave' | 'Close' | 'End' | 'Unfollow' | 'Unblock' | 'Clear' | 'Remove' | 'Decline';
+export const REMOVE_VERBS: readonly RemoveVerb[] = ['Delete', 'Take down', 'Withdraw', 'Cancel', 'Void', 'Leave', 'Close', 'End', 'Unfollow', 'Unblock', 'Clear', 'Remove', 'Decline'];
+
+/**
+ * A condition on one row (a remove's `only` and an outcome's `when`):
+ *  - a string: a registry SQL condition over the table's FROM (alias `t`, the usual tokens `{today}`, `{viewer}`; `?1` is the owner). It is
+ *    worked out in the same statement that reads the row (one column a rule, `ruleSelects`), so it costs no round trip. Never on a memory table.
+ *    Use it for what the cells cannot say (a post with replies: `NOT EXISTS (SELECT 1 FROM community_replies r WHERE r.post_id = t.id)`).
+ *  - { cell, is }: the row's cell (any column: hidden, derived or shown) is one of these values.
+ *  - { cell, not }: the row's cell is none of these values.
+ */
+export type RowRule = string | { cell: string; is: readonly Cell[] } | { cell: string; not: readonly Cell[] };
+
+/**
+ * A remove the server builds itself, for a route that takes a whole object (the day's gratitude emptied, every budget sent again). Each one is a
+ * builder in `REMOVE_RECIPES` (apps/api/src/tablesRemove.ts); add the key here and the builder there together. 'plain' is `removeCallFor`.
+ */
+export type RemoveRecipe = 'plain';
+
+/** The call one row's remove makes to the app's own route, as the person. */
+export interface RemoveCall {
+  method: 'DELETE' | 'POST' | 'PATCH' | 'PUT';
+  /**
+   * The app's own route under /api. `:id` is the row's id, or the cell named by `param`. Any other `:name` is the row's own hidden cell of that
+   * name (an id only the owner sees, `ownerOnly`), or a `privateSelect` field of that name, which the server reads and never sends: another
+   * person's id, which a route may need in its path (an unfollow, an unblock), never goes in a cell. A fixed query may end it (`?archived=1`).
+   */
+  path: string;
+  param?: string;
+  /** A fixed body (`{ status: 'withdrawn' }`). */
+  body?: Readonly<Record<string, string | number | boolean | null>>;
+  /** Body fields from the row: field -> a cell key or a `privateSelect` name (`{ date: 'day', ifUpdatedAt: 'updatedAt' }`). */
+  bodyFrom?: Readonly<Record<string, string>>;
+  /** The device's day: in the body as `today`, or in the query as `day=` (the routes that read the person's own day). */
+  today?: 'body' | 'query';
+  /** The server builds the call (`REMOVE_RECIPES`); left out, 'plain'. */
+  recipe?: RemoveRecipe;
+}
+
+/**
+ * What one row's remove does, by its state: the first outcome whose `when` holds (no `when`: always) decides. `did` is the past tense the
+ * preview and the status line say ("voided"); `skip` keeps the row as it is, with why in plain words ("Paid invoices stay for the books.").
+ * `line` is the status line's own words for it, as on the spec (`removeDoneLine`).
+ */
+export type RemoveOutcome = { when?: RowRule; did: string; call: RemoveCall; line?: string } | { when?: RowRule; skip: string };
+
+export interface RemoveSpec {
+  verb: RemoveVerb;
+  /** Past tense, for the status line and the preview: "deleted", "taken down", "withdrawn". An outcome may say its own (`did`). */
+  did: string;
+  /**
+   * The status line's own words, where "2 people lifted." would say the people were acted on and not the mute, the link or the ask they hold
+   * (the review of 2026-11-14): "Lifted the mute on {rows}." `{rows}` is the count in the `noun`. An outcome may say its own (`line`).
+   */
+  line?: string;
+  /**
+   * How one row asks, as its own app asks: 'twice' a second tap on the bar's button ("Tap again to delete", a small personal row the person
+   * can make again: a mood, a reminder); 'sheet' a ConfirmDelete sheet with a red yes in its own words (history, money, someone else's access,
+   * what cannot be undone). Several rows, and Select all, always ask once in the sheet, with the preview's counts.
+   */
+  ask: 'twice' | 'sheet';
+  /**
+   * The sheet's line under the counts: what goes with it, what stays, whether it can come back. Plain words, one or two sentences. A one-row
+   * second tap says it too, under the bar and with its ask (the review of 2026-11-14), so the person hears what goes before the second tap.
+   */
+  warn: string;
+  /** The cell that names the row in a one-row second tap's ask ("Tap again to delete Deep work"), as that app's own control names it. */
+  nameCell?: string;
+  /**
+   * A one-row ask's words about this very row, when one of its cells says it better than `warn` (a day template's weekdays: "The days it has
+   * in your week (Mon, Tue), …"). `{value}` is the cell's words; an empty cell keeps `warn`.
+   */
+  rowWarn?: { cell: string; words: string };
+  /**
+   * What one row is, where its rows are people or events and "row" would read wrong (the review of 2026-11-14): the sheet asks "Remove 1
+   * friend?" or "Cancel 1 event?", and the status line counts them ("2 friends removed."). With `person` the red yes and Keep speak of them as
+   * people ("Yes, remove them", "Keep them"), never "it". `{rows}` in the spec's own words takes it too.
+   */
+  noun?: { one: string; many: string; person?: boolean };
+  /**
+   * The sheet's words when the defaults ("Delete 3 rows?", "Yes, delete them", "Keep them") do not fit. `{n}` is the count, `{rows}` is
+   * "1 row" or "3 rows" (or the `noun`), `{it}` is "it" or "them" (`removeWords`). Past a hundred, the title's `{rows}` reads "the first 100
+   * of 340 people", so a title holds `{rows}` and says its own verb at any count.
+   */
+  title?: string;
+  yes?: string;
+  keep?: string;
+  /** Only rows that meet this are removed; any other is skipped with `why`. */
+  only?: { where: RowRule; why: string };
+  /**
+   * A spec that asks 'twice' asks in the sheet instead for a row this holds for (the review of 2026-11-14: a post nobody answered is a second
+   * tap, one with replies a sheet, since they go with it). Worked out with the row like `only` (`TableRow.remove.sheet`); a second tap the bar
+   * sends (`asked: 'twice'` on the bulk call) skips a row it holds for by then, so a reply that came in between is never deleted unasked.
+   */
+  sheetWhen?: RowRule;
+  /** The call for every row. Exactly one of `call` and `outcomes`. */
+  call?: RemoveCall;
+  /** Or what each row gets by its state (a draft invoice deleted, a sent one voided, a paid one skipped). A row none fits is skipped. */
+  outcomes?: readonly RemoveOutcome[];
+}
+
+/**
  * The server readers for a table read whole (`read: 'memory'`). Each returns raw rows of the table's column keys plus `_id` (then
  * `rowFromRaw` and `pageRows`), owner only, never more than the table's `memoryMax`.
  */
@@ -421,8 +558,23 @@ export interface DataTable {
   othersWhere?: string;
   /** The cell `recent` reads. */
   dayCell?: string;
-  /** Why nothing in it can be changed here, for a table with no editable column. */
+  /** Why nothing in it can be changed here, for a table with no editable column (the line under the controls). */
   readOnlyWhy?: string;
+  /**
+   * What the selection bar's second button does (2026-11-14): the app's own remove, as the person, one row at a time. Owner only, Active view
+   * only. See RemoveSpec.
+   */
+  remove?: RemoveSpec;
+  /**
+   * Why its rows are never edited here, for a table with no editable column: the greyed Edit says it ("A ledger stays as it happened."). Every
+   * table ends with an editable column or this (dataTables.actions.test.ts, COVERAGE_STRICT).
+   */
+  noEditWhy?: string;
+  /**
+   * Why its rows are never removed here, for a table with no `remove`: the greyed remove button says it ("Paid invoices stay for the books.").
+   * Every table ends with a `remove` or this.
+   */
+  noRemoveWhy?: string;
 }
 
 export interface TableQuery {
@@ -445,6 +597,13 @@ export interface TableRow {
   cells: Record<string, Cell>;
   /** The column keys this row lets its owner change now (owner view, Active view only). */
   edit?: string[];
+  /** Why none of its cells can change now, when the table has editable columns and this row's `edit` is empty (owner view, Active view only). */
+  noEdit?: string;
+  /**
+   * What the table's remove would do to this row now (owner view, Active view, a table with `remove`): the past tense of its outcome, or why it
+   * stays. The server works it out with the row (`removeStateOf`); the bulk route checks it again before it calls.
+   */
+  remove?: { did: string; sheet?: true } | { why: string };
 }
 
 export interface TableSubject {
@@ -509,18 +668,55 @@ export interface TableEditResponse {
   consent?: Record<string, boolean>;
 }
 
-export type TableBulkAction = 'archive' | 'restore' | 'delete';
+/**
+ * POST /tables/:table/bulk's actions. Archive, Restore and Delete forever only on a table with `archive` (as before); `remove` on a table with
+ * `remove` (each row through its outcome's call); `preview` and `matching` are reads, writing nothing.
+ */
+export type TableBulkAction = 'archive' | 'restore' | 'delete' | 'remove';
 export interface TableBulkRequest {
   action: TableBulkAction;
   /** At most BULK_MAX. */
   ids: string[];
   today: string;
+  /** `remove` only: the bar's one-row second tap, with no sheet; a row that asks in the sheet by now (`sheetWhen`) is skipped, said why. */
+  asked?: 'twice';
 }
 export interface TableBulkResponse {
   done: string[];
   skipped: { id: string; why: string }[];
   /** Not reached in this call (the round-trip budget): send these again. */
   left: string[];
+  /** `remove` only: how many of `done` each outcome took ("deleted", "voided"), in the spec's order. */
+  didAs?: { did: string; n: number }[];
+  /** `remove` only: a limit stopped it (the limit's own words); the rows in `left` wait, and the screen stops sending. */
+  stopped?: string;
+}
+/** What a remove of these rows would do, worked out in one read and no write (the sheet's counts). */
+export interface TablePreviewRequest {
+  action: 'preview';
+  ids: string[];
+  today: string;
+}
+export interface TablePreviewResponse {
+  /** How many rows each outcome would take, in the spec's order, none left out at 0. */
+  act: { did: string; n: number }[];
+  /** How many would stay, by why (a row not in the person's list: "It is not in your list."). */
+  skipped: { why: string; n: number }[];
+}
+/**
+ * "Select all N that match": the ids of the rows the screen's search and filters find (its address, `query`), in its sort, the owner's rows
+ * only, at most BULK_MAX, leaving out `not` (the rows already sent in an earlier round, at most MATCH_NOT_MAX). `total` is how many match
+ * besides `not`, so "the first 100 of 340" and "Do the next 100" read true.
+ */
+export interface TableMatchingRequest {
+  action: 'matching';
+  query: string;
+  not?: string[];
+  today: string;
+}
+export interface TableMatchingResponse {
+  ids: string[];
+  total: number;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------
@@ -540,6 +736,8 @@ export function csvMaxRows(table: DataTable, view: TableView): number {
 }
 /** Ids in one bulk call. */
 export const BULK_MAX = 100;
+/** Ids one "Select all that match" round may leave out (the rows sent before): ten rounds of BULK_MAX, then the ticks are cleared and picked again. */
+export const MATCH_NOT_MAX = 1000;
 /**
  * The most table keys a share list or AI chat's list takes in one request (Share all sends every table the person may share). Well past the
  * registry (a test holds DATA_TABLES under half of it), so a growing registry never trips it; coaching.ts keeps the same number for a stored share.
@@ -772,6 +970,14 @@ function patch(path: string, field: string, input: EditInput, more: Partial<Colu
 }
 
 const NODE_PATH = '/nodes/:id';
+const NOT_TO_DO_PATH = '/today/not-to-do/:id';
+const ROUTINE_DAY_PATH = '/session/day/:id';
+/** INVITE_LABEL_MAX in invites.ts (a subpath this leaf does not import; dataTables.essentials.test.ts holds them together). */
+const INVITE_LABEL_MOST = 60;
+const TICKET_PATH = '/support/:id';
+const TICKET_KEPT = 'Only a message the team has not answered can be changed. A report stays as you sent it.';
+/** NOT_TO_DO_TITLE_MAX in api.ts (the barrel's, which this leaf may not import; dataTables.essentials.test.ts holds them together). */
+const NOT_TO_DO_TITLE_MOST = 60;
 
 // -----------------------------------------------------------------------------------------------------------------------------------
 // The groups and the tables
@@ -833,6 +1039,13 @@ const TASK_HIDDEN_SQL = "CASE WHEN t.hidden_until IS NULL OR t.hidden_until < {t
 const TASK_MADE_BY_SQL = "CASE WHEN t.added_by IS NOT NULL THEN 'coach' WHEN t.origin = 'build' THEN 'build' WHEN t.origin LIKE 'breakdown:%' THEN 'breakdown' ELSE 'you' END";
 const TASK_HABIT_SQL = "CASE WHEN t.habit IS NULL THEN 'auto' WHEN t.habit = 1 THEN 'yes' ELSE 'no' END";
 const ONE_A_DAY_NOTE = 'Saving logs this day again, with the same date.';
+/**
+ * A task's repeat in the plain shapes a cell can pick (tasks.ts REPEAT_KINDS, whose names these are): every day, weekdays, every week (on the
+ * task's own weekday), every month or every year, or Once. Sent as the rule's JSON, which PATCH /nodes/:id reads with parseRepeat, so the
+ * route's own checks hold (a repeat needs a do date or a due date). Every 2 weeks, chosen weekdays and an end day are set on Daily.
+ */
+export const REPEAT_OPTIONS = opts([['daily', 'Every day'], ['weekdays', 'Weekdays'], ['weekly', 'Every week'], ['monthly', 'Every month'], ['yearly', 'Every year']], 'Once');
+const REPEAT_SEND: Record<string, string | null> = { none: null, ...Object.fromEntries(REPEAT_OPTIONS.filter((o) => !o.isNull).map((o) => [o.value, JSON.stringify({ kind: o.value })])) };
 
 const TASKS: DataTable = {
   key: 'tasks',
@@ -857,6 +1070,15 @@ const TASKS: DataTable = {
     remove: { method: 'DELETE', path: '/nodes/:id?archived=1' },
     only: { where: "t.status = 'active'", why: 'A done task stays as it is.' },
   },
+  // Delete from the Active view (2026-11-14, the founder: a done task too, as the pillar page lets you; its xp is never taken back): Daily's own
+  // Delete task, a second tap there and here. Its subtasks go with it, by the foreign key.
+  remove: {
+    verb: 'Delete',
+    did: 'deleted',
+    ask: 'twice',
+    warn: 'It goes for good, with its subtasks. The xp a done task earned stays yours.',
+    call: { method: 'DELETE', path: NODE_PATH },
+  },
   columns: [
     c('title', 'Task', 'text', 't.title', { sortable: true, searchable: true, notNull: true, edit: patch(NODE_PATH, 'title', 'text', { minLength: 1, maxLength: 140, note: 'A new name starts the ten-minute wait again.' }) }),
     c('note', 'Note', 'longtext', 't.note', { searchable: true, edit: patch(NODE_PATH, 'note', 'longtext', { maxLength: 500 }) }),
@@ -869,7 +1091,13 @@ const TASKS: DataTable = {
     c('dueTime', 'Time', 'time', 't.due_time', { sortable: true, edit: patch(NODE_PATH, 'dueTime', 'time', { nullable: true }) }),
     c('estimate', 'Minutes it should take', 'number', 't.estimate_min', { sortable: true, format: 'minutes', edit: patch(NODE_PATH, 'estimateMin', 'number', { min: 1, max: 600, step: 1, nullable: true }) }),
     c('priority', 'Priority', 'enum', 't.priority', { options: PRIORITY_OPTIONS, ordered: true, sortable: true, filter: 'pick', edit: patch(NODE_PATH, 'priority', 'select', { send: numberSend(PRIORITY_OPTIONS) }) }),
-    c('repeat', 'Repeats', 'summary', null, { derive: 'repeatWords', from: ['repeat'] }),
+    c('repeat', 'Repeats', 'summary', null, {
+      derive: 'repeatWords',
+      from: ['repeat'],
+      options: REPEAT_OPTIONS,
+      edit: patch(NODE_PATH, 'repeat', 'select', { current: 'repeatKind', when: 'open', send: REPEAT_SEND, note: 'It counts from the do date, else the due date. Every 2 weeks, chosen weekdays and an end day are set on Daily.' }),
+    }),
+    hiddenCell('repeatKind', "json_extract(t.repeat_json, '$.kind')"),
     c('remember', 'Remember', 'bool', 't.remind', { sortable: true, filter: 'pick', edit: patch(NODE_PATH, 'remind', 'toggle') }),
     c('forReview', 'Bring to my review', 'bool', 't.for_review', { sortable: true, filter: 'pick', edit: patch(NODE_PATH, 'forReview', 'toggle') }),
     c('habit', 'Habit', 'enum', TASK_HABIT_SQL, { options: HABIT_OPTIONS, filter: 'pick', notNull: true, edit: patch(NODE_PATH, 'habit', 'select', { send: { auto: null, yes: true, no: false } }) }),
@@ -896,6 +1124,8 @@ const SUBTASKS: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'createdAt', dir: 'desc' },
   read: 'sql',
+  // A subtask's ✕ on Daily, a second tap there and here.
+  remove: { verb: 'Remove', did: 'removed', ask: 'twice', warn: 'It leaves its task’s checklist. It paid nothing, so nothing is taken back.', call: { method: 'DELETE', path: '/nodes/subtasks/:id' } },
   columns: [
     c('title', 'Subtask', 'text', 't.title', { sortable: true, searchable: true, notNull: true, edit: patch('/nodes/subtasks/:id', 'title', 'text', { minLength: 1, maxLength: 140 }) }),
     c('task', 'Task', 'text', 'n.title', { sortable: true, searchable: true }),
@@ -918,10 +1148,18 @@ const NOT_TO_DO: DataTable = {
   read: 'memory',
   reader: 'notToDo',
   memoryMax: 7,
-  readOnlyWhy: 'Add, mark or remove these on Daily.',
+  // Remove from the list, Daily's own (a second tap there and here); its kept and slipped days go by the foreign key. The words and the pillar
+  // change through PATCH /today/not-to-do/:id (2026-11-14), checked as the create route checks them.
+  remove: { verb: 'Remove', did: 'removed', ask: 'twice', warn: 'Its kept and slipped days go with it. The xp its kept days earned stays yours.', call: { method: 'DELETE', path: NOT_TO_DO_PATH } },
   columns: [
-    c('title', 'Stay away from', 'text', null, { sortable: true, searchable: true }),
-    c('pillar', 'Pillar', 'enum', null, { options: PILLAR_OR_NONE, ordered: true, sortable: true, filter: 'pick' }),
+    c('title', 'Stay away from', 'text', null, { sortable: true, searchable: true, edit: patch(NOT_TO_DO_PATH, 'title', 'text', { minLength: 1, maxLength: NOT_TO_DO_TITLE_MOST }) }),
+    c('pillar', 'Pillar', 'enum', null, {
+      options: PILLAR_OR_NONE,
+      ordered: true,
+      sortable: true,
+      filter: 'pick',
+      edit: patch(NOT_TO_DO_PATH, 'relationship', 'select', { send: { none: null }, note: 'A kept day from now on goes to this pillar. What was earned stays.' }),
+    }),
     c('streak', 'Streak now', 'number', null, { sortable: true }),
     c('bestStreak', 'Best streak', 'number', null, { sortable: true }),
     c('createdAt', 'Added', 'datetime', null, { sortable: true, filter: 'range' }),
@@ -953,6 +1191,16 @@ const NOT_TO_DO_DAYS: DataTable = {
     }),
     stamp('createdAt', 'First marked', 't.created_at'),
   ],
+  // Unmarking, as unticking the box on Daily does (status null): today or yesterday only, as the route holds, which also refuses yesterday late in
+  // a zone behind UTC in its own words.
+  remove: {
+    verb: 'Clear',
+    did: 'cleared',
+    ask: 'twice',
+    warn: 'The day goes back to not marked, as unticking it on Daily does. A kept day’s xp stays yours.',
+    only: { where: "t.day >= date({today}, '-1 day') AND t.day <= {today}", why: 'Only today or yesterday can be marked or cleared, as on Daily.' },
+    call: { method: 'POST', path: '/today/not-to-do/:id/day', param: 'itemId', body: { status: null }, bodyFrom: { date: 'day' }, today: 'body' },
+  },
 };
 
 const SMALL_ACTS: DataTable = {
@@ -967,6 +1215,8 @@ const SMALL_ACTS: DataTable = {
   defaultSort: { key: 'day', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A small act paid its xp when you did it, so it stays as it is.',
+  noEditWhy: 'A small act paid its xp when you did it, so it stays as it is.',
+  noRemoveWhy: 'A small act is a record of the xp it paid, so it stays.',
   columns: [day('day', 'Day', 't.date'), pillar('pillar', 'Pillar it went to', 't.relationship'), stamp('createdAt', 'Done at', 't.created_at', { filter: undefined })],
 };
 
@@ -982,6 +1232,8 @@ const REMINDERS: DataTable = {
   defaultSort: { key: 'time', dir: 'asc' },
   read: 'sql',
   privateSelect: { days: 't.days_json' },
+  // Water and reminders' own remove, a second tap there and here. (The days are a list a cell cannot hold yet: set them in Water and reminders.)
+  remove: { verb: 'Remove', did: 'removed', ask: 'twice', warn: 'It stops for good. Switching On off pauses it instead.', call: { method: 'DELETE', path: '/reminders/custom/:id' } },
   columns: [
     c('title', 'Reminder', 'text', 't.title', { sortable: true, searchable: true, notNull: true, edit: patch('/reminders/custom/:id', 'title', 'text', { minLength: 1, maxLength: 60 }) }),
     c('time', 'Time', 'time', 't.time', { sortable: true, notNull: true, edit: patch('/reminders/custom/:id', 'time', 'time') }),
@@ -1015,6 +1267,8 @@ const KINDS_OF_DAY: DataTable = {
     }),
     stamp('createdAt', 'Set on', 't.created_at', { filter: undefined }),
   ],
+  // Follow your week again, as the month calendar's day sheet does: the same route, one day (`date`), with no template.
+  remove: { verb: 'Clear', did: 'cleared', ask: 'twice', warn: 'The day follows your week again.', call: { method: 'PUT', path: '/time-blocks/days', body: { templateId: null }, bodyFrom: { date: 'day' } } },
 };
 
 const TIME_BLOCKS: DataTable = {
@@ -1033,13 +1287,27 @@ const TIME_BLOCKS: DataTable = {
   columns: [
     c('name', 'Block', 'text', null, { sortable: true, searchable: true, edit: patch('/time-blocks/blocks/:id', 'name', 'text', { minLength: 1, maxLength: 40 }) }),
     c('tag', 'Tag', 'text', null, { sortable: true, searchable: true, edit: patch('/time-blocks/blocks/:id', 'tag', 'text', { maxLength: 24 }) }),
-    c('color', 'Colour', 'enum', null, { options: TIME_BLOCK_SWATCH_OPTIONS, otherLabel: 'Your own colour' }),
+    c('color', 'Colour', 'enum', null, {
+      options: TIME_BLOCK_SWATCH_OPTIONS,
+      otherLabel: 'Your own colour',
+      // One of the wheel's colours; a colour of one's own, typed as a code, is set on Time blocks (and shows here as where it starts, unpickable).
+      edit: patch('/time-blocks/blocks/:id', 'color', 'select', { offer: TIME_BLOCK_SWATCH_OPTIONS.map((o) => o.value), note: 'A colour of your own is set on Time blocks.' }),
+    }),
     c('lifeArea', 'Area of life', 'enum', null, { options: LIFE_AREA_OR_NONE, ordered: true, sortable: true, filter: 'pick', edit: patch('/time-blocks/blocks/:id', 'area', 'select', { send: { none: null } }) }),
     c('pillar', 'Pillar', 'enum', null, { options: PILLAR_OR_NONE, ordered: true, sortable: true, filter: 'pick', edit: patch('/time-blocks/blocks/:id', 'pillar', 'select', { send: { none: null } }) }),
     c('starting', 'Starting block', 'bool', null, { filter: 'pick' }),
     c('order', 'Order', 'number', null, { sortable: true, hidden: true }),
     c('updatedAt', 'Changed', 'datetime', null, { sortable: true }),
   ],
+  // Time blocks' own Delete, a second tap there and here: tasks lose the block and keep the rest, templates lose its slots (the route's batch).
+  remove: {
+    verb: 'Delete',
+    did: 'deleted',
+    ask: 'twice',
+    warn: 'Tasks that had it lose the block and keep everything else. Day templates lose its slots.',
+    nameCell: 'name',
+    call: { method: 'DELETE', path: '/time-blocks/blocks/:id' },
+  },
 };
 
 const DAY_TEMPLATES: DataTable = {
@@ -1061,12 +1329,27 @@ const DAY_TEMPLATES: DataTable = {
     c('second', 'Then', 'enum', null, { options: PILLAR_OR_NONE, ordered: true, sortable: true, filter: 'pick', edit: patch('/time-blocks/templates/:id', 'second', 'select', { send: { none: null } }) }),
     c('slots', 'Blocks', 'summary', null, { searchable: true }),
     c('weekdays', 'Weekdays', 'summary', null),
-    c('isDefault', 'Default', 'bool', null, { filter: 'pick' }),
+    // Make default only turns one on, as on Time blocks: the route refuses switching the default off, since one is always the default.
+    c('isDefault', 'Default', 'bool', null, { filter: 'pick', edit: patch('/time-blocks/templates/:id', 'isDefault', 'toggle', { note: 'On makes it your default. To change the default, switch another one on.' }) }),
     c('why', 'Why', 'longtext', null, { searchable: true }),
     c('source', 'From', 'text', null),
     c('order', 'Order', 'number', null, { sortable: true, hidden: true }),
     c('updatedAt', 'Changed', 'datetime', null, { sortable: true }),
   ],
+  // Time blocks' own Delete, a second tap there and here. Never the default, which the route refuses too.
+  remove: {
+    verb: 'Delete',
+    did: 'deleted',
+    ask: 'twice',
+    warn: 'Days set to it, and weekdays that used it, follow your default again.',
+    nameCell: 'name',
+    // As Time blocks' own Delete names them (`templateLoss`): the weekdays the week gives it go back to the default.
+    rowWarn: { cell: 'weekdays', words: 'The days it has in your week ({value}), and any day set to it, follow your default again.' },
+    outcomes: [
+      { when: { cell: 'isDefault', is: [true] }, skip: 'Make another kind of day the default first.' },
+      { did: 'deleted', call: { method: 'DELETE', path: '/time-blocks/templates/:id' } },
+    ],
+  },
 };
 
 const PYRAMIDS: DataTable = {
@@ -1081,6 +1364,14 @@ const PYRAMIDS: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'pillar', dir: 'asc' },
   read: 'sql',
+  // The pillar page's own Remove: a layer holds others up, so it asks in a sheet there and here, and everything under it goes with it.
+  remove: {
+    verb: 'Remove',
+    did: 'removed',
+    ask: 'sheet',
+    warn: 'Everything it holds up goes with it, the layers and the tasks under it. This cannot be undone. The xp already earned stays yours.',
+    call: { method: 'DELETE', path: NODE_PATH },
+  },
   columns: [
     pillar('pillar', 'Pillar', 't.relationship', { notNull: true }),
     c('layer', 'Layer', 'enum', 't.kind', { options: LAYER_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
@@ -1107,6 +1398,8 @@ const PILLAR_SCORES: DataTable = {
   defaultSort: { key: 'pillar', dir: 'asc' },
   read: 'sql',
   readOnlyWhy: 'The vibe check sets the score, and ticks earn the xp.',
+  noEditWhy: 'The vibe check sets the score, and ticks earn the xp.',
+  noRemoveWhy: 'Each pillar always keeps its score and its xp.',
   columns: [pillar('pillar', 'Pillar', 't.relationship', { filter: undefined, notNull: true }), c('score', 'Vibe check score', 'number', 't.score', { sortable: true }), c('xp', 'Pillar xp', 'number', 't.xp', { sortable: true })],
 };
 
@@ -1124,6 +1417,8 @@ const XP_HISTORY: DataTable = {
   // A post's, a reply's or a like's xp lands at the moment it was written: its time would say who wrote an anonymous line, so a coach never gets one.
   coachWhere: "t.source NOT LIKE 'social:%'",
   readOnlyWhy: 'A record of what was paid, so it stays as it is.',
+  noEditWhy: 'A record of what was paid, so it stays as it is.',
+  noRemoveWhy: 'Xp once earned is never taken back, so its record stays.',
   columns: [
     c('amount', 'Xp', 'number', 't.amount', { sortable: true, notNull: true, format: 'signed' }),
     c('source', 'From', 'enum', 't.source', { options: XP_SOURCE_OPTIONS, otherLabel: 'Other', sortable: true, filter: 'pick', notNull: true }),
@@ -1144,6 +1439,8 @@ const LIFE_MAP: DataTable = {
   defaultSort: { key: 'createdAt', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'Place your pillars again in the strategy session.',
+  noEditWhy: 'Place your pillars again in the strategy session.',
+  noRemoveWhy: 'Each placement says where you stood then, so it stays.',
   columns: [
     pillar('pillar', 'Pillar', 't.relationship', { notNull: true }),
     c('core', 'Where you usually live', 'enum', 't.core_level', { options: MAP_LEVEL_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
@@ -1168,6 +1465,8 @@ const LIFE_MAP_ANSWERS: DataTable = {
   read: 'sql',
   privateSelect: { focus: 't.focus_json', away: 't.away_json', fears: 't.fears_json', insecurities: 't.insecurities_json', scores: 't.scores_json', realDay: 't.real_day_json' },
   readOnlyWhy: 'Run the strategy session again to change these.',
+  noEditWhy: 'Run the strategy session again to change these.',
+  noRemoveWhy: 'A session’s answers made your plan, so they stay.',
   columns: [
     c('kind', 'Kind', 'enum', 't.kind', { options: ASSESSMENT_KIND_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
     c('focus', 'Focus', 'summary', null, { derive: 'pillarList', from: ['focus'] }),
@@ -1193,6 +1492,8 @@ const ROUTINE: DataTable = {
   read: 'sql',
   privateSelect: { general: 't.general_json', exceptional: 't.exceptional_json', practices: 't.practices_json' },
   readOnlyWhy: 'Change your routine on the life map, under Pillars.',
+  noEditWhy: 'Change your routine on the life map, under Pillars.',
+  noRemoveWhy: 'Each routine is the one a plan made, so it stays. The newest one is the live one.',
   columns: [
     c('current', 'Current', 'bool', 't.id = (SELECT r.id FROM routines r WHERE r.user_id = ?1 ORDER BY r.created_at DESC LIMIT 1)', { filter: 'pick', notNull: true }),
     c('general', 'Normal day', 'summary', null, { derive: 'routineDay', from: ['general'] }),
@@ -1214,15 +1515,35 @@ const ROUTINE_DAYS: DataTable = {
   defaultSort: { key: 'day', dir: 'desc' },
   read: 'sql',
   privateSelect: { steps: 't.steps_json', blocks: 't.blocks_json' },
-  readOnlyWhy: 'Tick your routine on Daily: a change here could lose a day’s steps.',
+  // Any past day may change, never one still to come (2026-11-14, the founder; routes/session.ts holds it too): the morning as a whole and the
+  // kind of day, through PATCH /session/day/:date, guarded on the row as it was read. The steps one by one are a list a cell cannot hold yet.
+  dayCell: 'day',
   columns: [
     day('day', 'Day', 't.day'),
-    c('dayType', 'Kind of day', 'enum', 't.day_type', { options: DAY_TYPE_OPTIONS, sortable: true, filter: 'pick' }),
+    c('dayType', 'Kind of day', 'enum', 't.day_type', {
+      options: DAY_TYPE_OPTIONS,
+      sortable: true,
+      filter: 'pick',
+      edit: patch(ROUTINE_DAY_PATH, 'dayType', 'select', { recipe: 'withToday', when: 'past', note: 'The ticks it keeps are those the other kind of day has.' }),
+    }),
     c('steps', 'Morning steps ticked', 'summary', null, { derive: 'stringList', from: ['steps'] }),
     c('blocks', 'Other blocks ticked', 'summary', null, { derive: 'routineBlocks', from: ['blocks'] }),
-    c('done', 'Morning done', 'bool', 't.done', { sortable: true, filter: 'pick', notNull: true }),
+    c('done', 'Morning done', 'bool', 't.done', {
+      sortable: true,
+      filter: 'pick',
+      notNull: true,
+      edit: patch(ROUTINE_DAY_PATH, 'done', 'toggle', { recipe: 'withToday', when: 'past', note: 'On ticks every morning step of that day, off clears them. The other blocks stay.' }),
+    }),
     stamp('updatedAt', 'Last ticked', 't.updated_at', { filter: undefined }),
   ],
+  // Clear a day: its ticks go (DELETE /session/day/:date, any past day). Ticking never paid, so nothing is taken back.
+  remove: {
+    verb: 'Clear',
+    did: 'cleared',
+    ask: 'twice',
+    warn: 'That day’s ticks go, and its week counts it as not done. Ticking paid nothing, so nothing is taken back.',
+    call: { method: 'DELETE', path: ROUTINE_DAY_PATH, today: 'query' },
+  },
 };
 
 const CONTRACT: DataTable = {
@@ -1237,6 +1558,8 @@ const CONTRACT: DataTable = {
   defaultSort: { key: 'signedAt', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'Signed paper stays as it is. A new plan signs a new one.',
+  noEditWhy: 'Signed paper stays as it is. A new plan signs a new one.',
+  noRemoveWhy: 'Signed paper stays as it is.',
   columns: [
     c('current', 'Current', 'bool', 't.id = (SELECT k.id FROM contracts k WHERE k.user_id = ?1 ORDER BY k.signed_at DESC LIMIT 1)', { filter: 'pick', notNull: true }),
     c('minDays', 'Days a week', 'number', 't.min_days', { sortable: true }),
@@ -1246,6 +1569,18 @@ const CONTRACT: DataTable = {
   ],
 };
 
+// Reflection's Edit and Delete (2026-11-14, the founder: "each entry for the original user"): a review's rating, highlight and answers change
+// through PATCH /reviews/:id, which never touches its questions or the numbers saved with it (`snapshot_json`); PUT / would rebuild them.
+const REVIEW_PATH = '/reviews/:id';
+const REVIEW_RATING_OPTIONS = opts([['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5']], 'Not rated');
+/**
+ * A review's answers as one block to change: each saved question, a colon and its answer, a blank line between, in the questions' order (the
+ * route reads it back by the same questions, `answersFromText` in routes/reviews.ts). The longest it can be: MAX_REVIEW_PROMPTS questions of
+ * REVIEW_PROMPT_MAX, each with ": " and an answer of REVIEW_ANSWER_MAX, and the blank lines between (a test holds the numbers together).
+ */
+export const REVIEW_ANSWERS_TEXT_MAX = 10 * (200 + 2 + 2000) + 9 * 2;
+const REVIEW_ANSWERS_TEXT_SQL =
+  "CASE WHEN json_valid(t.prompts_json) AND json_valid(t.answers_json) THEN (SELECT group_concat(q.line, char(10) || char(10)) FROM (SELECT p.value || ': ' || COALESCE(json_extract(t.answers_json, '$[' || p.key || ']'), '') AS line FROM json_each(t.prompts_json) p ORDER BY p.key) q) END";
 const REVIEWS: DataTable = {
   key: 'reviews',
   name: 'Reviews',
@@ -1259,22 +1594,56 @@ const REVIEWS: DataTable = {
   defaultSort: { key: 'from', dir: 'desc' },
   read: 'sql',
   privateSelect: { prompts: 't.prompts_json', answers: 't.answers_json' },
-  readOnlyWhy: 'Change a review on Reviews, where its numbers are kept with it.',
   columns: [
     c('kind', 'Period', 'enum', 't.kind', { options: PERIOD_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
     day('from', 'From', 't.period_start'),
     day('to', 'To', 't.period_end', { filter: undefined }),
     c('name', 'Name', 'text', 't.template_name', { derive: 'reviewName', sortable: true, searchable: true }),
     c('answered', 'Answered', 'summary', null, { derive: 'answered', from: ['prompts', 'answers'] }),
-    c('answers', 'Answers', 'summary', null, { derive: 'reviewAnswers', from: ['prompts', 'answers'], searchable: true, searchSql: 't.answers_json' }),
-    c('rating', 'Rating', 'number', 't.rating', { sortable: true, filter: 'pick', options: opts([['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5']], 'Not rated') }),
-    c('highlight', 'Highlight', 'text', 't.highlight', { searchable: true }),
+    c('answers', 'Answers', 'summary', null, {
+      derive: 'reviewAnswers',
+      from: ['prompts', 'answers'],
+      searchable: true,
+      searchSql: 't.answers_json',
+      edit: patch(REVIEW_PATH, 'answersText', 'longtext', { current: 'answersText', maxLength: REVIEW_ANSWERS_TEXT_MAX, note: 'Write after each question’s colon, and keep the questions as they are. The numbers saved with it never change.' }),
+    }),
+    c('rating', 'Rating', 'number', 't.rating', { sortable: true, filter: 'pick', options: REVIEW_RATING_OPTIONS, edit: patch(REVIEW_PATH, 'rating', 'select', { send: numberSend(REVIEW_RATING_OPTIONS) }) }),
+    c('highlight', 'Highlight', 'text', 't.highlight', { searchable: true, edit: patch(REVIEW_PATH, 'highlight', 'text', { maxLength: 200 }) }),
     stamp('createdAt', 'Written', 't.created_at', { filter: undefined }),
     stamp('updatedAt', 'Changed', 't.updated_at', { filter: undefined }),
+    // Every question with its answer, the unanswered too, for the Answers field (never a grid column, never in Copy or CSV).
+    c('answersText', 'answersText', 'longtext', REVIEW_ANSWERS_TEXT_SQL, { hidden: true, ownerOnly: true }),
   ],
+  remove: {
+    verb: 'Delete',
+    did: 'deleted',
+    ask: 'sheet',
+    warn: 'Its answers and the numbers saved with it go for good. You can write that period’s review again on Reviews, with the numbers as they are then.',
+    call: { method: 'DELETE', path: REVIEW_PATH },
+  },
 };
 
 const SCHEDULE_PATH = '/reviews/schedule/:id';
+/**
+ * A review reminder's repeat as one select (2026-11-14): once, or a plain repeat counted from its first day (every day, weekdays, every week on
+ * the first day's weekday, every month, every year). Sent as the rule's JSON, which `parseRepeat` reads on the route; Once sends null. A rule
+ * with chosen days, a step past one or an end day reads 'custom': shown as its words, never offered here (Reviews' own picker sets it).
+ */
+const REPEAT_PICK_OPTIONS: readonly ColumnOption[] = [
+  { value: 'none', label: 'Once', isNull: true },
+  ...opts([['daily', 'Every day'], ['weekdays', 'Weekdays'], ['weekly', 'Every week'], ['monthly', 'Every month'], ['yearly', 'Every year']]),
+];
+const REPEAT_PICK_OFFER = ['none', 'daily', 'weekdays', 'weekly', 'monthly', 'yearly'] as const;
+const REPEAT_PICK_SEND: Readonly<Record<string, string | null>> = {
+  none: null,
+  daily: '{"kind":"daily","every":1}',
+  weekdays: '{"kind":"weekdays","every":1}',
+  weekly: '{"kind":"weekly","every":1,"days":[]}',
+  monthly: '{"kind":"monthly","every":1}',
+  yearly: '{"kind":"yearly","every":1}',
+};
+const REPEAT_PICK_SQL =
+  "CASE WHEN t.repeat_json IS NULL THEN 'none' WHEN NOT json_valid(t.repeat_json) THEN 'custom' WHEN COALESCE(json_extract(t.repeat_json, '$.every'), 1) = 1 AND json_extract(t.repeat_json, '$.until') IS NULL AND json_extract(t.repeat_json, '$.anchor') IS NULL AND COALESCE(json_array_length(t.repeat_json, '$.days'), 0) = 0 AND json_extract(t.repeat_json, '$.kind') IN ('daily', 'weekdays', 'weekly', 'monthly', 'yearly') THEN json_extract(t.repeat_json, '$.kind') ELSE 'custom' END";
 const REVIEW_REMINDERS: DataTable = {
   key: 'reviewReminders',
   name: 'Review reminders',
@@ -1293,11 +1662,19 @@ const REVIEW_REMINDERS: DataTable = {
     c('name', 'Name', 'text', 't.name', { sortable: true, searchable: true, edit: { method: 'PATCH', path: SCHEDULE_PATH, field: 'name', input: 'text', recipe: 'todayQuery', maxLength: 60 } }),
     c('anchor', 'First day', 'date', 't.anchor', { sortable: true, notNull: true, edit: { method: 'PATCH', path: SCHEDULE_PATH, field: 'anchor', input: 'date', recipe: 'todayQuery' } }),
     c('time', 'Time', 'time', 't.time', { sortable: true, notNull: true, edit: { method: 'PATCH', path: SCHEDULE_PATH, field: 'time', input: 'time', recipe: 'todayQuery' } }),
-    c('repeat', 'Repeats', 'summary', null, { derive: 'repeatWords', from: ['repeat'] }),
+    c('repeat', 'Repeats', 'summary', null, {
+      derive: 'repeatWords',
+      from: ['repeat'],
+      options: REPEAT_PICK_OPTIONS,
+      edit: { method: 'PATCH', path: SCHEDULE_PATH, field: 'repeat', input: 'select', recipe: 'todayQuery', current: 'repeatPick', offer: REPEAT_PICK_OFFER, send: REPEAT_PICK_SEND, note: 'Every week falls on the first day’s weekday. Set chosen days or every few weeks on Reviews.' },
+    }),
     c('enabled', 'On', 'bool', 't.enabled', { sortable: true, filter: 'pick', notNull: true, edit: { method: 'PATCH', path: SCHEDULE_PATH, field: 'enabled', input: 'toggle', recipe: 'todayQuery' } }),
     c('nextOn', 'Next reminder', 'date', 't.next_on', { sortable: true, filter: 'range' }),
     stamp('createdAt', 'Added', 't.created_at', { filter: undefined }),
+    // Which plain repeat it is, for the Repeats field; a repeat with chosen days, a step or an end reads 'custom', shown and never offered.
+    c('repeatPick', 'repeatPick', 'text', REPEAT_PICK_SQL, { hidden: true, ownerOnly: true }),
   ],
+  remove: { verb: 'Delete', did: 'deleted', ask: 'twice', warn: 'Reviews you wrote stay. You can set the reminder again on Reviews.', call: { method: 'DELETE', path: SCHEDULE_PATH } },
 };
 
 const REVIEW_TEMPLATES: DataTable = {
@@ -1317,10 +1694,20 @@ const REVIEW_TEMPLATES: DataTable = {
     c('kind', 'Period', 'enum', 't.kind', { options: PERIOD_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
     c('name', 'Name', 'text', 't.name', { sortable: true, searchable: true, notNull: true, edit: patch('/reviews/templates/:id', 'name', 'text', { minLength: 1, maxLength: 60 }) }),
     c('count', 'Questions', 'number', 'json_array_length(t.prompts_json)', { sortable: true }),
-    c('questions', 'The questions', 'summary', null, { derive: 'stringList', from: ['prompts'], searchable: true, searchSql: 't.prompts_json' }),
+    c('questions', 'The questions', 'summary', null, {
+      derive: 'stringList',
+      from: ['prompts'],
+      searchable: true,
+      searchSql: 't.prompts_json',
+      // One question a line, up to MAX_REVIEW_PROMPTS (10) of REVIEW_PROMPT_MAX (200) each, and the line breaks between.
+      edit: patch('/reviews/templates/:id', 'questions', 'longtext', { current: 'questionLines', minLength: 1, maxLength: 10 * 201, note: 'One question a line, up to 10. Reviews you wrote keep the questions they were written with.' }),
+    }),
     stamp('createdAt', 'Added', 't.created_at', { filter: undefined }),
     stamp('updatedAt', 'Changed', 't.updated_at', { filter: undefined }),
+    // The questions one a line, for the field above (never a grid column, never in Copy or CSV).
+    c('questionLines', 'questionLines', 'longtext', "CASE WHEN json_valid(t.prompts_json) THEN (SELECT group_concat(q.value, char(10)) FROM (SELECT p.value FROM json_each(t.prompts_json) p ORDER BY p.key) q) END", { hidden: true, ownerOnly: true }),
   ],
+  remove: { verb: 'Delete', did: 'deleted', ask: 'twice', warn: 'Reviews you wrote with it keep their questions. You can make it again on Reviews.', call: { method: 'DELETE', path: '/reviews/templates/:id' } },
 };
 
 /** A wellbeing kind that keeps one log a day (mood, sleep, stress): its private fields, which the wellbeingDay recipe sends again. */
@@ -1328,6 +1715,12 @@ const DAY_LOG_FIELDS = { value: 't.value', extra: 't.extra', note: 't.note' } as
 function dayLogEdit(kind: string, field: string, input: EditInput, more: Partial<ColumnEdit> = {}): ColumnEdit {
   return { method: 'POST', path: `/wellbeing/${kind}`, field, input, recipe: 'wellbeingDay', note: ONE_A_DAY_NOTE, ...more };
 }
+/** A tracker's log removed by its own route, the kind in the path (DELETE /wellbeing/:kind/:id), on a second tap: one day's small entry. */
+function logRemove(kind: string, warn = 'Log the day again to have it back.'): RemoveSpec {
+  return { verb: 'Delete', did: 'deleted', ask: 'twice', warn, call: { method: 'DELETE', path: `/wellbeing/${kind}/:id` } };
+}
+/** One of mood's three "why" sliders (1 to 5), kept in the day's `extra` and sent again with the whole day. Empty takes it off. */
+const moodWhy = (key: string): ColumnEdit => dayLogEdit('mood', `extra.${key}`, 'number', { min: 1, max: 5, step: 1, nullable: true });
 function wellbeingTable(key: string, name: string, blurb: string, kind: string, columns: DataColumn[], more: Partial<DataTable> = {}): DataTable {
   return {
     key,
@@ -1350,12 +1743,12 @@ function wellbeingTable(key: string, name: string, blurb: string, kind: string, 
 const MOOD = wellbeingTable('mood', 'Mood', 'How you felt each day.', 'mood', [
   day('day', 'Day', 't.date'),
   c('mood', 'Mood', 'enum', 't.value', { options: MOOD_OPTIONS, sortable: true, filter: 'pick', notNull: true, edit: dayLogEdit('mood', 'value', 'select', { send: numberSend(MOOD_OPTIONS) }) }),
-  c('active', 'How active', 'number', "json_extract(t.extra, '$.active')", { sortable: true }),
-  c('ate', 'How well you ate', 'number', "json_extract(t.extra, '$.ate')", { sortable: true }),
-  c('slept', 'How you slept', 'number', "json_extract(t.extra, '$.slept')", { sortable: true }),
+  c('active', 'How active', 'number', "json_extract(t.extra, '$.active')", { sortable: true, edit: moodWhy('active') }),
+  c('ate', 'How well you ate', 'number', "json_extract(t.extra, '$.ate')", { sortable: true, edit: moodWhy('ate') }),
+  c('slept', 'How you slept', 'number', "json_extract(t.extra, '$.slept')", { sortable: true, edit: moodWhy('slept') }),
   c('note', 'Note', 'text', 't.note', { searchable: true, edit: dayLogEdit('mood', 'note', 'text', { maxLength: 500 }) }),
   stamp('createdAt', 'Saved at', 't.created_at', { filter: undefined }),
-], { privateSelect: DAY_LOG_FIELDS, needs: ['mood'] });
+], { privateSelect: DAY_LOG_FIELDS, needs: ['mood'], remove: logRemove('mood') });
 
 const SLEEP = wellbeingTable('sleep', 'Sleep', 'Your hours and how deep you slept, night by night.', 'sleep', [
   day('day', 'Morning of', 't.date'),
@@ -1363,7 +1756,7 @@ const SLEEP = wellbeingTable('sleep', 'Sleep', 'Your hours and how deep you slep
   c('quality', 'How deep', 'enum', "json_extract(t.extra, '$.quality')", { options: SLEEP_QUALITY_OPTIONS, sortable: true, filter: 'pick', edit: dayLogEdit('sleep', 'extra.quality', 'select', { send: numberSend(SLEEP_QUALITY_OPTIONS) }) }),
   c('note', 'Note', 'text', 't.note', { searchable: true, edit: dayLogEdit('sleep', 'note', 'text', { maxLength: 500 }) }),
   stamp('createdAt', 'Saved at', 't.created_at', { filter: undefined }),
-], { privateSelect: DAY_LOG_FIELDS, needs: ['sleep'] });
+], { privateSelect: DAY_LOG_FIELDS, needs: ['sleep'], remove: logRemove('sleep', 'Log the night again to have it back.') });
 
 const STRESS = wellbeingTable('stress', 'Stress', 'Your stress level each day and what weighed on you.', 'stress', [
   day('day', 'Day', 't.date'),
@@ -1377,27 +1770,48 @@ const STRESS = wellbeingTable('stress', 'Stress', 'Your stress level each day an
   }),
   c('note', 'Note', 'text', 't.note', { searchable: true, edit: dayLogEdit('stress', 'note', 'text', { maxLength: 500 }) }),
   stamp('createdAt', 'Saved at', 't.created_at', { filter: undefined }),
-], { privateSelect: { ...DAY_LOG_FIELDS, stressors: "json_extract(t.extra, '$.stressors')" }, needs: ['stress'] });
+], { privateSelect: { ...DAY_LOG_FIELDS, stressors: "json_extract(t.extra, '$.stressors')" }, needs: ['stress'], remove: logRemove('stress') });
 
+// Mindful minutes change and go (2026-11-14, the founder: edit as well as delete) through their own route, which keeps a focus round in step:
+// a round's log changes its minutes with the round's and stays a focus round's; deleting it leaves the round, no longer counted as mindful.
+const MINDFUL_PATH = '/wellbeing/mindful/:id';
 const MINDFUL = wellbeingTable('mindfulMinutes', 'Mindful minutes', 'Each time you logged mindful minutes.', 'mindful', [
   day('day', 'Day', 't.date'),
-  c('minutes', 'Minutes', 'number', 't.value', { sortable: true, notNull: true, format: 'minutes' }),
-  c('from', 'From', 'enum', "json_extract(t.extra, '$.kind')", { options: MINDFUL_FROM_OPTIONS, sortable: true, filter: 'pick' }),
+  c('minutes', 'Minutes', 'number', 't.value', { sortable: true, notNull: true, format: 'minutes', edit: patch(MINDFUL_PATH, 'minutes', 'number', { min: 1, max: 600, step: 1, note: 'A focus round’s minutes change with it.' }) }),
+  c('from', 'From', 'enum', "json_extract(t.extra, '$.kind')", {
+    options: MINDFUL_FROM_OPTIONS,
+    sortable: true,
+    filter: 'pick',
+    // A focus round's own log shows as one and stays one (the route refuses a change of it); a log made another way is a break, a breath or by hand.
+    edit: patch(MINDFUL_PATH, 'kind', 'select', { offer: ['break', 'breathe', 'none'], whenCell: { cell: 'from', is: ['break', 'breathe', null] }, why: 'A focus round’s log stays a focus round’s. Change its minutes here, or the round under Focus sessions.', note: 'A focus round’s minutes stay a focus round’s.' }),
+  }),
   c('note', 'Note', 'text', 't.note', { searchable: true }),
   stamp('createdAt', 'Logged at', 't.created_at', { filter: undefined }),
-], { readOnlyWhy: 'A focus round’s minutes change with the round, under Focus sessions.', needs: ['mindful'] });
+], { needs: ['mindful'], remove: logRemove('mindful', 'A focus round stays, no longer counted as mindful minutes. Log the minutes again to have them back.') });
 
 const MOVE_PATH = '/fitness/move/:id';
 const MOVEMENT = wellbeingTable('movement', 'Movement', 'Each run, walk or workout you logged.', 'move', [
   day('day', 'Day', 't.date'),
   c('kind', 'Kind', 'enum', "COALESCE(json_extract(t.extra, '$.kind'), 'run')", { options: MOVE_KIND_OPTIONS, sortable: true, filter: 'pick', notNull: true, edit: patch(MOVE_PATH, 'kind', 'select', { when: 'recentOwnMove' }) }),
   c('minutes', 'Minutes', 'number', 't.value', { sortable: true, notNull: true, format: 'minutes', edit: patch(MOVE_PATH, 'minutes', 'number', { min: 1, max: 600, step: 1, when: 'recentOwnMove' }) }),
-  c('distance', 'Distance', 'number', "json_extract(t.extra, '$.metres')", { sortable: true, format: 'km' }),
+  c('distance', 'Distance', 'number', "json_extract(t.extra, '$.metres')", {
+    sortable: true,
+    format: 'km',
+    // Typed in km as the movement form takes it (`typedMetres` on the route), so the metres never move: "5.25", empty to take it off.
+    edit: patch(MOVE_PATH, 'km', 'text', { current: 'kmTyped', maxLength: 7, when: 'recentOwnMove', note: 'In km, like 5.2. Empty takes it off.' }),
+  }),
   c('effort', 'Effort', 'enum', "json_extract(t.extra, '$.effort')", { options: EFFORT_OPTIONS, sortable: true, filter: 'pick', edit: patch(MOVE_PATH, 'effort', 'select', { send: numberSend(EFFORT_OPTIONS), when: 'recentOwnMove' }) }),
   c('loggedBy', 'Logged by', 'enum', "json_extract(t.extra, '$.source')", { options: LOGGED_BY_OPTIONS, filter: 'pick' }),
   c('note', 'Note', 'text', 't.note', { searchable: true, edit: patch(MOVE_PATH, 'note', 'text', { maxLength: 500, when: 'recentOwnMove' }) }),
   stamp('createdAt', 'Logged at', 't.created_at', { filter: undefined }),
-], { dayCell: 'day', needs: ['fitness', 'run'] });
+  // The distance as the form fills it ("5.25", whole metres kept), for the Distance field (never a grid column).
+  c('kmTyped', 'kmTyped', 'text', "CASE WHEN json_extract(t.extra, '$.metres') IS NULL THEN NULL ELSE rtrim(rtrim(printf('%.3f', json_extract(t.extra, '$.metres') / 1000.0), '0'), '.') END", { hidden: true, ownerOnly: true }),
+], {
+  dayCell: 'day',
+  needs: ['fitness', 'run'],
+  // Fitness's own remove: a club run's movement goes too, its xp and points stay where they went.
+  remove: { verb: 'Delete', did: 'deleted', ask: 'twice', warn: 'A club run’s xp and points stay where they went. Log it again in Fitness to have it back.', call: { method: 'DELETE', path: MOVE_PATH } },
+});
 
 function eatEdit(field: string, input: EditInput, more: Partial<ColumnEdit> = {}): ColumnEdit {
   return { method: 'PUT', path: '/fitness/eat', field, input, recipe: 'eatWhole', when: 'recentEat', ...more };
@@ -1417,8 +1831,15 @@ const EATING = wellbeingTable('eating', 'Eating', 'Your daily eating check-in, w
   c('legacy', 'From before the meals were asked', 'bool', null, { derive: 'eatLegacy', from: ['value', 'extra', 'note'], hidden: true }),
   c('note', 'Note', 'text', 't.note', { searchable: true, edit: eatEdit('note', 'text', { maxLength: 500 }) }),
   stamp('createdAt', 'Saved at', 't.created_at', { filter: undefined }),
-], { privateSelect: DAY_LOG_FIELDS, dayCell: 'day', needs: ['fitness'] });
+], {
+  privateSelect: DAY_LOG_FIELDS,
+  dayCell: 'day',
+  needs: ['fitness'],
+  remove: { verb: 'Delete', did: 'deleted', ask: 'twice', warn: 'The day’s protein goes with it. Check in again in Fitness to have it back.', call: { method: 'DELETE', path: '/fitness/eat/:id' } },
+});
 
+/** One logged amount (WATER_GLASS_MIN to WATER_GLASS_MAX ml), changed or removed on any day up to the person's today. */
+const WATER_PATH = '/reminders/water/:id';
 const WATER: DataTable = {
   key: 'water',
   name: 'Water',
@@ -1431,8 +1852,14 @@ const WATER: DataTable = {
   defaultSort: { key: 'createdAt', dir: 'desc' },
   read: 'sql',
   adminHidden: true,
-  readOnlyWhy: 'Add water or undo the last glass in Water and reminders.',
-  columns: [day('day', 'Day', 't.day'), c('ml', 'Amount', 'number', 't.ml', { sortable: true, notNull: true, format: 'ml' }), stamp('createdAt', 'Logged at', 't.created_at', { filter: undefined })],
+  // Any past day may change (2026-11-14, the founder), never one still to come: the routes by id take the same rule (routes/reminders.ts).
+  dayCell: 'day',
+  columns: [
+    day('day', 'Day', 't.day'),
+    c('ml', 'Amount', 'number', 't.ml', { sortable: true, notNull: true, format: 'ml', edit: patch(WATER_PATH, 'ml', 'number', { min: 50, max: 1000, step: 1, recipe: 'todayQuery', when: 'past', note: 'In ml, 50 to 1,000 at a time.' }) }),
+    stamp('createdAt', 'Logged at', 't.created_at', { filter: undefined }),
+  ],
+  remove: { verb: 'Delete', did: 'deleted', ask: 'twice', warn: 'Add it again in Water and reminders, for today or yesterday.', call: { method: 'DELETE', path: WATER_PATH, today: 'query' } },
 };
 
 const FOCUS_PATH = '/wellbeing/focus/:id';
@@ -1458,9 +1885,11 @@ const FOCUS_SESSIONS: DataTable = {
     c('mindful', 'Counted as mindful minutes', 'bool', 't.log_id IS NOT NULL', { filter: 'pick', notNull: true }),
     stamp('createdAt', 'Logged at', 't.created_at', { filter: undefined }),
   ],
+  remove: { verb: 'Delete', did: 'deleted', ask: 'twice', warn: 'Its mindful minutes go with it. Add a session you forgot in Mindfulness to have it back.', call: { method: 'DELETE', path: FOCUS_PATH } },
 };
 
 const SUPP_PATH = '/fitness/supplements/:id';
+const SUPPLEMENT_DAY_SET_OPTIONS = opts([['every', 'Every day'], ['weekdays', 'Weekdays'], ['weekends', 'Weekends']]);
 const SUPPLEMENTS: DataTable = {
   key: 'supplements',
   name: 'Supplements',
@@ -1480,12 +1909,21 @@ const SUPPLEMENTS: DataTable = {
     c('kind', 'Kind', 'enum', 't.kind', { options: SUPPLEMENT_KIND_OPTIONS, sortable: true, filter: 'pick', notNull: true, edit: patch(SUPP_PATH, 'kind', 'select') }),
     c('amount', 'Amount, as typed', 'text', 't.amount', { searchable: true, edit: patch(SUPP_PATH, 'amount', 'text', { maxLength: 24 }) }),
     c('time', 'When', 'enum', 't.time_of_day', { options: SUPPLEMENT_TIME_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true, edit: patch(SUPP_PATH, 'time', 'select') }),
-    c('days', 'Days', 'summary', null, { derive: 'weekdays', from: ['days'] }),
+    c('days', 'Days', 'summary', null, {
+      derive: 'weekdays',
+      from: ['days'],
+      options: SUPPLEMENT_DAY_SET_OPTIONS,
+      // A whole set by its name (the route reads it as the list Fitness sends); chosen days such as Mon, Wed, Fri are set in Fitness.
+      edit: patch(SUPP_PATH, 'days', 'select', { current: 'daySet', offer: ['every', 'weekdays', 'weekends'], note: 'Pick other days in Fitness.' }),
+    }),
     c('paused', 'Paused', 'bool', 't.paused_at IS NOT NULL', { filter: 'pick', notNull: true, edit: patch(SUPP_PATH, 'paused', 'toggle') }),
     c('pausedAt', 'Paused since', 'datetime', 't.paused_at', { sortable: true }),
     c('position', 'Order', 'number', 't.position', { sortable: true, hidden: true }),
     stamp('createdAt', 'Added', 't.created_at', { filter: undefined }),
+    // Which whole set its days are, for the Days field; any other choice of days reads 'custom', shown and never offered.
+    c('daySet', 'daySet', 'text', "CASE t.days_json WHEN '[1,2,3,4,5,6,7]' THEN 'every' WHEN '[1,2,3,4,5]' THEN 'weekdays' WHEN '[6,7]' THEN 'weekends' ELSE 'custom' END", { hidden: true, ownerOnly: true }),
   ],
+  remove: { verb: 'Delete', did: 'deleted', ask: 'twice', warn: 'Its ticks go with it. Pause keeps it instead.', call: { method: 'DELETE', path: SUPP_PATH } },
 };
 
 const SUPPLEMENT_DAYS: DataTable = {
@@ -1502,13 +1940,27 @@ const SUPPLEMENT_DAYS: DataTable = {
   read: 'sql',
   adminHidden: true,
   readOnlyWhy: 'Tick a supplement on Daily or in Fitness.',
+  noEditWhy: 'A tick is only taken or not. Untick it here, or tick one on Daily or in Fitness.',
   columns: [
     c('supplement', 'Supplement', 'text', 's.name', { sortable: true, searchable: true }),
     c('kind', 'Kind', 'enum', 's.kind', { options: SUPPLEMENT_KIND_OPTIONS, filter: 'pick' }),
     c('time', 'When', 'enum', 's.time_of_day', { options: SUPPLEMENT_TIME_OPTIONS, ordered: true, filter: 'pick' }),
     day('day', 'Day', 't.day'),
     stamp('takenAt', 'Ticked at', 't.taken_at', { filter: undefined }),
+    // The supplement's own id, which the tick's route names (the row's key holds a colon).
+    c('supplementId', 'supplementId', 'text', 't.supplement_id', { hidden: true, ownerOnly: true }),
   ],
+  // Ticked on any past day (2026-11-14, the founder), never one still to come, and unticked on any day: the tick's own route holds both
+  // (`tickDay` in routes/supplements.ts), so a tick an older build let through for tomorrow can still be taken away here.
+  remove: {
+    verb: 'Remove',
+    did: 'unticked',
+    ask: 'twice',
+    title: 'Untick {rows}?',
+    yes: 'Yes, untick {it}',
+    warn: 'The supplement stays on your list. Today’s and yesterday’s can be ticked again on Daily or in Fitness.',
+    call: { method: 'PUT', path: '/fitness/supplements/:id/day', param: 'supplementId', body: { taken: false }, bodyFrom: { date: 'day' } },
+  },
 };
 
 const JOURNAL_PATH = '/journal/:id';
@@ -1535,12 +1987,14 @@ const JOURNAL: DataTable = {
     c('stressors', 'What weighed on you', 'summary', null, { derive: 'stringList', from: ['stressors'], options: STRESSOR_OPTIONS, filter: 'pick', filterSql: 'EXISTS (SELECT 1 FROM json_each(t.stressors) s WHERE s.value = {v})' }),
     stamp('updatedAt', 'Changed', 't.updated_at', { filter: undefined }),
   ],
+  remove: { verb: 'Delete', did: 'deleted', ask: 'twice', warn: 'Your words go for good.', call: { method: 'DELETE', path: JOURNAL_PATH } },
 };
 
+// A day's lines change on any past day (2026-11-14, the founder), never one still to come; the route takes the same rule (routes/journal.ts).
 function gratitudeLine(i: number, label: string): DataColumn {
   return c(`line${i + 1}`, label, 'text', `json_extract(t.lines_json, '$[${i}].text')`, {
     searchable: true,
-    edit: { method: 'PUT', path: '/journal/gratitude/:id', field: `lines.${i}`, input: 'text', recipe: 'gratitudeLine', when: 'recent', maxLength: 280 },
+    edit: { method: 'PUT', path: '/journal/gratitude/:id', field: `lines.${i}`, input: 'text', recipe: 'gratitudeLine', when: 'past', maxLength: 280 },
   });
 }
 const GRATITUDE_PILLAR_OPTIONS: readonly ColumnOption[] = [...PILLAR_OPTIONS, { value: 'day', label: 'Your day' }];
@@ -1575,7 +2029,24 @@ const GRATITUDE: DataTable = {
     stamp('createdAt', 'First written', 't.created_at', { filter: undefined }),
     stamp('updatedAt', 'Changed', 't.updated_at', { filter: undefined }),
   ],
+  // Clearing a day takes its three lines, as emptying all three on Journal does; any day up to today (DELETE /journal/gratitude/:day).
+  remove: { verb: 'Clear', did: 'cleared', ask: 'twice', warn: 'The day’s three lines go for good.', call: { method: 'DELETE', path: '/journal/gratitude/:id', today: 'query' } },
 };
+
+/**
+ * The Creation apps' rule for a row its owner may change now (2026-11-14, All tables' Edit and Delete): a hidden yes cell, worked out in the read
+ * from the app's own rule (an entry typed by hand, a due still open, an offer still waiting), read by the `madeIt` rule, each column saying why
+ * not in its own words (`why`). The app's route holds the same rule in its write, so a row that moved since the read is refused out loud.
+ */
+function mayChangeCell(sql: string): DataColumn {
+  return c('madeIt', 'madeIt', 'bool', sql, { hidden: true, notNull: true });
+}
+const TX_PATH = '/finance/transactions/:id';
+/** Money the app booked (from an invoice, a due being settled or a month's recurring entry) is changed where it came from, never here. */
+const TX_BOOKED_WHY = 'The app booked this one from an invoice, a due or a monthly entry, so it stays as it was booked.';
+function typedTx(field: string, input: EditInput, more: Partial<ColumnEdit> = {}): ColumnEdit {
+  return patch(TX_PATH, field, input, { when: 'madeIt', why: TX_BOOKED_WHY, ...more });
+}
 
 const MONEY_IN_OUT: DataTable = {
   key: 'moneyInOut',
@@ -1591,17 +2062,39 @@ const MONEY_IN_OUT: DataTable = {
   read: 'sql',
   privateSelect: { splits: 't.splits_json' },
   columns: [
-    day('day', 'Day', 't.date'),
-    c('kind', 'In or out', 'enum', 't.kind', { options: IN_OUT_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
-    c('amount', 'Amount', 'money', 't.amount_cents', { currency: 'currency', sortable: true, notNull: true }),
+    day('day', 'Day', 't.date', { edit: typedTx('date', 'date') }),
+    c('kind', 'In or out', 'enum', 't.kind', {
+      options: IN_OUT_OPTIONS,
+      sortable: true,
+      filter: 'pick',
+      notNull: true,
+      edit: typedTx('kind', 'select', { note: 'A category that does not fit the other side moves to that side’s Other.' }),
+    }),
+    c('amount', 'Amount', 'money', 't.amount_cents', { currency: 'currency', sortable: true, notNull: true, edit: typedTx('amountCents', 'money', { min: 1, max: 1_000_000_000 }) }),
     c('currency', 'Currency', 'enum', 't.currency', { options: CURRENCY_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
-    c('category', 'Category', 'enum', 't.category', { options: CATEGORY_OPTIONS, otherLabel: 'Other', sortable: true, filter: 'pick' }),
-    c('who', 'Who', 'text', 't.counterparty', { sortable: true, searchable: true, edit: patch('/finance/transactions/:id', 'counterparty', 'text', { maxLength: 80 }) }),
-    c('note', 'Note', 'text', 't.note', { searchable: true, edit: patch('/finance/transactions/:id', 'note', 'text', { maxLength: 300 }) }),
+    c('category', 'Category', 'enum', 't.category', {
+      options: CATEGORY_OPTIONS,
+      otherLabel: 'Other',
+      sortable: true,
+      filter: 'pick',
+      edit: typedTx('category', 'select', { note: 'Money in takes a category for money in, money out one for money out.' }),
+    }),
+    c('who', 'Who', 'text', 't.counterparty', { sortable: true, searchable: true, edit: patch(TX_PATH, 'counterparty', 'text', { maxLength: 80 }) }),
+    c('note', 'Note', 'text', 't.note', { searchable: true, edit: patch(TX_PATH, 'note', 'text', { maxLength: 300 }) }),
     c('source', 'Where it came from', 'enum', 't.source', { options: MONEY_SOURCE_OPTIONS, sortable: true, filter: 'pick' }),
     c('splits', 'Splits', 'summary', null, { derive: 'splits', from: ['splits'] }),
     stamp('createdAt', 'Added', 't.created_at', { filter: undefined }),
+    // An entry the person typed (Finance's own rule for what changes and goes here).
+    mayChangeCell("t.source = 'manual'"),
   ],
+  remove: {
+    verb: 'Delete',
+    did: 'deleted',
+    ask: 'sheet',
+    warn: 'It comes off your books and your totals. This cannot be undone.',
+    only: { where: { cell: 'madeIt', is: [true] }, why: 'Money the app booked from an invoice, a due or a monthly entry stays. Change it where it came from.' },
+    call: { method: 'DELETE', path: TX_PATH },
+  },
 };
 
 const BUDGETS: DataTable = {
@@ -1624,9 +2117,23 @@ const BUDGETS: DataTable = {
       notNull: true,
       edit: { method: 'PUT', path: '/finance/budgets', field: 'monthlyCents', input: 'money', recipe: 'budgetsWhole', min: 0, note: 'Zero removes the budget.' },
     }),
+    // The category with dashes for its spaces, as a table names a row in a route's path (DELETE /finance/budgets/:category reads either).
+    c('slug', 'slug', 'text', "replace(t.category, ' ', '-')", { hidden: true }),
   ],
+  remove: {
+    verb: 'Delete',
+    did: 'deleted',
+    ask: 'twice',
+    warn: 'Its spending stays in your money in and out. Set it again in Finance any time.',
+    call: { method: 'DELETE', path: '/finance/budgets/:id', param: 'slug' },
+  },
 };
 
+const DUE_SETTLED_WHY = 'A settled due stays as it was booked.';
+/** A due's field, changed through Finance's PATCH while the due is open (the route guards its write on that too). */
+function openDue(field: string, input: EditInput, more: Partial<ColumnEdit> = {}): ColumnEdit {
+  return patch('/finance/dues/:id', field, input, { when: 'madeIt', why: DUE_SETTLED_WHY, ...more });
+}
 const DUES: DataTable = {
   key: 'dues',
   name: 'Dues',
@@ -1639,22 +2146,32 @@ const DUES: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'due', dir: 'asc' },
   read: 'sql',
-  readOnlyWhy: 'Settle a due in Finance, which books it in your money.',
   columns: [
     c('direction', 'Who owes', 'enum', 't.direction', { options: DUE_DIRECTION_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
-    c('who', 'Who', 'text', 't.counterparty', { sortable: true, searchable: true }),
-    c('amount', 'Amount', 'money', 't.amount_cents', { currency: 'currency', sortable: true, notNull: true }),
+    c('who', 'Who', 'text', 't.counterparty', { sortable: true, searchable: true, edit: openDue('counterparty', 'text', { minLength: 1, maxLength: 80 }) }),
+    c('amount', 'Amount', 'money', 't.amount_cents', { currency: 'currency', sortable: true, notNull: true, edit: openDue('amountCents', 'money', { min: 1, max: 1_000_000_000 }) }),
     c('currency', 'Currency', 'enum', 't.currency', { options: CURRENCY_OPTIONS, filter: 'pick', notNull: true }),
     c('category', 'Category', 'enum', 't.category', { options: CATEGORY_OPTIONS, otherLabel: 'None', sortable: true, filter: 'pick' }),
-    c('note', 'Note', 'text', 't.note', { searchable: true }),
-    c('due', 'Due', 'date', 't.due_date', { sortable: true, filter: 'range' }),
+    c('note', 'Note', 'text', 't.note', { searchable: true, edit: openDue('note', 'text', { maxLength: 300 }) }),
+    c('due', 'Due', 'date', 't.due_date', { sortable: true, filter: 'range', edit: openDue('dueDate', 'date', { nullable: true }) }),
     c('repeats', 'Repeats', 'enum', 't.recurring', { options: DUE_REPEAT_OPTIONS, filter: 'pick' }),
-    c('status', 'State', 'enum', 't.status', { options: DUE_STATE_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
+    c('status', 'State', 'enum', 't.status', {
+      options: DUE_STATE_OPTIONS,
+      ordered: true,
+      sortable: true,
+      filter: 'pick',
+      notNull: true,
+      // Settled is one way: Finance's own settle, which books the money on the person's day (`?day=`) and lines up a monthly due's next one.
+      edit: { method: 'POST', path: '/finance/dues/:id/settle', field: 'status', input: 'select', recipe: 'todayQuery', offer: ['settled'], when: 'madeIt', why: DUE_SETTLED_WHY, note: 'Settling books the money in your money in and out, on your day.' },
+    }),
     c('settledAt', 'Settled at', 'datetime', 't.settled_at', { sortable: true }),
     stamp('createdAt', 'Added', 't.created_at', { filter: undefined }),
+    mayChangeCell("t.status = 'open'"),
   ],
+  remove: { verb: 'Delete', did: 'deleted', ask: 'sheet', warn: 'Money already booked when it was settled stays in your money in and out. This cannot be undone.', call: { method: 'DELETE', path: '/finance/dues/:id' } },
 };
 
+const GOAL_PATH = '/finance/goals/:id';
 const SAVINGS_GOALS: DataTable = {
   key: 'savingsGoals',
   name: 'Savings goals',
@@ -1667,19 +2184,26 @@ const SAVINGS_GOALS: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'createdAt', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Put money toward a goal in Finance.',
   columns: [
-    c('title', 'Goal', 'text', 't.title', { sortable: true, searchable: true, notNull: true }),
+    c('title', 'Goal', 'text', 't.title', { sortable: true, searchable: true, notNull: true, edit: patch(GOAL_PATH, 'title', 'text', { minLength: 1, maxLength: 120 }) }),
     c('kind', 'Kind', 'enum', 't.kind', { options: GOAL_KIND_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
-    c('target', 'Target', 'money', 't.target_cents', { currency: 'person', sortable: true, notNull: true }),
-    // An earn goal counts money in (Finance works it out), so its stored 0 is never shown as saved.
-    c('saved', 'Saved so far', 'money', "CASE WHEN t.kind = 'save' THEN t.saved_cents END", { currency: 'person', sortable: true }),
+    c('target', 'Target', 'money', 't.target_cents', { currency: 'person', sortable: true, notNull: true, edit: patch(GOAL_PATH, 'targetCents', 'money', { min: 1, max: 1_000_000_000_000 }) }),
+    // An earn goal counts money in (Finance works it out), so its stored 0 is never shown as saved, nor changed.
+    c('saved', 'Saved so far', 'money', "CASE WHEN t.kind = 'save' THEN t.saved_cents END", {
+      currency: 'person',
+      sortable: true,
+      edit: patch(GOAL_PATH, 'savedCents', 'money', { min: 0, max: 1_000_000_000_000, when: 'madeIt', why: 'An earning goal counts your money in by itself.' }),
+    }),
     c('started', 'Started', 'date', 't.start_date', { sortable: true }),
-    c('deadline', 'By', 'date', 't.deadline', { sortable: true, filter: 'range' }),
+    c('deadline', 'By', 'date', 't.deadline', { sortable: true, filter: 'range', edit: patch(GOAL_PATH, 'deadline', 'date', { nullable: true }) }),
     stamp('createdAt', 'Added', 't.created_at', { filter: undefined }),
+    // A saving goal, whose amount put aside is typed (Finance's add, or this table's Saved so far).
+    mayChangeCell("t.kind = 'save'"),
   ],
+  remove: { verb: 'Delete', did: 'deleted', ask: 'sheet', warn: 'The goal goes. Your money in and out stays as it is. This cannot be undone.', call: { method: 'DELETE', path: GOAL_PATH } },
 };
 
+const RECURRING_PATH = '/finance/recurring/:id';
 const RECURRING: DataTable = {
   key: 'recurring',
   name: 'Recurring',
@@ -1694,16 +2218,26 @@ const RECURRING: DataTable = {
   read: 'sql',
   columns: [
     c('kind', 'In or out', 'enum', 't.kind', { options: IN_OUT_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
-    c('amount', 'Amount', 'money', 't.amount_cents', { currency: 'currency', sortable: true, notNull: true }),
+    c('amount', 'Amount', 'money', 't.amount_cents', { currency: 'currency', sortable: true, notNull: true, edit: patch(RECURRING_PATH, 'amountCents', 'money', { min: 1, max: 1_000_000_000 }) }),
     c('currency', 'Currency', 'enum', 't.currency', { options: CURRENCY_OPTIONS, filter: 'pick', notNull: true }),
-    c('category', 'Category', 'enum', 't.category', { options: CATEGORY_OPTIONS, otherLabel: 'Other', sortable: true, filter: 'pick' }),
-    c('who', 'Who', 'text', 't.counterparty', { sortable: true, searchable: true }),
-    c('note', 'Note', 'text', 't.note', { searchable: true }),
-    c('dayOfMonth', 'Day of the month', 'number', 't.day_of_month', { sortable: true }),
+    c('category', 'Category', 'enum', 't.category', {
+      options: CATEGORY_OPTIONS,
+      otherLabel: 'Other',
+      sortable: true,
+      filter: 'pick',
+      edit: patch(RECURRING_PATH, 'category', 'select', { note: 'Money in takes a category for money in, money out one for money out.' }),
+    }),
+    c('who', 'Who', 'text', 't.counterparty', { sortable: true, searchable: true, edit: patch(RECURRING_PATH, 'counterparty', 'text', { maxLength: 80 }) }),
+    c('note', 'Note', 'text', 't.note', { searchable: true, edit: patch(RECURRING_PATH, 'note', 'text', { maxLength: 300 }) }),
+    c('dayOfMonth', 'Day of the month', 'number', 't.day_of_month', {
+      sortable: true,
+      edit: patch(RECURRING_PATH, 'dayOfMonth', 'number', { min: 1, max: 28, step: 1, note: 'The next one keeps its month. A day already gone is booked on the next run.' }),
+    }),
     c('nextOn', 'Next on', 'date', 't.next_date', { sortable: true, notNull: true }),
-    c('active', 'On', 'bool', 't.active', { sortable: true, filter: 'pick', notNull: true, edit: patch('/finance/recurring/:id', 'active', 'toggle') }),
+    c('active', 'On', 'bool', 't.active', { sortable: true, filter: 'pick', notNull: true, edit: patch(RECURRING_PATH, 'active', 'toggle') }),
     stamp('createdAt', 'Added', 't.created_at', { filter: undefined }),
   ],
+  remove: { verb: 'Delete', did: 'deleted', ask: 'sheet', warn: 'What it already booked stays in your money in and out. Nothing more is booked from it.', call: { method: 'DELETE', path: RECURRING_PATH } },
 };
 
 const POINTS: DataTable = {
@@ -1720,6 +2254,8 @@ const POINTS: DataTable = {
   // A like's or a follow's point lands the moment it happened: a coach who liked an anonymous post could see whose it was, so never one.
   coachWhere: "t.reason NOT LIKE 'social:%'",
   readOnlyWhy: 'A record of what moved, so it stays as it is.',
+  noEditWhy: 'Points that moved stay on the record as they happened.',
+  noRemoveWhy: 'Points that moved stay on the record, so your balance stays true.',
   columns: [
     stamp('createdAt', 'When', 't.created_at'),
     c('amount', 'Points', 'number', 't.amount', { sortable: true, notNull: true, format: 'signed' }),
@@ -1739,6 +2275,8 @@ const CREDITS: DataTable = {
   defaultSort: { key: 'createdAt', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A record of what moved, so it stays as it is.',
+  noEditWhy: 'Credits that moved stay on the record as they happened.',
+  noRemoveWhy: 'Credits that moved stay on the record, so your balance stays true.',
   columns: [
     stamp('createdAt', 'When', 't.created_at'),
     c('amount', 'Credits', 'number', 't.amount', { sortable: true, notNull: true, format: 'signed' }),
@@ -1764,6 +2302,8 @@ const ORDERS: DataTable = {
   defaultSort: { key: 'createdAt', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'An order is a record of a purchase.',
+  noEditWhy: 'An order is a record of a purchase, so it stays as it was paid.',
+  noRemoveWhy: 'An order stays for the books, yours and the seller’s.',
   columns: [
     stamp('createdAt', 'Bought at', 't.created_at'),
     c('product', 'Product', 'text', 'p.title', { sortable: true, searchable: true }),
@@ -1798,6 +2338,20 @@ const ENROLMENTS: DataTable = {
   defaultSort: { key: 'joined', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'The cohort’s manager marks it complete.',
+  noEditWhy: 'The cohort’s manager marks it complete, and a place you paid for stays as it happened.',
+  // Leave a cohort (2026-11-14, the founder's yes): no refund, and the seat comes free; School's own leave route, guarded on enrolled.
+  remove: {
+    verb: 'Leave',
+    did: 'left',
+    ask: 'sheet',
+    noun: { one: 'cohort', many: 'cohorts' },
+    warn: 'Your place goes and what you paid stays paid: there is no refund. You cannot join that cohort again, and its manager is told.',
+    outcomes: [
+      { when: { cell: 'status', is: ['enrolled'] }, did: 'left', call: { method: 'POST', path: '/school/enrollments/:id/leave' } },
+      { when: { cell: 'status', is: ['withdrawn'] }, skip: 'You left it already.' },
+      { skip: 'A program you finished stays as you finished it.' },
+    ],
+  },
   columns: [
     c('program', 'Program', 'text', 'p.name', { sortable: true, searchable: true }),
     c('cohort', 'Cohort', 'text', 'k.name', { sortable: true, searchable: true }),
@@ -1820,6 +2374,8 @@ const LESSON_PROGRESS: DataTable = {
   defaultSort: { key: 'doneAt', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A finished lesson stays finished.',
+  noEditWhy: 'A finished lesson stays finished.',
+  noRemoveWhy: 'Your certificates and badges count it, so it stays.',
   columns: [c('lesson', 'Lesson', 'text', 'l.title', { sortable: true, searchable: true }), c('course', 'Course', 'text', 'p.title', { sortable: true, searchable: true }), stamp('doneAt', 'Done on', 't.completed_at')],
 };
 
@@ -1838,6 +2394,15 @@ const HAND_INS: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'handedIn', dir: 'desc' },
   read: 'sql',
+  // Take a hand-in back while it waits and nobody has written on it (School's own guarded route, 2026-11-14); hand it in again from the cohort.
+  remove: {
+    verb: 'Withdraw',
+    did: 'withdrawn',
+    ask: 'twice',
+    warn: 'It leaves the cohort’s hand-ins. Hand it in again from the cohort while you are in it.',
+    only: { where: "t.status = 'submitted' AND NOT EXISTS (SELECT 1 FROM submission_feedback f WHERE f.submission_id = t.id)", why: 'Someone gave feedback on it, so it stays.' },
+    call: { method: 'DELETE', path: '/school/submissions/:id' },
+  },
   columns: [
     c('assignment', 'Assignment', 'text', 'a.title', { sortable: true, searchable: true }),
     c('program', 'Program', 'text', 'p.name', { sortable: true, searchable: true }),
@@ -1865,6 +2430,8 @@ const QUIZ_ATTEMPTS: DataTable = {
   defaultSort: { key: 'lastTried', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'The quiz works out the score.',
+  noEditWhy: 'The quiz works out the score.',
+  noRemoveWhy: 'Your last try stays until you take the quiz again.',
   columns: [
     c('lesson', 'Lesson', 'text', 'l.title', { sortable: true, searchable: true }),
     c('course', 'Course', 'text', 'p.title', { sortable: true, searchable: true }),
@@ -1886,6 +2453,8 @@ const CERTIFICATES: DataTable = {
   defaultSort: { key: 'issued', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A certificate is a record, issued once.',
+  noEditWhy: 'A certificate is a record, issued once.',
+  noRemoveWhy: 'A certificate stays: its link and your badges count on it.',
   columns: [
     c('course', 'Course', 'text', 'p.title', { sortable: true, searchable: true }),
     // The course maker's name: the owner's own view only, as an order's seller.
@@ -1907,6 +2476,8 @@ const ATTENDANCE: DataTable = {
   defaultSort: { key: 'checkedIn', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A check-in is a record.',
+  noEditWhy: 'A check-in is a record.',
+  noRemoveWhy: 'A check-in stays: it counts toward finishing the program.',
   columns: [
     c('meeting', 'Session', 'text', 'cs.title', { sortable: true, searchable: true }),
     c('cohort', 'Cohort', 'text', 'k.name', { sortable: true, searchable: true }),
@@ -1929,14 +2500,41 @@ const FRIENDS: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'askedOn', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Answer or remove a friend in Bond.',
   columns: [
     c('name', 'Name', 'text', 'u.display_name', { sortable: true, searchable: true }),
     c('handle', 'Username', 'text', 'u.handle', { sortable: true, searchable: true, format: 'handle' }),
-    c('state', 'Status', 'enum', "CASE WHEN t.status = 'accepted' THEN 'friends' WHEN t.requester_id = ?1 THEN 'sent' ELSE 'pending' END", { options: FRIEND_STATE_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
+    // Saying yes to a request someone sent you, through Bond's own answer, which tells them (2026-11-14). A request you sent, or a friend, is
+    // refused by the route in words.
+    c('state', 'Status', 'enum', "CASE WHEN t.status = 'accepted' THEN 'friends' WHEN t.requester_id = ?1 THEN 'sent' ELSE 'pending' END", {
+      options: FRIEND_STATE_OPTIONS,
+      sortable: true,
+      filter: 'pick',
+      notNull: true,
+      edit: {
+        method: 'POST',
+        path: '/bond/friends/:id',
+        field: 'status',
+        input: 'select',
+        offer: ['friends'],
+        send: { friends: 'accepted' },
+        whenCell: { cell: 'state', is: ['pending'] },
+        why: 'Only a request someone sent you waits for your yes.',
+        note: 'Says yes to a request they sent you. They are told.',
+      },
+    }),
     stamp('askedOn', 'Asked on', 't.created_at'),
     c('answeredAt', 'Became friends', 'datetime', 't.answered_at', { sortable: true }),
   ],
+  // The other person's id, for Bond's own remove: read on the server, never sent.
+  privateSelect: { otherId: 'CASE WHEN t.requester_id = ?1 THEN t.recipient_id ELSE t.requester_id END' },
+  remove: {
+    verb: 'Remove',
+    did: 'removed',
+    ask: 'sheet',
+    noun: { one: 'friend', many: 'friends', person: true },
+    warn: 'A friend leaves your friends, or a request goes, and nobody is told. Either of you can ask again.',
+    call: { method: 'DELETE', path: '/bond/friends/:otherId' },
+  },
 };
 
 const FOLLOWING: DataTable = {
@@ -1953,7 +2551,11 @@ const FOLLOWING: DataTable = {
   defaultSort: { key: 'since', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'Unfollow from their page or a post.',
+  noEditWhy: 'A follow is on or off. Unfollow here, or follow again from their page.',
   columns: [c('name', 'Name', 'text', 'u.display_name', { sortable: true, searchable: true }), c('handle', 'Username', 'text', 'u.handle', { sortable: true, searchable: true, format: 'handle' }), stamp('since', 'Since', 't.created_at')],
+  // Community's own unfollow, never the toggle: sent again it changes nothing and says so, 409 (2026-11-14). Its route sits under Community, like a
+  // follow from a post.
+  remove: { verb: 'Unfollow', did: 'unfollowed', ask: 'twice', noun: { one: 'person', many: 'people', person: true }, warn: 'They are not told. Follow them again from their page.', call: { method: 'DELETE', path: '/community/follow/:id' } },
 };
 
 const FOLLOWERS: DataTable = {
@@ -1969,8 +2571,11 @@ const FOLLOWERS: DataTable = {
   idSql: 't.follower_id',
   defaultSort: { key: 'since', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Only they can undo a follow.',
+  readOnlyWhy: 'Only they choose to follow you. You can take them off the list.',
+  noEditWhy: 'Only they choose to follow you.',
   columns: [c('name', 'Name', 'text', 'u.display_name', { sortable: true, searchable: true }), c('handle', 'Username', 'text', 'u.handle', { sortable: true, searchable: true, format: 'handle' }), stamp('since', 'Since', 't.created_at')],
+  // Taking someone off your followers (2026-11-14, the founder's yes): they are not told and may follow again, unless you block them.
+  remove: { verb: 'Remove', did: 'removed', ask: 'sheet', noun: { one: 'follower', many: 'followers', person: true }, warn: 'They stop following you and are not told. They can follow you again unless you block them.', call: { method: 'DELETE', path: '/community/followers/:id' } },
 };
 
 const POSTS: DataTable = {
@@ -1986,9 +2591,13 @@ const POSTS: DataTable = {
   read: 'sql',
   // A coach never sees an anonymous post: listing it would say who wrote it.
   coachWhere: 't.anonymous = 0',
-  readOnlyWhy: 'A post is not changed once written. Remove it in Community.',
   columns: [
-    c('body', 'Post', 'longtext', 't.body', { searchable: true, format: 'inert' }),
+    // Its words change through Community's own route, only while nobody has answered or reacted to it and no guide hid it (2026-11-14).
+    c('body', 'Post', 'longtext', 't.body', {
+      searchable: true,
+      format: 'inert',
+      edit: patch('/community/:id', 'body', 'longtext', { minLength: 1, maxLength: 2000, note: 'Only while nobody has answered or reacted. People it newly names are not told.' }),
+    }),
     c('topic', 'Topic', 'enum', 't.category', { options: POST_CATEGORY_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
     c('anonymous', 'Without your name', 'bool', 't.anonymous', { sortable: true, filter: 'pick', notNull: true }),
     c('membersFeed', 'In a members’ feed', 'bool', 't.product_id IS NOT NULL', { filter: 'pick', notNull: true }),
@@ -1997,6 +2606,17 @@ const POSTS: DataTable = {
     c('hiddenByGuide', 'Hidden by a guide', 'bool', 't.hidden_at IS NOT NULL', { filter: 'pick', notNull: true }),
     stamp('posted', 'Posted', 't.created_at'),
   ],
+  // Community's own delete. Asked in a sheet for every post: one with replies takes them with it, and the bar asks one way for a table.
+  // A post nobody answered is a second tap; one with replies asks in the sheet, since they go with it (CLAUDE.md, Confirmations; the review of
+  // 2026-11-14). The rule reads through idx_replies_post.
+  remove: {
+    verb: 'Delete',
+    did: 'deleted',
+    ask: 'twice',
+    sheetWhen: 'EXISTS (SELECT 1 FROM community_replies r WHERE r.post_id = t.id)',
+    warn: 'Its replies and reactions go with it. The xp it paid stays.',
+    call: { method: 'DELETE', path: '/community/:id' },
+  },
 };
 
 const REPLIES: DataTable = {
@@ -2013,6 +2633,7 @@ const REPLIES: DataTable = {
   read: 'sql',
   coachWhere: 't.anonymous = 0',
   readOnlyWhy: 'A reply is not changed once written.',
+  noEditWhy: 'A reply stays as written. Delete it and write it again.',
   columns: [
     c('body', 'Reply', 'longtext', 't.body', { searchable: true, format: 'inert' }),
     c('anonymous', 'Without your name', 'bool', 't.anonymous', { sortable: true, filter: 'pick', notNull: true }),
@@ -2021,6 +2642,23 @@ const REPLIES: DataTable = {
     stamp('written', 'Written', 't.created_at'),
     hiddenCell('postId', 't.post_id'),
   ],
+  // Community's delete of your own reply (2026-11-14), a second tap. One somebody answered stays: their words hang from it. An answer to a
+  // reply at the deepest level (4 is `MAX_REPLY_DEPTH` in circles.ts, kept a number so this leaf imports nothing) is stored beside it, so
+  // there a later reply beside it counts as an answer, as Community's own delete reads it. Both read through `idx_replies_parent`.
+  remove: {
+    verb: 'Delete',
+    did: 'deleted',
+    ask: 'twice',
+    warn: 'Its reactions go with it. The xp it paid stays.',
+    outcomes: [
+      {
+        when: 'NOT EXISTS (SELECT 1 FROM community_replies x WHERE x.parent_id = t.id) AND NOT (t.depth >= 4 AND EXISTS (SELECT 1 FROM community_replies x WHERE x.parent_id = t.parent_id AND x.id != t.id AND x.depth >= 4 AND x.created_at >= t.created_at))',
+        did: 'deleted',
+        call: { method: 'DELETE', path: '/community/replies/:id' },
+      },
+      { skip: 'Someone answered it, so it stays with their words.' },
+    ],
+  },
 };
 
 const COACH_NOTES: DataTable = {
@@ -2037,6 +2675,8 @@ const COACH_NOTES: DataTable = {
   defaultSort: { key: 'written', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A note is your coach’s words. Only they can take it back.',
+  noEditWhy: 'A note is your coach’s words, so it stays as they wrote it.',
+  noRemoveWhy: 'A note is your coach’s words. Only they can take it back.',
   columns: [c('coach', 'Coach', 'text', 'u.display_name', { sortable: true, searchable: true }), c('body', 'Note', 'longtext', 't.body', { searchable: true, format: 'inert' }), stamp('written', 'Written', 't.created_at')],
 };
 
@@ -2054,6 +2694,8 @@ const BADGES: DataTable = {
   reader: 'badges',
   memoryMax: 300,
   readOnlyWhy: 'A badge once earned is never taken back.',
+  noEditWhy: 'A badge once earned stays as it was earned.',
+  noRemoveWhy: 'A badge once earned is never taken back.',
   columns: [
     c('badge', 'Badge', 'text', null, { sortable: true, searchable: true }),
     c('family', 'Family', 'enum', null, { options: BADGE_FAMILY_OPTIONS, ordered: true, sortable: true, filter: 'pick' }),
@@ -2080,6 +2722,8 @@ const INBOX: DataTable = {
   defaultSort: { key: 'arrived', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'The app wrote these. Archive or delete them here or in Inbox.',
+  // As Inbox says: a note is put away first, then deleted for good from the Archived view (Delete forever, unchanged).
+  noRemoveWhy: 'Archive a note first, then delete it for good from the Archived view.',
   archive: {
     activeWhere: 't.archived_at IS NULL',
     archivedWhere: 't.archived_at IS NOT NULL',
@@ -2093,7 +2737,7 @@ const INBOX: DataTable = {
     // Other people's words sit in a note's body (a reply, a mention, a coach's note): only its owner's own view selects them, whatever the audience.
     c('body', 'Words', 'longtext', 't.body', { searchable: true, ownerOnly: true, format: 'inert' }),
     c('link', 'Opens', 'text', 't.link', { format: 'appLink', ownerOnly: true }),
-    c('read', 'Read', 'bool', 't.read_at IS NOT NULL', { filter: 'pick', notNull: true }),
+    c('read', 'Read', 'bool', 't.read_at IS NOT NULL', { filter: 'pick', notNull: true, edit: { method: 'POST', path: '/inbox/:id/read', field: 'read', input: 'toggle', note: 'Off marks it unread again.' } }),
     c('archivedAt', 'Archived on', 'datetime', 't.archived_at', { sortable: true }),
     stamp('arrived', 'Arrived', 't.created_at'),
   ],
@@ -2112,6 +2756,7 @@ const PRIVACY_CHOICES: DataTable = {
   read: 'memory',
   reader: 'consents',
   memoryMax: 3,
+  noRemoveWhy: 'A choice is switched off, never removed. Switch Allowed off.',
   columns: [
     c('choice', 'Choice', 'enum', null, { options: CONSENT_OPTIONS, ordered: true, sortable: true }),
     c('allowed', 'Allowed', 'bool', null, { sortable: true, filter: 'pick', edit: { method: 'PUT', path: '/me/legal/consent', field: 'granted', input: 'toggle', recipe: 'consentWhole', note: 'Off by Global Privacy Control in this browser stays off.' } }),
@@ -2130,6 +2775,9 @@ const AGENCY_CURRENCY = "COALESCE(s.currency, 'INR')";
 const AGENCY_SETTINGS_JOIN = 'LEFT JOIN agency_settings s ON s.user_id = t.user_id';
 const CLIENT_PATH = '/agency/clients/:id';
 const ITEM_PATH = '/agency/items/:id';
+const TIME_PATH = '/agency/time/:id';
+/** The most minutes one time entry holds, as Agency's own add and change take it (AGENCY_MAX_MINUTES in agency.ts; a test holds them together). */
+export const AGENCY_TIME_MAX_MINUTES = 24 * 60;
 /** A piece changes through Agency's own PATCH, with the device's day, which a move to Approved or Published dates itself by. */
 function itemEdit(field: string, input: EditInput, more: Partial<ColumnEdit> = {}): ColumnEdit {
   return { method: 'PATCH', path: ITEM_PATH, field, input, recipe: 'todayQuery', ...more };
@@ -2149,13 +2797,32 @@ const AGENCY_CLIENTS: DataTable = {
   defaultSort: { key: 'createdAt', dir: 'desc' },
   read: 'sql',
   privateSelect: { channels: 't.channels_json' },
+  // Agency's own delete (2026-11-14): the client goes with their pieces, notes, time and link; invoices stay for the books, without the client.
+  remove: {
+    verb: 'Delete',
+    did: 'deleted',
+    ask: 'sheet',
+    warn: 'Their pieces, notes, time, retainers and log go with them, and their links stop working. Invoices, agreements and documents stay for the books.',
+    call: { method: 'DELETE', path: CLIENT_PATH },
+  },
   columns: [
     c('name', 'Client', 'text', 't.name', { sortable: true, searchable: true, notNull: true, edit: patch(CLIENT_PATH, 'name', 'text', { minLength: 1, maxLength: 80 }) }),
     c('contact', 'Contact', 'text', 't.contact_name', { sortable: true, searchable: true, edit: patch(CLIENT_PATH, 'contactName', 'text', { maxLength: 80 }) }),
-    c('contactEmail', 'Their email', 'text', 't.contact_email', { searchable: true }),
+    c('contactEmail', 'Their email', 'text', 't.contact_email', {
+      searchable: true,
+      edit: patch(CLIENT_PATH, 'contactEmail', 'text', { minLength: 3, maxLength: 120, note: 'Their link and every paper you email go here.' }),
+    }),
     c('status', 'State', 'enum', 't.status', { options: AGENCY_CLIENT_STATUS_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true, edit: patch(CLIENT_PATH, 'status', 'select') }),
     c('health', 'How it is going', 'enum', 't.health', { options: AGENCY_HEALTH_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true, edit: patch(CLIENT_PATH, 'health', 'select') }),
-    c('stage', 'Stage', 'enum', 't.stage', { options: AGENCY_STAGE_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
+    c('stage', 'Stage', 'enum', 't.stage', {
+      options: AGENCY_STAGE_OPTIONS,
+      ordered: true,
+      sortable: true,
+      filter: 'pick',
+      notNull: true,
+      // Agency's own move, one stage forward at a time with its checks (moveProblem), guarded on the stage it read and written in the log.
+      edit: { method: 'POST', path: '/agency/clients/:id/stage', field: 'to', input: 'select', note: 'One stage forward at a time. Step back on the client’s page in Agency.' },
+    }),
     c('channels', 'Channels', 'summary', null, { derive: 'stringList', from: ['channels'] }),
     c('monthlyFee', 'Monthly fee', 'money', 't.retainer_cents', { currency: 'currency', sortable: true, notNull: true, edit: patch(CLIENT_PATH, 'retainerCents', 'money', { min: 0 }) }),
     c('pieces', 'Pieces a month', 'number', 't.pieces_per_month', { sortable: true, notNull: true, edit: patch(CLIENT_PATH, 'piecesPerMonth', 'number', { min: 0, max: 500, step: 1 }) }),
@@ -2188,6 +2855,8 @@ const AGENCY_PIECES: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'createdAt', dir: 'desc' },
   read: 'sql',
+  // Agency's own delete (2026-11-14): the piece and its notes go; time logged on it stays, on the client.
+  remove: { verb: 'Delete', did: 'deleted', ask: 'sheet', warn: 'Its notes go with it, and the client no longer sees it. Time logged on it stays, on the client.', call: { method: 'DELETE', path: ITEM_PATH } },
   columns: [
     c('title', 'Piece', 'text', 't.title', { sortable: true, searchable: true, notNull: true, edit: itemEdit('title', 'text', { minLength: 1, maxLength: 120 }) }),
     c('client', 'Client', 'text', 'cl.name', { sortable: true, searchable: true }),
@@ -2201,7 +2870,8 @@ const AGENCY_PIECES: DataTable = {
     c('changesIncluded', 'Changes included', 'number', 'COALESCE(t.revisions_allowed, cl.revisions_per_piece)'),
     c('month', 'Retainer month', 'number', 't.cycle_n', { sortable: true }),
     c('trial', 'Trial piece', 'bool', 't.trial', { filter: 'pick', notNull: true }),
-    c('link', 'Link', 'text', 't.link', { format: 'inert' }),
+    // The route refuses a link that is not https out loud since 2026-11-14 (it once dropped one quietly), so the table can offer it.
+    c('link', 'Link', 'text', 't.link', { format: 'inert', edit: itemEdit('link', 'text', { maxLength: 500, note: 'A link that starts with https://, or empty.' }) }),
     c('notes', 'Your notes', 'longtext', 't.notes', { searchable: true, format: 'inert', edit: itemEdit('notes', 'longtext', { maxLength: 1000 }) }),
     c('approvedOn', 'Approved on', 'date', 't.approved_day', { sortable: true }),
     c('publishedOn', 'Published on', 'date', 't.published_day', { sortable: true, filter: 'range' }),
@@ -2227,6 +2897,17 @@ const AGENCY_NOTES: DataTable = {
   defaultSort: { key: 'createdAt', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A note stays as it was written. Write a new one on the piece in Agency.',
+  noEditWhy: 'A note stays as it was written. Write a new one on the piece in Agency.',
+  // Your own lines only (2026-11-14): Agency's own delete takes yours and a teammate's, but the table leaves a teammate's to them, and a line
+  // from your client or the brand stays as they wrote it.
+  remove: {
+    verb: 'Delete',
+    did: 'deleted',
+    ask: 'sheet',
+    warn: 'They go from the piece’s thread, and from the client’s page if you shared them.',
+    only: { where: "t.author = 'me' OR (t.author = 'team' AND t.author_id = ?1)", why: 'A line someone else wrote stays as they wrote it.' },
+    call: { method: 'DELETE', path: '/agency/notes/:id' },
+  },
   columns: [
     stamp('createdAt', 'Written', 't.created_at'),
     c('piece', 'Piece', 'text', 'i.title', { sortable: true, searchable: true }),
@@ -2252,14 +2933,15 @@ const AGENCY_TIME: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'day', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Time is logged and taken off on the client’s page in Agency.',
+  // Changed through Agency's own PATCH /agency/time/:id (2026-11-14), with the add form's checks, and taken off with its own delete.
+  remove: { verb: 'Delete', did: 'deleted', ask: 'sheet', warn: 'The time comes off the client’s hours. An invoice already made from it stays as it is.', call: { method: 'DELETE', path: TIME_PATH } },
   columns: [
-    day('day', 'Day', 't.day'),
+    day('day', 'Day', 't.day', { edit: patch(TIME_PATH, 'day', 'date', { note: 'A day that has started.' }) }),
     c('client', 'Client', 'text', 'cl.name', { sortable: true, searchable: true }),
     c('piece', 'Piece', 'text', 'i.title', { sortable: true, searchable: true }),
-    c('minutes', 'Minutes', 'number', 't.minutes', { sortable: true, notNull: true, format: 'minutes' }),
-    c('billable', 'Billable', 'bool', 't.billable', { sortable: true, filter: 'pick', notNull: true }),
-    c('note', 'Note', 'text', 't.note', { searchable: true, format: 'inert' }),
+    c('minutes', 'Minutes', 'number', 't.minutes', { sortable: true, notNull: true, format: 'minutes', edit: patch(TIME_PATH, 'minutes', 'number', { min: 1, max: AGENCY_TIME_MAX_MINUTES, step: 1 }) }),
+    c('billable', 'Billable', 'bool', 't.billable', { sortable: true, filter: 'pick', notNull: true, edit: patch(TIME_PATH, 'billable', 'toggle') }),
+    c('note', 'Note', 'text', 't.note', { searchable: true, format: 'inert', edit: patch(TIME_PATH, 'note', 'text', { maxLength: 200 }) }),
     stamp('createdAt', 'Logged', 't.created_at', { filter: undefined }),
   ],
 };
@@ -2285,6 +2967,18 @@ const AGENCY_RETAINERS: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'createdAt', dir: 'desc' },
   read: 'sql',
+  // Agency's own two ends (2026-11-14), each guarded on the state it moves from: an offer or a chosen length is taken back, a running one ends.
+  remove: {
+    verb: 'End',
+    did: 'ended',
+    ask: 'sheet',
+    warn: 'An offer is taken back, and a running retainer makes no more months. Invoices and pieces already made stay.',
+    outcomes: [
+      { when: { cell: 'status', is: ['offered', 'chosen'] }, did: 'withdrawn', call: { method: 'POST', path: '/agency/retainers/:id/withdraw' } },
+      { when: { cell: 'status', is: ['active'] }, did: 'ended', call: { method: 'POST', path: '/agency/retainers/:id/end' } },
+      { skip: 'It ended already.' },
+    ],
+  },
   columns: [
     c('client', 'Client', 'text', 'cl.name', { sortable: true, searchable: true }),
     c('status', 'State', 'enum', 't.status', { options: RETAINER_STATUS_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
@@ -2325,6 +3019,8 @@ const AGENCY_LOG: DataTable = {
   defaultSort: { key: 'createdAt', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A record of what happened, so it stays as it is.',
+  noEditWhy: 'A record of what happened, so it stays as it is.',
+  noRemoveWhy: 'A record of what happened, so it stays as it is.',
   columns: [
     stamp('createdAt', 'When', 't.created_at'),
     c('client', 'Client', 'text', 'cl.name', { sortable: true, searchable: true }),
@@ -2347,11 +3043,28 @@ const AGENCY_TEAM: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'asked', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Change a teammate’s role and access under Team in Agency.',
+  // Agency's own remove (2026-11-14): someone else's access, so asked in a sheet; a member is told, an ask still waiting goes quietly.
+  remove: {
+    verb: 'Remove',
+    did: 'removed',
+    ask: 'sheet',
+    noun: { one: 'teammate', many: 'teammates', person: true },
+    warn: 'Their access to your Agency ends at once, and a member is told. An ask still waiting is taken back quietly.',
+    only: { where: { cell: 'status', is: ['invited', 'active'] }, why: 'They are off the team already.' },
+    call: { method: 'DELETE', path: '/agency/team/:id' },
+  },
   columns: [
     c('member', 'Teammate', 'text', `CASE WHEN u.display_name IS NULL OR u.display_name = ${DELETED} THEN 'A former member' ELSE u.display_name END`, { sortable: true, searchable: true, notNull: true }),
     c('handle', 'Username', 'text', `CASE WHEN u.display_name = ${DELETED} THEN NULL ELSE u.handle END`, { searchable: true, format: 'handle' }),
-    c('role', 'Role', 'enum', 't.role', { options: TEAM_ROLE_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
+    c('role', 'Role', 'enum', 't.role', {
+      options: TEAM_ROLE_OPTIONS,
+      sortable: true,
+      filter: 'pick',
+      notNull: true,
+      // Agency's own change: a new role starts from its access defaults and a member is told. Making someone a client asks which client, so
+      // that stays under Team in Agency; each tab's access too, which is changed as a set there.
+      edit: patch('/agency/team/:id', 'role', 'select', { offer: ['content_creator', 'videographer', 'editor'], note: 'A new role starts with that role’s access. A member is told.' }),
+    }),
     c('status', 'State', 'enum', 't.status', { options: TEAM_STATUS_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
     c('forClient', 'For client', 'text', 'cl.name', { sortable: true, searchable: true }),
     c('overview', 'Overview', 'enum', "COALESCE(json_extract(t.access_json, '$.overview'), 'off')", { options: TEAM_LEVEL_OPTIONS, ordered: true, filter: 'pick', notNull: true }),
@@ -2381,14 +3094,33 @@ const AGENCY_INVOICES: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'createdAt', dir: 'desc' },
   read: 'sql',
+  // Agency's own removes, by the invoice's state (2026-11-14): a draft is deleted; a sent one is voided, guarded on still being sent (`ifStatus`,
+  // so one paid a moment ago is never voided), and Restore in Agency brings it back; a paid or void one stays.
+  remove: {
+    verb: 'Delete',
+    did: 'deleted',
+    ask: 'sheet',
+    warn: 'A draft is deleted. A sent invoice is voided instead: its number stays, its link closes, and Restore in Agency brings it back.',
+    outcomes: [
+      { when: { cell: 'status', is: ['draft'] }, did: 'deleted', call: { method: 'DELETE', path: INVOICE_PATH } },
+      { when: { cell: 'status', is: ['sent'] }, did: 'voided', call: { method: 'PATCH', path: INVOICE_PATH, body: { status: 'void', ifStatus: 'sent' } } },
+      { when: { cell: 'status', is: ['paid'] }, skip: 'Paid invoices stay for the books.' },
+      { skip: 'A void invoice is void already.' },
+    ],
+  },
   columns: [
-    c('number', 'Number', 'text', 't.number', { sortable: true, searchable: true, notNull: true }),
+    c('number', 'Number', 'text', 't.number', {
+      sortable: true,
+      searchable: true,
+      notNull: true,
+      edit: patch(INVOICE_PATH, 'number', 'text', { minLength: 1, maxLength: 30, when: 'paperOpen', note: 'Each of your invoices keeps its own number. A sent invoice shows your client it was revised.' }),
+    }),
     c('billedTo', 'Billed to', 'text', 't.client_name', { sortable: true, searchable: true, notNull: true }),
     c('client', 'Client', 'text', 'cl.name', { sortable: true, searchable: true }),
     c('total', 'Total', 'money', 't.total_cents', { currency: 'currency', sortable: true, notNull: true }),
     c('currency', 'Currency', 'enum', 't.currency', { options: CURRENCY_OPTIONS, filter: 'pick', notNull: true }),
     c('status', 'State', 'enum', 't.status', { options: INVOICE_STATUS_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
-    day('issued', 'Issued', 't.issue_date'),
+    day('issued', 'Issued', 't.issue_date', { edit: patch(INVOICE_PATH, 'issueDate', 'date', { when: 'paperOpen', note: 'A sent invoice shows your client it was revised.' }) }),
     c('due', 'Due', 'date', 't.due_date', {
       sortable: true,
       filter: 'range',
@@ -2417,6 +3149,21 @@ const AGENCY_AGREEMENTS: DataTable = {
   defaultSort: { key: 'updatedAt', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'An agreement is changed on its own page in Agency, as paper.',
+  noEditWhy: 'An agreement is changed on its own page in Agency, as paper.',
+  // Agency's own removes, by state (2026-11-14): a draft, or a void one that was never signed, is deleted; a sent one is voided, guarded on
+  // still being sent (`ifStatus`), and Restore in Agency brings it back. Signed paper is a record and stays, voided after signing too.
+  remove: {
+    verb: 'Delete',
+    did: 'deleted',
+    ask: 'sheet',
+    warn: 'A draft is deleted. A sent agreement is voided instead: its link closes, and Restore in Agency brings it back.',
+    outcomes: [
+      { when: "t.status = 'draft' OR (t.status = 'void' AND COALESCE(t.voided_from, 'draft') <> 'signed')", did: 'deleted', call: { method: 'DELETE', path: '/agency/contracts/:id' } },
+      { when: { cell: 'status', is: ['sent'] }, did: 'voided', call: { method: 'PATCH', path: '/agency/contracts/:id', body: { status: 'void', ifStatus: 'sent' } } },
+      { when: { cell: 'status', is: ['signed'] }, skip: 'A signed agreement is a record. Void it on its own page in Agency.' },
+      { skip: 'It was signed before it was voided, so it stays for the books.' },
+    ],
+  },
   columns: [
     c('title', 'Agreement', 'text', 't.title', { sortable: true, searchable: true, notNull: true }),
     c('client', 'Client', 'text', 'cl.name', { sortable: true, searchable: true }),
@@ -2443,6 +3190,19 @@ const AGENCY_DOCUMENTS: DataTable = {
   defaultSort: { key: 'updatedAt', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A document is changed on its own page in Agency, as paper.',
+  noEditWhy: 'A document is changed on its own page in Agency, as paper.',
+  // Agency's own delete takes a draft only (2026-11-14): a sent one is taken back to a draft on its page first, and an approved one is a record.
+  remove: {
+    verb: 'Delete',
+    did: 'deleted',
+    ask: 'sheet',
+    warn: 'Only a draft is deleted, with its comments. Nothing your client opened changes.',
+    outcomes: [
+      { when: { cell: 'status', is: ['draft'] }, did: 'deleted', call: { method: 'DELETE', path: '/agency/docs/:id' } },
+      { when: { cell: 'status', is: ['approved'] }, skip: 'An approved document is a record, so it stays.' },
+      { skip: 'Your client has it. Take it back to a draft on its page in Agency first.' },
+    ],
+  },
   columns: [
     c('title', 'Document', 'text', 't.title', { sortable: true, searchable: true, notNull: true }),
     c('kind', 'Kind', 'enum', 't.kind', { options: AGENCY_DOC_KIND_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
@@ -2469,6 +3229,8 @@ const AGENCY_TEMPLATES: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'updatedAt', dir: 'desc' },
   read: 'sql',
+  // A saved starting point (2026-11-14): Agency's own delete, a second tap; paper already made from it keeps its own copy.
+  remove: { verb: 'Delete', did: 'deleted', ask: 'twice', warn: 'Paper you already made from it stays as it is.', call: { method: 'DELETE', path: '/agency/templates/:id' } },
   columns: [
     c('name', 'Template', 'text', 't.name', { sortable: true, searchable: true, notNull: true, edit: patch('/agency/templates/:id', 'name', 'text', { minLength: 1, maxLength: 60 }) }),
     c('kind', 'Kind', 'enum', 't.kind', { options: TEMPLATE_KIND_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
@@ -2479,6 +3241,13 @@ const AGENCY_TEMPLATES: DataTable = {
 };
 
 const KPI_PATH = '/reviews/kpis/:id';
+/** The most a typed target or value can be, in its own unit (the route's `typedInUnit`). */
+const KPI_TYPED_MAX = 1_000_000_000;
+const KPI_TYPED_NOTE = 'Type it as Reviews shows it: money as an amount, hours as hours.';
+/** A stored target or value (cents for money, minutes for hours) as Reviews types it (`kpiToInput`); with `zeroIsNone`, 0 reads as empty. */
+function kpiTypedSql(unit: string, value: string, zeroIsNone = false): string {
+  return `CASE ${zeroIsNone ? `WHEN ${value} = 0 THEN NULL ` : ''}WHEN ${unit} = 'money' THEN ${value} / 100.0 WHEN ${unit} = 'hours' THEN round(${value} / 60.0, 2) ELSE ${value} END`;
+}
 const BUSINESS_METRICS: DataTable = {
   key: 'businessMetrics',
   name: 'Business metrics',
@@ -2497,14 +3266,26 @@ const BUSINESS_METRICS: DataTable = {
   columns: [
     c('name', 'Metric', 'text', 't.name', { sortable: true, searchable: true, notNull: true, edit: patch(KPI_PATH, 'name', 'text', { minLength: 1, maxLength: 60 }) }),
     c('unit', 'Counted as', 'enum', 't.unit', { options: KPI_UNIT_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
-    c('direction', 'Good when', 'enum', 't.direction', { options: KPI_DIRECTION_OPTIONS, filter: 'pick', notNull: true }),
+    c('direction', 'Good when', 'enum', 't.direction', { options: KPI_DIRECTION_OPTIONS, filter: 'pick', notNull: true, edit: patch(KPI_PATH, 'direction', 'select', { note: 'A metric read from Agency keeps its own.' }) }),
     c('cadence', 'How often', 'enum', 't.cadence', { options: KPI_CADENCE_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true, edit: patch(KPI_PATH, 'cadence', 'select') }),
-    c('target', 'Target', 'summary', null, { derive: 'kpiAmount', from: ['unit', 'target', 'currency'], sortable: true, sortSql: 't.target', notNull: true }),
+    c('target', 'Target', 'summary', null, {
+      derive: 'kpiAmount',
+      from: ['unit', 'target', 'currency'],
+      sortable: true,
+      sortSql: 't.target',
+      notNull: true,
+      edit: patch(KPI_PATH, 'targetTyped', 'number', { current: 'targetTyped', min: 0, max: KPI_TYPED_MAX, step: 0.01, nullable: true, note: KPI_TYPED_NOTE }),
+    }),
     c('source', 'Read from', 'enum', 't.source', { options: KPI_SOURCE_OPTIONS, otherLabel: 'Typed in', sortable: true, filter: 'pick', notNull: true }),
     stamp('createdAt', 'Added', 't.created_at'),
+    // The target as Reviews types it, for the Target field (never a grid column): an amount for money, hours for hours, empty for none.
+    c('targetTyped', 'targetTyped', 'number', kpiTypedSql('t.unit', 't.target', true), { hidden: true, ownerOnly: true }),
   ],
+  remove: { verb: 'Delete', did: 'deleted', ask: 'sheet', warn: 'Every number typed for it goes too, for good.', call: { method: 'DELETE', path: KPI_PATH } },
 };
 
+/** One period's typed value of a metric (the metric's id and the period's first day from the hidden `kpiId` and `periodStart`). */
+const KPI_VALUE_PATH = '/reviews/kpis/:id/values/:periodStart';
 const BUSINESS_METRIC_VALUES: DataTable = {
   key: 'businessMetricValues',
   name: 'Business metric values',
@@ -2524,18 +3305,30 @@ const BUSINESS_METRIC_VALUES: DataTable = {
   defaultSort: { key: 'byMetric', dir: 'desc' },
   read: 'sql',
   privateSelect: { unit: 'k.unit', amount: 't.value', currency: AGENCY_CURRENCY },
-  readOnlyWhy: 'Type a period’s number in Reviews, under Business metrics.',
   columns: [
     c('metric', 'Metric', 'text', 'k.name', { sortable: true, searchable: true, notNull: true }),
     day('period', 'Period starts', 't.period_start'),
     c('cadence', 'How often', 'enum', 'k.cadence', { options: KPI_CADENCE_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
-    c('value', 'Value', 'summary', null, { derive: 'kpiAmount', from: ['unit', 'amount', 'currency'], sortable: true, sortSql: 't.value', notNull: true }),
-    c('note', 'Note', 'text', 't.note', { searchable: true, format: 'inert' }),
+    // A value and its note change on their own (PATCH …/values/:period, each only when sent), never through PUT /:id/value, which replaces both.
+    c('value', 'Value', 'summary', null, {
+      derive: 'kpiAmount',
+      from: ['unit', 'amount', 'currency'],
+      sortable: true,
+      sortSql: 't.value',
+      notNull: true,
+      edit: patch(KPI_VALUE_PATH, 'valueTyped', 'number', { param: 'kpiId', current: 'valueTyped', min: 0, max: KPI_TYPED_MAX, step: 0.01, note: KPI_TYPED_NOTE }),
+    }),
+    c('note', 'Note', 'text', 't.note', { searchable: true, format: 'inert', edit: patch(KPI_VALUE_PATH, 'note', 'text', { param: 'kpiId', maxLength: 200 }) }),
     stamp('updatedAt', 'Changed', 't.updated_at', { filter: undefined }),
+    // The metric's id and the period, which the routes need in their path (a value's own key holds a colon), and its value as Reviews types it.
+    c('kpiId', 'kpiId', 'text', 't.kpi_id', { hidden: true, ownerOnly: true }),
+    c('periodStart', 'periodStart', 'date', 't.period_start', { hidden: true, ownerOnly: true }),
+    c('valueTyped', 'valueTyped', 'number', kpiTypedSql('k.unit', 't.value'), { hidden: true, ownerOnly: true }),
     // The default order, never a grid column. The rowid is the index's own last column (idx_kpis_user_created is (user_id, created_at),
     // rowid after them), so two metrics added in the same moment keep one order and the periods under each need no sort step.
     c('byMetric', 'By metric', 'datetime', 'k.created_at', { hidden: true, sortable: true, notNull: true, sortTerms: ['k.created_at', 'k.rowid', 't.period_start'] }),
   ],
+  remove: { verb: 'Clear', did: 'cleared', ask: 'twice', warn: 'Type it again on Reviews to have it back.', call: { method: 'DELETE', path: KPI_VALUE_PATH, param: 'kpiId' } },
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------
@@ -2594,18 +3387,31 @@ const PRODUCTS: DataTable = {
       edit: patch(PRODUCT_PATH, 'priceCents', 'money', { min: 0, max: PRODUCT_MONEY_MAX }),
     }),
     c('currency', 'Currency', 'enum', 't.currency', { options: CURRENCY_OPTIONS, filter: 'pick', notNull: true }),
-    c('payWhatYouWant', 'Pay what you want', 'bool', 't.pwyw', { filter: 'pick', notNull: true }),
+    c('payWhatYouWant', 'Pay what you want', 'bool', 't.pwyw', { filter: 'pick', notNull: true, edit: patch(PRODUCT_PATH, 'pwyw', 'toggle', { note: 'The points price becomes the least a buyer pays.' }) }),
     c('startsAt', 'Starts', 'datetime', 't.starts_at', { sortable: true }),
     c('minutes', 'How long', 'number', 't.duration_min', { sortable: true, format: 'minutes' }),
     c('seats', 'Seats', 'number', 't.capacity', { sortable: true }),
     c('answerDays', 'Answers within days', 'number', 't.response_days'),
     c('certificate', 'Gives a certificate', 'bool', 't.certificate', { filter: 'pick', notNull: true }),
-    c('minPoints', 'Unlocks at points', 'number', 't.min_points', { sortable: true, notNull: true }),
-    c('minXp', 'Unlocks at xp', 'number', 't.min_xp', { sortable: true, notNull: true }),
+    c('minPoints', 'Unlocks at points', 'number', 't.min_points', { sortable: true, notNull: true, edit: patch(PRODUCT_PATH, 'minPoints', 'number', { min: 0, max: PRODUCT_POINTS_MAX, step: 1 }) }),
+    c('minXp', 'Unlocks at xp', 'number', 't.min_xp', { sortable: true, notNull: true, edit: patch(PRODUCT_PATH, 'minXp', 'number', { min: 0, max: PRODUCT_POINTS_MAX, step: 1 }) }),
     c('description', 'About it', 'longtext', 't.description', { searchable: true, format: 'inert', edit: patch(PRODUCT_PATH, 'description', 'longtext', { maxLength: 2000 }) }),
     stamp('createdAt', 'Added', 't.created_at'),
     stamp('updatedAt', 'Changed', 't.updated_at', { filter: undefined }),
   ],
+  // Shop deletes for good only from Archived, and never a product someone bought (their orders and access rest on it); its route says both too.
+  remove: {
+    verb: 'Delete',
+    did: 'deleted',
+    ask: 'sheet',
+    warn: 'It goes for good, with its lessons, reviews and invites. This cannot be undone.',
+    yes: 'Yes, delete {it} for good',
+    only: { where: { cell: 'status', is: ['archived'] }, why: 'Archive it first. Only an archived product can be deleted for good.' },
+    outcomes: [
+      { when: 'EXISTS (SELECT 1 FROM orders o WHERE o.product_id = t.id)', skip: 'People bought it, so it stays archived to keep their orders and access.' },
+      { did: 'deleted', call: { method: 'DELETE', path: PRODUCT_PATH } },
+    ],
+  },
 };
 
 const COUPONS: DataTable = {
@@ -2620,16 +3426,22 @@ const COUPONS: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'createdAt', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Make or remove a coupon on its product in Shop.',
   columns: [
     c('product', 'For', 'text', "CASE WHEN t.product_id IS NULL THEN 'Every product' ELSE p.title END", { sortable: true, searchable: true }),
     c('percentOff', 'Off', 'number', 't.percent_off', { sortable: true, notNull: true, format: 'percent' }),
     c('used', 'Times used', 'number', 't.uses', { sortable: true, notNull: true }),
-    c('usesAllowed', 'Uses allowed', 'number', 't.max_uses', { sortable: true }),
+    c('usesAllowed', 'Uses allowed', 'number', 't.max_uses', {
+      sortable: true,
+      // Never under the uses already made (Shop's route refuses it in words). Its code and percent never change: a new deal is a new code.
+      edit: patch('/studio/coupons/:id', 'maxUses', 'number', { min: 1, max: 1_000_000, step: 1, nullable: true, note: 'Empty means no limit. It never goes under the times it was used.' }),
+    }),
     stamp('createdAt', 'Made', 't.created_at'),
   ],
+  remove: { verb: 'Delete', did: 'deleted', ask: 'sheet', warn: 'Buyers can no longer use its code. Orders that used it stay as they were. This cannot be undone.', call: { method: 'DELETE', path: '/studio/coupons/:id' } },
 };
 
+/** A booking Shop no longer moves, as its route says too. */
+const BOOKING_SHUT_WHY = 'A cancelled or finished session stays as it is.';
 const BOOKINGS: DataTable = {
   key: 'bookings',
   name: 'Bookings',
@@ -2644,19 +3456,37 @@ const BOOKINGS: DataTable = {
   defaultSort: { key: 'starts', dir: 'desc' },
   read: 'sql',
   privateSelect: { answers: 't.intake_json' },
-  readOnlyWhy: 'Confirm, cancel or finish a session in Shop, under Bookings, where the buyer is told.',
   columns: [
     c('product', 'Session', 'text', 'p.title', { sortable: true, searchable: true }),
     c('person', 'Booked by', 'text', personName('b'), { sortable: true, searchable: true, notNull: true }),
     stamp('starts', 'Starts', 't.starts_at'),
     c('ends', 'Ends', 'datetime', 't.ends_at', { sortable: true }),
-    c('status', 'State', 'enum', 't.status', { options: BOOKING_STATUS_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
+    c('status', 'State', 'enum', 't.status', {
+      options: BOOKING_STATUS_OPTIONS,
+      ordered: true,
+      sortable: true,
+      filter: 'pick',
+      notNull: true,
+      // Shop's own steps, one way: confirm a request, then mark it done. Cancelling is the remove, asked in a sheet. The buyer is told.
+      edit: { method: 'POST', path: '/studio/bookings/:id', field: 'status', input: 'select', offer: ['confirmed', 'done'], when: 'madeIt', why: BOOKING_SHUT_WHY, note: 'The buyer is told. A session is confirmed before it is done.' },
+    }),
     c('note', 'Their note', 'longtext', 't.note', { searchable: true, format: 'inert' }),
     c('answers', 'Their answers', 'summary', null, { derive: 'stringList', from: ['answers'] }),
     stamp('bookedAt', 'Booked', 't.created_at', { filter: undefined }),
+    mayChangeCell("t.status IN ('requested', 'confirmed')"),
   ],
+  remove: {
+    verb: 'Cancel',
+    did: 'cancelled',
+    ask: 'sheet',
+    noun: { one: 'booking', many: 'bookings' },
+    warn: 'They are told it was cancelled. This cannot be undone.',
+    only: { where: { cell: 'madeIt', is: [true] }, why: BOOKING_SHUT_WHY },
+    call: { method: 'POST', path: '/studio/bookings/:id', body: { status: 'cancelled' } },
+  },
 };
 
+const HOURS_PATH = '/studio/availability/:id';
 const SESSION_HOURS: DataTable = {
   key: 'sessionHours',
   name: 'Session hours',
@@ -2669,13 +3499,20 @@ const SESSION_HOURS: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'day', dir: 'asc' },
   read: 'sql',
-  readOnlyWhy: 'Change your hours in Shop, under Bookings.',
   columns: [
     // Sunday first, as Shop lists them (ORDER BY weekday, start_min), walked by its index to the rowid, so no page sorts.
-    c('day', 'Day', 'enum', 't.weekday', { options: WEEKDAY_SUNDAY_FIRST_OPTIONS, sortable: true, filter: 'pick', notNull: true, sortTerms: ['t.weekday', 't.start_min', 't.rowid'] }),
-    c('from', 'From', 'time', minuteClock('t.start_min'), { sortable: true, sortSql: 't.start_min', notNull: true }),
-    c('until', 'Until', 'time', minuteClock('t.end_min'), { notNull: true }),
+    c('day', 'Day', 'enum', 't.weekday', {
+      options: WEEKDAY_SUNDAY_FIRST_OPTIONS,
+      sortable: true,
+      filter: 'pick',
+      notNull: true,
+      sortTerms: ['t.weekday', 't.start_min', 't.rowid'],
+      edit: patch(HOURS_PATH, 'weekday', 'select', { note: 'Sessions already booked keep their times.' }),
+    }),
+    c('from', 'From', 'time', minuteClock('t.start_min'), { sortable: true, sortSql: 't.start_min', notNull: true, edit: patch(HOURS_PATH, 'from', 'time', { note: 'It starts before it ends.' }) }),
+    c('until', 'Until', 'time', minuteClock('t.end_min'), { notNull: true, edit: patch(HOURS_PATH, 'until', 'time', { note: 'It ends after it starts.' }) }),
   ],
+  remove: { verb: 'Remove', did: 'removed', ask: 'sheet', warn: 'Buyers can no longer book a session in it. Sessions already booked stay. You can add it again.', call: { method: 'DELETE', path: HOURS_PATH } },
 };
 
 const SESSION_DAYS: DataTable = {
@@ -2692,6 +3529,9 @@ const SESSION_DAYS: DataTable = {
   read: 'sql',
   privateSelect: { ranges: 't.ranges_json' },
   readOnlyWhy: 'Change a day’s hours in Shop, under Bookings.',
+  noEditWhy: 'A day’s own hours are set in Shop, under Bookings.',
+  // Shop's Remove: the day goes back to your weekly hours. Its route names the day by its date.
+  remove: { verb: 'Remove', did: 'removed', ask: 'sheet', warn: 'The day goes back to your weekly hours. Sessions already booked stay.', call: { method: 'DELETE', path: '/studio/availability/overrides/:id', param: 'day' } },
   columns: [
     day('day', 'Day', 't.date'),
     c('closed', 'Closed all day', 'bool', "COALESCE(json_array_length(t.ranges_json), 0) = 0", { filter: 'pick', notNull: true }),
@@ -2715,7 +3555,18 @@ const COURSE_INVITES: DataTable = {
   // page sorts. Tap Invited on to sort by the day alone.
   defaultSort: { key: 'byCourse', dir: 'desc' },
   read: 'sql',
+  // Who was invited, for the route's path alone: read on the server, never a cell (WHO SEES A TABLE).
+  privateSelect: { userId: 't.user_id' },
   readOnlyWhy: 'Invite people, or take an invite back, on the course in Shop.',
+  noEditWhy: 'An invite is given or taken back, never changed.',
+  remove: {
+    verb: 'Remove',
+    did: 'removed',
+    ask: 'sheet',
+    noun: { one: 'invite', many: 'invites' },
+    warn: 'They can no longer see the course or buy it. Anyone who already bought it keeps it. They are not told.',
+    call: { method: 'DELETE', path: '/studio/products/:id/invites/:userId', param: 'productId' },
+  },
   columns: [
     c('course', 'Course', 'text', 'p.title', { sortable: true, searchable: true, notNull: true }),
     c('person', 'Invited', 'text', personName('u'), { sortable: true, searchable: true, notNull: true }),
@@ -2723,6 +3574,8 @@ const COURSE_INVITES: DataTable = {
     c('courseState', 'Course state', 'enum', productStatusSql('p'), { options: PRODUCT_STATUS_OPTIONS, filter: 'pick', notNull: true }),
     stamp('invited', 'Invited on', 't.created_at'),
     c('byCourse', 'By course', 'datetime', 'p.created_at', { hidden: true, sortable: true, notNull: true, sortTerms: ['p.created_at', 'p.rowid', 't.created_at', 't.rowid'] }),
+    // The course, for the route's path: only in the owner's own view (a private course is found by its id).
+    c('productId', 'productId', 'text', 't.product_id', { hidden: true, ownerOnly: true }),
   ],
 };
 
@@ -2740,15 +3593,22 @@ const PRIORITY_DMS: DataTable = {
   defaultSort: { key: 'asked', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'Answer a question in Shop, under Priority DMs, where the buyer is told.',
+  noRemoveWhy: 'A paid question stays with its answer. A refund is made from the order in Shop, under Customers.',
   columns: [
     c('person', 'From', 'text', personName('b'), { sortable: true, searchable: true, notNull: true }),
     c('product', 'Product', 'text', 'p.title', { sortable: true, searchable: true }),
     c('question', 'Question', 'longtext', 't.question', { searchable: true, format: 'inert' }),
-    c('answer', 'Your answer', 'longtext', 't.answer', { searchable: true, format: 'inert' }),
+    c('answer', 'Your answer', 'longtext', 't.answer', {
+      searchable: true,
+      format: 'inert',
+      // Shop's own answer, once, while the question waits (its route guards that in the write and tells the buyer).
+      edit: { method: 'POST', path: '/studio/dm/:id/answer', field: 'answer', input: 'longtext', minLength: 1, maxLength: 4000, when: 'madeIt', why: 'An answered or refunded question stays as it is.', note: 'It is sent once, and the buyer is told.' },
+    }),
     c('status', 'State', 'enum', 't.status', { options: DM_STATUS_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
     c('answerBy', 'Answer promised by', 'datetime', 't.due_at', { sortable: true }),
     c('answeredAt', 'Answered at', 'datetime', 't.answered_at', { sortable: true, filter: 'range' }),
     stamp('asked', 'Asked', 't.created_at'),
+    mayChangeCell("t.status = 'open'"),
   ],
 };
 
@@ -2765,6 +3625,7 @@ const PRODUCT_REVIEWS: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'written', dir: 'desc' },
   read: 'sql',
+  noRemoveWhy: 'A buyer’s review is theirs to keep or delete. Hide it with Shown on the product instead.',
   columns: [
     c('product', 'Product', 'text', 'p.title', { sortable: true, searchable: true }),
     c('person', 'By', 'text', personName('a'), { sortable: true, searchable: true, notNull: true }),
@@ -2796,6 +3657,17 @@ const MY_BOOKINGS: DataTable = {
   read: 'sql',
   privateSelect: { answers: 't.intake_json' },
   readOnlyWhy: 'Move or cancel a session in My purchases.',
+  noEditWhy: 'Move a session to another time in My purchases, where its open times are.',
+  // My purchases' own cancel: only a session still waiting or confirmed (its route guards that in the write), and the host is told.
+  remove: {
+    verb: 'Cancel',
+    did: 'cancelled',
+    ask: 'sheet',
+    noun: { one: 'session', many: 'sessions' },
+    warn: 'It is called off, and the host is told. To meet, you would book again.',
+    only: { where: "t.status IN ('requested', 'confirmed')", why: 'A cancelled or finished session stays as it is.' },
+    call: { method: 'POST', path: '/store/bookings/:id/cancel' },
+  },
   columns: [
     c('product', 'Session', 'text', 'p.title', { sortable: true, searchable: true }),
     c('host', 'With', 'text', personName('ow'), { sortable: true, searchable: true, notNull: true }),
@@ -2823,6 +3695,8 @@ const MY_QUESTIONS: DataTable = {
   defaultSort: { key: 'asked', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A question is sent once it is paid for, and the answer is the creator’s.',
+  noEditWhy: 'A question is sent once it is paid for, and the answer is the creator’s.',
+  noRemoveWhy: 'A paid question stays with its answer. A refund comes from the creator.',
   columns: [
     c('person', 'To', 'text', personName('ow'), { sortable: true, searchable: true, notNull: true }),
     c('product', 'Product', 'text', 'p.title', { sortable: true, searchable: true }),
@@ -2849,14 +3723,30 @@ const MY_COURSE_INVITES: DataTable = {
   defaultSort: { key: 'invited', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'An invite is the course owner’s to give or take back.',
+  noEditWhy: 'An invite is the course owner’s to give.',
+  // Say no (2026-11-14, the founder's yes): the invite goes, nobody is told, and only while it was not bought (its route holds that too).
+  remove: {
+    verb: 'Decline',
+    did: 'declined',
+    ask: 'sheet',
+    noun: { one: 'invite', many: 'invites' },
+    warn: 'The course goes from your list, and nobody is told. To see it again, they would invite you again.',
+    only: { where: "NOT EXISTS (SELECT 1 FROM orders o WHERE o.product_id = t.product_id AND o.buyer_id = ?1 AND o.status IN ('paid', 'test'))", why: 'You bought this course, so its invite stays with it.' },
+    call: { method: 'DELETE', path: '/store/invites/:id', param: 'productId' },
+  },
   columns: [
     c('course', 'Course', 'text', 'p.title', { sortable: true, searchable: true }),
     c('host', 'From', 'text', personName('ow'), { sortable: true, searchable: true, notNull: true }),
     c('courseState', 'Course state', 'enum', productStatusSql('p'), { options: PRODUCT_STATUS_OPTIONS, filter: 'pick' }),
     stamp('invited', 'Invited on', 't.created_at'),
+    // The course, for the route's path: only in the person's own view (a private course is found by its id).
+    c('productId', 'productId', 'text', 't.product_id', { hidden: true, ownerOnly: true }),
   ],
 };
 
+const MY_REVIEW_PATH = '/store/reviews/:id';
+/** A changed review waits for the creator, as writing it again on the product's page does. */
+const MY_REVIEW_NOTE = 'A changed review waits for the creator to show it again.';
 const MY_PRODUCT_REVIEWS: DataTable = {
   key: 'myProductReviews',
   name: 'Product reviews you wrote',
@@ -2868,11 +3758,18 @@ const MY_PRODUCT_REVIEWS: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'written', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Write a review again on the product’s page to change it.',
+  remove: { verb: 'Delete', did: 'deleted', ask: 'twice', warn: 'It comes off the product’s page. Write one again there any time.', call: { method: 'DELETE', path: MY_REVIEW_PATH } },
   columns: [
     c('product', 'Product', 'text', 'p.title', { sortable: true, searchable: true }),
-    c('rating', 'Rating', 'enum', 't.rating', { options: RATING_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
-    c('words', 'Words', 'longtext', 't.body', { searchable: true, format: 'inert' }),
+    c('rating', 'Rating', 'enum', 't.rating', {
+      options: RATING_OPTIONS,
+      ordered: true,
+      sortable: true,
+      filter: 'pick',
+      notNull: true,
+      edit: patch(MY_REVIEW_PATH, 'rating', 'select', { note: MY_REVIEW_NOTE }),
+    }),
+    c('words', 'Words', 'longtext', 't.body', { searchable: true, format: 'inert', edit: patch(MY_REVIEW_PATH, 'body', 'longtext', { minLength: 1, maxLength: 600, note: MY_REVIEW_NOTE }) }),
     c('shown', 'Shown on the product', 'bool', 't.approved', { sortable: true, filter: 'pick', notNull: true }),
     stamp('written', 'Written', 't.created_at'),
   ],
@@ -2892,6 +3789,8 @@ const LEADS: DataTable = {
   defaultSort: { key: 'arrived', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A lead is what someone sent you, so it stays as it is. Their email is in Audience.',
+  noEditWhy: 'A lead is what someone sent you, so it stays as they wrote it.',
+  remove: { verb: 'Delete', did: 'deleted', ask: 'sheet', noun: { one: 'lead', many: 'leads' }, warn: 'Their name, email and message go from Audience. This cannot be undone.', call: { method: 'DELETE', path: '/studio/leads/:id' } },
   columns: [
     c('name', 'Name', 'text', 't.name', { sortable: true, searchable: true, notNull: true }),
     c('message', 'Message', 'longtext', 't.message', { searchable: true, format: 'inert' }),
@@ -2913,6 +3812,9 @@ const BROADCASTS: DataTable = {
   defaultSort: { key: 'sentAt', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A message stays as it was sent.',
+  noEditWhy: 'A message stays as it was sent.',
+  // Your own copy only (2026-11-14, the founder's yes): the notes it put in people's inboxes are theirs and stay.
+  remove: { verb: 'Delete', did: 'deleted', ask: 'sheet', warn: 'It goes from your list. The copies in people’s inboxes stay. This cannot be undone.', call: { method: 'DELETE', path: '/studio/broadcasts/:id' } },
   columns: [
     c('title', 'Title', 'text', 't.title', { sortable: true, searchable: true, notNull: true }),
     c('message', 'Message', 'longtext', 't.body', { searchable: true, format: 'inert' }),
@@ -2922,6 +3824,11 @@ const BROADCASTS: DataTable = {
   ],
 };
 
+const CONTENT_PATH = '/studio/content/:id';
+/** A post's number as typed (Content's own Type them), which marks its numbers as read now. */
+function postCount(field: string): ColumnEdit {
+  return patch(CONTENT_PATH, field, 'number', { min: 0, max: 1_000_000_000_000, step: 1, note: 'Typed numbers count as read now.' });
+}
 const CONTENT_POSTS: DataTable = {
   key: 'contentPosts',
   name: 'Posts you track',
@@ -2934,15 +3841,16 @@ const CONTENT_POSTS: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'added', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Read a post’s numbers again, or type them, in Content.',
+  remove: { verb: 'Delete', did: 'deleted', ask: 'sheet', warn: 'The post goes. Its tracked links keep working, and sales already credited stay. This cannot be undone.', call: { method: 'DELETE', path: CONTENT_PATH } },
   columns: [
-    c('caption', 'Post', 'text', 't.caption', { sortable: true, searchable: true }),
+    c('caption', 'Post', 'text', 't.caption', { sortable: true, searchable: true, edit: patch(CONTENT_PATH, 'caption', 'text', { maxLength: 300 }) }),
     c('platform', 'Where', 'enum', 't.platform', { options: SOCIAL_PLATFORM_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
-    c('kind', 'Kind', 'enum', 't.kind', { options: CONTENT_KIND_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
+    c('kind', 'Kind', 'enum', 't.kind', { options: CONTENT_KIND_OPTIONS, sortable: true, filter: 'pick', notNull: true, edit: patch(CONTENT_PATH, 'kind', 'select') }),
+    // The link is how the post is found, so it stays: a new link is a new post.
     c('link', 'Link', 'text', 't.url', { searchable: true, format: 'inert' }),
-    c('views', 'Views', 'number', 't.views', { sortable: true, notNull: true }),
-    c('likes', 'Likes', 'number', 't.likes', { sortable: true, notNull: true }),
-    c('comments', 'Comments', 'number', 't.comments', { sortable: true, notNull: true }),
+    c('views', 'Views', 'number', 't.views', { sortable: true, notNull: true, edit: postCount('views') }),
+    c('likes', 'Likes', 'number', 't.likes', { sortable: true, notNull: true, edit: postCount('likes') }),
+    c('comments', 'Comments', 'number', 't.comments', { sortable: true, notNull: true, edit: postCount('comments') }),
     c('numbersAt', 'Numbers from', 'datetime', 't.synced_at', { sortable: true }),
     stamp('added', 'Added', 't.created_at'),
   ],
@@ -2960,9 +3868,16 @@ const TRACKED_LINKS: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'made', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Make or remove a link in Content.',
+  // The link's code and where it opens never change: the posts and DMs that carry it keep working.
+  remove: {
+    verb: 'Delete',
+    did: 'deleted',
+    ask: 'sheet',
+    warn: 'The link stops working, and any Auto-DM that sends it goes too. Sales already credited stay. This cannot be undone.',
+    call: { method: 'DELETE', path: '/studio/links/:id' },
+  },
   columns: [
-    c('label', 'Link', 'text', 't.label', { sortable: true, searchable: true, notNull: true }),
+    c('label', 'Link', 'text', 't.label', { sortable: true, searchable: true, notNull: true, edit: patch('/studio/links/:id', 'label', 'text', { minLength: 1, maxLength: 80 }) }),
     c('opens', 'Opens', 'text', "CASE WHEN t.product_id IS NULL THEN 'Your page' ELSE p.title END", { sortable: true, searchable: true }),
     c('from', 'Used in', 'enum', 't.source_type', { options: LINK_SOURCE_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
     c('post', 'Post', 'text', 'ci.caption', { searchable: true }),
@@ -2972,6 +3887,7 @@ const TRACKED_LINKS: DataTable = {
   ],
 };
 
+const AUTO_DM_PATH = '/studio/automations/:id';
 const AUTO_DMS: DataTable = {
   key: 'autoDms',
   name: 'Auto-DMs',
@@ -2986,16 +3902,21 @@ const AUTO_DMS: DataTable = {
   read: 'sql',
   privateSelect: { keywords: 't.keywords_json', replies: 't.public_replies_json' },
   columns: [
-    c('keywords', 'Keywords', 'summary', null, { derive: 'stringList', from: ['keywords'] }),
-    c('message', 'Message it sends', 'longtext', 't.dm_message', { searchable: true, format: 'inert' }),
+    c('keywords', 'Keywords', 'summary', null, {
+      derive: 'stringList',
+      from: ['keywords'],
+      edit: patch(AUTO_DM_PATH, 'keywords', 'text', { minLength: 1, maxLength: 400, note: 'Up to 10, split by commas.' }),
+    }),
+    c('message', 'Message it sends', 'longtext', 't.dm_message', { searchable: true, format: 'inert', edit: patch(AUTO_DM_PATH, 'dmMessage', 'longtext', { minLength: 1, maxLength: 900 }) }),
     c('replies', 'Public replies', 'summary', null, { derive: 'stringList', from: ['replies'] }),
     c('post', 'On the post', 'text', 'ci.caption', { searchable: true }),
     c('link', 'Its link', 'text', 'l.label', { searchable: true }),
-    c('on', 'On', 'bool', 't.active', { sortable: true, filter: 'pick', notNull: true, edit: patch('/studio/automations/:id', 'active', 'toggle') }),
+    c('on', 'On', 'bool', 't.active', { sortable: true, filter: 'pick', notNull: true, edit: patch(AUTO_DM_PATH, 'active', 'toggle') }),
     // A count only, through the sends' own key: never who got one.
     c('sent', 'DMs sent', 'number', "(SELECT COUNT(*) FROM dm_sends ds WHERE ds.automation_id = t.id AND ds.status = 'sent')", { notNull: true }),
     stamp('made', 'Made', 't.created_at'),
   ],
+  remove: { verb: 'Delete', did: 'deleted', ask: 'sheet', warn: 'It stops answering comments, and its numbers go with it. Its tracked link stays. This cannot be undone.', call: { method: 'DELETE', path: AUTO_DM_PATH } },
 };
 
 const FUNNELS: DataTable = {
@@ -3011,15 +3932,16 @@ const FUNNELS: DataTable = {
   defaultSort: { key: 'made', dir: 'desc' },
   read: 'sql',
   privateSelect: { steps: 't.steps_json' },
-  readOnlyWhy: 'Make or remove a funnel in Auto-DM.',
+  remove: { verb: 'Delete', did: 'deleted', ask: 'sheet', warn: 'The posts, links and sales in it stay. This cannot be undone.', call: { method: 'DELETE', path: '/studio/funnels/:id' } },
   columns: [
-    c('name', 'Funnel', 'text', 't.name', { sortable: true, searchable: true, notNull: true }),
+    c('name', 'Funnel', 'text', 't.name', { sortable: true, searchable: true, notNull: true, edit: patch('/studio/funnels/:id', 'name', 'text', { minLength: 1, maxLength: 80, note: 'Its steps change in Auto-DM.' }) }),
     c('steps', 'Steps', 'summary', null, { derive: 'stepLabels', from: ['steps'] }),
     c('stepCount', 'How many steps', 'number', 'json_array_length(t.steps_json)'),
     stamp('made', 'Made', 't.created_at'),
   ],
 };
 
+const SEQUENCE_PATH = '/studio/sequences/:id';
 const SEQUENCES: DataTable = {
   key: 'sequences',
   name: 'After-purchase messages',
@@ -3033,17 +3955,19 @@ const SEQUENCES: DataTable = {
   defaultSort: { key: 'made', dir: 'desc' },
   read: 'sql',
   columns: [
-    c('title', 'Title', 'text', 't.title', { sortable: true, searchable: true, notNull: true }),
-    c('message', 'Message', 'longtext', 't.body', { searchable: true, format: 'inert' }),
+    c('title', 'Title', 'text', 't.title', { sortable: true, searchable: true, notNull: true, edit: patch(SEQUENCE_PATH, 'title', 'text', { minLength: 1, maxLength: 120 }) }),
+    c('message', 'Message', 'longtext', 't.body', { searchable: true, format: 'inert', edit: patch(SEQUENCE_PATH, 'body', 'longtext', { minLength: 1, maxLength: 2000, note: 'Messages already sent stay as they were.' }) }),
     c('product', 'After buying', 'text', "CASE WHEN t.product_id IS NULL THEN 'Any product' ELSE p.title END", { sortable: true, searchable: true }),
-    c('days', 'Days after', 'number', 't.delay_days', { sortable: true, notNull: true }),
-    c('on', 'On', 'bool', 't.active', { sortable: true, filter: 'pick', notNull: true, edit: patch('/studio/sequences/:id', 'active', 'toggle') }),
+    c('days', 'Days after', 'number', 't.delay_days', { sortable: true, notNull: true, edit: patch(SEQUENCE_PATH, 'delayDays', 'number', { min: 0, max: 365, step: 1 }) }),
+    c('on', 'On', 'bool', 't.active', { sortable: true, filter: 'pick', notNull: true, edit: patch(SEQUENCE_PATH, 'active', 'toggle') }),
     // A count only, through the sends' own key: never who got one.
     c('sent', 'Times sent', 'number', '(SELECT COUNT(*) FROM sequence_sends ss WHERE ss.sequence_id = t.id)', { notNull: true }),
     stamp('made', 'Made', 't.created_at'),
   ],
+  remove: { verb: 'Delete', did: 'deleted', ask: 'sheet', warn: 'It stops going out to buyers. Those already sent stay in their inboxes. This cannot be undone.', call: { method: 'DELETE', path: SEQUENCE_PATH } },
 };
 
+const PORTFOLIO_PATH = '/me/portfolio/:id';
 const PORTFOLIO: DataTable = {
   key: 'portfolio',
   name: 'Portfolio',
@@ -3056,12 +3980,12 @@ const PORTFOLIO: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'added', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Add or remove a piece on your Public page.',
+  remove: { verb: 'Delete', did: 'deleted', ask: 'twice', warn: 'It comes off your Public page. Add it again any time.', call: { method: 'DELETE', path: PORTFOLIO_PATH } },
   columns: [
-    c('title', 'Piece', 'text', 't.title', { sortable: true, searchable: true, notNull: true }),
-    c('about', 'About it', 'longtext', 't.description', { searchable: true, format: 'inert' }),
-    c('link', 'Link', 'text', 't.url', { searchable: true, format: 'inert' }),
-    c('shown', 'Who sees it', 'enum', 't.visibility', { options: PORTFOLIO_VISIBILITY_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
+    c('title', 'Piece', 'text', 't.title', { sortable: true, searchable: true, notNull: true, edit: patch(PORTFOLIO_PATH, 'title', 'text', { minLength: 1, maxLength: 120 }) }),
+    c('about', 'About it', 'longtext', 't.description', { searchable: true, format: 'inert', edit: patch(PORTFOLIO_PATH, 'description', 'longtext', { maxLength: 500 }) }),
+    c('link', 'Link', 'text', 't.url', { searchable: true, format: 'inert', edit: patch(PORTFOLIO_PATH, 'url', 'text', { minLength: 1, maxLength: 500, note: 'A link that starts with https://' }) }),
+    c('shown', 'Who sees it', 'enum', 't.visibility', { options: PORTFOLIO_VISIBILITY_OPTIONS, sortable: true, filter: 'pick', notNull: true, edit: patch(PORTFOLIO_PATH, 'visibility', 'select') }),
     stamp('added', 'Added', 't.created_at'),
   ],
 };
@@ -3122,7 +4046,11 @@ const BRANDS: DataTable = {
     stamp('createdAt', 'Made', 't.created_at'),
     stamp('updatedAt', 'Changed', 't.updated_at', { filter: undefined }),
   ],
+  remove: { verb: 'Delete', did: 'deleted', ask: 'sheet', warn: 'Everything in its folder goes with it: links, research and pieces. This cannot be undone.', call: { method: 'DELETE', path: BRAND_PATH } },
 };
+
+/** The folder a link, run or piece lives under, for its route's path; only in the owner's own view. */
+const brandIdCell = (): DataColumn => c('brandId', 'brandId', 'text', 't.brand_id', { hidden: true, ownerOnly: true });
 
 const BRAND_SOURCES: DataTable = {
   key: 'brandSources',
@@ -3137,15 +4065,16 @@ const BRAND_SOURCES: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'byBrand', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Add, read or remove a link in the brand’s folder in Content.',
+  remove: { verb: 'Delete', did: 'deleted', ask: 'twice', warn: 'The folder is no longer fed this link. What was read from it stays.', call: { method: 'DELETE', path: '/studio/brands/:brandId/sources/:id' } },
   columns: [
     brandName(),
-    c('label', 'Name', 'text', 't.label', { sortable: true, searchable: true }),
+    c('label', 'Name', 'text', 't.label', { sortable: true, searchable: true, edit: patch('/studio/brands/:brandId/sources/:id', 'label', 'text', { maxLength: 120, note: 'Its address stays: a new address is a new link.' }) }),
     c('kind', 'Kind', 'enum', 't.kind', { options: BRAND_SOURCE_KIND_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
     c('link', 'Link', 'text', 't.url', { searchable: true, format: 'inert' }),
     c('lastRead', 'Last read', 'datetime', 't.last_read_at', { sortable: true, filter: 'range' }),
     stamp('added', 'Added', 't.created_at'),
     byBrand(),
+    brandIdCell(),
   ],
 };
 
@@ -3162,6 +4091,8 @@ const RESEARCH_RUNS: DataTable = {
   defaultSort: { key: 'byBrand', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A run stays as it came back. Run it again from the brand’s folder in Content.',
+  noEditWhy: 'A run stays as it came back. Run it again from the brand’s folder in Content.',
+  remove: { verb: 'Delete', did: 'deleted', ask: 'twice', warn: 'Its results go. Pieces already written from it stay.', call: { method: 'DELETE', path: '/studio/brands/:brandId/runs/:id' } },
   columns: [
     brandName(),
     c('kind', 'Kind', 'enum', 't.kind', { options: RESEARCH_KIND_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
@@ -3172,6 +4103,7 @@ const RESEARCH_RUNS: DataTable = {
     c('why', 'Why it did not work', 'text', "CASE WHEN t.status = 'failed' THEN NULLIF(t.error, '') END"),
     stamp('ran', 'Ran', 't.created_at'),
     byBrand(),
+    brandIdCell(),
   ],
 };
 
@@ -3212,6 +4144,7 @@ const BRAND_PIECES: DataTable = {
     c('brandId', 'brandId', 'text', 't.brand_id', { hidden: true, ownerOnly: true }),
     byBrand(),
   ],
+  remove: { verb: 'Delete', did: 'deleted', ask: 'twice', warn: 'The piece goes. Write another from the folder any time.', call: { method: 'DELETE', path: '/studio/brands/:brandId/pieces/:id' } },
 };
 
 const PREOWNED_LISTINGS: DataTable = {
@@ -3228,10 +4161,10 @@ const PREOWNED_LISTINGS: DataTable = {
   read: 'sql',
   columns: [
     c('title', 'Listing', 'text', 't.title', { sortable: true, searchable: true, notNull: true, edit: patch(LISTING_PATH, 'title', 'text', { minLength: 1, maxLength: 120, when: 'listingOpen' }) }),
-    c('category', 'Category', 'enum', 't.category', { options: STORE_CATEGORY_OPTIONS, otherLabel: 'Other', sortable: true, filter: 'pick', notNull: true }),
+    c('category', 'Category', 'enum', 't.category', { options: STORE_CATEGORY_OPTIONS, otherLabel: 'Other', sortable: true, filter: 'pick', notNull: true, edit: patch(LISTING_PATH, 'category', 'select', { when: 'listingOpen' }) }),
     c('condition', 'Condition', 'enum', 't.condition', { options: PREOWNED_CONDITION_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true, edit: patch(LISTING_PATH, 'condition', 'select', { when: 'listingOpen' }) }),
     c('price', 'Price', 'money', 't.price_cents', { currency: 'currency', sortable: true, notNull: true, edit: patch(LISTING_PATH, 'priceCents', 'money', { min: 1, when: 'listingOpen' }) }),
-    c('priceNew', 'Price new', 'money', 't.original_cents', { currency: 'currency', sortable: true }),
+    c('priceNew', 'Price new', 'money', 't.original_cents', { currency: 'currency', sortable: true, edit: patch(LISTING_PATH, 'originalCents', 'money', { min: 0, nullable: true, when: 'listingOpen' }) }),
     c('currency', 'Currency', 'enum', 't.currency', { options: CURRENCY_OPTIONS, filter: 'pick', notNull: true }),
     c('status', 'State', 'enum', 't.status', {
       options: LISTING_STATUS_OPTIONS,
@@ -3245,15 +4178,16 @@ const PREOWNED_LISTINGS: DataTable = {
     // A count only, through the offers' own index by listing: who offered is on the next table, for the person alone.
     c('openOffers', 'Open offers', 'number', "(SELECT COUNT(*) FROM preowned_offers o WHERE o.listing_id = t.id AND o.status = 'open')", { notNull: true }),
     c('city', 'City', 'text', 't.city', { sortable: true, searchable: true, edit: patch(LISTING_PATH, 'city', 'text', { maxLength: 80, when: 'listingOpen' }) }),
-    c('yearBought', 'Year bought', 'number', 't.purchase_year', { sortable: true }),
-    c('comesWith', 'What comes with it', 'text', 't.includes', { searchable: true, format: 'inert' }),
-    c('wholeSetup', 'Whole setup', 'bool', 't.is_kit', { filter: 'pick', notNull: true }),
+    c('yearBought', 'Year bought', 'number', 't.purchase_year', { sortable: true, edit: patch(LISTING_PATH, 'purchaseYear', 'number', { min: 1990, max: 2100, step: 1, nullable: true, when: 'listingOpen' }) }),
+    c('comesWith', 'What comes with it', 'text', 't.includes', { searchable: true, format: 'inert', edit: patch(LISTING_PATH, 'includes', 'text', { maxLength: 300, when: 'listingOpen' }) }),
+    c('wholeSetup', 'Whole setup', 'bool', 't.is_kit', { filter: 'pick', notNull: true, edit: patch(LISTING_PATH, 'isKit', 'toggle', { when: 'listingOpen' }) }),
     c('pictures', 'Pictures', 'number', jsonCount('t.images_json'), { notNull: true }),
     c('about', 'About it', 'longtext', 't.description', { searchable: true, format: 'inert', edit: patch(LISTING_PATH, 'description', 'longtext', { maxLength: 3000, when: 'listingOpen' }) }),
     c('featuredUntil', 'Featured until', 'datetime', 't.featured_until', { sortable: true }),
     stamp('listed', 'Listed', 't.created_at'),
     stamp('updatedAt', 'Changed', 't.updated_at', { filter: undefined }),
   ],
+  remove: { verb: 'Delete', did: 'deleted', ask: 'sheet', warn: 'Its offers and chats go too, for the buyers as well. This cannot be undone.', call: { method: 'DELETE', path: LISTING_PATH } },
 };
 
 const LISTING_OFFERS: DataTable = {
@@ -3272,19 +4206,50 @@ const LISTING_OFFERS: DataTable = {
   defaultSort: { key: 'byListing', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'Accept or decline an offer on your listing in the Store, where the buyer is told.',
+  noRemoveWhy: 'An offer is the buyer’s. Decline it with State instead.',
   columns: [
     c('listing', 'Listing', 'text', 'l.title', { sortable: true, searchable: true, notNull: true }),
     c('person', 'From', 'text', personName('b'), { sortable: true, searchable: true, notNull: true }),
     c('amount', 'Offer', 'money', 't.cents', { currency: 'currency', sortable: true, notNull: true }),
     c('note', 'Their note', 'text', 't.note', { searchable: true, format: 'inert' }),
-    c('status', 'State', 'enum', 't.status', { options: OFFER_STATUS_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
+    c('status', 'State', 'enum', 't.status', {
+      options: OFFER_STATUS_OPTIONS,
+      ordered: true,
+      sortable: true,
+      filter: 'pick',
+      notNull: true,
+      // The Store's own accept and decline, once, while the offer waits (its route guards that in the write); the buyer is told.
+      edit: {
+        method: 'POST',
+        path: '/market/offers/:id',
+        field: 'action',
+        input: 'select',
+        offer: ['accepted', 'declined'],
+        send: { accepted: 'accept', declined: 'decline' },
+        when: 'madeIt',
+        why: 'An offer already decided stays as it is.',
+        note: 'The buyer is told. Accepting one declines the other offers on the listing.',
+      },
+    }),
     c('decided', 'Decided', 'datetime', 't.decided_at', { sortable: true, filter: 'range' }),
     stamp('made', 'Made', 't.created_at'),
     c('currency', 'currency', 'text', 'l.currency', { hidden: true }),
     c('byListing', 'By listing', 'datetime', 'l.created_at', { hidden: true, sortable: true, notNull: true, sortTerms: ['l.created_at', 'l.rowid', 't.created_at', 't.rowid'] }),
+    mayChangeCell("t.status = 'open'"),
   ],
 };
 
+/** The listing a chat line is about, for its route's path; only in the owner's own view. */
+const listingIdCell = (): DataColumn => c('listingId', 'listingId', 'text', 't.listing_id', { hidden: true, ownerOnly: true });
+/** Delete a line you wrote in a listing's chat, seller or buyer: gone for both of you. The other side's lines are theirs. */
+const STORE_CHAT_REMOVE: RemoveSpec = {
+  verb: 'Delete',
+  did: 'deleted',
+  ask: 'twice',
+  warn: 'It goes from the chat for both of you. Their lines stay.',
+  only: { where: 't.sender_id = ?1', why: 'Only your own lines can be deleted. Theirs stay as they wrote them.' },
+  call: { method: 'DELETE', path: '/market/listings/:listingId/messages/:id' },
+};
 const CHATS_WITH_BUYERS: DataTable = {
   key: 'chatsWithBuyers',
   name: 'Chats with buyers',
@@ -3303,6 +4268,8 @@ const CHATS_WITH_BUYERS: DataTable = {
   defaultSort: { key: 'byChat', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A message stays as it was sent. Write back in the listing’s chat in the Store.',
+  noEditWhy: 'A message stays as it was sent. Write back in the listing’s chat in the Store.',
+  remove: STORE_CHAT_REMOVE,
   columns: [
     c('listing', 'Listing', 'text', 'l.title', { sortable: true, searchable: true, notNull: true }),
     c('buyer', 'Buyer', 'text', personName('b'), { sortable: true, searchable: true, notNull: true }),
@@ -3310,6 +4277,7 @@ const CHATS_WITH_BUYERS: DataTable = {
     c('message', 'Message', 'longtext', 't.body', { searchable: true, format: 'inert' }),
     stamp('sent', 'Sent', 't.created_at'),
     c('byChat', 'By chat', 'datetime', 'l.created_at', { hidden: true, sortable: true, notNull: true, sortTerms: ['l.created_at', 'l.rowid', 't.buyer_id', 't.created_at', 't.rowid'] }),
+    listingIdCell(),
   ],
 };
 
@@ -3326,6 +4294,15 @@ const MY_OFFERS: DataTable = {
   defaultSort: { key: 'made', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'Make another offer, or take one back, on the listing in the Store.',
+  noEditWhy: 'Make a new offer on the listing in the Store. It takes the place of this one.',
+  remove: {
+    verb: 'Withdraw',
+    did: 'withdrawn',
+    ask: 'sheet',
+    warn: 'The seller can no longer accept it. You can make another while the listing is for sale.',
+    only: { where: { cell: 'status', is: ['open'] }, why: 'Only an offer still waiting can be withdrawn.' },
+    call: { method: 'POST', path: '/market/offers/:id', body: { action: 'withdraw' } },
+  },
   columns: [
     c('listing', 'Listing', 'text', 'l.title', { sortable: true, searchable: true }),
     c('amount', 'Your offer', 'money', 't.cents', { currency: 'currency', sortable: true, notNull: true }),
@@ -3353,15 +4330,24 @@ const CHATS_WITH_SELLERS: DataTable = {
   defaultSort: { key: 'sent', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A message stays as it was sent. Write back in the listing’s chat in the Store.',
+  noEditWhy: 'A message stays as it was sent. Write back in the listing’s chat in the Store.',
+  remove: STORE_CHAT_REMOVE,
   columns: [
     c('listing', 'Listing', 'text', 'l.title', { sortable: true, searchable: true, notNull: true }),
     c('seller', 'Seller', 'text', personName('ow'), { sortable: true, searchable: true, notNull: true }),
     c('from', 'Written by', 'text', chatWriter('s'), { sortable: true, notNull: true }),
     c('message', 'Message', 'longtext', 't.body', { searchable: true, format: 'inert' }),
     stamp('sent', 'Sent', 't.created_at'),
+    listingIdCell(),
   ],
 };
 
+const TOOL_PATH = '/tools/:id';
+const TOOL_CHECKED_WHY = 'The team checked it, so it stays in the directory as the team keeps it.';
+/** A suggested tool's field, changed through Tools' own PATCH while the team has not checked it. */
+function unchecked(field: string, input: EditInput, more: Partial<ColumnEdit> = {}): ColumnEdit {
+  return patch(TOOL_PATH, field, input, { when: 'madeIt', why: TOOL_CHECKED_WHY, ...more });
+}
 const TOOLS_SUGGESTED: DataTable = {
   key: 'toolsSuggested',
   name: 'Tools you suggested',
@@ -3374,16 +4360,18 @@ const TOOLS_SUGGESTED: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'added', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'The team checks and changes tools in Tools.',
+  // Yours to change or take back while the team has not checked it; from then on it is the team's (Tools' routes hold the same rule).
+  remove: { verb: 'Delete', did: 'deleted', ask: 'twice', warn: 'It goes from the directory. Suggest it again any time.', only: { where: { cell: 'madeIt', is: [true] }, why: TOOL_CHECKED_WHY }, call: { method: 'DELETE', path: TOOL_PATH } },
   columns: [
-    c('name', 'Tool', 'text', 't.name', { sortable: true, searchable: true, notNull: true }),
-    c('category', 'Category', 'enum', 't.category', { options: TOOL_CATEGORY_OPTIONS, otherLabel: 'Other', sortable: true, filter: 'pick', notNull: true }),
+    c('name', 'Tool', 'text', 't.name', { sortable: true, searchable: true, notNull: true, edit: unchecked('name', 'text', { minLength: 1, maxLength: 80 }) }),
+    c('category', 'Category', 'enum', 't.category', { options: TOOL_CATEGORY_OPTIONS, otherLabel: 'Other', sortable: true, filter: 'pick', notNull: true, edit: unchecked('category', 'select') }),
     // Tools blanks a tool's link while the team has locked it behind points, xp or a badge, so this does too (and never searches it).
-    c('link', 'Link', 'text', "CASE WHEN t.min_points = 0 AND t.min_xp = 0 AND t.badge = '' THEN t.url END", { format: 'inert' }),
-    c('about', 'About it', 'longtext', 't.description', { searchable: true, format: 'inert' }),
+    c('link', 'Link', 'text', "CASE WHEN t.min_points = 0 AND t.min_xp = 0 AND t.badge = '' THEN t.url END", { format: 'inert', edit: unchecked('url', 'text', { minLength: 1, maxLength: 500, note: 'A link that starts with https://' }) }),
+    c('about', 'About it', 'longtext', 't.description', { searchable: true, format: 'inert', edit: unchecked('description', 'longtext', { maxLength: 500 }) }),
     c('checked', 'Checked by the team', 'bool', 't.verified', { sortable: true, filter: 'pick', notNull: true }),
     c('partner', 'Partner link', 'bool', 't.affiliate', { filter: 'pick', notNull: true }),
     stamp('added', 'Added', 't.created_at'),
+    mayChangeCell('t.verified = 0'),
   ],
 };
 
@@ -3399,7 +4387,17 @@ const REWARD_RESERVATIONS: DataTable = {
   defaultSort: { key: 'reserved', dir: 'desc' },
   read: 'sql',
   privateSelect: { reward: 't.reward_key' },
-  readOnlyWhy: 'Cancel a reservation on Rewards, where its points come back.',
+  readOnlyWhy: 'Cancel a reservation here or on Rewards, and its points come back.',
+  noEditWhy: 'A reservation stays as you made it. The team marks it done when it ships.',
+  // Rewards' own Cancel, asked in a sheet there and here: the status moves first and only from reserved, so two taps refund once.
+  remove: {
+    verb: 'Cancel',
+    did: 'cancelled',
+    ask: 'sheet',
+    warn: 'The points come back and the reservation is gone. To have it again, reserve it again if it is still there.',
+    only: { where: { cell: 'status', is: ['reserved'] }, why: 'Only a reservation still waiting can be cancelled. A game stays yours for good.' },
+    call: { method: 'POST', path: '/rewards/redemptions/:id/cancel' },
+  },
   columns: [
     // Its name from the catalog, the one list of rewards (REWARD_BY_KEY), on the server.
     c('reward', 'Reward', 'summary', null, { derive: 'rewardName', from: ['reward'] }),
@@ -3425,6 +4423,8 @@ const GAMES_UNLOCKED: DataTable = {
   read: 'sql',
   privateSelect: { reward: "'game_' || t.game_key" },
   readOnlyWhy: 'A game stays yours for good once it is unlocked.',
+  noEditWhy: 'A game stays yours for good once it is unlocked.',
+  noRemoveWhy: 'A game stays yours for good once it is unlocked.',
   columns: [
     c('game', 'Game', 'summary', null, { derive: 'rewardName', from: ['reward'], sortable: true, sortSql: 't.game_key', notNull: true }),
     stamp('unlocked', 'Unlocked', 't.unlocked_at'),
@@ -3466,7 +4466,7 @@ export const VERSION_REVIEW_OPTIONS = opts([['pending', 'Waiting'], ['approved',
 /** The steps Army's campaign log records (logEvent in routes/army.ts), in words. */
 export const CAMPAIGN_EVENT_OPTIONS = opts([
   ['created', 'Started'], ['status', 'Stage moved'], ['deliverable', 'Piece added'], ['assignment', 'A creator’s role'], ['version', 'Work sent'],
-  ['approved', 'Work approved'], ['changes', 'Changes asked'],
+  ['approved', 'Work approved'], ['changes', 'Changes asked'], ['details', 'Name or days changed'],
 ]);
 export const ORG_TYPE_OPTIONS = opts([['brand', 'Brand'], ['agency', 'Agency'], ['partner', 'Partner']]);
 export const ORG_ROLE_OPTIONS = opts([['owner', 'Owner'], ['member', 'Member']]);
@@ -3481,6 +4481,12 @@ export const PROPOSAL_STAGE_OPTIONS = opts([
 export const CLUB_STATUS_OPTIONS = opts([['applied', 'In review'], ['approved', 'Approved'], ['active', 'Active'], ['rejected', 'Not this time'], ['suspended', 'Paused'], ['expired', 'Ended']]);
 
 const OPPORTUNITY_PATH = '/work/opportunities/:id';
+/** A listing nobody ever saw: a draft never published with no application, which Work's own delete takes (DELETE /work/opportunities/:id). */
+const WORK_NEVER_PUBLISHED = "t.status = 'draft' AND t.published_at IS NULL AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.opportunity_id = t.id)";
+/** The states an applicant can no longer withdraw from (WITHDRAW_SHUT in routes/work.ts, as Work's page hides Withdraw; a test holds them). */
+export const WORK_WITHDRAW_SHUT: readonly string[] = ['withdrawn', 'rejected', 'completed', 'selected'];
+/** The steps the listing's team takes on an application, as Work's own buttons offer them (`decisions` in screens/Work.tsx). */
+export const WORK_REVIEW_STEPS: readonly string[] = ['reviewing', 'shortlisted', 'selected', 'rejected'];
 /** A listing's or a reward's brand as Work and Win name it: the brand's own name, else Kreators (a listing the team posted). */
 const brandOf = (org: string): string => `COALESCE(${org}.name, 'Kreators')`;
 /** A reward's brand as Win names it: the name typed on the reward, else its brand's, else Kreators. */
@@ -3507,8 +4513,22 @@ const WORK_LISTINGS: DataTable = {
   defaultSort: { key: 'made', dir: 'desc' },
   read: 'sql',
   privateSelect: { skills: 't.skills_required' },
+  // Work's own routes (2026-11-14): a draft nobody ever saw is deleted (guarded, its pictures with it); a published one is closed, as Work's
+  // Close does, so its applications keep their listing; anything published once stays.
+  remove: {
+    verb: 'Delete',
+    did: 'deleted',
+    ask: 'sheet',
+    warn: 'A draft that was never published is deleted. A published listing is closed instead: nobody can apply after this, and you can put it back to draft.',
+    outcomes: [
+      { when: WORK_NEVER_PUBLISHED, did: 'deleted', call: { method: 'DELETE', path: OPPORTUNITY_PATH } },
+      { when: { cell: 'status', is: ['published'] }, did: 'closed', call: { method: 'PATCH', path: OPPORTUNITY_PATH, body: { status: 'closed' } } },
+      { when: { cell: 'status', is: ['closed'] }, skip: 'It is closed already.' },
+      { skip: 'It was published once, so it stays. Its applications keep their history.' },
+    ],
+  },
   columns: [
-    c('title', 'Title', 'text', 't.title', { sortable: true, searchable: true, notNull: true }),
+    c('title', 'Title', 'text', 't.title', { sortable: true, searchable: true, notNull: true, edit: patch(OPPORTUNITY_PATH, 'title', 'text', { minLength: 1, maxLength: 120 }) }),
     c('brand', 'Brand', 'text', brandOf('og'), { sortable: true, searchable: true, notNull: true }),
     c('kind', 'Kind', 'enum', 't.opportunity_type', { options: OPPORTUNITY_TYPE_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
     c('status', 'State', 'enum', 't.status', {
@@ -3523,14 +4543,15 @@ const WORK_LISTINGS: DataTable = {
     // Every application but a withdrawn one, as Work counts them.
     c('applied', 'Applied', 'number', "(SELECT COUNT(*) FROM applications a WHERE a.opportunity_id = t.id AND a.status != 'withdrawn')", { sortable: true, notNull: true }),
     c('locationMode', 'Where', 'enum', 't.location_mode', { options: LOCATION_MODE_OPTIONS, ordered: true, filter: 'pick', notNull: true }),
-    c('place', 'Place', 'text', "NULLIF(t.location_text, '')", { searchable: true }),
+    c('place', 'Place', 'text', "NULLIF(t.location_text, '')", { searchable: true, edit: patch(OPPORTUNITY_PATH, 'locationText', 'text', { maxLength: 120 }) }),
     c('payFrom', 'Pay from', 'money', wholeUnits('t.compensation_min'), { currency: 'currency', sortable: true }),
     c('payTo', 'Pay up to', 'money', wholeUnits('t.compensation_max'), { currency: 'currency', sortable: true }),
     c('skills', 'Skills', 'summary', null, { derive: 'stringList', from: ['skills'] }),
-    c('deadline', 'Apply by', 'date', 't.deadline', { sortable: true, filter: 'range' }),
-    c('about', 'About it', 'longtext', 't.description', { searchable: true, format: 'inert' }),
-    c('deliverables', 'What to deliver', 'longtext', 't.deliverables', { format: 'inert' }),
-    c('eligibility', 'Who can apply', 'longtext', 't.eligibility', { format: 'inert' }),
+    c('deadline', 'Apply by', 'date', 't.deadline', { sortable: true, filter: 'range', edit: patch(OPPORTUNITY_PATH, 'deadline', 'date', { nullable: true }) }),
+    c('about', 'About it', 'longtext', 't.description', { searchable: true, format: 'inert', edit: patch(OPPORTUNITY_PATH, 'description', 'longtext', { maxLength: 5000 }) }),
+    // What to deliver changes only while nobody has applied (Work's own PATCH refuses it after, in words), so no application answers a moved brief.
+    c('deliverables', 'What to deliver', 'longtext', 't.deliverables', { format: 'inert', edit: patch(OPPORTUNITY_PATH, 'deliverables', 'longtext', { maxLength: 2000, note: 'Only while nobody has applied.' }) }),
+    c('eligibility', 'Who can apply', 'longtext', 't.eligibility', { format: 'inert', edit: patch(OPPORTUNITY_PATH, 'eligibility', 'longtext', { maxLength: 1000 }) }),
     c('featured', 'Featured', 'bool', 't.featured', { filter: 'pick', notNull: true }),
     stamp('made', 'Made', 't.created_at'),
     c('published', 'Published', 'datetime', 't.published_at', { sortable: true, filter: 'range' }),
@@ -3554,12 +4575,21 @@ const WORK_APPLICANTS: DataTable = {
   // applications' own (by listing and day sent) make, so no page sorts. Tap Sent to sort by the day alone.
   defaultSort: { key: 'byListing', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Move an application along on the listing’s page in Work, where the person is told.',
+  noRemoveWhy: 'An application is the applicant’s. Reject it instead, and they are told.',
   columns: [
     c('listing', 'Listing', 'text', 'o.title', { sortable: true, searchable: true, notNull: true }),
     c('person', 'Who applied', 'text', personName('u'), { sortable: true, searchable: true, notNull: true }),
     c('handle', 'Username', 'text', personHandle('u'), { searchable: true, format: 'handle' }),
-    c('status', 'State', 'enum', 't.status', { options: APPLICATION_STATUS_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
+    c('status', 'State', 'enum', 't.status', {
+      options: APPLICATION_STATUS_OPTIONS,
+      ordered: true,
+      sortable: true,
+      filter: 'pick',
+      notNull: true,
+      // Work's own step (2026-11-14), the four its listing page offers; the route keeps a withdrawn or completed one as it is, in words, and
+      // moves the rest only from the state it read, writing the step and telling the applicant.
+      edit: { method: 'POST', path: '/work/applications/:id', field: 'status', input: 'select', offer: WORK_REVIEW_STEPS, note: 'They are told of each step.' },
+    }),
     c('coverNote', 'Their note', 'longtext', 't.cover_note', { searchable: true, format: 'inert' }),
     c('portfolio', 'Their work as sent', 'longtext', 't.portfolio_snapshot', { format: 'inert' }),
     stamp('sent', 'Sent', 't.submitted_at'),
@@ -3580,7 +4610,17 @@ const WORK_APPLICATIONS: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'changed', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Withdraw an application on its listing in Work, where the brand is told.',
+  readOnlyWhy: 'Your note stays as you sent it. The listing’s team has it.',
+  noEditWhy: 'Your note stays as you sent it. The listing’s team has it.',
+  // Work's own withdraw (2026-11-14), only while the application is still being looked at, guarded on the state the route read.
+  remove: {
+    verb: 'Withdraw',
+    did: 'withdrawn',
+    ask: 'sheet',
+    warn: 'It cannot be sent again: one application per person. The listing’s team sees it withdrawn.',
+    only: { where: { cell: 'status', not: WORK_WITHDRAW_SHUT }, why: 'It was decided, or withdrawn already, so it stays.' },
+    call: { method: 'POST', path: '/work/applications/:id', body: { status: 'withdrawn' } },
+  },
   columns: [
     c('listing', 'Listing', 'text', 'o.title', { sortable: true, searchable: true }),
     c('brand', 'Brand', 'text', brandOf('og'), { sortable: true, searchable: true, notNull: true }),
@@ -3610,6 +4650,8 @@ const WORK_APPLICATION_STEPS: DataTable = {
   defaultSort: { key: 'byApplication', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A step is what happened. It changes only as the application moves in Work.',
+  noEditWhy: 'A step is what happened. It changes only as the application moves in Work.',
+  noRemoveWhy: 'A step is what happened, so it stays.',
   columns: [
     c('listing', 'Listing', 'text', 'o.title', { sortable: true, searchable: true }),
     c('step', 'Step', 'enum', 't.event_type', { options: APPLICATION_STATUS_OPTIONS, otherLabel: 'Something else', ordered: true, sortable: true, filter: 'pick', notNull: true }),
@@ -3633,6 +4675,17 @@ const ARMY_ROLES: DataTable = {
   read: 'sql',
   // Accepting is agreeing to the campaign's brief, usage rights and exclusivity, which Army shows beside the answer; so it is answered there.
   readOnlyWhy: 'Accept or decline an offer on the campaign in Army, beside its brief and terms.',
+  noEditWhy: 'Accept an offer on the campaign in Army, beside its brief and terms.',
+  // Declining agrees to nothing, so it may be done here (2026-11-14): Army's own answer, guarded on the offer still waiting (never after an accept).
+  remove: {
+    verb: 'Decline',
+    did: 'declined',
+    ask: 'sheet',
+    noun: { one: 'role', many: 'roles' },
+    warn: 'The campaign’s team is told. They can offer it to you again.',
+    only: { where: { cell: 'status', is: ['offered'] }, why: 'Only an offer still waiting can be declined. Once you accept, talk to the campaign’s team in Army.' },
+    call: { method: 'POST', path: '/army/assignments/:id', body: { status: 'declined' } },
+  },
   columns: [
     c('campaign', 'Campaign', 'text', 'cp.name', { sortable: true, searchable: true }),
     c('brand', 'Brand', 'text', 'og.name', { sortable: true, searchable: true }),
@@ -3659,6 +4712,8 @@ const ARMY_WORK_SENT: DataTable = {
   defaultSort: { key: 'sent', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A version stays as you sent it. Send a new one on the campaign in Army.',
+  noEditWhy: 'A version stays as you sent it. Send a new one on the campaign in Army.',
+  noRemoveWhy: 'The brand reviews what you sent, so it stays as you sent it.',
   columns: [
     c('campaign', 'Campaign', 'text', 'cp.name', { sortable: true, searchable: true }),
     c('piece', 'Piece', 'text', 'dl.title', { sortable: true, searchable: true }),
@@ -3687,6 +4742,8 @@ const ARMY_FEEDBACK: DataTable = {
   defaultSort: { key: 'byVersion', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'Feedback stays as it was written. Answer it with a new version on the campaign in Army.',
+  noEditWhy: 'Feedback is the writer’s words, so it stays as they wrote it.',
+  noRemoveWhy: 'Feedback is the writer’s words, so it stays as they wrote it.',
   columns: [
     c('campaign', 'Campaign', 'text', 'cp.name', { sortable: true, searchable: true }),
     c('piece', 'Piece', 'text', 'dl.title', { sortable: true, searchable: true }),
@@ -3713,6 +4770,25 @@ const ARMY_BRANDS: DataTable = {
   defaultSort: { key: 'since', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'Answer an ask to join on your Profile tab. A brand’s owner adds and removes teammates in Army.',
+  noEditWhy: 'Your role is the brand owner’s to give.',
+  // Leave a brand, or say no to an ask (2026-11-14): the Profile tab's own no (nobody is told), or the new leave (the owners are told), never
+  // its only owner. Both core, like the ask itself.
+  remove: {
+    verb: 'Leave',
+    did: 'left',
+    ask: 'sheet',
+    noun: { one: 'brand', many: 'brands' },
+    warn: 'You leave its team and its campaigns in Army, and its owners are told. An ask you turn down goes quietly.',
+    outcomes: [
+      { when: { cell: 'status', is: ['invited'] }, did: 'turned down', call: { method: 'POST', path: '/me/org-invites/:id/answer', body: { yes: false } } },
+      {
+        when: "t.status = 'active' AND (t.role <> 'owner' OR (SELECT COUNT(*) FROM organization_members ow WHERE ow.organization_id = t.organization_id AND ow.role = 'owner' AND ow.status = 'active') > 1)",
+        did: 'left',
+        call: { method: 'DELETE', path: '/orgs/:id/membership' },
+      },
+      { skip: 'You are its only owner, so you stay with it.' },
+    ],
+  },
   columns: [
     c('brand', 'Brand', 'text', 'og.name', { sortable: true, searchable: true, notNull: true }),
     c('type', 'Kind', 'enum', 'og.type', { options: ORG_TYPE_OPTIONS, filter: 'pick', notNull: true }),
@@ -3740,6 +4816,22 @@ const ARMY_BRAND_TEAMS: DataTable = {
   defaultSort: { key: 'byBrand', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'Ask someone onto a brand’s team, or take them off it, in Army.',
+  noEditWhy: 'A teammate’s role is given when they join. Ask someone new in Army.',
+  // The teammate's id, which the brand's own remove needs in its path, is read by the server and never sent (2026-11-14).
+  privateSelect: { memberId: 't.user_id' },
+  // The brand's own remove (2026-11-14): someone else's access, so asked in a sheet; an owner stays, and the route says whether a row went.
+  remove: {
+    verb: 'Remove',
+    did: 'removed',
+    ask: 'sheet',
+    noun: { one: 'teammate', many: 'teammates', person: true },
+    warn: 'They leave the brand’s team and its campaigns in Army. An ask still waiting is taken back, and nobody is told.',
+    outcomes: [
+      { when: { cell: 'role', is: ['owner'] }, skip: 'An owner stays on the team.' },
+      { when: { cell: 'status', is: ['invited'] }, did: 'taken back', line: 'Took back the ask to {rows}.', call: { method: 'DELETE', path: '/orgs/:orgId/members/:memberId' } },
+      { did: 'removed', call: { method: 'DELETE', path: '/orgs/:orgId/members/:memberId' } },
+    ],
+  },
   columns: [
     c('brand', 'Brand', 'text', 'og.name', { sortable: true, searchable: true, notNull: true }),
     c('person', 'Teammate', 'text', `CASE WHEN t.user_id = ?1 THEN 'You' ELSE ${personName('u')} END`, { sortable: true, searchable: true, notNull: true }),
@@ -3748,9 +4840,11 @@ const ARMY_BRAND_TEAMS: DataTable = {
     c('status', 'State', 'enum', 't.status', { options: ORG_MEMBER_STATUS_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
     stamp('since', 'Since', 't.created_at'),
     c('byBrand', 'By brand', 'datetime', 'ow.created_at', { hidden: true, sortable: true, notNull: true, sortTerms: ['ow.created_at', 'ow.rowid', 't.created_at', 't.rowid'] }),
+    c('orgId', 'orgId', 'text', 't.organization_id', { hidden: true, ownerOnly: true }),
   ],
 };
 
+const CAMPAIGN_PATH = '/army/campaigns/:id';
 const ARMY_CAMPAIGNS: DataTable = {
   key: 'armyCampaigns',
   name: 'Your brands’ campaigns',
@@ -3766,14 +4860,35 @@ const ARMY_CAMPAIGNS: DataTable = {
   // By brand, then each brand's campaigns changed last first: the walk the person's memberships and the campaigns' index by brand make.
   defaultSort: { key: 'byBrand', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'A campaign is the brand’s and the team’s. Change it in Army.',
+  // The brand's own cancel in Army (2026-11-14), a stage move the brand may make; delivered work stays on the books.
+  remove: {
+    verb: 'Cancel',
+    did: 'cancelled',
+    ask: 'sheet',
+    noun: { one: 'campaign', many: 'campaigns' },
+    warn: 'Everyone on the brand’s team is told, and it reads Cancelled in Army. The team can move it on again.',
+    outcomes: [
+      { when: { cell: 'stage', is: ['cancelled'] }, skip: 'It is cancelled already.' },
+      { when: { cell: 'stage', is: ['delivered', 'reported'] }, skip: 'Its work was delivered, so it stays on the books.' },
+      { did: 'cancelled', call: { method: 'PATCH', path: CAMPAIGN_PATH, body: { status: 'cancelled' } } },
+    ],
+  },
   columns: [
-    c('campaign', 'Campaign', 'text', 't.name', { sortable: true, searchable: true, notNull: true }),
+    // Army's own PATCH (2026-11-14): the name and days only, never the brief, the terms or the budget a creator agreed to; each change is a line
+    // in the campaign's log, and the write is guarded on the version read.
+    c('campaign', 'Campaign', 'text', 't.name', { sortable: true, searchable: true, notNull: true, edit: patch(CAMPAIGN_PATH, 'name', 'text', { minLength: 1, maxLength: 120, note: 'The change is written in the campaign’s log.' }) }),
     c('brand', 'Brand', 'text', 'og.name', { sortable: true, searchable: true, notNull: true }),
-    c('stage', 'Stage', 'enum', 't.status', { options: CAMPAIGN_STATUS_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
+    c('stage', 'Stage', 'enum', 't.status', {
+      options: CAMPAIGN_STATUS_OPTIONS,
+      ordered: true,
+      sortable: true,
+      filter: 'pick',
+      notNull: true,
+      edit: patch(CAMPAIGN_PATH, 'status', 'select', { offer: ['approved'], note: 'The brand approves the shortlist. The team moves the other steps.' }),
+    }),
     c('budget', 'Budget', 'money', wholeUnits('t.budget_amount'), { currency: 'currency', sortable: true, notNull: true }),
-    c('starts', 'Starts', 'date', 't.start_date', { sortable: true, filter: 'range' }),
-    c('due', 'Due', 'date', 't.due_date', { sortable: true, filter: 'range' }),
+    c('starts', 'Starts', 'date', 't.start_date', { sortable: true, filter: 'range', edit: patch(CAMPAIGN_PATH, 'startDate', 'date', { nullable: true, note: 'The change is written in the campaign’s log.' }) }),
+    c('due', 'Due', 'date', 't.due_date', { sortable: true, filter: 'range', edit: patch(CAMPAIGN_PATH, 'dueDate', 'date', { nullable: true, note: 'The change is written in the campaign’s log.' }) }),
     c('runBy', 'Run by', 'text', `CASE WHEN t.owner_user_id IS NULL THEN 'Not given yet' ELSE ${personName('u')} END`, { sortable: true, notNull: true }),
     c('pieces', 'Pieces', 'number', '(SELECT COUNT(*) FROM campaign_deliverables d WHERE d.campaign_id = t.id)', { notNull: true }),
     c('creators', 'Creators', 'number', '(SELECT COUNT(*) FROM campaign_assignments a WHERE a.campaign_id = t.id)', { notNull: true }),
@@ -3805,6 +4920,8 @@ const ARMY_CAMPAIGN_LOG: DataTable = {
   defaultSort: { key: 'byCampaign', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'The log is what happened. It grows as the campaign moves in Army.',
+  noEditWhy: 'The log is what happened. It grows as the campaign moves in Army.',
+  noRemoveWhy: 'The log is what happened, and the brand’s team reads it too, so it stays.',
   columns: [
     c('campaign', 'Campaign', 'text', 'cp.name', { sortable: true, searchable: true, notNull: true }),
     c('who', 'Who', 'text', `CASE WHEN t.actor_user_id IS NULL THEN 'The app' WHEN t.actor_user_id = ?1 THEN 'You' ELSE ${personName('u')} END`, { sortable: true, searchable: true, notNull: true }),
@@ -3815,6 +4932,14 @@ const ARMY_CAMPAIGN_LOG: DataTable = {
   ],
 };
 
+const REWARD_PATH = '/win/:id';
+/**
+ * A reward changes through Win's own PATCH (2026-11-14): each change is a new version, and everyone who entered is told of it, so nobody posts
+ * against rules that moved. A reward whose pool was paid out stays as it ended (the route refuses it, in words).
+ */
+function rewardEdit(field: string, input: EditInput, more: Partial<ColumnEdit> = {}): ColumnEdit {
+  return { method: 'PATCH', path: REWARD_PATH, field, input, note: 'Saving makes a new version, and everyone who entered is told.', ...more };
+}
 const WIN_REWARDS: DataTable = {
   key: 'winRewards',
   name: 'Rewards you launched',
@@ -3827,23 +4952,34 @@ const WIN_REWARDS: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'launched', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Change a reward on its page in Win, where everyone who entered is told of each change.',
+  // Win's own close (2026-11-14): a version change every entrant is told of, as each change is; a reward whose pool was paid out stays.
+  remove: {
+    verb: 'Close',
+    did: 'closed',
+    ask: 'sheet',
+    warn: 'Nobody can enter after this, and everyone who entered is told. Entries already in are still reviewed and paid.',
+    outcomes: [
+      { when: { cell: 'status', is: ['open'] }, did: 'closed', call: { method: 'PATCH', path: REWARD_PATH, body: { status: 'closed' } } },
+      { when: { cell: 'status', is: ['paid'] }, skip: 'Its pool was paid out, so it stays as it ended.' },
+      { skip: 'It is closed already.' },
+    ],
+  },
   columns: [
-    c('title', 'Title', 'text', 't.title', { sortable: true, searchable: true, notNull: true }),
+    c('title', 'Title', 'text', 't.title', { sortable: true, searchable: true, notNull: true, edit: rewardEdit('title', 'text', { minLength: 1, maxLength: 120 }) }),
     c('brand', 'Brand', 'text', rewardBrand('t', 'og'), { sortable: true, searchable: true, notNull: true }),
-    c('status', 'State', 'enum', 't.status', { options: REWARD_STATUS_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
-    c('deliverable', 'What to make', 'text', 't.deliverable', { searchable: true }),
-    c('platform', 'Where to post', 'text', "NULLIF(t.platform, '')", { searchable: true }),
-    c('pool', 'Pool in points', 'number', 't.budget_points', { sortable: true, notNull: true }),
-    c('rate', 'Points per 1,000 views', 'number', 't.rate_per_thousand', { sortable: true, notNull: true }),
-    c('cap', 'Most points a creator', 'number', 't.max_payout_points', { sortable: true, notNull: true }),
-    c('minViews', 'Least views', 'number', 't.min_views', { sortable: true, notNull: true }),
+    c('status', 'State', 'enum', 't.status', { options: REWARD_STATUS_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true, edit: rewardEdit('status', 'select', { offer: ['open', 'closed'] }) }),
+    c('deliverable', 'What to make', 'text', 't.deliverable', { searchable: true, edit: rewardEdit('deliverable', 'text', { minLength: 1, maxLength: 80 }) }),
+    c('platform', 'Where to post', 'text', "NULLIF(t.platform, '')", { searchable: true, edit: rewardEdit('platform', 'text', { maxLength: 60 }) }),
+    c('pool', 'Pool in points', 'number', 't.budget_points', { sortable: true, notNull: true, edit: rewardEdit('budgetPoints', 'number', { min: 0, step: 1, note: 'Never under what was paid already. Everyone who entered is told.' }) }),
+    c('rate', 'Points per 1,000 views', 'number', 't.rate_per_thousand', { sortable: true, notNull: true, edit: rewardEdit('ratePerThousand', 'number', { min: 0, step: 1 }) }),
+    c('cap', 'Most points a creator', 'number', 't.max_payout_points', { sortable: true, notNull: true, edit: rewardEdit('maxPayoutPoints', 'number', { min: 0, step: 1 }) }),
+    c('minViews', 'Least views', 'number', 't.min_views', { sortable: true, notNull: true, edit: rewardEdit('minViews', 'number', { min: 0, step: 1 }) }),
     c('entries', 'Entries', 'number', '(SELECT COUNT(*) FROM bounty_submissions s WHERE s.bounty_id = t.id)', { sortable: true, notNull: true }),
     c('paid', 'Points paid', 'number', "(SELECT COALESCE(SUM(s.payout_points), 0) FROM bounty_submissions s WHERE s.bounty_id = t.id AND s.status = 'paid')", { sortable: true, notNull: true }),
     c('version', 'Version', 'number', 't.version', { notNull: true }),
-    c('brief', 'Brief', 'longtext', 't.brief', { searchable: true, format: 'inert' }),
-    c('rules', 'Rules', 'longtext', 't.reward_rule', { format: 'inert' }),
-    c('eligibility', 'Who can enter', 'longtext', 't.eligibility', { format: 'inert' }),
+    c('brief', 'Brief', 'longtext', 't.brief', { searchable: true, format: 'inert', edit: rewardEdit('brief', 'longtext', { maxLength: 5000 }) }),
+    c('rules', 'Rules', 'longtext', 't.reward_rule', { format: 'inert', edit: rewardEdit('rewardRule', 'longtext', { maxLength: 1000 }) }),
+    c('eligibility', 'Who can enter', 'longtext', 't.eligibility', { format: 'inert', edit: rewardEdit('eligibility', 'longtext', { maxLength: 1000 }) }),
     c('opens', 'Opens', 'datetime', 't.starts_at', { sortable: true, filter: 'range', notNull: true }),
     c('closes', 'Closes', 'datetime', 't.ends_at', { sortable: true, filter: 'range', notNull: true }),
     c('featured', 'Featured', 'bool', 't.featured', { filter: 'pick', notNull: true }),
@@ -3864,11 +5000,25 @@ const WIN_ENTRIES: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'entered', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Send a new link, or ask again about a rejection, on the reward’s page in Win.',
+  // Withdraw an entry before a reviewer looks at it (2026-11-14, the founder's yes): Win's own guarded delete; enter again while it is open.
+  remove: {
+    verb: 'Withdraw',
+    did: 'withdrawn',
+    ask: 'twice',
+    warn: 'It leaves the reward with its numbers. You can enter again while the reward is open.',
+    only: { where: { cell: 'status', is: ['submitted'] }, why: 'A reviewer has looked at it, so it stays.' },
+    call: { method: 'DELETE', path: '/win/submissions/:id' },
+  },
   columns: [
     c('reward', 'Reward', 'text', 'b.title', { sortable: true, searchable: true }),
     c('brand', 'Brand', 'text', rewardBrand('b', 'og'), { sortable: true, searchable: true, notNull: true }),
-    c('link', 'Your post', 'text', 't.url', { searchable: true, format: 'inert' }),
+    // A new link is Win's own "Update my entry" (one entry a person a reward), while the reward is open: it waits for review again, and a paid
+    // one stays (the route refuses it).
+    c('link', 'Your post', 'text', 't.url', {
+      searchable: true,
+      format: 'inert',
+      edit: { method: 'POST', path: '/win/:id/submit', param: 'rewardId', field: 'url', input: 'text', minLength: 1, maxLength: 500, note: 'A public link to your post. It waits for review again.' },
+    }),
     c('platform', 'Platform', 'enum', 't.platform', { options: SOCIAL_PLATFORM_OPTIONS, otherLabel: 'Other', filter: 'pick', notNull: true }),
     c('status', 'State', 'enum', 't.status', { options: ENTRY_STATUS_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
     c('views', 'Latest views', 'number', 't.latest_views', { sortable: true, notNull: true }),
@@ -3877,6 +5027,7 @@ const WIN_ENTRIES: DataTable = {
     c('dispute', 'What you asked', 'longtext', "NULLIF(t.dispute_note, '')", { format: 'inert' }),
     stamp('entered', 'Entered', 't.created_at'),
     c('changed', 'Changed', 'datetime', 't.updated_at', { sortable: true, filter: 'range', notNull: true }),
+    c('rewardId', 'rewardId', 'text', 't.bounty_id', { hidden: true, ownerOnly: true }),
   ],
 };
 
@@ -3896,6 +5047,8 @@ const WIN_REVIEWER_NOTES: DataTable = {
   defaultSort: { key: 'entered', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A reviewer’s note stays as they wrote it. Ask again about a rejection on the reward’s page in Win.',
+  noEditWhy: 'A reviewer’s note stays as they wrote it.',
+  noRemoveWhy: 'A reviewer’s note is their words, so it stays.',
   columns: [
     c('reward', 'Reward', 'text', 'b.title', { sortable: true, searchable: true }),
     c('status', 'State', 'enum', 't.status', { options: ENTRY_STATUS_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
@@ -3928,6 +5081,17 @@ function pitchTable(key: string, kind: 'tv' | 'fund', name: string, blurb: strin
     idSql: 't.id',
     defaultSort: { key: 'changed', dir: 'desc' },
     read: 'sql',
+    // TV's and Fund's own withdraw: only while the team has not started reading it (its route guards that and says so in words).
+    remove: {
+      verb: 'Withdraw',
+      did: 'withdrawn',
+      ask: 'sheet',
+      warn: 'It leaves the team’s list. You can pitch it again.',
+      outcomes: [
+        { when: "t.stage = 'submitted'", did: 'withdrawn', call: { method: 'POST', path: '/proposals/:id/withdraw' } },
+        { skip: 'The team has started reading it, so it stays.' },
+      ],
+    },
     columns: [
       c('title', 'Title', 'text', 't.title', { sortable: true, searchable: true, notNull: true, edit: pitchEdit('title', 'text', { minLength: 1, maxLength: 120 }) }),
       c('stage', 'Stage', 'enum', 't.stage', { options: PROPOSAL_STAGE_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
@@ -3960,15 +5124,24 @@ const CLUB_MEMBERSHIP: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'applied', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Apply, or apply again, under Club. A reviewer decides.',
   columns: [
     c('status', 'State', 'enum', 't.status', { options: CLUB_STATUS_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
-    c('note', 'Your note', 'longtext', "NULLIF(t.note, '')", { format: 'inert' }),
+    // Your note and the application itself, through Club's own routes, only while it waits for a reviewer (2026-11-14); a decision stays.
+    c('note', 'Your note', 'longtext', "NULLIF(t.note, '')", { format: 'inert', edit: patch('/club/apply', 'note', 'longtext', { maxLength: 2000, note: 'Only while it waits for a reviewer.' }) }),
     c('starts', 'Starts', 'datetime', 't.starts_at', { sortable: true }),
     c('ends', 'Ends', 'datetime', 't.ends_at', { sortable: true }),
     c('manager', 'A manager named', 'bool', '(t.manager_user_id IS NOT NULL)', { notNull: true }),
     stamp('applied', 'Applied', 't.created_at'),
   ],
+  remove: {
+    verb: 'Withdraw',
+    did: 'withdrawn',
+    ask: 'sheet',
+    noun: { one: 'application', many: 'applications' },
+    warn: 'Your application goes. You can apply again under Club.',
+    only: { where: { cell: 'status', is: ['applied'] }, why: 'Only an application still waiting can be withdrawn. A reviewer’s decision stays.' },
+    call: { method: 'DELETE', path: '/club/apply' },
+  },
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------
@@ -4027,6 +5200,11 @@ const seatsOf = (statuses: string): string =>
   `(SELECT COUNT(*) FROM event_registrations r JOIN users su ON su.id = r.user_id WHERE r.event_id = t.id AND r.status IN (${statuses}) AND su.display_name != ${DELETED})`;
 const XP_NOTE = 'What each one gets for typing the code at the start. It is fixed thirty minutes before. The code itself is shown only on its page.';
 
+/** Party's own route for an event the person hosts: its title, words, place and state (2026-11-14, All tables' Edit). */
+const PARTY_EVENT_PATH = '/party/events/:id';
+/** Now, by SQLite's own clock, in the stored instants' shape (toISOString), for a remove's rule about what has not ended yet. */
+const EVENT_NOW_SQL = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
+
 const PARTY_HOSTED: DataTable = {
   key: 'partyHosted',
   name: 'Events you host',
@@ -4043,12 +5221,21 @@ const PARTY_HOSTED: DataTable = {
   defaultSort: { key: 'starts', dir: 'desc' },
   read: 'sql',
   columns: [
-    c('title', 'Event', 'text', 't.title', { sortable: true, searchable: true, notNull: true }),
+    // Its title, words and place, and Mark done, through Party's own route (2026-11-14); a cancelled event stays as it is, refused there in
+    // words. Never the time or the price here, which guests and their tickets rest on. Cancelling is the remove, asked in a sheet.
+    c('title', 'Event', 'text', 't.title', { sortable: true, searchable: true, notNull: true, edit: patch(PARTY_EVENT_PATH, 'title', 'text', { param: 'eventId', minLength: 1, maxLength: 120 }) }),
     c('kind', 'Kind', 'enum', 't.event_type', { options: EVENT_TYPE_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
-    c('state', 'State', 'enum', 't.status', { options: EVENT_STATE_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
+    c('state', 'State', 'enum', 't.status', {
+      options: EVENT_STATE_OPTIONS,
+      ordered: true,
+      sortable: true,
+      filter: 'pick',
+      notNull: true,
+      edit: patch(PARTY_EVENT_PATH, 'status', 'select', { param: 'eventId', offer: ['done'], note: 'Marks it done. To call it off, use Cancel.' }),
+    }),
     c('starts', 'Starts', 'datetime', 't.starts_at', { sortable: true, filter: 'range', notNull: true }),
     c('ends', 'Ends', 'datetime', 't.ends_at', { sortable: true, filter: 'range', notNull: true }),
-    c('venue', 'Where', 'text', "NULLIF(t.venue, '')", { searchable: true }),
+    c('venue', 'Where', 'text', "NULLIF(t.venue, '')", { searchable: true, edit: patch(PARTY_EVENT_PATH, 'venue', 'text', { param: 'eventId', maxLength: 200, note: 'Everyone with a seat, or waiting for one, is told the new place.' }) }),
     c('visibility', 'Who can see it', 'enum', 't.visibility', { options: EVENT_VISIBILITY_OPTIONS, ordered: true, filter: 'pick', notNull: true }),
     c('seats', 'Seats', 'number', 't.capacity', { sortable: true }),
     c('going', 'Going', 'number', seatsOf("'registered', 'attended'"), { sortable: true, notNull: true }),
@@ -4063,12 +5250,22 @@ const PARTY_HOSTED: DataTable = {
     c('scores', 'Feedback given', 'number', '(SELECT COUNT(*) FROM event_feedback f WHERE f.event_id = t.id)', { notNull: true }),
     c('photosShared', 'Photo folder shared', 'bool', photoSharedOf('party', 't.id'), { filter: 'pick', notNull: true }),
     c('photoFolder', 'Photo folder', 'text', photoFolderOf('party', 't.id'), { ownerOnly: true, format: 'inert' }),
-    c('about', 'About it', 'longtext', "NULLIF(t.description, '')", { searchable: true, format: 'inert' }),
+    c('about', 'About it', 'longtext', "NULLIF(t.description, '')", { searchable: true, format: 'inert', edit: patch(PARTY_EVENT_PATH, 'description', 'longtext', { param: 'eventId', maxLength: 3000 }) }),
     c('featured', 'Featured', 'bool', 't.featured', { filter: 'pick', notNull: true }),
     stamp('made', 'Made', 't.created_at'),
     c('xpOpen', 'xpOpen', 'bool', xpOpenSql('t.starts_at', 't.status'), { hidden: true, notNull: true }),
     c('eventId', 'eventId', 'text', 't.id', { hidden: true, ownerOnly: true }),
   ],
+  // Party's own cancel, which tells every guest and gives back what each paid. Only before it ends: a ticket is never refunded after an event.
+  remove: {
+    verb: 'Cancel',
+    did: 'cancelled',
+    ask: 'sheet',
+    noun: { one: 'event', many: 'events' },
+    warn: 'Every guest is told, and what each paid for a ticket comes back. It cannot be undone.',
+    only: { where: `t.status != 'cancelled' AND t.ends_at > ${EVENT_NOW_SQL}`, why: 'Only an event that has not ended, and is not cancelled already, can be called off.' },
+    call: { method: 'PATCH', path: PARTY_EVENT_PATH, param: 'eventId', body: { status: 'cancelled' } },
+  },
 };
 
 const PARTY_GUESTS: DataTable = {
@@ -4089,6 +5286,8 @@ const PARTY_GUESTS: DataTable = {
   defaultSort: { key: 'byEvent', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'Check a guest in on the event’s page in Party.',
+  noEditWhy: 'Check a guest in on the event’s page in Party, at the door.',
+  noRemoveWhy: 'A guest’s seat is theirs to cancel. Cancel the event to free every seat.',
   columns: [
     c('event', 'Event', 'text', 'e.title', { sortable: true, searchable: true, notNull: true }),
     c('starts', 'Starts', 'datetime', 'e.starts_at', { sortable: true, filter: 'range', notNull: true }),
@@ -4137,6 +5336,17 @@ const PARTY_JOINED: DataTable = {
     // The event's id, for the list-to-meet route's path: only the owner's own view selects it, since a private event's id is its link.
     c('eventId', 'eventId', 'text', 't.event_id', { hidden: true, ownerOnly: true }),
   ],
+  // Party's own cancel of a seat or a waitlist place (2026-11-14), which gives back what was paid and may seat someone waiting. Only at an event
+  // still live and not over: the route refuses one after the end too, so a ticket is never refunded after the event.
+  remove: {
+    verb: 'Cancel',
+    did: 'cancelled',
+    ask: 'sheet',
+    noun: { one: 'place', many: 'places' },
+    warn: 'What you paid for the ticket comes back, and your seat may go to someone waiting. Sign up again while there is room.',
+    only: { where: `t.status IN ('registered', 'waitlisted') AND e.status = 'published' AND e.ends_at > ${EVENT_NOW_SQL}`, why: 'Only a place at an event still to come can be cancelled.' },
+    call: { method: 'POST', path: '/party/events/:id/cancel-rsvp', param: 'eventId' },
+  },
 };
 
 const PARTY_FEEDBACK: DataTable = {
@@ -4151,13 +5361,25 @@ const PARTY_FEEDBACK: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'left', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Leave your feedback again on the event’s page in Party.',
   columns: [
     c('event', 'Event', 'text', 'e.title', { sortable: true, searchable: true }),
-    c('score', 'Score out of 5', 'number', 't.rating', { sortable: true, notNull: true }),
-    c('words', 'Your words', 'longtext', "NULLIF(t.comment, '')", { searchable: true, format: 'inert' }),
+    // The score and the words, each alone, through the event's own feedback route, which keeps what it is not sent (2026-11-14); only while you
+    // still hold a seat at it, as there.
+    c('score', 'Score out of 5', 'number', 't.rating', {
+      sortable: true,
+      notNull: true,
+      edit: { method: 'POST', path: '/party/events/:id/feedback', param: 'eventId', field: 'rating', input: 'number', min: 1, max: 5, step: 1 },
+    }),
+    c('words', 'Your words', 'longtext', "NULLIF(t.comment, '')", {
+      searchable: true,
+      format: 'inert',
+      edit: { method: 'POST', path: '/party/events/:id/feedback', param: 'eventId', field: 'comment', input: 'longtext', maxLength: 1000 },
+    }),
     stamp('left', 'Left', 't.created_at'),
+    // The event's id, for its route's path: only the owner's own view selects it, since a private event's id is its link.
+    c('eventId', 'eventId', 'text', 't.event_id', { hidden: true, ownerOnly: true }),
   ],
+  remove: { verb: 'Delete', did: 'deleted', ask: 'twice', warn: 'Leave it again on the event’s page while you hold a seat.', call: { method: 'DELETE', path: '/party/events/:id/feedback', param: 'eventId' } },
 };
 
 const PARTY_LINES: DataTable = {
@@ -4178,6 +5400,7 @@ const PARTY_LINES: DataTable = {
   // A coach never sees a line written without a name: listing it would say who wrote it.
   coachWhere: 't.anonymous = 0',
   readOnlyWhy: 'A line stays as written. Take one down in the event’s conversation in Party.',
+  noEditWhy: 'A line stays as written. Take it down and write it again.',
   columns: [
     c('event', 'Event', 'text', 'e.title', { sortable: true, searchable: true }),
     c('line', 'Your line', 'longtext', 'CASE WHEN t.removed_by IS NULL THEN t.body END', { searchable: true, format: 'inert' }),
@@ -4185,7 +5408,17 @@ const PARTY_LINES: DataTable = {
     c('answer', 'An answer to a line', 'bool', '(t.parent_id IS NOT NULL)', { filter: 'pick', notNull: true }),
     c('takenDown', 'Taken down', 'bool', '(t.removed_by IS NOT NULL)', { filter: 'pick', notNull: true }),
     stamp('written', 'Written', 't.created_at'),
+    c('eventId', 'eventId', 'text', 't.event_id', { hidden: true, ownerOnly: true }),
   ],
+  // The conversation's own take-down (2026-11-14): its words go and its place stays. Its writer may do it even with the seat gone.
+  remove: {
+    verb: 'Take down',
+    did: 'taken down',
+    ask: 'twice',
+    warn: 'Its words go from the conversation and its place stays.',
+    only: { where: { cell: 'takenDown', is: [false] }, why: 'It is already taken down.' },
+    call: { method: 'DELETE', path: '/connect/party/:eventId/messages/:id' },
+  },
 };
 
 const RUN_CLUB_PATH = '/run/clubs/:id';
@@ -4205,10 +5438,18 @@ const RUN_CLUBS_HOSTED: DataTable = {
   defaultSort: { key: 'started', dir: 'desc' },
   read: 'sql',
   columns: [
-    c('club', 'Club', 'text', 't.name', { sortable: true, searchable: true, notNull: true }),
-    c('city', 'City', 'text', "NULLIF(t.city, '')", { sortable: true, searchable: true }),
-    // Closing a club asks first in Kreators Run, so it is never done here.
-    c('state', 'State', 'enum', 't.status', { options: CLUB_STATE_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
+    // Its name and city through the club's own route, which keeps both (2026-11-14), never emptied, as a new club needs both.
+    c('club', 'Club', 'text', 't.name', { sortable: true, searchable: true, notNull: true, edit: patch(RUN_CLUB_PATH, 'name', 'text', { param: 'clubId', minLength: 1, maxLength: 80 }) }),
+    c('city', 'City', 'text', "NULLIF(t.city, '')", { sortable: true, searchable: true, edit: patch(RUN_CLUB_PATH, 'city', 'text', { param: 'clubId', minLength: 1, maxLength: 80 }) }),
+    // Opening a closed club again here; closing one is the remove, asked in a sheet, as Kreators Run asks first.
+    c('state', 'State', 'enum', 't.status', {
+      options: CLUB_STATE_OPTIONS,
+      ordered: true,
+      sortable: true,
+      filter: 'pick',
+      notNull: true,
+      edit: patch(RUN_CLUB_PATH, 'status', 'select', { param: 'clubId', offer: ['active'], note: 'Opens it again for new members and runs. To close it, use Close.' }),
+    }),
     c('pace', 'Pace', 'enum', 't.pace', { options: RUN_PACE_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true, edit: patch(RUN_CLUB_PATH, 'pace', 'select', { param: 'clubId' }) }),
     c('visibility', 'Who can find it', 'enum', 't.visibility', {
       options: CLUB_VISIBILITY_OPTIONS,
@@ -4224,6 +5465,15 @@ const RUN_CLUBS_HOSTED: DataTable = {
     stamp('started', 'Started', 't.created_at'),
     c('clubId', 'clubId', 'text', 't.id', { hidden: true, ownerOnly: true }),
   ],
+  remove: {
+    verb: 'Close',
+    did: 'closed',
+    ask: 'sheet',
+    noun: { one: 'club', many: 'clubs' },
+    warn: 'It takes no new members or runs. Its members stay in it, and you can open it again.',
+    only: { where: { cell: 'state', is: ['active'] }, why: 'It is already closed.' },
+    call: { method: 'PATCH', path: RUN_CLUB_PATH, param: 'clubId', body: { status: 'closed' } },
+  },
 };
 
 const RUN_CLUBS_JOINED: DataTable = {
@@ -4241,16 +5491,37 @@ const RUN_CLUBS_JOINED: DataTable = {
   idSql: 't.rowid',
   defaultSort: { key: 'joined', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Join or leave a club on its page in Kreators Run.',
   columns: [
     c('club', 'Club', 'text', 'k.name', { sortable: true, searchable: true, notNull: true }),
     c('city', 'City', 'text', "NULLIF(k.city, '')", { sortable: true, searchable: true }),
     c('pace', 'Pace', 'enum', 'k.pace', { options: RUN_PACE_OPTIONS, ordered: true, filter: 'pick', notNull: true }),
-    c('status', 'You', 'enum', 't.status', { options: CLUB_MEMBER_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
+    // Joining a club you left again, through its own join (2026-11-14), which tells the host; only while the club is open, refused there in words.
+    c('status', 'You', 'enum', 't.status', {
+      options: CLUB_MEMBER_OPTIONS,
+      ordered: true,
+      sortable: true,
+      filter: 'pick',
+      notNull: true,
+      edit: { method: 'POST', path: '/run/clubs/:id/join', param: 'clubId', field: 'status', input: 'select', offer: ['member'], whenCell: { cell: 'status', is: ['left'] }, why: 'You are in this club already.', note: 'Joins it again. The host is told.' },
+    }),
     c('youHost', 'You host it', 'bool', '(k.host_user_id = ?1)', { filter: 'pick', notNull: true }),
     c('clubState', 'Club is', 'enum', 'k.status', { options: CLUB_STATE_OPTIONS, ordered: true, filter: 'pick', notNull: true }),
     stamp('joined', 'Joined', 't.joined_at'),
+    // The club's id, for its routes' paths: only the owner's own view selects it, since a club found by its link is joined by its id.
+    c('clubId', 'clubId', 'text', 't.club_id', { hidden: true, ownerOnly: true }),
   ],
+  remove: {
+    verb: 'Leave',
+    did: 'left',
+    ask: 'sheet',
+    noun: { one: 'club', many: 'clubs' },
+    warn: 'Join it again from its page while it is open.',
+    outcomes: [
+      { when: { cell: 'youHost', is: [true] }, skip: 'You host it. Close it under Clubs you host instead.' },
+      { when: { cell: 'status', is: ['member'] }, did: 'left', call: { method: 'POST', path: '/run/clubs/:id/leave', param: 'clubId' } },
+      { skip: 'You already left it.' },
+    ],
+  },
 };
 
 const RUNS_HOSTED: DataTable = {
@@ -4269,14 +5540,22 @@ const RUNS_HOSTED: DataTable = {
   defaultSort: { key: 'byClub', dir: 'desc' },
   read: 'sql',
   columns: [
-    c('run', 'Run', 'text', 't.title', { sortable: true, searchable: true, notNull: true }),
+    // Its title and meeting point, and Mark done, through the run's own route (2026-11-14), which keeps the rest; never its time or distance,
+    // and a cancelled run stays as it is, refused there in words. Cancelling is the remove, asked in a sheet, since it tells every member.
+    c('run', 'Run', 'text', 't.title', { sortable: true, searchable: true, notNull: true, edit: patch('/run/runs/:id', 'title', 'text', { minLength: 1, maxLength: 120 }) }),
     c('club', 'Club', 'text', 'k.name', { sortable: true, searchable: true, notNull: true }),
     c('starts', 'Starts', 'datetime', 't.starts_at', { sortable: true, filter: 'range', notNull: true }),
     c('ends', 'Ends', 'datetime', 't.ends_at', { sortable: true, filter: 'range', notNull: true }),
-    c('meetingPoint', 'Meeting point', 'text', "NULLIF(t.meeting_point, '')", { searchable: true }),
+    c('meetingPoint', 'Meeting point', 'text', "NULLIF(t.meeting_point, '')", { searchable: true, edit: patch('/run/runs/:id', 'meetingPoint', 'text', { maxLength: 200 }) }),
     c('distance', 'Distance', 'number', 't.metres', { sortable: true, notNull: true, format: 'km' }),
-    // Mark done and Cancel run are the run card's own (a cancel tells every member), so the state is never changed here.
-    c('state', 'State', 'enum', 't.status', { options: EVENT_STATE_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
+    c('state', 'State', 'enum', 't.status', {
+      options: EVENT_STATE_OPTIONS,
+      ordered: true,
+      sortable: true,
+      filter: 'pick',
+      notNull: true,
+      edit: patch('/run/runs/:id', 'status', 'select', { offer: ['done'], note: 'Marks it done. Runners can still log it with its code until three hours after its end.' }),
+    }),
     c('xp', 'Xp for each runner', 'number', 't.xp', {
       sortable: true,
       notNull: true,
@@ -4290,6 +5569,19 @@ const RUNS_HOSTED: DataTable = {
     c('xpOpen', 'xpOpen', 'bool', xpOpenSql('t.starts_at', 't.status'), { hidden: true, notNull: true }),
     c('byClub', 'By club', 'datetime', 'k.created_at', { hidden: true, sortable: true, notNull: true, sortTerms: ['k.created_at', 'k.rowid', 't.starts_at', 't.rowid'] }),
   ],
+  // The run card's own cancel, which tells every member. Never one someone already logged with its code: its xp and points were paid.
+  remove: {
+    verb: 'Cancel',
+    did: 'cancelled',
+    ask: 'sheet',
+    noun: { one: 'run', many: 'runs' },
+    warn: 'Every member of the club is told. It cannot be undone.',
+    only: {
+      where: "t.status != 'cancelled' AND NOT EXISTS (SELECT 1 FROM run_entries e WHERE e.run_id = t.id AND e.status = 'logged')",
+      why: 'A run already cancelled, or one someone logged with its code, stays as it is. Void an entry instead.',
+    },
+    call: { method: 'PATCH', path: '/run/runs/:id', body: { status: 'cancelled' } },
+  },
 };
 
 const RUN_ENTRIES: DataTable = {
@@ -4305,6 +5597,8 @@ const RUN_ENTRIES: DataTable = {
   defaultSort: { key: 'logged', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A run is logged with its start code at the line. Only the club’s host can void one.',
+  noEditWhy: 'A run is logged with its start code at the line, so it stays as it was logged.',
+  noRemoveWhy: 'A logged run keeps the xp and points it paid. Only the club’s host can void one.',
   columns: [
     c('run', 'Run', 'text', 'r.title', { sortable: true, searchable: true }),
     c('club', 'Club', 'text', 'k.name', { sortable: true, searchable: true }),
@@ -4335,6 +5629,17 @@ const RUN_ENTRIES_HOSTED: DataTable = {
   defaultSort: { key: 'byClub', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'Void an entry on the club’s page in Kreators Run, where the runner is told.',
+  noEditWhy: 'A runner logs a run with its start code. You can only void an entry.',
+  // The club page's own void (2026-11-14), which tells the runner and takes back the xp and points it paid, once.
+  remove: {
+    verb: 'Void',
+    did: 'voided',
+    ask: 'sheet',
+    noun: { one: 'logged run', many: 'logged runs' },
+    warn: 'Each runner is told, and the xp and points their run paid come back out. It cannot be undone.',
+    only: { where: { cell: 'status', is: ['logged'] }, why: 'It is already voided.' },
+    call: { method: 'POST', path: '/run/entries/:id/void' },
+  },
   columns: [
     c('run', 'Run', 'text', 'r.title', { sortable: true, searchable: true }),
     c('club', 'Club', 'text', 'k.name', { sortable: true, searchable: true, notNull: true }),
@@ -4363,6 +5668,16 @@ const RUN_LINES: DataTable = {
   // A coach never sees a line written without a name: listing it would say who wrote it.
   coachWhere: 't.anonymous = 0',
   readOnlyWhy: 'A line stays as written. Take one down in the run’s discussion in Kreators Run.',
+  noEditWhy: 'A line stays as written. Take it down and write it again.',
+  // The discussion's own take-down (2026-11-14): its words go and its place stays. Its writer may do it even after leaving the club.
+  remove: {
+    verb: 'Take down',
+    did: 'taken down',
+    ask: 'twice',
+    warn: 'Its words go from the discussion and its place stays.',
+    only: { where: { cell: 'takenDown', is: [false] }, why: 'It is already taken down.' },
+    call: { method: 'DELETE', path: '/run/talk/:runId/messages/:id' },
+  },
   columns: [
     c('run', 'Run', 'text', 'r.title', { sortable: true, searchable: true }),
     c('club', 'Club', 'text', 'k.name', { sortable: true, searchable: true }),
@@ -4372,8 +5687,13 @@ const RUN_LINES: DataTable = {
     c('takenDown', 'Taken down', 'bool', '(t.deleted_at IS NOT NULL)', { filter: 'pick', notNull: true }),
     // In the order they were written (`seq`), which the person's own index keeps.
     stamp('written', 'Written', 't.created_at', { sortSql: 't.seq' }),
+    // The run's id, for the discussion's route: only the owner's own view selects it.
+    c('runId', 'runId', 'text', 't.run_id', { hidden: true, ownerOnly: true }),
   ],
 };
+
+/** What a collab's words say while they can change (the route refuses the rest in words). */
+const COLLAB_WORDS_NOTE = 'Only while no club has applied.';
 
 const RUN_COLLABS_POSTED: DataTable = {
   key: 'runCollabsPosted',
@@ -4387,22 +5707,38 @@ const RUN_COLLABS_POSTED: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'posted', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Close a collab, or answer a club, under Brand collabs in Kreators Run.',
   columns: [
-    c('collab', 'Collab', 'text', 't.title', { sortable: true, searchable: true, notNull: true }),
+    // Its words through the collab's own route (2026-11-14), which keeps the rest, and only while no club has applied: a club applied to what
+    // it said (refused there in words). Opening a closed one again here; closing is the remove, asked in a sheet.
+    c('collab', 'Collab', 'text', 't.title', { sortable: true, searchable: true, notNull: true, edit: patch('/run/collabs/:id', 'title', 'text', { minLength: 1, maxLength: 120, note: COLLAB_WORDS_NOTE }) }),
     c('brand', 'Brand', 'text', "NULLIF(t.brand_name, '')", { sortable: true, searchable: true }),
-    c('state', 'State', 'enum', 't.status', { options: COLLAB_STATE_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
-    c('giveaway', 'Giveaway', 'text', "NULLIF(t.giveaway, '')", { searchable: true }),
+    c('state', 'State', 'enum', 't.status', {
+      options: COLLAB_STATE_OPTIONS,
+      ordered: true,
+      sortable: true,
+      filter: 'pick',
+      notNull: true,
+      edit: patch('/run/collabs/:id', 'status', 'select', { offer: ['open'], note: 'Opens it again to clubs. To close it, use Close.' }),
+    }),
+    c('giveaway', 'Giveaway', 'text', "NULLIF(t.giveaway, '')", { searchable: true, edit: patch('/run/collabs/:id', 'giveaway', 'text', { minLength: 1, maxLength: 300, note: COLLAB_WORDS_NOTE }) }),
     c('howMany', 'How many to win', 'number', 't.giveaway_count', { sortable: true, notNull: true }),
-    c('city', 'City', 'text', "NULLIF(t.city, '')", { searchable: true }),
+    c('city', 'City', 'text', "NULLIF(t.city, '')", { searchable: true, edit: patch('/run/collabs/:id', 'city', 'text', { maxLength: 80, note: COLLAB_WORDS_NOTE }) }),
     c('starts', 'Starts', 'datetime', 't.starts_at', { sortable: true, filter: 'range', notNull: true }),
     c('ends', 'Ends', 'datetime', 't.ends_at', { sortable: true, filter: 'range', notNull: true }),
     c('applied', 'Clubs applied', 'number', '(SELECT COUNT(*) FROM run_collab_applications a WHERE a.collab_id = t.id)', { sortable: true, notNull: true }),
     c('accepted', 'Clubs accepted', 'number', "(SELECT COUNT(*) FROM run_collab_applications a WHERE a.collab_id = t.id AND a.status = 'accepted')", { sortable: true, notNull: true }),
-    c('brief', 'Brief', 'longtext', "NULLIF(t.brief, '')", { searchable: true, format: 'inert' }),
-    c('asks', 'What it asks', 'longtext', "NULLIF(t.asks, '')", { format: 'inert' }),
+    c('brief', 'Brief', 'longtext', "NULLIF(t.brief, '')", { searchable: true, format: 'inert', edit: patch('/run/collabs/:id', 'brief', 'longtext', { maxLength: 3000, note: COLLAB_WORDS_NOTE }) }),
+    c('asks', 'What it asks', 'longtext', "NULLIF(t.asks, '')", { format: 'inert', edit: patch('/run/collabs/:id', 'asks', 'longtext', { maxLength: 1000, note: COLLAB_WORDS_NOTE }) }),
     stamp('posted', 'Posted', 't.created_at'),
   ],
+  remove: {
+    verb: 'Close',
+    did: 'closed',
+    ask: 'sheet',
+    warn: 'Clubs can no longer apply. The clubs you accepted keep their runs, and you can open it again.',
+    only: { where: { cell: 'state', is: ['open'] }, why: 'It is already closed.' },
+    call: { method: 'PATCH', path: '/run/collabs/:id', body: { status: 'closed' } },
+  },
 };
 
 const RUN_COLLAB_APPLICANTS: DataTable = {
@@ -4421,16 +5757,25 @@ const RUN_COLLAB_APPLICANTS: DataTable = {
   // collab and time.
   defaultSort: { key: 'byCollab', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Accept or decline a club under Brand collabs in Kreators Run, where its host is told.',
+  noRemoveWhy: 'A club’s application is theirs. Answer it with Accepted or Not this time.',
   columns: [
     c('collab', 'Collab', 'text', 'cb.title', { sortable: true, searchable: true, notNull: true }),
     c('club', 'Club', 'text', 'k.name', { sortable: true, searchable: true }),
     c('host', 'Its host', 'text', personName('u'), { sortable: true, searchable: true, notNull: true }),
     c('note', 'Their note', 'longtext', "NULLIF(t.note, '')", { searchable: true, format: 'inert' }),
-    c('status', 'State', 'enum', 't.status', { options: COLLAB_APPLICATION_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
+    // The answer, through Brand collabs' own route, which tells the club's host; given once, while it still waits (refused there in words).
+    c('status', 'State', 'enum', 't.status', {
+      options: COLLAB_APPLICATION_OPTIONS,
+      ordered: true,
+      sortable: true,
+      filter: 'pick',
+      notNull: true,
+      edit: { method: 'POST', path: '/run/collabs/:collabId/applications/:id', field: 'status', input: 'select', offer: ['accepted', 'declined'], whenCell: { cell: 'status', is: ['applied'] }, why: 'You already answered this club.', note: 'Its host is told. An answer is given once.' },
+    }),
     stamp('applied', 'Applied', 't.created_at'),
     c('decided', 'Answered', 'datetime', 't.decided_at', { sortable: true, filter: 'range' }),
     c('byCollab', 'By collab', 'datetime', 'cb.created_at', { hidden: true, sortable: true, notNull: true, sortTerms: ['cb.created_at', 'cb.rowid', 't.created_at', 't.rowid'] }),
+    c('collabId', 'collabId', 'text', 't.collab_id', { hidden: true, ownerOnly: true }),
   ],
 };
 
@@ -4447,17 +5792,30 @@ const RUN_COLLAB_APPLICATIONS: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'applied', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'A collab’s poster answers each club. Apply under Brand collabs in Kreators Run.',
   columns: [
     c('collab', 'Collab', 'text', 'cb.title', { sortable: true, searchable: true }),
     c('brand', 'Brand', 'text', "NULLIF(cb.brand_name, '')", { sortable: true, searchable: true }),
     c('giveaway', 'Giveaway', 'text', "NULLIF(cb.giveaway, '')", { searchable: true }),
     c('club', 'Your club', 'text', 'k.name', { sortable: true, searchable: true }),
-    c('note', 'Your note', 'longtext', "NULLIF(t.note, '')", { searchable: true, format: 'inert' }),
+    // Your note, and withdrawing, through Kreators Run's own routes, only while the poster has not answered (2026-11-14); an answer stays.
+    c('note', 'Your note', 'longtext', "NULLIF(t.note, '')", {
+      searchable: true,
+      format: 'inert',
+      edit: { method: 'PATCH', path: '/run/collabs/:collabId/applications/:id', field: 'note', input: 'longtext', maxLength: 1000, whenCell: { cell: 'status', is: ['applied'] }, why: 'It was already answered, so your note stays as it was.', note: 'Only while it waits for an answer.' },
+    }),
     c('status', 'State', 'enum', 't.status', { options: COLLAB_APPLICATION_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
     stamp('applied', 'Applied', 't.created_at'),
     c('decided', 'Answered', 'datetime', 't.decided_at', { sortable: true, filter: 'range' }),
+    c('collabId', 'collabId', 'text', 't.collab_id', { hidden: true, ownerOnly: true }),
   ],
+  remove: {
+    verb: 'Withdraw',
+    did: 'withdrawn',
+    ask: 'twice',
+    warn: 'Apply again under Brand collabs while it is open.',
+    only: { where: { cell: 'status', is: ['applied'] }, why: 'It was already answered, so it stays.' },
+    call: { method: 'DELETE', path: '/run/collabs/:collabId/applications/:id' },
+  },
 };
 
 const CIRCLE_SIGNUPS: DataTable = {
@@ -4481,6 +5839,19 @@ const CIRCLE_SIGNUPS: DataTable = {
   defaultSort: { key: 'signedUp', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'Change how you will show up, or leave before the tables are set, under Circles.',
+  // How you will show up stays theirs alone (an owner-only column, never edited here): it changes under Circles, before sign-ups close.
+  noEditWhy: 'Change how you will show up under Circles, before sign-ups close.',
+  // Circles' own leave, a second tap (2026-11-14), only while it takes sign-ups: once its tables are set, your place at one stays.
+  remove: {
+    verb: 'Leave',
+    did: 'left',
+    // Leaving asks in a sheet, as the Circles screen does (2026-11-14, the review: leaving is one of the sheet's kinds).
+    ask: 'sheet',
+    noun: { one: 'circle', many: 'circles' },
+    warn: 'Sign up again while it takes sign-ups.',
+    only: { where: { cell: 'state', is: ['open'] }, why: 'Its tables are set, so your place stays.' },
+    call: { method: 'DELETE', path: '/circles/events/:id/join' },
+  },
   columns: [
     c('circle', 'Circle', 'text', 'e.title', { sortable: true, searchable: true, notNull: true }),
     c('city', 'City', 'text', 'e.city', { sortable: true, searchable: true, notNull: true }),
@@ -4514,12 +5885,17 @@ const CIRCLE_LINES: DataTable = {
   defaultSort: { key: 'written', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A line at a circle’s table stays as written.',
+  noEditWhy: 'A line at a circle’s table stays as written. Delete it and write it again.',
+  // Your own line, deleted (2026-11-14, the founder's yes): it leaves the table's chat for everyone, and everyone stays under their alias.
+  remove: { verb: 'Delete', did: 'deleted', ask: 'twice', warn: 'It leaves the table’s chat for everyone. Nobody there is told.', call: { method: 'DELETE', path: '/circles/groups/:groupId/messages/:id' } },
   columns: [
     c('circle', 'Circle', 'text', 'e.title', { sortable: true, searchable: true }),
     c('table', 'Table', 'text', 'g.name', { sortable: true }),
     c('alias', 'You went by', 'text', 'm.alias', { searchable: true }),
     c('line', 'Your line', 'longtext', 't.body', { searchable: true, format: 'inert' }),
     stamp('written', 'Written', 't.created_at'),
+    // The table's id, for its route's path: only the owner's own view selects it.
+    c('groupId', 'groupId', 'text', 't.group_id', { hidden: true, ownerOnly: true }),
   ],
 };
 
@@ -4598,14 +5974,36 @@ const PROGRAMS_MADE: DataTable = {
   idSql: 't.rowid',
   defaultSort: { key: 'made', dir: 'desc' },
   read: 'sql',
+  // School's own delete (2026-11-14): only an archived program, everything under it with it, guarded on still being archived; archive it in
+  // School first, where that asks before it takes a program from anyone.
+  remove: {
+    verb: 'Delete',
+    did: 'deleted',
+    ask: 'sheet',
+    warn: 'Its cohorts, places, hand-ins, sessions, talk, lessons and invites go with it. Points people spent stay spent.',
+    outcomes: [
+      { when: { cell: 'state', is: ['archived'] }, did: 'deleted', call: { method: 'DELETE', path: PROGRAM_PATH, param: 'programId' } },
+      { skip: 'Archive it in School first. Only an archived program can be deleted.' },
+    ],
+  },
   columns: [
     c('name', 'Program', 'text', 't.name', { sortable: true, searchable: true, notNull: true, edit: patch(PROGRAM_PATH, 'name', 'text', { param: 'programId', minLength: 1, maxLength: PROGRAM_NAME_MOST }) }),
     c('about', 'Description', 'longtext', 't.description', { searchable: true, edit: patch(PROGRAM_PATH, 'description', 'longtext', { param: 'programId', maxLength: PROGRAM_ABOUT_MOST }) }),
     c('state', 'State', 'enum', programStateSql('t'), { options: PROGRAM_STATE_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
-    c('delivery', 'How it runs', 'enum', 't.delivery_mode', { options: DELIVERY_MODE_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
-    c('pricePoints', 'Price in points', 'number', 't.price_points', { sortable: true, notNull: true }),
-    c('price', 'Price', 'money', 't.price_cents', { currency: 'currency', sortable: true, notNull: true }),
-    c('outcomes', 'You leave with', 'longtext', "NULLIF(t.outcomes, '')", { searchable: true }),
+    // How it runs, its prices and what people leave with (2026-11-14): the fields School's own PATCH already takes, for whoever runs it.
+    c('delivery', 'How it runs', 'enum', 't.delivery_mode', { options: DELIVERY_MODE_OPTIONS, sortable: true, filter: 'pick', notNull: true, edit: patch(PROGRAM_PATH, 'deliveryMode', 'select', { param: 'programId' }) }),
+    c('pricePoints', 'Price in points', 'number', 't.price_points', {
+      sortable: true,
+      notNull: true,
+      edit: patch(PROGRAM_PATH, 'pricePoints', 'number', { param: 'programId', min: 0, step: 1, note: 'A new price is for people who join from now. What anyone paid stays.' }),
+    }),
+    c('price', 'Price', 'money', 't.price_cents', {
+      currency: 'currency',
+      sortable: true,
+      notNull: true,
+      edit: patch(PROGRAM_PATH, 'priceCents', 'money', { param: 'programId', min: 0, note: 'A new price is for people who join from now. What anyone paid stays.' }),
+    }),
+    c('outcomes', 'You leave with', 'longtext', "NULLIF(t.outcomes, '')", { searchable: true, edit: patch(PROGRAM_PATH, 'outcomes', 'longtext', { param: 'programId', maxLength: 2000 }) }),
     c('cohorts', 'Cohorts', 'number', "(SELECT COUNT(*) FROM cohorts k WHERE k.program_id = t.id AND k.status != 'cancelled')", { sortable: true, notNull: true }),
     c('learners', 'Joined', 'number', "(SELECT COUNT(*) FROM enrollments e WHERE e.status != 'withdrawn' AND e.cohort_id IN (SELECT k.id FROM cohorts k WHERE k.program_id = t.id))", { sortable: true, notNull: true }),
     stamp('made', 'Made on', 't.created_at'),
@@ -4627,16 +6025,23 @@ const COHORTS_RUN: DataTable = {
   idSql: 't.rowid',
   defaultSort: { key: 'starts', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'A cohort’s name and dates are set when it opens. Who runs it changes on its page in School.',
+  noRemoveWhy: 'A cohort holds people’s places and hand-ins, so it stays.',
   columns: [
-    c('cohort', 'Cohort', 'text', 't.name', { sortable: true, searchable: true, notNull: true }),
+    // School's own PATCH /school/cohorts/:id (2026-11-14), for whoever runs it: the name, and seats never under the people in it. Its dates stay
+    // as it opened, and who runs it changes on its page in School.
+    c('cohort', 'Cohort', 'text', 't.name', { sortable: true, searchable: true, notNull: true, edit: patch('/school/cohorts/:id', 'name', 'text', { param: 'cohortId', minLength: 1, maxLength: 80 }) }),
     c('program', 'Program', 'text', 'p.name', { sortable: true, searchable: true }),
     c('programState', 'Program state', 'enum', programStateSql('p'), { options: PROGRAM_STATE_OPTIONS, ordered: true, filter: 'pick' }),
     c('when', 'Now', 'enum', COHORT_WHEN_SQL, { options: COHORT_WHEN_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
     c('starts', 'Starts', 'datetime', 't.start_at', { sortable: true, filter: 'range', notNull: true }),
     c('ends', 'Ends', 'datetime', 't.end_at', { sortable: true, filter: 'range', notNull: true }),
-    c('seats', 'Seats', 'number', 't.capacity', { sortable: true, notNull: true }),
+    c('seats', 'Seats', 'number', 't.capacity', {
+      sortable: true,
+      notNull: true,
+      edit: patch('/school/cohorts/:id', 'capacity', 'number', { param: 'cohortId', min: 1, max: 1000, step: 1, note: 'Never fewer than the people in it now.' }),
+    }),
     c('learners', 'Joined', 'number', "(SELECT COUNT(*) FROM enrollments e WHERE e.cohort_id = t.id AND e.status != 'withdrawn')", { sortable: true, notNull: true }),
+    c('cohortId', 'cohortId', 'text', 't.id', { hidden: true, ownerOnly: true }),
   ],
 };
 
@@ -4659,6 +6064,18 @@ const PROGRAM_INVITES_SENT: DataTable = {
   defaultSort: { key: 'byProgram', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'Invite people, or take an invite back, on the program in School.',
+  noEditWhy: 'An invite is given or taken back, never changed.',
+  // The invited person's id, which School's own take-back needs in its path, is read by the server and never sent (2026-11-14).
+  privateSelect: { invitedId: 't.user_id' },
+  // School's own take-back (2026-11-14): someone's access, so asked in a sheet. They are not told, and a place they took stays.
+  remove: {
+    verb: 'Withdraw',
+    did: 'taken back',
+    ask: 'sheet',
+    noun: { one: 'invite', many: 'invites' },
+    warn: 'They can no longer see the program, and they are not told. A place they already took in a cohort stays.',
+    call: { method: 'DELETE', path: '/school/programs/:programId/invites/:invitedId' },
+  },
   columns: [
     c('program', 'Program', 'text', 'p.name', { sortable: true, searchable: true, notNull: true }),
     c('person', 'Invited', 'text', 'u.display_name', { sortable: true, searchable: true, notNull: true }),
@@ -4666,6 +6083,7 @@ const PROGRAM_INVITES_SENT: DataTable = {
     c('programState', 'Program state', 'enum', programStateSql('p'), { options: PROGRAM_STATE_OPTIONS, ordered: true, filter: 'pick', notNull: true }),
     stamp('invited', 'Invited on', 't.created_at'),
     c('byProgram', 'By program', 'datetime', 'p.created_at', { hidden: true, sortable: true, notNull: true, sortTerms: ['p.created_at', 'p.rowid', 't.created_at', 't.rowid'] }),
+    c('programId', 'programId', 'text', 'p.id', { hidden: true, ownerOnly: true }),
   ],
 };
 
@@ -4688,10 +6106,26 @@ const PROGRAM_INVITES: DataTable = {
   defaultSort: { key: 'invited', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'An invite is the program maker’s to give or take back. Enrol from School.',
+  noEditWhy: 'An invite is the program maker’s to give, so it is never changed here.',
+  // Turn an invite down (2026-11-14, the founder's yes): School's own guarded decline, only while no place in its cohorts was taken (the rule a
+  // block's take-back keeps); nobody is told.
+  remove: {
+    verb: 'Decline',
+    did: 'declined',
+    ask: 'sheet',
+    noun: { one: 'invite', many: 'invites' },
+    warn: 'The program leaves your School list, and nobody is told. Its maker would have to invite you again.',
+    only: {
+      where: "NOT EXISTS (SELECT 1 FROM enrollments e JOIN cohorts k ON k.id = e.cohort_id WHERE k.program_id = t.program_id AND e.learner_user_id = t.user_id AND e.status != 'withdrawn')",
+      why: 'You joined one of its cohorts, so the invite stays.',
+    },
+    call: { method: 'DELETE', path: '/school/programs/:id/invite', param: 'programId' },
+  },
   columns: [
     c('program', 'Program', 'text', 'p.name', { sortable: true, searchable: true, notNull: true }),
     c('programState', 'Program state', 'enum', programStateSql('p'), { options: PROGRAM_STATE_OPTIONS, ordered: true, filter: 'pick', notNull: true }),
     stamp('invited', 'Invited on', 't.created_at'),
+    c('programId', 'programId', 'text', 'p.id', { hidden: true, ownerOnly: true }),
   ],
 };
 
@@ -4712,15 +6146,33 @@ const COHORT_LINES: DataTable = {
   // A member is private in a cohort's talk unless they say otherwise, their name in stars to everyone else there. A coach sees only the lines of
   // a cohort where the person shows by their @username now, as the talk itself shows them, never one a masked name would tie to them.
   coachWhere: "v.visibility = 'public'",
-  readOnlyWhy: 'A line stays as written. Take one down in the cohort’s talk in School.',
+  // Your own line, taken down as the talk takes one down (2026-11-14): its words wiped and its place kept while answers hang from it, a second
+  // tap. The talk's own route, which lets its writer take their own line down even after leaving the cohort, as it lets them change how they show.
+  remove: {
+    verb: 'Take down',
+    did: 'taken down',
+    ask: 'twice',
+    warn: 'Its words are wiped and its place stays, so answers to it still make sense.',
+    only: { where: { cell: 'takenDown', not: [true] }, why: 'It is taken down already.' },
+    call: { method: 'DELETE', path: '/school/cohorts/:cohortId/talk/:lineId' },
+  },
   columns: [
     c('cohort', 'Cohort', 'text', 'k.name', { sortable: true, searchable: true }),
     c('program', 'Program', 'text', 'p.name', { sortable: true, searchable: true }),
     c('line', 'Your line', 'longtext', 'CASE WHEN t.deleted_at IS NULL THEN t.body END', { searchable: true, format: 'inert' }),
-    c('shownAs', 'You show there as', 'enum', `COALESCE(v.visibility, '${COHORT_TALK_SHOWN_DEFAULT}')`, { options: COHORT_TALK_SHOW_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
+    c('shownAs', 'You show there as', 'enum', `COALESCE(v.visibility, '${COHORT_TALK_SHOWN_DEFAULT}')`, {
+      options: COHORT_TALK_SHOW_OPTIONS,
+      sortable: true,
+      filter: 'pick',
+      notNull: true,
+      // The talk's own choice (PUT /school/cohorts/:id/talk/me): one for the whole cohort, so every line of yours there shows the same way.
+      edit: { method: 'PUT', path: '/school/cohorts/:id/talk/me', param: 'cohortId', field: 'visibility', input: 'select', note: 'It changes how you show on every line in that cohort.' },
+    }),
     c('answer', 'An answer to a line', 'bool', '(t.parent_id IS NOT NULL)', { filter: 'pick', notNull: true }),
     c('takenDown', 'Taken down', 'bool', '(t.deleted_at IS NOT NULL)', { filter: 'pick', notNull: true }),
     stamp('written', 'Written', 't.created_at'),
+    c('cohortId', 'cohortId', 'text', 't.cohort_id', { hidden: true, ownerOnly: true }),
+    c('lineId', 'lineId', 'text', 't.id', { hidden: true, ownerOnly: true }),
   ],
 };
 
@@ -4749,6 +6201,8 @@ const COMMUNITY_CHANNELS: DataTable = {
     stamp('joined', 'Joined', 't.joined_at'),
     c('channelId', 'channelId', 'text', 't.channel_id', { hidden: true, ownerOnly: true }),
   ],
+  // The channel's own leave (2026-11-14), a closed one too. Your lines stay, and an open channel takes you back any time.
+  remove: { verb: 'Leave', did: 'left', ask: 'sheet', noun: { one: 'channel', many: 'channels' }, warn: 'Your lines stay. Join an open channel again any time.', call: { method: 'POST', path: '/community/channels/:id/leave', param: 'channelId' } },
 };
 
 const COMMUNITY_LINES: DataTable = {
@@ -4768,6 +6222,16 @@ const COMMUNITY_LINES: DataTable = {
   // A coach never sees a line written without a name: listing it would say who wrote it.
   coachWhere: 't.anonymous = 0',
   readOnlyWhy: 'A line stays as written. Take one down in the channel in Community.',
+  noEditWhy: 'A line stays as written. Take it down and write it again.',
+  // The channel's own take-down (2026-11-14): its words go and its place stays. Its writer may do it after leaving, or once it closed.
+  remove: {
+    verb: 'Take down',
+    did: 'taken down',
+    ask: 'twice',
+    warn: 'Its words go from the channel and its place stays.',
+    only: { where: { cell: 'takenDown', is: [false] }, why: 'It is already taken down.' },
+    call: { method: 'DELETE', path: '/community/channels/:channelId/messages/:id' },
+  },
   columns: [
     c('channel', 'Channel', 'text', 'ch.name', { sortable: true, searchable: true, notNull: true }),
     c('line', 'Your line', 'longtext', 'CASE WHEN t.deleted_at IS NULL THEN t.body END', { searchable: true, format: 'inert' }),
@@ -4776,6 +6240,7 @@ const COMMUNITY_LINES: DataTable = {
     c('takenDown', 'Taken down', 'bool', '(t.deleted_at IS NOT NULL)', { filter: 'pick', notNull: true }),
     // In the order they were written (`seq`, the row's own number), which the person's own index keeps.
     stamp('written', 'Written', 't.created_at', { sortSql: 't.seq' }),
+    c('channelId', 'channelId', 'text', 't.channel_id', { hidden: true, ownerOnly: true }),
   ],
 };
 
@@ -4796,14 +6261,24 @@ const POST_REACTIONS: DataTable = {
   idSql: 't.rowid',
   defaultSort: { key: 'reacted', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Change a reaction, or take it back, on the post in Community.',
   columns: [
-    c('reaction', 'Your reaction', 'enum', 't.kind', { options: REACTION_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
+    // Another kind, or taking it back, through Community's own routes that leave the same state however often they are sent (2026-11-14),
+    // never the screen's toggle. A change pays nothing, and taking one back takes nothing back.
+    c('reaction', 'Your reaction', 'enum', 't.kind', {
+      options: REACTION_OPTIONS,
+      ordered: true,
+      sortable: true,
+      filter: 'pick',
+      notNull: true,
+      edit: { method: 'PUT', path: '/community/:id/reaction', param: 'postId', field: 'kind', input: 'select' },
+    }),
     c('post', 'Post', 'longtext', 'p.body', { searchable: true, format: 'inert' }),
     c('writer', 'Written by', 'text', writerOf('p', 'u'), { sortable: true, searchable: true, notNull: true }),
     c('topic', 'Topic', 'enum', 'p.category', { options: POST_CATEGORY_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
     stamp('reacted', 'Reacted', 't.created_at'),
+    c('postId', 'postId', 'text', 't.post_id', { hidden: true, ownerOnly: true }),
   ],
+  remove: { verb: 'Remove', did: 'removed', ask: 'twice', warn: 'The xp a like paid stays. React again on the post any time.', call: { method: 'DELETE', path: '/community/:id/reaction', param: 'postId' } },
 };
 
 const REPLY_REACTIONS: DataTable = {
@@ -4822,14 +6297,23 @@ const REPLY_REACTIONS: DataTable = {
   idSql: 't.rowid',
   defaultSort: { key: 'reacted', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Change a reaction, or take it back, under the post in Community.',
   columns: [
-    c('reaction', 'Your reaction', 'enum', 't.kind', { options: REACTION_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
+    // Another kind, or taking it back, through Community's own routes that leave the same state however often they are sent (2026-11-14).
+    c('reaction', 'Your reaction', 'enum', 't.kind', {
+      options: REACTION_OPTIONS,
+      ordered: true,
+      sortable: true,
+      filter: 'pick',
+      notNull: true,
+      edit: { method: 'PUT', path: '/community/replies/:id/reaction', param: 'replyId', field: 'kind', input: 'select' },
+    }),
     c('reply', 'Reply', 'longtext', 'r.body', { searchable: true, format: 'inert' }),
     c('writer', 'Written by', 'text', writerOf('r', 'u'), { sortable: true, searchable: true, notNull: true }),
     c('onPost', 'On the post', 'longtext', 'p.body', { searchable: true, format: 'inert' }),
     stamp('reacted', 'Reacted', 't.created_at'),
+    c('replyId', 'replyId', 'text', 't.reply_id', { hidden: true, ownerOnly: true }),
   ],
+  remove: { verb: 'Remove', did: 'removed', ask: 'twice', warn: 'React again under the post any time.', call: { method: 'DELETE', path: '/community/replies/:id/reaction', param: 'replyId' } },
 };
 
 const FOLLOWED_POSTS: DataTable = {
@@ -4848,12 +6332,17 @@ const FOLLOWED_POSTS: DataTable = {
   defaultSort: { key: 'since', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'Stop following a post from the post itself in Community.',
+  noEditWhy: 'A post is followed or not. Unfollow it here, or follow it again on the post.',
   columns: [
     c('post', 'Post', 'longtext', 'p.body', { searchable: true, format: 'inert' }),
     c('writer', 'Written by', 'text', writerOf('p', 'u'), { sortable: true, searchable: true, notNull: true }),
     c('topic', 'Topic', 'enum', 'p.category', { options: POST_CATEGORY_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
     stamp('since', 'Following since', 't.created_at'),
+    c('postId', 'postId', 'text', 't.post_id', { hidden: true, ownerOnly: true }),
   ],
+  // Community's own unfollow, never the toggle: sent again it changes nothing and says so, 409 (2026-11-14). A reply you write follows the post
+  // again, as always.
+  remove: { verb: 'Unfollow', did: 'unfollowed', ask: 'twice', warn: 'New replies stop reaching your inbox. Follow it again on the post.', call: { method: 'DELETE', path: '/community/:id/follow-post', param: 'postId' } },
 };
 
 const MUTES: DataTable = {
@@ -4872,12 +6361,27 @@ const MUTES: DataTable = {
   defaultSort: { key: 'since', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'Lift a mute in Community’s guide tools.',
+  noEditWhy: 'A mute stays as it was set. Its reason was told to them then.',
   columns: [
     c('person', 'Muted', 'text', personName('u'), { sortable: true, searchable: true, notNull: true }),
     c('handle', 'Username', 'text', personHandle('u'), { searchable: true, format: 'handle' }),
     c('reason', 'Your reason', 'text', "NULLIF(t.reason, '')", { searchable: true, format: 'inert' }),
     stamp('since', 'Since', 't.created_at'),
   ],
+  // The muted member's id, for the guide tools' own lift: read on the server, never sent.
+  privateSelect: { mutedId: 't.user_id' },
+  // The guide tools' own lift (2026-11-14), by rank as there, and only your own mute (`mine=1`): another guide may have muted them since.
+  remove: {
+    verb: 'Remove',
+    did: 'lifted',
+    line: 'Lifted the mute on {rows}.',
+    ask: 'sheet',
+    noun: { one: 'person', many: 'people' },
+    title: 'Lift the mute on {rows}?',
+    yes: 'Yes, lift {it}',
+    warn: 'They can post and reply again, and are not told.',
+    call: { method: 'DELETE', path: '/community/members/:mutedId/mute?mine=1' },
+  },
 };
 
 const BOND_CHATS: DataTable = {
@@ -4895,6 +6399,8 @@ const BOND_CHATS: DataTable = {
   defaultSort: { key: 'lastAt', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A chat is written in Bond, a line at a time.',
+  noEditWhy: 'A chat is written in Bond, a line at a time.',
+  noRemoveWhy: 'A chat has two sides, so it stays for the other person too. Delete your own lines one by one.',
   columns: [
     c('them', 'They go by', 'text', 'CASE WHEN t.a_user_id = ?1 THEN t.b_alias ELSE t.a_alias END', { sortable: true, searchable: true, notNull: true }),
     c('you', 'You go by', 'text', 'CASE WHEN t.a_user_id = ?1 THEN t.a_alias ELSE t.b_alias END', { searchable: true, notNull: true }),
@@ -4925,13 +6431,26 @@ const BOND_CHAT_LINES: DataTable = {
   defaultSort: { key: 'byChat', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A line stays as it was sent. Write back in the chat in Bond.',
+  noEditWhy: 'A line stays as it was sent. Delete your own and write it again.',
   columns: [
     c('chat', 'Chat with', 'text', 'CASE WHEN ch.a_user_id = ?1 THEN ch.b_alias ELSE ch.a_alias END', { sortable: true, searchable: true, notNull: true }),
     c('from', 'Written by', 'text', "CASE WHEN t.user_id = ?1 THEN 'You' WHEN ch.a_user_id = ?1 THEN ch.b_alias ELSE ch.a_alias END", { sortable: true, notNull: true }),
     c('line', 'Line', 'longtext', 't.body', { searchable: true, format: 'inert' }),
     stamp('sent', 'Sent', 't.created_at'),
     c('byChat', 'By chat', 'datetime', 'ch.created_at', { hidden: true, sortable: true, notNull: true, sortTerms: ['t.chat_id', 't.created_at', 't.rowid'] }),
+    // The line's and its chat's own ids, for Bond's own delete: only the owner's own view selects them (and nobody else ever sees this table).
+    c('lineId', 'lineId', 'text', 't.id', { hidden: true, ownerOnly: true }),
+    c('chatId', 'chatId', 'text', 't.chat_id', { hidden: true, ownerOnly: true }),
   ],
+  // Your own lines only (2026-11-14): Bond's delete takes nothing of the other side's, and nobody is told.
+  remove: {
+    verb: 'Delete',
+    did: 'deleted',
+    ask: 'twice',
+    warn: 'It leaves the chat for both of you. The other side’s words stay.',
+    only: { where: { cell: 'from', is: ['You'] }, why: 'Only your own lines can be deleted. The other side’s words stay.' },
+    call: { method: 'DELETE', path: '/bond/chats/:chatId/messages/:lineId' },
+  },
 };
 
 const INTRODUCTIONS: DataTable = {
@@ -4950,6 +6469,8 @@ const INTRODUCTIONS: DataTable = {
   defaultSort: { key: 'asked', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'Answer an introduction in Bond.',
+  // A yes shares your email, so it is said only in Bond, where it shows what goes (2026-11-14).
+  noEditWhy: 'Answer an introduction in Bond, where a yes shares your email.',
   columns: [
     c('person', 'With', 'text', `CASE WHEN t.requester_user_id = ?1 THEN ${personName('b')} ELSE ${personName('a')} END`, { sortable: true, searchable: true, notNull: true }),
     c('side', 'Who asked', 'enum', "CASE WHEN t.requester_user_id = ?1 THEN 'you' ELSE 'them' END", { options: INTRO_SIDE_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
@@ -4957,7 +6478,22 @@ const INTRODUCTIONS: DataTable = {
     c('state', 'State', 'enum', 't.status', { options: INTRO_STATE_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
     stamp('asked', 'Asked on', 't.created_at'),
     c('accepted', 'Accepted on', 'datetime', 't.consent_at', { sortable: true }),
+    // The introduction's own id, for Bond's routes: only the owner's own view selects it.
+    c('introId', 'introId', 'text', 't.id', { hidden: true, ownerOnly: true }),
   ],
+  // Turning down one asked of you (Bond's own no, which tells nobody), or taking back your own while it waits (2026-11-14). An answered one stays.
+  remove: {
+    verb: 'Remove',
+    did: 'removed',
+    ask: 'sheet',
+    noun: { one: 'introduction', many: 'introductions' },
+    warn: 'Turning one down tells nobody. One you take back leaves its note in their inbox. An answered one stays.',
+    outcomes: [
+      { when: "t.status = 'proposed' AND t.recipient_user_id = ?1", did: 'turned down', call: { method: 'POST', path: '/bond/intros/:id', param: 'introId', body: { status: 'declined' } } },
+      { when: "t.status = 'proposed'", did: 'taken back', call: { method: 'DELETE', path: '/bond/intros/:id', param: 'introId' } },
+      { skip: 'An introduction already answered stays as it is.' },
+    ],
+  },
 };
 
 const BOND_CHANNEL_PATH = '/bond/channels/:id';
@@ -4981,12 +6517,43 @@ const BOND_CHANNELS: DataTable = {
     c('channel', 'Channel', 'text', 'ch.name', { sortable: true, searchable: true, notNull: true, edit: patch(BOND_CHANNEL_PATH, 'name', 'text', { param: 'channelId', when: 'madeIt', minLength: CHANNEL_NAME_LEAST, maxLength: CHANNEL_NAME_MOST }) }),
     c('topic', 'Topic', 'text', "NULLIF(ch.topic, '')", { searchable: true, edit: patch(BOND_CHANNEL_PATH, 'topic', 'text', { param: 'channelId', when: 'madeIt', maxLength: CHANNEL_TOPIC_MOST }) }),
     c('madeIt', 'You made it', 'bool', '(ch.created_by = ?1)', { filter: 'pick', notNull: true }),
-    c('seat', 'You are', 'enum', 't.status', { options: CHANNEL_SEAT_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
+    // Saying yes to an invitation, through the room's own join, which tells its maker (2026-11-14); refused there in words once it closed.
+    c('seat', 'You are', 'enum', 't.status', {
+      options: CHANNEL_SEAT_OPTIONS,
+      sortable: true,
+      filter: 'pick',
+      notNull: true,
+      edit: {
+        method: 'POST',
+        path: '/bond/channels/:id/join',
+        param: 'channelId',
+        field: 'status',
+        input: 'select',
+        offer: ['member'],
+        whenCell: { cell: 'seat', is: ['invited'] },
+        why: 'Only an invitation waits for your yes. You are in this room already.',
+        note: 'Says yes to the invitation. Its maker is told.',
+      },
+    }),
     c('open', 'Open', 'bool', '(ch.archived_at IS NULL)', { filter: 'pick', notNull: true }),
     c('members', 'Members', 'number', CHANNEL_MEMBERS_SQL, { sortable: true, notNull: true }),
     stamp('since', 'Since', 't.joined_at'),
     c('channelId', 'channelId', 'text', 't.channel_id', { hidden: true, ownerOnly: true }),
   ],
+  // The room's own ways out (2026-11-14): a room you made closes for everyone in it (and opens again in Bond); another you leave, or turn down.
+  remove: {
+    verb: 'Leave',
+    did: 'left',
+    ask: 'sheet',
+    noun: { one: 'channel', many: 'channels' },
+    warn: 'A room you made closes for everyone in it, and you can open it again. To come back to another, its maker asks you again.',
+    outcomes: [
+      { when: 'ch.created_by = ?1 AND ch.archived_at IS NULL', did: 'closed', call: { method: 'POST', path: '/bond/channels/:id/archive', param: 'channelId', body: { archived: true } } },
+      { when: 'ch.created_by = ?1', skip: 'You made it, and it is closed already.' },
+      { when: "t.status = 'invited'", did: 'turned down', call: { method: 'POST', path: '/bond/channels/:id/leave', param: 'channelId' } },
+      { did: 'left', call: { method: 'POST', path: '/bond/channels/:id/leave', param: 'channelId' } },
+    ],
+  },
 };
 
 const BOND_CHANNEL_LINES: DataTable = {
@@ -5005,13 +6572,24 @@ const BOND_CHANNEL_LINES: DataTable = {
   defaultSort: { key: 'written', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A line stays as written. Take one down in the room in Bond.',
+  noEditWhy: 'A line stays as written. Take it down and write it again.',
   columns: [
     c('channel', 'Channel', 'text', 'ch.name', { sortable: true, searchable: true, notNull: true }),
     c('line', 'Your line', 'longtext', 'CASE WHEN t.deleted_at IS NULL THEN t.body END', { searchable: true, format: 'inert' }),
     c('answer', 'An answer to a line', 'bool', '(t.reply_to IS NOT NULL)', { filter: 'pick', notNull: true }),
     c('takenDown', 'Taken down', 'bool', '(t.deleted_at IS NOT NULL)', { filter: 'pick', notNull: true }),
     stamp('written', 'Written', 't.created_at', { sortSql: 't.seq' }),
+    c('channelId', 'channelId', 'text', 't.channel_id', { hidden: true, ownerOnly: true }),
   ],
+  // The room's own take-down (2026-11-14): its words go and its place stays. Its writer may do it after leaving the room, or once it closed.
+  remove: {
+    verb: 'Take down',
+    did: 'taken down',
+    ask: 'twice',
+    warn: 'Its words go from the room and its place stays.',
+    only: { where: { cell: 'takenDown', is: [false] }, why: 'It is already taken down.' },
+    call: { method: 'DELETE', path: '/bond/channels/:channelId/messages/:id' },
+  },
 };
 
 const BLOCKS: DataTable = {
@@ -5031,12 +6609,24 @@ const BLOCKS: DataTable = {
   defaultSort: { key: 'since', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'Unblock someone in Bond.',
+  noEditWhy: 'A block is on or off. Your reason stays as you wrote it.',
   columns: [
     c('person', 'Blocked', 'text', personName('u'), { sortable: true, searchable: true, notNull: true }),
     c('handle', 'Username', 'text', personHandle('u'), { searchable: true, format: 'handle' }),
     c('reason', 'Your reason', 'text', "NULLIF(t.reason, '')", { searchable: true, format: 'inert' }),
     stamp('since', 'Since', 't.created_at'),
   ],
+  // The blocked person's id, for Bond's own unblock: read on the server, never sent.
+  privateSelect: { blockedId: 't.blocked_id' },
+  // Bond's own unblock (2026-11-14). A block behind a made-up name stays, so the list never says who was behind it; nobody is told.
+  remove: {
+    verb: 'Unblock',
+    did: 'unblocked',
+    ask: 'sheet',
+    noun: { one: 'person', many: 'people', person: true },
+    warn: 'You see each other’s writing again, and they are not told. A friendship or ask the block ended does not come back.',
+    call: { method: 'DELETE', path: '/bond/block/:blockedId' },
+  },
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------
@@ -5124,6 +6714,36 @@ function coachParts(student: boolean): DataColumn[] {
     }),
   );
 }
+/**
+ * Ending coaching from either side (2026-11-14), through My coach's own routes, core, so they work with Coaching off: a running link is ended,
+ * an ask the person made is taken back, and an ask the person is the one to answer is turned down (the answer route, as Coaching and the
+ * Profile tab say no). `answers` is who the person answers from this side ('them' for a coach, whom a student asks; the coach's and the
+ * team's asks for a student). Someone else's access, so it asks in a sheet; the row stays and the coaching log keeps it. One over stays.
+ */
+function coachLinkRemove(answers: readonly string[], warn: string, noun: NonNullable<RemoveSpec['noun']>): RemoveSpec {
+  const end: RemoveCall = { method: 'DELETE', path: '/me/coach/links/:id' };
+  return {
+    verb: 'End',
+    did: 'ended',
+    ask: 'sheet',
+    noun,
+    title: 'End coaching with {rows}?',
+    yes: 'Yes, end the coaching',
+    warn,
+    only: { where: { cell: 'status', is: ['pending', 'active'] }, why: 'It has already ended.' },
+    // The status line names the coaching and the ask, never the person, as acted on ("Said no to 1 coach.", not "1 coach turned down.").
+    outcomes: [
+      { when: { cell: 'status', is: ['active'] }, did: 'ended', line: 'Ended coaching with {rows}.', call: end },
+      {
+        when: { cell: 'asker', is: answers },
+        did: 'turned down',
+        line: 'Said no to {rows}.',
+        call: { method: 'POST', path: '/me/coach/links/:id/answer', body: { yes: false } },
+      },
+      { did: 'taken back', line: 'Took back the ask to {rows}.', call: end },
+    ],
+  };
+}
 /** Who asked, from this side of the link: the person, the other side, or the team (Admin, Connect people). */
 const askerSql = (mine: 'coach' | 'student'): string => `CASE t.asked_by WHEN '${mine}' THEN 'you' WHEN 'admin' THEN 'team' ELSE 'them' END`;
 
@@ -5151,6 +6771,7 @@ const LIFE_COACHES: DataTable = {
     c('answered', 'Answered on', 'datetime', 't.answered_at', { sortable: true }),
     c('ended', 'Ended on', 'datetime', 't.ended_at', { sortable: true }),
   ],
+  remove: coachLinkRemove(['them', 'team'], 'Your coach stops seeing what you share at once and is told. The row stays, and the log keeps what happened.', { one: 'coach', many: 'coaches', person: true }),
 };
 
 const COACH_STUDENTS: DataTable = {
@@ -5167,6 +6788,8 @@ const COACH_STUDENTS: DataTable = {
   defaultSort: { key: 'asked', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'What a student shares is theirs to switch. Ask, answer or end coaching in Coaching.',
+  noEditWhy: 'What a student shares is theirs to switch. Answer an ask in Coaching, where you see who asked.',
+  remove: coachLinkRemove(['them'], 'You stop seeing their progress at once and they are told. The row stays, and the log keeps what happened.', { one: 'student', many: 'students', person: true }),
   columns: [
     c('student', 'Student', 'text', personName('u'), { sortable: true, searchable: true, notNull: true }),
     c('handle', 'Username', 'text', personHandle('u'), { searchable: true, format: 'handle' }),
@@ -5197,6 +6820,8 @@ const COACHING_LOG: DataTable = {
   defaultSort: { key: 'when', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A record of what happened, so it stays as it is.',
+  noEditWhy: 'A record of what happened stays as it is.',
+  noRemoveWhy: 'The log is the other person’s too, so it stays as it happened.',
   columns: [
     c('person', 'Coach', 'text', personName('co'), { sortable: true, searchable: true, notNull: true }),
     c('step', 'What', 'enum', 't.action', { options: COACH_LOG_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
@@ -5220,6 +6845,8 @@ const STUDENTS_LOG: DataTable = {
   defaultSort: { key: 'when', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A record of what happened, so it stays as it is.',
+  noEditWhy: 'A record of what happened stays as it is.',
+  noRemoveWhy: 'The log is the other person’s too, so it stays as it happened.',
   columns: [
     // A coach's own invite link lines (renewed, closed, emailed) name no one.
     c('person', 'Student', 'text', `CASE WHEN t.student_id = ?1 THEN NULL ELSE ${personName('st')} END`, { sortable: true, searchable: true }),
@@ -5242,6 +6869,7 @@ const COACH_CARD: DataTable = {
   idSql: "'card'",
   defaultSort: { key: 'changed', dir: 'desc' },
   read: 'sql',
+  noRemoveWhy: 'Your card stays while you coach. Empty its words, or switch off Taking new students.',
   columns: [
     c('about', 'About you', 'longtext', 't.about', { searchable: true, edit: { method: 'PUT', path: '/coach/profile', field: 'about', input: 'longtext', maxLength: COACH_ABOUT_MOST } }),
     c('open', 'Taking new students', 'bool', 't.open', { filter: 'pick', notNull: true, edit: { method: 'PUT', path: '/coach/profile', field: 'open', input: 'toggle', note: 'Off keeps you out of the directory’s asks. Your students stay.' } }),
@@ -5270,6 +6898,8 @@ const DISCOVER_RESULTS: DataTable = {
   read: 'sql',
   privateSelect: { result: 't.result_json' },
   readOnlyWhy: 'Take the quiz again in Discover. AI chat reads these only while “Let the assistant learn from them” is on there too.',
+  noEditWhy: 'A result is scored from your answers, so it stays as it came out. Take the quiz again in Discover.',
+  remove: { verb: 'Delete', did: 'deleted', ask: 'sheet', warn: 'The result goes for good. Take the quiz again in Discover for a new one.', call: { method: 'DELETE', path: '/discover/results/:id' } },
   columns: [
     stamp('taken', 'Taken on', 't.created_at'),
     c('strongest', 'Strongest', 'summary', null, { derive: 'discoverResult', from: ['result'] }),
@@ -5298,6 +6928,9 @@ const DISCOVER_ADD_ONS: DataTable = {
   read: 'sql',
   privateSelect: { result: 't.result_json' },
   readOnlyWhy: 'Take a self-check again in Discover. AI chat reads these only while “Let the assistant learn from them” is on there too.',
+  noEditWhy: 'A self-check’s result is worked out from your answers, so it stays as it came out. Take it again in Discover.',
+  // Its answers, its result and any draft go (DELETE /discover/more/:kind; a row's key is its kind).
+  remove: { verb: 'Delete', did: 'deleted', ask: 'sheet', warn: 'Its answers and its result go for good. Take it again in Discover for a new one.', call: { method: 'DELETE', path: '/discover/more/:id' } },
   columns: [
     c('addOn', 'Self-check', 'enum', 't.kind', { options: EXTRA_KIND_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
     c('found', 'What it found', 'summary', null, { derive: 'discoverAddOn', from: ['result'] }),
@@ -5324,6 +6957,9 @@ const COMPANION_CHAT: DataTable = {
   read: 'sql',
   privateSelect: { model: 't.model' },
   readOnlyWhy: 'A line stays as it was said. Clear the whole chat in the Companion.',
+  noEditWhy: 'A line stays as it was said.',
+  // One line of the person's own chat, theirs or an answer to them (2026-11-14, the founder: "delete one Companion chat line").
+  remove: { verb: 'Delete', did: 'deleted', ask: 'twice', warn: 'The lines go for good. The rest of the chat stays.', call: { method: 'DELETE', path: '/companion/messages/:id' } },
   columns: [
     c('who', 'Who', 'enum', "CASE WHEN t.role = 'user' THEN 'you' ELSE 'companion' END", { options: COMPANION_WHO_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
     c('line', 'Line', 'longtext', 't.body', { searchable: true, notNull: true, format: 'inert' }),
@@ -5346,6 +6982,8 @@ const ASSISTANT_CHANGES: DataTable = {
   defaultSort: { key: 'when', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'Undo or confirm a change in the assistant’s panel, where it was made.',
+  noEditWhy: 'Undo or confirm a change in the assistant’s panel, where it was made.',
+  noRemoveWhy: 'Each change keeps its way back, so it stays. Undo it in the assistant’s panel.',
   columns: [
     c('change', 'Change', 'text', 't.label', { sortable: true, searchable: true, notNull: true, format: 'inert' }),
     c('state', 'State', 'enum', 't.status', { options: ASSISTANT_ACTION_OPTIONS, sortable: true, filter: 'pick', notNull: true }),
@@ -5370,6 +7008,8 @@ const VIBE_ANSWERS: DataTable = {
   // Only the index of an answer is stored: one in the person's own words counts as a choice it never names, so the cell says what it counted as,
   // and a foundation, whose own words replace it on the pyramid, reads as nothing here (tablesRead.ts, vibeAnswerWords).
   readOnlyWhy: 'Answer a pillar again in the vibe check, which replaces its answers. An answer in your own words shows as the choice it counted as. Your foundation is on your pyramid.',
+  noEditWhy: 'Answer a pillar again in the vibe check, which replaces its answers.',
+  noRemoveWhy: 'Your pillar’s score is worked out from these, so they stay. Answering again replaces them.',
   columns: [
     pillar('pillar', 'Pillar', 't.relationship', { notNull: true }),
     c('question', 'Question', 'summary', null, { derive: 'vibeQuestion', from: ['questionId'] }),
@@ -5392,6 +7032,16 @@ const LIVE_CALLS: DataTable = {
   defaultSort: { key: 'asked', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'Ask for the live call on your life map. The team sets the time.',
+  noEditWhy: 'The team sets the time and the price, so nothing here changes from your side.',
+  // Withdraw an ask still waiting for the team (POST /session/call/:id/withdraw, 2026-11-14): never one with a payment window open, paid or booked.
+  remove: {
+    verb: 'Withdraw',
+    did: 'withdrawn',
+    ask: 'sheet',
+    warn: 'The team is told. Nothing was charged, and you can ask again on your life map.',
+    only: { where: { cell: 'state', is: ['asked'] }, why: 'Only an ask still waiting for the team can be withdrawn. One being paid for, paid or booked stays for the books.' },
+    call: { method: 'POST', path: '/session/call/:id/withdraw' },
+  },
   columns: [
     c('state', 'State', 'enum', 't.status', { options: LIVE_CALL_STATE_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
     c('price', 'Price', 'money', 't.amount_cents', { currency: 'currency', sortable: true, notNull: true }),
@@ -5414,6 +7064,8 @@ const PLAN: DataTable = {
   defaultSort: { key: 'changed', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'See plans and top-ups on Plans. While payments are not live, the team starts a plan.',
+  noEditWhy: 'See plans and top-ups on Plans. While payments are not live, the team starts a plan.',
+  noRemoveWhy: 'A plan ends by itself when its time is up.',
   columns: [
     c('plan', 'Plan', 'enum', 't.plan', { options: PLAN_OPTIONS, ordered: true, notNull: true }),
     // A plan whose time is up closes the next time the account is read: here it already reads as ended, with no plan credits left.
@@ -5439,6 +7091,8 @@ const DISCOUNTS_USED: DataTable = {
   defaultSort: { key: 'when', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A record of a discount used. One given back means the payment did not go through.',
+  noEditWhy: 'A discount used is a record of a payment, so it stays as it was.',
+  noRemoveWhy: 'A discount used stays with the payment it was used on.',
   columns: [
     c('area', 'Where', 'enum', 't.area', { options: DISCOUNT_AREA_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
     c('item', 'What', 'text', DISCOUNT_ITEM_SQL, { searchable: true }),
@@ -5464,6 +7118,8 @@ const PAYOUT_DETAILS: DataTable = {
   defaultSort: { key: 'sent', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'Change your payout details in the Shop, under Customers. Sending them again asks the team to look again.',
+  noEditWhy: 'Change your payout details in the Shop, under Customers, where the team looks at them again.',
+  noRemoveWhy: 'Payout details stay while you sell, so the team can pay you.',
   columns: [
     c('state', 'State', 'enum', 't.status', { options: KYC_STATE_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
     c('legalName', 'Legal name', 'text', "NULLIF(t.legal_name, '')", { searchable: true }),
@@ -5489,6 +7145,8 @@ const HONORS_TABLE: DataTable = {
   defaultSort: { key: 'given', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'The team gives honors and a season gives its own. The time honors come by themselves and are not kept here.',
+  noEditWhy: 'The team gives honors and a season gives its own.',
+  noRemoveWhy: 'An honor once given stays yours.',
   columns: [
     c('honor', 'Honor', 'enum', 't.honor_key', { options: HONOR_OPTIONS, otherLabel: 'An honor no longer given', sortable: true, filter: 'pick', notNull: true }),
     c('tier', 'Tier', 'enum', HONOR_TIER_SQL, { options: BADGE_TIER_OPTIONS, ordered: true, sortable: true, filter: 'pick' }),
@@ -5510,6 +7168,8 @@ const SEASON_PLACES: DataTable = {
   defaultSort: { key: 'season', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A season closes once, at the start of the next month, and stays as it ended.',
+  noEditWhy: 'A season closes once and stays as it ended.',
+  noRemoveWhy: 'A season closes once and stays as it ended.',
   columns: [
     c('season', 'Season', 'text', SEASON_LABEL_SQL, { sortable: true, sortSql: 't.season', notNull: true }),
     c('place', 'Place', 'number', 't.place', { sortable: true, notNull: true }),
@@ -5529,6 +7189,15 @@ const CALENDAR_LINK: DataTable = {
   idSql: "'calendar'",
   defaultSort: { key: 'made', dir: 'desc' },
   read: 'sql',
+  // Close: the Profile tab's own Off, through the same route (on again brings back the same link).
+  remove: {
+    verb: 'Close',
+    did: 'switched off',
+    ask: 'twice',
+    warn: 'The link stops at once. Switching it on again brings back the same link.',
+    only: { where: { cell: 'on', is: [true] }, why: 'It is off already.' },
+    call: { method: 'POST', path: '/me/calendar', body: { on: false } },
+  },
   columns: [
     c('on', 'On', 'bool', 't.enabled', { filter: 'pick', notNull: true, edit: { method: 'POST', path: '/me/calendar', field: 'on', input: 'toggle', note: 'Off stops the link at once. On again brings back the same link.' } }),
     stamp('made', 'First made', 't.created_at', { filter: undefined }),
@@ -5547,6 +7216,8 @@ const PRIVACY_RECORDS: DataTable = {
   defaultSort: { key: 'when', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A record of each choice, so it stays as it is. Change a choice in Privacy choices.',
+  noEditWhy: 'A record of each choice, so it stays as it is. Change a choice in Privacy choices.',
+  noRemoveWhy: 'A record of each choice you made, so it stays.',
   columns: [
     c('choice', 'Choice', 'enum', 't.purpose', { options: CONSENT_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
     c('allowed', 'Allowed', 'bool', 't.granted', { filter: 'pick', notNull: true }),
@@ -5568,6 +7239,8 @@ const TERMS_ACCEPTED: DataTable = {
   defaultSort: { key: 'when', dir: 'desc' },
   read: 'sql',
   readOnlyWhy: 'A record of what you agreed to, so it stays as it is.',
+  noEditWhy: 'A record of what you agreed to, so it stays as it is.',
+  noRemoveWhy: 'A record of what you agreed to, so it stays as it is.',
   columns: [
     c('doc', 'Document', 'enum', 't.doc', { options: LEGAL_DOC_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
     c('version', 'Version of', 'date', 't.version', { sortable: true, notNull: true }),
@@ -5589,9 +7262,23 @@ const INVITE_CODES: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'made', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Make, copy or take back a code under Invite people on your Profile tab.',
+  // Take back: Invite people's own, a second tap there and here, only while the code still works (the route refuses a used one, 409).
+  remove: {
+    verb: 'Withdraw',
+    did: 'taken back',
+    ask: 'twice',
+    warn: 'Its link stops working at once. A used code stays as it is.',
+    only: { where: { cell: 'state', is: ['open'] }, why: 'Only a code that still works can be taken back. A used one stays as it is.' },
+    call: { method: 'DELETE', path: '/me/invites/:id' },
+  },
   columns: [
-    c('label', 'Your label', 'text', "NULLIF(t.label, '')", { sortable: true, searchable: true, format: 'inert' }),
+    // The label, the maker's own private word (PATCH /me/invites/:id, 2026-11-14), used or not.
+    c('label', 'Your label', 'text', "NULLIF(t.label, '')", {
+      sortable: true,
+      searchable: true,
+      format: 'inert',
+      edit: patch('/me/invites/:id', 'label', 'text', { maxLength: INVITE_LABEL_MOST, note: 'Only you see it. Empty clears it.' }),
+    }),
     c('state', 'State', 'enum', INVITE_STATE_SQL, { options: INVITE_STATE_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
     c('linkWorks', 'Its link works', 'bool', `(${INVITE_STATE_SQL}) = 'open'`, { filter: 'pick', notNull: true }),
     stamp('made', 'Made on', 't.created_at'),
@@ -5614,10 +7301,21 @@ const TEAM_MESSAGES: DataTable = {
   idSql: 't.id',
   defaultSort: { key: 'sent', dir: 'desc' },
   read: 'sql',
-  readOnlyWhy: 'Write to the team in Help. Only the team answers.',
+  // A plain message the team has not answered yet may change or be withdrawn (PATCH and DELETE /support/:id, 2026-11-14, which hold the same
+  // rule in the statement). A report, its subject always "Report: …", quotes someone else's line, so it stays as it was sent.
+  remove: {
+    verb: 'Withdraw',
+    did: 'withdrawn',
+    ask: 'twice',
+    warn: 'It leaves the team’s list before they answer it. You can write to them again in Help.',
+    only: { where: { cell: 'status', is: ['active'] }, why: 'Only a message the team has not answered can be withdrawn. A report stays as you sent it.' },
+    call: { method: 'DELETE', path: TICKET_PATH },
+  },
   columns: [
-    c('subject', 'Subject', 'text', 't.subject', { sortable: true, searchable: true, notNull: true, format: 'inert' }),
-    c('words', 'Your words', 'longtext', 't.body', { searchable: true, notNull: true, format: 'inert' }),
+    c('subject', 'Subject', 'text', 't.subject', { sortable: true, searchable: true, notNull: true, format: 'inert', edit: patch(TICKET_PATH, 'subject', 'text', { minLength: 1, maxLength: 120, when: 'open', why: TICKET_KEPT }) }),
+    c('words', 'Your words', 'longtext', 't.body', { searchable: true, notNull: true, format: 'inert', edit: patch(TICKET_PATH, 'body', 'longtext', { minLength: 1, maxLength: 4000, when: 'open', why: TICKET_KEPT }) }),
+    // 'active' while the person may still change or withdraw it (read by `when: 'open'` and the remove's `only`), else 'kept'.
+    hiddenCell('status', "CASE WHEN t.status = 'open' AND t.reply = '' AND t.subject NOT LIKE 'Report: %' THEN 'active' ELSE 'kept' END"),
     c('state', 'State', 'enum', 't.status', { options: TICKET_STATE_OPTIONS, ordered: true, sortable: true, filter: 'pick', notNull: true }),
     c('answer', 'The team’s answer', 'longtext', "NULLIF(t.reply, '')", { searchable: true, format: 'inert' }),
     c('answeredBy', 'Answered by', 'text', `CASE WHEN t.replied_by IS NULL THEN NULL ELSE ${personName('r')} END`),
@@ -5928,6 +7626,15 @@ export interface TableSqlContext {
   aiHeld?: readonly string[];
   /** Read one row by its id (an edit or a bulk action): no paging, no count. */
   id?: string;
+  /** Read these rows by their ids (a remove and its preview, at most BULK_MAX), bound as one JSON list: no paging, no count. */
+  ids?: readonly string[];
+  /** Leave these rows out (Select all's later rounds: the rows already sent), bound as one JSON list. The count leaves them out too. */
+  not?: readonly string[];
+  /**
+   * Also work out the table's remove rules that are SQL (`ruleSelects`), one column each (`_q0`, `_q1`, …), which `rowFromRaw` carries into the
+   * row's private fields for `removeStateOf`. The owner's own reads in the Active view only (a page, one row, the ids of a remove).
+   */
+  rules?: boolean;
   /** Rows to read and skip; by default the query's page (size + 1, so `more` comes free). The CSV passes CSV_MAX_ROWS + 1 and 0. */
   limit?: number;
   offset?: number;
@@ -6009,6 +7716,11 @@ function conditions(table: DataTable, query: TableQuery, ctx: TableSqlContext, b
     out.push(`${table.idSql} = ${b.bind(ctx.id)}`);
     return out;
   }
+  if (ctx.ids !== undefined) {
+    out.push(`${table.idSql} IN (SELECT value FROM json_each(${b.bind(JSON.stringify(ctx.ids))}))`);
+    return out;
+  }
+  if (ctx.not !== undefined && ctx.not.length > 0) out.push(`${table.idSql} NOT IN (SELECT value FROM json_each(${b.once('not', JSON.stringify(ctx.not))}))`);
   for (const col of table.columns) {
     if (!columnFor(col, ctx.view)) continue;
     const v = query.filters[col.key];
@@ -6061,10 +7773,12 @@ export function tableSql(table: DataTable, query: TableQuery, ctx: TableSqlConte
   const select = [`${table.idSql} AS "_id"`];
   for (const col of table.columns) if (col.sql && columnFor(col, ctx.view)) select.push(`${tokens(col.sql, b, ctx)} AS "${col.key}"`);
   for (const [name, expr] of Object.entries(table.privateSelect ?? {})) select.push(`${tokens(expr, b, ctx)} AS "_p_${name}"`);
+  // The remove's SQL rules, the owner's own only: one 0-or-1 column each, read with the row, so the row's remove costs no trip of its own.
+  if (ctx.rules && ctx.view === 'owner') ruleSelects(table).forEach((rule, i) => select.push(`CASE WHEN (${tokens(rule, b, ctx)}) THEN 1 ELSE 0 END AS "${RULE_FIELD}${i}"`));
   const from = tokens(table.from, b, ctx);
   const where = conditions(table, query, ctx, b).join(' AND ');
   let sql = `SELECT ${select.join(', ')} FROM ${from} WHERE ${where}`;
-  if (ctx.id === undefined) {
+  if (ctx.id === undefined && ctx.ids === undefined) {
     const sortCol = tableColumn(table, query.sort) ?? tableColumn(table, table.defaultSort.key);
     const dir = query.dir === 'asc' ? 'ASC' : 'DESC';
     const parts: string[] = [];
@@ -6083,7 +7797,7 @@ export function tableSql(table: DataTable, query: TableQuery, ctx: TableSqlConte
   }
   let countSql: string | null = null;
   let countBinds: unknown[] = [];
-  if (query.count && ctx.id === undefined) {
+  if (query.count && ctx.id === undefined && ctx.ids === undefined) {
     const cb = new Binder(ctx.ownerId);
     const cFrom = tokens(table.from, cb, ctx);
     // The LIMIT keeps SQLite from flattening the subquery, so it drops the LEFT JOINs that neither a cell nor a condition reads (under a bare
@@ -6204,6 +7918,11 @@ export function rowFromRaw(table: DataTable, raw: Readonly<Record<string, unknow
     const k = `_p_${name}`;
     if (k in raw) fields[name] = raw[k];
   }
+  // The remove's SQL rules, when the read worked them out (the owner's own, `rules`): private fields, never cells.
+  for (let i = 0; i < plan.rules; i++) {
+    const k = `${RULE_FIELD}${i}`;
+    if (k in raw) fields[k] = raw[k];
+  }
   for (const col of plan.derived) {
     const done = deriveLeaf(col.derive as DeriveKey, fields, col.from);
     if (done !== undefined) cells[col.key] = done;
@@ -6219,6 +7938,8 @@ interface RowPlan {
   cols: DataColumn[];
   priv: string[];
   derived: DataColumn[];
+  /** How many SQL remove rules a read may carry (`ruleSelects`). */
+  rules: number;
 }
 const ROW_PLANS = new WeakMap<DataTable, { owner?: RowPlan; other?: RowPlan }>();
 function rowPlan(table: DataTable, view: TableView): RowPlan {
@@ -6227,7 +7948,7 @@ function rowPlan(table: DataTable, view: TableView): RowPlan {
   const had = kept[slot];
   if (had) return had;
   const cols = table.columns.filter((col) => columnFor(col, view));
-  const plan: RowPlan = { cols, priv: Object.keys(table.privateSelect ?? {}), derived: cols.filter((col) => col.derive) };
+  const plan: RowPlan = { cols, priv: Object.keys(table.privateSelect ?? {}), derived: cols.filter((col) => col.derive), rules: view === 'owner' ? ruleSelects(table).length : 0 };
   kept[slot] = plan;
   ROW_PLANS.set(table, kept);
   return plan;
@@ -6238,10 +7959,16 @@ export function isRecentDay(dayStr: Cell, today: string): boolean {
   return typeof dayStr === 'string' && isRealDay(today) && (dayStr === today || dayStr === addDays(today, -1));
 }
 
+/** Is `dayStr` a real day that is the subject's today or any day before it (never one still to come)? */
+export function isPastDay(dayStr: Cell, today: string): boolean {
+  return isRealDay(dayStr) && isRealDay(today) && dayStr <= today;
+}
+
 /** May the owner change this cell of this row now? (Owner view, Active view; the server checks it again before it calls.) */
 export function rowEditable(table: DataTable, col: DataColumn, cells: Readonly<Record<string, Cell>>, today: string): boolean {
   const edit = col.edit;
   if (!edit) return false;
+  if (edit.whenCell && !edit.whenCell.is.includes(cells[edit.whenCell.cell] ?? null)) return false;
   const recent = () => isRecentDay(table.dayCell ? (cells[table.dayCell] ?? null) : null, today);
   switch (edit.when) {
     case undefined:
@@ -6276,6 +8003,8 @@ export function rowEditable(table: DataTable, col: DataColumn, cells: Readonly<R
       return cells.madeIt === true;
     case 'linkOpen':
       return cells.status === 'pending' || cells.status === 'active';
+    case 'past':
+      return isPastDay(table.dayCell ? (cells[table.dayCell] ?? null) : null, today);
     default:
       return false;
   }
@@ -6376,6 +8105,228 @@ export function plainCall(col: DataColumn, rowId: string, cells: Readonly<Record
 export function archiveCall(spec: TableCall, rowId: string): { method: string; path: string; body?: Record<string, unknown> } | null {
   if (!TABLE_ID_RE.test(rowId)) return null;
   return { method: spec.method, path: spec.path.replace(':id', encodeURIComponent(rowId)), ...(spec.body ? { body: { ...spec.body } } : {}) };
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------
+// Edit and remove from the selection bar (2026-11-14): why a row stays, what a remove does to it, and the call it makes
+// -----------------------------------------------------------------------------------------------------------------------------------
+
+/** Why a row's cell cannot change now, by its edit's `when`, in plain words (the edit route refuses with it, the greyed Edit says it). */
+export function editWhenWhy(edit: ColumnEdit, cells: Readonly<Record<string, Cell>>): string {
+  if (edit.why) return edit.why;
+  switch (edit.when) {
+    case 'open':
+      return 'Only an open task can be changed this way.';
+    case 'project':
+      return 'Only a project has a due day here.';
+    case 'recentOwnMove':
+      return cells.loggedBy === 'run' ? 'A club run is changed in Kreators Run.' : 'Only today or yesterday can be changed here.';
+    case 'recentEat':
+      return cells.legacy === true ? 'A check-in from before the meals were asked stays as it is.' : 'Only today or yesterday can be changed here.';
+    case 'recent':
+      return 'Only today or yesterday can be changed here.';
+    case 'past':
+      return 'A day still to come cannot be changed yet.';
+    case 'handInOpen':
+      return 'An approved hand-in, or one from a cohort you left, stays as it is.';
+    case 'paperOpen':
+      return cells.status === 'paid' ? 'A paid invoice is marked sent again in Agency before it can change.' : 'A void invoice stays as it is.';
+    case 'retainerOpen':
+      return 'An ended or withdrawn retainer stays as it is.';
+    case 'listingOpen':
+      return 'A listing with an accepted offer, or one that sold, stays as it is.';
+    case 'unpublished':
+      return 'A published listing is closed on its page in Work, where that asks first.';
+    case 'pitchWaiting':
+      return 'The team has started reading it, so it can no longer be changed.';
+    case 'xpOpen':
+      return 'The xp is fixed once the code opens, thirty minutes before the start, and a cancelled one stays as it is.';
+    case 'seatHeld':
+      return 'Only a guest with a seat can be on the list to meet other guests.';
+    case 'madeIt':
+      return 'Only a channel you made can be renamed here.';
+    case 'linkOpen':
+      return 'Coaching that ended or was turned down shares nothing, so it stays as it is.';
+    default:
+      return 'This one cannot be changed now.';
+  }
+}
+
+/** Why none of this row's cells can change now (its first editable column's `when` that says no), for a row whose `edit` is empty. */
+export function rowNoEditWhy(table: DataTable, cells: Readonly<Record<string, Cell>>, today: string): string {
+  const shut = table.columns.find((col) => col.edit && !rowEditable(table, col, cells, today));
+  return shut?.edit ? editWhenWhy(shut.edit, cells) : 'This row cannot be changed now.';
+}
+
+/** Why the greyed Edit says no for every row of this table, or null when the table has an editable column. */
+export function noEditWhyOf(table: DataTable): string | null {
+  return tableEditable(table) ? null : (table.noEditWhy ?? table.readOnlyWhy ?? 'Rows here stay as they are.');
+}
+
+/** Why the greyed remove button says no for every row of this table, or null when the table has a `remove`. */
+export function noRemoveWhyOf(table: DataTable): string | null {
+  return table.remove ? null : (table.noRemoveWhy ?? table.readOnlyWhy ?? 'Rows here stay as they are.');
+}
+
+/** The remove button's word for this table: its own, else Delete (greyed). */
+export const removeVerbOf = (table: DataTable): RemoveVerb => table.remove?.verb ?? 'Delete';
+
+/** A row's private field that holds the result of the remove's i-th SQL rule (0 or 1), as the read names it. */
+const RULE_FIELD = '_q';
+
+/** Every rule a remove holds, in the one order the read and `removeStateOf` both walk: `only`, then each outcome's `when`, then `sheetWhen`. */
+function removeRules(spec: RemoveSpec): (RowRule | undefined)[] {
+  return [spec.only?.where, ...(spec.outcomes ?? []).map((o) => o.when), spec.sheetWhen];
+}
+
+/** The remove's SQL rules in that order, which the read works out with the row (`rules` on TableSqlContext). Empty for a table with none. */
+export function ruleSelects(table: DataTable): string[] {
+  if (!table.remove) return [];
+  return removeRules(table.remove).filter((r): r is string => typeof r === 'string');
+}
+
+/**
+ * What the table's remove does to this row now: the outcome it gets (its `did` and its index in `outcomes`, -1 for the one `call`), or why it
+ * stays. `fields` are the row's private fields from the read, which hold the SQL rules' results (a read without them reads each as not
+ * holding, so a row is never removed on a rule nobody checked). Null for a table with no `remove`.
+ */
+export function removeStateOf(
+  table: DataTable,
+  cells: Readonly<Record<string, Cell>>,
+  fields: Readonly<Record<string, unknown>> = {},
+): { did: string; at: number; sheet?: true } | { why: string } | null {
+  const spec = table.remove;
+  if (!spec) return null;
+  // Each SQL rule's field by its place among the SQL rules (`ruleSelects`), whichever rules this row's walk stops short of.
+  const rules = removeRules(spec);
+  /** A rule's answer for this row; an SQL rule the read did not work out answers `unchecked`. */
+  const holds = (rule: RowRule | undefined, at: number, unchecked = false): boolean => {
+    if (rule === undefined) return true;
+    if (typeof rule === 'string') {
+      const v = fields[`${RULE_FIELD}${rules.slice(0, at).filter((r) => typeof r === 'string').length}`];
+      return v === undefined ? unchecked : v === 1 || v === true;
+    }
+    const c: Cell = rule.cell in cells ? (cells[rule.cell] ?? null) : ((fields[rule.cell] as Cell | undefined) ?? null);
+    return 'is' in rule ? rule.is.includes(c) : !rule.not.includes(c);
+  };
+  // What the row gets; a 'twice' spec's row asks in the sheet while `sheetWhen` holds for it, and when nobody checked (the sheet is the safe ask).
+  const did = (d: string, at: number) => (spec.sheetWhen !== undefined && holds(spec.sheetWhen, rules.length - 1, true) ? { did: d, at, sheet: true as const } : { did: d, at });
+  if (spec.only && !holds(spec.only.where, 0)) return { why: spec.only.why };
+  if (spec.call) return did(spec.did, -1);
+  for (const [at, o] of (spec.outcomes ?? []).entries()) {
+    if (!holds(o.when, at + 1)) continue;
+    return 'skip' in o ? { why: o.skip } : did(o.did, at);
+  }
+  return { why: spec.only?.why ?? 'This one stays as it is.' };
+}
+
+/** The call an outcome makes (`at` from `removeStateOf`: -1 for the spec's one `call`). */
+export function removeCallOf(spec: RemoveSpec, at: number): RemoveCall | null {
+  if (at < 0) return spec.call ?? null;
+  const o = spec.outcomes?.[at];
+  return o && 'call' in o ? o.call : null;
+}
+
+/**
+ * The call for one row's remove (a 'plain' recipe), or null when it cannot be built (an id that is not an id, a part of the path the row does
+ * not hold): `:id` from the row's id or `param`, any other `:name` from the row's hidden cell or private field of that name, the body fixed and
+ * from the row, and the device's day where the route reads it. A recipe the server builds itself answers null here.
+ */
+export function removeCallFor(call: RemoveCall, rowId: string, cells: Readonly<Record<string, Cell>>, fields: Readonly<Record<string, unknown>>, today: string): { method: RemoveCall['method']; path: string; body?: Record<string, unknown> } | null {
+  if ((call.recipe ?? 'plain') !== 'plain') return null;
+  const valueOf = (name: string): unknown => (name in cells ? cells[name] : fields[name]);
+  const idValue = call.param ? valueOf(call.param) : rowId;
+  if (typeof idValue !== 'string' || !TABLE_ID_RE.test(idValue)) return null;
+  const [route, fixedQuery = ''] = call.path.split('?');
+  let missing = false;
+  const path = route!.replace(/:([A-Za-z]\w*)/g, (_, name: string) => {
+    const v = name === 'id' ? idValue : valueOf(name);
+    if (typeof v !== 'string' || !TABLE_ID_RE.test(v)) {
+      missing = true;
+      return '';
+    }
+    return encodeURIComponent(v);
+  });
+  if (missing) return null;
+  const query = [fixedQuery, call.today === 'query' ? `day=${encodeURIComponent(today)}` : ''].filter(Boolean).join('&');
+  const body: Record<string, unknown> = { ...(call.body ?? {}) };
+  for (const [field, from] of Object.entries(call.bodyFrom ?? {})) {
+    const v = valueOf(from);
+    body[field] = v === undefined ? null : v;
+  }
+  if (call.today === 'body') body.today = today;
+  const hasBody = Object.keys(body).length > 0;
+  return { method: call.method, path: query ? `${path}?${query}` : path, ...(hasBody ? { body } : {}) };
+}
+
+/** "1 row", "3 rows", "1,234 rows". */
+export const rowsWord = (n: number): string => `${formatCount(n)} ${n === 1 ? 'row' : 'rows'}`;
+
+/** A remove's count in its own word where its rows are people or events ("1 friend", "3 events"), else `rowsWord`. */
+export function removeCount(table: DataTable, n: number): string {
+  const noun = table.remove?.noun;
+  return noun ? `${formatCount(n)} ${n === 1 ? noun.one : noun.many}` : rowsWord(n);
+}
+
+/**
+ * The status line for `n` rows a remove did as `did`: "2 friends removed.", or the outcome's or the spec's own `line` where the count before
+ * the word would say the people were acted on ("Lifted the mute on 2 people.", never "2 people lifted."; "Said no to 1 coach.").
+ */
+export function removeDoneLine(table: DataTable, did: string, n: number): string {
+  const spec = table.remove;
+  const outcome = spec?.outcomes?.find((o): o is Extract<RemoveOutcome, { did: string }> => 'did' in o && o.did === did && Boolean(o.line));
+  const line = outcome?.line ?? (spec?.did === did ? spec.line : undefined);
+  return line ? line.replace(/\{rows\}/g, removeCount(table, n)) : `${removeCount(table, n)} ${did}.`;
+}
+
+/** The verb in a sentence with "it" or "them" in it ("take them down", "delete it"). */
+export function verbWith(verb: RemoveVerb, it: string): string {
+  const [head, ...rest] = verb.toLowerCase().split(' ');
+  return rest.length ? `${head} ${it} ${rest.join(' ')}` : `${head} ${it}`;
+}
+
+/**
+ * The words of a remove for `n` rows (of `of` that match, when Select all takes them a hundred at a time): the button's word, the second tap's
+ * ask ("Tap again to delete"), and the sheet's title, red yes and Keep, the spec's own where it has them (`{n}`, `{rows}`, `{it}`). Given the
+ * one row a second tap is about, the ask names it (`nameCell`: "Tap again to delete Deep work") and `warn` speaks of it (`rowWarn`).
+ */
+export function removeWords(
+  table: DataTable,
+  n: number,
+  of = n,
+  row?: Pick<TableRow, 'cells'>,
+): { verb: RemoveVerb; ask: string; title: string; yes: string; keep: string; warn: string } {
+  const spec = table.remove;
+  const verb = removeVerbOf(table);
+  const it = n === 1 ? 'it' : 'them';
+  // A person is "them", one or many ("Yes, remove them"); `{it}` in a spec's own words stays the count's, since it may name a thing (a mute).
+  const them = spec?.noun?.person ? 'them' : it;
+  const fill = (s: string) => s.replace(/\{n\}/g, formatCount(n)).replace(/\{rows\}/g, removeCount(table, n)).replace(/\{it\}/g, it);
+  const which = of > n ? `the first ${formatCount(n)} of ${spec?.noun ? removeCount(table, of) : formatCount(of)}` : removeCount(table, n);
+  // One row's own words, when it is one row the ask is about: its name in the ask, and what goes with this very row.
+  const cellWords = (key: string | undefined) => {
+    const v = key && n === 1 && row ? row.cells[key] : null;
+    return typeof v === 'string' ? v.trim() : '';
+  };
+  const name = cellWords(spec?.nameCell);
+  const rowWarn = cellWords(spec?.rowWarn?.cell);
+  return {
+    verb,
+    ask: `Tap again to ${verb.toLowerCase()}${name ? ` ${name}` : ''}`,
+    // The spec's own title past a hundred too, "the first 100 of 340 people" in its `{rows}`, so it says the same as its own red yes.
+    title: spec?.title ? fill(spec.title.replace(/\{rows\}/g, which)) : `${verb} ${which}?`,
+    yes: spec?.yes ? fill(spec.yes) : `Yes, ${verbWith(verb, them)}`,
+    keep: spec?.keep ? fill(spec.keep) : `Keep ${them}`,
+    warn: rowWarn && spec?.rowWarn ? spec.rowWarn.words.replace(/\{value\}/g, rowWarn) : (spec?.warn ?? ''),
+  };
+}
+
+/** The sheet's counts in one line: "6 will be deleted and 2 voided. 1 stays as it is: Paid invoices stay for the books." */
+export function previewLine(p: TablePreviewResponse): string {
+  const acts = p.act.filter((a) => a.n > 0).map((a, i) => (i === 0 ? `${formatCount(a.n)} will be ${a.did}` : `${formatCount(a.n)} ${a.did}`));
+  const actLine = acts.length === 0 ? 'None of these can be changed this way.' : `${acts.length > 1 ? `${acts.slice(0, -1).join(', ')} and ${acts.at(-1)}` : acts[0]}.`;
+  const stays = p.skipped.filter((s) => s.n > 0).map((s) => `${formatCount(s.n)} ${s.n === 1 ? 'stays as it is' : 'stay as they are'}: ${s.why}`);
+  return [actLine, ...stays].join(' ');
 }
 
 function cmpCells(a: Cell, b: Cell, col: DataColumn): number {

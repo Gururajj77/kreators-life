@@ -23,7 +23,8 @@ import { cohortRole } from './school';
 
 /**
  * Discussions under a School cohort, mounted at /school/cohorts so the module gate reads School. Its people are everyone enrolled
- * (enrolled or completed) and its moderators, read by the cohort page's own rule (`cohortRole`); anyone else gets 404. Threads nest
+ * (enrolled or completed) and its moderators, read by the cohort page's own rule (`cohortRole`); anyone else gets 404, save that a writer
+ * who left may still take their own lines down and change how they show on them (2026-11-14, All tables). Threads nest
  * three levels; a reply past that sits beside the line it answers and names it. How a member shows is their own pick per cohort,
  * private by default, and a private member's real handle, id and friend code are masked here, on the server, for everyone but
  * themself and the cohort's moderators. Lines by someone blocked either way are hidden both ways, a line comes down at its writer's or
@@ -168,14 +169,19 @@ cohortTalk.put('/:id/talk/me', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const room = await withRoom(c);
-  if (!room) return c.json({ error: 'not found' }, 404);
+  // Someone who left the cohort may still change how they show on the lines they wrote there (2026-11-14, All tables); reading, writing and
+  // reporting stay for its people.
+  const cohortId = room
+    ? room.cohort.id
+    : (await db.prepare('SELECT t.cohort_id FROM cohort_talk t JOIN cohorts k ON k.id = t.cohort_id WHERE t.cohort_id = ? AND t.user_id = ? LIMIT 1').bind(c.req.param('id') ?? '', user.id).first<{ cohort_id: string }>())?.cohort_id;
+  if (!cohortId) return c.json({ error: 'not found' }, 404);
   const body = await c.req.json<{ visibility?: unknown }>().catch(() => ({}) as { visibility?: unknown });
   if (!isCohortTalkVisibility(body.visibility)) return c.json({ error: 'Pick public or private.' }, 400);
   await db
     .prepare('INSERT INTO cohort_talk_prefs (cohort_id, user_id, visibility, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT (cohort_id, user_id) DO UPDATE SET visibility = excluded.visibility, updated_at = excluded.updated_at')
-    .bind(room.cohort.id, user.id, body.visibility, nowIso())
+    .bind(cohortId, user.id, body.visibility, nowIso())
     .run();
-  return c.json({ me: await meFor(db, user, room.cohort.id) });
+  return c.json({ me: await meFor(db, user, cohortId) });
 });
 
 // A post, or a reply to a line (`parentId`). A reply to a line at the deepest level is kept beside it and names it.
@@ -227,13 +233,24 @@ cohortTalk.delete('/:id/talk/:lineId', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const room = await withRoom(c);
-  if (!room) return c.json({ error: 'not found' }, 404);
-  const line = await db.prepare('SELECT id, user_id FROM cohort_talk WHERE id = ? AND cohort_id = ? AND deleted_at IS NULL').bind(c.req.param('lineId'), room.cohort.id).first<{ id: string; user_id: string }>();
+  // Its writer may always take their own line down, even after leaving the cohort (2026-11-14, All tables).
+  const own = room
+    ? null
+    : await db
+        .prepare('SELECT t.cohort_id FROM cohort_talk t JOIN cohorts k ON k.id = t.cohort_id WHERE t.id = ? AND t.cohort_id = ? AND t.user_id = ? AND t.deleted_at IS NULL')
+        .bind(c.req.param('lineId'), c.req.param('id') ?? '', user.id)
+        .first<{ cohort_id: string }>();
+  const cohortId = room ? room.cohort.id : own?.cohort_id;
+  if (!cohortId) return c.json({ error: 'not found' }, 404);
+  const line = await db.prepare('SELECT id, user_id FROM cohort_talk WHERE id = ? AND cohort_id = ? AND deleted_at IS NULL').bind(c.req.param('lineId'), cohortId).first<{ id: string; user_id: string }>();
   if (!line) return c.json({ error: 'not found' }, 404);
   const mine = line.user_id === user.id;
-  if (!mine && !room.moderator) return c.json({ error: 'Only its writer or the cohort manager can take a line down.' }, 403);
+  if (!mine && !room?.moderator) return c.json({ error: 'Only its writer or the cohort manager can take a line down.' }, 403);
   const res = await db.prepare("UPDATE cohort_talk SET body = '', deleted_at = ?, deleted_by = ? WHERE id = ? AND deleted_at IS NULL").bind(nowIso(), user.id, line.id).run();
-  if (res.meta.changes > 0 && !mine) {
+  // Taken down already (another tab, or a second send): said, never a quiet yes, so All tables counts it once.
+  if (!res.meta.changes) return c.json({ error: 'That line was taken down a moment ago.' }, 409);
+  // Someone else's line comes down only with the room (a moderator), so the note names the cohort it read.
+  if (res.meta.changes > 0 && !mine && room) {
     await audit(db, user.id, 'cohort.line.delete', 'cohort_talk', line.id, '', { cohort: room.cohort.id });
     await notify(db, line.user_id, 'moderation', 'A line of yours was taken down', `In the discussion for ${room.cohort.name}.`, talkLink(room.cohort.id));
   }

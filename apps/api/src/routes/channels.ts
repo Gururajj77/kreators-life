@@ -332,14 +332,25 @@ function channelRouter(scope: ChannelScope) {
     return c.json({ channel: next ? toChannel(next, user) : null });
   });
 
+  /**
+   * The channel when this person holds a seat or an invitation in it, open or closed (2026-11-14, All tables): leaving a closed Community channel,
+   * or taking down a line in one, is the person's own business, though only a guide can open a closed one.
+   */
+  const seatedIn = (c: Context<AppEnv>) =>
+    c.env.DB.prepare('SELECT ch.* FROM channels ch JOIN channel_members cm ON cm.channel_id = ch.id AND cm.user_id = ?1 WHERE ch.id = ?2 AND ch.scope = ?3')
+      .bind(c.get('user').id, c.req.param('id') ?? '', scope)
+      .first<ChRow>();
+
   // Leave a channel, or turn down an invitation. The lines you wrote stay; delete them one by one if you like.
   r.post('/:id/leave', async (c) => {
     const db = c.env.DB;
     const user = c.get('user');
-    const row = await open(c);
+    const row = (await open(c)) ?? (await seatedIn(c));
     if (!row) return c.json({ error: 'not found' }, 404);
     if (scope === 'bond' && row.created_by === user.id) return c.json({ error: 'You made this channel. Close it instead.' }, 400);
-    await db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').bind(row.id, user.id).run();
+    const left = await db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').bind(row.id, user.id).run();
+    // Out already (another tab, or a second send): said, never a quiet yes, so All tables counts it once.
+    if (!left.meta.changes) return c.json({ error: 'You left it a moment ago.' }, 409);
     return c.json({ ok: true });
   });
 
@@ -459,7 +470,10 @@ function channelRouter(scope: ChannelScope) {
   r.delete('/:id/messages/:mid', async (c) => {
     const db = c.env.DB;
     const user = c.get('user');
-    const row = await open(c);
+    const seen = await open(c);
+    // Its writer may always take their own line down, after leaving or once it closed (2026-11-14, All tables; Leave says lines can go one by one).
+    const own = seen ? null : await db.prepare("SELECT ch.* FROM channels ch JOIN channel_messages m ON m.channel_id = ch.id AND m.id = ?1 AND m.user_id = ?2 AND m.deleted_at IS NULL WHERE ch.id = ?3 AND ch.scope = ?4").bind(c.req.param('mid'), user.id, c.req.param('id') ?? '', scope).first<ChRow>();
+    const row = seen ?? own;
     if (!row) return c.json({ error: 'not found' }, 404);
     const line = await db.prepare('SELECT id, user_id FROM channel_messages WHERE id = ? AND channel_id = ? AND deleted_at IS NULL').bind(c.req.param('mid'), row.id).first<{ id: string; user_id: string }>();
     if (!line) return c.json({ error: 'not found' }, 404);
@@ -471,7 +485,9 @@ function channelRouter(scope: ChannelScope) {
       const writer = await db.prepare('SELECT role, permissions FROM users WHERE id = ?').bind(line.user_id).first<Pick<UserRow, 'role' | 'permissions'>>();
       if (writer && !canModerate(rankOf(user), rankOf(writer))) return c.json({ error: 'You cannot take this line down. Report it and the team will look.' }, 403);
     }
-    await db.prepare("UPDATE channel_messages SET body = '', deleted_at = ?, deleted_by = ? WHERE id = ? AND deleted_at IS NULL").bind(nowIso(), user.id, line.id).run();
+    const down = await db.prepare("UPDATE channel_messages SET body = '', deleted_at = ?, deleted_by = ? WHERE id = ? AND deleted_at IS NULL").bind(nowIso(), user.id, line.id).run();
+    // Taken down already (another tab, or a second send): said, never a quiet yes, and never a second note or audit line.
+    if (!down.meta.changes) return c.json({ error: 'That line was taken down a moment ago.' }, 409);
     if (!mine) {
       await audit(db, user.id, 'channel.line.delete', 'channel_message', line.id, '', { channel: row.id, scope });
       await notify(db, line.user_id, 'moderation', 'A line of yours was taken down', `In ${row.name}.`, linkFor(row));

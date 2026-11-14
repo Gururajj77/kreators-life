@@ -79,6 +79,12 @@ inbox.post('/read-all', async (c) => {
 });
 
 inbox.post('/:id/read', async (c) => {
+  // `{ read: false }` marks it unread again (All tables' Read switch, 2026-11-14, the owner's own). No body marks it read, as Inbox sends.
+  const body = await c.req.json<{ read?: unknown }>().catch(() => ({}) as { read?: unknown });
+  if (body.read === false) {
+    await c.env.DB.prepare('UPDATE notifications SET read_at = NULL WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+    return c.json({ ok: true, read: false });
+  }
   await c.env.DB.prepare('UPDATE notifications SET read_at = COALESCE(read_at, ?) WHERE id = ? AND user_id = ?').bind(nowIso(), c.req.param('id'), c.get('user').id).run();
   return c.json({ ok: true });
 });

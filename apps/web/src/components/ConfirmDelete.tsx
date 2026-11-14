@@ -4,6 +4,8 @@ import { Sheet } from './Sheet';
 
 /** The pale red outline a delete wears (the Sign out button's look): the button that opens the question. The yes inside it is `RED_YES`. */
 export const DELETE_BTN = 'toy inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-md text-headline text-r1 hover:bg-r1/10 disabled:opacity-50';
+/** The same look at a small `Button`'s size (36px, 44px from `md`, `text-subhead` semibold), for a row of small buttons (All tables' selection bar). */
+export const DELETE_BTN_SM = 'toy inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center justify-center rounded-pill border-2 border-r1/40 bg-transparent px-sm text-subhead font-semibold leading-none text-r1 hover:bg-r1/10 disabled:opacity-50';
 
 /**
  * Asks before a delete, the Mindful session pattern: a red "Yes, delete it" (solid only on a mouse hover, keyboard focus or a press) and a quiet "Keep it". Every removal asks first (the founder,

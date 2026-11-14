@@ -1,9 +1,11 @@
 import { Hono } from 'hono';
 import { APPLICATION_STATUSES, OPPORTUNITY_TYPES, type Application, type Opportunity } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { audit, can, isClubMember, nameOf, newId, notify, nowIso, num, oneOf, orgIdsOf, orgRole, parseList, str, pageOf, paged, TEN_A_PAGE } from '../db';
+import { audit, can, DATE_RE, isClubMember, nameOf, newId, notify, nowIso, num, oneOf, orgIdsOf, orgRole, parseList, str, pageOf, paged, TEN_A_PAGE } from '../db';
 
 export const work = new Hono<AppEnv>();
+/** The states an applicant can no longer withdraw from, as Work's own page hides Withdraw for them (All tables reads the same list). */
+export const WITHDRAW_SHUT: readonly string[] = ['withdrawn', 'rejected', 'completed', 'selected'];
 
 interface OppRow {
   id: string; organization_id: string | null; organization_name: string | null; created_by: string; title: string; description: string; opportunity_type: Opportunity['opportunityType']; skills_required: string; location_mode: Opportunity['locationMode']; location_text: string;
@@ -84,17 +86,61 @@ work.get('/opportunities/:id', async (c) => {
   return c.json({ opportunity: toOpp(row, mine ? toApp(mine) : null), page: pg.page, applications: pg.items.map(toApp), owner });
 });
 
+/**
+ * A listing's state and Club only, as Work's own buttons send them, and (2026-11-14, from All tables) its words: the title, about it, who can
+ * apply, the place and the apply-by day, each only when sent and read by the create route's own limits. What to deliver changes only while
+ * nobody has applied, so nobody's application answers a brief that moved (409 in words). A day sent is a real calendar day or nothing. The
+ * words are only for whoever posted it: talent staff and the brand's team keep the state and Club moves they always had (the review of 2026-11-14).
+ */
 work.patch('/opportunities/:id', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const prev = await db.prepare(`${SELECT} WHERE o.id = ?`).bind(c.req.param('id')).first<OppRow>();
   if (!prev || !(await owns(db, user, prev))) return c.json({ error: 'not found' }, 404);
-  const body = await c.req.json<{ status?: string; clubOnly?: boolean }>().catch(() => ({}) as { status?: string; clubOnly?: boolean });
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
   const status = oneOf(body.status, ['draft', 'published', 'closed'] as const, prev.status);
   const clubOnly = typeof body.clubOnly === 'boolean' ? (body.clubOnly ? 1 : 0) : prev.club_only;
+  const wordKeys = ['title', 'description', 'deliverables', 'eligibility', 'locationText', 'deadline'];
+  if (wordKeys.some((k) => k in body) && prev.created_by !== user.id) return c.json({ error: 'Only whoever posted it changes its words.' }, 403);
+  if ('title' in body && !str(body.title, 120)) return c.json({ error: 'Give the listing a title.' }, 400);
+  if ('deadline' in body && body.deadline !== null && body.deadline !== '' && !(typeof body.deadline === 'string' && DATE_RE.test(body.deadline))) return c.json({ error: 'Pick a real day to apply by.' }, 400);
+  if ('deliverables' in body && str(body.deliverables, 2000) !== prev.deliverables && prev.applications > 0) return c.json({ error: 'People applied to it already, so what to deliver stays as they read it.' }, 409);
+  const words = {
+    title: 'title' in body ? str(body.title, 120) : prev.title,
+    description: 'description' in body ? str(body.description, 5000) : prev.description,
+    deliverables: 'deliverables' in body ? str(body.deliverables, 2000) : prev.deliverables,
+    eligibility: 'eligibility' in body ? str(body.eligibility, 1000) : prev.eligibility,
+    location_text: 'locationText' in body ? str(body.locationText, 120) : prev.location_text,
+    deadline: 'deadline' in body ? (typeof body.deadline === 'string' && body.deadline ? body.deadline : null) : prev.deadline,
+  };
   const now = nowIso();
-  await db.prepare('UPDATE opportunities SET status = ?, club_only = ?, published_at = CASE WHEN ? = \'published\' THEN COALESCE(published_at, ?) ELSE published_at END, closed_at = CASE WHEN ? = \'closed\' THEN ? ELSE NULL END WHERE id = ?').bind(status, clubOnly, status, now, status, now, prev.id).run();
-  await audit(db, user.id, 'opportunity.status', 'opportunity', prev.id, prev.status, status);
+  await db
+    .prepare('UPDATE opportunities SET status = ?, club_only = ?, title = ?, description = ?, deliverables = ?, eligibility = ?, location_text = ?, deadline = ?, published_at = CASE WHEN ? = \'published\' THEN COALESCE(published_at, ?) ELSE published_at END, closed_at = CASE WHEN ? = \'closed\' THEN COALESCE(CASE WHEN status = \'closed\' THEN closed_at END, ?) ELSE NULL END WHERE id = ?')
+    .bind(status, clubOnly, words.title, words.description, words.deliverables, words.eligibility, words.location_text, words.deadline, status, now, status, now, prev.id)
+    .run();
+  if (status !== prev.status) await audit(db, user.id, 'opportunity.status', 'opportunity', prev.id, prev.status, status);
+  const changed = (Object.keys(words) as (keyof typeof words)[]).filter((k) => (words[k] ?? '') !== (prev[k] ?? ''));
+  if (changed.length) await audit(db, user.id, 'opportunity.edit', 'opportunity', prev.id, prev.title, changed.join(', '));
+  return c.json({ ok: true });
+});
+
+/**
+ * Delete a listing that was never published (2026-11-14, from All tables): a draft nobody saw or applied to, by whoever posted it (never talent
+ * staff or the brand's team, the review of 2026-11-14), in one guarded statement; its pictures go with it. Anything published once stays (close
+ * it instead), so no application loses its listing.
+ */
+work.delete('/opportunities/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const prev = await db.prepare(`${SELECT} WHERE o.id = ?`).bind(c.req.param('id')).first<OppRow>();
+  if (!prev || !(await owns(db, user, prev))) return c.json({ error: 'not found' }, 404);
+  if (prev.created_by !== user.id) return c.json({ error: 'Only whoever posted it deletes it.' }, 403);
+  const [, gone] = await db.batch([
+    db.prepare("DELETE FROM media_items WHERE owner_type = 'opportunity' AND owner_id = ?1 AND EXISTS (SELECT 1 FROM opportunities o WHERE o.id = ?1 AND o.status = 'draft' AND o.published_at IS NULL AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.opportunity_id = o.id))").bind(prev.id),
+    db.prepare("DELETE FROM opportunities WHERE id = ?1 AND status = 'draft' AND published_at IS NULL AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.opportunity_id = ?1)").bind(prev.id),
+  ]);
+  if (!gone?.meta.changes) return c.json({ error: 'It was published once, so it stays. Close it instead.' }, 409);
+  await audit(db, user.id, 'opportunity.delete', 'opportunity', prev.id, prev.title, '');
   return c.json({ ok: true });
 });
 
@@ -137,11 +183,19 @@ work.post('/applications/:id', async (c) => {
   const isCreator = a.creator_user_id === user.id;
   if (isCreator && next !== 'withdrawn') return c.json({ error: 'you can withdraw, the other steps are the reviewer\'s' }, 403);
   if (!isCreator && !(await owns(db, user, opp))) return c.json({ error: 'you do not review this listing' }, 403);
+  // What Work's own buttons offer (2026-11-14, guarded for All tables): the applicant withdraws only while it is still being looked at, and
+  // the listing's team moves only one the applicant has not withdrawn and nobody has completed, never into the applicant's own Withdrawn.
+  if (isCreator && WITHDRAW_SHUT.includes(a.status)) return c.json({ error: a.status === 'withdrawn' ? 'You withdrew it already.' : 'It was decided already, so it stays.' }, 409);
+  if (!isCreator && (a.status === 'withdrawn' || a.status === 'completed')) return c.json({ error: a.status === 'withdrawn' ? 'They withdrew it, so it stays.' : 'It is completed, so it stays.' }, 409);
+  if (!isCreator && (next === 'withdrawn' || next === 'draft')) return c.json({ error: 'That step is the applicant’s own.' }, 400);
+  if (next === a.status) return c.json({ ok: true });
   const now = nowIso();
-  await db.batch([
-    db.prepare('UPDATE applications SET status = ?, updated_at = ?, decision_at = CASE WHEN ? IN (\'selected\',\'rejected\') THEN ? ELSE decision_at END WHERE id = ?').bind(next, now, next, now, a.id),
-    db.prepare('INSERT INTO application_events (id, application_id, actor_user_id, event_type, note, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(newId(), a.id, user.id, next, str(body.note, 500), now),
+  // Guarded on the state that was read, with the step written only when the move landed, so two taps (or a table's second send) move it once.
+  const [moved] = await db.batch([
+    db.prepare('UPDATE applications SET status = ?, updated_at = ?, decision_at = CASE WHEN ? IN (\'selected\',\'rejected\') THEN ? ELSE decision_at END WHERE id = ? AND status = ?').bind(next, now, next, now, a.id, a.status),
+    db.prepare('INSERT INTO application_events (id, application_id, actor_user_id, event_type, note, created_at) SELECT ?, ?, ?, ?, ?, ? WHERE changes() = 1').bind(newId(), a.id, user.id, next, str(body.note, 500), now),
   ]);
+  if (!moved?.meta.changes) return c.json({ error: 'It moved a moment ago. Read it again.' }, 409);
   if (!isCreator) await notify(db, a.creator_user_id, 'work', `${a.opportunity_title}: ${next}`, str(body.note, 160), `/work/${a.opportunity_id}`);
   return c.json({ ok: true });
 });

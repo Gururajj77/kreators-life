@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { MAX_CUSTOM_REMINDERS, parseWeekdays, REMINDER_TIME, REMINDER_TITLE_MAX, WATER_DAY_MAX, WATER_GLASS_MAX, WATER_GLASS_MIN, WATER_GOAL_MAX, WATER_GOAL_MIN, type CustomReminder, type RemindersResponse, type WaterState } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { DATE_RE, dateNearToday, newId, nowIso, shiftDate, str } from '../db';
+import { DATE_RE, dateNearToday, GONE_NOW, newId, nowIso, personDay, shiftDate, str } from '../db';
 
 /**
  * Water and the person's own reminders. Owner-only: nothing here reaches anyone else, and it is in the export and
@@ -90,6 +90,45 @@ reminders.delete('/water', async (c) => {
   return c.json({ water: await waterFor(db, user.id, day) });
 });
 
+/**
+ * One logged amount, changed or removed on its own (All tables, 2026-11-14, the founder: water may change on any past day, never one still to
+ * come). The screens still add and undo for today or yesterday only (above); these two take a glass of any day up to the person's own today
+ * (`personDay`: the device's `?day=` within a day of their zone's, else the zone's). Owner only, and each write is guarded inside its statement.
+ */
+reminders.patch('/water/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const today = personDay(c.req.query('day'), user.timezone);
+  const body = await c.req.json<{ ml?: unknown }>().catch(() => ({}) as { ml?: unknown });
+  const ml = typeof body.ml === 'number' ? Math.round(body.ml) : Number.NaN;
+  if (!Number.isFinite(ml) || ml < WATER_GLASS_MIN || ml > WATER_GLASS_MAX) return c.json({ error: `Between ${WATER_GLASS_MIN} and ${WATER_GLASS_MAX} ml at a time.` }, 400);
+  const row = await db.prepare('SELECT id, day FROM water_logs WHERE id = ? AND user_id = ?').bind(c.req.param('id'), user.id).first<{ id: string; day: string }>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  if (row.day > today) return c.json({ error: 'A day still to come cannot be changed yet.' }, 400);
+  // The day's other amounts and this one together stay under what a day can hold, worked out in the same statement that writes it.
+  const done = await db
+    .prepare('UPDATE water_logs SET ml = ? WHERE id = ? AND user_id = ? AND day <= ? AND ? + (SELECT COALESCE(SUM(w.ml), 0) FROM water_logs w WHERE w.user_id = ? AND w.day = water_logs.day AND w.id <> water_logs.id) <= ?')
+    .bind(ml, row.id, user.id, today, ml, user.id, WATER_DAY_MAX)
+    .run();
+  if (!(done.meta.changes ?? 0)) {
+    const still = await db.prepare('SELECT 1 AS x FROM water_logs WHERE id = ? AND user_id = ?').bind(row.id, user.id).first();
+    return still ? c.json({ error: 'That is more water than a day can hold.' }, 400) : c.json({ error: 'not found' }, 404);
+  }
+  return c.json({ ok: true, day: row.day, ml });
+});
+
+reminders.delete('/water/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const today = personDay(c.req.query('day'), user.timezone);
+  const row = await db.prepare('SELECT id, day FROM water_logs WHERE id = ? AND user_id = ?').bind(c.req.param('id'), user.id).first<{ id: string; day: string }>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  if (row.day > today) return c.json({ error: 'A day still to come cannot be changed yet.' }, 400);
+  const done = await db.prepare('DELETE FROM water_logs WHERE id = ? AND user_id = ? AND day <= ?').bind(row.id, user.id, today).run();
+  if (!(done.meta.changes ?? 0)) return c.json({ error: 'not found' }, 404);
+  return c.json({ ok: true, day: row.day });
+});
+
 reminders.put('/water/settings', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
@@ -148,6 +187,7 @@ reminders.patch('/custom/:id', async (c) => {
 });
 
 reminders.delete('/custom/:id', async (c) => {
-  await c.env.DB.prepare('DELETE FROM custom_reminders WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  const res = await c.env.DB.prepare('DELETE FROM custom_reminders WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: GONE_NOW }, 409);
   return c.json({ ok: true });
 });

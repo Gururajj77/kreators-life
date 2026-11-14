@@ -40,9 +40,9 @@ import {
   type SessionResponse,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { DATE_RE, newId, nowIso, num, oneOf, shiftDate, str } from '../db';
+import { BEFORE_JOINED, beforeStart, DATE_RE, newId, nowIso, num, oneOf, personDay, shiftDate, startDay, str } from '../db';
 import { localDay } from '../coaching';
-import { askForCall, callPaymentsLive, openCall } from '../liveCall';
+import { askForCall, callPaymentsLive, openCall, withdrawCall } from '../liveCall';
 
 /** The strategy session: the assessment, the plan it produces, and the morning routine day by day. */
 export const session = new Hono<AppEnv>();
@@ -148,6 +148,20 @@ const dateOf = (v: string | undefined, zone: string) => {
   return v && DATE_RE.test(v) && v <= shiftDate(own, 1) ? v : own;
 };
 
+/**
+ * Why a routine day cannot be ticked or changed, or null (2026-11-14, the founder: routine days may change on ANY PAST DAY, never a day still to
+ * come; Daily still ticks only today, the change is for All tables). The day must be a real calendar day, today or any day before it. The
+ * person's today is their device's (`today`, else the day sent itself, as Daily and the assistant send only their own today), within a day of
+ * their zone's, as everywhere (`personDay`); so a device a zone ahead still ticks its own today, and a day two or more ahead is refused out loud.
+ */
+function routineDayProblem(date: unknown, today: unknown, zone: string, joined?: string): string | null {
+  if (typeof date !== 'string' || !DATE_RE.test(date)) return 'Pick a real day, like 2026-11-02.';
+  const own = personDay(typeof today === 'string' ? today : date, zone);
+  if (date > own) return 'A day still to come cannot be ticked yet.';
+  // A tick or a change is never for a day before the account began (the review of 2026-11-14); clearing one passes no `joined`.
+  return joined && beforeStart(date, joined, own) ? BEFORE_JOINED : null;
+}
+
 session.get('/', async (c) => {
   const user = c.get('user');
   const { res, fix } = await latestRead(c.env.DB, user.id, dateOf(c.req.query('date'), user.timezone));
@@ -169,6 +183,17 @@ session.post('/call', async (c) => {
   } catch (e) {
     return c.json({ error: e instanceof Error ? e.message : 'The ask for a live call did not go through. Nothing was charged; try again.' }, 502);
   }
+});
+/**
+ * Withdraw an ask that is still only an ask (2026-11-14, All tables, the owner's own): guarded on `asked`, so two taps withdraw it once and the
+ * team is told once. One with a payment window open, paid, booked or done stays for the books (409 in words). Limit `checkout`.
+ */
+session.post('/call/:id/withdraw', async (c) => {
+  const got = await withdrawCall(c.env.DB, c.get('user'), c.req.param('id'));
+  if (got === 'gone') return c.json({ error: 'not found' }, 404);
+  if (got === 'already') return c.json({ error: 'It is cancelled already.' }, 409);
+  if (got === 'moved') return c.json({ error: 'It is being paid for, paid or booked, so it stays. Write to the team about it.' }, 409);
+  return c.json({ ok: true });
 });
 
 /** The assessment: seven placements, fears, insecurities, the scorecard, the real day. The rules run here, not in the browser. */
@@ -321,7 +346,12 @@ session.post('/day', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
-  const day = dateOf(typeof body.date === 'string' ? body.date : undefined, user.timezone);
+  // Any past day, never one still to come (routineDayProblem); a body with no day ticks the person's own today.
+  if (body.date !== undefined) {
+    const problem = routineDayProblem(body.date, body.today, user.timezone, startDay(user.created_at, user.timezone));
+    if (problem) return c.json({ error: problem }, 400);
+  }
+  const day = typeof body.date === 'string' ? body.date : localDay(user.timezone);
   const dayType = oneOf(body.dayType, ['general', 'exceptional'] as const, 'general');
   const r = await db.prepare('SELECT * FROM routines WHERE user_id = ? ORDER BY created_at DESC LIMIT 1').bind(user.id).first<RRow>();
   if (!r) return c.json({ error: 'no routine yet; run the strategy session first' }, 400);
@@ -341,4 +371,58 @@ session.post('/day', async (c) => {
     .bind(user.id, day, dayType, JSON.stringify(steps), JSON.stringify(sentBlocks ?? []), done, nowIso())
     .run();
   return c.json(await latest(db, user.id, day));
+});
+
+/**
+ * Change one routine day that was ticked (2026-11-14, All tables, the owner's own; any past day, never one still to come). What a cell can hold:
+ * `done` (the morning: every step of that day's kind ticked, or none, the other blocks as they were) and `dayType` (counted as a normal or an
+ * exceptional day; the ticks kept are those the new kind has, as the routine reads now). Owner only, in the statement; guarded on the row as it
+ * was read, so two tabs change it once (409 for the second). It pays nothing, as ticking never did. Limit `prefs`.
+ */
+session.patch('/day/:date', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const date = c.req.param('date');
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const problem = routineDayProblem(date, body.today, user.timezone, startDay(user.created_at, user.timezone));
+  if (problem) return c.json({ error: problem }, 400);
+  if (body.done !== undefined && typeof body.done !== 'boolean') return c.json({ error: 'Pick yes or no.' }, 400);
+  if (body.dayType !== undefined && body.dayType !== 'general' && body.dayType !== 'exceptional') return c.json({ error: 'Pick a normal day or an exceptional day.' }, 400);
+  if (body.done === undefined && body.dayType === undefined) return c.json({ error: 'Send whether the morning was done, or the kind of day.' }, 400);
+  const [row, r] = await Promise.all([
+    db.prepare('SELECT day, day_type, steps_json, blocks_json, done, updated_at FROM routine_days WHERE user_id = ? AND day = ?').bind(user.id, date).first<DRow & { updated_at: string }>(),
+    db.prepare('SELECT * FROM routines WHERE user_id = ? ORDER BY created_at DESC LIMIT 1').bind(user.id).first<RRow>(),
+  ]);
+  if (!row) return c.json({ error: 'not found' }, 404);
+  if (!r) return c.json({ error: 'no routine yet; run the strategy session first' }, 400);
+  const dayType = (body.dayType as RoutineDay['dayType'] | undefined) ?? row.day_type;
+  const blocks = json<RoutineBlock[]>(dayType === 'general' ? r.general_json : r.exceptional_json, []);
+  const morning = blocks.find((b) => b.key === 'morning')?.steps ?? [];
+  if (body.done === true && morning.length === 0) return c.json({ error: 'That kind of day has no morning steps to tick.' }, 400);
+  const others = new Set(blocks.filter((b) => b.key !== 'morning').map((b) => b.key));
+  const kept = json<unknown[]>(row.steps_json, []).filter((s): s is string => typeof s === 'string' && morning.includes(s));
+  const steps = body.done === true ? [...morning] : body.done === false ? [] : kept;
+  const ticked = json<unknown[]>(row.blocks_json, []).filter((k): k is BlockKey => typeof k === 'string' && others.has(k as BlockKey));
+  const done = morning.length > 0 && morning.every((s) => steps.includes(s)) ? 1 : 0;
+  const res = await db
+    .prepare('UPDATE routine_days SET day_type = ?, steps_json = ?, blocks_json = ?, done = ?, updated_at = ? WHERE user_id = ? AND day = ? AND updated_at = ?')
+    .bind(dayType, JSON.stringify(steps), JSON.stringify(ticked), done, nowIso(), user.id, date, row.updated_at)
+    .run();
+  if (!res.meta.changes) return c.json({ error: 'It changed somewhere else just now. Look again and change it then.' }, 409);
+  return c.json({ day: { day: date, dayType, steps, blocks: ticked, done: done === 1 } satisfies RoutineDay });
+});
+
+/**
+ * Clear one routine day (2026-11-14, All tables, the owner's own): its ticks go, any past day, never one still to come (the device's today in
+ * `?day=`). It paid nothing, so nothing is taken back; the week it sits in counts it as not done. Owner only, in the statement; a second send
+ * answers 404. Limit `prefs`.
+ */
+session.delete('/day/:date', async (c) => {
+  const user = c.get('user');
+  const date = c.req.param('date');
+  const problem = routineDayProblem(date, c.req.query('day'), user.timezone);
+  if (problem) return c.json({ error: problem }, 400);
+  const res = await c.env.DB.prepare('DELETE FROM routine_days WHERE user_id = ? AND day = ?').bind(user.id, date).run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
+  return c.json({ ok: true });
 });

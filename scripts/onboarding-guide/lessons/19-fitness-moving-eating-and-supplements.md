@@ -60,7 +60,7 @@ Check with a doctor if you have a kidney condition or are pregnant.
 **Track supplements** starts off. Turn it on only if you already take something and want a list.
 
 - **Your own list:** up to twelve. Each has a name as it says on the label, a kind, an amount as you type it, when you take it and on which days.
-- **Tick what you took,** for today or yesterday. **Mark all taken** ticks a whole part of the day. You can Pause one, or Change it.
+- **Tick what you took,** for today or yesterday. **Mark all taken** ticks a whole part of the day. You can Pause one, or Change it. In **All tables**, you can untick an older day.
 - **Copy my list** gives you the whole list as text, for a doctor or pharmacist.
 - **Show on Daily** and **Reminders** each stay off until you say.
 

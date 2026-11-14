@@ -102,6 +102,18 @@ export const LIMITS = {
    * most about 50,000 rows a day this way. Thirty an hour all day would be past the free plan's daily rows for everyone (2026-11-13).
    */
   tablesCsvDay: { max: 10, windowSec: 86400 },
+  /**
+   * All tables' Select, Delete and Select all (POST /tables/:table/bulk: every round, its preview and the matching ids), per person. A round
+   * reaches a few rows (each is its app's own route), so a hundred rows take some forty calls; this holds about six of those an hour, apart from
+   * `prefs`, so a big clean-up never locks the everyday settings saves (the review of 2026-11-14).
+   */
+  tablesBulk: { max: 240, windowSec: 3600 },
+  /**
+   * A row's change through All tables: the Edit door (POST /tables/:table/edit), and each delegated row call that would spend `prefs` (`VIA_TABLES`
+   * below), per person. A thousand rows an hour, apart from `prefs`. Only a call the Tables doors made themselves inside the Worker spends it
+   * (`tablesCalls` in assistant/dispatch.ts); the `X-Kreators-Via: tables` header alone counts for nothing, so a person who sends it still spends `prefs`.
+   */
+  tablesRows: { max: 1000, windowSec: 3600 },
   /** Everyday Agency work: moving a deliverable, a note, a time entry. */
   agency: { max: 600, windowSec: 3600 },
   /** Asking someone to join your Agency team: an inbox note and maybe a friend request go out, so twenty a day. */
@@ -155,6 +167,14 @@ export const LIMITS = {
 } as const;
 
 export type LimitName = keyof typeof LIMITS;
+
+/**
+ * A delegated row call from All tables spends this budget in place of the route's own: only the Request the edit and bulk doors' caller built in
+ * this Worker (`tablesCalls` in assistant/dispatch.ts, read by `rateLimit` in ops.ts), never a request that only carries the `X-Kreators-Via: tables`
+ * header, which anyone can send. Only `prefs`: every other route limit (create, message, checkout and the rest) holds as it is, so Tables never
+ * makes a thing cheaper to do than it is on its own screen (the review of 2026-11-14).
+ */
+export const VIA_TABLES: Partial<Record<LimitName, LimitName>> = { prefs: 'tablesRows' };
 
 type Door = { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE'; path: string; limit: LimitName };
 /** The same doors for the channels of each app: /community/channels (public, guides) and /bond/channels (private, friends). */
@@ -213,6 +233,8 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/proposals', limit: 'create' },
   { method: 'POST', path: '/win', limit: 'create' },
   { method: 'POST', path: '/support', limit: 'ticket' },
+  { method: 'PATCH', path: '/support/:id', limit: 'prefs' },
+  { method: 'DELETE', path: '/support/:id', limit: 'prefs' },
   { method: 'POST', path: '/work/opportunities/:id/apply', limit: 'apply' },
   { method: 'POST', path: '/win/:id/submit', limit: 'apply' },
   { method: 'POST', path: '/club/apply', limit: 'apply' },
@@ -223,6 +245,7 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/assistant/feelings', limit: 'feelings' },
   { method: 'POST', path: '/companion', limit: 'companion' },
   { method: 'POST', path: '/companion/stop', limit: 'companion' },
+  { method: 'DELETE', path: '/companion/messages/:id', limit: 'prefs' },
   { method: 'POST', path: '/party/events/:id/claim', limit: 'claim' },
   { method: 'POST', path: '/circles/events/:id/claim', limit: 'claim' },
   { method: 'POST', path: '/party/events/:id/duplicate', limit: 'create' },
@@ -232,6 +255,30 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/party/events/:id/arrive', limit: 'eventJoin' },
   { method: 'POST', path: '/community/:id/follow-post', limit: 'follow' },
   { method: 'POST', path: '/community/replies/:id/react', limit: 'like' },
+  // All tables' Edit and Delete for the owner in the Connection apps (2026-11-14): each its app's own limit, the rest `prefs`.
+  { method: 'PATCH', path: '/community/:id', limit: 'prefs' },
+  { method: 'DELETE', path: '/community/replies/:id', limit: 'prefs' },
+  { method: 'PUT', path: '/community/:id/reaction', limit: 'like' },
+  { method: 'DELETE', path: '/community/:id/reaction', limit: 'like' },
+  { method: 'PUT', path: '/community/replies/:id/reaction', limit: 'like' },
+  { method: 'DELETE', path: '/community/replies/:id/reaction', limit: 'like' },
+  { method: 'DELETE', path: '/community/:id/follow-post', limit: 'follow' },
+  { method: 'DELETE', path: '/community/follow/:userId', limit: 'follow' },
+  { method: 'DELETE', path: '/community/followers/:userId', limit: 'follow' },
+  { method: 'DELETE', path: '/bond/intros/:id', limit: 'prefs' },
+  { method: 'DELETE', path: '/bond/chats/:id/messages/:mid', limit: 'prefs' },
+  { method: 'PATCH', path: '/club/apply', limit: 'prefs' },
+  { method: 'DELETE', path: '/club/apply', limit: 'prefs' },
+  { method: 'DELETE', path: '/party/events/:id/feedback', limit: 'prefs' },
+  // A host's change to an event, run, club or collab (2026-11-14, the review: their words and place came with All tables' Edit, and a new place
+  // tells every guest). The event's is `create`, as making one is; the notes it sends are one per guest rewritten in place, never piled up.
+  { method: 'PATCH', path: '/party/events/:id', limit: 'create' },
+  { method: 'PATCH', path: '/run/runs/:id', limit: 'prefs' },
+  { method: 'PATCH', path: '/run/clubs/:id', limit: 'prefs' },
+  { method: 'PATCH', path: '/run/collabs/:id', limit: 'prefs' },
+  { method: 'PATCH', path: '/run/collabs/:id/applications/:appId', limit: 'prefs' },
+  { method: 'DELETE', path: '/run/collabs/:id/applications/:appId', limit: 'prefs' },
+  { method: 'DELETE', path: '/circles/groups/:id/messages/:mid', limit: 'prefs' },
   { method: 'POST', path: '/coach/requests', limit: 'coachAsk' },
   { method: 'POST', path: '/coach/ask/:coachId', limit: 'coachAsk' },
   { method: 'POST', path: '/coach/apply', limit: 'coachAsk' },
@@ -249,6 +296,7 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/discover/submit', limit: 'discover' },
   { method: 'PUT', path: '/wellbeing/focus-settings', limit: 'prefs' },
   { method: 'PUT', path: '/journal/gratitude/:day', limit: 'gratitude' },
+  { method: 'DELETE', path: '/journal/gratitude/:day', limit: 'gratitude' },
   // Gratitude prompts per person (migration 0106): Another prompt, the pillar picker and the usual three share the card's budget.
   { method: 'POST', path: '/journal/gratitude/:day/another', limit: 'gratitude' },
   { method: 'POST', path: '/journal/gratitude/:day/pick', limit: 'gratitude' },
@@ -256,6 +304,7 @@ export const ROUTE_LIMITS: readonly {
   { method: 'PATCH', path: '/wellbeing/focus/:id', limit: 'prefs' },
   { method: 'POST', path: '/wellbeing/focus', limit: 'prefs' },
   { method: 'DELETE', path: '/wellbeing/focus/:id', limit: 'prefs' },
+  { method: 'PATCH', path: '/wellbeing/mindful/:id', limit: 'prefs' },
   // Fitness (2026-11-07) and Kreators Run's own run-or-walk tool: the same movement log, under the everyday limit.
   { method: 'POST', path: '/fitness/move', limit: 'prefs' },
   { method: 'PATCH', path: '/fitness/move/:id', limit: 'prefs' },
@@ -280,7 +329,11 @@ export const ROUTE_LIMITS: readonly {
   { method: 'PUT', path: '/session/away', limit: 'prefs' },
   // A yes to the live call: a paid service, so it shares the checkout budget (a provider order is made only while payments are live).
   { method: 'POST', path: '/session/call', limit: 'checkout' },
+  { method: 'POST', path: '/session/call/:id/withdraw', limit: 'checkout' },
+  { method: 'PATCH', path: '/session/day/:date', limit: 'prefs' },
+  { method: 'DELETE', path: '/session/day/:date', limit: 'prefs' },
   { method: 'PUT', path: '/today/day-type', limit: 'prefs' },
+  { method: 'PATCH', path: '/today/not-to-do/:id', limit: 'prefs' },
   // Time blocks, day templates and the weekly pattern (docs/time-blocks.md): settings, so under `prefs` like the kind of day.
   { method: 'POST', path: '/time-blocks/blocks', limit: 'prefs' },
   { method: 'PATCH', path: '/time-blocks/blocks/:id', limit: 'prefs' },
@@ -300,8 +353,8 @@ export const ROUTE_LIMITS: readonly {
   { method: 'GET', path: '/tables/:table', limit: 'tables' },
   { method: 'GET', path: '/tables/:table/csv', limit: 'tablesCsv' },
   { method: 'GET', path: '/tables/:table/csv', limit: 'tablesCsvDay' },
-  { method: 'POST', path: '/tables/:table/edit', limit: 'prefs' },
-  { method: 'POST', path: '/tables/:table/bulk', limit: 'prefs' },
+  { method: 'POST', path: '/tables/:table/edit', limit: 'tablesRows' },
+  { method: 'POST', path: '/tables/:table/bulk', limit: 'tablesBulk' },
   { method: 'GET', path: '/tables/coach/:studentId', limit: 'tables' },
   { method: 'GET', path: '/tables/coach/:studentId/:table', limit: 'tables' },
   { method: 'GET', path: '/tables/coach/:studentId/:table/csv', limit: 'tablesCsv' },
@@ -328,6 +381,8 @@ export const ROUTE_LIMITS: readonly {
   { method: 'PUT', path: '/reminders/water/settings', limit: 'reminder' },
   { method: 'POST', path: '/reminders/custom', limit: 'reminder' },
   { method: 'PATCH', path: '/reminders/custom/:id', limit: 'reminder' },
+  { method: 'PATCH', path: '/reminders/water/:id', limit: 'reminder' },
+  { method: 'DELETE', path: '/reminders/water/:id', limit: 'reminder' },
   { method: 'PUT', path: '/media/for/:type/:id', limit: 'create' },
   { method: 'POST', path: '/connect/:app/:id/messages', limit: 'message' },
   // A run's discussion: lines take the event conversation's limit; the rest are the channel doors' limits.
@@ -341,6 +396,17 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/school/programs/:id/invites', limit: 'programInvite' },
   { method: 'DELETE', path: '/school/programs/:id/invites/:userId', limit: 'prefs' },
   { method: 'DELETE', path: '/school/programs/:id', limit: 'prefs' },
+  // The person's own removes and changes from All tables (2026-11-14): turn an invite down, leave a cohort, take a hand-in back, a cohort's
+  // name and seats, a Work listing's words and a never-published draft, leave a brand, withdraw a Win entry, and a time entry.
+  { method: 'DELETE', path: '/school/programs/:id/invite', limit: 'prefs' },
+  { method: 'POST', path: '/school/enrollments/:id/leave', limit: 'prefs' },
+  { method: 'DELETE', path: '/school/submissions/:id', limit: 'prefs' },
+  { method: 'PATCH', path: '/school/cohorts/:id', limit: 'prefs' },
+  { method: 'PATCH', path: '/work/opportunities/:id', limit: 'prefs' },
+  { method: 'DELETE', path: '/work/opportunities/:id', limit: 'prefs' },
+  { method: 'DELETE', path: '/orgs/:id/membership', limit: 'prefs' },
+  { method: 'DELETE', path: '/win/submissions/:id', limit: 'prefs' },
+  { method: 'PATCH', path: '/agency/time/:id', limit: 'agency' },
   // Editing a program in place on School: its name and words, its order (an admin), and its lessons (add, change, move, remove).
   { method: 'PATCH', path: '/school/programs/:id', limit: 'prefs' },
   { method: 'POST', path: '/school/programs/:id/move', limit: 'prefs' },
@@ -359,6 +425,8 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/connect/:app/:id/people/:userId/connect', limit: 'intro' },
   { method: 'POST', path: '/reviews/kpis', limit: 'create' },
   { method: 'PUT', path: '/reviews/kpis/:id/value', limit: 'prefs' },
+  { method: 'PATCH', path: '/reviews/kpis/:id/values/:period', limit: 'prefs' },
+  { method: 'DELETE', path: '/reviews/kpis/:id/values/:period', limit: 'prefs' },
   { method: 'PUT', path: '/reviews/kpis/settings', limit: 'prefs' },
   { method: 'POST', path: '/agency/clients', limit: 'create' },
   { method: 'POST', path: '/agency/clients/:id/invoice', limit: 'create' },
@@ -366,6 +434,7 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/agency/invoices/:id/duplicate', limit: 'create' },
   { method: 'POST', path: '/reviews/schedule', limit: 'create' },
   { method: 'PATCH', path: '/reviews/schedule/:id', limit: 'prefs' },
+  { method: 'PATCH', path: '/reviews/:id', limit: 'prefs' },
   { method: 'POST', path: '/agency/templates', limit: 'create' },
   { method: 'POST', path: '/agency/contracts', limit: 'create' },
   { method: 'POST', path: '/agency/contracts/:id/duplicate', limit: 'create' },
@@ -487,11 +556,20 @@ export const ROUTE_LIMITS: readonly {
   { method: 'POST', path: '/public/waitlist', limit: 'waitlist', by: 'address' },
   { method: 'POST', path: '/me/invites', limit: 'inviteMake' },
   { method: 'DELETE', path: '/me/invites/:id', limit: 'inviteMake' },
+  { method: 'PATCH', path: '/me/invites/:id', limit: 'inviteMake' },
   { method: 'POST', path: '/admin/invites', limit: 'inviteMake' },
   { method: 'DELETE', path: '/admin/invites/:id', limit: 'inviteMake' },
   { method: 'POST', path: '/admin/invites/waitlist/:id/approve', limit: 'inviteMake' },
   { method: 'POST', path: '/admin/invites/waitlist/:id/decline', limit: 'inviteMake' },
   { method: 'DELETE', path: '/admin/invites/waitlist/:id', limit: 'inviteMake' },
+  // All tables' Edit and Delete for the Creation apps (2026-11-14): the owner routes the table reaches, each the app's own, under `prefs`.
+  ...([
+    ['PATCH', '/finance/transactions/:id'], ['PATCH', '/finance/dues/:id'], ['PATCH', '/finance/goals/:id'], ['PATCH', '/finance/recurring/:id'], ['DELETE', '/finance/budgets/:category'],
+    ['PATCH', '/studio/coupons/:id'], ['PATCH', '/studio/availability/:id'], ['DELETE', '/studio/leads/:id'], ['DELETE', '/studio/broadcasts/:id'], ['PATCH', '/studio/links/:id'],
+    ['PATCH', '/studio/content/:id'], ['PATCH', '/studio/automations/:id'], ['PATCH', '/studio/funnels/:id'], ['PATCH', '/studio/sequences/:id'], ['PATCH', '/studio/brands/:id/sources/:sid'],
+    ['DELETE', '/store/invites/:productId'], ['PATCH', '/store/reviews/:id'], ['DELETE', '/store/reviews/:id'], ['DELETE', '/market/listings/:id/messages/:mid'], ['PATCH', '/me/portfolio/:id'],
+    ['PATCH', '/tools/:id'], ['DELETE', '/tools/:id'],
+  ] as const).map(([method, path]) => ({ method, path, limit: 'prefs' as const })),
 ];
 
 /** The doors that take no session are limited before the session check; everything else after it, per person. /admin is mounted before that check too. */

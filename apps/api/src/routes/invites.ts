@@ -182,10 +182,26 @@ myInvites.delete('/:id', async (c) => {
   const row = await db.prepare('SELECT * FROM invite_codes WHERE id = ? AND created_by = ?').bind(c.req.param('id'), user.id).first<InviteRow>();
   if (!row) return c.json({ error: 'not found' }, 404);
   if (row.used_by) return c.json({ error: 'That code was used already, so it stays.' }, 409);
-  await db.prepare('UPDATE invite_codes SET revoked_at = ?, revoked_by = ? WHERE id = ? AND used_by IS NULL AND revoked_at IS NULL').bind(nowIso(), user.id, row.id).run();
+  const took = await db.prepare('UPDATE invite_codes SET revoked_at = ?, revoked_by = ? WHERE id = ? AND used_by IS NULL AND revoked_at IS NULL').bind(nowIso(), user.id, row.id).run();
   const after = await db.prepare('SELECT used_by FROM invite_codes WHERE id = ?').bind(row.id).first<{ used_by: string | null }>();
   if (after?.used_by) return c.json({ error: 'That code was used already, so it stays.' }, 409);
+  // Taken back already (another tab, or a second send): said, never a quiet yes, so All tables counts it once.
+  if (!took.meta.changes) return c.json({ error: 'That code was taken back a moment ago.' }, 409);
   return c.json({ ok: true });
+});
+
+// Rename a code's label, its maker's own note of who it is for (2026-11-14, All tables, the owner's own), used or not: the label is the maker's
+// private word, never shown to whoever joined. Up to INVITE_LABEL_MAX, empty clears it. Owner only, in the statement; another's id answers 404.
+myInvites.patch('/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const body = await objectBody(c);
+  if (typeof body.label !== 'string') return c.json({ error: 'Type a label, or leave it empty.' }, 400);
+  if (body.label.trim().length > INVITE_LABEL_MAX) return c.json({ error: `Keep the label to ${INVITE_LABEL_MAX} characters.` }, 400);
+  const label = str(body.label, INVITE_LABEL_MAX);
+  const r = await db.prepare('UPDATE invite_codes SET label = ? WHERE id = ? AND created_by = ?').bind(label, c.req.param('id'), user.id).run();
+  if (!r.meta.changes) return c.json({ error: 'not found' }, 404);
+  return c.json({ ok: true, label });
 });
 
 // ---- Admin, Invites (/admin/invites: admins and the key only)

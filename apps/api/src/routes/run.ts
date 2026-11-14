@@ -2,7 +2,8 @@ import { Hono, type Context } from 'hono';
 import { CHANNEL_LINES, channelCursor, channelMessageProblem, cleanChannelMessage, MAX_RUN_METRES, MAX_RUN_MINUTES, mentionsIn, normalizeCode, RUN_CODE_WINDOW, RUN_PACES, RUN_REWARD, RUN_TALK_DAYS_AFTER, runEntryState, runTalkClosesAt, runTalkOpen, weekStreak, type Run, type RunClub, type RunClubDetail, type RunCollab, type RunCollabApplication, type RunCollabsResponse, type RunEntry, type RunResponse, type RunTalk, type RunTalkLine, type RunTracking, type Page } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
 import { newRunCode, setRunCode } from '../attendee';
-import { anonAlias, audit, badgesNow, can, dayFromDevice, diffBadges, hiddenByBlock, isStaff, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, orgIdsOf, orgRole, seenBy, shiftDate, str, pageOf, paged } from '../db';
+import { ROUTE_TRIPS, tripsOf } from '../d1Batch';
+import { anonAlias, audit, badgesNow, can, dayFromDevice, diffBadges, hiddenByBlock, inBatches, isStaff, nameOf, newId, noteStmt, notify, notifyMany, nowIso, num, oneOf, orgIdsOf, orgRole, seenBy, shiftDate, str, pageOf, paged } from '../db';
 import { blockBehind } from './community';
 import { LOG_COLS, logMoveFrom, removeMoveFrom, toMove, type LogRow } from '../fitness';
 import { RUN_TOOL_KINDS, type RunMovesResponse } from '@kreators/shared/fitness';
@@ -193,14 +194,20 @@ run.get('/clubs/:id', async (c) => {
 run.patch('/clubs/:id', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const row = await db.prepare('SELECT * FROM run_clubs WHERE id = ?').bind(c.req.param('id')).first<{ id: string; host_user_id: string; name: string; status: string; description: string; meets: string; pace: string; visibility: string }>();
+  const row = await db.prepare('SELECT * FROM run_clubs WHERE id = ?').bind(c.req.param('id')).first<{ id: string; host_user_id: string; name: string; city: string; status: string; description: string; meets: string; pace: string; visibility: string }>();
   if (!row) return c.json({ error: 'not found' }, 404);
   if (!hostOf(row, user)) return c.json({ error: 'the host changes a club' }, 403);
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
   const status = oneOf(body.status, ['active', 'closed'] as const, row.status as 'active' | 'closed');
+  // A name and a city (2026-11-14, All tables' Edit): each kept when not sent, and never emptied when sent, as a new club needs both. They are
+  // the host's own words: events staff keep what they could always change here, never a club's name or city (the review of 2026-11-14).
+  if ((body.name !== undefined || body.city !== undefined) && row.host_user_id !== user.id) return c.json({ error: 'Only the club’s host changes its name and city.' }, 403);
+  const name = body.name === undefined ? row.name : str(body.name, 80);
+  const city = body.city === undefined ? row.city : str(body.city, 80);
+  if ((body.name !== undefined && !name) || (body.city !== undefined && !city)) return c.json({ error: 'A club keeps a name and a city.' }, 400);
   await db
-    .prepare('UPDATE run_clubs SET status = ?, description = ?, meets = ?, pace = ?, visibility = ? WHERE id = ?')
-    .bind(status, str(body.description, 2000, row.description), str(body.meets, 200, row.meets), oneOf(body.pace, RUN_PACES, row.pace as RunClub['pace']), oneOf(body.visibility, ['public', 'private'] as const, row.visibility as RunClub['visibility']), row.id)
+    .prepare('UPDATE run_clubs SET status = ?, description = ?, meets = ?, pace = ?, visibility = ?, name = ?, city = ? WHERE id = ?')
+    .bind(status, str(body.description, 2000, row.description), str(body.meets, 200, row.meets), oneOf(body.pace, RUN_PACES, row.pace as RunClub['pace']), oneOf(body.visibility, ['public', 'private'] as const, row.visibility as RunClub['visibility']), name, city, row.id)
     .run();
   if (status !== row.status) await audit(db, user.id, 'run.club.status', 'run_club', row.id, row.status, status);
   return c.json({ ok: true });
@@ -209,8 +216,10 @@ run.patch('/clubs/:id', async (c) => {
 run.post('/clubs/:id/join', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const row = await db.prepare("SELECT id, name, host_user_id FROM run_clubs WHERE id = ? AND status = 'active'").bind(c.req.param('id')).first<{ id: string; name: string; host_user_id: string }>();
+  const row = await db.prepare('SELECT id, name, host_user_id, status FROM run_clubs WHERE id = ?').bind(c.req.param('id')).first<{ id: string; name: string; host_user_id: string; status: string }>();
   if (!row) return c.json({ error: 'not found' }, 404);
+  // Said in words (2026-11-14, All tables' Clubs you are in): a club its host closed takes no one, a member who left included.
+  if (row.status !== 'active') return c.json({ error: 'This club is closed, so it takes no new members.' }, 409);
   await db.prepare("INSERT INTO run_members (club_id, user_id, status, joined_at) VALUES (?, ?, 'member', ?) ON CONFLICT (club_id, user_id) DO UPDATE SET status = 'member', joined_at = excluded.joined_at").bind(row.id, user.id, nowIso()).run();
   if (row.host_user_id !== user.id) await notify(db, row.host_user_id, 'run', `${nameOf(user)} joined ${row.name}`, 'Say hello at the next run.', `/run/clubs/${row.id}`);
   return c.json({ ok: true }, 201);
@@ -222,7 +231,9 @@ run.post('/clubs/:id/leave', async (c) => {
   const row = await db.prepare('SELECT id, host_user_id FROM run_clubs WHERE id = ?').bind(c.req.param('id')).first<{ id: string; host_user_id: string }>();
   if (!row) return c.json({ error: 'not found' }, 404);
   if (row.host_user_id === user.id) return c.json({ error: 'the host cannot leave; close the club instead' }, 400);
-  await db.prepare("UPDATE run_members SET status = 'left' WHERE club_id = ? AND user_id = ?").bind(row.id, user.id).run();
+  const left = await db.prepare("UPDATE run_members SET status = 'left' WHERE club_id = ? AND user_id = ? AND status <> 'left'").bind(row.id, user.id).run();
+  // Out already (another tab, or a second send): said, never a quiet yes, so All tables counts it once.
+  if (!left.meta.changes) return c.json({ error: 'You left it a moment ago.' }, 409);
   return c.json({ ok: true });
 });
 
@@ -290,12 +301,32 @@ run.patch('/runs/:id', async (c) => {
   const found = await runWithClub(db, c.req.param('id'));
   if (!found) return c.json({ error: 'not found' }, 404);
   if (!hostOf(found.club, user)) return c.json({ error: 'the host changes a run' }, 403);
-  const body = await c.req.json<{ status?: string }>().catch(() => ({}) as { status?: string });
+  const body = await c.req.json<{ status?: string; title?: unknown; meetingPoint?: unknown }>().catch(() => ({}) as { status?: string; title?: unknown; meetingPoint?: unknown });
   const status = oneOf(body.status, ['published', 'cancelled', 'done'] as const, found.r.status);
-  await db.prepare('UPDATE runs SET status = ? WHERE id = ?').bind(status, found.r.id).run();
-  if (status === 'cancelled') {
-    const members = await db.prepare("SELECT user_id FROM run_members WHERE club_id = ? AND status = 'member'").bind(found.club.id).all<{ user_id: string }>();
-    await notifyMany(db, members.results.map((m) => m.user_id), 'run', `Cancelled: ${found.r.title}`, found.club.name, `/run/clubs/${found.club.id}`);
+  // A title and a meeting point (2026-11-14, All tables' Edit), each kept when not sent; never the time or the distance. They are the club host's
+  // own words: events staff keep the status moves they always had (the review of 2026-11-14). A cancelled run stays as it is: never live or done
+  // again, its members already told.
+  if ((body.title !== undefined || body.meetingPoint !== undefined) && found.club.host_user_id !== user.id) return c.json({ error: 'Only the club’s host changes a run’s title and meeting point.' }, 403);
+  const title = body.title === undefined ? found.r.title : str(body.title, 120);
+  const meetingPoint = body.meetingPoint === undefined ? found.r.meeting_point : str(body.meetingPoint, 200);
+  if (body.title !== undefined && !title) return c.json({ error: 'Give the run a title.' }, 400);
+  if (found.r.status === 'cancelled' && (status !== 'cancelled' || title !== found.r.title || meetingPoint !== found.r.meeting_point)) return c.json({ error: 'A cancelled run stays as it is.' }, 400);
+  // Guarded on the status that was read, so a cancel landing between the read and here is never undone, and the members are told once.
+  const moved = await db.prepare('UPDATE runs SET status = ?, title = ?, meeting_point = ? WHERE id = ? AND status = ?').bind(status, title, meetingPoint, found.r.id, found.r.status).run();
+  if (!moved.meta.changes) return c.json({ error: 'Someone changed this run a moment ago. Read it again.' }, 409);
+  if (status === 'cancelled' && found.r.status !== 'cancelled') {
+    // Each member is told once (one note per run and member, a fixed id), fifty to a round trip, and only while this invocation has room under
+    // ROUTE_TRIPS: the cancel may be one row of All tables' bulk remove, which sends several in one invocation (the review of 2026-11-14). The
+    // members read is held to what fits, so the call can never pass the free plan's 50; a club past about 1,800 members tells the first ones only.
+    const room = Math.max(0, ROUTE_TRIPS - tripsOf(db) - 2) * 50;
+    if (room > 0) {
+      const members = await db.prepare("SELECT user_id FROM run_members WHERE club_id = ? AND status = 'member' LIMIT ?").bind(found.club.id, room).all<{ user_id: string }>();
+      const at = nowIso();
+      await inBatches(
+        db,
+        members.results.map((m) => noteStmt(db, { id: `run-cancelled-${found.r.id}-${m.user_id}`, userId: m.user_id, kind: 'run', title: `Cancelled: ${found.r.title}`, body: found.club.name, link: `/run/clubs/${found.club.id}`, at }, 'once')),
+      );
+    }
   }
   return c.json({ ok: true });
 });
@@ -453,8 +484,30 @@ run.patch('/collabs/:id', async (c) => {
   const row = await db.prepare('SELECT id, created_by, status FROM run_collabs WHERE id = ?').bind(c.req.param('id')).first<{ id: string; created_by: string; status: string }>();
   if (!row) return c.json({ error: 'not found' }, 404);
   if (row.created_by !== user.id && !can(user, 'events')) return c.json({ error: 'whoever posted it changes it' }, 403);
-  const body = await c.req.json<{ status?: string }>().catch(() => ({}) as { status?: string });
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
   const status = oneOf(body.status, ['open', 'closed'] as const, row.status as 'open' | 'closed');
+  // Its words (2026-11-14, All tables' Edit): the title, the giveaway, the brief, what it asks and the city, each kept when not sent, and only while
+  // no club has applied, since a club applied to what it said. The guard is in the statement, so an application landing first wins. Only whoever
+  // posted it changes its words: events staff keep opening and closing it, as before (the review of 2026-11-14).
+  const fields = ['title', 'giveaway', 'brief', 'asks', 'city'] as const;
+  if (fields.some((f) => body[f] !== undefined)) {
+    if (row.created_by !== user.id) return c.json({ error: 'Only whoever posted it changes its words.' }, 403);
+    const had = await db.prepare('SELECT title, giveaway, brief, asks, city FROM run_collabs WHERE id = ?').bind(row.id).first<Record<(typeof fields)[number], string>>();
+    if (!had) return c.json({ error: 'not found' }, 404);
+    const next = {
+      title: body.title === undefined ? had.title : str(body.title, 120),
+      giveaway: body.giveaway === undefined ? had.giveaway : str(body.giveaway, 300),
+      brief: body.brief === undefined ? had.brief : str(body.brief, 3000),
+      asks: body.asks === undefined ? had.asks : str(body.asks, 1000),
+      city: body.city === undefined ? had.city : str(body.city, 80),
+    };
+    if ((body.title !== undefined && !next.title) || (body.giveaway !== undefined && !next.giveaway)) return c.json({ error: 'a title and what runners can win' }, 400);
+    const res = await db
+      .prepare('UPDATE run_collabs SET title = ?, giveaway = ?, brief = ?, asks = ?, city = ? WHERE id = ? AND NOT EXISTS (SELECT 1 FROM run_collab_applications a WHERE a.collab_id = ?)')
+      .bind(next.title, next.giveaway, next.brief, next.asks, next.city, row.id, row.id)
+      .run();
+    if (!res.meta.changes) return c.json({ error: 'A club has applied, so its words stay as they were.' }, 409);
+  }
   await db.prepare('UPDATE run_collabs SET status = ? WHERE id = ?').bind(status, row.id).run();
   return c.json({ ok: true });
 });
@@ -487,9 +540,46 @@ run.post('/collabs/:id/applications/:appId', async (c) => {
   if (!app) return c.json({ error: 'not found' }, 404);
   const body = await c.req.json<{ status?: string }>().catch(() => ({}) as { status?: string });
   const status = oneOf(body.status, ['accepted', 'declined'] as const, 'declined');
-  await db.prepare('UPDATE run_collab_applications SET status = ?, decided_at = ? WHERE id = ?').bind(status, nowIso(), app.id).run();
+  // Guarded on the club still waiting (2026-11-14): an answer is given once, and the club is told once.
+  const answered = await db.prepare("UPDATE run_collab_applications SET status = ?, decided_at = ? WHERE id = ? AND status = 'applied'").bind(status, nowIso(), app.id).run();
+  if (!answered.meta.changes) return c.json({ error: 'You already answered this club.' }, 409);
   await audit(db, user.id, 'run.collab.decide', 'run_collab_application', app.id, app.status, status);
   await notify(db, app.user_id, 'collab', status === 'accepted' ? `Accepted: ${collab.title}` : `Not this time: ${collab.title}`, status === 'accepted' ? `Giveaway for your runners: ${collab.giveaway}. Add a run and pick the collab.` : 'Thanks for applying.', `/run/clubs/${app.club_id}`);
+  return c.json({ ok: true });
+});
+
+/**
+ * A club's host changes their note, or withdraws the application, while it waits for an answer (2026-11-14, All tables: Edit and Delete for the
+ * owner). Only the host who applied, and each write guarded on it still waiting, so an answer given a moment before stands.
+ */
+const appStillWaiting = async (db: D1Database, appId: string, collabId: string, userId: string) => {
+  const had = await db.prepare('SELECT status FROM run_collab_applications WHERE id = ? AND collab_id = ? AND user_id = ?').bind(appId, collabId, userId).first<{ status: string }>();
+  return had ? { error: 'It was already answered, so it stays.', code: 409 as const } : { error: 'not found', code: 404 as const };
+};
+run.patch('/collabs/:id/applications/:appId', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const body = await c.req.json<{ note?: unknown }>().catch(() => ({}) as { note?: unknown });
+  if (typeof body.note !== 'string') return c.json({ error: 'Say what your note should be.' }, 400);
+  if (body.note.trim().length > 1000) return c.json({ error: 'Keep your note to 1,000 characters.' }, 400);
+  const res = await db
+    .prepare("UPDATE run_collab_applications SET note = ? WHERE id = ? AND collab_id = ? AND user_id = ? AND status = 'applied'")
+    .bind(str(body.note, 1000), c.req.param('appId'), c.req.param('id'), user.id)
+    .run();
+  if (!res.meta.changes) {
+    const why = await appStillWaiting(db, c.req.param('appId'), c.req.param('id'), user.id);
+    return c.json({ error: why.error }, why.code);
+  }
+  return c.json({ ok: true });
+});
+run.delete('/collabs/:id/applications/:appId', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const res = await db.prepare("DELETE FROM run_collab_applications WHERE id = ? AND collab_id = ? AND user_id = ? AND status = 'applied'").bind(c.req.param('appId'), c.req.param('id'), user.id).run();
+  if (!res.meta.changes) {
+    const why = await appStillWaiting(db, c.req.param('appId'), c.req.param('id'), user.id);
+    return c.json({ error: why.error }, why.code);
+  }
   return c.json({ ok: true });
 });
 
@@ -702,14 +792,15 @@ run.post('/talk/:runId/messages', async (c) => {
 run.delete('/talk/:runId/messages/:mid', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
+  const line = await db.prepare('SELECT id, user_id FROM run_messages WHERE id = ? AND run_id = ? AND deleted_at IS NULL').bind(c.req.param('mid'), c.req.param('runId')).first<{ id: string; user_id: string }>();
+  const mine = line?.user_id === user.id;
+  // Its writer may always take their own line down, even after leaving the club (2026-11-14, All tables); anyone else needs the run's talk.
   const t = await talkFor(db, user, c.req.param('runId'));
-  if (!t) return c.json({ error: 'not found' }, 404);
-  const line = await db.prepare('SELECT id, user_id FROM run_messages WHERE id = ? AND run_id = ? AND deleted_at IS NULL').bind(c.req.param('mid'), t.id).first<{ id: string; user_id: string }>();
-  if (!line) return c.json({ error: 'not found' }, 404);
-  const mine = line.user_id === user.id;
-  if (!mine && !(t.host_user_id === user.id || can(user, 'events'))) return c.json({ error: 'Only its writer or the host can take a line down.' }, 403);
-  await db.prepare("UPDATE run_messages SET body = '', deleted_at = ?, deleted_by = ? WHERE id = ? AND deleted_at IS NULL").bind(nowIso(), user.id, line.id).run();
-  if (!mine) {
+  if (!line || (!t && !mine)) return c.json({ error: 'not found' }, 404);
+  if (!mine && !(t && (t.host_user_id === user.id || can(user, 'events')))) return c.json({ error: 'Only its writer or the host can take a line down.' }, 403);
+  const res = await db.prepare("UPDATE run_messages SET body = '', deleted_at = ?, deleted_by = ? WHERE id = ? AND deleted_at IS NULL").bind(nowIso(), user.id, line.id).run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
+  if (!mine && t) {
     await audit(db, user.id, 'run.line.delete', 'run_message', line.id, '', { run: t.id });
     await notify(db, line.user_id, 'moderation', 'A line of yours was taken down', `In the discussion for ${t.title}.`, talkLink(t.id));
   }

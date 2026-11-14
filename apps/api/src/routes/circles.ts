@@ -190,7 +190,9 @@ circles.delete('/events/:id/join', async (c) => {
   const ev = await db.prepare('SELECT status FROM circle_events WHERE id = ?').bind(c.req.param('id')).first<{ status: string }>();
   if (!ev) return c.json({ error: 'not found' }, 404);
   if (ev.status !== 'open') return c.json({ error: 'tables are already set' }, 400);
-  await db.prepare('DELETE FROM circle_signups WHERE event_id = ? AND user_id = ?').bind(c.req.param('id'), user.id).run();
+  const res = await db.prepare('DELETE FROM circle_signups WHERE event_id = ? AND user_id = ?').bind(c.req.param('id'), user.id).run();
+  // No seat to give up (another tab, or a second send took it): said, never a quiet yes, so All tables counts it once.
+  if (!res.meta.changes) return c.json({ error: 'You are not signed up for it now.' }, 409);
   return c.json({ ok: true });
 });
 
@@ -353,6 +355,18 @@ circles.post('/groups/:id/messages', async (c) => {
   const id = newId();
   await db.prepare('INSERT INTO circle_messages (id, group_id, user_id, body, created_at) VALUES (?, ?, ?, ?, ?)').bind(id, row.id, user.id, text, nowIso()).run();
   return c.json({ ok: true, id }, 201);
+});
+
+/**
+ * Delete a line you wrote at your table (2026-11-14, the founder's yes in All tables): only your own, whether or not the chat is still open. It
+ * leaves the table's chat for everyone, and nobody there is told; everyone stays under their alias.
+ */
+circles.delete('/groups/:id/messages/:mid', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const res = await db.prepare('DELETE FROM circle_messages WHERE id = ? AND group_id = ? AND user_id = ?').bind(c.req.param('mid'), c.req.param('id'), user.id).run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
+  return c.json({ ok: true });
 });
 
 // Anyone at the table can write the plan: where and when exactly.

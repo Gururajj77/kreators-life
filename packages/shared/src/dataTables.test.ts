@@ -577,7 +577,7 @@ describe('All tables: the registry', () => {
         expect(col.ownerOnly, id).toBeFalsy();
         if (e.param) expect(tableColumn(t, e.param), `${id} param`).toBeTruthy();
         if (e.current) expect(tableColumn(t, e.current), `${id} current`).toBeTruthy();
-        if (e.when === 'recent' || e.when === 'recentEat' || e.when === 'recentOwnMove') expect(t.dayCell, `${id} needs a dayCell`).toBeTruthy();
+        if (e.when === 'recent' || e.when === 'recentEat' || e.when === 'recentOwnMove' || e.when === 'past') expect(t.dayCell, `${id} needs a dayCell`).toBeTruthy();
         if (e.when === 'recentEat') expect(tableColumn(t, 'legacy')?.hidden, id).toBe(true);
         if (e.when === 'handInOpen') expect(tableColumn(t, 'enrolStatus')?.hidden, id).toBe(true);
         if (e.input === 'select') expect(col.options || e.choices, `${id} select has choices`).toBeTruthy();
@@ -607,6 +607,14 @@ describe('All tables: the registry', () => {
       ['/reviews/kpis', 'routes/kpis.ts'],
       ['/reviews', 'routes/reviews.ts'],
       ['/school', 'routes/school.ts'],
+      // Contribution (2026-11-14): a cohort's talk, Agency's team and documents, Army, Win, a brand's team and the answer to its ask.
+      ['/school/cohorts', 'routes/cohortTalk.ts'],
+      ['/agency/team', 'routes/agencyTeam.ts'],
+      ['/agency/docs', 'routes/agencyOther.ts'],
+      ['/army', 'routes/army.ts'],
+      ['/win', 'routes/win.ts'],
+      ['/orgs', 'routes/orgs.ts'],
+      ['/me/org-invites', 'routes/orgs.ts'],
       ['/me/legal', 'routes/legal.ts'],
       // Agency's own routes are several files mounted at /agency (index.ts); a path is found in whichever holds it.
       ['/agency', 'routes/agency.ts|routes/agencyLife.ts|routes/agencyDocs.ts'],
@@ -624,26 +632,54 @@ describe('All tables: the registry', () => {
       // A channel's name and topic: Community's and Bond's channels are one router file mounted twice (index.ts), each behind its own app.
       ['/community/channels', 'routes/channels.ts'],
       ['/bond/channels', 'routes/channels.ts'],
+      // Connection (2026-11-14): Community's posts, replies, reactions, follows and mutes; Bond's friends, chats, introductions and blocks; a Club
+      // application; a line at a circle's table. Each after its channels' prefix above, so a channel's path finds the channels' file first.
+      ['/community', 'routes/community.ts'],
+      ['/bond', 'routes/bond.ts'],
+      ['/club', 'routes/club.ts'],
+      ['/circles', 'routes/circles.ts'],
       // What a student shares with one coach (My coach, core), a coach's own directory card (Coaching) and the private calendar link (the Profile tab).
       ['/me/coach', 'routes/coach.ts'],
       ['/coach', 'routes/coach.ts'],
       ['/me/calendar', 'routes/calendar.ts'],
+      // Discover's results and add-ons, and one Companion line (Reflection's removes, 2026-11-14).
+      ['/discover', 'routes/discover.ts'],
+      ['/companion', 'routes/companion.ts'],
+      // Essentials (2026-11-14): routine days and the live call ask (the strategy session's file), a reward's cancel, a code's label and
+      // taking it back, and a message to the team.
+      ['/session', 'routes/session.ts'],
+      ['/rewards', 'routes/rewards.ts'],
+      ['/me/invites', 'routes/invites.ts'],
+      ['/support', 'routes/support.ts'],
+      // Creation (2026-11-14): a booking's cancel, a course invite's no and a review you wrote (the store prefix, core, two files), and a tool
+      // you suggested.
+      ['/store', 'routes/store.ts|routes/buyer.ts'],
+      ['/tools', 'routes/tools.ts'],
+      // A portfolio piece on the Public page. Kept last: every /me/... prefix above finds its own file first.
+      ['/me', 'routes/me.ts'],
     ];
     const index = readFileSync(new URL('../../../apps/api/src/index.ts', import.meta.url), 'utf8');
+    // Every mount whose prefix holds the path is tried, and one of them must hold the route (2026-11-14: School's cohort talk is mounted at
+    // /school/cohorts beside School's own /school, which holds a cohort's own PATCH; Agency's team and documents beside /agency).
     const check = (method: string, path: string, why: string) => {
-      const mount = MOUNTS.find(([prefix]) => path === prefix || path.startsWith(`${prefix}/`));
-      expect(mount, `${why}: ${path} has a known mount`).toBeTruthy();
-      const [prefix, file] = mount!;
-      if (prefix !== '/fitness/supplements') expect(index.includes(`app.route('${prefix}',`), `${prefix} is mounted`).toBe(true);
-      const rest = path.slice(prefix.length) || '/';
-      const src = file.split('|').map((f) => readFileSync(new URL(`../../../apps/api/src/${f}`, import.meta.url), 'utf8')).join('\n');
-      const segs = rest.split('/').filter(Boolean).map((s) => (s.startsWith(':') ? ':\\w+' : `(?:${s.replace(/[-]/g, '\\-')}|:\\w+)`));
-      const re = new RegExp(`\\.${method.toLowerCase()}\\('/${segs.join('/')}'`);
-      expect(re.test(src), `${why}: ${method} ${path} in ${file}`).toBe(true);
+      const mounts = MOUNTS.filter(([prefix]) => path === prefix || path.startsWith(`${prefix}/`));
+      expect(mounts.length > 0, `${why}: ${path} has a known mount`).toBe(true);
+      const holds = mounts.some(([prefix, file]) => {
+        if (prefix !== '/fitness/supplements' && !index.includes(`app.route('${prefix}',`)) return false;
+        const rest = path.slice(prefix.length) || '/';
+        const src = file.split('|').map((f) => readFileSync(new URL(`../../../apps/api/src/${f}`, import.meta.url), 'utf8')).join('\n');
+        const segs = rest.split('/').filter(Boolean).map((s) => (s.startsWith(':') ? ':\\w+' : `(?:${s.replace(/[-]/g, '\\-')}|:\\w+)`));
+        return new RegExp(`\\.${method.toLowerCase()}\\('/${segs.join('/')}'`).test(src);
+      });
+      expect(holds, `${why}: ${method} ${path} in ${mounts.map(([, f]) => f).join(' or ')}`).toBe(true);
     };
     for (const t of DATA_TABLES) {
       for (const col of t.columns) if (col.edit) check(col.edit.method, col.edit.path, `${t.key}.${col.key}`);
       if (t.archive) for (const call of [t.archive.archive, t.archive.restore, t.archive.remove]) check(call.method, call.path, t.key);
+      // The selection bar's remove (2026-11-14): every route a remove can call, its fixed query left off. A remove on a new prefix needs its line
+      // in MOUNTS above (the prefix and the route file or files that hold it).
+      const removeCalls = t.remove ? [...(t.remove.call ? [t.remove.call] : []), ...(t.remove.outcomes ?? []).flatMap((o) => ('call' in o ? [o.call] : []))] : [];
+      for (const call of removeCalls) check(call.method, call.path.split('?')[0]!, `${t.key} remove`);
     }
   });
 
@@ -1037,13 +1073,19 @@ describe('All tables: Agency and Business metrics (2026-11-14)', () => {
 
   it('changes only through Agency’s and Reviews’ own routes, each only while the app would take it', () => {
     const editable = (k: string) => dataTableByKey[k]!.columns.filter((col) => col.edit).map((col) => col.key);
-    expect(editable('agencyClients')).toEqual(['name', 'contact', 'status', 'health', 'monthlyFee', 'pieces', 'hours', 'changes', 'renews', 'notes']);
-    expect(editable('agencyPieces')).toEqual(['title', 'kind', 'channel', 'stage', 'due', 'goesLive', 'fee', 'notes']);
-    expect(editable('agencyInvoices')).toEqual(['due', 'note']);
+    // Contribution's Edit (2026-11-14): a client's email and a stage forward, a piece's link, an invoice's number and day, a teammate's role and
+    // a time entry (dataTables.contribution.test.ts).
+    expect(editable('agencyClients')).toEqual(['name', 'contact', 'contactEmail', 'status', 'health', 'stage', 'monthlyFee', 'pieces', 'hours', 'changes', 'renews', 'notes']);
+    expect(editable('agencyPieces')).toEqual(['title', 'kind', 'channel', 'stage', 'due', 'goesLive', 'fee', 'link', 'notes']);
+    expect(editable('agencyInvoices')).toEqual(['number', 'issued', 'due', 'note']);
     expect(editable('agencyRetainers')).toEqual(['autoSend']);
     expect(editable('agencyTemplates')).toEqual(['name']);
-    expect(editable('businessMetrics')).toEqual(['name', 'cadence']);
-    for (const k of ['agencyNotes', 'agencyTime', 'agencyLog', 'agencyTeam', 'agencyAgreements', 'agencyDocuments', 'businessMetricValues']) {
+    expect(editable('agencyTeam')).toEqual(['role']);
+    expect(editable('agencyTime')).toEqual(['day', 'minutes', 'billable', 'note']);
+    // Reflection's Edit (2026-11-14): Good when and the target too, and a typed value and its note (dataTables.reflection.test.ts).
+    expect(editable('businessMetrics')).toEqual(['name', 'direction', 'cadence', 'target']);
+    expect(editable('businessMetricValues')).toEqual(['value', 'note']);
+    for (const k of ['agencyNotes', 'agencyLog', 'agencyAgreements', 'agencyDocuments']) {
       expect(editable(k), k).toEqual([]);
       expect(dataTableByKey[k]!.readOnlyWhy, k).toBeTruthy();
     }
@@ -1207,8 +1249,9 @@ describe('All tables: Shop and creator tools (2026-11-14)', () => {
       const t = dataTableByKey[k]!;
       for (const col of t.columns) {
         expect(col.sql ?? '', `${k}.${col.key}`).not.toMatch(NEVER);
-        // A cell is never a bare id (a person's, a product's or a link's): a name, a title or a count instead.
-        expect(col.sql ?? '', `${k}.${col.key}`).not.toMatch(/^\w+\.(\w+_)?id$/);
+        // A cell is never a bare id (a person's, a product's or a link's): a name, a title or a count instead. The one exception is a hidden
+        // cell only the owner's own view reads, for a route's path (a course an invite is for, 2026-11-14).
+        if (!(col.hidden && col.ownerOnly)) expect(col.sql ?? '', `${k}.${col.key}`).not.toMatch(/^\w+\.(\w+_)?id$/);
       }
       for (const expr of Object.values(t.privateSelect ?? {})) expect(expr, k).not.toMatch(NEVER);
     }
@@ -1220,13 +1263,26 @@ describe('All tables: Shop and creator tools (2026-11-14)', () => {
   });
 
   it('changes only through Shop’s own routes, each field one the app changes by itself', () => {
-    expect(editable('products')).toEqual(['title', 'status', 'pricePoints', 'price', 'description']);
-    expect(editable('productReviews')).toEqual(['shown']);
-    expect(editable('autoDms')).toEqual(['on']);
-    expect(editable('sequences')).toEqual(['on']);
-    for (const k of BATCH.filter((x) => !['products', 'productReviews', 'autoDms', 'sequences'].includes(x))) {
-      expect(editable(k), k).toEqual([]);
+    // What each table changes (2026-11-14, All tables' Edit and Delete: every field its app's own route lets its owner change, nothing else).
+    const EDITS: Record<string, string[]> = {
+      products: ['title', 'status', 'pricePoints', 'price', 'payWhatYouWant', 'minPoints', 'minXp', 'description'],
+      coupons: ['usesAllowed'],
+      bookings: ['status'],
+      sessionHours: ['day', 'from', 'until'],
+      priorityDms: ['answer'],
+      productReviews: ['shown'],
+      myProductReviews: ['rating', 'words'],
+      contentPosts: ['caption', 'kind', 'views', 'likes', 'comments'],
+      trackedLinks: ['label'],
+      autoDms: ['keywords', 'message', 'on'],
+      funnels: ['name'],
+      sequences: ['title', 'message', 'days', 'on'],
+      portfolio: ['title', 'about', 'link', 'shown'],
+    };
+    for (const k of BATCH) expect(editable(k), k).toEqual(EDITS[k] ?? []);
+    for (const k of BATCH.filter((x) => !EDITS[x])) {
       expect(dataTableByKey[k]!.readOnlyWhy, k).toBeTruthy();
+      expect(dataTableByKey[k]!.noEditWhy, k).toBeTruthy();
     }
     const products = dataTableByKey.products!;
     const status = tableColumn(products, 'status')!;

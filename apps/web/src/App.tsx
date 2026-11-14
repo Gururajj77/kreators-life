@@ -37,6 +37,8 @@ const ConsentPopup = lazyNamed(() => import('./components/ConsentPopup'), 'Conse
 const PageContents = lazyNamed(() => import('./components/PageContents'), 'PageContents');
 // The bar that invites someone who joined an event to finish setting up: its own chunk, fetched only for them.
 const AttendeeBar = lazyNamed(() => import('./components/AttendeeBar'), 'AttendeeBar');
+// Back to top, the small round button left of the assistant's on every screen: its own chunk after the first paint.
+const BackToTop = lazyNamed(() => import('./components/BackToTop'), 'BackToTop');
 const Forgot = lazyNamed(() => import('./screens/PasswordReset'), 'Forgot');
 const ResetPassword = lazyNamed(() => import('./screens/PasswordReset'), 'ResetPassword');
 const Admin = lazyNamed(() => import('./screens/Admin'), 'Admin');
@@ -301,6 +303,9 @@ function Root() {
           <FocusRoundsHost />
         </Suspense>
       )}
+      <Suspense fallback={null}>
+        <BackToTop />
+      </Suspense>
     </>
   );
 }

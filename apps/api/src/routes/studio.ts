@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { AFFILIATE_SHARE, INVITE_NOT_FOUND, PRODUCT_KINDS, statusesFor, type Availability, type AvailabilityOverride, type Booking, type Coupon, type Lead, type Lesson, type Order, type Product, type ProductInvite, type ProductKind, type ProductStatus, type QuizQuestion, type StudioAnalytics, type Testimonial, parseFaq } from '@kreators/shared';
 import { formatCount, isUnlockBadgeKey, money, PRODUCT_MONEY_MAX } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { audit, badLink, blockedByName, DELETED_NAME, LINK_PROBLEM, nameOf, newId, noteStmt, notify, nowIso, parseList, pageOf, paged, TEN_A_PAGE, personBy, httpUrl, str } from '../db';
+import { audit, badLink, blockedByName, DELETED_NAME, GONE_NOW, LINK_PROBLEM, nameOf, newId, noteStmt, notify, nowIso, objectBody, parseList, pageOf, paged, TEN_A_PAGE, personBy, httpUrl, str } from '../db';
 import { logEvent, sendEmail, track } from '../ops';
 import { parseQuiz } from './buyer';
 
@@ -561,8 +561,26 @@ studio.post('/coupons', async (c) => {
   return c.json({ coupon: row ? toCoupon(row) : null }, 201);
 });
 
+// How many uses a coupon allows (2026-11-14, All tables): never under the uses already made, null for no limit. Its code and its percent never
+// change: a new deal is a new code. Guarded in the write, so a use at checkout in between is counted.
+studio.patch('/coupons/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const body = await objectBody(c);
+  if (!('maxUses' in body)) return c.json({ error: 'Say how many uses it allows.' }, 400);
+  const max = body.maxUses === null ? null : Number(body.maxUses);
+  if (max !== null && (!Number.isInteger(max) || max < 1 || max > 1_000_000)) return c.json({ error: 'A whole number of uses, 1 or more, or no limit.' }, 400);
+  const res = await db.prepare('UPDATE coupons SET max_uses = ?1 WHERE id = ?2 AND owner_id = ?3 AND (?1 IS NULL OR uses <= ?1)').bind(max, c.req.param('id'), user.id).run();
+  if (!res.meta.changes) {
+    const row = await db.prepare('SELECT uses FROM coupons WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), user.id).first<{ uses: number }>();
+    return row ? c.json({ error: `It was used ${formatCount(row.uses)} times already, so it allows at least that many.` }, 409) : c.json({ error: 'not found' }, 404);
+  }
+  return c.json({ ok: true });
+});
+
 studio.delete('/coupons/:id', async (c) => {
-  await c.env.DB.prepare('DELETE FROM coupons WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  const res = await c.env.DB.prepare('DELETE FROM coupons WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: GONE_NOW }, 409);
   return c.json({ ok: true });
 });
 
@@ -618,7 +636,8 @@ studio.put('/availability/overrides/:date', async (c) => {
 });
 
 studio.delete('/availability/overrides/:date', async (c) => {
-  await c.env.DB.prepare('DELETE FROM availability_overrides WHERE owner_id = ? AND date = ?').bind(c.get('user').id, c.req.param('date')).run();
+  const res = await c.env.DB.prepare('DELETE FROM availability_overrides WHERE owner_id = ? AND date = ?').bind(c.get('user').id, c.req.param('date')).run();
+  if (!res.meta.changes) return c.json({ error: GONE_NOW }, 409);
   return c.json({ ok: true });
 });
 
@@ -661,8 +680,34 @@ studio.get('/orders', async (c) => {
   return c.json({ page: pg.page, orders });
 });
 
+/** A clock time as minutes after midnight ("09:30" is 570, "24:00" a day's end), or null. */
+const minutesOf = (v: unknown): number | null => {
+  if (typeof v !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$|^24:00$/.test(v)) return null;
+  return Number(v.slice(0, 2)) * 60 + Number(v.slice(3, 5));
+};
+
+// Change a weekly window of session hours (2026-11-14, All tables): its weekday, its start (`from`) or its end (`until`), each as a clock time,
+// each alone keeping the rest, the end always after the start. Sessions already booked keep their times.
+studio.patch('/availability/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const prev = await db.prepare('SELECT * FROM availability WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), user.id).first<AvailRow>();
+  if (!prev) return c.json({ error: 'not found' }, 404);
+  const body = await objectBody(c);
+  const weekday = 'weekday' in body ? Number(body.weekday) : prev.weekday;
+  if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) return c.json({ error: 'Pick a day of the week.' }, 400);
+  const start = 'from' in body ? minutesOf(body.from) : prev.start_min;
+  const end = 'until' in body ? minutesOf(body.until) : prev.end_min;
+  if (start === null || end === null || start > 1439) return c.json({ error: 'Pick a time.' }, 400);
+  if (end <= start) return c.json({ error: 'The end comes after the start.' }, 400);
+  const res = await db.prepare('UPDATE availability SET weekday = ?, start_min = ?, end_min = ? WHERE id = ? AND owner_id = ?').bind(weekday, start, end, prev.id, user.id).run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
+  return c.json({ availability: { id: prev.id, weekday, startMin: start, endMin: end } satisfies Availability });
+});
+
 studio.delete('/availability/:id', async (c) => {
-  await c.env.DB.prepare('DELETE FROM availability WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  const res = await c.env.DB.prepare('DELETE FROM availability WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: GONE_NOW }, 409);
   return c.json({ ok: true });
 });
 
@@ -682,7 +727,14 @@ studio.post('/bookings/:id', async (c) => {
   const body = await c.req.json<{ status?: string; meetingUrl?: string }>().catch(() => ({}) as { status?: string; meetingUrl?: string });
   const status = body.status === 'confirmed' || body.status === 'cancelled' || body.status === 'done' ? body.status : prev.status;
   const meetingUrl = typeof body.meetingUrl === 'string' ? httpUrl(body.meetingUrl, 500) || null : prev.meeting_url;
-  await db.prepare('UPDATE bookings SET status = ?, meeting_url = ? WHERE id = ?').bind(status, meetingUrl, prev.id).run();
+  // One way only (2026-11-14, All tables): a cancelled or finished session stays as it is, and a session is confirmed before it is done, as
+  // Shop offers it. The write is guarded on the state it read, so two taps or two tabs tell the buyer once.
+  if (status !== prev.status) {
+    if (prev.status === 'cancelled' || prev.status === 'done') return c.json({ error: 'A cancelled or finished session stays as it is.' }, 409);
+    if (status === 'done' && prev.status !== 'confirmed') return c.json({ error: 'Confirm the session before you mark it done.' }, 409);
+  }
+  const moved = await db.prepare('UPDATE bookings SET status = ?, meeting_url = ? WHERE id = ? AND status = ?').bind(status, meetingUrl, prev.id, prev.status).run();
+  if (!moved.meta.changes) return c.json({ error: 'That session changed just now. Look again.' }, 409);
   if (status !== prev.status) {
     const when = new Date(prev.starts_at).toUTCString();
     await notify(db, prev.buyer_id, 'booking', status === 'confirmed' ? `Your session with ${nameOf(user)} is confirmed` : status === 'cancelled' ? `Your session with ${nameOf(user)} was cancelled` : `Session marked done`, when, '/library#bk-heading');
@@ -706,6 +758,14 @@ studio.get('/leads', async (c) => {
   const rows = { results: pg.items };
   const leads: Lead[] = rows.results.map((r) => ({ id: r.id, name: r.name, email: r.email, message: r.message, source: r.source, createdAt: r.created_at }));
   return c.json({ page: pg.page, leads });
+});
+
+// Delete a lead (2026-11-14, the founder's yes in All tables): their name, email and message go from Audience. Owner only; a lead already gone
+// answers 404, so a second send changes nothing.
+studio.delete('/leads/:id', async (c) => {
+  const res = await c.env.DB.prepare('DELETE FROM leads WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
+  return c.json({ ok: true });
 });
 
 studio.get('/testimonials', async (c) => {
@@ -742,6 +802,14 @@ studio.post('/broadcasts', async (c) => {
     ),
   ]);
   return c.json({ sent: people.results.length }, 201);
+});
+
+// Delete your own copy of a broadcast you sent (2026-11-14, the founder's yes in All tables). The notes it put in people's inboxes are theirs
+// and stay, with the words they were sent with.
+studio.delete('/broadcasts/:id', async (c) => {
+  const res = await c.env.DB.prepare('DELETE FROM broadcasts WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
+  return c.json({ ok: true });
 });
 
 studio.get('/audience', async (c) => {

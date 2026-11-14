@@ -1,4 +1,15 @@
-import type { TableBulkRequest, TableBulkResponse, TableEditRequest, TableEditResponse, TablePageResponse, TablesListResponse } from '@kreators/shared/dataTables';
+import type {
+  TableBulkRequest,
+  TableBulkResponse,
+  TableEditRequest,
+  TableEditResponse,
+  TableMatchingRequest,
+  TableMatchingResponse,
+  TablePageResponse,
+  TablePreviewRequest,
+  TablePreviewResponse,
+  TablesListResponse,
+} from '@kreators/shared/dataTables';
 import { ApiError, request } from './api';
 import { todayLocal } from './date';
 import { useSession } from './store';
@@ -39,8 +50,15 @@ export const tablesApi = {
   page: (s: TablesSubject, table: string, qs: string) => request<TablePageResponse>(withQuery(`${base(s)}/${encodeURIComponent(table)}`, s.view === 'owner' ? [qs, `day=${todayLocal()}`].filter(Boolean).join('&') : qs)),
   /** Change one cell through the app's own route (owner only). */
   edit: (table: string, body: TableEditRequest) => request<TableEditResponse>(`/tables/${encodeURIComponent(table)}/edit`, { method: 'POST', body: JSON.stringify(body) }),
-  /** Archive, restore or delete forever, at most BULK_MAX ids a call (owner only, on a table the app already archives). */
+  /**
+   * Archive, restore or delete forever (on a table the app already archives), or the table's own remove (on a table with `remove`), at most
+   * BULK_MAX ids a call, the person's own rows only. What a call did not reach comes back in `left`, to send again.
+   */
   bulk: (table: string, body: TableBulkRequest) => request<TableBulkResponse>(`/tables/${encodeURIComponent(table)}/bulk`, { method: 'POST', body: JSON.stringify(body) }),
+  /** What a remove of these rows would do: one read, nothing written (the sheet's counts). */
+  preview: (table: string, body: TablePreviewRequest) => request<TablePreviewResponse>(`/tables/${encodeURIComponent(table)}/bulk`, { method: 'POST', body: JSON.stringify(body) }),
+  /** "Select all N that match": the ids the page's own query finds, BULK_MAX at most, leaving out the rows already sent, and how many match. */
+  matching: (table: string, body: TableMatchingRequest) => request<TableMatchingResponse>(`/tables/${encodeURIComponent(table)}/bulk`, { method: 'POST', body: JSON.stringify(body) }),
   /**
    * Every row that matches as a CSV file, up to CSV_MAX_ROWS (the person's own, a coach's view of what a student shares, or a super
    * admin's, which the server writes to the audit log). The session token goes in the header, never in the address.

@@ -6,7 +6,7 @@ In this lesson you'll learn:
 - What only you see, and what the team may read.
 - What others may see, and the switch for each part.
 - How your devices and your password work.
-- How to see all your data as tables, take it with you, or wipe it.
+- How to see all your data as tables, change it, take it with you, or wipe it.
 
 ## What only you see
 
@@ -87,13 +87,23 @@ The first time you visit, a small card called **Your privacy** asks about three 
 
 Open **All tables** to see your tasks, trackers, money and more as tables. Sort it, filter it, search it, then copy the rows you tick or download them as a CSV file.
 
+You can change your own rows there too, and only you can.
+
+- **Edit:** tap a cell under a pencil, or tick one row and tap **Edit** to change it in a form. Edit works on one row at a time.
+- **Remove:** the button beside **Edit** uses the app's own word, such as **Delete**, **Withdraw** or **Leave**. A small thing of your own, like a mood, asks for a second tap. Several rows, or anything with money, history or someone else's access, ask in a sheet that counts what will happen first.
+- **Select all:** it takes every row that matches, a hundred at a time. **Do the next 100** goes on.
+- **Records stay:** xp, points, orders, badges and signed paper are greyed, with the reason beside them. A done task can go, and its xp stays.
+- **Older days:** water, gratitude, supplement ticks and routine days keep to today and yesterday on their own screens. Here, an older day can change or go too.
+
+Every change goes through the app's own screen, so its rules and waits still apply. A coach, AI chat and a super admin can only read the tables the rules above let them see, and never change a row.
+
 On the Profile tab, the **Your data** card has three buttons.
 
 1. **Export my data:** everything we hold about you, as one file you can keep.
 2. **Erase everything:** your pillars, xp, streak and badges go, and you start over. A sheet asks first, with a red **Yes, erase everything** and **Keep my progress**. After it, the setup chat opens again. Your journal, gratitude, trackers and Fitness logs stay.
 3. **Delete my account:** a sheet lists what happens. You type DELETE, then tap **Delete my account**. Your name, page, pillars, logs, journal and messages are gone. Your events, runs and sessions still to come are cancelled, and whoever was coming is told. What you never sold goes, and what you sold is archived for the people who bought it. Money records and what others rely on stay, without your name. A note already in someone else's inbox keeps the words it was written with.
 
-> **Result:** you know what is yours alone, which switch shares each part, and how to leave with your data.
+> **Result:** you know what is yours alone, which switch shares each part, how to change your own rows, and how to leave with your data.
 
 ## The bottom line
 

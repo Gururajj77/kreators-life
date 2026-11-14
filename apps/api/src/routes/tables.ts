@@ -7,10 +7,17 @@ import {
   coachTableKeys,
   dataTableByKey,
   editValue,
+  editWhenWhy,
   listTables,
+  MATCH_NOT_MAX,
+  noEditWhyOf,
+  noRemoveWhyOf,
   parseAiTables,
   parseTableQuery,
   plainCall,
+  removeCallFor,
+  removeCallOf,
+  removeStateOf,
   TABLE_SWITCHES,
   tableAppsOn,
   rowEditable,
@@ -19,12 +26,14 @@ import {
   toCsv,
   visibleColumns,
   type Cell,
-  type ColumnEdit,
   type DataColumn,
   type DataTable,
+  type RemoveCall,
   type TableBulkAction,
   type TableBulkResponse,
   type TableEditResponse,
+  type TableMatchingResponse,
+  type TablePreviewResponse,
   type TableRow,
   type TablesListResponse,
   type TableView,
@@ -41,6 +50,7 @@ import { DELETED_NAME, getUser, newId, nowIso, objectBody, orgIdsOf, personDay }
 import { loadTable, readPage, subjectOf, viewQuery, type Loaded, type ReadCtx } from '../tablesRead';
 import { tableSwitchesOn } from '../tablesShare';
 import { heldCompanionModels } from '../aiOpen';
+import { removeBuilder } from '../tablesRemove';
 
 /**
  * All tables (2026-11-13, the founder): every list of a person's own data as a table they can sort, filter, search, page, tick, copy,
@@ -49,7 +59,10 @@ import { heldCompanionModels } from '../aiOpen';
  *
  * - The owner: GET /tables, /tables/:table, /tables/:table/csv; POST /tables/:table/edit and /tables/:table/bulk. An edit or a bulk action is
  *   never done here: it is sent to the app's own route as the person, with their own token, through the app itself (the assistant's caller,
- *   `X-Kreators-Via: tables`), so the session, the module switches, the limits, the waits, the xp caps and the owner filters all hold.
+ *   `X-Kreators-Via: tables`), so the session, the module switches, the limits, the waits, the xp caps and the owner filters all hold. The
+ *   selection bar's remove (2026-11-14) is a bulk action like the archive's: each row through its table's `remove` recipe to the app's own
+ *   route, with a `preview` (one read, no write) for the sheet's counts and `matching` for "Select all N that match". Never a coach's or an
+ *   admin's mount, never AI chat (the middleware below refuses every POST marked as AI chat), never a SQL write here.
  * - A coach (access map `tables/coach`, the Coaching app): only the tables the student switched on for them, read only, checked on every request,
  *   never one with other people's details (`tableReach`).
  * - A super admin (access map `tables/admin`): any member's tables but the journal, the body and mind ones and those with other people's
@@ -135,44 +148,6 @@ function csvAnswer(c: Ctx, table: DataTable, got: Loaded, view: TableView, curre
     'X-Table-Rows': String(got.rows.length),
     ...(got.capped ? { 'X-Table-Capped': '1' } : {}),
   });
-}
-
-/** Why a row's cell cannot change now, in plain words. */
-function notNowWhy(edit: ColumnEdit, cells: Record<string, Cell>): string {
-  switch (edit.when) {
-    case 'open':
-      return 'Only an open task can be changed this way.';
-    case 'project':
-      return 'Only a project has a due day here.';
-    case 'recentOwnMove':
-      return cells.loggedBy === 'run' ? 'A club run is changed in Kreators Run.' : 'Only today or yesterday can be changed here.';
-    case 'recentEat':
-      return cells.legacy === true ? 'A check-in from before the meals were asked stays as it is.' : 'Only today or yesterday can be changed here.';
-    case 'recent':
-      return 'Only today or yesterday can be changed here.';
-    case 'handInOpen':
-      return 'An approved hand-in, or one from a cohort you left, stays as it is.';
-    case 'paperOpen':
-      return cells.status === 'paid' ? 'A paid invoice is marked sent again in Agency before it can change.' : 'A void invoice stays as it is.';
-    case 'retainerOpen':
-      return 'An ended or withdrawn retainer stays as it is.';
-    case 'listingOpen':
-      return 'A listing with an accepted offer, or one that sold, stays as it is.';
-    case 'unpublished':
-      return 'A published listing is closed on its page in Work, where that asks first.';
-    case 'pitchWaiting':
-      return 'The team has started reading it, so it can no longer be changed.';
-    case 'xpOpen':
-      return 'The xp is fixed once the code opens, thirty minutes before the start, and a cancelled one stays as it is.';
-    case 'seatHeld':
-      return 'Only a guest with a seat can be on the list to meet other guests.';
-    case 'madeIt':
-      return 'Only a channel you made can be renamed here.';
-    case 'linkOpen':
-      return 'Coaching that ended or was turned down shares nothing, so it stays as it is.';
-    default:
-      return 'This one cannot be changed now.';
-  }
 }
 
 /** The route's own error, said back plainly, with its status (a 409 passes through for the screen to read the row again). */
@@ -431,7 +406,7 @@ export function tablesRoutes(appFetch: AppFetch) {
           return !l.text.trim() && typeof p === 'string' ? { ...l, prompt: p } : l;
         });
         lines[i] = { ...lines[i]!, text: typeof value === 'string' ? value : '' };
-        if (lines.every((l) => !l.text.trim())) return { error: 'Keep at least one line. To clear the day, do it on Journal.' };
+        if (lines.every((l) => !l.text.trim())) return { error: 'Keep at least one line. To clear the day, tick it and Clear it.' };
         return { method: 'PUT', path: `/journal/gratitude/${encodeURIComponent(row.id)}`, body: { lines, today, ifUpdatedAt: typeof cells.updatedAt === 'string' ? cells.updatedAt : '' } };
       }
       case 'notToDoDay': {
@@ -489,14 +464,14 @@ export function tablesRoutes(appFetch: AppFetch) {
     const id = rowId(body.id);
     if (!id) return c.json({ error: 'Pick a row.' }, 400);
     const col = typeof body.column === 'string' ? tableColumn(table, body.column) : undefined;
-    if (!col?.edit) return c.json({ error: table.readOnlyWhy ?? 'That column cannot be changed here.' }, 400);
+    if (!col?.edit) return c.json({ error: noEditWhyOf(table) ?? 'That column cannot be changed here.' }, 400);
     const value = body.value;
     if (value !== null && !['string', 'number', 'boolean'].includes(typeof value)) return c.json({ error: 'That value cannot be saved.' }, 400);
     const ctx = ownerCtx(c, body.today);
     const before = await ownRow(db, table, id, ctx);
     const row = before.rows[0];
     if (!row) return c.json(NOT_FOUND, 404);
-    if (!rowEditable(table, col, row.cells, ctx.subject.today)) return c.json({ error: notNowWhy(col.edit, row.cells) }, 400);
+    if (!rowEditable(table, col, row.cells, ctx.subject.today)) return c.json({ error: editWhenWhy(col.edit, row.cells) }, 400);
     const checked = editValue(col, value as Cell, before.options[col.key] ?? []);
     if ('error' in checked) return c.json({ error: checked.error }, 400);
     const fields = before.fields[0] ?? {};
@@ -519,20 +494,140 @@ export function tablesRoutes(appFetch: AppFetch) {
     return c.json(out);
   });
 
+  /** The ids a bulk body names: at least one, at most BULK_MAX, each once; or the refusal to send. */
+  const idsOf = (c: Ctx, body: Record<string, unknown>): string[] | Response => {
+    if (!Array.isArray(body.ids) || body.ids.length === 0) return c.json({ error: 'Tick at least one row.' }, 400);
+    if (body.ids.length > BULK_MAX) return c.json({ error: `Up to ${BULK_MAX} rows at a time.` }, 400);
+    return [...new Set(body.ids.map(rowId).filter((v): v is string => v !== null))];
+  };
+
+  /** A delegated route's refusal for one row, in plain words (never "not found" alone). */
+  const rowRefusal = (a: Answer): string => (typeof a.data?.error === 'string' && a.data.error !== 'not found' ? a.data.error : a.status === 404 ? 'Could not find that. It may be gone.' : 'That did not work. Try again.');
+
+  /**
+   * "Select all N that match" (2026-11-14): the ids of the rows the screen's own query finds, in its sort and its view, the owner's rows only,
+   * BULK_MAX at most, leaving out the rows an earlier round already sent (`not`), and how many match besides those. One read, no write.
+   */
+  async function matching(c: Ctx, table: DataTable, body: Record<string, unknown>): Promise<Response> {
+    const qs = typeof body.query === 'string' && body.query.length <= 4000 ? body.query : '';
+    const query = parseTableQuery(table, new URLSearchParams(qs), 'owner');
+    if (body.not !== undefined && !Array.isArray(body.not)) return c.json({ error: 'That list of rows cannot be read.' }, 400);
+    const not = [...new Set((Array.isArray(body.not) ? body.not : []).map(rowId).filter((v): v is string => v !== null))];
+    if (not.length > MATCH_NOT_MAX) return c.json({ error: 'That is as many rows as one go takes. Clear the ticks and pick again.' }, 400);
+    const got = await loadTable(c.env.DB, table, query, ownerCtx(c, body.today), { kind: 'match', not, max: BULK_MAX }, { options: false });
+    return c.json({ ids: got.rows.map((r) => r.id), total: got.total ?? got.rows.length } satisfies TableMatchingResponse);
+  }
+
+  /**
+   * A remove, or its preview (2026-11-14, the founder: "edit and delete buttons should also be there in select and multi select and select
+   * all"). One read takes every row asked about, in the Active view, with the remove's SQL rules; `removeStateOf` says what each would get or
+   * why it stays. The preview stops there. A remove sends each row to its outcome's route as the person, in turn, while the round trips allow,
+   * and hands back what it did not reach in `left` (and, when a limit stopped it, why in `stopped`): safe to send again, since each route
+   * checks the row's state itself.
+   */
+  async function removeRows(c: Ctx, table: DataTable, body: Record<string, unknown>, action: 'preview' | 'remove'): Promise<Response> {
+    const db = c.env.DB;
+    const spec = table.remove;
+    if (!spec) return c.json({ error: noRemoveWhyOf(table) }, 400);
+    const ids = idsOf(c, body);
+    if (ids instanceof Response) return ids;
+    const ctx = ownerCtx(c, body.today);
+    const got = await loadTable(db, table, viewQuery(table, 'owner'), ctx, { kind: 'ids', ids }, { options: false });
+    const at = new Map(got.rows.map((r, i) => [r.id, i]));
+    const notHere = table.archive ? 'It is not in your active list.' : 'It is not in your list.';
+    // The bar's one-row second tap, with no sheet: a row that asks in the sheet by now (a post someone just answered) waits for it.
+    const twice = action === 'remove' && body.asked === 'twice';
+    type Step = { id: string; why: string } | { id: string; did: string; call: RemoveCall; row: TableRow; fields: Record<string, unknown> };
+    const plan = ids.map((id): Step => {
+      const i = at.get(id);
+      if (i === undefined) return { id, why: notHere };
+      const row = got.rows[i]!;
+      const fields = got.fields[i] ?? {};
+      const state = removeStateOf(table, row.cells, fields);
+      if (!state) return { id, why: noRemoveWhyOf(table) ?? 'This one stays as it is.' };
+      if ('why' in state) return { id, why: state.why };
+      if (twice && state.sheet) return { id, why: `It changed a moment ago, so it asks first now. Tick it and tap ${spec.verb} again to see what goes with it.` };
+      const call = removeCallOf(spec, state.at);
+      return call ? { id, did: state.did, call, row, fields } : { id, why: 'This one cannot be changed here.' };
+    });
+
+    if (action === 'preview') {
+      const act = new Map<string, number>();
+      // Every outcome the spec has, in its order, so the sheet's line keeps one order whatever was ticked.
+      for (const o of spec.call ? [{ did: spec.did }] : (spec.outcomes ?? [])) if ('did' in o) act.set(o.did, 0);
+      const skipped = new Map<string, number>();
+      for (const p of plan) {
+        if ('why' in p) skipped.set(p.why, (skipped.get(p.why) ?? 0) + 1);
+        else act.set(p.did, (act.get(p.did) ?? 0) + 1);
+      }
+      return c.json({ act: [...act].map(([did, n]) => ({ did, n })), skipped: [...skipped].map(([why, n]) => ({ why, n })) } satisfies TablePreviewResponse);
+    }
+
+    const send = callAs(c);
+    const out: TableBulkResponse = { done: [], skipped: [], left: [] };
+    const didAs = new Map<string, number>();
+    // Each row is the app's own call as the person, in turn, as the archive's are, and the rest wait in `left` for the screen to send again,
+    // well under the free plan's 50 round trips. A row starts only while twice the dearest so far is left under ROUTE_TRIPS (the review of
+    // 2026-11-14): a later row can cost more than the ones before it (a cancel that tells a club, a brand's owners), and the routes whose cost
+    // grows with their data stop at ROUTE_TRIPS by themselves (a Party cancel's seats, a run cancel's notes read `tripsOf` on this same binding),
+    // so the margin is for the fixed part of a call, and the invocation never reaches the hard cap in the middle of one.
+    let dearest = 10;
+    let stopped: string | undefined;
+    for (const p of plan) {
+      if ('why' in p) {
+        out.skipped.push({ id: p.id, why: p.why });
+        continue;
+      }
+      if (stopped || tripsOf(db) + 2 * dearest + 2 > ROUTE_TRIPS) {
+        out.left.push(p.id);
+        continue;
+      }
+      const before = tripsOf(db);
+      const build = removeBuilder(p.call.recipe);
+      const req: Req | { error: string } | null = build
+        ? await build({ db, table, call: p.call, row: p.row, fields: p.fields, ctx })
+        : (removeCallFor(p.call, p.row.id, p.row.cells, p.fields, ctx.subject.today) as Req | null);
+      if (!req || 'error' in req) {
+        out.skipped.push({ id: p.id, why: req && 'error' in req ? req.error : 'This one cannot be changed here.' });
+        continue;
+      }
+      let a: Answer;
+      try {
+        a = await send(req);
+      } catch {
+        out.skipped.push({ id: p.id, why: 'This one cannot be changed here.' });
+        continue;
+      }
+      dearest = Math.max(dearest, tripsOf(db) - before);
+      if (a.ok) {
+        out.done.push(p.id);
+        didAs.set(p.did, (didAs.get(p.did) ?? 0) + 1);
+      } else if (a.status === 429) {
+        // A limit: this row and the rest wait, and the screen says the limit's own words.
+        stopped = typeof a.data?.error === 'string' && a.data.error ? a.data.error : 'That was done too often just now. Wait a little and try again.';
+        out.left.push(p.id);
+      } else out.skipped.push({ id: p.id, why: rowRefusal(a) });
+    }
+    out.didAs = [...didAs].map(([did, n]) => ({ did, n }));
+    if (stopped) out.stopped = stopped;
+    return c.json(out);
+  }
+
   r.post('/:table/bulk', async (c) => {
     const db = c.env.DB;
     const table = tableOf(c.req.param('table'));
     if (!table) return c.json(NOT_FOUND, 404);
     const shut = await ownTableShut(c, table);
     if (shut) return shut;
+    const body = await objectBody(c);
+    if (body.action === 'matching') return matching(c, table, body);
+    if (body.action === 'preview' || body.action === 'remove') return removeRows(c, table, body, body.action);
     const spec = table.archive;
     if (!spec) return c.json({ error: 'This table has no archive, so rows here are not archived or deleted.' }, 400);
-    const body = await objectBody(c);
     const action = body.action as TableBulkAction;
     if (action !== 'archive' && action !== 'restore' && action !== 'delete') return c.json({ error: 'Pick archive, restore or delete.' }, 400);
-    if (!Array.isArray(body.ids) || body.ids.length === 0) return c.json({ error: 'Tick at least one row.' }, 400);
-    if (body.ids.length > BULK_MAX) return c.json({ error: `Up to ${BULK_MAX} rows at a time.` }, 400);
-    const ids = [...new Set(body.ids.map(rowId).filter((v): v is string => v !== null))];
+    const ids = idsOf(c, body);
+    if (ids instanceof Response) return ids;
     const ctx = ownerCtx(c, body.today);
     // One read for every row asked about: in the view the action needs, and for an archive whether the row meets the archive's own rule.
     // Built from the registry's own strings; the owner is ?1 and the ids one bound list.

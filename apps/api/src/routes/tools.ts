@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { isUnlockBadgeKey, TOOL_CATEGORIES, unlockFor, type Tool, type UnlockHave } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { can, nameOf, newId, nowIso, num, oneOf, str, pageOf, paged } from '../db';
+import { can, httpUrl, LINK_PROBLEM, nameOf, newId, nowIso, num, objectBody, oneOf, str, pageOf, paged } from '../db';
 import { haveFor } from '../unlocks';
 import { featureUntil } from './market';
 
@@ -78,9 +78,46 @@ tools.post('/:id', async (c) => {
   return c.json({ ok: true });
 });
 
+/** The words for a suggestion the team has checked: from then on it is the team's to change or remove. */
+const CHECKED = 'The team checked it, so it stays in the directory as the team keeps it.';
+
+// Change a tool you suggested while the team has not checked it yet (2026-11-14, All tables): its name, category, link and words, each alone
+// keeping the rest, with POST's own rules. Guarded in the write on the suggester and on not yet checked, so a check in between wins.
+tools.patch('/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const id = c.req.param('id');
+  const prev = await db.prepare('SELECT name, category, url, description, verified FROM tools WHERE id = ? AND suggested_by = ?').bind(id, user.id).first<{ name: string; category: string; url: string; description: string; verified: number }>();
+  if (!prev) return c.json({ error: 'not found' }, 404);
+  if (prev.verified === 1) return c.json({ error: CHECKED }, 409);
+  const body = await objectBody(c);
+  const name = 'name' in body ? str(body.name, 80) : prev.name;
+  if (!name) return c.json({ error: 'a name for the tool' }, 400);
+  if ('category' in body && !(TOOL_CATEGORIES as readonly string[]).includes(String(body.category))) return c.json({ error: 'Pick a category.' }, 400);
+  const url = 'url' in body ? httpUrl(body.url) : prev.url;
+  if (!url) return c.json({ error: LINK_PROBLEM }, 400);
+  const res = await db
+    .prepare('UPDATE tools SET name = ?, category = ?, url = ?, description = ? WHERE id = ? AND suggested_by = ? AND verified = 0')
+    .bind(name, 'category' in body ? String(body.category) : prev.category, url, 'description' in body ? str(body.description, 500) : prev.description, id, user.id)
+    .run();
+  if (!res.meta.changes) return c.json({ error: CHECKED }, 409);
+  return c.json({ ok: true });
+});
+
+// Reviewers remove any tool. Since 2026-11-14 (All tables) the person who suggested one may also take it back while the team has not checked it.
 tools.delete('/:id', async (c) => {
   const user = c.get('user');
-  if (!can(user, 'review')) return c.json({ error: 'reviewers remove tools' }, 403);
-  await c.env.DB.prepare('DELETE FROM tools WHERE id = ?').bind(c.req.param('id')).run();
-  return c.json({ ok: true });
+  const db = c.env.DB;
+  const id = c.req.param('id');
+  if (can(user, 'review')) {
+    const gone = await db.prepare('DELETE FROM tools WHERE id = ?').bind(id).run();
+    // Removed already (another tab, or a second send): said, never a quiet yes, so All tables counts it once.
+    if (!gone.meta.changes) return c.json({ error: 'not found' }, 404);
+    return c.json({ ok: true });
+  }
+  const res = await db.prepare('DELETE FROM tools WHERE id = ? AND suggested_by = ? AND verified = 0').bind(id, user.id).run();
+  if (res.meta.changes) return c.json({ ok: true });
+  const row = await db.prepare('SELECT suggested_by FROM tools WHERE id = ?').bind(id).first<{ suggested_by: string | null }>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  return row.suggested_by === user.id ? c.json({ error: CHECKED }, 409) : c.json({ error: 'reviewers remove tools' }, 403);
 });

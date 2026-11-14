@@ -36,6 +36,7 @@ import { prettyDate, shortDay } from '../lib/date';
 import { useAuthed } from '../lib/queries';
 import { FIELD, FIELD_44 } from '../lib/ui';
 import { Button } from './Button';
+import { ConfirmDelete } from './ConfirmDelete';
 import { ErrorLine } from './ErrorLine';
 import { IconTag } from './FactTag';
 import { FieldLabel } from './Field';
@@ -245,9 +246,13 @@ function MemberRow({ m, onRole, onSaid }: { m: TeamMember; onRole: (m: TeamMembe
     onSettled: () => qc.invalidateQueries({ queryKey: ['agency', 'team'] }),
   });
   const resend = useMutation({ mutationFn: () => api.agencyTeamResend(m.id), onSuccess: () => onSaid(`Sent ${m.person.name} the invite again.`), onError: (e) => onSaid(e instanceof Error ? e.message : 'That did not send.') });
+  // Someone else's access closes, so it asks in a sheet with its own red yes, never a second tap (CLAUDE.md, Confirmations; the review of
+  // 2026-11-14). The sheet is portalled, so the card's blur never frames it.
+  const [asking, setAsking] = useState(false);
   const remove = useMutation({
     mutationFn: () => api.agencyTeamRemove(m.id),
     onSuccess: () => {
+      setAsking(false);
       onSaid(m.status === 'invited' ? `Took back the invite to ${m.person.name}.` : `${m.person.name} is off your team.`);
       void qc.invalidateQueries({ queryKey: ['agency', 'team'] });
     },
@@ -274,8 +279,10 @@ function MemberRow({ m, onRole, onSaid }: { m: TeamMember; onRole: (m: TeamMembe
                     label: m.status === 'invited' ? 'Take back the invite' : 'Remove from the team',
                     icon: UserMinus,
                     destructive: true,
-                    confirm: m.status === 'invited' ? 'Yes, take it back' : `Yes, remove ${m.person.name}`,
-                    onSelect: () => remove.mutate(),
+                    onSelect: () => {
+                      remove.reset();
+                      setAsking(true);
+                    },
                     disabled: remove.isPending,
                   },
                 ]}
@@ -305,7 +312,18 @@ function MemberRow({ m, onRole, onSaid }: { m: TeamMember; onRole: (m: TeamMembe
           {save.isError && <ErrorLine e={save.error} className="mt-xs" />}
         </div>
       )}
-      {remove.isError && <ErrorLine e={remove.error} className="mt-xs" />}
+      <ConfirmDelete
+        open={asking}
+        title={m.status === 'invited' ? `Take back the invite to ${m.person.name}?` : `Remove ${m.person.name} from the team?`}
+        body={m.status === 'invited' ? 'Their invite goes quietly, and they are not told. You can ask them again.' : 'Their access to your Agency ends at once, and they are told. You can ask them again.'}
+        yes={m.status === 'invited' ? 'Yes, take it back' : `Yes, remove ${m.person.name}`}
+        keep={m.status === 'invited' ? 'Keep the invite' : 'Keep them'}
+        pending={remove.isPending}
+        failed={remove.isError}
+        error={remove.error instanceof Error ? remove.error.message : undefined}
+        onYes={() => remove.mutate()}
+        onClose={() => setAsking(false)}
+      />
     </li>
   );
 }

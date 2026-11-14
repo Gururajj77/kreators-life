@@ -37,6 +37,51 @@ support.post('/', async (c) => {
   return c.json({ ok: true }, 201);
 });
 
+/**
+ * A message of one's own that the team has not answered yet (2026-11-14, All tables, the owner's own): its subject and words can change, or it
+ * can be withdrawn. Only a plain message: a report (written by a Report on someone else's line, its subject always "Report: …", in
+ * cohortTalk.ts, channels.ts and run.ts) quotes another person's words, so it stays as it was sent. Every write is guarded on the same rule in
+ * the statement itself, owner first, so a reply that lands first wins and a second send changes nothing twice (404 or 409 in words).
+ */
+const OWN_OPEN = "user_id = ? AND status = 'open' AND reply = '' AND subject NOT LIKE 'Report: %'";
+/** Why a message of one's own that a write did not reach stays, or null when it is not theirs. */
+async function whyStays(db: D1Database, id: string, userId: string): Promise<string | null> {
+  const row = await db.prepare('SELECT subject, status, reply FROM support_tickets WHERE id = ? AND user_id = ?').bind(id, userId).first<{ subject: string; status: string; reply: string }>();
+  if (!row) return null;
+  if (/^report: /i.test(row.subject)) return 'A report stays as you sent it.';
+  return row.status === 'closed' && !row.reply ? 'The team closed it, so it stays as it is.' : 'The team has answered it, so it stays as it is.';
+}
+
+support.patch('/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const body = await c.req.json<{ subject?: unknown; body?: unknown }>().catch(() => ({}) as { subject?: unknown; body?: unknown });
+  const subject = 'subject' in body ? str(body.subject, 120) : null;
+  const text = 'body' in body ? str(body.body, 4000) : null;
+  if (subject === null && text === null) return c.json({ error: 'Send a subject or the words to change.' }, 400);
+  if (subject === '' || text === '') return c.json({ error: 'a subject and what happened' }, 400);
+  const r = await db
+    .prepare(`UPDATE support_tickets SET subject = COALESCE(?, subject), body = COALESCE(?, body), updated_at = ? WHERE id = ? AND ${OWN_OPEN}`)
+    .bind(subject, text, nowIso(), c.req.param('id'), user.id)
+    .run();
+  if (!r.meta.changes) {
+    const why = await whyStays(db, c.req.param('id'), user.id);
+    return why ? c.json({ error: why }, 409) : c.json({ error: 'not found' }, 404);
+  }
+  return c.json({ ok: true });
+});
+
+support.delete('/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const r = await db.prepare(`DELETE FROM support_tickets WHERE id = ? AND ${OWN_OPEN}`).bind(c.req.param('id'), user.id).run();
+  if (!r.meta.changes) {
+    const why = await whyStays(db, c.req.param('id'), user.id);
+    return why ? c.json({ error: why }, 409) : c.json({ error: 'not found' }, 404);
+  }
+  return c.json({ ok: true });
+});
+
 support.post('/:id/reply', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');

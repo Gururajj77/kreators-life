@@ -1,7 +1,7 @@
 // The smoke checks. Run through blueprint.sh, which starts the server this talks to.
 // Node imports the shared model straight from TypeScript (--experimental-strip-types).
 import { LOVE_PAIRS, MIND_SCREENS, TYPE_NAMES, TYPE_SCREENS, DISCOVER_CORE_STEPS, DISCOVER_SCENES, DISCOVER_STEPS, EQ_FEELINGS, EQ_PEOPLE, EQ_READING, PUZZLES_SHOWN, puzzleAt, RELATIONSHIPS, QUESTIONS, XP, POINTS, WAIT, RUN_REWARD, SOCIAL_REWARDS, MAX_NOT_TO_DO, MODULES, FEATURE_FEE_POINTS, matchSetup, parseSetup, setupSwitchable } from '../../packages/shared/src/index.ts';
-import { LIMITS, ROUTE_LIMITS } from '../../apps/api/src/limits.ts';
+import { LIMITS, ROUTE_LIMITS, VIA_TABLES } from '../../apps/api/src/limits.ts';
 import { DISCOVER_KEYS } from '../../apps/api/src/discoverKeys.ts';
 import { LEGAL_VERSION } from '../../packages/shared/src/index.ts';
 import { CONTRACT_VARS, contractAsText, contractVarsUsed, invoiceAsText, money } from '../../packages/shared/src/index.ts';
@@ -638,9 +638,17 @@ section('Wellbeing');
   const gStill = await api('GET', `/journal/gratitude?day=${today}`, undefined, B.token);
   check('emptying the day with an older version is refused too, so an Undo never wipes words written since', gStaleClear.status === 409 && gStill.json.gratitude?.lines?.[1]?.text === 'Smoke second line', { status: gStaleClear.status, lines: gStill.json.gratitude?.lines });
   const gYes = await api('PUT', `/journal/gratitude/${gYday}`, { lines: gLines(['Yesterday counts', '', ''], gYKeys), today }, B.token);
-  const gOld = await api('PUT', `/journal/gratitude/${new Date(Date.parse(`${today}T00:00:00Z`) - 3 * 86_400_000).toISOString().slice(0, 10)}`, { lines: gLines(['Too late', '', '']), today }, B.token);
+  // Any past day may change since 2026-11-14 (the founder, for All tables), but never one before the account began (the review of 2026-11-14):
+  // this account began today, so three days back is refused in words. An older account's older day is in "All tables: edit and delete".
+  const gOldDay = new Date(Date.parse(`${today}T00:00:00Z`) - 3 * 86_400_000).toISOString().slice(0, 10);
+  const gOld = await api('PUT', `/journal/gratitude/${gOldDay}`, { lines: gLines(['Three days back', '', '']), today }, B.token);
   const gFuture = await api('PUT', `/journal/gratitude/2999-01-01`, { lines: gLines(['Too soon', '', '']), today: '2999-01-01' }, B.token);
-  check('gratitude can change today and yesterday only', gYes.status === 200 && gOld.status === 400 && gFuture.status === 400, { yesterday: gYes.status, old: gOld.status, future: gFuture.status });
+  const gTomorrow = await api('PUT', `/journal/gratitude/${new Date(Date.parse(`${today}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10)}`, { lines: gLines(['Too soon', '', '']), today }, B.token);
+  check(
+    'gratitude can change today and yesterday, never a day before the account began, and never a day still to come',
+    gYes.status === 200 && gOld.status === 400 && /before you joined/.test(gOld.json.error ?? '') && gFuture.status === 400 && gTomorrow.status === 400,
+    { yesterday: gYes.status, old: gOld.status, oldError: gOld.json.error, future: gFuture.status, tomorrow: gTomorrow.status },
+  );
   const gBadPrompt = await api('PUT', `/journal/gratitude/${today}`, { lines: [{ prompt: 'constructor', text: 'x' }, ...gLines([]).slice(1)], today }, B.token);
   check('a prompt that does not exist is refused', gBadPrompt.status === 400, gBadPrompt.json);
   const gOther = await api('GET', `/journal/gratitude?day=${today}`, undefined, C.token);
@@ -1471,7 +1479,21 @@ section('Fitness');
   check('ticking taken twice makes one tick, and Fitness shows the last seven days', k1.status === 200 && k2.status === 200 && d3Row?.takenToday === true && d3Row?.takenDays === 1 && d3Row?.week?.length === 7 && d3Row?.week?.[6] === true, d3Row);
   const kOld = await api('PUT', `/fitness/supplements/${d3}/day`, { date: old, taken: true }, FT.token);
   const kBad = await api('PUT', `/fitness/supplements/${d3}/day`, { date: '2026-11-31', taken: true }, FT.token);
-  check('a tick is for today or yesterday only, on a real day', kOld.status === 400 && kBad.status === 400, [kOld.json, kBad.json]);
+  check('a tick is never for a day before the account began, nor a day that is not real', kOld.status === 400 && /before you joined/.test(kOld.json.error ?? '') && kBad.status === 400, [kOld.json, kBad.json]);
+  // Any past day, never one still to come (2026-11-14, the founder): the person's own tomorrow is refused out loud, whether or not the device
+  // sends its today, for one tick and for Mark all taken, and nothing is written for it; an untick of that day still answers.
+  const sTomorrow = shiftD(today, 1);
+  const kAhead = await api('PUT', `/fitness/supplements/${d3}/day`, { date: sTomorrow, taken: true, today }, FT.token);
+  const kAheadBare = await api('PUT', `/fitness/supplements/${d3}/day`, { date: sTomorrow, taken: true }, FT.token);
+  const allAhead = await api('POST', '/fitness/supplements/day', { date: sTomorrow, time: 'morning', today }, FT.token);
+  const unAhead = await api('PUT', `/fitness/supplements/${d3}/day`, { date: sTomorrow, taken: false, today }, FT.token);
+  const kYday = await api('PUT', `/fitness/supplements/${d3}/day`, { date: yday, taken: false, today }, FT.token);
+  const aheadRows = (await api('GET', '/tables/supplementDays?size=100', undefined, FT.token)).json.rows;
+  check(
+    'a supplement tick for a day still to come is refused in words, one tick and Mark all taken alike, and writes nothing',
+    [kAhead, kAheadBare, allAhead].every((r) => r.status === 400 && /still to come/.test(r.json.error ?? '')) && unAhead.status === 200 && kYday.status === 200 && Array.isArray(aheadRows) && !aheadRows.some((r) => String(r.id).endsWith(`:${sTomorrow}`)),
+    [kAhead.status, kAheadBare.status, allAhead.status, unAhead.status, kYday.status, (aheadRows ?? []).map((r) => r.id)],
+  );
   // The reminder: one inbox note for the morning, while one of the two is not marked; never twice.
   const sParts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
   const sNow = Number(sParts.find((x) => x.type === 'hour')?.value ?? 0) * 60 + Number(sParts.find((x) => x.type === 'minute')?.value ?? 0);
@@ -4079,7 +4101,8 @@ section('Agency');
   check('moving back clears the live day', back.stage === 'making' && back.publishedAt === null && back.approvedAt === null, back);
   await api('PATCH', `/agency/items/${id1}?day=${today}`, { title: 'Founder story reel', stage: 'published' }, O.token);
   const bad = await api('PATCH', `/agency/items/${i2.json.id}?day=${today}`, { title: 'Launch video', link: 'javascript:alert(1)' }, O.token);
-  check('only https links are kept', bad.status === 200 && (await full(i2.json.id)).link === '');
+  // Refused out loud since 2026-11-14 (CLAUDE.md's rule for a typed link: never dropped quietly), and nothing is kept.
+  check('only https links are kept: another is refused in words, and nothing changes', bad.status === 400 && /https/.test(bad.json.error ?? '') && (await full(i2.json.id)).link === '' && (await full(i2.json.id)).title === 'Launch video', bad.json);
 
   // the thread, and the client's dashboard link
   const id2 = i2.json.id;
@@ -10948,11 +10971,12 @@ section('All tables');
     const calAfter = await api('GET', '/me/calendar', undefined, O.token);
     const calOn = await tb('/calendarLink/edit', O.token, 'POST', { id: 'calendar', column: 'on', value: true, today });
     const calBack = await api('GET', '/me/calendar', undefined, O.token);
-    const readOnly = await tb('/teamMessages/edit', O.token, 'POST', { id: msgs.json.rows?.[0]?.id ?? 'x', column: 'words', value: 'x', today });
+    // A message to the team the team has not answered changes through Help's own route since 2026-11-14 (the founder: every table editable).
+    const msgEdit = await tb('/teamMessages/edit', O.token, 'POST', { id: msgs.json.rows?.[0]?.id ?? 'x', column: 'words', value: 'Where does my plan show, please?', today });
     check(
-      'tables: the calendar link switches off and on through its own route, keeping the same link, and a message to the team never changes here',
-      calOff.status === 200 && calOff.json.row?.cells?.on === false && calAfter.json.enabled === false && calOn.status === 200 && calBack.json.enabled === true && calBack.json.token === cal.json.token && readOnly.status === 400,
-      [calOff.status, calOff.json.error, calAfter.json.enabled, calOn.status, calBack.json.token === cal.json.token, readOnly.status],
+      'tables: the calendar link switches off and on through its own route, keeping the same link, and a message the team has not answered changes through Help’s',
+      calOff.status === 200 && calOff.json.row?.cells?.on === false && calAfter.json.enabled === false && calOn.status === 200 && calBack.json.enabled === true && calBack.json.token === cal.json.token && msgEdit.status === 200 && msgEdit.json.row?.cells?.words === 'Where does my plan show, please?',
+      [calOff.status, calOff.json.error, calAfter.json.enabled, calOn.status, calBack.json.token === cal.json.token, msgEdit.status, msgEdit.json.error],
     );
     // AI chat reads Discover's add-ons only with Show to AI chat and Discover's own yes for the assistant, and how the mind works only with its own switch.
     await api('PATCH', '/me/ai-tables', { table: 'discoverAddOns', on: true }, O.token);
@@ -11384,6 +11408,15 @@ section('All tables');
   const aiPage = await api('GET', `/tables/tasks?q=${q}&count=1`, undefined, O.token, AI);
   const aiShut = await api('GET', `/tables/journal`, undefined, O.token, AI);
   check('tables: AI chat reads a switched-on table, and a table not switched on is refused in words naming the switch', aiPage.status === 200 && aiPage.json.total === 11 && aiShut.status === 403 && /Show to AI chat/.test(aiShut.json.error ?? ''), [aiPage.status, aiPage.json.total, aiShut.status]);
+  // AI chat reads only (the review, 2026-11-14): even on a model that keeps nothing, which reads the owner's view, its page carries no edit,
+  // noEdit or remove marks, which the owner's own page of the same rows does.
+  const [aiPrivPage, ownMarked] = await Promise.all([api('GET', `/tables/tasks?q=${q}&count=1&ai=private`, undefined, O.token, AI), tb(`/tasks?q=${q}&count=1`, O.token)]);
+  const rowMarked = (r) => r.edit !== undefined || r.noEdit !== undefined || r.remove !== undefined;
+  check(
+    'tables: an AI chat page on a model that keeps nothing carries no edit or remove marks, which the owner’s own page does',
+    aiPrivPage.status === 200 && (aiPrivPage.json.rows ?? []).length > 0 && !(aiPrivPage.json.rows ?? []).some(rowMarked) && (ownMarked.json.rows ?? []).some(rowMarked),
+    [aiPrivPage.status, (aiPrivPage.json.rows ?? []).filter(rowMarked).length, (ownMarked.json.rows ?? []).filter(rowMarked).length],
+  );
   const aiNever = await Promise.all([
     fetch(`${API}/tables/tasks/csv?q=${q}`, { headers: { authorization: `Bearer ${O.token}`, 'CF-Connecting-IP': ADDRESS, ...AI } }),
     api('POST', '/tables/tasks/edit', { id: made[5]?.id, column: 'title', value: 'AI was here', today }, O.token, AI),
@@ -11505,6 +11538,472 @@ section('All tables');
     }),
     LIMITS.tablesCsvDay,
   );
+}
+
+// ---------------------------------------------------------------- All tables: edit and delete for the owner
+section('All tables: edit and delete for the owner');
+{
+  // The selection bar's Edit and remove (2026-11-14, the founder: "each entry for the original user and not for coach, and not even ai, edit
+  // and delete buttons should also be there in select and multi select and select all"). Each row goes to the app's own route as the person,
+  // on the owner's mount only: never a coach's or an admin's view, never AI chat; a record stays and says why. Every account here is new, so a
+  // kept database runs it the same way again.
+  const P = await signup(`tedit-${stamp}@smoke.test`, `Juniper-${stamp}-pass`, 'Tables editor');
+  const Q = await signup(`tedit-other-${stamp}@smoke.test`, `Saffron-${stamp}-pass`, 'Tables neighbour');
+  const K2 = await signup(`tedit-coach-${stamp}@smoke.test`, `Bramble-${stamp}-pass`, 'Tables edit coach');
+  const R = await signup(`tedit-staff-${stamp}@smoke.test`, `Thistle-${stamp}-pass`, 'Tables edit staff');
+  const tb = (path, token, method = 'GET', body, headers) => api(method, `/tables${path}`, body, token, headers);
+  // The owner's account began thirty days ago, so the older days below are days it had: a day before an account began is refused (the review of
+  // 2026-11-14), which the neighbour's new account shows.
+  smokeDb(`UPDATE users SET created_at = '${daysAgo(30)}' WHERE id = '${P.user.id}'`);
+  const AIV = { 'X-Kreators-Via': 'assistant' };
+  const enc = encodeURIComponent;
+  const dayFrom = (n) => new Date(Date.parse(`${today}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+  const yesterday = dayFrom(-1);
+  const tomorrow = dayFrom(1);
+  const apps = ['community', 'bond', 'companion', 'mindful', 'mood', 'win', 'help', 'journal', 'finance', 'party'];
+  const shown = await Promise.all([P, Q].map((u) => api('PATCH', '/me/modules', { changes: apps.map((key) => ({ key, on: true })) }, u.token)));
+  check('tedit: the apps these tables need are shown for the owner and the other person', shown.every((r) => r.status === 200), shown.map((r) => r.status));
+
+  // ---- the framework: preview, remove, a second send, Select all, owner only
+  const pBuilt = await api('POST', '/onboarding/build', { relationships: ['self'], date: today, picks: { self: { project: `Tedit project ${stamp}` } } }, P.token);
+  const project = (pBuilt.json.nodes ?? []).find((n) => n.kind === 'project');
+  const qBuilt = await api('POST', '/onboarding/build', { relationships: ['self'], date: today, picks: { self: { project: `Tedit theirs ${stamp}` } } }, Q.token);
+  const qProject = (qBuilt.json.nodes ?? []).find((n) => n.kind === 'project');
+  const word = `Tedit ${stamp}`;
+  const mine = [];
+  for (let i = 1; i <= 5; i += 1) mine.push((await api('POST', '/nodes', { kind: 'task', parentId: project?.id, relationship: 'self', title: `${word} ${i}` }, P.token)).json.node?.id);
+  const theirs = (await api('POST', '/nodes', { kind: 'task', parentId: qProject?.id, relationship: 'self', title: `${word} theirs` }, Q.token)).json.node?.id;
+  check('tedit: five tasks of the owner’s and one of someone else’s, under the same words', mine.every(Boolean) && Boolean(theirs), [mine, theirs]);
+  const exists = async (id, token = P.token) => (await api('GET', `/nodes/${id}`, undefined, token)).status === 200;
+
+  // Select all N that match: the ids the screen's own query finds, the owner's only, leaving out what a round already sent.
+  const query = `q=${enc(word)}`;
+  const all = await tb('/tasks/bulk', P.token, 'POST', { action: 'matching', query, today });
+  const rest = await tb('/tasks/bulk', P.token, 'POST', { action: 'matching', query, not: [mine[0]], today });
+  const badNot = await tb('/tasks/bulk', P.token, 'POST', { action: 'matching', query, not: 'everything', today });
+  check(
+    'tedit: Select all finds every row that matches, the owner’s only, and leaves out the rows a round already sent',
+    all.status === 200 && all.json.total === 5 && all.json.ids?.length === 5 && !all.json.ids.includes(theirs) && rest.status === 200 && rest.json.total === 4 && !rest.json.ids?.includes(mine[0]) && badNot.status === 400,
+    [all.status, all.json.total, all.json.ids?.length, rest.json.total, badNot.status],
+  );
+
+  // The preview reads and writes nothing: what each row would get, and why a row stays.
+  const preview = await tb('/tasks/bulk', P.token, 'POST', { action: 'preview', ids: [mine[0], mine[1], theirs, 'nope'], today });
+  const deletedN = (r) => (r.json.act ?? []).find((a) => a.did === 'deleted')?.n;
+  check(
+    'tedit: the sheet’s preview counts what each row would get and why a row stays, and changes nothing',
+    preview.status === 200 && deletedN(preview) === 2 && (preview.json.skipped ?? []).some((s) => s.n === 2 && /not in your active list/.test(s.why)) && (await exists(mine[0])) && (await exists(theirs, Q.token)),
+    preview.json,
+  );
+
+  // AI chat never edits or removes: every write on the owner's mount marked as AI chat is refused, the new actions included.
+  const aiTries = await Promise.all([
+    tb('/tasks/bulk', P.token, 'POST', { action: 'remove', ids: [mine[0]], today }, AIV),
+    tb('/tasks/bulk', P.token, 'POST', { action: 'preview', ids: [mine[0]], today }, AIV),
+    tb('/tasks/bulk', P.token, 'POST', { action: 'matching', query, today }, AIV),
+    tb('/tasks/edit', P.token, 'POST', { id: mine[0], column: 'title', value: 'AI was here', today }, AIV),
+  ]);
+  check('tedit: AI chat is refused every edit and remove, its preview and Select all too, and the task stays as it was', aiTries.every((r) => r.status === 403) && (await exists(mine[0])) && !JSON.stringify((await api('GET', `/nodes/${mine[0]}`, undefined, P.token)).json).includes('AI was here'), aiTries.map((r) => r.status));
+
+  // A coach reads what the student shares, read only: no edit or remove on a row, no write on the coach's mount, and the owner's mount acts only
+  // on the coach's own rows.
+  await admin('POST', `/admin/users/${K2.user.id}/permissions`, { permissions: ['coach'] });
+  const asked = await api('POST', '/coach/requests', { who: `tedit-${stamp}@smoke.test` }, K2.token);
+  const linkId = asked.json.link?.id;
+  await api('POST', `/me/coach/links/${linkId}/answer`, { yes: true }, P.token);
+  await api('PATCH', `/me/coach/links/${linkId}/share`, { tables: ['tasks'] }, P.token);
+  const coachPage = await tb(`/coach/${P.user.id}/tasks?${query}&count=1`, K2.token);
+  const coachWrites = await Promise.all([
+    tb(`/coach/${P.user.id}/tasks/bulk`, K2.token, 'POST', { action: 'remove', ids: [mine[0]], today }),
+    tb(`/coach/${P.user.id}/tasks/edit`, K2.token, 'POST', { id: mine[0], column: 'title', value: 'Coach was here', today }),
+  ]);
+  const coachOwnMount = await tb('/tasks/bulk', K2.token, 'POST', { action: 'remove', ids: [mine[0], mine[1]], today });
+  check(
+    'tedit: a coach reads the shared table with no edit or remove on any row, has no write of their own, and never removes a student’s row through the owner’s mount',
+    coachPage.status === 200 && coachPage.json.total === 5 && coachPage.json.rows?.every((r) => r.edit === undefined && r.remove === undefined && r.noEdit === undefined) &&
+      coachWrites.every((r) => [403, 404].includes(r.status)) && coachOwnMount.status === 200 && coachOwnMount.json.done?.length === 0 && coachOwnMount.json.skipped?.length === 2 && (await exists(mine[0])) && (await exists(mine[1])),
+    [coachPage.status, coachPage.json.total, coachWrites.map((r) => r.status), coachOwnMount.json],
+  );
+  // A super admin reads, read only, and has no write either.
+  const adminPage = await tb(`/admin/${P.user.id}/tasks?${query}&count=1`, A.token);
+  const adminWrites = await Promise.all([
+    tb(`/admin/${P.user.id}/tasks/bulk`, A.token, 'POST', { action: 'remove', ids: [mine[0]], today }),
+    tb(`/admin/${P.user.id}/tasks/edit`, A.token, 'POST', { id: mine[0], column: 'title', value: 'Admin was here', today }),
+  ]);
+  check(
+    'tedit: a super admin reads a member’s table with no edit or remove on any row, and has no write',
+    adminPage.status === 200 && adminPage.json.total === 5 && adminPage.json.rows?.every((r) => r.edit === undefined && r.remove === undefined) && adminWrites.every((r) => [403, 404].includes(r.status)) && (await exists(mine[0])),
+    [adminPage.status, adminPage.json.total, adminWrites.map((r) => r.status)],
+  );
+  // The owner's own rows say what a remove would do, with the page.
+  const ownPage = await tb(`/tasks?${query}&count=1`, P.token);
+  check('tedit: the owner’s rows say what Delete would do, read with the page', ownPage.status === 200 && ownPage.json.rows?.length === 5 && ownPage.json.rows.every((r) => r.remove?.did === 'deleted'), ownPage.json.rows?.map((r) => r.remove));
+
+  // The remove: each row through the app's own route as the person; someone else's row is skipped; a second send changes nothing twice.
+  const removed = await tb('/tasks/bulk', P.token, 'POST', { action: 'remove', ids: [mine[0], mine[1], theirs], today });
+  check(
+    'tedit: ticked rows are removed through the app’s own route, and someone else’s row is skipped, saying why',
+    removed.status === 200 && removed.json.done?.length === 2 && removed.json.done.includes(mine[0]) && removed.json.done.includes(mine[1]) && removed.json.skipped?.[0]?.id === theirs && /not in your active list/.test(removed.json.skipped?.[0]?.why ?? '') &&
+      (removed.json.didAs ?? []).some((d) => d.did === 'deleted' && d.n === 2) && removed.json.left?.length === 0,
+    removed.json,
+  );
+  check('tedit: the owner’s two are gone, and the other person’s task stays theirs', !(await exists(mine[0])) && !(await exists(mine[1])) && (await exists(theirs, Q.token)), '');
+  const again = await tb('/tasks/bulk', P.token, 'POST', { action: 'remove', ids: [mine[0], mine[1]], today });
+  check('tedit: sending the same remove again changes nothing twice', again.status === 200 && again.json.done?.length === 0 && again.json.skipped?.length === 2, again.json);
+  // Two tabs sending the same remove at once (the review of 2026-11-14): both read the rows before either delete runs, so only the route can tell
+  // a real delete from a no-op. Each row counts as done once across the two answers, the other lists it under skipped, and a delete that finds
+  // nothing answers 409 in words, never a quiet yes.
+  {
+    const raced = [];
+    for (let i = 1; i <= 3; i += 1) raced.push((await api('POST', `/finance/goals?day=${today}`, { title: `Tedit race ${stamp} ${i}`, targetCents: 10000 * i }, P.token)).json?.id);
+    const racedTasks = [];
+    for (let i = 1; i <= 2; i += 1) racedTasks.push((await api('POST', '/nodes', { kind: 'task', parentId: project?.id, relationship: 'self', title: `Tedit race ${stamp} ${i}` }, P.token)).json.node?.id);
+    const both = (table, ids) => Promise.all([0, 1].map(() => tb(`/${table}/bulk`, P.token, 'POST', { action: 'remove', ids, today })));
+    const [goalsRace, tasksRace] = await Promise.all([both('savingsGoals', raced), both('tasks', racedTasks)]);
+    const onceEach = (answers, ids) => {
+      const done = answers.flatMap((r) => r.json.done ?? []);
+      const didN = answers.reduce((n, r) => n + (r.json.didAs ?? []).reduce((m, d) => m + d.n, 0), 0);
+      const skipped = answers.flatMap((r) => r.json.skipped ?? []).map((s) => s.id);
+      return answers.every((r) => r.status === 200) && done.length === ids.length && new Set(done).size === ids.length && ids.every((id) => done.includes(id)) && didN === ids.length && skipped.length === ids.length;
+    };
+    const goalsLeft = (await tb(`/savingsGoals?q=${enc(`Tedit race ${stamp}`)}&count=1`, P.token)).json.total;
+    const goneGoal = await api('DELETE', `/finance/goals/${raced[0]}`, undefined, P.token);
+    const goneDue = await api('DELETE', '/finance/dues/never-was', undefined, P.token);
+    check(
+      'tedit: two identical removes at once count each row done once between them, and a delete that finds nothing answers 409 in words',
+      raced.every(Boolean) && racedTasks.every(Boolean) && onceEach(goalsRace, raced) && onceEach(tasksRace, racedTasks) && goalsLeft === 0 && !(await exists(racedTasks[0])) &&
+        goneGoal.status === 409 && /a moment ago/.test(goneGoal.json.error ?? '') && goneDue.status === 409,
+      [goalsRace.map((r) => r.json), tasksRace.map((r) => r.json), goalsLeft, goneGoal.status, goneDue.status],
+    );
+  }
+  const tooMany =await tb('/tasks/bulk', P.token, 'POST', { action: 'remove', ids: Array.from({ length: 101 }, (_, i) => `id${i}`), today });
+  const none = await tb('/tasks/bulk', P.token, 'POST', { action: 'remove', ids: [], today });
+  check('tedit: at most a hundred rows a call, and at least one', tooMany.status === 400 && none.status === 400, [tooMany.status, none.status]);
+  // A done task can be deleted, as on a pillar page; the xp it paid stays.
+  const ticked = await api('POST', `/nodes/${mine[2]}/complete`, { date: today }, P.token);
+  const xpBefore = (await me(P.token)).xp;
+  const doneGone = await tb('/tasks/bulk', P.token, 'POST', { action: 'remove', ids: [mine[2]], today });
+  const xpAfter = (await me(P.token)).xp;
+  check('tedit: a done task is deleted from Tables, and the xp it paid is never taken back', ticked.status === 200 && doneGone.json.done?.[0] === mine[2] && !(await exists(mine[2])) && xpBefore > 0 && xpAfter === xpBefore, [ticked.status, doneGone.json, xpBefore, xpAfter]);
+
+  // A record stays: no remove on a ledger, said in its own words, its preview too.
+  const ledger = await tb('/xpHistory/bulk', P.token, 'POST', { action: 'remove', ids: ['1'], today });
+  const ledgerPreview = await tb('/xpHistory/bulk', P.token, 'POST', { action: 'preview', ids: ['1'], today });
+  check('tedit: a ledger’s rows are never removed, refused in its own words', ledger.status === 400 && /never taken back/.test(ledger.json.error ?? '') && ledgerPreview.status === 400, [ledger.json, ledgerPreview.status]);
+  // The default kind of day stays until another is the default, and nothing is written for it.
+  const templates = await tb('/dayTemplates', P.token);
+  const defaultId = (templates.json.rows ?? []).find((r) => r.cells.isDefault === true)?.id;
+  const keepDefault = await tb('/dayTemplates/bulk', P.token, 'POST', { action: 'remove', ids: [defaultId], today });
+  check('tedit: the default kind of day is skipped, saying to make another the default first', Boolean(defaultId) && keepDefault.status === 200 && keepDefault.json.done?.length === 0 && /default first/.test(keepDefault.json.skipped?.[0]?.why ?? ''), keepDefault.json);
+
+  // ---- Essentials: a not to do item, a message to the team, a routine day
+  const ntd = (await api('POST', '/today/not-to-do', { title: `Tedit doomscroll ${stamp}` }, P.token)).json.item;
+  const renamed = await tb('/notToDo/edit', P.token, 'POST', { id: ntd?.id, column: 'title', value: `Tedit late scroll ${stamp}`, today });
+  const notTheirs = await api('PATCH', `/today/not-to-do/${ntd?.id}`, { title: 'Taken over' }, Q.token);
+  const ntdGone = await tb('/notToDo/bulk', P.token, 'POST', { action: 'remove', ids: [ntd?.id], today });
+  check(
+    'tedit: a not to do item is renamed through Daily’s own route, never by someone else, and removed',
+    renamed.status === 200 && renamed.json.row?.cells?.title === `Tedit late scroll ${stamp}` && notTheirs.status === 404 && ntdGone.json.done?.[0] === ntd?.id && !((await tb('/notToDo', P.token)).json.rows ?? []).some((r) => r.id === ntd?.id),
+    [renamed.status, renamed.json.error, notTheirs.status, ntdGone.json],
+  );
+  await api('POST', '/support', { subject: `Tedit help ${stamp}`, body: 'First words' }, P.token);
+  const ticket = (await tb(`/teamMessages?q=${enc(`Tedit help ${stamp}`)}`, P.token)).json.rows?.[0];
+  const reworded = await tb('/teamMessages/edit', P.token, 'POST', { id: ticket?.id, column: 'words', value: 'Better words', today });
+  const notTheirTicket = await api('PATCH', `/support/${ticket?.id}`, { body: 'Taken over' }, Q.token);
+  const withdrawn = await tb('/teamMessages/bulk', P.token, 'POST', { action: 'remove', ids: [ticket?.id], today });
+  const withdrawnAgain = await tb('/teamMessages/bulk', P.token, 'POST', { action: 'remove', ids: [ticket?.id], today });
+  check(
+    'tedit: a message the team has not answered is reworded and withdrawn through Help’s own routes, never by someone else, once',
+    Boolean(ticket) && reworded.status === 200 && reworded.json.row?.cells?.words === 'Better words' && notTheirTicket.status === 404 && withdrawn.json.done?.[0] === ticket?.id && withdrawnAgain.json.done?.length === 0 && withdrawnAgain.json.skipped?.length === 1,
+    [reworded.status, reworded.json.error, notTheirTicket.status, withdrawn.json, withdrawnAgain.json],
+  );
+  // A routine day: any past day may change, never one still to come (2026-11-14).
+  const LEVELS = { self: [400, 200], lover_partner: [350, 100], friendship: [310, 250], parent_child: [310, 310], servant_leader: [250, 200], guru: [350, 350], divine: [540, 400] };
+  const placements = Object.entries(LEVELS).map(([relationship, [core, floor]]) => ({ relationship, core, floor, evidence: relationship === 'divine' ? 'Sat every morning this week, twenty minutes, logged.' : '' }));
+  await api('POST', '/session/assessment', { placements, realDay: { wake: '07:00', sleep: '23:00', workStart: '09:30', workEnd: '18:00', evening: 'reading', gym: '' } }, P.token);
+  const plan = await api('POST', '/session/plan', { focus: ['guru'], contract: { minDays: 5, checkinTime: '21:30', penalty: 'streak', signedName: 'Tables editor' }, date: today }, P.token);
+  const steps = plan.json.routine?.general?.[0]?.steps ?? [];
+  const pastDay = dayFrom(-5);
+  const pastTick = await api('POST', '/session/day', { date: pastDay, dayType: 'general', steps, today }, P.token);
+  const aheadTick = await api('POST', '/session/day', { date: tomorrow, dayType: 'general', steps, today }, P.token);
+  const aheadChange = await api('PATCH', `/session/day/${tomorrow}`, { done: true, today }, P.token);
+  const beforeJoined = await api('POST', '/session/day', { date: pastDay, dayType: 'general', steps, today }, Q.token);
+  check('tedit: a day before the account began is refused in words', beforeJoined.status === 400 && /before you joined/.test(beforeJoined.json.error ?? ''), [beforeJoined.status, beforeJoined.json]);
+  check(
+    'tedit: a routine day five days back can be ticked, and a day still to come never',
+    plan.status === 201 && steps.length > 0 && pastTick.status === 200 && aheadTick.status === 400 && /still to come/.test(aheadTick.json.error ?? '') && aheadChange.status === 400,
+    [plan.status, pastTick.status, pastTick.json.error, aheadTick.status, aheadChange.status],
+  );
+  const dayRow = (await tb('/routineDays', P.token)).json.rows?.find((r) => r.id === pastDay);
+  const undone = await tb('/routineDays/edit', P.token, 'POST', { id: pastDay, column: 'done', value: false, today });
+  const cleared = await tb('/routineDays/bulk', P.token, 'POST', { action: 'remove', ids: [pastDay], today });
+  check(
+    'tedit: a past routine day is changed and cleared from Tables',
+    dayRow?.cells?.done === true && undone.status === 200 && undone.json.row?.cells?.done === false && cleared.json.done?.[0] === pastDay && !((await tb('/routineDays', P.token)).json.rows ?? []).some((r) => r.id === pastDay),
+    [dayRow?.cells, undone.status, undone.json.error, cleared.json],
+  );
+
+  // ---- Reflection: water on any past day, a mindful log kept in step with its focus round, gratitude on an older day, a Companion line
+  await api('POST', '/reminders/water', { day: today, ml: 400 }, P.token);
+  const glass = (await tb('/water?count=1', P.token)).json.rows?.[0];
+  const moreWater = await tb('/water/edit', P.token, 'POST', { id: glass?.id, column: 'ml', value: 500, today });
+  const aheadOfDevice = await tb('/water/edit', P.token, 'POST', { id: glass?.id, column: 'ml', value: 300, today: yesterday });
+  const aheadDirect = await api('PATCH', `/reminders/water/${glass?.id}?day=${yesterday}`, { ml: 300 }, P.token);
+  const notTheirWater = await api('PATCH', `/reminders/water/${glass?.id}?day=${today}`, { ml: 300 }, Q.token);
+  check(
+    'tedit: a glass of water changes through its own route, never on a day still to come for the device, never by someone else',
+    moreWater.status === 200 && moreWater.json.row?.cells?.ml === 500 && aheadOfDevice.status === 400 && /still to come/.test(aheadOfDevice.json.error ?? '') && aheadDirect.status === 400 && notTheirWater.status === 404,
+    [moreWater.status, moreWater.json.error, aheadOfDevice.status, aheadDirect.status, notTheirWater.status],
+  );
+  const glassGone = await tb('/water/bulk', P.token, 'POST', { action: 'remove', ids: [glass?.id], today });
+  check('tedit: and is deleted', glassGone.json.done?.[0] === glass?.id && (await tb('/water?count=1', P.token)).json.total === 0, glassGone.json);
+
+  const round = await api('POST', '/wellbeing/focus', { minutes: 25, date: today, clientRef: `tedit${stamp}:timer:${Date.now()}`, mode: 'timer', mindful: true }, P.token);
+  const mindful = (await tb('/mindfulMinutes?count=1', P.token)).json.rows?.[0];
+  const longer = await tb('/mindfulMinutes/edit', P.token, 'POST', { id: mindful?.id, column: 'minutes', value: 30, today });
+  const roundNow = ((await api('GET', `/wellbeing/focus/today?date=${today}`, undefined, P.token)).json.rounds ?? []).find((x) => x.id === round.json.id);
+  const reKind = await tb('/mindfulMinutes/edit', P.token, 'POST', { id: mindful?.id, column: 'from', value: 'break', today });
+  check(
+    'tedit: a focus round’s mindful minutes change with the round, and stay a focus round’s',
+    round.status === 201 && round.json.logged === true && mindful?.cells?.from === 'focus' && !(mindful?.edit ?? []).includes('from') && longer.status === 200 && longer.json.row?.cells?.minutes === 30 && roundNow?.minutes === 30 && reKind.status === 400 && /focus round/.test(reKind.json.error ?? ''),
+    [round.status, mindful?.cells, mindful?.edit, longer.status, roundNow, reKind.status, reKind.json.error],
+  );
+  const mindfulGone = await tb('/mindfulMinutes/bulk', P.token, 'POST', { action: 'remove', ids: [mindful?.id], today });
+  const roundAfter = ((await api('GET', `/wellbeing/focus/today?date=${today}`, undefined, P.token)).json.rounds ?? []).find((x) => x.id === round.json.id);
+  check('tedit: deleting the mindful minutes leaves the focus round, no longer counted as mindful', mindfulGone.json.done?.[0] === mindful?.id && roundAfter?.mindful === false && roundAfter?.minutes === 30, [mindfulGone.json, roundAfter]);
+
+  const oldDay = dayFrom(-4);
+  const keys = (await api('GET', `/journal/gratitude?day=${today}&today=${today}`, undefined, P.token)).json.prompts ?? [];
+  const firstTry = await api('PUT', `/journal/gratitude/${oldDay}`, { lines: keys.map((prompt, i) => ({ prompt, text: i === 0 ? 'An older day' : '' })), today }, P.token);
+  const oldKeys = firstTry.status === 409 ? (firstTry.json.prompts ?? []) : keys;
+  const oldSaved = firstTry.status === 200 ? firstTry : await api('PUT', `/journal/gratitude/${oldDay}`, { lines: oldKeys.map((prompt, i) => ({ prompt, text: i === 0 ? 'An older day' : '' })), today }, P.token);
+  const lineChanged = await tb('/gratitude/edit', P.token, 'POST', { id: oldDay, column: 'line1', value: 'Changed from the table', today });
+  const notYet = await api('DELETE', `/journal/gratitude/${tomorrow}?day=${today}`, undefined, P.token);
+  const dayCleared = await tb('/gratitude/bulk', P.token, 'POST', { action: 'remove', ids: [oldDay], today });
+  const gratBefore = await api('PUT', `/journal/gratitude/${oldDay}`, { lines: keys.map((prompt, i) => ({ prompt, text: i === 0 ? 'Before I joined' : '' })), today }, Q.token);
+  check('tedit: gratitude for a day before the account began is refused in words', gratBefore.status === 400 && /before you joined/.test(gratBefore.json.error ?? ''), [gratBefore.status, gratBefore.json]);
+  check(
+    'tedit: gratitude four days back is written, changed and cleared, and a day still to come never',
+    oldSaved.status === 200 && lineChanged.status === 200 && lineChanged.json.row?.cells?.line1 === 'Changed from the table' && notYet.status === 400 && dayCleared.json.done?.[0] === oldDay && (await api('GET', `/journal/gratitude?day=${oldDay}`, undefined, P.token)).json.gratitude === null,
+    [firstTry.status, oldSaved.status, lineChanged.status, lineChanged.json.error, notYet.status, dayCleared.json],
+  );
+
+  const talked = await api('POST', '/companion', { body: 'Hello from the tables', context: { date: today, timeZone: 'Asia/Kolkata' } }, P.token);
+  const lines = await tb('/companionChat?count=1', P.token);
+  const lineGone = await tb('/companionChat/bulk', P.token, 'POST', { action: 'remove', ids: [lines.json.rows?.[0]?.id], today });
+  const linesAfter = await tb('/companionChat?count=1', P.token);
+  check(
+    'tedit: one Companion line is deleted, and the rest of the chat stays',
+    talked.status === 200 && lines.json.total >= 2 && lineGone.json.done?.length === 1 && linesAfter.json.total === lines.json.total - 1,
+    [talked.status, lines.json.total, lineGone.json, linesAfter.json.total],
+  );
+
+  // ---- Connection: a friend request answered once, a follower removed, a follow ended
+  const pMe = await me(P.token);
+  const qMe = await me(Q.token);
+  const requested = await api('POST', '/bond/friends', { code: pMe.friendCode }, Q.token);
+  const pRequest = (await tb('/friends', P.token)).json.rows?.find((r) => r.cells.handle === qMe.handle);
+  const qRequest = (await tb('/friends', Q.token)).json.rows?.find((r) => r.cells.handle === pMe.handle);
+  const qAnswers = await tb('/friends/edit', Q.token, 'POST', { id: qRequest?.id, column: 'state', value: 'friends', today });
+  const yes = await tb('/friends/edit', P.token, 'POST', { id: pRequest?.id, column: 'state', value: 'friends', today });
+  const yesAgain = await api('POST', `/bond/friends/${pRequest?.id}`, { status: 'accepted' }, P.token);
+  const said = ((await api('GET', '/inbox?size=100', undefined, Q.token)).json.notifications ?? []).filter((n) => / said yes$/.test(n.title ?? ''));
+  check(
+    'tedit: a friend request is answered from Tables once, only by the one it was sent to, and the asker is told once',
+    requested.status === 201 && pRequest?.cells?.state === 'pending' && (pRequest?.edit ?? []).includes('state') && !(qRequest?.edit ?? []).includes('state') && qAnswers.status === 400 &&
+      yes.status === 200 && yes.json.row?.cells?.state === 'friends' && !(yes.json.row?.edit ?? []).includes('state') && yesAgain.status === 409 && said.length === 1,
+    [requested.status, pRequest?.cells, pRequest?.edit, qRequest?.edit, qAnswers.status, yes.status, yesAgain.status, said.length],
+  );
+  const unfriended = await tb('/friends/bulk', P.token, 'POST', { action: 'remove', ids: [pRequest?.id], today });
+  check('tedit: a friend is removed from Tables, for both', unfriended.json.done?.length === 1 && ((await tb('/friends?count=1', Q.token)).json.total ?? 0) === 0, unfriended.json);
+
+  await api('POST', `/community/follow/${P.user.id}`, {}, Q.token);
+  const followers = await tb('/followers?count=1', P.token);
+  const takenOff = await tb('/followers/bulk', P.token, 'POST', { action: 'remove', ids: [Q.user.id], today });
+  check('tedit: someone who follows the owner is taken off, and they follow no more', followers.json.total === 1 && followers.json.rows?.[0]?.id === Q.user.id && takenOff.json.done?.[0] === Q.user.id && (await tb('/following?count=1', Q.token)).json.total === 0, [followers.json.total, takenOff.json]);
+  await api('POST', `/community/follow/${Q.user.id}`, {}, P.token);
+  const unfollowed = await tb('/following/bulk', P.token, 'POST', { action: 'remove', ids: [Q.user.id], today });
+  const unfollowedAgain = await tb('/following/bulk', P.token, 'POST', { action: 'remove', ids: [Q.user.id], today });
+  check('tedit: the owner unfollows from Tables, once', unfollowed.json.done?.[0] === Q.user.id && (await tb('/followers?count=1', Q.token)).json.total === 0 && unfollowedAgain.json.done?.length === 0 && /not in your list/.test(unfollowedAgain.json.skipped?.[0]?.why ?? ''), [unfollowed.json, unfollowedAgain.json]);
+
+  // A cancelled event stays as it is, and an empty change says so (gaps a table would have shown).
+  const ev = await api('POST', '/party/events', { title: `Tedit party ${stamp}`, startsAt: new Date(Date.now() + 3 * 86_400_000).toISOString(), minutes: 60, pricePoints: 0 }, P.token);
+  const evId = ev.json.event?.id ?? ev.json.id;
+  const emptyChange = await api('PATCH', `/party/events/${evId}`, {}, P.token);
+  const cancelled = await api('PATCH', `/party/events/${evId}`, { status: 'cancelled' }, P.token);
+  const reopened = await api('PATCH', `/party/events/${evId}`, { status: 'published' }, P.token);
+  const renamedLate = await api('PATCH', `/party/events/${evId}`, { title: 'Back from the dead' }, P.token);
+  check(
+    'tedit: an event’s change needs something to change, and a cancelled one is never live again nor renamed',
+    Boolean(evId) && emptyChange.status === 400 && cancelled.status === 200 && reopened.status === 400 && renamedLate.status === 400,
+    [ev.status, emptyChange.status, cancelled.status, reopened.status, renamedLate.status],
+  );
+
+  // ---- Contribution: a Win entry withdrawn before it is reviewed
+  await admin('POST', `/admin/users/${R.user.id}/role`, { role: 'admin' });
+  await api('PATCH', '/me/modules', { key: 'win', on: true }, R.token);
+  const reward = await api('POST', '/win', { title: `Tedit reward ${stamp}`, brandName: 'Tedit brand', budgetPoints: 1000, ratePerThousand: 10, minViews: 1 }, R.token);
+  const entered = await api('POST', `/win/${reward.json.id}/submit`, { url: `https://example.test/tedit/${stamp}` }, P.token);
+  const entryId = entered.json.submission?.id;
+  const entryOut = await tb('/winEntries/bulk', P.token, 'POST', { action: 'remove', ids: [entryId], today });
+  const entryOutAgain = await api('DELETE', `/win/submissions/${entryId}`, undefined, P.token);
+  check(
+    'tedit: a Win entry waiting for review is withdrawn from Tables, once',
+    reward.status === 201 && entered.status === 201 && entryOut.json.done?.[0] === entryId && ((await tb('/winEntries?count=1', P.token)).json.total ?? 0) === 0 && entryOutAgain.status === 404,
+    [reward.status, entered.status, entryOut.json, entryOutAgain.status],
+  );
+
+  // An event's words are its host's own (the review of 2026-11-14): staff keep the status moves they had, never a host's title or place. A new
+  // place tells each guest in one note, rewritten in place, so moving it twice never piles up notes.
+  const venueEv = await api('POST', '/party/events', { title: `Tedit venue ${stamp}`, startsAt: new Date(Date.now() + 4 * 86_400_000).toISOString(), minutes: 60, pricePoints: 0, venue: 'Old cafe' }, P.token);
+  const venueId = venueEv.json.event?.id ?? venueEv.json.id;
+  const seat = await api('POST', `/party/events/${venueId}/rsvp`, { networking: false }, Q.token);
+  const staffWords = await api('PATCH', `/party/events/${venueId}`, { title: 'Renamed by staff' }, R.token);
+  const placeOnce = await api('PATCH', `/party/events/${venueId}`, { venue: 'New cafe' }, P.token);
+  const placeTwice = await api('PATCH', `/party/events/${venueId}`, { venue: 'Newer cafe' }, P.token);
+  const placeNotes = ((await api('GET', '/inbox?size=100', undefined, Q.token)).json.notifications ?? []).filter((n) => n.title === `New place for Tedit venue ${stamp}`);
+  check(
+    'tedit: staff never change a host’s words, and a guest gets one note however often the place moves',
+    Boolean(venueId) && seat.status < 300 && staffWords.status === 403 && placeOnce.status === 200 && placeTwice.status === 200 && placeNotes.length === 1 && placeNotes[0]?.body === 'Newer cafe',
+    [venueEv.status, seat.status, staffWords.status, placeOnce.status, placeTwice.status, placeNotes.map((n) => n.body)],
+  );
+
+  // A client's email is checked when it changes, as when the client was added (a gap a table would have shown).
+  await api('PATCH', '/me/modules', { key: 'agency', on: true }, P.token);
+  const client = await api('POST', '/agency/clients', { name: `Tedit client co ${stamp}`, contactName: 'Asha', contactEmail: `tedit-co-${stamp}@smoke.test`, portalPassword: 'generate' }, P.token);
+  const badEmail = await api('PATCH', `/agency/clients/${client.json.id}`, { contactEmail: 'not an email' }, P.token);
+  const goodEmail = await api('PATCH', `/agency/clients/${client.json.id}`, { contactEmail: `tedit-co2-${stamp}@smoke.test` }, P.token);
+  check('tedit: a client’s email is checked when it changes, refused in words when it is not one', client.status === 201 && badEmail.status === 400 && /email/.test(badEmail.json.error ?? '') && goodEmail.status === 200, [client.status, badEmail.status, badEmail.json.error, goodEmail.status]);
+
+  // ---- Creation: budgets one by one, money the app booked stays
+  await api('PUT', '/finance/budgets', { budgets: [{ category: 'Software', monthlyCents: 10000 }, { category: 'Other expense', monthlyCents: 5000 }] }, P.token);
+  const budgets = await tb('/budgets?count=1', P.token);
+  const budgetsGone = await tb('/budgets/bulk', P.token, 'POST', { action: 'remove', ids: (budgets.json.rows ?? []).map((r) => r.id), today });
+  check('tedit: budgets are deleted one by one through Finance’s own route, a category with a space in it too', budgets.json.total === 2 && budgetsGone.json.done?.length === 2 && (await tb('/budgets?count=1', P.token)).json.total === 0, [budgets.json.total, budgetsGone.json]);
+  const inv = await api('POST', '/finance/invoices', { clientName: `Tedit client ${stamp}`, clientEmail: `tedit-client-${stamp}@example.test`, items: [{ description: 'A short', quantity: 1, unitCents: 250000 }] }, P.token);
+  await api('PATCH', `/finance/invoices/${inv.json.invoice?.id}`, { status: 'sent' }, P.token);
+  const paid = await api('PATCH', `/finance/invoices/${inv.json.invoice?.id}`, { status: 'paid' }, P.token);
+  const typed = await api('POST', '/finance/transactions', { kind: 'expense', amountCents: 9900, category: 'Software', date: today }, P.token);
+  const money = await tb('/moneyInOut?count=1', P.token);
+  const booked = (money.json.rows ?? []).find((r) => r.cells.source === 'invoice');
+  const own = (money.json.rows ?? []).find((r) => r.cells.source === 'manual');
+  const moneyPreview = await tb('/moneyInOut/bulk', P.token, 'POST', { action: 'preview', ids: [booked?.id, own?.id], today });
+  const bookedDirect = await api('DELETE', `/finance/transactions/${booked?.id}`, undefined, P.token);
+  const moneyGone = await tb('/moneyInOut/bulk', P.token, 'POST', { action: 'remove', ids: [booked?.id, own?.id], today });
+  check(
+    'tedit: money typed in is deleted, and money the app booked from a paid invoice stays, said in words, even straight to the route',
+    paid.status === 200 && typed.status === 201 && Boolean(booked) && Boolean(own) && deletedN(moneyPreview) === 1 && /booked/.test(moneyPreview.json.skipped?.[0]?.why ?? '') &&
+      bookedDirect.status === 409 && moneyGone.json.done?.join() === own?.id && moneyGone.json.skipped?.[0]?.id === booked?.id && (await tb('/moneyInOut?count=1', P.token)).json.total === 1,
+    [paid.status, typed.status, booked?.cells?.source, moneyPreview.json, bookedDirect.status, moneyGone.json],
+  );
+
+  // Every new write route has a limit.
+  const newWrites = [
+    ['PATCH', '/today/not-to-do/:id'], ['PATCH', '/support/:id'], ['DELETE', '/support/:id'], ['PATCH', '/session/day/:date'], ['DELETE', '/session/day/:date'], ['PATCH', '/reminders/water/:id'], ['DELETE', '/reminders/water/:id'],
+    ['PATCH', '/wellbeing/mindful/:id'], ['DELETE', '/journal/gratitude/:day'], ['DELETE', '/companion/messages/:id'], ['DELETE', '/community/followers/:userId'], ['DELETE', '/community/follow/:userId'], ['DELETE', '/win/submissions/:id'],
+    ['DELETE', '/finance/budgets/:category'], ['DELETE', '/tools/:id'], ['DELETE', '/studio/leads/:id'], ['DELETE', '/studio/broadcasts/:id'], ['POST', '/school/enrollments/:id/leave'], ['DELETE', '/orgs/:id/membership'],
+    ['PATCH', '/party/events/:id'], ['PATCH', '/run/runs/:id'], ['PATCH', '/run/clubs/:id'], ['PATCH', '/run/collabs/:id'],
+  ];
+  const unlimited = newWrites.filter(([method, path]) => !ROUTE_LIMITS.some((r) => r.method === method && r.path === path));
+  check('tedit: every route Tables now reaches to change or remove a row has a limit', unlimited.length === 0, unlimited);
+  const doorLimit = (path) => ROUTE_LIMITS.find((r) => r.method === 'POST' && r.path === path)?.limit;
+  check(
+    'tedit: Tables spends its own budgets (the bulk door, each row it reaches, and the edit door), never the everyday settings’ prefs',
+    Boolean(LIMITS.tablesBulk && LIMITS.tablesRows) && doorLimit('/tables/:table/bulk') === 'tablesBulk' && doorLimit('/tables/:table/edit') === 'tablesRows' && VIA_TABLES.prefs === 'tablesRows' && Object.keys(VIA_TABLES).join() === 'prefs',
+    [doorLimit('/tables/:table/bulk'), doorLimit('/tables/:table/edit'), VIA_TABLES],
+  );
+  // Only a call Tables' own doors made spends `tablesRows`: the `X-Kreators-Via: tables` header sent by a person moves nothing (the review of
+  // 2026-11-14 found it gave every account a second budget on every `prefs` route). A new account, so spending its `prefs` touches no other check.
+  {
+    const S = await signup(`tedit-budget-${stamp}@smoke.test`, `Marigold-${stamp}-pass`, 'Tables budget');
+    const item = (await api('POST', '/today/not-to-do', { title: `Tedit budget ${stamp}` }, S.token)).json.item;
+    let spent = 0;
+    let shut = 0;
+    // Until the first 429: a bad id still passes the limiter (404), so this spends `prefs` and changes nothing. Twice the limit at most, in case
+    // the hour's window turns on the way.
+    while (shut !== 429 && spent < LIMITS.prefs.max * 2 + 2) {
+      shut = (await api('PATCH', '/today/not-to-do/zzzz-none', { title: 'Nothing' }, S.token)).status;
+      spent += 1;
+    }
+    const forged = await api('PATCH', `/today/not-to-do/${item?.id}`, { title: `Forged ${stamp}` }, S.token, { 'X-Kreators-Via': 'tables' });
+    const viaDoor = await tb('/notToDo/edit', S.token, 'POST', { id: item?.id, column: 'title', value: `Tedit through the door ${stamp}`, today });
+    check(
+      'tedit: a person who sends the Tables mark themselves still spends prefs (429 once spent), while Tables’ own Edit of the same row still saves',
+      Boolean(item?.id) && shut === 429 && forged.status === 429 && viaDoor.status === 200 && viaDoor.json.row?.cells?.title === `Tedit through the door ${stamp}`,
+      [item?.id, spent, shut, forged.status, viaDoor.status, viaDoor.json.error],
+    );
+  }
+
+  // A post nobody answered goes on the bar's second tap; once someone answers it, it asks in the sheet, and a second tap sent then is skipped.
+  const lonePost = await api('POST', '/community', { body: `Tedit post ${stamp}`, category: 'Stories' }, P.token);
+  const postId = lonePost.json.post?.id;
+  const postRow = async () => (await tb(`/posts?q=${enc(`Tedit post ${stamp}`)}`, P.token)).json.rows?.find((r) => r.id === postId);
+  const quiet = await postRow();
+  const answered = await api('POST', `/community/${postId}/replies`, { body: 'Tedit reply' }, Q.token);
+  const loud = await postRow();
+  const tapped = await tb('/posts/bulk', P.token, 'POST', { action: 'remove', ids: [postId], today, asked: 'twice' });
+  const sheeted = await tb('/posts/bulk', P.token, 'POST', { action: 'remove', ids: [postId], today });
+  check(
+    'tedit: a post asks on a second tap until someone answers it, then in the sheet, and a second tap sent after the answer deletes nothing',
+    lonePost.status === 201 && quiet?.remove?.did === 'deleted' && !quiet?.remove?.sheet && answered.status === 201 && loud?.remove?.sheet === true &&
+      tapped.json.done?.length === 0 && /asks first/.test(tapped.json.skipped?.[0]?.why ?? '') && sheeted.json.done?.[0] === postId,
+    [lonePost.status, quiet?.remove, answered.status, loud?.remove, tapped.json, sheeted.json],
+  );
+
+  // An answer to a reply at the deepest level is stored beside it, so the reply it answered stays, in the table and in Community's own delete
+  // (the review of 2026-11-14: it could be deleted though its writer was told someone replied); one with nothing after it still goes.
+  const deepPost = await api('POST', '/community', { body: `Tedit deep post ${stamp}`, category: 'Stories' }, P.token);
+  const deepId = deepPost.json.post?.id;
+  const chain = [];
+  for (let d = 0, under = null; d <= 4; d += 1) {
+    const r = await api('POST', `/community/${deepId}/replies`, { body: `Tedit deep ${stamp} ${d}`, parentId: under }, P.token);
+    chain.push(r.json.reply);
+    under = r.json.reply?.id ?? null;
+  }
+  const bottom = chain[4];
+  const besideIt = await api('POST', `/community/${deepId}/replies`, { body: `Tedit answer at the bottom ${stamp}`, parentId: bottom?.id }, Q.token);
+  const loneDeep = await api('POST', `/community/${deepId}/replies`, { body: `Tedit unanswered at the bottom ${stamp}`, parentId: chain[3]?.id }, P.token);
+  const loneId = loneDeep.json.reply?.id;
+  const deepPreview = await tb('/replies/bulk', P.token, 'POST', { action: 'preview', ids: [bottom?.id, loneId], today });
+  const straight = await api('DELETE', `/community/replies/${bottom?.id}`, undefined, P.token);
+  const deepRemoved = await tb('/replies/bulk', P.token, 'POST', { action: 'remove', ids: [bottom?.id, loneId], today });
+  check(
+    'tedit: a reply at the deepest level that someone answered stays, in the table and through Community’s own delete, while one with nothing after it goes',
+    deepPost.status === 201 && chain.every(Boolean) && bottom?.depth === 4 && besideIt.status === 201 && besideIt.json.reply?.depth === 4 && besideIt.json.reply?.parentId === bottom?.parentId &&
+      loneDeep.json.reply?.depth === 4 && deletedN(deepPreview) === 1 && (deepPreview.json.skipped ?? []).some((s) => /Someone answered it/.test(s.why)) &&
+      straight.status === 409 && deepRemoved.json.done?.length === 1 && deepRemoved.json.done[0] === loneId && (deepRemoved.json.skipped ?? []).some((s) => /Someone answered it/.test(s.why ?? '')),
+    [deepPost.status, chain.map((r) => r?.depth), besideIt.status, besideIt.json.reply?.parentId, bottom?.parentId, deepPreview.json, straight.status, straight.json, deepRemoved.json],
+  );
+
+  // A cohort you left: your own line in its talk still comes down and how you show on your lines still changes, while reading and writing there
+  // stay for its people and nobody else reaches either (the review of 2026-11-14: the talk let only its people in, so after Leave every Take down
+  // and every change of how you show said "not found").
+  const joined = await api('POST', '/school/cohorts/coh-onboarding/enroll', {}, P.token);
+  const cohortLine = await api('POST', '/school/cohorts/coh-onboarding/talk', { body: `Tedit cohort line ${stamp}` }, P.token);
+  const lineId = cohortLine.json.line?.id;
+  const place = ((await tb('/enrolments?count=1', P.token)).json.rows ?? []).find((r) => r.cells.cohort === 'Open all year' && r.cells.status === 'enrolled');
+  const leftCohort = await tb('/enrolments/bulk', P.token, 'POST', { action: 'remove', ids: [place?.id], today });
+  const lineRow = async () => ((await tb('/cohortLines?count=1', P.token)).json.rows ?? []).find((r) => r.cells.lineId === lineId);
+  const lineBefore = await lineRow();
+  const reshown = await tb('/cohortLines/edit', P.token, 'POST', { id: lineBefore?.id, column: 'shownAs', value: 'public', today });
+  const readLeft = await api('GET', '/school/cohorts/coh-onboarding/talk', undefined, P.token);
+  const writeLeft = await api('POST', '/school/cohorts/coh-onboarding/talk', { body: `Tedit after leaving ${stamp}` }, P.token);
+  const strangerShow = await api('PUT', '/school/cohorts/coh-onboarding/talk/me', { visibility: 'public' }, Q.token);
+  const strangerDown = await api('DELETE', `/school/cohorts/coh-onboarding/talk/${lineId}`, undefined, Q.token);
+  const lineDown = await tb('/cohortLines/bulk', P.token, 'POST', { action: 'remove', ids: [lineBefore?.id], today, asked: 'twice' });
+  const lineAfter = await lineRow();
+  check(
+    'tedit: after leaving a cohort its writer still takes their own line down and changes how they show, while reading and writing there stay for its people and nobody else reaches either',
+    joined.status === 201 && cohortLine.status === 201 && Boolean(place) && leftCohort.json.done?.[0] === place?.id && lineBefore?.remove?.did === 'taken down' &&
+      reshown.status === 200 && reshown.json.row?.cells?.shownAs === 'public' && readLeft.status === 404 && writeLeft.status === 404 && strangerShow.status === 404 && strangerDown.status === 404 &&
+      lineDown.json.done?.[0] === lineBefore?.id && lineAfter?.cells?.takenDown === true && lineAfter?.cells?.line == null,
+    [joined.status, cohortLine.status, place?.cells, leftCohort.json, lineBefore?.remove, reshown.status, reshown.json.error, readLeft.status, writeLeft.status, strangerShow.status, strangerDown.status, lineDown.json, lineAfter?.cells],
+  );
+
+  // Back as they were: the coach link ends, the coach and the staff account lose what this section gave them.
+  await api('DELETE', `/me/coach/links/${linkId}`, undefined, P.token);
+  await admin('POST', `/admin/users/${K2.user.id}/permissions`, { permissions: [] });
+  await admin('POST', `/admin/users/${R.user.id}/role`, { role: 'user' });
 }
 
 // The run's own admin goes back to a user once every section that needs it is done (the Pages section makes a program as it, Dev Tools reads as it).

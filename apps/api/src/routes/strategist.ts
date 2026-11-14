@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { BRAND_NAME_MAX, BRAND_SOURCE_KINDS, BRIEF_MAX, MAX_BRANDS, MAX_BRAND_SOURCES, PIECE_KINDS, RESEARCH_KINDS, sourceKindOf, type Brand, type BrandDetail, type BrandPiece, type BrandSource, type PieceKind, type ResearchItem, type ResearchKind, type ResearchRun } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { newId, nowIso, num, oneOf, pageOf, paged, str } from '../db';
+import { GONE_NOW, newId, nowIso, num, oneOf, pageOf, paged, str } from '../db';
 import { reachConnected, readLink, research } from '../reach';
 import type { Env } from '../env';
 import { titleFor, write, writerFor, type Context } from '../strategist';
@@ -106,12 +106,14 @@ strategist.delete('/brands/:id', async (c) => {
   const user = c.get('user');
   const row = await mine(db, user.id, c.req.param('id'));
   if (!row) return c.json({ error: 'not found' }, 404);
-  await db.batch([
+  const done = await db.batch([
     db.prepare('DELETE FROM brand_pieces WHERE brand_id = ?').bind(row.id),
     db.prepare('DELETE FROM research_runs WHERE brand_id = ?').bind(row.id),
     db.prepare('DELETE FROM brand_sources WHERE brand_id = ?').bind(row.id),
     db.prepare('DELETE FROM brands WHERE id = ?').bind(row.id),
   ]);
+  // Another tab, or a second send, took it between the read above and here: said, never a quiet yes, so All tables counts it once.
+  if (!done[3]?.meta.changes) return c.json({ error: GONE_NOW }, 409);
   return c.json({ ok: true });
 });
 
@@ -133,12 +135,26 @@ strategist.post('/brands/:id/sources', async (c) => {
   return c.json({ source: s ? toSource(s) : null }, 201);
 });
 
+// Rename a link a folder is fed (2026-11-14, All tables). Its address stays: a new one is a new link.
+strategist.patch('/brands/:id/sources/:sid', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const row = await mine(db, user.id, c.req.param('id'));
+  if (!row) return c.json({ error: 'not found' }, 404);
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const res = await db.prepare('UPDATE brand_sources SET label = ? WHERE id = ? AND brand_id = ?').bind(str(body.label, 120), c.req.param('sid'), row.id).run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
+  await touch(db, row.id);
+  return c.json({ ok: true });
+});
+
 strategist.delete('/brands/:id/sources/:sid', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const row = await mine(db, user.id, c.req.param('id'));
   if (!row) return c.json({ error: 'not found' }, 404);
-  await db.prepare('DELETE FROM brand_sources WHERE id = ? AND brand_id = ?').bind(c.req.param('sid'), row.id).run();
+  const res = await db.prepare('DELETE FROM brand_sources WHERE id = ? AND brand_id = ?').bind(c.req.param('sid'), row.id).run();
+  if (!res.meta.changes) return c.json({ error: GONE_NOW }, 409);
   return c.json({ ok: true });
 });
 
@@ -188,7 +204,8 @@ strategist.delete('/brands/:id/runs/:rid', async (c) => {
   const user = c.get('user');
   const row = await mine(db, user.id, c.req.param('id'));
   if (!row) return c.json({ error: 'not found' }, 404);
-  await db.prepare('DELETE FROM research_runs WHERE id = ? AND brand_id = ?').bind(c.req.param('rid'), row.id).run();
+  const res = await db.prepare('DELETE FROM research_runs WHERE id = ? AND brand_id = ?').bind(c.req.param('rid'), row.id).run();
+  if (!res.meta.changes) return c.json({ error: GONE_NOW }, 409);
   return c.json({ ok: true });
 });
 
@@ -252,7 +269,8 @@ strategist.delete('/brands/:id/pieces/:pid', async (c) => {
   const user = c.get('user');
   const row = await mine(db, user.id, c.req.param('id'));
   if (!row) return c.json({ error: 'not found' }, 404);
-  await db.prepare('DELETE FROM brand_pieces WHERE id = ? AND brand_id = ?').bind(c.req.param('pid'), row.id).run();
+  const res = await db.prepare('DELETE FROM brand_pieces WHERE id = ? AND brand_id = ?').bind(c.req.param('pid'), row.id).run();
+  if (!res.meta.changes) return c.json({ error: GONE_NOW }, 409);
   return c.json({ ok: true });
 });
 

@@ -23,6 +23,9 @@ import {
   type ReviewLayerItem,
   type ReviewLayerKind,
   MAX_REVIEW_TEMPLATES,
+  MAX_REVIEW_PROMPTS,
+  REVIEW_PROMPT_MAX,
+  formatCount,
   parseReviewPrompts,
   PERIOD_KINDS,
   periodDays,
@@ -664,14 +667,28 @@ reviews.post('/templates', async (c) => {
   return c.json({ template }, 201);
 });
 
+/**
+ * A template's questions typed as lines, one a line (All tables, 2026-11-14), read by the same rule as the list the Reviews screen sends, but
+ * refused out loud where that list would be cut quietly: more than MAX_REVIEW_PROMPTS questions, or one past REVIEW_PROMPT_MAX.
+ */
+function questionLines(text: string): string[] | string {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length > MAX_REVIEW_PROMPTS) return `Up to ${MAX_REVIEW_PROMPTS} questions, one a line.`;
+  if (lines.some((l) => l.length > REVIEW_PROMPT_MAX)) return `Keep each question to ${REVIEW_PROMPT_MAX} characters.`;
+  return parseReviewPrompts(lines);
+}
+
 reviews.patch('/templates/:id', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const row = await db.prepare('SELECT * FROM review_templates WHERE id = ? AND user_id = ?').bind(c.req.param('id'), user.id).first<TemplateRow>();
   if (!row) return c.json({ error: 'not found' }, 404);
-  const body = await c.req.json<{ name?: unknown; prompts?: unknown }>().catch(() => ({}) as { name?: unknown; prompts?: unknown });
+  const body = await c.req.json<{ name?: unknown; prompts?: unknown; questions?: unknown }>().catch(() => ({}) as { name?: unknown; prompts?: unknown; questions?: unknown });
   const name = typeof body.name === 'string' ? body.name.trim().slice(0, REVIEW_NAME_MAX) : row.name;
-  const prompts = body.prompts === undefined ? strings(row.prompts_json) : parseReviewPrompts(body.prompts);
+  // `questions`: the same list as lines, from All tables' one cell. Reviews already written keep the questions they were written with.
+  const typed = typeof body.questions === 'string' ? questionLines(body.questions) : null;
+  if (typeof typed === 'string') return c.json({ error: typed }, 400);
+  const prompts = typed ?? (body.prompts === undefined ? strings(row.prompts_json) : parseReviewPrompts(body.prompts));
   if (!name) return c.json({ error: 'Give the template a name.' }, 400);
   if (prompts.length === 0) return c.json({ error: 'Add at least one question.' }, 400);
   const now = nowIso();
@@ -771,6 +788,70 @@ reviews.get('/:id', async (c) => {
   const row = await c.env.DB.prepare('SELECT * FROM reviews WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).first<ReviewRow>();
   if (!row) return c.json({ error: 'not found' }, 404);
   return c.json({ review: toReview(row) });
+});
+
+/**
+ * A saved review's answers as one block of words (All tables' Answers cell): each question as it was saved, a colon, then its answer, and the
+ * next question at the start of a later line. Read back in the saved questions' order, so an answer never moves under another question; the
+ * words before the first question must be nothing, and a question that cannot be found refuses the whole block in plain words.
+ */
+export function answersFromText(text: string, prompts: readonly string[]): string[] | string {
+  const src = text.replace(/\r\n?/g, '\n');
+  const heads: { at: number; end: number }[] = [];
+  let from = 0;
+  for (const p of prompts) {
+    const head = `${p.trim()}:`;
+    let at = src.indexOf(head, from);
+    // A question starts its own line: the very start, or just after a line break.
+    while (at > 0 && src[at - 1] !== '\n') at = src.indexOf(head, at + 1);
+    if (at < 0) return 'Keep every question as it was, each at the start of its line with its colon, and write after it.';
+    heads.push({ at, end: at + head.length });
+    from = at + head.length;
+  }
+  if (heads.length && src.slice(0, heads[0]!.at).trim()) return 'Write each answer after its question, not before the first one.';
+  const answers = heads.map((h, i) => src.slice(h.end, i + 1 < heads.length ? heads[i + 1]!.at : src.length).trim());
+  if (answers.some((a) => a.length > REVIEW_ANSWER_MAX)) return `Keep each answer to ${formatCount(REVIEW_ANSWER_MAX)} characters.`;
+  return answers;
+}
+
+/**
+ * Change a saved review's rating, highlight or answers (All tables, 2026-11-14), and nothing else: never its questions, its period, its name
+ * or the numbers saved with it (`snapshot_json`), which PUT / would rebuild from today's data. Owner only. The answers are written only while
+ * the review still holds the questions they were read against (guarded on `prompts_json`), so a save on Reviews in another tab answers 409.
+ */
+reviews.patch('/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const row = await db.prepare('SELECT id, prompts_json FROM reviews WHERE id = ? AND user_id = ?').bind(c.req.param('id'), user.id).first<{ id: string; prompts_json: string }>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const sets: string[] = [];
+  const args: unknown[] = [];
+  if ('rating' in body) {
+    const r = body.rating;
+    if (r !== null && !(typeof r === 'number' && Number.isInteger(r) && r >= 1 && r <= 5)) return c.json({ error: 'A rating is 1 to 5, or none.' }, 400);
+    sets.push('rating = ?');
+    args.push(r);
+  }
+  if ('highlight' in body) {
+    if (typeof body.highlight !== 'string') return c.json({ error: 'Type the highlight as words.' }, 400);
+    const h = body.highlight.trim();
+    if (h.length > REVIEW_HIGHLIGHT_MAX) return c.json({ error: `Keep the highlight to ${REVIEW_HIGHLIGHT_MAX} characters.` }, 400);
+    sets.push('highlight = ?');
+    args.push(h);
+  }
+  if ('answersText' in body) {
+    if (typeof body.answersText !== 'string') return c.json({ error: 'Type the answers as words.' }, 400);
+    const answers = answersFromText(body.answersText, strings(row.prompts_json));
+    if (typeof answers === 'string') return c.json({ error: answers }, 400);
+    sets.push('answers_json = ?');
+    args.push(JSON.stringify(answers));
+  }
+  if (sets.length === 0) return c.json({ error: 'Nothing to change.' }, 400);
+  const done = await db.prepare(`UPDATE reviews SET ${sets.join(', ')}, updated_at = ? WHERE id = ? AND user_id = ? AND prompts_json = ?`).bind(...args, nowIso(), row.id, user.id, row.prompts_json).run();
+  if (!(done.meta.changes ?? 0)) return c.json({ error: 'changed' }, 409);
+  const after = await db.prepare('SELECT * FROM reviews WHERE id = ? AND user_id = ?').bind(row.id, user.id).first<ReviewRow>();
+  return c.json({ review: after ? toReview(after) : null });
 });
 
 reviews.delete('/:id', async (c) => {

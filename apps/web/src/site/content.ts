@@ -258,11 +258,11 @@ export const FEATURES: Record<string, FeatureCopy> = {
     pitch: 'Your tasks, moods, money, shop, clients, events and more, each as a table, grouped like your apps. Sort it, filter it, search it, and copy or download the rows you pick.',
     more: [
       'Pick 10, 25, 50 or 100 rows a page. Download a CSV file of the rows you tick, or of every row that matches.',
-      'Change a cell where the app lets you, by the same rules as its own screen. Records such as xp, points, orders and signed paper stay as they are.',
+      'Edit a row or remove it by the same rules as its own screen, and only you can. Records such as xp, points, orders and signed paper stay as they are.',
       'A life coach sees a table only if you switch it on for them, and can never change it. A table with other people’s details, such as buyers or guests, never reaches a coach.',
       'An admin never sees your journal, gratitude, body and mind tables or a table with other people’s details, and every table an admin opens is logged.',
     ],
-    steps: ['Open All tables and pick a table.', 'Sort, filter or search it.', 'Tick rows to copy them, or download them as a CSV file.'],
+    steps: ['Open All tables and pick a table.', 'Sort, filter or search it.', 'Tick rows to copy, download, edit or remove them.'],
     relationships: ['self', 'guru'],
   },
   rewards: {

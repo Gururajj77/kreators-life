@@ -593,8 +593,53 @@ store.post('/bookings/:id/cancel', async (c) => {
   const user = c.get('user');
   const prev = await db.prepare(`${BOOKING_SELECT} WHERE k.id = ? AND k.buyer_id = ?`).bind(c.req.param('id'), user.id).first<BookingRow>();
   if (!prev) return c.json({ error: 'not found' }, 404);
-  await db.prepare("UPDATE bookings SET status = 'cancelled' WHERE id = ?").bind(prev.id).run();
+  // Only a session still waiting or confirmed (2026-11-14, the route gap All tables found): a finished one stays done, and a second tap, or a
+  // second tab, cancels and tells the host once. Guarded in the write itself.
+  const res = await db.prepare("UPDATE bookings SET status = 'cancelled' WHERE id = ? AND buyer_id = ? AND status IN ('requested', 'confirmed')").bind(prev.id, user.id).run();
+  if (!res.meta.changes) return c.json({ error: prev.status === 'cancelled' ? 'This session is already cancelled.' : 'A finished session stays as it is.' }, 409);
   await notify(db, prev.owner_id, 'booking', `${nameOf(user)} cancelled a session`, new Date(prev.starts_at).toUTCString(), '/shop/bookings');
+  return c.json({ ok: true });
+});
+
+// Say no to a private course you were invited to (2026-11-14, the founder's yes in All tables): the invite goes, with the team's Connect row
+// for it when the team made it, and nobody is told, as a no to the team's friend suggestion. Only while it was not bought: a course you
+// bought keeps its invite with it. Core, like the invite itself, so it works whatever Shop is set to.
+store.delete('/invites/:productId', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const productId = c.req.param('productId');
+  const bought = await db.prepare("SELECT 1 FROM orders WHERE product_id = ? AND buyer_id = ? AND status IN ('paid', 'test') LIMIT 1").bind(productId, user.id).first();
+  if (bought) return c.json({ error: 'You bought this course, so its invite stays with it.' }, 409);
+  const [, res] = await db.batch([
+    db.prepare("UPDATE team_connections SET ended_at = ?3 WHERE kind = 'product' AND ended_at IS NULL AND first_user_id = ?1 AND ref_id = ?2 AND EXISTS (SELECT 1 FROM product_invites WHERE product_id = ?2 AND user_id = ?1)").bind(user.id, productId, nowIso()),
+    db.prepare('DELETE FROM product_invites WHERE product_id = ? AND user_id = ?').bind(productId, user.id),
+  ]);
+  if (!res?.meta.changes) return c.json({ error: 'not found' }, 404);
+  return c.json({ ok: true });
+});
+
+// Change a review you wrote (2026-11-14, All tables): its stars and its words, as writing it again on the product's page would, so it waits
+// for the creator to show it again (Shown off). Only your own, kept in place.
+store.patch('/reviews/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const prev = await db.prepare('SELECT id, owner_id, rating, body FROM testimonials WHERE id = ? AND author_id = ?').bind(c.req.param('id'), user.id).first<{ id: string; owner_id: string; rating: number; body: string }>();
+  if (!prev) return c.json({ error: 'not found' }, 404);
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const rating = 'rating' in body ? Number(body.rating) : prev.rating;
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) return c.json({ error: 'A rating from 1 to 5 stars.' }, 400);
+  const text = 'body' in body ? (typeof body.body === 'string' ? body.body.trim().slice(0, 600) : '') : prev.body;
+  if (!text) return c.json({ error: 'a rating and a few words' }, 400);
+  const res = await db.prepare('UPDATE testimonials SET rating = ?, body = ?, approved = 0 WHERE id = ? AND author_id = ?').bind(rating, text, prev.id, user.id).run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
+  await notify(db, prev.owner_id, 'review', `${nameOf(user)} changed their review`, text.slice(0, 120), '/shop/testimonials');
+  return c.json({ ok: true });
+});
+
+// Delete a review you wrote (2026-11-14, All tables). No rating is stored apart from the reviews, so the product's average stays true.
+store.delete('/reviews/:id', async (c) => {
+  const res = await c.env.DB.prepare('DELETE FROM testimonials WHERE id = ? AND author_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
   return c.json({ ok: true });
 });
 

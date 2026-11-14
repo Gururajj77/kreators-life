@@ -34,7 +34,8 @@ import { isValidElement, lazy, Suspense, useEffect, useLayoutEffect, useRef, use
 /** A tall root stops counting as tall only this far under the room the window has, so the rail never flickers on the edge. */
 const TALL_SLACK = 24;
 /** Said on the window whenever a rail shows, goes, changes side or moves, so a rail inside or around it measures again; anything that
- *  moves a root without resizing it (an app group's body that stops clipping once its slide ends) says it too. */
+ *  moves a root without resizing it (an app group's body that stops clipping once its slide ends) or changes a top bar (Apps' row while
+ *  selecting, which comes, goes and grows) says it too. */
 export const STICKY_CLOSE_CHANGED = 'kreators:sticky-close';
 /** The class of the open content's wrapper, a direct child of the root: it keeps a lane for a close that runs down the root's edge. */
 export const STICKY_CLOSE_LANE = 'sticky-close-lane';
@@ -52,13 +53,16 @@ export function scrollPanel(el: Element): HTMLElement | null {
   return null;
 }
 
-/** The tallest bar that sticks to the window's top and is not the condensed title bar: the public site's header from the width where it
- *  sticks, a whole-page chat's header, the coach's share row (`data-top-bar`). (Shared with the rail.) */
+/** How far down the window the bars that stick to its top reach, the condensed title bar aside: the public site's header from the width
+ *  where it sticks, a whole-page chat's header, the coach's share row, Apps' row while selecting (`data-top-bar`). A bar reaches its own
+ *  height past the line it sticks at (its `top`: 0 for most, under the condensed title bar for Apps' row, 2026-11-14), so a close sticks
+ *  under it, never on its buttons. (Shared with the rail.) */
 export function topBars(): number {
   let h = 0;
   for (const bar of document.querySelectorAll<HTMLElement>('[data-top-bar]')) {
-    const pos = getComputedStyle(bar).position;
-    if ((pos === 'sticky' || pos === 'fixed') && !bar.closest('[role="dialog"]')) h = Math.max(h, bar.getBoundingClientRect().height);
+    const cs = getComputedStyle(bar);
+    const pos = cs.position;
+    if ((pos === 'sticky' || pos === 'fixed') && !bar.closest('[role="dialog"]')) h = Math.max(h, (parseFloat(cs.top) || 0) + bar.getBoundingClientRect().height);
   }
   return h;
 }
@@ -90,7 +94,8 @@ function roomFor(el: HTMLElement): number {
 /** A title's words, from the React nodes it is made of (strings, numbers, fragments and elements' children). */
 export function textOf(node: ReactNode): string {
   if (node == null || typeof node === 'boolean') return '';
-  if (typeof node === 'string' || typeof node === 'number' || typeof node === 'bigint') return String(node);
+  // A string, a number or a bigint: every other node is an object.
+  if (typeof node !== 'object') return String(node);
   if (Array.isArray(node)) return node.map(textOf).join('');
   if (isValidElement(node)) return textOf((node.props as { children?: ReactNode }).children);
   return '';
@@ -106,8 +111,8 @@ function preloadRail() {
     void loadRail().catch(() => {
       railAsked = false;
     });
-  if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(fetchIt, { timeout: 3000 });
-  else window.setTimeout(fetchIt, 1500);
+  if ('requestIdleCallback' in window) requestIdleCallback(fetchIt, { timeout: 3000 });
+  else setTimeout(fetchIt, 1500);
 }
 /** A rail that could not be fetched (a new version went out and the old file is gone) draws nothing: the toggle still opens and folds
  *  itself, and nothing reloads the page under a form someone is filling in. */
@@ -126,10 +131,11 @@ const Rail = lazy<ComponentType<StickyCloseProps>>(() =>
 
 /**
  * Whether an open toggle needs its sticky close: open, and its root (the toggle and what it opened) taller than the room the window has
- * (the window less the condensed title bar or the site's sticky header at its top and the phone's tab bar or a held main action at its foot;
- * inside a popup, its panel). It goes off again only 24px under that, so it never flickers, and is read on open, on a resize and whenever
- * the root changes size (a form that grows, a slide). `enabled` false keeps it off (a fold in the laptop sidebar). The first toggle drawn
- * also has the rail's chunk fetched when the browser is idle.
+ * (the window less the condensed title bar or a sticky top bar at its top and the phone's tab bar or a held main action at its foot;
+ * inside a popup, its panel). It goes off again only 24px under that, so it never flickers, and is read on open, on a resize, whenever
+ * the root changes size (a form that grows, a slide) and whenever `STICKY_CLOSE_CHANGED` is said (a bar or a close came or went).
+ * `enabled` false keeps it off (a fold in the laptop sidebar). The first toggle drawn also has the rail's chunk fetched when the browser
+ * is idle.
  */
 export function useTallOpen(root: RefObject<HTMLElement | null>, open: boolean, enabled = true): boolean {
   const [tall, setTall] = useState(false);
@@ -160,11 +166,13 @@ export function useTallOpen(root: RefObject<HTMLElement | null>, open: boolean, 
     measure();
     const ro = new ResizeObserver(soon);
     ro.observe(el);
-    window.addEventListener('resize', soon);
+    // A bar that comes or goes (Apps' row while selecting) or a close round it changes the room without resizing the root.
+    const events = ['resize', STICKY_CLOSE_CHANGED];
+    for (const ev of events) window.addEventListener(ev, soon);
     return () => {
       cancelAnimationFrame(frame);
       ro.disconnect();
-      window.removeEventListener('resize', soon);
+      for (const ev of events) window.removeEventListener(ev, soon);
     };
   }, [open, enabled, root]);
   return tall && open && enabled;

@@ -171,11 +171,19 @@ describe('All tables: Party, Kreators Run and Circles (2026-11-14)', () => {
   });
 
   it('changes only through Party’s and Kreators Run’s own routes, and only while the app would take it', () => {
-    expect(editable('partyHosted')).toEqual(['guestXp']);
+    // Connection's Edit (2026-11-14) added an event's and a run's words and Mark done, a club's name and city and opening it again, rejoining a
+    // club, a collab's words, answering a club, your note, and your feedback (dataTables.connectionActions.test.ts holds their rules).
+    expect(editable('partyHosted')).toEqual(['title', 'state', 'venue', 'guestXp', 'about']);
     expect(editable('partyJoined')).toEqual(['openToMeet']);
-    expect(editable('runClubsHosted')).toEqual(['pace', 'visibility', 'meets', 'about']);
-    expect(editable('runsHosted')).toEqual(['xp']);
-    for (const k of BATCH.filter((x) => !['partyHosted', 'partyJoined', 'runClubsHosted', 'runsHosted'].includes(x))) {
+    expect(editable('partyFeedback')).toEqual(['score', 'words']);
+    expect(editable('runClubsHosted')).toEqual(['club', 'city', 'state', 'pace', 'visibility', 'meets', 'about']);
+    expect(editable('runClubsJoined')).toEqual(['status']);
+    expect(editable('runsHosted')).toEqual(['run', 'meetingPoint', 'state', 'xp']);
+    expect(editable('runCollabsPosted')).toEqual(['collab', 'state', 'giveaway', 'city', 'brief', 'asks']);
+    expect(editable('runCollabApplicants')).toEqual(['status']);
+    expect(editable('runCollabApplications')).toEqual(['note']);
+    const EDITED = ['partyHosted', 'partyJoined', 'partyFeedback', 'runClubsHosted', 'runClubsJoined', 'runsHosted', 'runCollabsPosted', 'runCollabApplicants', 'runCollabApplications'];
+    for (const k of BATCH.filter((x) => !EDITED.includes(x))) {
       expect(editable(k), k).toEqual([]);
       expect(dataTableByKey[k]!.readOnlyWhy, k).toBeTruthy();
     }
@@ -219,8 +227,9 @@ describe('All tables: Party, Kreators Run and Circles (2026-11-14)', () => {
     expect(connectSrc).toContain("if (g.ev.app === 'party') batch.push(db.prepare('UPDATE event_registrations SET networking_opt_in = ? WHERE event_id = ? AND user_id = ?')");
     const attendee = read('../../../apps/api/src/attendee.ts');
     expect(attendee).toContain("if (n !== xp && locked) return { error: 'The xp is fixed once the code opens");
-    const route = read('../../../apps/api/src/routes/tables.ts');
-    for (const when of ['xpOpen', 'seatHeld']) expect(route, when).toContain(`case '${when}':`);
+    // Why a cell waits is said in the registry's one rule (editWhenWhy, 2026-11-14), which the edit route and the bar both read.
+    const rules = read('./dataTables.ts');
+    for (const when of ['xpOpen', 'seatHeld']) expect(rules.slice(rules.indexOf('export function editWhenWhy')), when).toContain(`case '${when}':`);
   });
 
   it('reads each page in an order an index serves, the person first', async () => {

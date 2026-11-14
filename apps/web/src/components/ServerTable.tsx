@@ -5,7 +5,11 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import { Link } from 'react-router';
 import { clockOf, longDate, stamp } from '../lib/date';
 import { FIELD_CELL } from '../lib/ui';
+import { Button } from './Button';
 import { showFocused, Switch } from './DataTable';
+import { StickyAction } from './StickyAction';
+import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from './StickyClose';
+import { ErrorLine } from './ErrorLine';
 import { Icon } from './Icon';
 import { Inert } from './Inert';
 
@@ -19,8 +23,12 @@ import { Inert } from './Inert';
 export interface ServerTableEditor {
   /** May this cell of this row be changed now (the server's `row.edit`). */
   editable: (row: TableRow, col: DataColumn) => boolean;
-  /** Saves it; rejects when it did not save (the screen puts the old value back and says why). */
-  save: (row: TableRow, col: DataColumn, value: Cell) => Promise<void>;
+  /**
+   * Saves it; rejects when it did not save (the screen puts the old value back and says why). `quiet`: the row's form says the refusal itself,
+   * beside its fields, so the screen does not say it again. `left`: the save took the row out of this list (a kind of day back to following
+   * the week, a budget of 0), which the screen has said.
+   */
+  save: (row: TableRow, col: DataColumn, value: Cell, opts?: { quiet?: boolean }) => Promise<{ left: boolean }>;
 }
 
 interface Props {
@@ -38,9 +46,18 @@ interface Props {
   picked: ReadonlySet<string> | null;
   onPick: (rows: readonly TableRow[], on: boolean) => void;
   editor?: ServerTableEditor;
+  /**
+   * The row whose form is open, in a card under the table (the selection bar's Edit, 2026-11-14: one row at a time, in place, never a sheet), and how it closes:
+   * 'saved' after every changed field saved, 'cancel' on Cancel, its close or Escape (or nothing changed), 'left' when a save took the row out
+   * of the list. `opener` is the button that opened it (the bar's Edit), which its sticky close hands focus back to.
+   */
+  form?: { rowId: string; key: string; onDone: (how: FormEnd) => void; opener?: () => HTMLElement | null } | null;
   busy: boolean;
   empty: ReactNode;
 }
+
+/** How a row's form closed. */
+export type FormEnd = 'saved' | 'cancel' | 'left';
 
 const NUMBER = new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 2 });
 const KM = new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 1 });
@@ -162,7 +179,7 @@ function draftValue(col: DataColumn, draft: string): Cell | { error: string } {
   return draft;
 }
 
-function EditCell({ col, row, options, onDone, save }: { col: DataColumn; row: TableRow; options: Readonly<Record<string, ColumnOption[]>>; onDone: (focusBack: boolean) => void; save: (value: Cell) => Promise<void> }) {
+function EditCell({ col, row, options, onDone, save }: { col: DataColumn; row: TableRow; options: Readonly<Record<string, ColumnOption[]>>; onDone: (focusBack: boolean) => void; save: (value: Cell) => Promise<unknown> }) {
   const edit = col.edit;
   const choices = choicesOf(col, options);
   const first = startValue(col, row, choices);
@@ -325,6 +342,196 @@ function SelectOptions({ choices }: { choices: readonly ColumnOption[] }) {
   );
 }
 
+/** The value a form's field starts from: the cell's words as an input holds them, or yes or no for a switch. */
+function formStart(col: DataColumn, row: TableRow, options: Readonly<Record<string, ColumnOption[]>>): string | boolean {
+  if (col.edit?.input === 'toggle') return row.cells[col.key] === true;
+  return startValue(col, row, choicesOf(col, options));
+}
+
+/**
+ * One row's form, open in place under the table (2026-11-14, the founder: "each entry for the original user", one row at a time): every cell this row
+ * lets its owner change now, through the same inputs and checks a cell uses. Save sends each changed field in the columns' order, one after
+ * another, through the editor (so each goes under the id the save before it left); the first refusal stops it, says why, and keeps what was
+ * typed. Cancel or its sticky close closes it with nothing sent, and so does Escape while no field has changed: Escape never throws changed
+ * fields away (the sticky close's rule), the field keeps the key. On a phone its Cancel and Save are held above the tab bar (StickyAction)
+ * while the form is in view and its foot is not, since a task's form runs well past one screen.
+ */
+function RowForm({ formKey, row, columns, options, editor, onDone, name }: { formKey: string; row: TableRow; columns: readonly DataColumn[]; options: Readonly<Record<string, ColumnOption[]>>; editor: ServerTableEditor; onDone: (how: FormEnd) => void; name: string }) {
+  // The fields as the form opened: a save that changes what else may change keeps the form steady, and the route says no to the rest.
+  const [fields] = useState(() => columns.filter((col) => col.edit && row.edit?.includes(col.key)));
+  // The row as the form opened on it: each save names it, and the editor follows it to the id the save before left it under.
+  const opened = useRef(row);
+  const [drafts, setDrafts] = useState<Record<string, string | boolean>>(() => Object.fromEntries(fields.map((col) => [col.key, formStart(col, row, options)])));
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [failed, setFailed] = useState<unknown>(null);
+  const [saving, setSaving] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  // Whether the form is still drawn: a save that answers after it closed (a page turned, its row left the list) goes no further.
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    box.current?.querySelector<HTMLElement>('input, select, textarea, button[role="switch"]')?.focus();
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  const idOf = (key: string) => `row-form-${formKey.replace(/[^A-Za-z0-9_-]/g, '_')}-${key}`;
+  const submit = async () => {
+    setFailed(null);
+    const errs: Record<string, string> = {};
+    const changes: [DataColumn, Cell][] = [];
+    for (const col of fields) {
+      const d = drafts[col.key];
+      if (d === undefined || d === formStart(col, row, options)) continue;
+      if (typeof d === 'boolean') {
+        changes.push([col, d]);
+        continue;
+      }
+      const value = draftValue(col, d);
+      if (value !== null && typeof value === 'object') {
+        errs[col.key] = value.error;
+        continue;
+      }
+      const checked = editValue(col, value, col.edit?.choices ? (options[col.key] ?? []) : []);
+      if ('error' in checked) errs[col.key] = checked.error;
+      else changes.push([col, value]);
+    }
+    setErrors(errs);
+    const firstBad = fields.find((col) => errs[col.key]);
+    if (firstBad) {
+      document.getElementById(idOf(firstBad.key))?.focus();
+      return;
+    }
+    if (changes.length === 0) {
+      onDone('cancel');
+      return;
+    }
+    setSaving(true);
+    for (const [col, value] of changes) {
+      try {
+        const { left } = await editor.save(opened.current, col, value, { quiet: true });
+        if (!alive.current) return;
+        // The row left the list (the screen said so): the fields after it have no row to land on, and the form goes with it.
+        if (left) {
+          onDone('left');
+          return;
+        }
+      } catch (e) {
+        if (!alive.current) return;
+        setFailed(e);
+        setSaving(false);
+        return;
+      }
+    }
+    setSaving(false);
+    onDone('saved');
+  };
+  const keys = (e: KeyboardEvent) => {
+    if (e.key !== 'Escape') return;
+    // A field changed: the key is the field's, and Cancel or the close still close in one tap (2026-11-14 review: Escape closed the form and
+    // lost what was typed, which the sticky close's rule never does).
+    if (fields.some((col) => drafts[col.key] !== formStart(col, row, options))) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onDone('cancel');
+  };
+  return (
+    <div ref={box} role="group" aria-labelledby={idOf('-name')} onKeyDown={keys} className="grid gap-sm">
+      {/* It opens under the table, apart from its row (still ticked and tinted), so it says which row it changes. */}
+      <p id={idOf('-name')} className="m-0 text-subhead font-semibold">
+        Edit {name}
+      </p>
+      <div className="grid gap-sm sm:grid-cols-2">
+        {fields.map((col) => {
+          const edit = col.edit!;
+          const d = drafts[col.key];
+          const set = (v: string | boolean) => {
+            setDrafts((cur) => ({ ...cur, [col.key]: v }));
+            setErrors((cur) => {
+              if (!cur[col.key]) return cur;
+              const next = { ...cur };
+              delete next[col.key];
+              return next;
+            });
+          };
+          const err = errors[col.key];
+          const errId = `${idOf(col.key)}-error`;
+          const common = { id: idOf(col.key), 'aria-invalid': err ? true : undefined, 'aria-describedby': err ? errId : undefined } as const;
+          let input: ReactNode;
+          if (edit.input === 'toggle') input = <Switch on={d === true} label={col.label} disabled={saving} onChange={(on) => set(on)} />;
+          else if (edit.input === 'select') {
+            const choices = choicesOf(col, options);
+            const first = formStart(col, row, options);
+            input = (
+              <select {...common} value={String(d)} disabled={saving} onChange={(e) => set(e.target.value)} className="min-h-[44px] w-full rounded-tile border-2 border-line bg-paper pl-sm text-subhead font-medium">
+                {edit.offer && first !== '' && !choices.some((o) => o.value === first) && (
+                  <option value={String(first)} disabled>
+                    {cellText(col, row.cells)}
+                  </option>
+                )}
+                <SelectOptions choices={choices} />
+              </select>
+            );
+          } else if (edit.input === 'longtext') input = <textarea {...common} value={String(d)} rows={3} maxLength={edit.maxLength} disabled={saving} onChange={(e) => set(e.target.value)} className={`${FIELD_CELL} py-xs`} />;
+          else {
+            const type = edit.input === 'number' ? 'number' : edit.input === 'date' ? 'date' : edit.input === 'time' ? 'time' : 'text';
+            input = (
+              <input
+                {...common}
+                type={type}
+                inputMode={edit.input === 'money' ? 'decimal' : undefined}
+                value={String(d)}
+                min={edit.input === 'number' ? edit.min : undefined}
+                max={edit.input === 'number' ? edit.max : undefined}
+                step={edit.input === 'number' ? edit.step : undefined}
+                maxLength={edit.input === 'text' ? edit.maxLength : undefined}
+                disabled={saving}
+                onChange={(e) => set(e.target.value)}
+                className={FIELD_CELL}
+              />
+            );
+          }
+          return (
+            <div key={col.key} className="min-w-0">
+              {edit.input === 'toggle' ? (
+                // 32px, not 44: the switch's own tap-pad is its 44px target, and a 44px row left 10px empty above and below the 24px switch,
+                // so two switches in a row stood 32px apart where the form's other fields stand about 15 (spacing-probe, 2026-11-14).
+                <div className="flex min-h-[32px] items-center justify-between gap-sm">
+                  <span className="text-subhead text-ink-soft">{col.label}</span>
+                  {input}
+                </div>
+              ) : (
+                <>
+                  <label htmlFor={idOf(col.key)} className="block text-caption text-ink-soft">
+                    {col.label}
+                  </label>
+                  <div className="mt-xs">{input}</div>
+                </>
+              )}
+              {err ? (
+                <p id={errId} role="alert" className="mt-xs m-0 text-caption text-r1">
+                  {err}
+                </p>
+              ) : (
+                edit.note && <p className="mt-xs m-0 text-caption text-ink-soft">{edit.note}</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <ErrorLine e={failed} />
+      <StickyAction className="flex flex-wrap items-center justify-end gap-xs">
+        <Button size="sm" variant="outline" disabled={saving} onClick={() => onDone('cancel')}>
+          Cancel
+        </Button>
+        <Button size="sm" disabled={saving} onClick={() => void submit()}>
+          {saving ? 'Saving…' : 'Save'}
+        </Button>
+      </StickyAction>
+    </div>
+  );
+}
+
 /** A name for a row, for its tick and its cells' labels: its first column's words. */
 function rowName(row: TableRow, columns: readonly DataColumn[], ctx: { options: Readonly<Record<string, ColumnOption[]>>; currency: string }): string {
   for (const col of columns) {
@@ -334,9 +541,15 @@ function rowName(row: TableRow, columns: readonly DataColumn[], ctx: { options: 
   return 'this row';
 }
 
-export function ServerTable({ label, columns, rows, options, currency, sort, onSort, picked, onPick, editor, busy, empty }: Props) {
+export function ServerTable({ label, columns, rows, options, currency, sort, onSort, picked, onPick, editor, form, busy, empty }: Props) {
   const [editing, setEditing] = useState<string | null>(null);
   const ctx = { options, currency };
+  // A row's open form is a card of its own under the table (the review of 2026-11-14), never inside the box that scrolls sideways: that box is
+  // the one a sticky close would stick to, and it never scrolls up and down, so a form taller than the window (a task's, on a phone) would
+  // keep no close in view. Out here it keeps one (StickyClose), as Admin's person panel does, which hands focus back to the bar's Edit.
+  const formRow = form && editor ? rows.find((r) => r.id === form.rowId) : undefined;
+  const formRoot = useRef<HTMLDivElement>(null);
+  const formTall = useTallOpen(formRoot, Boolean(formRow));
   const ticks = picked !== null;
   const allPicked = ticks && rows.length > 0 && rows.every((r) => picked.has(r.id));
   const somePicked = ticks && !allPicked && rows.some((r) => picked.has(r.id));
@@ -391,77 +604,89 @@ export function ServerTable({ label, columns, rows, options, currency, sort, onS
   };
 
   return (
-    <div className="overflow-x-auto rounded-card bg-card shadow-toy-soft" onFocus={showFocused}>
-      <table className="w-full border-collapse text-left" aria-label={label} aria-busy={busy}>
-        <thead>
-          <tr className="border-b-2 border-line">
-            {ticks && (
-              <th scope="col" className="w-[56px] px-xs py-0">
-                {/* The box is small; the label round it is the 44px target. */}
-                <label className="inline-flex size-[44px] cursor-pointer items-center justify-center">
-                  <input ref={headTick} type="checkbox" checked={allPicked} disabled={rows.length === 0} onChange={() => onPick(rows, !allPicked)} aria-label="Select every row on this page" className="size-[20px] accent-ink" />
-                </label>
-              </th>
-            )}
-            {columns.map((col) => {
-              const active = sort.key === col.key;
-              const mark = anyEditable(col) ? (
-                <>
-                  <Icon icon={Pencil} size={12} className="opacity-60" />
-                  <span className="sr-only">(you can change it)</span>
-                </>
-              ) : null;
-              return (
-                <th key={col.key} scope="col" aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : col.sortable ? 'none' : undefined} className="whitespace-nowrap px-md py-sm text-eyebrow uppercase text-ink-soft">
-                  {col.sortable ? (
-                    // A button resets the letter case, so it carries the eyebrow's capitals itself, like the headers that do not sort.
-                    <button type="button" onClick={() => onSort(col.key)} className={`inline-flex min-h-[44px] min-w-[44px] items-center gap-xs rounded-pill uppercase hover:text-ink ${active ? 'text-ink' : ''}`}>
-                      {col.label}
-                      {mark}
-                      <Icon icon={active ? (sort.dir === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown} size={12} className={active ? '' : 'opacity-60'} />
-                    </button>
-                  ) : (
-                    <span className="inline-flex min-h-[44px] items-center gap-xs">
-                      {col.label}
-                      {mark}
-                    </span>
-                  )}
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 && (
-            <tr>
-              <td colSpan={colCount} className="px-md py-lg text-subhead text-ink-soft">
-                {empty}
-              </td>
-            </tr>
-          )}
-          {rows.map((row) => (
-            <tr key={row.id} className={`border-t border-line align-top ${ticks && picked.has(row.id) ? 'bg-paper' : ''}`}>
+    <>
+      <div className="overflow-x-auto rounded-card bg-card shadow-toy-soft" onFocus={showFocused}>
+        <table className="w-full border-collapse text-left" aria-label={label} aria-busy={busy}>
+          <thead>
+            <tr className="border-b-2 border-line">
               {ticks && (
-                <td className="px-xs py-sm">
+                <th scope="col" className="w-[56px] px-xs py-0">
+                  {/* The box is small; the label round it is the 44px target. */}
                   <label className="inline-flex size-[44px] cursor-pointer items-center justify-center">
-                    <input type="checkbox" checked={picked.has(row.id)} onChange={(e) => onPick([row], e.target.checked)} aria-label={`Select ${rowName(row, columns, ctx)}`} className="size-[20px] accent-ink" />
+                    <input ref={headTick} type="checkbox" checked={allPicked} disabled={rows.length === 0} onChange={() => onPick(rows, !allPicked)} aria-label="Select every row on this page" className="size-[20px] accent-ink" />
                   </label>
-                </td>
+                </th>
               )}
               {columns.map((col) => {
-                const wraps = col.kind === 'text' || col.kind === 'longtext' || col.kind === 'summary';
+                const active = sort.key === col.key;
+                const mark = anyEditable(col) ? (
+                  <>
+                    <Icon icon={Pencil} size={12} className="opacity-60" />
+                    <span className="sr-only">(you can change it)</span>
+                  </>
+                ) : null;
                 return (
-                  <td key={col.key} className={`px-md py-sm text-subhead ${wraps ? '' : 'whitespace-nowrap'} ${col.kind === 'number' || col.kind === 'money' ? 'text-right tabular-nums' : ''}`}>
-                    {/* A table cell ignores a max width, so the words' own box holds it: long words wrap inside 320px. */}
-                    {/* Every cell keeps the 44px of the row's tick and of a cell's change button, so the words of a row share one line. */}
-                    <span className={`flex min-h-[44px] flex-col justify-center ${wraps ? 'w-max min-w-[160px] max-w-[320px]' : ''}`}>{cell(col, row)}</span>
-                  </td>
+                  <th key={col.key} scope="col" aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : col.sortable ? 'none' : undefined} className="whitespace-nowrap px-md py-sm text-eyebrow uppercase text-ink-soft">
+                    {col.sortable ? (
+                      // A button resets the letter case, so it carries the eyebrow's capitals itself, like the headers that do not sort.
+                      <button type="button" onClick={() => onSort(col.key)} className={`inline-flex min-h-[44px] min-w-[44px] items-center gap-xs rounded-pill uppercase hover:text-ink ${active ? 'text-ink' : ''}`}>
+                        {col.label}
+                        {mark}
+                        <Icon icon={active ? (sort.dir === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown} size={12} className={active ? '' : 'opacity-60'} />
+                      </button>
+                    ) : (
+                      <span className="inline-flex min-h-[44px] items-center gap-xs">
+                        {col.label}
+                        {mark}
+                      </span>
+                    )}
+                  </th>
                 );
               })}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={colCount} className="px-md py-lg text-subhead text-ink-soft">
+                  {empty}
+                </td>
+              </tr>
+            )}
+            {rows.map((row) => (
+              <tr key={row.id} className={`border-t border-line align-top ${ticks && picked.has(row.id) ? 'bg-paper' : ''}`}>
+                {ticks && (
+                  <td className="px-xs py-sm">
+                    <label className="inline-flex size-[44px] cursor-pointer items-center justify-center">
+                      <input type="checkbox" checked={picked.has(row.id)} onChange={(e) => onPick([row], e.target.checked)} aria-label={`Select ${rowName(row, columns, ctx)}`} className="size-[20px] accent-ink" />
+                    </label>
+                  </td>
+                )}
+                {columns.map((col) => {
+                  const wraps = col.kind === 'text' || col.kind === 'longtext' || col.kind === 'summary';
+                  return (
+                    <td key={col.key} className={`px-md py-sm text-subhead ${wraps ? '' : 'whitespace-nowrap'} ${col.kind === 'number' || col.kind === 'money' ? 'text-right tabular-nums' : ''}`}>
+                      {/* A table cell ignores a max width, so the words' own box holds it: long words wrap inside 320px. */}
+                      {/* Every cell keeps the 44px of the row's tick and of a cell's change button, so the words of a row share one line. */}
+                      <span className={`flex min-h-[44px] flex-col justify-center ${wraps ? 'w-max min-w-[160px] max-w-[320px]' : ''}`}>{cell(col, row)}</span>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {form && editor && formRow && (
+        <div ref={formRoot} data-sticky-close-root="" className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
+          {/* Escape is RowForm's own (it closes only while no field has changed), so the rail's would only close over changed fields. */}
+          {formTall && <StickyClose onClose={() => form.onDone('cancel')} label={`Close the form for ${rowName(formRow, columns, ctx)}`} opener={form.opener} escape={false} />}
+          <div className={STICKY_CLOSE_LANE}>
+            {/* Keyed by the row the form opened on, never its id now, so a save that gives the row a new id (a day's log) keeps the form as it is. */}
+            <RowForm key={form.key} formKey={form.key} row={formRow} columns={columns} options={options} editor={editor} onDone={form.onDone} name={rowName(formRow, columns, ctx)} />
+          </div>
+        </div>
+      )}
+    </>
   );
 }

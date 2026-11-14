@@ -112,19 +112,25 @@ export function GroupAccordion({
         tick();
         onToggle();
       }}
-      className="toy toy-flat flex min-h-[72px] w-full items-center gap-sm rounded-card p-sm text-left"
+      className="toy toy-flat @container flex min-h-[72px] w-full items-center gap-sm rounded-card p-sm text-left"
     >
       <Avatar relationship={rel.key} size={44} decorative still mood={mood} />
-      <span className="min-w-0 flex-1">
-        <span id={`${id}-h`} className="block text-title3 type-figure">
-          {MODULE_GROUPS[group]}
+      {/* The words and the count side by side, as they always were; in a narrow header (under 18.5rem inside its padding: a phone's group
+          standing in the lane a tall fold keeps for its close, Profile's "Tables AI chat can read" at 390, or a 320px phone) the count drops
+          under the line, so the words keep the column's width instead of a ribbon of one word a line (2026-11-14). 360 and up at rest keep
+          the one row (a 328px header there, 304px inside its padding). */}
+      <span className="flex min-w-0 flex-1 items-center gap-sm @max-[18.5rem]:flex-col @max-[18.5rem]:items-start @max-[18.5rem]:gap-xs">
+        <span className="min-w-0 flex-1 @max-[18.5rem]:self-stretch">
+          <span id={`${id}-h`} className="block text-title3 type-figure">
+            {MODULE_GROUPS[group]}
+          </span>
+          <span className="block text-footnote" style={{ color: `var(--deep-${rel.key})` }}>
+            {blurb}
+          </span>
         </span>
-        <span className="block text-footnote" style={{ color: `var(--deep-${rel.key})` }}>
-          {blurb}
+        <span className="shrink-0 rounded-pill bg-card-strong px-sm text-caption font-medium leading-[26px]" style={{ color: `var(--deep-${rel.key})` }}>
+          {count}
         </span>
-      </span>
-      <span className="shrink-0 rounded-pill bg-card-strong px-sm text-caption font-medium leading-[26px]" style={{ color: `var(--deep-${rel.key})` }}>
-        {count}
       </span>
       {/* While the sticky close shows, the chevron keeps its slot unseen, as a task card's edit button does. */}
       <ToggleChevron open={open} size={20} className={`text-ink-soft ${railOn ? 'invisible' : ''}`} />

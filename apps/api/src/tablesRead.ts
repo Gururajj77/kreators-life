@@ -3,6 +3,9 @@ import {
   csvMaxRows,
   editableKeys,
   pageRows,
+  removeStateOf,
+  rowNoEditWhy,
+  tableEditable,
   parseTableQuery,
   rowFromRaw,
   tableSql,
@@ -422,7 +425,15 @@ function shapeRow(table: DataTable, raw: Record<string, unknown>, ctx: ReadCtx, 
     // A not to do day is marked through Daily's route, which takes only a day within one of the server's own (UTC) day: late in the evening
     // in a zone behind UTC, yesterday is past it, so the cell is not offered where the route would refuse it (as Daily hides yesterday then).
     const marks = row.edit.filter((k) => table.columns.find((col) => col.key === k)?.edit?.recipe === 'notToDoDay');
-    if (marks.length && !dateNearToday(String(row.cells.day ?? ''))) row.edit = row.edit.filter((k) => !marks.includes(k));
+    let late = false;
+    if (marks.length && !dateNearToday(String(row.cells.day ?? ''))) {
+      row.edit = row.edit.filter((k) => !marks.includes(k));
+      late = true;
+    }
+    // Why the bar's Edit is greyed for this row, and what its remove would do (2026-11-14): worked out with the row, so the bar never asks.
+    if (row.edit.length === 0 && tableEditable(table)) row.noEdit = late ? 'Late in your evening, Daily no longer takes yesterday, so it cannot be marked now.' : rowNoEditWhy(table, row.cells, ctx.subject.today);
+    const state = removeStateOf(table, row.cells, fields);
+    if (state) row.remove = 'why' in state ? { why: state.why } : state.sheet ? { did: state.did, sheet: true } : { did: state.did };
   }
   return { row, fields };
 }
@@ -538,7 +549,11 @@ export interface Loaded {
   options: Record<string, ColumnOption[]>;
 }
 
-type Mode = { kind: 'page' } | { kind: 'all' } | { kind: 'one'; id: string };
+/**
+ * A page; every row (the CSV); one row (an edit); the rows of a remove or its preview, by id (`ids`, at most BULK_MAX, in no order); or the
+ * first BULK_MAX rows the query finds in its sort, leaving out `not`, with how many match besides them (`match`, Select all's ids).
+ */
+type Mode = { kind: 'page' } | { kind: 'all' } | { kind: 'one'; id: string } | { kind: 'ids'; ids: readonly string[] } | { kind: 'match'; not: readonly string[]; max: number };
 
 /** The query a single-row read uses: no filters, the view asked for. */
 export function viewQuery(table: DataTable, view: TableView, archived = false): TableQuery {
@@ -579,8 +594,10 @@ export async function loadTable(db: D1Database, table: DataTable, query: TableQu
       ? db.prepare("SELECT id, title, relationship FROM nodes WHERE user_id = ? AND kind = 'project' AND status = 'active' ORDER BY created_at ASC LIMIT 200").bind(uid).all<ProjectRow>().then((r) => r.results)
       : Promise.resolve([] as ProjectRow[]);
   const itemsP = want.items && lists ? db.prepare('SELECT id, title FROM not_to_do WHERE user_id = ? ORDER BY created_at ASC LIMIT 20').bind(uid).all<{ id: string; title: string }>().then((r) => r.results) : Promise.resolve([] as { id: string; title: string }[]);
-  // Rows are editable only for the owner, and on a table with an archive only in its Active view. A download never says what may change.
-  const editable = ctx.view === 'owner' && (!table.archive || query.view !== 'archived') && mode.kind !== 'all';
+  // Rows are editable only for the owner, and on a table with an archive only in its Active view. A download never says what may change,
+  // nor Select all's ids (which only need their keys), nor an AI chat read (2026-11-14, the review: AI chat reads only, so its page carries no
+  // edit, noEdit or remove marks and builds none of the remove's rule columns).
+  const editable = ctx.view === 'owner' && !ctx.ai && (!table.archive || query.view !== 'archived') && mode.kind !== 'all' && mode.kind !== 'match';
   const csvMax = csvMaxRows(table, ctx.view);
   const optionsOf = (blocking: TablesBlocking | null, projects: ProjectRow[], items: { id: string; title: string }[], rows: readonly TableRow[]) => {
     if (!lists) return {};
@@ -591,10 +608,16 @@ export async function loadTable(db: D1Database, table: DataTable, query: TableQu
   if (table.read === 'memory') {
     const [blocking, projects, items, raw] = await Promise.all([blockingP, projectsP, itemsP, readMemory(db, table, ctx, blockingP)]);
     const shaped = raw.map((r) => shapeRow(table, r, ctx, blocking, editable));
-    if (mode.kind === 'one') {
-      const hit = shaped.find((s) => s.row.id === mode.id);
-      const rows = hit ? [hit.row] : [];
-      return { rows, fields: hit ? [hit.fields] : [], page: { page: 1, size: query.size, more: false }, total: null, capped: false, options: optionsOf(blocking, projects, items, rows) };
+    if (mode.kind === 'one' || mode.kind === 'ids') {
+      const wanted = new Set(mode.kind === 'one' ? [mode.id] : mode.ids);
+      const hits = shaped.filter((s) => wanted.has(s.row.id));
+      const rows = hits.map((h) => h.row);
+      return { rows, fields: hits.map((h) => h.fields), page: { page: 1, size: query.size, more: false }, total: null, capped: false, options: optionsOf(blocking, projects, items, rows) };
+    }
+    if (mode.kind === 'match') {
+      const not = new Set(mode.not);
+      const res = pageRows(table, shaped.map((s) => s.row).filter((r) => !not.has(r.id)), { ...query, page: 1, size: mode.max as PageSize, count: true }, { view: ctx.view, zone: ctx.subject.zone });
+      return { rows: res.rows, fields: [], page: { page: 1, size: query.size, more: res.page.more }, total: res.total, capped: false, options: {} };
     }
     const all = mode.kind === 'all';
     const q = all ? { ...query, page: 1, size: csvMax as PageSize } : query;
@@ -610,13 +633,18 @@ export async function loadTable(db: D1Database, table: DataTable, query: TableQu
     };
   }
 
-  const sqlCtx = { view: ctx.view, ownerId: uid, viewerId: ctx.viewerId, today: ctx.subject.today, zone: ctx.subject.zone, ai: ctx.ai === true, aiHeld: ctx.aiHeld };
+  // The remove's SQL rules ride in the owner's own reads of the Active view (a page, one row, a remove's ids), never a download or a coach's.
+  const sqlCtx = { view: ctx.view, ownerId: uid, viewerId: ctx.viewerId, today: ctx.subject.today, zone: ctx.subject.zone, ai: ctx.ai === true, aiHeld: ctx.aiHeld, rules: editable };
   const built =
     mode.kind === 'one'
       ? tableSql(table, { ...query, count: false }, { ...sqlCtx, id: mode.id })
-      : mode.kind === 'all'
-        ? tableSql(table, { ...query, count: false }, { ...sqlCtx, limit: csvMax + 1, offset: 0 })
-        : tableSql(table, query, sqlCtx);
+      : mode.kind === 'ids'
+        ? tableSql(table, { ...query, count: false }, { ...sqlCtx, ids: mode.ids })
+        : mode.kind === 'match'
+          ? tableSql(table, { ...query, page: 1, count: true }, { ...sqlCtx, not: mode.not, limit: mode.max + 1, offset: 0 })
+          : mode.kind === 'all'
+            ? tableSql(table, { ...query, count: false }, { ...sqlCtx, limit: csvMax + 1, offset: 0 })
+            : tableSql(table, query, sqlCtx);
   const [rowsRes, countRow, blocking, projects, items] = await Promise.all([
     db.prepare(built.sql).bind(...built.binds).all<Record<string, unknown>>(),
     built.countSql ? db.prepare(built.countSql).bind(...built.countBinds).first<{ n: number }>() : Promise.resolve(null),
@@ -633,6 +661,9 @@ export async function loadTable(db: D1Database, table: DataTable, query: TableQu
   } else if (mode.kind === 'all') {
     capped = raw.length > csvMax;
     raw = raw.slice(0, csvMax);
+  } else if (mode.kind === 'match') {
+    page = { page: 1, size: query.size, more: raw.length > mode.max };
+    raw = raw.slice(0, mode.max);
   }
   const shaped = raw.map((r) => shapeRow(table, r, ctx, blocking, editable));
   const rows = shaped.map((s) => s.row);

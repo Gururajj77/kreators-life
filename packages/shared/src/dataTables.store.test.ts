@@ -124,10 +124,17 @@ describe('All tables: Content, the Store, Tools and Rewards (2026-11-14)', () =>
   });
 
   it('changes only through Content’s and the Store’s own routes, and only while the app would take it', () => {
-    expect(editable('brands')).toEqual(['name', 'niche', 'about', 'voice']);
-    expect(editable('brandPieces')).toEqual(['title', 'status']);
-    expect(editable('preownedListings')).toEqual(['title', 'condition', 'price', 'status', 'city', 'about']);
-    for (const k of BATCH.filter((x) => !['brands', 'brandPieces', 'preownedListings'].includes(x))) {
+    // What each table changes (2026-11-14, All tables' Edit and Delete: every field its app's own route lets its owner change, nothing else).
+    const EDITS: Record<string, string[]> = {
+      brands: ['name', 'niche', 'about', 'voice'],
+      brandSources: ['label'],
+      brandPieces: ['title', 'status'],
+      preownedListings: ['title', 'category', 'condition', 'price', 'priceNew', 'status', 'city', 'yearBought', 'comesWith', 'wholeSetup', 'about'],
+      listingOffers: ['status'],
+      toolsSuggested: ['name', 'category', 'link', 'about'],
+    };
+    for (const k of BATCH.filter((x) => !['rewardReservations', 'gamesUnlocked'].includes(x))) expect(editable(k), k).toEqual(EDITS[k] ?? []);
+    for (const k of BATCH.filter((x) => !EDITS[x])) {
       expect(editable(k), k).toEqual([]);
       expect(dataTableByKey[k]!.readOnlyWhy, k).toBeTruthy();
     }

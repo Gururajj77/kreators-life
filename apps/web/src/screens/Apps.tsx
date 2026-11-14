@@ -1,6 +1,6 @@
 import { type MeResponse, type ModuleGroup } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { EyeOff } from 'lucide-react';
 import { AppGroups, HiddenAppsPanel, showInCache, useFits, useHiddenApps, type AppChange, type AppPicks } from '../components/AppGroups';
@@ -10,7 +10,7 @@ import { ToggleIcon } from '../components/ToggleMark';
 import { CondensedTitle } from '../components/fx/CondensedTitle';
 import { Screen } from '../components/Screen';
 import { SearchBox } from '../components/SearchBox';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
+import { STICKY_CLOSE_CHANGED, STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
 import { api } from '../lib/api';
 import { useGroupOrder, useModules, type ModuleView } from '../lib/modules';
 import { keys, useMe, useRefreshAll } from '../lib/queries';
@@ -25,9 +25,12 @@ const ORDER: ModuleGroup[] = ['earn', 'creator', 'community', 'wellbeing', 'core
  * moves. Its card shows only once the title has gone above that line (`.apps-row-stuck`), which is when the list reaches it: any sooner, a card would
  * cover the title's foot or push the row down. Under a 34rem column the words take a line and the buttons fill the next. Select is last at rest and
  * Done, the same button, last while selecting, so on a laptop it stays at the far right and never moves (the founder, 2026-11-07).
+ * While selecting it is also a top bar (`data-top-bar`), so the sticky close of a tall open group (or of a group's Hidden apps fold) sticks
+ * under it and never on Done or Select all, and it sits above those closes (z 16 over their 15, still under the condensed title bar and every
+ * sheet), so a close pushed up by its group's end slides under it (2026-11-14).
  */
 const ROW_REST = 'flex flex-wrap items-center justify-between gap-x-sm gap-y-md';
-const ROW_SELECTING = 'sticky top-[calc(env(safe-area-inset-top)+52px+4px)] z-10 -mx-sm -my-xs flex flex-wrap items-center justify-between gap-x-sm gap-y-xs rounded-card px-sm py-xs @min-[34rem]:my-[calc((var(--spacing-xs)+var(--spacing-sm))*-1)] @min-[34rem]:flex-nowrap';
+const ROW_SELECTING = 'sticky top-[calc(env(safe-area-inset-top)+52px+4px)] z-[16] -mx-sm -my-xs flex flex-wrap items-center justify-between gap-x-sm gap-y-xs rounded-card px-sm py-xs @min-[34rem]:my-[calc((var(--spacing-xs)+var(--spacing-sm))*-1)] @min-[34rem]:flex-nowrap';
 const WORDS_REST = 'flex-[1_1_220px] text-ink-soft';
 const WORDS_SELECTING = 'basis-full @min-[34rem]:basis-0 @min-[34rem]:flex-1';
 const BUTTONS_REST = '-my-sm ml-auto flex shrink-0 items-center gap-xs';
@@ -170,17 +173,32 @@ export function Apps() {
     eye.current?.focus({ preventScroll: true });
   };
 
-  // Escape leaves too, unless a dialog is open: then it belongs to the dialog.
+  // Escape leaves too, unless a dialog is open: then it belongs to the dialog. Select owns the key over the sticky closes inside the list
+  // (`data-owns-escape` on the wrapper, which the closes stand aside for when they hear it first), and says it took it (preventDefault), so a
+  // close that hears it after this never closes its group and takes focus from Done (2026-11-14).
   useEffect(() => {
     if (!selecting) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing || dialogOpen()) return;
+      e.preventDefault();
       focusSelect();
       sel.turn(false);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `turn` only calls setters.
+  }, [selecting]);
+
+  // The row is a top bar only while selecting, and its height moves with its words and buttons: each time it comes, goes or grows, the sticky
+  // closes in the list measure again, so they stick under it (StickyClose's `topBars`).
+  useLayoutEffect(() => {
+    const say = () => queueMicrotask(() => window.dispatchEvent(new Event(STICKY_CLOSE_CHANGED)));
+    say();
+    const el = row.current;
+    if (!selecting || !el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(say);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, [selecting]);
 
   // The card comes once the title has gone above the row's sticking line: by then the row is stuck at every width and the list has reached it.
@@ -207,13 +225,13 @@ export function Apps() {
       </header>
 
       {/* One wrapper from the count to the end of the list, so the row can stick for as long as the list lasts. */}
-      <div className={`span-all mt-xs ${selecting ? '@container' : ''}`} data-apps-selecting={selecting ? '' : undefined}>
+      <div className={`span-all mt-xs ${selecting ? '@container' : ''}`} data-apps-selecting={selecting ? '' : undefined} data-owns-escape={selecting ? '' : undefined}>
         {/* The hidden apps panel's root (StickyClose): the row with its round button, then the panel. While selecting it draws no box
             (`contents`), so the row sticks for as long as the list lasts, as before. While its rail shows it reaches 12px above the row,
             taken back by its padding, so the rail starts level with the round button (whose 44px reaches 12px past the row) and nothing
             moves. Its children take a lane only while the rail runs down its own edge (a phone, a tablet). */}
         <div ref={hiddenRoot} data-sticky-close-root="" className={selecting ? 'contents' : railOn ? '-mt-sm pt-sm' : undefined}>
-          <div ref={row} className={selecting ? `${ROW_SELECTING} ${stuck ? 'apps-row-stuck' : ''}` : `${ROW_REST} ${STICKY_CLOSE_LANE}`}>
+          <div ref={row} data-top-bar={selecting ? '' : undefined} className={selecting ? `${ROW_SELECTING} ${stuck ? 'apps-row-stuck' : ''}` : `${ROW_REST} ${STICKY_CLOSE_LANE}`}>
             <p role="status" aria-live="polite" className={`m-0 min-w-0 text-subhead ${selecting ? `${WORDS_SELECTING} ${sel.refused ? 'text-r1' : 'text-ink-soft'}` : WORDS_REST}`}>
               {selecting ? sel.line : `${on} shown${hidden > 0 ? `, ${hidden} hidden` : ''}. Open a group to see its apps, or hide one.`}
             </p>

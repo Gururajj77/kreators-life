@@ -184,14 +184,21 @@ describe('All tables: School and Connection (2026-11-14)', () => {
   });
 
   it('changes only through School’s and the channels’ own routes: a program’s name and words, and a channel its maker opened', () => {
-    expect(editable('programsMade')).toEqual(['name', 'about']);
+    // School's own PATCHes (2026-11-14, Contribution's Edit): how a program runs, its prices and what people leave with; a cohort's name and
+    // seats; how the person shows in a cohort's talk (dataTables.contribution.test.ts holds the rest).
+    expect(editable('programsMade')).toEqual(['name', 'about', 'delivery', 'pricePoints', 'price', 'outcomes']);
+    expect(editable('cohortsRun')).toEqual(['cohort', 'seats']);
+    expect(editable('cohortLines')).toEqual(['shownAs']);
     expect(editable('communityChannels')).toEqual(['channel', 'topic']);
-    expect(editable('bondChannels')).toEqual(['channel', 'topic']);
-    for (const k of BATCH.filter((x) => !['programsMade', 'communityChannels', 'bondChannels'].includes(x))) {
+    // Connection's Edit (2026-11-14): saying yes to a room's invitation, and a reaction's kind (dataTables.connectionActions.test.ts holds the rules).
+    expect(editable('bondChannels')).toEqual(['channel', 'topic', 'seat']);
+    expect(editable('postReactions')).toEqual(['reaction']);
+    expect(editable('replyReactions')).toEqual(['reaction']);
+    for (const k of BATCH.filter((x) => !['programsMade', 'cohortsRun', 'cohortLines', 'communityChannels', 'bondChannels', 'postReactions', 'replyReactions'].includes(x))) {
       expect(editable(k), k).toEqual([]);
       expect(dataTableByKey[k]!.readOnlyWhy, k).toBeTruthy();
     }
-    // A program's state is changed in School, which asks first before it takes a program from anyone; its price is set when it is made.
+    // A program's state is changed in School, which asks first before it takes a program from anyone.
     expect(tableColumn(dataTableByKey.programsMade!, 'state')!.edit).toBeUndefined();
     const name = tableColumn(dataTableByKey.programsMade!, 'name')!;
     const about = tableColumn(dataTableByKey.programsMade!, 'about')!;
@@ -222,7 +229,9 @@ describe('All tables: School and Connection (2026-11-14)', () => {
     const channels = read('../../../apps/api/src/routes/channels.ts');
     expect(channels).toContain('const topic = body.topic === undefined ? row.topic : str(body.topic, MAX_CHANNEL_TOPIC);');
     expect(channels).toContain("const manages = (r: Pick<ChRow, 'scope' | 'created_by'>, u: UserRow) => (r.scope === 'community' ? isGuide(u) : r.created_by === u.id);");
-    expect(read('../../../apps/api/src/routes/tables.ts')).toContain("case 'madeIt':");
+    // Why a cell waits is said in the registry's one rule (editWhenWhy, 2026-11-14), which the edit route and the bar both read.
+    const rules = read('./dataTables.ts');
+    expect(rules.slice(rules.indexOf('export function editWhenWhy'))).toContain("case 'madeIt':");
   });
 
   it('reads each page in an order an index serves, and only what the app would show the person', async () => {

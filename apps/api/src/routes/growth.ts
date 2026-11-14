@@ -2,7 +2,7 @@ import { openTurn, type Turn } from '../cronTick';
 import { Hono } from 'hono';
 import { CONTENT_KINDS, LINK_SOURCES, detectPlatform, type ContentItem, type Customer, type DmAutomation, type DmRequest, type DmSend, type Funnel, type FunnelStep, type Page, type PayoutSummary, type Sequence, type TrackedLink } from '@kreators/shared';
 import type { AppEnv, Env } from '../env';
-import { inBatches, nameOf, newId, noteStmt, notify, nowIso, num, oneOf, parseList, randomCode, str, pageOf, paged, TEN_A_PAGE } from '../db';
+import { GONE_NOW, inBatches, nameOf, newId, noteStmt, notify, nowIso, num, objectBody, oneOf, parseList, randomCode, str, pageOf, paged, TEN_A_PAGE } from '../db';
 import { fetchMetrics } from '../social';
 import { fetchT, isTimeout, TIMEOUT } from '../http';
 import { providerFor } from '../payments';
@@ -58,8 +58,19 @@ growth.post('/links', async (c) => {
   return c.json({ link: toLink(row) }, 201);
 });
 
+// Rename a tracked link (2026-11-14, All tables). Its code, and where it opens, never change: the posts and DMs that carry it keep working.
+growth.patch('/links/:id', async (c) => {
+  const body = await objectBody(c);
+  const label = str(body.label, 80);
+  if (!label) return c.json({ error: 'a name for the link' }, 400);
+  const res = await c.env.DB.prepare('UPDATE tracked_links SET label = ? WHERE id = ? AND owner_id = ?').bind(label, c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
+  return c.json({ ok: true });
+});
+
 growth.delete('/links/:id', async (c) => {
-  await c.env.DB.prepare('DELETE FROM tracked_links WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  const res = await c.env.DB.prepare('DELETE FROM tracked_links WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: GONE_NOW }, 409);
   return c.json({ ok: true });
 });
 
@@ -131,8 +142,35 @@ growth.post('/content/:id/refresh', async (c) => {
   return c.json({ item: row ? toContent(row) : null, why });
 });
 
+// Change a tracked post (2026-11-14, All tables): its caption, its kind, or its numbers as typed (views, likes, comments; any of them marks the
+// numbers as read now). Each field alone keeps the rest; its link never changes, since the post is found by it.
+growth.patch('/content/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const prev = await db.prepare('SELECT * FROM content_items WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), user.id).first<ContentRow>();
+  if (!prev) return c.json({ error: 'not found' }, 404);
+  const body = await objectBody(c);
+  if ('kind' in body && !(CONTENT_KINDS as readonly string[]).includes(String(body.kind))) return c.json({ error: 'Pick a kind of post.' }, 400);
+  const count = (k: 'views' | 'likes' | 'comments'): number | null => {
+    if (!(k in body)) return prev[k];
+    const n = Number(body[k]);
+    return Number.isInteger(n) && n >= 0 && n <= 1e12 ? n : null;
+  };
+  const [views, likes, comments] = [count('views'), count('likes'), count('comments')];
+  if (views === null || likes === null || comments === null) return c.json({ error: 'A whole number, 0 or more.' }, 400);
+  const typed = ['views', 'likes', 'comments'].some((k) => k in body);
+  const res = await db
+    .prepare('UPDATE content_items SET caption = ?, kind = ?, views = ?, likes = ?, comments = ?, synced_at = ? WHERE id = ? AND owner_id = ?')
+    .bind('caption' in body ? str(body.caption, 300) : prev.caption, 'kind' in body ? String(body.kind) : prev.kind, views, likes, comments, typed ? nowIso() : prev.synced_at, prev.id, user.id)
+    .run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
+  const row = await db.prepare(`${CONTENT_SELECT} WHERE ci.id = ?`).bind(prev.id).first<ContentRow>();
+  return c.json({ item: row ? toContent(row) : null });
+});
+
 growth.delete('/content/:id', async (c) => {
-  await c.env.DB.prepare('DELETE FROM content_items WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  const res = await c.env.DB.prepare('DELETE FROM content_items WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: GONE_NOW }, 409);
   return c.json({ ok: true });
 });
 
@@ -183,14 +221,29 @@ growth.post('/automations', async (c) => {
   return c.json({ automation: row ? toAuto(row) : null }, 201);
 });
 
+// Switch an Auto-DM on or off (Auto-DM sends `active`), and since 2026-11-14 (All tables) change its keywords (a list, or words split at
+// commas, up to 10) or the message it sends (up to 900), each alone keeping the rest, with POST's own rules. Its link and post stay.
 growth.patch('/automations/:id', async (c) => {
-  const body = await c.req.json<{ active?: boolean }>().catch(() => ({}) as { active?: boolean });
-  await c.env.DB.prepare('UPDATE dm_automations SET active = ? WHERE id = ? AND owner_id = ?').bind(body.active === false ? 0 : 1, c.req.param('id'), c.get('user').id).run();
+  const db = c.env.DB;
+  const user = c.get('user');
+  const prev = await db.prepare('SELECT active, keywords_json, dm_message FROM dm_automations WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), user.id).first<{ active: number; keywords_json: string; dm_message: string }>();
+  if (!prev) return c.json({ error: 'not found' }, 404);
+  const body = await objectBody(c);
+  const keywords = 'keywords' in body ? (Array.isArray(body.keywords) ? body.keywords : String(body.keywords ?? '').split(',')).map((k) => String(k).trim().toLowerCase()).filter(Boolean).slice(0, 10) : null;
+  if (keywords && keywords.length === 0) return c.json({ error: 'at least one keyword' }, 400);
+  const dmMessage = 'dmMessage' in body ? str(body.dmMessage, 900) : prev.dm_message;
+  if (!dmMessage) return c.json({ error: 'the message to send' }, 400);
+  const res = await db
+    .prepare('UPDATE dm_automations SET active = ?, keywords_json = ?, dm_message = ? WHERE id = ? AND owner_id = ?')
+    .bind('active' in body ? (body.active === false ? 0 : 1) : prev.active, keywords ? JSON.stringify(keywords) : prev.keywords_json, dmMessage, c.req.param('id'), user.id)
+    .run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
   return c.json({ ok: true });
 });
 
 growth.delete('/automations/:id', async (c) => {
-  await c.env.DB.prepare('DELETE FROM dm_automations WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  const res = await c.env.DB.prepare('DELETE FROM dm_automations WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: GONE_NOW }, 409);
   return c.json({ ok: true });
 });
 
@@ -319,8 +372,19 @@ growth.post('/funnels', async (c) => {
   return c.json({ funnel: row ? ((await toFunnels(db, user.id, [row]))[0] ?? null) : null }, 201);
 });
 
+// Rename a funnel (2026-11-14, All tables); its steps change in Auto-DM.
+growth.patch('/funnels/:id', async (c) => {
+  const body = await objectBody(c);
+  const name = str(body.name, 80);
+  if (!name) return c.json({ error: 'a name for the funnel' }, 400);
+  const res = await c.env.DB.prepare('UPDATE funnels SET name = ? WHERE id = ? AND owner_id = ?').bind(name, c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
+  return c.json({ ok: true });
+});
+
 growth.delete('/funnels/:id', async (c) => {
-  await c.env.DB.prepare('DELETE FROM funnels WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  const res = await c.env.DB.prepare('DELETE FROM funnels WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: GONE_NOW }, 409);
   return c.json({ ok: true });
 });
 
@@ -349,14 +413,30 @@ growth.post('/sequences', async (c) => {
   return c.json({ sequence: row ? toSeq(row) : null }, 201);
 });
 
+// Switch an after-purchase message on or off (Auto-DM sends `active`), and since 2026-11-14 (All tables) change its title (up to 120), its
+// words (up to 2,000) or the days after buying (0 to 365), each alone keeping the rest, with POST's own rules. A message already sent stays sent.
 growth.patch('/sequences/:id', async (c) => {
-  const body = await c.req.json<{ active?: boolean }>().catch(() => ({}) as { active?: boolean });
-  await c.env.DB.prepare('UPDATE sequences SET active = ? WHERE id = ? AND owner_id = ?').bind(body.active === false ? 0 : 1, c.req.param('id'), c.get('user').id).run();
+  const db = c.env.DB;
+  const user = c.get('user');
+  const prev = await db.prepare('SELECT active, title, body, delay_days FROM sequences WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), user.id).first<{ active: number; title: string; body: string; delay_days: number }>();
+  if (!prev) return c.json({ error: 'not found' }, 404);
+  const body = await objectBody(c);
+  const title = 'title' in body ? str(body.title, 120) : prev.title;
+  const text = 'body' in body ? str(body.body, 2000) : prev.body;
+  if (!title || !text) return c.json({ error: 'a title and a message' }, 400);
+  const days = 'delayDays' in body ? Number(body.delayDays) : prev.delay_days;
+  if (!Number.isInteger(days) || days < 0 || days > 365) return c.json({ error: 'A number of days from 0 to 365.' }, 400);
+  const res = await db
+    .prepare('UPDATE sequences SET active = ?, title = ?, body = ?, delay_days = ? WHERE id = ? AND owner_id = ?')
+    .bind('active' in body ? (body.active === false ? 0 : 1) : prev.active, title, text, days, c.req.param('id'), user.id)
+    .run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
   return c.json({ ok: true });
 });
 
 growth.delete('/sequences/:id', async (c) => {
-  await c.env.DB.prepare('DELETE FROM sequences WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  const res = await c.env.DB.prepare('DELETE FROM sequences WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: GONE_NOW }, 409);
   return c.json({ ok: true });
 });
 
@@ -531,7 +611,10 @@ growth.post('/dm/:id/answer', async (c) => {
   const body = await c.req.json<{ answer?: string }>().catch(() => ({}) as { answer?: string });
   const answer = str(body.answer, 4000);
   if (!answer) return c.json({ error: 'write the answer' }, 400);
-  await db.prepare("UPDATE dm_requests SET answer = ?, status = 'answered', answered_at = ? WHERE id = ?").bind(answer, nowIso(), r.id).run();
+  // Only a question still waiting (2026-11-14, the route gap All tables found): an answered one keeps the answer the buyer was told, and a
+  // refunded one is closed. Guarded in the write, so two taps or two tabs answer and tell the buyer once.
+  const res = await db.prepare("UPDATE dm_requests SET answer = ?, status = 'answered', answered_at = ? WHERE id = ? AND status = 'open'").bind(answer, nowIso(), r.id).run();
+  if (!res.meta.changes) return c.json({ error: 'This question was already answered or refunded, so it stays as it is.' }, 409);
   await notify(db, r.buyer_id, 'dm', `${nameOf(user)} answered your question`, answer.slice(0, 160), '/library#dm-heading');
   return c.json({ ok: true });
 });

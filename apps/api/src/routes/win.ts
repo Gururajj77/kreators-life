@@ -114,6 +114,9 @@ win.patch('/:id', async (c) => {
   const b = await db.prepare(`${SELECT} WHERE b.id = ?`).bind(c.req.param('id')).first<BRow & { created_by: string }>();
   if (!b) return c.json({ error: 'not found' }, 404);
   if (b.created_by !== user.id && !can(user, 'review') && !can(user, 'talent')) return c.json({ error: 'staff change rewards' }, 403);
+  // A reward whose pool was paid out stays as it ended (2026-11-14, for All tables): Win's own page offers no change then, and any save here
+  // once turned "Pool paid out" into "Closed".
+  if (b.status === 'paid') return c.json({ error: 'Its pool was paid out, so it stays as it ended.' }, 409);
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
   const next = {
     title: str(body.title, 120, b.title) || b.title,
@@ -128,7 +131,7 @@ win.patch('/:id', async (c) => {
     rate_per_thousand: num(body.ratePerThousand, b.rate_per_thousand, 0) ?? b.rate_per_thousand,
     max_payout_points: num(body.maxPayoutPoints, b.max_payout_points, 0) ?? b.max_payout_points,
     min_views: num(body.minViews, b.min_views, 0) ?? b.min_views,
-    status: oneOf(body.status, ['open', 'closed'] as const, b.status === 'paid' ? 'closed' : b.status),
+    status: oneOf(body.status, ['open', 'closed'] as const, b.status as 'open' | 'closed'),
   };
   if (Number.isNaN(Date.parse(next.ends_at))) return c.json({ error: 'that closing time does not look right' }, 400);
   if (next.budget_points > 0 && next.budget_points < b.paid_points) return c.json({ error: `the pool cannot drop under the ${b.paid_points} points already paid` }, 400);
@@ -258,6 +261,26 @@ win.post('/submissions/:id/review', async (c) => {
   await audit(db, user.id, 'bounty.review', 'bounty_submission', s.id, s.status, status);
   await notify(db, s.user_id, 'win', `${s.bounty_title}: ${status}`, status === 'verified' ? `${payout} points queued for payout` : str(body.evidenceNote, 160), '/win#mine-heading');
   return c.json({ ok: true });
+});
+
+/**
+ * Withdraw an entry before it is reviewed (2026-11-14, the founder's yes, from All tables): the entrant's own, only while it waits for review,
+ * with its numbers, in one guarded batch, so a second send takes nothing twice (409 in words, or 404 for someone else's). An entry a reviewer
+ * verified, paid or rejected stays. It can be entered again while the reward is open.
+ */
+win.delete('/submissions/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const id = c.req.param('id');
+  const waiting = "SELECT 1 FROM bounty_submissions s WHERE s.id = ?1 AND s.user_id = ?2 AND s.status = 'submitted'";
+  const [, gone] = await db.batch([
+    db.prepare(`DELETE FROM social_metrics WHERE submission_id = ?1 AND EXISTS (${waiting})`).bind(id, user.id),
+    db.prepare("DELETE FROM bounty_submissions WHERE id = ?1 AND user_id = ?2 AND status = 'submitted'").bind(id, user.id),
+  ]);
+  if (gone?.meta.changes) return c.json({ ok: true });
+  const still = await db.prepare('SELECT status FROM bounty_submissions WHERE id = ? AND user_id = ?').bind(id, user.id).first<{ status: string }>();
+  if (!still) return c.json({ error: 'not found' }, 404);
+  return c.json({ error: 'A reviewer has looked at it, so it stays.' }, 409);
 });
 
 win.post('/submissions/:id/dispute', async (c) => {

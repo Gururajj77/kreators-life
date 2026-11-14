@@ -14,9 +14,10 @@ import {
   type SupplementsTodayView,
   type SupplementsView,
 } from '@kreators/shared/fitness';
+import { byKey } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { dayFromDevice, dayInZone, newId, nowIso, shiftDate } from '../db';
-import { logDay, supplementOnList } from '../fitness';
+import { BEFORE_JOINED, beforeStart, DATE_RE, dayFromDevice, dayInZone, GONE_NOW, newId, nowIso, personDay, shiftDate, startDay } from '../db';
+import { supplementOnList } from '../fitness';
 
 /**
  * Supplements in Fitness (2026-11-07; migration 0104), under /fitness/supplements so the module gate refuses all of it while Fitness is
@@ -65,6 +66,28 @@ async function settingsOf(db: D1Database, userId: string): Promise<SupplementSet
   const s = parseSupplementSettings({ on: r.supplements_on === 1, daily: r.supplements_daily === 1, remind }, SUPPLEMENT_SETTINGS_OFF);
   return typeof s === 'string' ? { on: r.supplements_on === 1, daily: r.supplements_daily === 1, remind: {} } : s;
 }
+
+/**
+ * The day a tick is for, and the person's own today (2026-11-14, the founder: supplement ticks may change on any past day, never one still to
+ * come). The day is the one sent (a real calendar day, else refused), else their today. Their today is the device's (`today`, which the
+ * screens send beside `date`) within a day of their zone's, as everywhere (`personDay`), so a device a zone ahead still ticks its own today;
+ * with none sent it is their zone's today, never a window round the server's UTC date. Taking a day after it is refused out loud, as gratitude
+ * and the routine refuse it; an untick (`taking` false) clears any real day, since it only takes a tick away. Fitness's screen and Daily still
+ * tick only today and yesterday; All tables unticks an older one.
+ */
+function tickDay(raw: unknown, today: unknown, zone: string | null | undefined, taking: boolean): { day: string; own: string } | { error: string } {
+  if (raw !== undefined && raw !== null && raw !== '' && !(typeof raw === 'string' && DATE_RE.test(raw))) return { error: 'send date as a real day, YYYY-MM-DD' };
+  const own = personDay(typeof today === 'string' ? today : null, zone);
+  const day = typeof raw === 'string' && raw ? raw : own;
+  return taking && day > own ? { error: 'A day still to come cannot be ticked yet.' } : { day, own };
+}
+
+/** A whole set of days by its name (All tables' Days, 2026-11-14), looked up with no prototype, so "constructor" is no set. */
+const DAY_SETS = byKey<Readonly<Record<string, readonly number[] | undefined>>>([
+  ['every', [1, 2, 3, 4, 5, 6, 7]],
+  ['weekdays', [1, 2, 3, 4, 5]],
+  ['weekends', [6, 7]],
+]);
 
 const rowsOf = async (db: D1Database, userId: string) => (await db.prepare(`SELECT ${COLS} FROM supplements WHERE user_id = ? ORDER BY position, created_at LIMIT ?`).bind(userId, MAX_SUPPLEMENTS * 2).all<Row>()).results;
 const listOf = async (db: D1Database, userId: string) => (await rowsOf(db, userId)).map(toSupplement);
@@ -160,16 +183,21 @@ supplements.post('/', async (c) => {
   return c.json({ supplement: row ? toSupplement(row) : null }, 201);
 });
 
-// Mark every one of a part of the day taken (Mark all taken), for today or yesterday. Only the person's own, due that day, not paused.
+// Mark every one of a part of the day taken (Mark all taken), for a day up to their today (`tickDay`; the screens send today or yesterday). Only the
+// person's own, due that day, not paused.
 supplements.post('/day', async (c) => {
   const db = c.env.DB;
   const userId = c.get('user').id;
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
-  const day = logDay(body.date, c.get('user').timezone);
-  if (typeof day !== 'string') return c.json(day, 400);
+  const user = c.get('user');
+  const when = tickDay(body.date, body.today, user.timezone, true);
+  if ('error' in when) return c.json(when, 400);
+  const { day, own } = when;
+  if (beforeStart(day, startDay(user.created_at, user.timezone), own)) return c.json({ error: BEFORE_JOINED }, 400);
   if (!isSupplementTime(body.time)) return c.json({ error: `pick when: ${SUPPLEMENT_TIMES.join(', ')}` }, 400);
   const time = body.time;
-  const due = (await listOf(db, userId)).filter((s) => s.time === time && supplementDue(s, day));
+  // Never one added after that day (the review of 2026-11-14): a tick before a supplement was on the list would count as taken and as due.
+  const due = (await rowsOf(db, userId)).filter((r) => !beforeStart(day, startDay(r.created_at, user.timezone), own)).map(toSupplement).filter((s) => s.time === time && supplementDue(s, day));
   const now = nowIso();
   if (due.length) await db.batch(due.map((s) => db.prepare('INSERT OR IGNORE INTO supplement_days (supplement_id, user_id, day, taken_at) VALUES (?, ?, ?, ?)').bind(s.id, userId, day, now)));
   return c.json({ ok: true, marked: due.length });
@@ -195,6 +223,12 @@ supplements.patch('/:id', async (c) => {
   if (!row) return c.json({ error: 'not found' }, 404);
   const old = toSupplement(row);
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  // A set of days by its name (All tables' one select): every day, weekdays or weekends, read as the list the Fitness form sends.
+  if (typeof body.days === 'string') {
+    const set = DAY_SETS[body.days];
+    if (!set) return c.json({ error: 'Pick every day, weekdays or weekends.' }, 400);
+    body.days = [...set];
+  }
   const s = parseSupplement(body, old);
   if (typeof s === 'string') return c.json({ error: s }, 400);
   const paused = body.paused === undefined ? row.paused_at : body.paused === true ? (row.paused_at ?? nowIso()) : null;
@@ -238,20 +272,28 @@ supplements.delete('/:id', async (c) => {
   const userId = c.get('user').id;
   const row = await own(db, userId, c.req.param('id'));
   if (!row) return c.json({ error: 'not found' }, 404);
-  await db.batch([db.prepare('DELETE FROM supplement_days WHERE supplement_id = ? AND user_id = ?').bind(row.id, userId), db.prepare('DELETE FROM supplements WHERE id = ? AND user_id = ?').bind(row.id, userId)]);
+  const [, gone] = await db.batch([db.prepare('DELETE FROM supplement_days WHERE supplement_id = ? AND user_id = ?').bind(row.id, userId), db.prepare('DELETE FROM supplements WHERE id = ? AND user_id = ?').bind(row.id, userId)]);
+  // Another tab, or a second send, took it between the read above and here: said, never a quiet yes, so All tables counts it once.
+  if (!gone?.meta.changes) return c.json({ error: GONE_NOW }, 409);
   return c.json({ ok: true });
 });
 
-// Tick one taken, or untick it, for today or yesterday. Taking is INSERT OR IGNORE, so two taps make one row; unticking deletes it.
+// Tick one taken for any day up to their today, or untick any day (`tickDay`). Taking is INSERT OR IGNORE, so two taps make one row; unticking deletes it.
 supplements.put('/:id/day', async (c) => {
   const db = c.env.DB;
   const userId = c.get('user').id;
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
-  const day = logDay(body.date, c.get('user').timezone);
-  if (typeof day !== 'string') return c.json(day, 400);
+  const user = c.get('user');
   if (typeof body.taken !== 'boolean') return c.json({ error: 'send taken as true or false' }, 400);
+  const when = tickDay(body.date, body.today, user.timezone, body.taken);
+  if ('error' in when) return c.json(when, 400);
+  const { day, own: today } = when;
   const row = await own(db, userId, c.req.param('id'));
   if (!row) return c.json({ error: 'not found' }, 404);
+  // A tick is never for a day still to come, before the account began, nor before this one was added (the review of 2026-11-14); an untick
+  // always goes.
+  if (body.taken && beforeStart(day, startDay(user.created_at, user.timezone), today)) return c.json({ error: BEFORE_JOINED }, 400);
+  if (body.taken && beforeStart(day, startDay(row.created_at, user.timezone), today)) return c.json({ error: 'That day is before you added it to your list.' }, 400);
   if (body.taken) await db.prepare('INSERT OR IGNORE INTO supplement_days (supplement_id, user_id, day, taken_at) VALUES (?, ?, ?, ?)').bind(row.id, userId, day, nowIso()).run();
   else await db.prepare('DELETE FROM supplement_days WHERE supplement_id = ? AND user_id = ? AND day = ?').bind(row.id, userId, day).run();
   return c.json({ ok: true, day, taken: body.taken });

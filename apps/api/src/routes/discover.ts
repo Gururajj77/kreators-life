@@ -175,7 +175,9 @@ discover.post('/more/:kind/submit', async (c) => {
 discover.delete('/more/:kind', async (c) => {
   const kind = c.req.param('kind');
   if (!isExtraKind(kind)) return c.json({ error: 'not found' }, 404);
-  await c.env.DB.prepare('DELETE FROM discover_extras WHERE user_id = ? AND kind = ?').bind(c.get('user').id, kind).run();
+  const gone = await c.env.DB.prepare('DELETE FROM discover_extras WHERE user_id = ? AND kind = ?').bind(c.get('user').id, kind).run();
+  // Nothing there to remove (another tab, or a second send from All tables): said, never a quiet yes.
+  if (!(gone.meta.changes ?? 0)) return c.json({ error: 'not found' }, 404);
   return c.json({ ok: true });
 });
 

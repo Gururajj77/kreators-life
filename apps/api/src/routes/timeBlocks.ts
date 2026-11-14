@@ -22,7 +22,7 @@ import {
   type KindsMonthResponse,
 } from '@kreators/shared';
 import type { AppEnv } from '../env';
-import { DATE_RE, dayFromDevice, newId, nowIso } from '../db';
+import { DATE_RE, dayFromDevice, GONE_NOW, newId, nowIso } from '../db';
 import { blocksWritten, ensureTimeBlocks, kindsBetween, loadBlocking, ownTemplateId, slotInsert, startingBlockRow, startingSet, startingTemplate, templateIdByName, toDayTemplate, toTimeBlock, restoreStartingSet, type DayTemplateRow, type TimeBlockRow } from '../timeBlocks';
 
 // Time blocks, day templates and the weekly pattern (docs/time-blocks.md). Core like /today, so it is not in MODULE_FOR_PREFIX.
@@ -198,6 +198,8 @@ timeBlocks.delete('/blocks/:id', async (c) => {
     db.prepare('UPDATE nodes SET time_block_id = NULL WHERE user_id = ? AND time_block_id = ?').bind(user.id, row.id),
     db.prepare('DELETE FROM time_blocks WHERE id = ? AND user_id = ?').bind(row.id, user.id),
   ]);
+  // Another tab, or a second send, took it between the read above and here: said, never a quiet yes, so All tables counts it once.
+  if (!res[2]?.meta.changes) return c.json({ error: GONE_NOW }, 409);
   return c.json({ ok: true, tasksCleared: res[1]?.meta.changes ?? 0, templatesTouched: touched?.n ?? 0 });
 });
 
@@ -259,6 +261,8 @@ timeBlocks.patch('/templates/:id', async (c) => {
   const body = await bodyOf(c);
   const problem = dayTemplateProblem(body, true) ?? dayTemplateProblem({ name: tpl.name, lead: tpl.lead, second: tpl.second, ...body }, false);
   if (problem) return c.json({ error: problem }, 400);
+  // The default only moves to another template (one is always the default): switching it off here would say it changed while it did not.
+  if (body.isDefault === false && tpl.isDefault) return c.json({ error: 'To change your default, make another kind of day the default.' }, 400);
   const stmts: D1PreparedStatement[] = [];
   if (body.slots !== undefined) {
     const { ids, names } = await blockNames(db, user.id);
@@ -300,6 +304,7 @@ timeBlocks.delete('/templates/:id', async (c) => {
     db.prepare('DELETE FROM week_patterns WHERE user_id = ? AND template_id = ?').bind(user.id, tpl.id),
     db.prepare('DELETE FROM day_templates WHERE id = ? AND user_id = ?').bind(tpl.id, user.id),
   ]);
+  if (!res[3]?.meta.changes) return c.json({ error: GONE_NOW }, 409);
   return c.json({ ok: true, daysCleared: res[1]?.meta.changes ?? 0, weekdaysReset: res[2]?.meta.changes ?? 0 });
 });
 
@@ -335,7 +340,8 @@ timeBlocks.put('/days', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
   const body = await bodyOf(c);
-  const dates = Array.isArray(body.dates) ? [...new Set(body.dates)] : [];
+  // `dates` (Daily's month and the Time blocks page), or one `date` (All tables' Clear on a kind of day, 2026-11-14, which sends one day).
+  const dates = Array.isArray(body.dates) ? [...new Set(body.dates)] : typeof body.date === 'string' ? [body.date] : [];
   if (dates.length === 0 || dates.length > MAX_APPLY_DATES || dates.some((d) => typeof d !== 'string' || !DATE_RE.test(d))) return c.json({ error: `Pick 1 to ${MAX_APPLY_DATES} real days, like 2026-11-02.` }, 400);
   const list = dates as string[];
   const tpl = await templateFromBody(db, user.id, body);

@@ -27,7 +27,10 @@
 // growing (a lazy chunk), and measure from the toggle's top to the content's bottom (its root's bottom when it has one) against the room:
 // the window less the fixed and sticky bars over its top and bottom edges (the condensed title, the site's header from the tablet, the
 // phone's tab bar, a held StickyAction). TALL: scroll the content's middle to the window's middle, then its foot to 120px above the bottom
-// bar, and at each a close must be on screen, under the bars, not covered, not clipped, not over another close and not over a control or a
+// bar, then the toggle's own line to just above the bottom bar (`low`: the close at its resting place, in the band where Back to top and the
+// assistant's button sit), and at each a close must be on screen, under the bars, not covered (Back to top touching it counts; a phone's
+// close at rest under the assistant's floating button, as any control in that corner is until the page scrolls, is only noted), not
+// clipped, not over another close and not over a control or a
 // line of words; then a real click on it must fold the toggle, focus it and leave it in view. SHORT: a close showing anyway is `extra`
 // (information, not a failure). Toggles inside an opened region are tested too (one level), and one open at load is folded first and
 // opened again so its opening can be watched. Not inline toggles, so only noted: one that opens a popup (Escape closes it), one whose
@@ -35,8 +38,12 @@
 // again). Skipped: navigation, the bars, fixed chrome, the phone's top corners, menus (`aria-haspopup`), a glossary word's tip, a task's
 // tag filters and the closes themselves. Everything opened is folded again; the page is
 // read again whenever it did not come back as it loaded. Nothing but an aria-expanded toggle or a close is ever clicked, and no form is sent.
+// The privacy card is answered on the device before every load, all off, as a person who tapped Reject all (the app then hands that answer
+// to the account once, as it does for anyone): an unanswered card is a dialog the page keeps, and Back to top steps aside for it, so the
+// run would never see Back to top at all. The terms notice is only hidden; while one is up, every look notes that Back to top could not
+// show, and the summary says how many `low` looks had Back to top drawn.
 //
-// The kinds: `no-close` (none on screen), `covered` (under a bar or something else), `clipped` (off the window or cut by a box),
+// The kinds: `no-close` (none on screen), `covered` (under a bar or something else, or touching Back to top), `clipped` (off the window or cut by a box),
 // `overlap` (two closes on each other), `covers-control` (over a field, a button, a link or a line of words in the content), `name` (its
 // name does not start with "Close"), `no-collapse`, `focus` and `off-view` (after tapping it), and `extra` (a close on a short one).
 // Prints one line per hit and a summary by kind; exits 1 on any kind but `extra`, or when a page threw.
@@ -60,6 +67,9 @@ const token = (process.env.SHOOT_TOKEN ?? fs.readFileSync(new URL('./state/shoot
 const chrome = [process.env.SHOOT_CHROME, '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Chromium.app/Contents/MacOS/Chromium', '/usr/bin/google-chrome', '/usr/bin/chromium'].find((p) => p && fs.existsSync(p));
 if (!chrome) throw new Error('no Chrome found; set SHOOT_CHROME');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// The version of the privacy question the app asks now (lib/consent.ts keeps an answer only at this version or later).
+const CONSENT_VERSION = Number(/export const CONSENT_VERSION = (\d+)/.exec(fs.readFileSync(new URL('../../packages/shared/src/legal.ts', import.meta.url), 'utf8'))?.[1]);
+if (!Number.isInteger(CONSENT_VERSION)) throw new Error('CONSENT_VERSION not found in packages/shared/src/legal.ts');
 
 const shots = process.argv[2] ? JSON.parse(fs.readFileSync(process.argv[2], 'utf8')) : [];
 if (!shots.length && !POPUPS) throw new Error('usage: node scripts/smoke/drive-folds.mjs <shots.json>   (or FOLDS_POPUPS=1 alone)');
@@ -382,6 +392,24 @@ function pageLib(mode) {
     const foot = F.bottomOf(d) - V.top + F.scrollY();
     F.scrollTo(foot - (V.bottom - V.top - c.bottom - 120));
   };
+  // The toggle's own line just above the bottom bar (8px clear, never under the top bar): its close at rest, low on the screen, where Back
+  // to top and the assistant's button sit.
+  F.scrollLow = (d) => {
+    const V = F.view();
+    const c = F.chrome(V);
+    const tr = F.stack[d].el.getBoundingClientRect();
+    const want = Math.max(c.top, V.bottom - V.top - c.bottom - tr.height - 8);
+    F.scrollTo(tr.top - V.top + F.scrollY() - want);
+  };
+  // Back to top while it is drawn (its 36px button grown to the 44px it takes to tap), else null.
+  const backToTop = () => {
+    const b = document.querySelector('.back-to-top-btn');
+    if (!b || !shown(b)) return null;
+    const r = b.getBoundingClientRect();
+    const gx = Math.max(0, (44 - r.width) / 2);
+    const gy = Math.max(0, (44 - r.height) / 2);
+    return { left: r.left - gx, right: r.right + gx, top: r.top - gy, bottom: r.bottom + gy, x: r.left, y: r.top, w: r.width, h: r.height };
+  };
   // One look at the open toggle from where the page is scrolled now.
   F.check = (d, at) => {
     const s = F.stack[d];
@@ -396,6 +424,10 @@ function pageLib(mode) {
     const vTop = V.top + c.top;
     const vBottom = V.bottom - c.bottom;
     const scope = F.scope();
+    const btt = backToTop();
+    res.btt = btt ? box({ left: btt.x, top: btt.y, width: btt.w, height: btt.h }) : null;
+    // A dialog the page keeps (the unanswered privacy card or the terms notice, even hidden by this script) holds Back to top back.
+    res.bttBlocked = Boolean(document.querySelector('[role="dialog"].lift-over-sticky'));
     const stateOf = (b) => {
       const r = b.getBoundingClientRect();
       const o = { label: norm(b.getAttribute('aria-label')).slice(0, 50), ...box(r) };
@@ -405,8 +437,13 @@ function pageLib(mode) {
       else if (r.top < vTop - 0.5 || r.bottom > vBottom + 0.5) (o.state = 'covered'), (o.by = r.top < vTop - 0.5 ? `the top bar (${c.top}px)` : `the bottom bar (${c.bottom}px)`);
       else {
         const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-        if (hit && (hit === b || b.contains(hit))) (o.state = 'ok'), (o.by = undefined);
-        else (o.state = 'covered'), (o.by = shortSel(hit));
+        // Back to top touching it anywhere is as bad as over its middle: a tap meant for one lands on the other.
+        if (btt && meets(r, btt)) (o.state = 'covered'), (o.by = 'Back to top');
+        else if (hit && (hit === b || b.contains(hit))) (o.state = 'ok'), (o.by = undefined);
+        // At rest low on a phone the close stands where the toggle's own chevron was, under the assistant's floating button, as any control
+        // in that corner does until the page is scrolled (the page keeps room at its foot and a scroll padding for it): noted, not failed.
+        else if (at === 'low' && hit?.closest?.('button[aria-label="Open the assistant"]')) (o.state = 'ok'), (o.under = "the assistant's button");
+        else (o.state = 'covered'), (o.by = hit?.closest?.('.back-to-top') ? 'Back to top' : shortSel(hit));
       }
       return o;
     };
@@ -650,6 +687,15 @@ async function testToggle(page, ctx, cand, d) {
     await frames(page);
     await sleep(120);
     checks.push(await page.evaluate((dd) => window.__folds.check(dd, 'foot'), d));
+    // The toggle's line low on the screen: the close at rest beside it, in Back to top's band (200ms covers Back to top's 160ms fade).
+    await page.evaluate((dd) => window.__folds.scrollLow(dd), d);
+    await frames(page);
+    await sleep(200);
+    const low = await page.evaluate((dd) => window.__folds.check(dd, 'low'), d);
+    checks.push(low);
+    t.lowBtt = Boolean(low.btt);
+    if (low.bttBlocked) t.notes.push('Back to top held back: a privacy or terms dialog is still on the page');
+    if (low.closes.some((c) => c.under)) t.notes.push("low: the close rests under the assistant's button until the page is scrolled");
     t.checks = checks;
     t.hits.push(...kindsOf(checks));
   } else {
@@ -772,17 +818,20 @@ async function openPage(browser, width, height, session) {
     { name: 'prefers-reduced-motion', value: 'reduce' },
   ]);
   await page.evaluateOnNewDocument(
-    (t, mode) => {
+    (t, mode, v) => {
       try {
         if (t) localStorage.setItem('kreators.session', JSON.stringify({ state: { token: t }, version: 0 }));
         else localStorage.removeItem('kreators.session');
         localStorage.setItem('kreators.theme', JSON.stringify({ state: { mode }, version: 0 }));
+        // The privacy card answered as Reject all would (lib/consent.ts's shape), so it is never drawn and Back to top can show.
+        localStorage.setItem('kreators.consent', JSON.stringify({ v, decided: true, choices: { attribution: false, embeds: false, marketing: false } }));
       } catch {
         // storage may be blocked
       }
     },
     session ? token : null,
     THEME,
+    CONSENT_VERSION,
   );
   return page;
 }
@@ -881,6 +930,10 @@ for (const [w] of WIDTHS.map((x) => [x.join('x')])) {
   for (const h of hits.filter((x) => x.width === w)) row[h.kind] = (row[h.kind] ?? 0) + 1;
   console.log(`  ${w}: ${tests.filter((t) => t.width === w).length} tested, ${tests.filter((t) => t.width === w && t.tall).length} tall, ${Object.entries(row).map(([k, v]) => `${k} ${v}`).join(', ') || 'no hits'}`);
 }
+// Proof the run saw Back to top at all: it shows only past a screen of scrolling, so a toggle near a page's top never meets it, and it
+// steps aside under every popup, so only the pages' looks count.
+const lows = tests.filter((t) => 'lowBtt' in t && !t.route.startsWith('popup:'));
+if (lows.length) console.log(`Back to top drawn in ${lows.filter((t) => t.lowBtt).length} of ${lows.length} low looks${lows.some((t) => t.lowBtt) ? '' : ' (none: is a privacy or terms dialog still up?)'}`);
 if (Object.values(dropped).some(Boolean)) console.log(`not tested: ${dropped.top} past the cap of ${CAP}, ${dropped.nested} inside others past the cap, ${dropped.rows} task cards past ${ROWS} a page, ${dropped.time} past the time limit`);
 if (Object.keys(notes).length) console.log(`notes: ${Object.entries(notes).map(([k, v]) => `${k} (${v})`).join('; ')}`);
 if (errors.length) {

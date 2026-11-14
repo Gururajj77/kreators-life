@@ -620,7 +620,7 @@ The Life app scores each one from what you already log. Only you see them.
 - Daily: Three small boxes. One better day. Check in, do one small act, tick one task. Every tick pays xp, and the check-in pays points. Tasks have a do date, an optional due date, a priority from P0 to P3, repeats and reminders. Plan my week gives a day to each task that has none.
 - Pillars: Seven pillars, one life. Each relationship is a pyramid you build in a short session.
 - Leaderboard: Climb on effort, not followers. Opt in to rank on xp, streaks and badges. Never follower counts, and never your journal or your wellbeing.
-- All tables: All your data, in tables. Your tasks, moods, money, badges and more, each as a table to sort, filter, search, copy and download as a CSV file. A life coach sees a table only if you switch it on for them.
+- All tables: All your data, in tables. Your tasks, moods, money, badges and more, each as a table to sort, filter, search, copy and download as a CSV file. Edit a row or remove it by the same rules as its own screen, and only you can. A life coach sees a table only if you switch it on for them.
 - Help: Answers, and a line to the team.
 - Assistant: Say what you did. It is done. Bumling sits at the corner of every screen. Tapping is free. Typing needs a plan. It asks before it removes anything, and you can undo with one tap.
 
@@ -1254,7 +1254,7 @@ Online, ticket in points (so no `offers`):
 | today | Daily: three small boxes \| kreators.app | Daily on kreators.app: check in, do one small act, tick one task. Tasks have do dates, priorities and repeats, and Plan my week suggests a day for each task that has none. |
 | tower | Pillars: seven pillars, one life \| kreators.app | Pillars on kreators.app: each of the seven relationships is a pillar, and each pillar is a pyramid from a foundation down to today's task. Tick it to grow. |
 | leaderboard | Leaderboard: climb on effort \| kreators.app | Leaderboard on kreators.app: opt in to climb on xp, streaks and badges. Never on follower counts, and never on your journal or your wellbeing. |
-| tables | All tables: your data as tables \| kreators.app | All tables on kreators.app shows your own lists, from tasks and moods to money and badges, as tables you can sort, filter, search, copy and download as CSV files. |
+| tables | All tables: your data as tables \| kreators.app | All tables on kreators.app shows your own lists, from tasks and moods to money and clients, as tables you can sort, search, edit, copy and download as CSV files. |
 | help | Help: answers and the team \| kreators.app | Help on kreators.app: common questions answered, and a support ticket when you need a person. The reply comes to your own inbox inside the app. |
 | assistant | Assistant: say it, it is done \| kreators.app | Bumling, the kreators.app assistant, logs a mood, adds a task or ticks a box when you tap. Typing to it needs a plan. Undo anything with one tap. |
 

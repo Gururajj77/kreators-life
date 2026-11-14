@@ -8,6 +8,10 @@ import { rewardSocial } from '../rewards';
 
 export const community = new Hono<AppEnv>();
 
+/** A reaction taken back by another tab, or by a second send racing the first (2026-11-14, the review). */
+const REACTION_GONE = 'That reaction was taken back a moment ago.';
+const MUTE_GONE = 'That mute was lifted a moment ago.';
+
 interface PostRow {
   id: string;
   user_id: string;
@@ -246,6 +250,38 @@ community.post('/:id/like', async (c) => {
   return c.json({ post: await presentPost(c, row), awarded });
 });
 
+/**
+ * Set your reaction on a post to one kind, or take it back (2026-11-14, All tables: Edit and Delete for the owner). Unlike the screen's toggle
+ * above, each leaves the same state however often it is sent (taking back one already gone says so, 409), so a second send from the table never
+ * flips it back. The first reaction is still the like that pays, once per post; a change pays nothing, and taking one back takes nothing back.
+ */
+community.put('/:id/reaction', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const id = c.req.param('id');
+  const body = await c.req.json<{ kind?: unknown }>().catch(() => ({}) as { kind?: unknown });
+  if (!isReaction(body.kind)) return c.json({ error: 'Pick one of the six reactions.' }, 400);
+  const kind = body.kind;
+  const post = await db.prepare('SELECT id, user_id FROM community_posts WHERE id = ? AND hidden_at IS NULL AND held_at IS NULL').bind(id).first<{ id: string; user_id: string }>();
+  if (!post || !(await canSeePost(db, user.id, id))) return c.json({ error: 'not found' }, 404);
+  const changed = await db.prepare('UPDATE community_likes SET kind = ? WHERE post_id = ? AND user_id = ?').bind(kind, id, user.id).run();
+  let awarded = { xp: 0, points: 0 };
+  if (!changed.meta.changes) {
+    const added = await db.prepare('INSERT INTO community_likes (post_id, user_id, created_at, kind) VALUES (?, ?, ?, ?) ON CONFLICT (post_id, user_id) DO NOTHING').bind(id, user.id, nowIso(), kind).run();
+    if (added.meta.changes) {
+      awarded = await rewardSocial(db, user.id, 'like', id);
+      if (post.user_id !== user.id) await rewardSocial(db, post.user_id, 'liked', `${id}:${user.id}`);
+    }
+  }
+  return c.json({ ok: true, kind, awarded });
+});
+// Taking a reaction back (2026-11-14, All tables): one that is gone already answers 409 in words, so two tabs never both count it.
+community.delete('/:id/reaction', async (c) => {
+  const res = await c.env.DB.prepare('DELETE FROM community_likes WHERE post_id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: REACTION_GONE }, 409);
+  return c.json({ ok: true, kind: null });
+});
+
 // Follow a post, or stop: new replies land in the inbox under Following.
 community.post('/:id/follow-post', async (c) => {
   const db = c.env.DB;
@@ -256,6 +292,14 @@ community.post('/:id/follow-post', async (c) => {
   if (had) await db.prepare('DELETE FROM community_post_follows WHERE post_id = ? AND user_id = ?').bind(post.id, user.id).run();
   else await follow(db, post.id, user.id);
   return c.json({ following: !had });
+});
+
+// Stop following a post (2026-11-14, All tables): never a follow again, nobody told. Sent again, it changes nothing and says so (409), so two
+// tabs never both count it.
+community.delete('/:id/follow-post', async (c) => {
+  const res = await c.env.DB.prepare('DELETE FROM community_post_follows WHERE post_id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: 'You no longer follow it.' }, 409);
+  return c.json({ following: false });
 });
 
 interface ReplyRow {
@@ -425,10 +469,101 @@ community.post('/replies/:id/react', async (c) => {
   return c.json({ reply: row ? ((await presentReplies(c, [row]))[0] ?? null) : null });
 });
 
+// Set your reaction on a reply to one kind, or take it back (2026-11-14, All tables): the same state however often it is sent. Pays nothing.
+community.put('/replies/:id/reaction', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const body = await c.req.json<{ kind?: unknown }>().catch(() => ({}) as { kind?: unknown });
+  if (!isReaction(body.kind)) return c.json({ error: 'Pick one of the six reactions.' }, 400);
+  const reply = await db.prepare(`SELECT r.id FROM community_replies r WHERE r.id = ?2 AND r.hidden_at IS NULL AND NOT ${hiddenByBlock('?1', 'r.user_id', 'r.anonymous')}`).bind(user.id, c.req.param('id')).first<{ id: string }>();
+  if (!reply) return c.json({ error: 'not found' }, 404);
+  await db.prepare('INSERT INTO community_reply_reactions (reply_id, user_id, kind, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(reply_id, user_id) DO UPDATE SET kind = excluded.kind').bind(reply.id, user.id, body.kind, nowIso()).run();
+  return c.json({ ok: true, kind: body.kind });
+});
+community.delete('/replies/:id/reaction', async (c) => {
+  const res = await c.env.DB.prepare('DELETE FROM community_reply_reactions WHERE reply_id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: REACTION_GONE }, 409);
+  return c.json({ ok: true, kind: null });
+});
+
+/**
+ * Delete a reply you wrote that nobody has answered (2026-11-14, All tables), and its reactions with it. One with answers stays, since they are
+ * other people's words hanging from it. The xp it paid stays, and a note already in someone's inbox keeps its words. An answer to a reply at the
+ * deepest level is stored beside it (the reply route above), with nothing saying which one it answered, so a reply at that level counts as
+ * answered once a later one sits beside it: it may stay when nobody answered it, but never goes when somebody did. The table's rule says the same.
+ */
+community.delete('/replies/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const id = c.req.param('id');
+  const [gone] = await db.batch([
+    db
+      .prepare(
+        'DELETE FROM community_replies WHERE id = ?1 AND user_id = ?2 AND NOT EXISTS (SELECT 1 FROM community_replies x WHERE x.parent_id = ?1) AND NOT (depth >= ?3 AND EXISTS (SELECT 1 FROM community_replies x WHERE x.parent_id = community_replies.parent_id AND x.id != ?1 AND x.depth >= ?3 AND x.created_at >= community_replies.created_at))',
+      )
+      .bind(id, user.id, MAX_REPLY_DEPTH),
+    db.prepare('DELETE FROM community_reply_reactions WHERE reply_id = ?1 AND NOT EXISTS (SELECT 1 FROM community_replies WHERE id = ?1)').bind(id),
+  ]);
+  if (!gone?.meta.changes) {
+    const had = await db.prepare('SELECT 1 FROM community_replies WHERE id = ? AND user_id = ?').bind(id, user.id).first();
+    return had ? c.json({ error: 'Someone answered it, so it stays with their words.' }, 409) : c.json({ error: 'not found' }, 404);
+  }
+  return c.json({ ok: true });
+});
+
+/**
+ * Change the words of a post you wrote while nobody has answered or reacted to it (2026-11-14, All tables: Edit for the owner), with the create
+ * route's length and mute checks. Never its topic, nor whether it carries your name; a post a guide hid stays as it is. People a change newly
+ * mentions are not told, since the post is already up.
+ */
+community.patch('/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const id = c.req.param('id');
+  const body = await c.req.json<{ body?: unknown }>().catch(() => ({}) as { body?: unknown });
+  if (body.body === undefined) return c.json({ error: 'Say what to change.' }, 400);
+  const text = typeof body.body === 'string' ? body.body.trim() : '';
+  if (!text) return c.json({ error: 'write something first' }, 400);
+  if (text.length > 2000) return c.json({ error: 'Keep a post to 2,000 characters.' }, 400);
+  if (await db.prepare('SELECT 1 FROM community_mutes WHERE user_id = ?').bind(user.id).first()) return c.json({ error: 'You are muted in Community for now. A guide or admin can lift it.' }, 403);
+  // One guarded statement: two saves at once, or a reply landing in between, change it once or not at all.
+  const res = await db
+    .prepare(
+      `UPDATE community_posts SET body = ?3 WHERE id = ?1 AND user_id = ?2 AND hidden_at IS NULL
+         AND NOT EXISTS (SELECT 1 FROM community_replies r WHERE r.post_id = ?1) AND NOT EXISTS (SELECT 1 FROM community_likes l WHERE l.post_id = ?1)`,
+    )
+    .bind(id, user.id, text)
+    .run();
+  if (!res.meta.changes) {
+    const post = await db.prepare('SELECT hidden_at FROM community_posts WHERE id = ? AND user_id = ?').bind(id, user.id).first<{ hidden_at: string | null }>();
+    if (!post) return c.json({ error: 'not found' }, 404);
+    return c.json({ error: post.hidden_at ? 'A guide hid this post, so it stays as it is.' : 'Someone answered or reacted to it, so it stays as written.' }, 409);
+  }
+  const row = await db.prepare(`${POST_SELECT} WHERE p.id = ?2`).bind(user.id, id).first<PostRow>();
+  return c.json({ post: await presentPost(c, row) });
+});
+
 community.delete('/:id', async (c) => {
   const user = c.get('user');
   const res = await c.env.DB.prepare('DELETE FROM community_posts WHERE id = ? AND user_id = ?').bind(c.req.param('id'), user.id).run();
   if (res.meta.changes === 0) return c.json({ error: 'not found' }, 404);
+  return c.json({ ok: true });
+});
+
+// Stop following someone (2026-11-14, All tables): never a follow again, nobody told. Sent again, it changes nothing and says so (409).
+community.delete('/follow/:userId', async (c) => {
+  const res = await c.env.DB.prepare('DELETE FROM follows WHERE follower_id = ? AND owner_id = ?').bind(c.get('user').id, c.req.param('userId')).run();
+  if (!res.meta.changes) return c.json({ error: 'You no longer follow them.' }, 409);
+  return c.json({ following: false });
+});
+
+/**
+ * Take someone off the people who follow you (2026-11-14, the founder's yes in All tables). They are not told and may follow again, unless a block
+ * stops them. The points a new follower paid stay. Sent again, it changes nothing and says so (409).
+ */
+community.delete('/followers/:userId', async (c) => {
+  const res = await c.env.DB.prepare('DELETE FROM follows WHERE follower_id = ? AND owner_id = ?').bind(c.req.param('userId'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: 'They no longer follow you.' }, 409);
   return c.json({ ok: true });
 });
 
@@ -482,11 +617,16 @@ community.post('/members/:userId/mute', async (c) => {
 community.delete('/members/:userId/mute', async (c) => {
   const db = c.env.DB;
   const me = c.get('user');
-  const row = await db.prepare('SELECT muter_rank FROM community_mutes WHERE user_id = ?').bind(c.req.param('userId')).first<{ muter_rank: 'member' | 'guide' | 'staff' | 'admin' }>();
-  if (!row) return c.json({ ok: true });
+  const row = await db.prepare('SELECT muter_rank, muted_by FROM community_mutes WHERE user_id = ?').bind(c.req.param('userId')).first<{ muter_rank: 'member' | 'guide' | 'staff' | 'admin'; muted_by: string }>();
+  // `?mine=1` (All tables' People you muted, 2026-11-14) lifts only the mute this person set: another guide may have muted them again since.
+  // There a mute already lifted (another tab, or a second send) answers 409 in words, so the table counts it once; Manage's lift stays a yes.
+  const mine = c.req.query('mine') === '1';
+  if (!row) return mine ? c.json({ error: MUTE_GONE }, 409) : c.json({ ok: true });
+  if (mine && row.muted_by !== me.id) return c.json({ error: 'Another guide has muted them since, so their mute stays.' }, 409);
   // Whoever lifts it must outrank, or equal, whoever set it, and hold the power at all.
   if (!canUndo(rankOf(me), row.muter_rank)) return c.json({ error: 'only the rank that muted them, or a higher one, can lift it' }, 403);
-  await db.prepare('DELETE FROM community_mutes WHERE user_id = ?').bind(c.req.param('userId')).run();
+  const lifted = await db.prepare(`DELETE FROM community_mutes WHERE user_id = ?1${mine ? ' AND muted_by = ?2' : ''}`).bind(c.req.param('userId'), ...(mine ? [me.id] : [])).run();
+  if (mine && !lifted.meta.changes) return c.json({ error: MUTE_GONE }, 409);
   await audit(c.env.DB, me.id, 'community.unmute', 'user', c.req.param('userId'));
   return c.json({ ok: true });
 });

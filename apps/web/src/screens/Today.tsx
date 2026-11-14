@@ -6,13 +6,11 @@ import { ON_FILL, pillarTick } from '../lib/relFill';
 import { AnimatePresence } from 'motion/react';
 import { Link, useSearchParams } from 'react-router';
 import { useModule } from '../lib/modules';
-import { AgencyToday, TodayEvents } from '../components/AgencyToday';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { useCelebrate } from '../components/Celebration';
 import { CheckRow } from '../components/CheckRow';
 import { DayBlocks } from '../components/DayBlocks';
-import { EvolutionReveal } from '../components/EvolutionReveal';
 import { Fold } from '../components/Fold';
 import { Icon } from '../components/Icon';
 import { Flame } from 'lucide-react';
@@ -79,6 +77,21 @@ const DoneToday = lazyNamed(() => import('../components/DoneToday'), 'DoneToday'
 const HiddenTasks = lazyNamed(() => import('../components/HiddenTasks'), 'HiddenTasks');
 // The Past due and Upcoming tabs (2026-11-12): their paged lists download the first time either tab is picked.
 const TaskTabList = lazyNamed(() => import('../components/TaskTabList'), 'TaskTabList');
+// Below the tasks, drawn only once the day has loaded (2026-11-14, the entry trim): Agency's due list and the day's events, and Who you are
+// becoming at the page's foot. Their chunks are fetched as Daily opens, beside /today, and what came in is kept here: a lazy part first drawn
+// after that takes it at once (`already`), so it lands in the same commit as the day. A fresh import() is still pending when the day draws,
+// so it would suspend to its null fallback and React 19 holds the retry up to 300ms, pushing Not to do down. Still downloading: the fallback.
+let agencyMod: typeof import('../components/AgencyToday') | null = null;
+let evolutionMod: typeof import('../components/EvolutionReveal') | null = null;
+const loadAgencyToday = () => import('../components/AgencyToday').then((m) => (agencyMod = m));
+const loadEvolution = () => import('../components/EvolutionReveal').then((m) => (evolutionMod = m));
+/** A module already in, as a thenable that answers at once, so `React.lazy` resolves in the same render instead of suspending. */
+function already<T>(value: T): Promise<T> {
+  return { then: (ok?: ((v: T) => unknown) | null) => already(ok ? ok(value) : value) } as unknown as Promise<T>;
+}
+const AgencyToday = lazyNamed(() => (agencyMod ? already(agencyMod) : loadAgencyToday()), 'AgencyToday');
+const TodayEvents = lazyNamed(() => (agencyMod ? already(agencyMod) : loadAgencyToday()), 'TodayEvents');
+const EvolutionReveal = lazyNamed(() => (evolutionMod ? already(evolutionMod) : loadEvolution()), 'EvolutionReveal');
 
 /**
  * "8 more waiting": the open tasks past the ones Daily shows, read only once the fold opens (`GET /today/waiting`, in the server's order,
@@ -229,6 +242,12 @@ export function Today() {
       const r = await api.spark(date);
       if (!r.alreadyDone) celebrate({ title: 'Small act done', totalXp: r.awarded, color: RELATIONSHIP_BY_KEY[r.relationship].color });
     });
+  // The sections below the tasks start downloading as Daily opens, so they are in by the time /today answers and draw with the day (the
+  // lazy parts above keep what came in).
+  useEffect(() => {
+    if (!agencyMod) void loadAgencyToday().catch(() => undefined);
+    if (!evolutionMod) void loadEvolution().catch(() => undefined);
+  }, []);
   // A tick by mistake (2026-11-13, the frictionless pass): the ticked row leaves the list, so one quiet line under it says what was ticked,
   // with Undo, for about ten seconds or until the next tick, as Inbox's "Archived. Undo" does. Focus moves to Undo, since the row went.
   const [lastTick, setLastTick] = useState<{ id: string; title: string } | null>(null);
@@ -769,8 +788,10 @@ export function Today() {
             )}
           </section>
 
-          {data.agency && <AgencyToday agency={data.agency} />}
-          <TodayEvents events={data.events ?? []} />
+          <Suspense fallback={null}>
+            {data.agency && <AgencyToday agency={data.agency} />}
+            <TodayEvents events={data.events ?? []} />
+          </Suspense>
 
           {view.shows('notToDo') && <NotToDoBlock />}
           {view.shows('habits') && <HabitsSlot app="today" tasks={[...allTasks, ...(data.backlog ?? []), ...(data.done ?? [])]} />}
@@ -795,15 +816,17 @@ export function Today() {
             Who you are becoming
           </h2>
           <Link to="/you" className="toy toy-soft mt-sm block rounded-card bg-card p-md text-ink">
-            <EvolutionReveal
-              now={<Person stage={identity.stage.stage} size={72} decorative />}
-              nowName={identity.stage.name}
-              next={identity.next ? <Person stage={identity.next.stage} size={72} decorative /> : null}
-              nextName={identity.next?.name ?? null}
-              charge={identity.charge}
-              preparing={identity.preparing}
-              readyInDays={identity.readyInDays}
-            />
+            <Suspense fallback={null}>
+              <EvolutionReveal
+                now={<Person stage={identity.stage.stage} size={72} decorative />}
+                nowName={identity.stage.name}
+                next={identity.next ? <Person stage={identity.next.stage} size={72} decorative /> : null}
+                nextName={identity.next?.name ?? null}
+                charge={identity.charge}
+                preparing={identity.preparing}
+                readyInDays={identity.readyInDays}
+              />
+            </Suspense>
             <p className="mt-sm m-0 text-center text-subhead text-ink-soft">
               {identity.preparing && identity.next
                 ? `Fully revealed. Evolves in ${identity.readyInDays} ${identity.readyInDays === 1 ? 'day' : 'days'}.`

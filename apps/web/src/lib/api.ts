@@ -649,8 +649,9 @@ export const api = {
   moveSupplement: (id: string, dir: 'up' | 'down') => post<{ ok: true }>(`/fitness/supplements/${id}/move`, { dir }),
   deleteSupplement: (id: string) => del<{ ok: true }>(`/fitness/supplements/${id}`),
   deleteAllSupplements: () => del<{ ok: true }>('/fitness/supplements'),
-  tickSupplement: (id: string, date: string, taken: boolean) => put<{ ok: true }>(`/fitness/supplements/${id}/day`, { date, taken }),
-  tickSupplementGroup: (date: string, time: SupplementTime) => post<{ ok: true; marked: number }>('/fitness/supplements/day', { date, time }),
+  // The device's today rides beside the day, so the server holds a tick to the person's own today (never a day still to come).
+  tickSupplement: (id: string, date: string, taken: boolean) => put<{ ok: true }>(`/fitness/supplements/${id}/day`, { date, taken, today: todayLocal() }),
+  tickSupplementGroup: (date: string, time: SupplementTime) => post<{ ok: true; marked: number }>('/fitness/supplements/day', { date, time, today: todayLocal() }),
   deleteEat: (id: string) => del<{ ok: true }>(`/fitness/eat/${id}`),
   runMoves: (day: string) => request<RunMovesResponse>(`/run/move?day=${day}`),
   journalDay: (date: string) => request<{ entries: JournalEntry[] }>(`/journal?date=${date}&size=100`),

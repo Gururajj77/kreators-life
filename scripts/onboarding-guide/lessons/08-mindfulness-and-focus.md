@@ -65,7 +65,7 @@ A second tab shows the clock as "Running in another tab", so a session is never 
 
 Under the panel, **Today** lists your sessions, newest first. Tap one to change its length or task, or to delete it. **Continue** starts the same clock again. **Add a session I forgot** adds one for today or yesterday.
 
-Further down, **How productive you were** shows your focus time by day, week or month, in minutes or hours, beside the tasks you ticked. **Sessions** lists your mindful minutes. Deleting one asks first.
+Further down, **How productive you were** shows your focus time by day, week or month, in minutes or hours, beside the tasks you ticked. **Sessions** lists your mindful minutes. Deleting one asks first. To change one's minutes, open its table in **All tables**.
 
 ## What emerges over time
 

@@ -75,12 +75,26 @@ bond.post('/intros/:id', async (c) => {
   if (!i) return c.json({ error: 'not found' }, 404);
   const body = await c.req.json<{ status?: string }>().catch(() => ({}) as { status?: string });
   const status = oneOf(body.status, ['accepted', 'declined'] as const, 'declined');
-  await db.prepare('UPDATE introductions SET status = ?, consent_at = ? WHERE id = ?').bind(status, status === 'accepted' ? nowIso() : null, i.id).run();
+  // Guarded on the ask still waiting (2026-11-14): two taps answer once, and an answered one never changes, since a yes already shared both addresses.
+  const answered = await db.prepare("UPDATE introductions SET status = ?, consent_at = ? WHERE id = ? AND status = 'proposed'").bind(status, status === 'accepted' ? nowIso() : null, i.id).run();
+  if (!answered.meta.changes) return c.json({ error: 'You already answered this one.' }, 409);
   if (status === 'accepted') {
     const me = await db.prepare('SELECT handle, email FROM users WHERE id = ?').bind(user.id).first<{ handle: string | null; email: string | null }>();
     const them = await db.prepare('SELECT handle, email FROM users WHERE id = ?').bind(i.requester_user_id).first<{ handle: string | null; email: string | null }>();
     await notify(db, i.requester_user_id, 'bond', `${nameOf({ display_name: i.recipient_name })} said yes`, me?.email ? `Reach them at ${me.email}${me.handle ? ` or /u/${me.handle}` : ''}` : me?.handle ? `Find them at /u/${me.handle}` : 'Say hello in the community.', '/bond#bond-intros');
     await notify(db, user.id, 'bond', `You are introduced to ${nameOf({ display_name: i.requester_name })}`, them?.email ? `Reach them at ${them.email}${them.handle ? ` or /u/${them.handle}` : ''}` : them?.handle ? `Find them at /u/${them.handle}` : 'Say hello in the community.', '/bond#bond-intros');
+  }
+  return c.json({ ok: true });
+});
+
+// Take back an introduction you asked for while it still waits (2026-11-14, All tables). The note already in their inbox keeps its words.
+bond.delete('/intros/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const res = await db.prepare("DELETE FROM introductions WHERE id = ? AND requester_user_id = ? AND status = 'proposed'").bind(c.req.param('id'), user.id).run();
+  if (!res.meta.changes) {
+    const had = await db.prepare('SELECT 1 FROM introductions WHERE id = ? AND requester_user_id = ?').bind(c.req.param('id'), user.id).first();
+    return had ? c.json({ error: 'They already answered, so it stays.' }, 409) : c.json({ error: 'not found' }, 404);
   }
   return c.json({ ok: true });
 });
@@ -229,11 +243,17 @@ bond.post('/friends', async (c) => {
 bond.post('/friends/:id', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  const row = await db.prepare("SELECT id, requester_id FROM friendships WHERE id = ? AND recipient_id = ? AND status = 'pending'").bind(c.req.param('id'), user.id).first<{ id: string; requester_id: string }>();
+  const row = await db.prepare('SELECT id, requester_id, recipient_id, status FROM friendships WHERE id = ?1 AND (requester_id = ?2 OR recipient_id = ?2)').bind(c.req.param('id'), user.id).first<{ id: string; requester_id: string; recipient_id: string; status: string }>();
   if (!row) return c.json({ error: 'not found' }, 404);
+  // Only a request someone sent you, still waiting, is answered here; the rest say why (All tables' Edit, 2026-11-14).
+  if (row.status === 'accepted') return c.json({ error: 'You are already friends.' }, 409);
+  if (row.recipient_id !== user.id) return c.json({ error: 'Only a request someone sent you can be answered here.' }, 409);
+  if (row.status !== 'pending') return c.json({ error: 'You already answered this one.' }, 409);
   const body = await c.req.json<{ status?: string }>().catch(() => ({}) as { status?: string });
   const status = oneOf(body.status, ['accepted', 'declined'] as const, 'declined');
-  await db.prepare('UPDATE friendships SET status = ?, answered_at = ? WHERE id = ?').bind(status, nowIso(), row.id).run();
+  // Guarded on the request still waiting, so two taps answer it, and tell them, once.
+  const answered = await db.prepare("UPDATE friendships SET status = ?, answered_at = ? WHERE id = ? AND status = 'pending'").bind(status, nowIso(), row.id).run();
+  if (!answered.meta.changes) return c.json({ error: 'You already answered this one.' }, 409);
   if (status === 'accepted') {
     await notify(db, row.requester_id, 'bond', `${nameOf(user)} said yes`, 'You are friends now. Say hello from Bond.', '/bond#bond-friends');
     await connectionsCameTrue(db, 'friends', { pair: [user.id, row.requester_id] });
@@ -244,7 +264,9 @@ bond.post('/friends/:id', async (c) => {
 bond.delete('/friends/:userId', async (c) => {
   const db = c.env.DB;
   const user = c.get('user');
-  await db.prepare('DELETE FROM friendships WHERE (requester_id = ?1 AND recipient_id = ?2) OR (requester_id = ?2 AND recipient_id = ?1)').bind(user.id, c.req.param('userId')).run();
+  const res = await db.prepare('DELETE FROM friendships WHERE (requester_id = ?1 AND recipient_id = ?2) OR (requester_id = ?2 AND recipient_id = ?1)').bind(user.id, c.req.param('userId')).run();
+  // Gone already (another tab, or a second send): said, never a quiet yes, so All tables counts it once.
+  if (!res.meta.changes) return c.json({ error: 'That friendship or request was ended a moment ago.' }, 409);
   return c.json({ ok: true });
 });
 
@@ -343,4 +365,18 @@ bond.post('/chats/:id/messages', async (c) => {
     db.prepare('UPDATE bond_chats SET last_message_at = ? WHERE id = ?').bind(now, row.id),
   ]);
   return c.json({ ok: true, id }, 201);
+});
+
+// Delete a line you wrote in a chat (2026-11-14, All tables): only your own, and the other side's words stay. Nobody is told.
+bond.delete('/chats/:id/messages/:mid', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const row = await chatFor(db, c.req.param('id'), user.id);
+  if (!row) return c.json({ error: 'not your chat' }, 404);
+  const res = await db.prepare('DELETE FROM bond_messages WHERE id = ? AND chat_id = ? AND user_id = ?').bind(c.req.param('mid'), row.id, user.id).run();
+  if (!res.meta.changes) {
+    const theirs = await db.prepare('SELECT 1 FROM bond_messages WHERE id = ? AND chat_id = ?').bind(c.req.param('mid'), row.id).first();
+    return theirs ? c.json({ error: 'Only your own lines can be deleted. The other side’s words stay.' }, 403) : c.json({ error: 'not found' }, 404);
+  }
+  return c.json({ ok: true });
 });

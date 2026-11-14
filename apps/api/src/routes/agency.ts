@@ -440,6 +440,9 @@ agency.patch('/clients/:id', async (c) => {
   }
   const f = clientFields(body, prev);
   if (!f.name) return c.json({ error: 'who is the client?' }, 400);
+  // Their email, when sent, is checked as when they were added (2026-11-14, for All tables): every link and paper's email goes there. An empty
+  // one still saves as before, since the client sheet sends the field whole and an older client may have none (the integration, 2026-11-14).
+  if ('contactEmail' in body && f.contactEmail !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.contactEmail)) return c.json({ error: "type the client's email" }, 400);
   let campaignId = prev.campaign_id;
   if ('campaignId' in body) {
     if (body.campaignId === null || body.campaignId === '') campaignId = null;
@@ -657,6 +660,9 @@ function itemFields(body: Record<string, unknown>, prev?: ItemRow): ItemFields {
     feeCents: 'feeCents' in body ? moneyIn(body.feeCents) : (prev?.fee_cents ?? 0),
   };
 }
+/** A piece's link that is not an https address is refused out loud (2026-11-14), never dropped: CLAUDE.md's rule for typed links. */
+const AGENCY_LINK_PROBLEM = 'Use a link that starts with https://, or leave it empty.';
+const linkRefused = (body: Record<string, unknown>): boolean => 'link' in body && str(body.link, 500) !== '' && httpsOrEmpty(body.link) === '';
 /** Links are kept only when they are https web addresses. */
 function httpsOrEmpty(v: unknown): string {
   const s = str(v, 500);
@@ -678,6 +684,7 @@ agency.post('/items', async (c) => {
   // A piece's fee is set by a team member only with paperwork to edit; its private notes are the owner's alone.
   if (!teamMay(c, 'paperwork', 'edit')) delete body.feeCents;
   if (c.get('team')) delete body.notes;
+  if (linkRefused(body)) return c.json({ error: AGENCY_LINK_PROBLEM }, 400);
   const f = itemFields(body);
   if (!f.title) return c.json({ error: 'what is it called?' }, 400);
   const n = await db.prepare('SELECT COUNT(*) AS n FROM agency_items WHERE user_id = ?').bind(user.id).first<{ n: number }>();
@@ -701,6 +708,7 @@ agency.patch('/items/:id', async (c) => {
   if (!teamMay(c, 'paperwork', 'edit')) delete body.feeCents;
   // A member never sees the owner's private notes on a piece (the gate blanks them), so whatever they send keeps the stored words.
   if (c.get('team')) delete body.notes;
+  if (linkRefused(body)) return c.json({ error: AGENCY_LINK_PROBLEM }, 400);
   const f = itemFields(body, prev);
   if (!f.title) return c.json({ error: 'what is it called?' }, 400);
   const now = nowIso();
@@ -861,6 +869,34 @@ agency.post('/time', async (c) => {
   const id = newId();
   await db.prepare('INSERT INTO agency_time (id, user_id, client_id, item_id, day, minutes, billable, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id, user.id, client.id, itemId, day, minutes, body.billable === false ? 0 : 1, str(body.note, 200), nowIso()).run();
   return c.json({ id }, 201);
+});
+
+/**
+ * Change a time entry (2026-11-14, from All tables) with the add route's own checks: a day that has started, 1 to AGENCY_MAX_MINUTES
+ * minutes, billable or not, a note up to 200 characters. Owner only, each field only when sent, one statement filtered by the owner.
+ */
+agency.patch('/time/:id', async (c) => {
+  const db = c.env.DB;
+  const user = c.get('user');
+  const prev = await db.prepare('SELECT id, day, minutes, billable, note FROM agency_time WHERE id = ? AND user_id = ?').bind(c.req.param('id'), user.id).first<{ id: string; day: string; minutes: number; billable: number; note: string }>();
+  if (!prev) return c.json({ error: 'not found' }, 404);
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  let day = prev.day;
+  if ('day' in body) {
+    const d = dateOrNull(body.day);
+    if (!d || d > shiftDate(utcToday(), 1)) return c.json({ error: 'pick a day that has started' }, 400);
+    day = d;
+  }
+  let minutes = prev.minutes;
+  if ('minutes' in body) {
+    const m = num(body.minutes, 0, 0, AGENCY_MAX_MINUTES) ?? 0;
+    if (m < 1) return c.json({ error: 'how long?' }, 400);
+    minutes = m;
+  }
+  const billable = typeof body.billable === 'boolean' ? (body.billable ? 1 : 0) : prev.billable;
+  const note = 'note' in body ? str(body.note, 200) : prev.note;
+  await db.prepare('UPDATE agency_time SET day = ?, minutes = ?, billable = ?, note = ? WHERE id = ? AND user_id = ?').bind(day, minutes, billable, note, prev.id, user.id).run();
+  return c.json({ ok: true });
 });
 
 agency.delete('/time/:id', async (c) => {

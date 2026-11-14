@@ -88,7 +88,8 @@ function Fold({ id, title, hint, closeLabel, open, onToggle, onClose, children }
  * tap it again and everything folds away. Open and taller than the room the window has, its close stays
  * in view beside it (`StickyClose`, 2026-11-14, the founder: "the close buttons that need one to scroll
  * back top need the close button to be sticky outside the toggle tab"): the card's round chevron keeps its
- * slot unseen, the steps keep a lane while the close runs down the section's edge, and Escape closes it.
+ * slot unseen, the panel under it keeps its full width and a lane inside it while the close runs down the
+ * section's edge (app.css, "A card keeps its full width"), and Escape closes it.
  */
 export function HowItWorksPanel({ howKey, name, open, setOpen, steps, setSteps, words, setWords }: PanelProps) {
   const how = HOW_TO[howKey];

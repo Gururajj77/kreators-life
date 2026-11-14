@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { CAMPAIGN_STATUSES, type Campaign, type CampaignAssignment, type CampaignEvent, type Deliverable, type DeliverableVersion } from '@kreators/shared';
 import type { AppEnv, UserRow } from '../env';
-import { audit, can, httpUrl, LINK_PROBLEM, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, orgIdsOf, orgRole, str, pageOf, paged, TEN_A_PAGE } from '../db';
+import { audit, can, DATE_RE, httpUrl, LINK_PROBLEM, nameOf, newId, notify, notifyMany, nowIso, num, oneOf, orgIdsOf, orgRole, str, pageOf, paged, TEN_A_PAGE } from '../db';
 
 export const army = new Hono<AppEnv>();
 
@@ -121,10 +121,25 @@ army.patch('/campaigns/:id', async (c) => {
     if (next === 'production' && (!prev.brief || prev.budget_amount <= 0 || !prev.due_date)) return c.json({ error: 'brief, budget and due date are needed before production' }, 400);
     status = next;
   }
-  await db
-    .prepare('UPDATE campaigns SET name = ?, brief = ?, budget_amount = ?, currency = ?, start_date = ?, due_date = ?, status = ?, usage_rights = ?, exclusivity_terms = ?, brand_restrictions = ?, owner_user_id = ?, updated_at = ? WHERE id = ?')
-    .bind(str(body.name, 120, prev.name) || prev.name, str(body.brief, 5000, prev.brief), who === 'staff' ? (num(body.budgetAmount, prev.budget_amount, 0) ?? prev.budget_amount) : prev.budget_amount, str(body.currency, 3, prev.currency).toUpperCase(), 'startDate' in body ? str(body.startDate, 10) || null : prev.start_date, 'dueDate' in body ? str(body.dueDate, 10) || null : prev.due_date, status, str(body.usageRights, 1000, prev.usage_rights), str(body.exclusivityTerms, 1000, prev.exclusivity_terms), str(body.brandRestrictions, 1000, prev.brand_restrictions), who === 'staff' && typeof body.ownerId === 'string' ? body.ownerId : prev.owner_user_id, nowIso(), prev.id)
+  // A day sent is a real calendar day or nothing, and the due day never comes before the start (2026-11-14, checked for All tables).
+  for (const k of ['startDate', 'dueDate'] as const) {
+    const v = body[k];
+    if (k in body && v !== null && v !== '' && !(typeof v === 'string' && DATE_RE.test(v))) return c.json({ error: 'Pick a real day.' }, 400);
+  }
+  if ('name' in body && !str(body.name, 120)) return c.json({ error: 'Give the campaign a name.' }, 400);
+  const name = str(body.name, 120, prev.name) || prev.name;
+  const startDate = 'startDate' in body ? str(body.startDate, 10) || null : prev.start_date;
+  const dueDate = 'dueDate' in body ? str(body.dueDate, 10) || null : prev.due_date;
+  if (startDate && dueDate && dueDate < startDate) return c.json({ error: 'The due day comes before the start.' }, 400);
+  // Guarded on the version read, so a change made elsewhere at the same moment is never written over with what this one read.
+  const res = await db
+    .prepare('UPDATE campaigns SET name = ?, brief = ?, budget_amount = ?, currency = ?, start_date = ?, due_date = ?, status = ?, usage_rights = ?, exclusivity_terms = ?, brand_restrictions = ?, owner_user_id = ?, updated_at = ? WHERE id = ? AND updated_at = ?')
+    .bind(name, str(body.brief, 5000, prev.brief), who === 'staff' ? (num(body.budgetAmount, prev.budget_amount, 0) ?? prev.budget_amount) : prev.budget_amount, str(body.currency, 3, prev.currency).toUpperCase(), startDate, dueDate, status, str(body.usageRights, 1000, prev.usage_rights), str(body.exclusivityTerms, 1000, prev.exclusivity_terms), str(body.brandRestrictions, 1000, prev.brand_restrictions), who === 'staff' && typeof body.ownerId === 'string' ? body.ownerId : prev.owner_user_id, nowIso(), prev.id, prev.updated_at)
     .run();
+  if (!res.meta.changes) return c.json({ error: 'Someone changed this campaign a moment ago. Read it again.' }, 409);
+  // Its name and days are on the log too, so the brand's team and staff see who moved them (the log says what, never a brief's words).
+  const moved = [name !== prev.name ? `name from "${prev.name}"` : '', startDate !== prev.start_date ? `start ${prev.start_date ?? 'none'} to ${startDate ?? 'none'}` : '', dueDate !== prev.due_date ? `due ${prev.due_date ?? 'none'} to ${dueDate ?? 'none'}` : ''].filter(Boolean);
+  if (moved.length) await logEvent(db, prev.id, user.id, 'details', `Changed ${moved.join(', ')}`.slice(0, 300));
   if (status !== prev.status) {
     await logEvent(db, prev.id, user.id, 'status', `${prev.status} to ${status}`);
     await audit(db, user.id, 'campaign.status', 'campaign', prev.id, prev.status, status);
@@ -179,7 +194,11 @@ army.post('/assignments/:id', async (c) => {
   if (next === 'done') {
     if (!can(user, 'talent')) return c.json({ error: 'staff mark work done' }, 403);
   } else if (a.creator_user_id !== user.id) return c.json({ error: 'not your offer' }, 403);
-  await db.prepare('UPDATE campaign_assignments SET status = ?, terms_accepted_at = COALESCE(terms_accepted_at, ?) WHERE id = ?').bind(next, next === 'accepted' ? nowIso() : null, a.id).run();
+  // Each answer moves only from the state Army offers it on (2026-11-14, guarded for All tables): the creator answers an offer still waiting,
+  // never declining after accepting its terms, and staff mark done only accepted work. One guarded statement, so two taps answer once.
+  const from = next === 'done' ? 'accepted' : 'offered';
+  const moved = await db.prepare('UPDATE campaign_assignments SET status = ?, terms_accepted_at = COALESCE(terms_accepted_at, ?) WHERE id = ? AND status = ?').bind(next, next === 'accepted' ? nowIso() : null, a.id, from).run();
+  if (!moved.meta.changes) return c.json({ error: next === 'done' ? 'Only accepted work can be marked done.' : a.status === 'accepted' ? 'You accepted its terms already. Talk to the campaign’s team in Army to step away.' : 'This offer was answered already.' }, 409);
   await logEvent(db, a.campaign_id, user.id, 'assignment', `${nameOf({ display_name: a.creator_name })} ${next}`);
   if (a.owner_user_id && next !== 'done') await notify(db, a.owner_user_id, 'campaign', `${nameOf({ display_name: a.creator_name })} ${next} the offer on ${a.campaign_name}`, '', `/army/${a.campaign_id}`);
   return c.json({ ok: true });

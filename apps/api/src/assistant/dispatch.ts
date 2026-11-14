@@ -33,19 +33,25 @@ export function seg(v: unknown): string {
   return v;
 }
 
+/**
+ * The requests All tables' own doors made, inside this Worker (2026-11-14). A header anyone can send, so the `X-Kreators-Via: tables` mark only
+ * says who called; the limiter swaps `prefs` for `tablesRows` (VIA_TABLES) only for a Request object in this set, which no client can reach.
+ */
+export const tablesCalls = new WeakSet<Request>();
+
 /** A caller bound to one person's session. `via` names who is calling in the X-Kreators-Via header: the assistant, or All tables (2026-11-13). */
 export function caller(fetcher: Fetcher, token: string, via: 'assistant' | 'tables' = 'assistant'): (req: Req) => Promise<Answer> {
   return async (req) => {
     const url = new URL(`http://internal/api${req.path}`);
     // The path must arrive as written: anything the URL parser had to tidy (a dot segment, a stray slash) is refused.
     if (url.pathname !== `/api${req.path.split('?')[0]}`) throw new ToolError('That path is not allowed.');
-    const res = await fetcher(
-      new Request(url, {
-        method: req.method,
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Kreators-Via': via },
-        body: req.body === undefined ? undefined : JSON.stringify(req.body),
-      }),
-    );
+    const request = new Request(url, {
+      method: req.method,
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Kreators-Via': via },
+      body: req.body === undefined ? undefined : JSON.stringify(req.body),
+    });
+    if (via === 'tables') tablesCalls.add(request);
+    const res = await fetcher(request);
     const data = await res.json().catch(() => null);
     return { status: res.status, ok: res.ok, data };
   };

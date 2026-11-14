@@ -387,22 +387,29 @@ market.post('/offers/:id', async (c) => {
   const now = nowIso();
   // A seller can still settle an offer made before a block; the note just does not cross it.
   const heard = action !== 'withdraw' && !(await blockedEither(db, listing.seller_id, offer.buyer_id));
+  // Every decision is one write guarded on the offer still being open (2026-11-14, the route gap All tables found: this read, then wrote), so
+  // two taps or two tabs decide once and tell the buyer once. An accept's other two writes run only on the offer this one accepted.
+  const decided = 'That offer is already decided.';
   if (action === 'withdraw') {
     if (offer.buyer_id !== user.id) return c.json({ error: 'not found' }, 404);
-    if (offer.status !== 'open') return c.json({ error: 'That offer is already decided.' }, 400);
-    await db.prepare("UPDATE preowned_offers SET status = 'withdrawn', decided_at = ? WHERE id = ?").bind(now, offer.id).run();
+    if (offer.status !== 'open') return c.json({ error: decided }, 400);
+    const res = await db.prepare("UPDATE preowned_offers SET status = 'withdrawn', decided_at = ? WHERE id = ? AND buyer_id = ? AND status = 'open'").bind(now, offer.id, user.id).run();
+    if (!res.meta.changes) return c.json({ error: decided }, 409);
   } else {
     if (listing.seller_id !== user.id) return c.json({ error: 'not found' }, 404);
-    if (offer.status !== 'open') return c.json({ error: 'That offer is already decided.' }, 400);
+    if (offer.status !== 'open') return c.json({ error: decided }, 400);
     if (action === 'accept') {
-      await db.batch([
-        db.prepare("UPDATE preowned_offers SET status = 'accepted', decided_at = ? WHERE id = ?").bind(now, offer.id),
-        db.prepare("UPDATE preowned_offers SET status = 'declined', decided_at = ? WHERE listing_id = ? AND id != ? AND status = 'open'").bind(now, listing.id, offer.id),
-        db.prepare("UPDATE preowned_listings SET status = 'agreed', buyer_id = ?, updated_at = ? WHERE id = ?").bind(offer.buyer_id, now, listing.id),
+      const mine = "EXISTS (SELECT 1 FROM preowned_offers a WHERE a.id = ? AND a.status = 'accepted' AND a.decided_at = ?)";
+      const [res] = await db.batch([
+        db.prepare("UPDATE preowned_offers SET status = 'accepted', decided_at = ? WHERE id = ? AND status = 'open'").bind(now, offer.id),
+        db.prepare(`UPDATE preowned_offers SET status = 'declined', decided_at = ? WHERE listing_id = ? AND id != ? AND status = 'open' AND ${mine}`).bind(now, listing.id, offer.id, offer.id, now),
+        db.prepare(`UPDATE preowned_listings SET status = 'agreed', buyer_id = ?, updated_at = ? WHERE id = ? AND ${mine}`).bind(offer.buyer_id, now, listing.id, offer.id, now),
       ]);
+      if (!res?.meta.changes) return c.json({ error: decided }, 409);
       if (heard) await notify(db, offer.buyer_id, 'store', `Your offer on ${listing.title} was accepted`, 'Sort out the handover in the chat.', `/store?listing=${listing.id}`);
     } else {
-      await db.prepare("UPDATE preowned_offers SET status = 'declined', decided_at = ? WHERE id = ?").bind(now, offer.id).run();
+      const res = await db.prepare("UPDATE preowned_offers SET status = 'declined', decided_at = ? WHERE id = ? AND status = 'open'").bind(now, offer.id).run();
+      if (!res.meta.changes) return c.json({ error: decided }, 409);
       if (heard) await notify(db, offer.buyer_id, 'store', `Your offer on ${listing.title} was declined`, 'You can make another.', `/store?listing=${listing.id}`);
     }
   }
@@ -444,6 +451,15 @@ market.post('/listings/:id/messages', async (c) => {
   await notify(db, other, 'store', `About ${t.listing.title}`, text.slice(0, 120), `/store?listing=${t.listing.id}`);
   const row = await db.prepare('SELECT m.*, u.display_name AS sender_name FROM preowned_messages m JOIN users u ON u.id = m.sender_id WHERE m.id = ?').bind(id).first<MessageRow>();
   return c.json({ message: row ? toMessage(row, user.id) : null }, 201);
+});
+
+// Delete a line you wrote in a listing's chat (2026-11-14, the founder's yes in All tables): your own only, seller or buyer, gone from the
+// chat for both of you. The other side's lines stay as they wrote them, and a note already in their inbox keeps its words. A line already
+// gone answers 404, so a second send changes nothing.
+market.delete('/listings/:id/messages/:mid', async (c) => {
+  const res = await c.env.DB.prepare('DELETE FROM preowned_messages WHERE id = ? AND listing_id = ? AND sender_id = ?').bind(c.req.param('mid'), c.req.param('id'), c.get('user').id).run();
+  if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
+  return c.json({ ok: true });
 });
 
 // A featured spot: staff give it for free; a seller pays points for their own listing.

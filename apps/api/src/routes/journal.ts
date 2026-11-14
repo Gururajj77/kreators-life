@@ -19,7 +19,7 @@ import {
 } from '@kreators/shared/gratitude';
 import type { AppEnv } from '../env';
 import { aiTableShut } from '../aiOpen';
-import { DATE_RE, dateNearToday, dayInZone, newId, nowIso, pageOf, paged, shiftDate } from '../db';
+import { BEFORE_JOINED, beforeStart, DATE_RE, dateNearToday, dayInZone, newId, nowIso, pageOf, paged, shiftDate, startDay } from '../db';
 
 export const journal = new Hono<AppEnv>();
 
@@ -121,6 +121,16 @@ function readPrompts(json: string): string[] | null {
 function openToday(day: string, today: unknown): string | null {
   const t = typeof today === 'string' && DATE_RE.test(today) && dateNearToday(today) ? today : null;
   return t && DATE_RE.test(day) && (day === t || day === shiftDate(t, -1)) ? t : null;
+}
+
+/**
+ * The device's today when `day` is that day or any day before it, else null (2026-11-14, the founder: gratitude may change on any past day,
+ * never one still to come). Saving a day's lines and clearing a day take it; the prompts (Another prompt, the pillar picker) and the screen's
+ * card still open only on today or yesterday (`openToday`). `today` must be near the server's own date.
+ */
+function pastToday(day: string, today: unknown): string | null {
+  const t = typeof today === 'string' && DATE_RE.test(today) && dateNearToday(today) ? today : null;
+  return t && DATE_RE.test(day) && day <= t ? t : null;
 }
 
 /** The person's seen marks in the round each group is in and the round before: all the rules read. */
@@ -310,8 +320,9 @@ journal.post('/gratitude/:day/pick', async (c) => {
   return c.json({ prompts: picked });
 });
 
-// Save a day's three lines as the person goes. Only today or yesterday can change (the device says which day is today); an older
-// day stays as it was written. All three empty removes the day, so a day with nothing written never counts. `ifUpdatedAt` is the
+// Save a day's three lines as the person goes. Any day up to the device's today can change (2026-11-14, the founder: any past day, never one
+// still to come; Journal's card itself opens only today and yesterday, and All tables changes an older one). All three empty removes the day,
+// so a day with nothing written never counts. `ifUpdatedAt` is the
 // version the screen read: another tab's newer save answers 409 `changed`, and the screen reloads. The lines sit under the day's own
 // prompts for this person (see above): an empty line takes its place's prompt, and words under any other prompt answer 409 `changed`
 // (another tab moved it). A line that gets words for the first time marks its prompt seen, so it does not come back in that round.
@@ -320,7 +331,10 @@ journal.put('/gratitude/:day', async (c) => {
   const user = c.get('user');
   const day = c.req.param('day');
   const body = await c.req.json<{ lines?: unknown; today?: unknown; ifUpdatedAt?: unknown }>().catch(() => ({}) as { lines?: unknown; today?: unknown; ifUpdatedAt?: unknown });
-  if (!openToday(day, body.today)) return c.json({ error: 'Only today or yesterday can be changed.' }, 400);
+  const t = pastToday(day, body.today);
+  if (!t) return c.json({ error: 'A day still to come cannot be written yet.' }, 400);
+  // Never a day before the account began (the review of 2026-11-14): it would make an offer and mark prompts seen for a day that never was.
+  if (beforeStart(day, startDay(user.created_at, user.timezone), t)) return c.json({ error: BEFORE_JOINED }, 400);
   const sent = parseGratitudeLines(body.lines);
   if (typeof sent === 'string') return c.json({ error: sent }, 400);
   const read = () => db.prepare('SELECT day, lines_json, updated_at FROM gratitude_days WHERE user_id = ? AND day = ?').bind(user.id, day).first<GratitudeRow>();
@@ -369,6 +383,17 @@ journal.put('/gratitude/:day', async (c) => {
     if (add.length) await db.batch(add);
   }
   return c.json({ gratitude: { day, lines, updatedAt: now } satisfies GratitudeDay, prompts: offer.prompts });
+});
+
+// Clear a day's gratitude (All tables, 2026-11-14): its three lines go, as emptying all three on Journal does. Any day up to the device's today
+// (`?day=`), never one still to come. The seen marks stay, as they always do (a mark is never taken back). Owner only; a second send finds
+// nothing and says so.
+journal.delete('/gratitude/:day', async (c) => {
+  const day = c.req.param('day');
+  if (!pastToday(day, c.req.query('day'))) return c.json({ error: 'A day still to come cannot be changed yet.' }, 400);
+  const gone = await c.env.DB.prepare('DELETE FROM gratitude_days WHERE user_id = ? AND day = ?').bind(c.get('user').id, day).run();
+  if (!(gone.meta.changes ?? 0)) return c.json({ error: 'not found' }, 404);
+  return c.json({ ok: true });
 });
 
 journal.get('/', async (c) => {
@@ -434,6 +459,8 @@ journal.patch('/:id', async (c) => {
 });
 
 journal.delete('/:id', async (c) => {
-  await c.env.DB.prepare('DELETE FROM journal_entries WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  const gone = await c.env.DB.prepare('DELETE FROM journal_entries WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  // Nothing went (another tab, or a second send of the same delete): said, never a quiet yes.
+  if (!(gone.meta.changes ?? 0)) return c.json({ error: 'not found' }, 404);
   return c.json({ ok: true });
 });

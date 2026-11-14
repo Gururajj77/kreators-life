@@ -119,6 +119,29 @@ export function personDay(device: string | undefined | null, zone: string | null
   return device && DATE_RE.test(device) && device >= shiftDate(own, -1) && device <= shiftDate(own, 1) ? device : own;
 }
 
+/** The day something began (an account, a supplement on the list), in the person's own zone; an instant that does not read keeps its UTC day. */
+export function startDay(createdAt: string, zone: string | null | undefined): string {
+  const at = new Date(createdAt);
+  return Number.isNaN(at.getTime()) ? createdAt.slice(0, 10) : dayInZone(zone, at);
+}
+
+/**
+ * "Any past day" (2026-11-14, the founder) stops at the day something began (the review of 2026-11-14): true for a day before `from` (the day
+ * the account began, or a supplement was added, `startDay`) that is older than yesterday. Today and yesterday stay open as they always were,
+ * since a device in another zone can be a day off the account's own. Only what writes a day is held to it; clearing one never is.
+ */
+export function beforeStart(day: string, from: string, today: string): boolean {
+  return day < from && day < shiftDate(today, -1);
+}
+export const BEFORE_JOINED = 'That day is before you joined.';
+
+/**
+ * A remove that found nothing to remove (2026-11-14, the review): another tab, or a second send racing the first, took it already. The route
+ * answers 409 with these words, never a quiet yes, so All tables' bulk remove counts each row once and lists the other under skipped; the
+ * assistant's Undo reads a 409 as done.
+ */
+export const GONE_NOW = 'It was removed a moment ago.';
+
 /** The currency a person keeps their money in (migration 0070), rupees unless they changed it. */
 export const currencyOf = (r: object): string => {
   const v = (r as { currency?: unknown }).currency;
