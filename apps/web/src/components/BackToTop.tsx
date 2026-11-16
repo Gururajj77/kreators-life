@@ -17,12 +17,15 @@ import { STICKY_CLOSE_CHANGED } from './StickyClose';
  * (CSS, no JS) while a sheet, the assistant's panel, the privacy card or bar, the attendee bar or a phone's keyboard is up.
  *
  * When it shows: once the page has scrolled more than a screen down on a page at least two screens tall, never while the site's footer
- * is in view (it would sit on the footer's links), on the whole-page chats, the vibe check, a card table or in focus mode, and never while
- * an open toggle's sticky close (`[data-sticky-close-btn]`, StickyClose.tsx) has its hit area on the button's: on a laptop about 1100 to 1350px
- * wide the close of a tall fold or a task's plan stands in the same column, and passes through this corner while the toggle's line nears
- * the window's foot, so the button steps aside for that moment rather than take a tap meant for the close (2026-11-14). It fades in and
- * out (opacity only; at once under reduced motion), takes no tap while it fades out, and leaves the page (`hidden`) once faded, so it is
- * no tab stop and covers nothing.
+ * is in view (it would sit on the footer's links), on the whole-page chats, the vibe check, a card table or in focus mode, never while an
+ * open toggle's sticky close (`[data-sticky-close-btn]`, StickyClose.tsx) is in view (that close is the way out then, and on a laptop about
+ * 1100 to 1350px wide it passes through this corner), and never over a control, a line of words or a picture to look at (2026-11-16, the founder: "on mobile the
+ * toggle in tasks breaks in design overalapping, recheck entire app for such errors"): once a frame while the page scrolls it looks at
+ * what lies under its 44px (`elementsFromPoint` on rows of points no more than 8px apart, then a look through what is topmost there for a
+ * smaller line or label inside the square) and steps aside while a link, a button, a field or any words sit
+ * there, coming back once they have passed and the spot has stayed clear a moment (`CLEAR_MS`), so it never blinks between rows. It
+ * fades in and out (opacity only; at once under reduced motion), takes no tap while it fades out, and leaves the page (`hidden`) once
+ * faded, so it is no tab stop and covers nothing.
  *
  * The page's foot: an app screen keeps 168px under its last control on a phone, which this shares with the assistant. Where a page keeps
  * less (a laptop's 32px, a page outside the app), a spacer after the page (`.btt-room`, only on a page long enough to show the button)
@@ -42,9 +45,77 @@ const FADE_MS = 160;
 const RING = 106.81;
 /** The button as drawn (app.css). */
 const SIZE = 36;
-/** Its hit area and a sticky close's: each is 44 by 44 to tap (`.tap-pad` round the 36px button and a 32px `small` close). The two never
- * meet, as this button's never meets the assistant's (drawn 8px apart), so a tap is always the close's or this one's, never both. */
+/** Its hit area: 44 by 44 to tap (`.tap-pad` round the 36px button). Nothing it would sit on may lie under it. */
 const HIT = 44;
+/** How long the spot under it stays clear before it comes back, so it never blinks between the rows of a list. */
+const CLEAR_MS = 220;
+/** What it never sits on: anything a tap could be meant for. */
+const CONTROL =
+  'a[href], button, input, select, textarea, summary, label, [role="button"], [role="link"], [role="switch"], [role="checkbox"], [role="radio"], [role="tab"], [role="slider"], [role="option"], [contenteditable]:not([contenteditable="false"]), [tabindex]:not([tabindex="-1"])';
+/** And what it never sits on to look at: a picture with words of its own (a QR code someone scans, a person's photo), a video, a canvas
+ *  or a frame, a picture drawn in code that says what it shows (`role="img"`: a chart, the map of consciousness, a guide shown by name),
+ *  or a box marked `data-btt-avoid` (the QR code's white tile, whose quiet zone a scanner needs too). Decorative art (an empty `alt`,
+ *  `aria-hidden` on it or round it, as the home's knot canvas) is left out, so heroes and their characters never send it away. */
+const PICTURE =
+  'img:not([alt=""]):not([aria-hidden="true"]):not([aria-hidden="true"] img), picture, video, canvas:not([aria-hidden="true"] canvas), iframe, [role="img"]:not([aria-hidden="true"]):not([aria-hidden="true"] [role="img"]), [data-btt-avoid]';
+type Box = { left: number; right: number; top: number; bottom: number };
+const meets = (a: Box, b: Box) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+/** Whether something is drawn for a person to see: a box a screen-reader-only label leaves (1px, clipped) is not, nor a hidden one. */
+const seen = (el: Element) =>
+  typeof el.checkVisibility !== 'function' || el.checkVisibility({ visibilityProperty: true, contentVisibilityAuto: true });
+/** Whether a line of words that is `el`'s own text (not its children's) lies inside `sq`. */
+function wordsIn(el: Element, sq: Box, range: Range): boolean {
+  for (const n of el.childNodes) {
+    if (n.nodeType !== Node.TEXT_NODE || !n.textContent?.trim()) continue;
+    range.selectNodeContents(n);
+    for (const r of range.getClientRects()) if (r.width >= 2 && r.height >= 2 && meets(r, sq) && seen(el)) return true;
+  }
+  return false;
+}
+/** How many elements one look may visit inside the things under the button, so a frame never walks a long list. */
+const WALK_MAX = 400;
+/** Whether a control or a line of words lies inside `sq` anywhere in `el`'s subtree, visiting only boxes that meet `sq` (a box with no
+ *  size of its own, `display: contents`, is passed through). A small line between two sample points, or a chart's label inside the
+ *  chart's box, is found this way. */
+function underIn(el: Element, sq: Box, range: Range, left: { n: number }): boolean {
+  if (wordsIn(el, sq, range)) return true;
+  for (const child of el.children) {
+    if (--left.n < 0) return false;
+    const r = child.getBoundingClientRect();
+    const sized = r.width > 0 || r.height > 0;
+    if (sized && !meets(r, sq)) continue;
+    if (sized && r.width >= 2 && r.height >= 2 && (child.matches(CONTROL) || child.matches(PICTURE)) && seen(child)) return true;
+    if (underIn(child, sq, range, left)) return true;
+  }
+  return false;
+}
+/** The rows of points it samples across its hit area, from edge to edge (a control whose own tap area reaches the edge counts) and never
+ *  more than 8px apart, so a line of words (about 15px tall) always meets one; whatever is topmost at each is then looked through for
+ *  smaller words or controls (`underIn`). */
+const ROWS = [0, 7, 15, 22, 29, 37, HIT];
+/** Across, a little wider apart: the look inside each topmost box (`underIn`) finds what lies between two columns. */
+const COLS = [0, 15, 29, HIT];
+/** Whether a control or a line of words lies under the square `sq` (the button's hit area), the button itself (`own`) left out: the
+ *  topmost thing at each sampled point that is not the button, and what that holds inside the square. */
+function coversSomething(sq: Box, own: Element): boolean {
+  const range = document.createRange();
+  const looked = new Set<Element>();
+  const left = { n: WALK_MAX };
+  for (const fy of ROWS) {
+    for (const fx of COLS) {
+      const x = sq.left + fx;
+      const y = sq.top + fy;
+      if (x < 0 || y < 0 || x >= window.innerWidth || y >= window.innerHeight) continue;
+      const top = document.elementsFromPoint(x, y).find((e) => !own.contains(e));
+      if (!top || top === document.documentElement || top === document.body || looked.has(top)) continue;
+      looked.add(top);
+      if (top.closest(CONTROL) || top.closest(PICTURE)) return true;
+      // A box that holds the button (the app's root) is read for its own words only, never walked.
+      if (top.contains(own) ? wordsIn(top, sq, range) : underIn(top, sq, range, left)) return true;
+    }
+  }
+  return false;
+}
 const reduced =() => typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export function BackToTop() {
@@ -96,20 +167,26 @@ export function BackToTop() {
       const b = page.clientHeight - bottom + ty;
       return { left: r - SIZE, right: r, top: b - SIZE, bottom: b };
     };
-    /** A sticky close's hit area on the button's: it steps aside for it, so a tap meant for the close is never its. */
-    const nearClose = () => {
-      if (!closes.length) return false;
-      const s = spot();
-      if (!s) return false;
-      const pad = (HIT - SIZE) / 2;
+    /** A sticky close in view: the open toggle's close is the way out then, and the button steps aside (a close passing through its corner
+     *  never meets it either). */
+    const closeInView = () => {
       for (const c of closes) {
         const q = c.getBoundingClientRect();
-        if (!q.width) continue;
-        const g = Math.max(0, (HIT - q.width) / 2);
-        if (q.right + g > s.left - pad && q.left - g < s.right + pad && q.bottom + g > s.top - pad && q.top - g < s.bottom + pad) return true;
+        if (q.width && q.bottom > 0 && q.top < window.innerHeight && q.right > 0 && q.left < window.innerWidth) return true;
       }
       return false;
     };
+    /** A control or a line of words under its hit area. */
+    const onSomething = () => {
+      const s = spot();
+      const el = wrap.current;
+      if (!s || !el) return false;
+      const pad = (HIT - SIZE) / 2;
+      return coversSomething({ left: s.left - pad, right: s.right + pad, top: s.top - pad, bottom: s.bottom + pad }, el);
+    };
+    /** Since when the spot under it has been clear (0 while it is not), and the call that looks again once it has been clear long enough. */
+    let clearSince = 0;
+    let clearTimer = 0;
 
     const show = (on: boolean) => {
       const el = wrap.current;
@@ -136,7 +213,21 @@ export function BackToTop() {
       frame = 0;
       const y = window.scrollY;
       const isLong = docH - spacer >= viewH * 2;
-      show(isLong && y > viewH && !footerSeen && !nearClose());
+      let on = isLong && y > viewH && !footerSeen && !closeInView();
+      if (on && onSomething()) {
+        clearSince = 0;
+        on = false;
+      } else if (on && !shown.current) {
+        // Clear now: it comes back once the spot has stayed clear a moment, so it never blinks between a list's rows.
+        const now = performance.now();
+        if (!clearSince) clearSince = now;
+        if (now - clearSince < CLEAR_MS) {
+          on = false;
+          window.clearTimeout(clearTimer);
+          clearTimer = window.setTimeout(soon, CLEAR_MS - (now - clearSince) + 16);
+        }
+      }
+      show(on);
       const ring = arc.current;
       if (ring && shown.current) {
         const p = Math.min(1, Math.max(0, y / Math.max(1, docH - viewH)));
@@ -203,6 +294,7 @@ export function BackToTop() {
       cancelAnimationFrame(frame);
       cancelAnimationFrame(second);
       window.clearTimeout(later);
+      window.clearTimeout(clearTimer);
     };
   }, [off, pathname]);
 

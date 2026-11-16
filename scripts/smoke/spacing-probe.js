@@ -19,7 +19,8 @@
 //             grid's blank cell; or a first or last child with no height and nothing in it whose margin still adds room.
 //
 // Left out: inline runs of a sentence (one line box), the parts inside one small control (a button's icon and words), table cells,
-// chart SVG, the paper that is edited in place and printed paper, hidden and screen-reader-only text, and anything out of the flow.
+// chart SVG, the paper that is edited in place and printed paper, hidden and screen-reader-only text, anything out of the flow, and what
+// a box that scrolls or clips keeps out of sight (the sidebar's own scroll, 2026-11-16; a run inside one element reads all it holds).
 // On a page run the open dialogs are left to the popup run; set data-spacing-root on an element to measure only inside it.
 (() => {
   // Measured on the ink, so a line's descenders count: words over a control, a box or a picture (or a control's own words, a ruler's
@@ -206,6 +207,33 @@
     const at = (el.nodeType === 1 ? el : el.parentElement)?.getBoundingClientRect();
     hits.push({ kind, line: `${kind} ${line}`, near: near(el), y: at ? Math.round(at.top + window.scrollY) : 0, ...extra });
   };
+  // What a scrolling or clipping box lets show of what it holds, as one rect: p's own overflow and that of every box around it, each on
+  // its own axis, up to a fixed box (whose ancestors never clip it) and short of body and html (the page itself scrolls, and the probe
+  // reads the whole page). A row that a box's own scroll keeps out of sight (the sidebar's last apps, below its fold in a full-page run,
+  // 2026-11-16) draws nothing there, so it is no neighbour of anything and its room is no empty room.
+  const clips = new Map();
+  const clipFor = (el) => {
+    // A run inside one element (a popup's panel, from its top) reads all it holds, as the page run reads the whole page: the panel's own
+    // scroll and the boxes around it are not a clip here, only boxes inside it that scroll on their own.
+    if (!el || el === document.body || el === document.documentElement || (!pageRun && el.contains(rootEl))) return null;
+    if (clips.has(el)) return clips.get(el);
+    const cs = css(el);
+    let out = cs.position === 'fixed' ? null : clipFor(el.parentElement);
+    const r = el.getBoundingClientRect();
+    if (cs.overflowY !== 'visible') out = { ...(out ?? { left: -Infinity, right: Infinity }), top: Math.max(out?.top ?? -Infinity, r.top), bottom: Math.min(out?.bottom ?? Infinity, r.bottom) };
+    if (cs.overflowX !== 'visible') out = { ...(out ?? { top: -Infinity, bottom: Infinity }), left: Math.max(out?.left ?? -Infinity, r.left), right: Math.min(out?.right ?? Infinity, r.right) };
+    clips.set(el, out);
+    return out;
+  };
+  const cut = (x, c) => ({ ...x, top: Math.max(x.top, c.top), bottom: Math.min(x.bottom, c.bottom), left: Math.max(x.left, c.left), right: Math.min(x.right, c.right) });
+  const shows = (x) => x.bottom > x.top && x.right > x.left;
+  // The items as the clip around them leaves them: an item it hides whole is left out, and what a part-hidden one draws is cut to it.
+  const clipItems = (p, items) => {
+    const c = clipFor(p);
+    if (!c) return items;
+    // An item with no size (it.empty) stays as it is: what it does to the gaps around it is measured on its own.
+    return items.filter((it) => it.empty || shows(cut(it.box, c))).map((it) => ({ ...it, parts: it.parts.map((x) => cut(x, c)).filter(shows) }));
+  };
   // The items a container lays out: its in-flow element children, and in a block box each run of inline content as one line item.
   const itemsOf = (p, pcs) => {
     const flexOrGrid = /flex|grid/.test(pcs.display);
@@ -250,7 +278,7 @@
       items.push({ el: c, box: { left: r.left, top: r.top, right: r.right, bottom: r.bottom }, parts: visParts(c), empty: r.width === 0 || r.height === 0, cs });
     }
     flush();
-    return items;
+    return clipItems(p, items);
   };
   const overlapX = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left);
   const kindOf = (el) => (el.nodeType !== 1 ? '#line' : `${el.tagName}.${(el.getAttribute('class') ?? '').split(/\s+/).filter((c) => c && !/^(m[tby]?|-m[tby]?)-|open|active|selected|done|line-through|text-ink|opacity|^bg-|^border-|^toy|aria-|data-/.test(c)).sort().join('.')}`);
@@ -434,6 +462,9 @@
     const r = el.getBoundingClientRect();
     if (r.height <= 24 || r.width <= 24) continue;
     if (visBox(el)) continue;
+    // Kept out of sight whole by a box that scrolls or clips around it: it is not seen, so its room is not seen either.
+    const around = clipFor(el.parentElement);
+    if (around && !shows(cut({ left: r.left, top: r.top, right: r.right, bottom: r.bottom }, around))) continue;
     // A room kept on purpose: a height set inline, a lazy picture or frame still to come, a busy region.
     if (el.style.height || el.style.minHeight || el.querySelector('img, iframe, video, canvas') || el.closest('[aria-busy="true"]')) continue;
     // A grid cell left blank to hold a place (a calendar's days before the 1st) is the grid's own layout.

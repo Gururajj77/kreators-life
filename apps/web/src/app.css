@@ -930,9 +930,12 @@
 }
 /* A toggle's close runs 4px from the root's edge (a task's row keeps its edit button's place, 8px in): where the toggle's mark was, it then
    keeps the 8px the spacing allows from what ends the toggle's line (an app group's "12 of 12 shown", a lesson's tag), which at 8px in it
-   came within 4px of, its 44px hit area on them (2026-11-14). The lane under it keeps the same 8px (`.sticky-close-lane` below). */
+   came within 4px of, its 44px hit area on them (2026-11-14). The lane under it keeps the same 8px (`.sticky-close-lane` below). Where the
+   open content's painted surface ends inside the root (an app group's list, a time block's tasks, 12px in), it runs 4px inside that
+   surface's edge instead (`--sticky-close-inset`, `fitLane`), wholly on it as a task's close is on its card, and the toggle's own line moves
+   in by as much (2026-11-16). */
 .sticky-close-rail[data-mode='in']:not(.row-close-rail, [data-nest]) {
-  right: calc(var(--spacing-xs) / 2);
+  right: calc(var(--spacing-xs) / 2 + var(--sticky-close-inset, 0px));
 }
 /* Nested: the outermost close's column, whichever side it stands (its width still follows `data-mode`, which is that close's). */
 .sticky-close-rail[data-nest] {
@@ -949,8 +952,8 @@
 .sticky-close-slot > .close-btn {
   pointer-events: auto;
 }
-/* A nested close tucks away for the moment its own content's end pushes it onto the close round it (`data-tuck`), unless the keyboard is
-   on it. */
+/* A nested close tucks away for the moment its own content's end pushes it onto the close round it (`data-tuck`), and a task's close
+   running down its row's edge while it would sit over the card's tags (the rail's row check), unless the keyboard is on it. */
 .sticky-close-rail[data-tuck] > .sticky-close-slot:not(:has(:focus-visible)) {
   opacity: 0;
 }
@@ -1001,25 +1004,58 @@ body:has(.fx-condensed[data-on]) .sticky-close-slot {
 [data-sticky-close='in']:not([data-sticky-close-nest]) > .sticky-close-lane {
   padding-right: calc(var(--spacing-lg) + var(--spacing-sm));
 }
-/* A card keeps its full width and the lane sits inside it, as a task's plan keeps it (2026-11-14): when what the toggle opened is one card
-   (Add a task's form, How it works' panel, the month calendar, a Help group's card) or one list of cards (Help's words, each its own
-   tile), the card, or each card of the list, reaches back over the wrapper's lane to the root's edge and keeps the lane in its own
-   padding, so its edge still meets the toggle's above it instead of stopping 44px short with a strip of page beside it, and the words
-   inside lose 28px of their width, not 44. The wrapper (or the list) keeps its lane, so the width the words' boxes sit in still changes
-   when the close comes or goes, and the rectangle fixer (lib/rectText.ts, which pins its own padding on a block of words and measures it
-   again only when that width changes) evens them out at the width they now have. A list item with no fill keeps the list's lane, so
-   nothing in the list runs under the close. Only a block that fills its row reaches back (a box with a width of its own, an inline one,
-   a grid or a row of tiles side by side keep the wrapper's lane, where a reach would run into the next tile). */
-[data-sticky-close='in']:not([data-sticky-close-nest])
-  > .sticky-close-lane
-  > :only-child:is(div, form, section, article, ul, ol, dl, fieldset):is(.bg-card, .bg-card-strong, .bg-paper):not([class^='w-'], [class*=' w-'], [class*=':w-'], [class*='inline']),
-[data-sticky-close='in']:not([data-sticky-close-nest])
-  > .sticky-close-lane
-  > :only-child:is(ul, ol):not(.bg-card, .bg-card-strong, .bg-paper, [class*='grid'], [class*='flex-row'], [class*='flex-wrap'], [class*='columns-']):is([class*='flex-col'], :not([class*='flex']))
-  > li:is(.bg-card, .bg-card-strong, .bg-paper) {
-  margin-right: calc((var(--spacing-lg) + var(--spacing-sm)) * -1);
-  padding-right: calc(var(--spacing-lg) + var(--spacing-sm));
+/* A painted surface keeps its full width (2026-11-16, the founder: "where ever you have made the cross button for close u ended up
+   compromising the right space ... why dont u keep it similar to the way u did it in tasks?"). Inside a root whose close runs down its edge,
+   every painted surface of the open content that filled its row at rest (a card, a list of cards, an inset list such as an app group's,
+   a form card such as Add a task's, a wide toggle) reaches back over the wrapper's lane to the edge it had at rest, so it still meets the
+   toggle above it, and keeps the room the close needs as its own right padding instead, as a task's plan does (`.row-lane`): its rows'
+   right-edge controls move in and the close runs down its right edge over that padding. The rail measures each (`fitLane` in
+   StickyCloseRail.tsx) and marks the box that reaches (`data-sc-reach`, its margin `--sc-mr`: the surface, or the box round it that holds it
+   whole when its width is its own) and the surface that keeps the lane (`data-sc-pad`, its padding `--sc-pr`), which apply only while the
+   root says `in`. Unpainted content (a line of words, a field, a bare list) keeps the wrapper's lane. */
+[data-sticky-close='in']:not([data-sticky-close-nest]) [data-sc-reach] {
+  margin-right: var(--sc-mr) !important;
 }
+[data-sticky-close='in']:not([data-sticky-close-nest]) [data-sc-pad] {
+  padding-right: var(--sc-pr) !important;
+}
+/* A badge tile in the close's column (2026-11-17, Profile's badge folds at 360): its name's last words, kept together at rest, wrap inside
+   the narrower content box instead of running out of it under the close. */
+[data-sticky-close='in']:not([data-sticky-close-nest]) .badge-tile[data-sc-pad] .whitespace-nowrap {
+  white-space: normal;
+}
+/* A task's card that keeps the lane as its own padding (a tall By time block or By area box whose close runs down its edge, 2026-11-17):
+   its small edit button gives up its slot to the lane, as on a task's open plan, so the close runs down the card's edge where the button
+   was and the title keeps its column instead of losing both (at 360 a long title took ten lines of 111px). The button is for a mouse or a
+   finger only (`aria-hidden`, no tab stop), and a tap on the card opens the plan as before. The padding is worked out from the card's edge
+   alone (`fitLane`), so it never waits on the button. */
+[data-sticky-close='in']:not([data-sticky-close-nest]) .check-row[data-sc-pad] [data-row-edit] {
+  display: none;
+}
+/* An app group that keeps the lane as its own padding (a group of Profile's "Tables AI chat can read" while that fold's close runs down its
+   edge, 2026-11-17; the group itself padded, or its header when the rail pads the toggle of a nested group): its header's count drops under its line, as it does in a narrow header (GroupAccordion), so the line keeps the header's
+   width instead of a word or two a line beside the pill. Only in a header under 26rem inside its padding (the button is the container), so
+   a wide one keeps its one row; the chevron's slot and the padding stay, so the close never meets the pill or the chevron. */
+@container (max-width: 26rem) {
+  [data-sticky-close='in']:not([data-sticky-close-nest]) [data-sticky-close-root][data-sc-pad] > :is(h2, h3) > button > .ga-meta,
+  [data-sticky-close='in']:not([data-sticky-close-nest]) [data-sticky-close-root][data-sc-pad] > button > .ga-meta,
+  [data-sticky-close='in']:not([data-sticky-close-nest]) [data-sticky-close-root] button[data-sc-pad] > .ga-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
+  }
+  [data-sticky-close='in']:not([data-sticky-close-nest]) [data-sticky-close-root][data-sc-pad] > :is(h2, h3) > button > .ga-meta > .ga-words,
+  [data-sticky-close='in']:not([data-sticky-close-nest]) [data-sticky-close-root][data-sc-pad] > button > .ga-meta > .ga-words,
+  [data-sticky-close='in']:not([data-sticky-close-nest]) [data-sticky-close-root] button[data-sc-pad] > .ga-meta > .ga-words {
+    align-self: stretch;
+  }
+}
+/* A task's card while its plan's close runs down the row's edge (2026-11-16, the founder: "on mobile the toggle in tasks breaks in design
+   overalapping"): the card stays exactly as it was at rest, its width, its padding and its tags' lines (a wider padding made its marks wrap
+   onto one more line and the card jump as the plan opened). The close stands in the small edit button's slot on the card's first line,
+   which the button keeps unseen (CheckRow), and the plan under the card keeps its lane (`.row-lane` above); while the stuck close would sit
+   over the card's lines below that slot (its tags, as the card scrolls up under it) it tucks away (`data-tuck`, the rail's row check) and
+   comes back over the plan. */
 .check-preview {
   opacity: 0;
   transform: scale(0.6);
@@ -6871,9 +6907,9 @@ body:has([data-assistant-panel]) .page-contents {
    tab bar nor the footer (Admin, a public page, a product page) it sits 16px up. It rises with the assistant over a held bar
    (`.lift-over-sticky`), under the assistant (40) and every scrim, over the tab bar and the bars at the foot (30). It shows only past a
    screen of scrolling on a page two screens tall, away from the footer (the component), and steps aside while something else holds that
-   corner or the page: a sheet, the assistant's panel, the privacy card or bar, the attendee bar, a phone's keyboard, in print, or while a
-   sticky close's 44px hit area meets its own (the component: on a laptop about 1100 to 1350px wide an open toggle's close stands in this
-   column and passes through this corner as the toggle's line nears the window's foot).
+   corner or the page: a sheet, the assistant's panel, the privacy card or bar, the attendee bar, a phone's keyboard, in print, while an
+   open toggle's sticky close is in view, and while a control or a line of words lies under its 44px (the component, 2026-11-16: it never
+   sits on a field, a button, a link or words, and comes back once they have passed).
    While it fades out it takes no tap, so the tap goes to what it is stepping aside for. */
 .back-to-top {
   position: fixed;

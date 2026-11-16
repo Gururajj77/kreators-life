@@ -22,7 +22,8 @@ import { ToggleChevron } from './ToggleMark';
  * An open group taller than the room the window has keeps its close in view beside it (`StickyClose`, 2026-11-14, the founder: "the close
  * buttons that need one to scroll back top need the close button to be sticky outside the toggle tab"): the rail sits in the group itself,
  * right after the header, never inside the sliding body (whose clip would cut it off), the chevron keeps its slot unseen, the controls and
- * the body keep a lane while it runs down the group's edge, and Escape anywhere in the group closes it. The body clips only while it
+ * the body keep a lane while it runs down the group's edge (the app or table lists in it keeping their full width with the lane as their
+ * own padding, 2026-11-16, `fitLane` in StickyCloseRail.tsx), and Escape anywhere in the group closes it. The body clips only while it
  * slides, so a tall fold or a task's plan inside it can keep its own close in view too.
  */
 export function GroupAccordion({
@@ -118,9 +119,11 @@ export function GroupAccordion({
       {/* The words and the count side by side, as they always were; in a narrow header (under 18.5rem inside its padding: a phone's group
           standing in the lane a tall fold keeps for its close, Profile's "Tables AI chat can read" at 390, or a 320px phone) the count drops
           under the line, so the words keep the column's width instead of a ribbon of one word a line (2026-11-14). 360 and up at rest keep
-          the one row (a 328px header there, 304px inside its padding). */}
-      <span className="flex min-w-0 flex-1 items-center gap-sm @max-[18.5rem]:flex-col @max-[18.5rem]:items-start @max-[18.5rem]:gap-xs">
-        <span className="min-w-0 flex-1 @max-[18.5rem]:self-stretch">
+          the one row (a 328px header there, 304px inside its padding). The same happens while the group is a surface that keeps a lane round
+          it as its own padding (`data-sc-pad`, inside a tall fold whose close runs down its edge, Profile's "Tables AI chat can read" at 414
+          and 430), so its line never shrinks to a word or two a line (2026-11-17; `.ga-meta` in app.css). */}
+      <span className="ga-meta flex min-w-0 flex-1 items-center gap-sm @max-[18.5rem]:flex-col @max-[18.5rem]:items-start @max-[18.5rem]:gap-xs">
+        <span className="ga-words min-w-0 flex-1 @max-[18.5rem]:self-stretch">
           <span id={`${id}-h`} className="block text-title3 type-figure">
             {MODULE_GROUPS[group]}
           </span>

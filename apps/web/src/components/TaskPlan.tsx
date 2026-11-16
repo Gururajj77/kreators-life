@@ -4,7 +4,7 @@ import { OPEN_ENDINGS, OPEN_KIND_META } from '@kreators/shared/openBusiness';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router';
-import { X } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { api, type TaskPlanBody } from '../lib/api';
 import { Icon } from './Icon';
 import { useAuthed, useRefreshAll } from '../lib/queries';
@@ -246,8 +246,10 @@ export function TaskPlanFields({ plan, onChange, today, pillar, taskId }: { plan
         <span className="block text-subhead font-semibold">Do on</span>
         <div className="flex flex-wrap items-end gap-xs">
           <input type="date" aria-label="Do date" value={plan.doDate} onChange={(e) => set({ doDate: e.target.value })} className={`${FIELD} min-w-[200px] flex-1`} />
-          {/* A phone: the three quick days as one even row across the full width under the date; wider, beside the date at its right. */}
-          <div className="grid w-full grid-cols-3 gap-xs sm:ml-auto sm:flex sm:w-auto sm:flex-wrap sm:justify-end" role="group" aria-label="Quick days">
+          {/* A phone: the three quick days fill one line across the full width under the date, each as wide as its words need and sharing what is
+              left, so "Next week" never runs into its pill's edge beside a 360px row's lane; where even that is too tight they take two lines, the
+              last one filling its line. Wider, beside the date at its right. */}
+          <div className="fill-row-all flex w-full flex-wrap gap-xs sm:ml-auto sm:w-auto sm:justify-end" role="group" aria-label="Quick days">
           {[
             { name: 'Today', day: today },
             { name: 'Tomorrow', day: addDays(today, 1) },
@@ -301,7 +303,8 @@ export function TaskPlanFields({ plan, onChange, today, pillar, taskId }: { plan
       <Toggle on={plan.forReview} onChange={(forReview) => set({ forReview })} label="Bring it to my review" hint="The review for its week, month or quarter lists it, so you can put it into your answers." compact />
 
       <div className="flex flex-wrap items-end gap-xs">
-      <div className="grid min-w-[240px] flex-1 grid-cols-2 gap-xs">
+      {/* Time keeps room for a whole 12-hour value ("10:30 AM" and its clock) inside a phone plan's close lane; Minutes takes the rest, level at the foot. */}
+      <div className="grid min-w-[240px] flex-1 grid-cols-[minmax(9.25rem,1fr)_minmax(0,1fr)] items-end gap-xs">
         <label className="block">
           <span className="block text-subhead font-semibold">Time (optional)</span>
           <input type="time" value={plan.time} onChange={(e) => set({ time: e.target.value })} className={FIELD} />
@@ -601,7 +604,7 @@ export function Subtasks({ task }: { task: Node }) {
                   label={`Remove "${s.title}"`}
                   className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center self-center text-ink-soft hover:text-ink"
                 >
-                  <Icon icon={X} size={18} />
+                  <Icon icon={Trash2} size={18} />
                 </TapTwiceIcon>
               }
             />

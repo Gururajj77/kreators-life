@@ -14,8 +14,8 @@ import { ToggleChevron } from './ToggleMark';
  * While it is open and taller than the room the window has (Daily's Add a task form, a long list), its close stays in view beside what it
  * holds (`StickyClose`, 2026-11-14, the founder: "the close buttons that need one to scroll back top need the close button to be sticky
  * outside the toggle tab"): the plus or chevron keeps its slot unseen, the close stands in the margin at its right or runs down its own
- * right edge with a lane kept for it (inside the card when what it holds is one card, such as Add a task's form, so the card's edge
- * still meets the fold's own), and Escape anywhere inside closes it too, except from typed words (a half-written task is never thrown
+ * right edge with a lane kept for it (inside every painted surface it holds, such as Add a task's form card, so the card's edge
+ * still meets the fold's own; `fitLane` in StickyCloseRail.tsx), and Escape anywhere inside closes it too, except from typed words (a half-written task is never thrown
  * away by a key). A short fold is as it always was; the laptop sidebar's `plain` folds never take one.
  */
 export function Fold({

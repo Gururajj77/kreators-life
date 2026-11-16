@@ -13,8 +13,9 @@ import { isValidElement, lazy, Suspense, useEffect, useLayoutEffect, useRef, use
  * Where the page has 60px of margin at the root's right (past the painted box round it, before the window's edge, On this page when it
  * shows, and the right of the nearest box that clips) it stands in that margin and is the 44px round `CloseButton` with its name as a tip
  * (`data-sticky-close="out"` on the root); where it has none it runs down the root's own right edge as the 32px one (a 44px hit area, no
- * tip, since a tip there would sit on words; `"in"`), and the content keeps a 48px lane for it (`.sticky-close-lane`, a direct child of the
- * root), so it never covers a field. It clears the condensed title bar, the public site's sticky header and a whole-page chat's header, and
+ * tip, since a tip there would sit on words; `"in"`), and the content keeps a 44px lane for it (`.sticky-close-lane`, a direct child of the
+ * root), so it never covers a field; every painted surface in it that filled its row (a card, an inset list, a form card) keeps its full
+ * width and takes the lane as its own right padding instead, as a task's plan does (`fitLane` in StickyCloseRail.tsx, 2026-11-16). It clears the condensed title bar, the public site's sticky header and a whole-page chat's header, and
  * inside a popup's scrolling panel it sticks to the panel's top. A rail inside another root whose rail shows lines up with the outermost
  * one: the same column and size (inside an `in` root it stands in that root's lane, so its own content keeps no second lane; inside an
  * `out` one it stands out beside it), 52px lower per level once they stick, and it tucks away for the moment its own content's end would
@@ -74,8 +75,8 @@ function topChrome(): number {
   return Math.max(condensed ? condensed.getBoundingClientRect().height : 0, topBars());
 }
 
-/** How much of the window's foot is covered: the phone's tab bar and a held main action (StickyAction). */
-function bottomChrome(): number {
+/** How much of the window's foot is covered: the phone's tab bar and a held main action (StickyAction). (Shared with the rail.) */
+export function bottomChrome(): number {
   const tabs = document.querySelector('nav[data-tabbar]');
   let h = tabs ? tabs.getBoundingClientRect().height : 0;
   const html = document.documentElement;

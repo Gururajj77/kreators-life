@@ -15,6 +15,7 @@
 //   FOLDS_THEME=light|dark                   default light
 //   FOLDS_POPUPS=1                           also open the popups in popupCases.mjs and check the toggles inside each panel (the panel is the room)
 //   FOLDS_JOB_MS=300000                      the most one page may take; a page stopped by it is printed
+//   FOLDS_KINDS=shrunk,float-over            only these kinds are worked out and reported (the summary still names every kind it ran)
 //   SMOKE_ORIGIN=http://127.0.0.1:8788       the server (it must serve the latest build)
 //   SHOOT_TOKEN=<token>                      the account, instead of scripts/smoke/state/shoot-token
 //
@@ -46,6 +47,24 @@
 // The kinds: `no-close` (none on screen), `covered` (under a bar or something else, or touching Back to top), `clipped` (off the window or cut by a box),
 // `overlap` (two closes on each other), `covers-control` (over a field, a button, a link or a line of words in the content), `name` (its
 // name does not start with "Close"), `no-collapse`, `focus` and `off-view` (after tapping it), and `extra` (a close on a short one).
+// Two more (2026-11-16, the founder: "where ever you have made the cross button for close u ended up compromising the right space to
+// accomodate for that sticky close ... why dont u keep it similar to the way u did it in tasks?"), at every look of a tall toggle:
+//   `shrunk`: while the root's close runs down its edge (`data-sticky-close="in"`, or a task row's `data-row-close="in"`; never a nested
+//     root that keeps no lane of its own), a painted surface in what it opened (a fill, an edge, a shadow, or `.toy`, `.bg-card`,
+//     `.fx-inset`, `.rounded-card`, `.rounded-tile`) whose right edge the lane pulled in: it moved more than 8px left of where it stands with
+//     no close (the page measured again with the root's mode taken off for a moment, in the same task, so nothing is drawn or told) and now
+//     stops more than 8px short of the toggle's own painted right edge (else the nearest painted box round the toggle, else the root's).
+//     Only the outermost surface counts: what sits inside a surface that kept its width (a task's plan, a card that reaches back over the
+//     lane) may move in, as the lane in its own padding means. Left out as meant to be narrower: a button, a link, a chip or pill, a
+//     switch, a field narrower than three quarters of the content (one in a row), a field or a segmented control that a painted box holds
+//     (the root's own card, the toggle's or a list's round the root: it moves in with the lane, as a task plan's fields do), a box painted only down its left
+//     side, anything under half the root's width at rest, and anything off screen at that look. Reports the box, its right edge now
+//     and at rest, and the reference edge.
+//   `float-over`: Back to top's 44px (while `.back-to-top[data-show]` draws it) over an interactive control (a, button, input, select,
+//     textarea, [role=button], a [tabindex] that is not -1) or a line of words that is not its own, read from the top of the page as drawn
+//     (`elementsFromPoint` on a grid 3px inside its square, so an overlap of 2px or less never counts and nothing hidden under a card does);
+//     the sticky close's button drawn over a control or words outside its root (inside it, `covers-control` says it) or over the assistant's
+//     button or Back to top by more than 2px. The assistant's button drawn over the close (it sits higher) is the note it always was.
 // Prints one line per hit and a summary by kind; exits 1 on any kind but `extra`, or when a page threw.
 import fs from 'node:fs';
 import puppeteer from 'puppeteer-core';
@@ -60,7 +79,12 @@ const ROWS = Number(process.env.FOLDS_ROWS ?? 3);
 const THEME = process.env.FOLDS_THEME === 'dark' ? 'dark' : 'light';
 const JOB_MS = Number(process.env.FOLDS_JOB_MS ?? 300000);
 const POPUPS = process.env.FOLDS_POPUPS === '1';
-const FAIL = ['no-close', 'covered', 'clipped', 'overlap', 'covers-control', 'name', 'no-collapse', 'focus', 'off-view'];
+const FAIL = ['no-close', 'covered', 'clipped', 'overlap', 'covers-control', 'name', 'no-collapse', 'focus', 'off-view', 'shrunk', 'float-over'];
+const ALL_KINDS = [...FAIL, 'extra'];
+const KINDS = process.env.FOLDS_KINDS ? new Set(process.env.FOLDS_KINDS.split(',').map((k) => k.trim()).filter(Boolean)) : null;
+if (KINDS) for (const k of KINDS) if (!ALL_KINDS.includes(k)) throw new Error(`FOLDS_KINDS: no kind "${k}" (${ALL_KINDS.join(', ')})`);
+const wantKind = (k) => !KINDS || KINDS.has(k);
+const WANT = { shrunk: wantKind('shrunk'), float: wantKind('float-over') };
 // Whole-page chats, as drive-scroll.mjs leaves them; whole segments only, so /sessions (the Library's sessions) is still tested.
 const SKIP = /^\/(onboarding|session|vibe-check)(?=[/?#]|$)/;
 const token = (process.env.SHOOT_TOKEN ?? fs.readFileSync(new URL('./state/shoot-token', import.meta.url), 'utf8')).trim();
@@ -410,8 +434,194 @@ function pageLib(mode) {
     const gy = Math.max(0, (44 - r.height) / 2);
     return { left: r.left - gx, right: r.right + gx, top: r.top - gy, bottom: r.bottom + gy, x: r.left, y: r.top, w: r.width, h: r.height };
   };
+  // ------- `shrunk` and `float-over` (2026-11-16) -------
+  const alphaOf = (c) => {
+    if (!c || c === 'transparent') return 0;
+    const m = /rgba?\(([^)]*)\)/.exec(c);
+    if (!m) return 1;
+    const parts = m[1].split(/[\s,/]+/).filter(Boolean);
+    if (parts.length < 4) return 1;
+    const a = parts[3];
+    return a.endsWith('%') ? parseFloat(a) / 100 : parseFloat(a);
+  };
+  const PAINT_CLASS = '.toy, .bg-card, .fx-inset, .rounded-card, .rounded-tile';
+  // A fill, an edge, a shadow, or one of the surface classes.
+  const painted = (el, cache) => {
+    if (cache.has(el)) return cache.get(el);
+    const cs = getComputedStyle(el);
+    let ok = alphaOf(cs.backgroundColor) > 0.01 || cs.backgroundImage !== 'none' || cs.boxShadow !== 'none' || el.matches(PAINT_CLASS);
+    if (!ok) {
+      for (const side of ['Top', 'Right', 'Bottom', 'Left']) {
+        if (parseFloat(cs[`border${side}Width`]) > 0 && cs[`border${side}Style`] !== 'none' && alphaOf(cs[`border${side}Color`]) > 0.01) {
+          ok = true;
+          break;
+        }
+      }
+    }
+    cache.set(el, ok);
+    return ok;
+  };
+  // Paint that shows where the right edge is: a fill, a shadow, a surface class, or an edge on the right, top or bottom (a quote's rule down
+  // its left side alone does not show how wide it is).
+  const paintedRight = (el, cache) => {
+    const cs = getComputedStyle(el);
+    if (alphaOf(cs.backgroundColor) > 0.01 || cs.backgroundImage !== 'none' || cs.boxShadow !== 'none' || el.matches(PAINT_CLASS)) return painted(el, cache);
+    return ['Top', 'Right', 'Bottom'].some((side) => parseFloat(cs[`border${side}Width`]) > 0 && cs[`border${side}Style`] !== 'none' && alphaOf(cs[`border${side}Color`]) > 0.01);
+  };
+  // Meant to be narrower than the content anyway: a button, a link, a chip or pill, a switch or tick, svg or a picture.
+  const NARROW_KIND = 'button, a, [role="button"], [role="switch"], [role="checkbox"], [role="radio"], [role="tab"], [aria-pressed], .chip, .pri-chip, [class*="rounded-pill"], [class*="rounded-full"], svg, img, picture, video, canvas, hr, .close-btn';
+  const FIELD = 'input, select, textarea, [contenteditable="true"], [contenteditable="plaintext-only"]';
+  // The painted surfaces in what the root opened that the lane pulled in. `root` says `in` and keeps a lane of its own.
+  const shrunkIn = (s, root, V, c) => {
+    const attr = root.hasAttribute('data-sticky-close') ? 'data-sticky-close' : 'data-row-close';
+    const mode = root.getAttribute(attr);
+    if (mode !== 'in' || root.hasAttribute('data-sticky-close-nest')) return [];
+    const el = s.el;
+    const cache = new Map();
+    // The reference: the toggle's own painted edge, else the nearest painted box round it inside the root, else the root's.
+    let ref = null;
+    for (let a = el; a && a !== root; a = a.parentElement) {
+      if (painted(a, cache)) {
+        ref = a;
+        break;
+      }
+    }
+    const refRight = (ref ?? root).getBoundingClientRect().right;
+    const rootR = root.getBoundingClientRect();
+    const vTop = V.top + c.top;
+    const vBottom = V.bottom - c.bottom;
+    // Everything in the root but the toggle (and what holds it) and the closes' rails.
+    const cands = [];
+    for (const x of root.querySelectorAll('*')) {
+      if (x === el || el.contains(x) || x.contains(el)) continue;
+      if (x.closest('.sticky-close-rail')) continue;
+      if (x.matches(NARROW_KIND) || x.closest('svg')) continue;
+      const r = x.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8 || r.bottom <= vTop || r.top >= vBottom) continue;
+      if (!paintedRight(x, cache) || !shown(x)) continue;
+      // A field or a segmented control is a control, not a surface: inside a painted box (the root's own card, the toggle's) it moves in
+      // with the lane in that box's padding, as a task's plan's fields do; it counts only when nothing painted holds it.
+      if (x.matches(`${FIELD}, .fx-seg, [role="radiogroup"], [role="tablist"]`)) {
+        let held = false;
+        for (let a = x.parentElement; a && a !== document.body; a = a.parentElement) {
+          if (painted(a, cache)) {
+            held = true;
+            break;
+          }
+        }
+        if (held) continue;
+      }
+      // Only the outermost surface: one inside a painted box that is itself in the content is that box's business.
+      let inner = false;
+      for (let a = x.parentElement; a && a !== root; a = a.parentElement) {
+        if (a.contains(el)) break;
+        if (painted(a, cache)) {
+          inner = true;
+          break;
+        }
+      }
+      if (!inner) cands.push({ x, now: r });
+    }
+    if (!cands.length) return [];
+    // Where each stands with no close: the root's mode off for a moment (read, then put back in the same task, so nothing is drawn), and
+    // with it the modes of the open roots round it and inside it, since a surface's reach and padding follow the outermost root's lane
+    // (`fitLane` in StickyCloseRail.tsx), so a nested root read alone would stand its surfaces past where they ever were.
+    const off = [];
+    for (let a = root; a; a = a.parentElement) {
+      for (const k of ['data-sticky-close', 'data-row-close']) if (a.hasAttribute(k)) off.push([a, k, a.getAttribute(k)]);
+    }
+    for (const d of root.querySelectorAll('[data-sticky-close], [data-row-close]')) {
+      for (const k of ['data-sticky-close', 'data-row-close']) if (d.hasAttribute(k)) off.push([d, k, d.getAttribute(k)]);
+    }
+    for (const [a, k] of off) a.removeAttribute(k);
+    let rest;
+    let contentW;
+    try {
+      rest = cands.map(({ x }) => x.getBoundingClientRect());
+      contentW = root.getBoundingClientRect().width;
+    } finally {
+      for (const [a, k, v] of off) a.setAttribute(k, v);
+    }
+    const out = [];
+    cands.forEach(({ x, now }, i) => {
+      const r0 = rest[i];
+      if (r0.width < contentW / 2) return; // narrower than half the root at rest: meant to be
+      if (x.matches(FIELD) && r0.width < 0.75 * contentW) return; // a field in a row
+      const moved = r0.right - now.right;
+      const short = refRight - now.right;
+      if (moved > 8 && short > 8) out.push({ box: shortSel(x), right: Math.round(now.right), rest: Math.round(r0.right), ref: Math.round(refRight), refIs: ref ? shortSel(ref) : 'the root', rootRight: Math.round(rootR.right) });
+    });
+    return out;
+  };
+  const FLOAT_CONTROL = 'a, button, input:not([type="hidden"]), select, textarea, [role="button"], [tabindex]:not([tabindex="-1"])';
+  // What a floating square (`self`) covers, read as drawn: on a grid 3px inside it, the topmost element below `self` in the page's stack
+  // there that `skip` does not take away (never what is drawn over it, such as the assistant's button over a close), the control it is or
+  // sits in, and the words under the point. Each found once.
+  const under = (r, self, skip) => {
+    const controls = new Map();
+    const words = new Map();
+    const N = 6;
+    const range = document.createRange();
+    for (let i = 0; i < N; i += 1) {
+      for (let j = 0; j < N; j += 1) {
+        const x = r.left + 3 + ((r.right - r.left - 6) * i) / (N - 1);
+        const y = r.top + 3 + ((r.bottom - r.top - 6) * j) / (N - 1);
+        if (x < 0 || y < 0 || x >= window.innerWidth || y >= window.innerHeight) continue;
+        const stack = document.elementsFromPoint(x, y);
+        const me = stack.findIndex((e) => e === self || self.contains(e));
+        if (me < 0) continue; // something opaque is drawn over it here
+        let k = me;
+        while (k < stack.length && (stack[k] === self || self.contains(stack[k]))) k += 1;
+        const top = stack.slice(k).find((e) => !skip(e));
+        if (!top || top === document.documentElement || top === document.body) continue;
+        const ctl = top.closest(FLOAT_CONTROL);
+        if (ctl && !skip(ctl) && shown(ctl) && !controls.has(ctl)) controls.set(ctl, `${ctl.tagName.toLowerCase()}${ctl.getAttribute('type') ? `[${ctl.getAttribute('type')}]` : ''} "${labelOf(ctl).slice(0, 30)}" ${shortSel(ctl)}`);
+        for (const t of top.childNodes) {
+          if (t.nodeType !== 3 || !t.nodeValue.trim() || words.has(t)) continue;
+          range.selectNodeContents(t);
+          for (const rr of range.getClientRects()) {
+            if (x >= rr.left && x <= rr.right && y >= rr.top && y <= rr.bottom) {
+              words.set(t, `words "${norm(t.nodeValue).slice(0, 30)}" in ${shortSel(top)}`);
+              break;
+            }
+          }
+        }
+      }
+    }
+    return [...controls.values(), ...words.values()];
+  };
+  const overlapBy = (a, b) => Math.min(Math.min(a.right, b.right) - Math.max(a.left, b.left), Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+  const floatOver = (s, root, mine, btt) => {
+    const out = [];
+    const el = s.el;
+    const tr = el.getBoundingClientRect();
+    if (btt) {
+      const sq = { left: btt.left, right: btt.right, top: btt.top, bottom: btt.bottom };
+      // Closes under it are `covered` already.
+      const self = document.querySelector('.back-to-top-btn');
+      for (const f of under(sq, self, (e) => Boolean(e.closest('.back-to-top, .sticky-close-rail, [data-sticky-close-btn], [data-row-close-btn]')))) out.push(`Back to top over ${f}`);
+    }
+    const zones = root ? [root] : [s.G, ...F.regionNodes(F.stack.indexOf(s))].filter(Boolean);
+    const assistant = document.querySelector('button[aria-label="Open the assistant"]');
+    const ar = assistant && shown(assistant) ? assistant.getBoundingClientRect() : null;
+    for (const b of mine) {
+      if (!shown(b)) continue;
+      const cr = b.getBoundingClientRect();
+      const skip = (e) => Boolean(e.closest('.sticky-close-rail, [data-sticky-close-btn], [data-row-close-btn], .back-to-top')) || e === el || el.contains(e) || zones.some((z) => z.contains(e)) || within(e.getBoundingClientRect(), tr);
+      for (const f of under(cr, b, skip)) out.push(`the close over ${f}`);
+      if (ar && overlapBy(cr, ar) > 2) {
+        const mx = (Math.max(cr.left, ar.left) + Math.min(cr.right, ar.right)) / 2;
+        const my = (Math.max(cr.top, ar.top) + Math.min(cr.bottom, ar.bottom)) / 2;
+        const topEl = document.elementFromPoint(mx, my);
+        if (topEl && (topEl === b || b.contains(topEl))) out.push(`the close over the assistant's button by ${Math.round(overlapBy(cr, ar))}px`);
+      }
+      if (btt && overlapBy(cr, btt) > 2) out.push(`the close and Back to top meet by ${Math.round(overlapBy(cr, btt))}px`);
+    }
+    return out;
+  };
+
   // One look at the open toggle from where the page is scrolled now.
-  F.check = (d, at) => {
+  F.check = (d, at, want = {}) => {
     const s = F.stack[d];
     const V = F.view();
     const c = F.chrome(V);
@@ -476,6 +686,15 @@ function pageLib(mode) {
           if (skip(x) || x.type === 'hidden' || !shown(x, seen)) continue;
           const xr = x.getBoundingClientRect();
           if (within(xr, tr) || !meets(xr, cr)) continue;
+          // A control that keeps the lane as its own padding (`data-sc-pad`, a link card or a badge tile laid back to its full width, as a
+          // task's card is round its plan's close): the close over that padding only, never its words or marks, is where it belongs. Past
+          // the control's right edge it may run on over the padding of the card round it (a card that holds cards keeps the close at its
+          // own edge, `through` in StickyCloseRail.tsx: How it works' inner folds, the month calendar's Sunday column).
+          if (x.hasAttribute('data-sc-pad')) {
+            const xs = getComputedStyle(x);
+            const inner = xr.right - (parseFloat(xs.paddingRight) || 0) - (parseFloat(xs.borderRightWidth) || 0);
+            if (cr.left >= inner - 0.5) continue;
+          }
           found.add(`${x.tagName.toLowerCase()}${x.type ? `[${x.type}]` : ''} "${labelOf(x).slice(0, 30)}"`);
         }
         const walker = document.createTreeWalker(z, NodeFilter.SHOW_TEXT, { acceptNode: (t) => (t.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT) });
@@ -493,6 +712,8 @@ function pageLib(mode) {
       }
       for (const f of found) res.covers.push(f);
     });
+    res.shrunk = want.shrunk && root && res.tall ? shrunkIn(s, root, V, c) : [];
+    res.float = want.float && res.tall ? floatOver(s, root, mine, btt) : [];
     return res;
   };
   // The close a person would tap now: the first one in the clear, else any (pressed by its own click, so the folding is still checked).
@@ -620,8 +841,10 @@ const kindsOf = (checks) => {
     if (ch.overlap.length) add('overlap', ch.at, ch.overlap[0]);
     if (ch.covers.length) add('covers-control', ch.at, ch.covers.join(', '));
     if (ch.badName) add('name', ch.at, `its name "${ch.badName}" does not start with Close`);
+    if (ch.shrunk?.length) add('shrunk', ch.at, ch.shrunk.slice(0, 3).map((b) => `${b.box} right ${b.right} (at rest ${b.rest}) vs ${b.ref} (${b.refIs})`).join('; ') + (ch.shrunk.length > 3 ? `; and ${ch.shrunk.length - 3} more` : ''));
+    if (ch.float?.length) add('float-over', ch.at, ch.float.slice(0, 3).join('; ') + (ch.float.length > 3 ? `; and ${ch.float.length - 3} more` : ''));
   }
-  return out;
+  return out.filter((k) => wantKind(k.kind));
 };
 
 // One toggle: open, look, nested ones, its close, fold again. Returns false when the page must be loaded again.
@@ -679,19 +902,19 @@ async function testToggle(page, ctx, cand, d) {
   await page.evaluate((dd) => window.__folds.scrollMid(dd), d);
   await frames(page);
   await sleep(120);
-  const mid = await page.evaluate((dd) => window.__folds.check(dd, 'mid'), d);
+  const mid = await page.evaluate((dd, w) => window.__folds.check(dd, 'mid', w), d, WANT);
   Object.assign(t, { total: mid.total, room: mid.room, tall: mid.tall && !a.popover, root: mid.root, g: mid.g, bars: mid.bars, rail: mid.rail });
   const checks = [mid];
   if (t.tall) {
     await page.evaluate((dd) => window.__folds.scrollFoot(dd), d);
     await frames(page);
     await sleep(120);
-    checks.push(await page.evaluate((dd) => window.__folds.check(dd, 'foot'), d));
+    checks.push(await page.evaluate((dd, w) => window.__folds.check(dd, 'foot', w), d, WANT));
     // The toggle's line low on the screen: the close at rest beside it, in Back to top's band (200ms covers Back to top's 160ms fade).
     await page.evaluate((dd) => window.__folds.scrollLow(dd), d);
     await frames(page);
     await sleep(200);
-    const low = await page.evaluate((dd) => window.__folds.check(dd, 'low'), d);
+    const low = await page.evaluate((dd, w) => window.__folds.check(dd, 'low', w), d, WANT);
     checks.push(low);
     t.lowBtt = Boolean(low.btt);
     if (low.bttBlocked) t.notes.push('Back to top held back: a privacy or terms dialog is still on the page');
@@ -700,7 +923,7 @@ async function testToggle(page, ctx, cand, d) {
     t.hits.push(...kindsOf(checks));
   } else {
     const shownClose = mid.closes.find((c) => c.state === 'ok');
-    if (shownClose) t.hits.push({ kind: 'extra', at: ['mid'], detail: `"${shownClose.label}" shows on a short one` });
+    if (shownClose && wantKind('extra')) t.hits.push({ kind: 'extra', at: ['mid'], detail: `"${shownClose.label}" shows on a short one` });
   }
   // The toggles inside what it opened (one level), while it stays open.
   if (d === 0 && !a.popover) {
@@ -742,10 +965,10 @@ async function testToggle(page, ctx, cand, d) {
       await frames(page);
       const after = await page.evaluate((dd) => window.__folds.afterClose(dd), d);
       t.afterClose = after;
-      if (after.expanded === 'true') t.hits.push({ kind: 'no-collapse', at: ['close'], detail: 'still aria-expanded="true"' });
+      if (after.expanded === 'true') wantKind('no-collapse') && t.hits.push({ kind: 'no-collapse', at: ['close'], detail: 'still aria-expanded="true"' });
       else {
-        if (!after.focus) t.hits.push({ kind: 'focus', at: ['close'], detail: `focus on ${after.active}` });
-        if (!after.inView) t.hits.push({ kind: 'off-view', at: ['close'], detail: `toggle at ${after.top}px, top bar ${after.chromeTop}px` });
+        if (!after.focus && wantKind('focus')) t.hits.push({ kind: 'focus', at: ['close'], detail: `focus on ${after.active}` });
+        if (!after.inView && wantKind('off-view')) t.hits.push({ kind: 'off-view', at: ['close'], detail: `toggle at ${after.top}px, top bar ${after.chromeTop}px` });
       }
     }
   }
@@ -924,11 +1147,12 @@ const notes = {};
 for (const t of tests) for (const n of t.notes) notes[n.replace(/".*"|\d+/g, '…').slice(0, 60)] = (notes[n.replace(/".*"|\d+/g, '…').slice(0, 60)] ?? 0) + 1;
 const errors = results.flatMap((r) => r.errors.map((e) => `${r.route} ${r.width}: ${e}`));
 console.log(`\n${results.length} pages, ${tests.length} toggles tested (${tests.filter((t) => t.depth).length} inside another), ${tests.filter((t) => t.tall).length} tall, ${results.reduce((n, r) => n + r.reloads, 0)} reloads, ${Math.round((Date.now() - t0) / 1000)}s`);
-console.log(`hits by kind: ${Object.keys(byKind).length ? Object.entries(byKind).map(([k, v]) => `${k} ${v}`).join(', ') : 'none'}`);
+const RAN = ALL_KINDS.filter(wantKind);
+console.log(`hits by kind: ${RAN.map((k) => `${k} ${byKind[k] ?? 0}`).join(', ')}`);
 for (const [w] of WIDTHS.map((x) => [x.join('x')])) {
   const row = {};
   for (const h of hits.filter((x) => x.width === w)) row[h.kind] = (row[h.kind] ?? 0) + 1;
-  console.log(`  ${w}: ${tests.filter((t) => t.width === w).length} tested, ${tests.filter((t) => t.width === w && t.tall).length} tall, ${Object.entries(row).map(([k, v]) => `${k} ${v}`).join(', ') || 'no hits'}`);
+  console.log(`  ${w}: ${tests.filter((t) => t.width === w).length} tested, ${tests.filter((t) => t.width === w && t.tall).length} tall, ${RAN.map((k) => `${k} ${row[k] ?? 0}`).join(', ')}`);
 }
 // Proof the run saw Back to top at all: it shows only past a screen of scrolling, so a toggle near a page's top never meets it, and it
 // steps aside under every popup, so only the pages' looks count.
@@ -940,5 +1164,5 @@ if (errors.length) {
   console.log(`${errors.length} errors:`);
   for (const e of errors) console.log(`  ${e}`);
 }
-if (process.env.FOLDS_JSON) fs.writeFileSync(process.env.FOLDS_JSON, JSON.stringify({ origin: ORIGIN, widths: WIDTHS, cap: CAP, rows: ROWS, byKind, dropped, errors, hits, tests, pages: results.map(({ tests: _t, ...r }) => r) }, null, 1));
+if (process.env.FOLDS_JSON) fs.writeFileSync(process.env.FOLDS_JSON, JSON.stringify({ origin: ORIGIN, widths: WIDTHS, cap: CAP, rows: ROWS, kinds: RAN, byKind, dropped, errors, hits, tests, pages: results.map(({ tests: _t, ...r }) => r) }, null, 1));
 process.exit(fails.length || errors.length ? 1 : 0);

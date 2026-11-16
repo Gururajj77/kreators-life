@@ -121,7 +121,9 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
             }
           : undefined
       }
-      layout={!reduce}
+      // Only its place glides when the list moves (2026-11-16): a size change (its plan opening or folding) is drawn at once, since a
+      // size animation scales the row's card and tags, squashed to a sliver as the plan opens and stretched over the rows round it as it folds.
+      layout={reduce ? false : 'position'}
       initial={{ opacity: 0, y: reduce ? 0 : 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: reduce ? 0 : 48 }}
