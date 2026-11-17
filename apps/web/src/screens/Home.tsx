@@ -25,6 +25,7 @@ import { RoleBadge } from '../components/RoleBadge';
 import { BookShelf } from '../components/BookShelf';
 import { Screen } from '../components/Screen';
 import { SearchBox } from '../components/SearchBox';
+import { AppCover } from '../components/AppCover';
 import { DailyBrief } from '../components/DailyBrief';
 import { EmergenceSlot } from '../components/EmergenceSlot';
 import { Section, SeeAll } from '../components/Section';
@@ -209,58 +210,61 @@ export function Home() {
       {/* The line of the day opens Home, above the greeting (the founder, 2026-11-13), so the header is no longer the screen's first
           child: on a phone it is a card in the gutter like on a laptop, not the bleed under the corner buttons. */}
       <QuoteOfTheDay date={date} />
-      <header className="relative mt-md overflow-hidden rounded-card night-card px-md pt-lg pb-md text-on-fill">
-        <HeroBlobs opacity={0.06} kind="cosmos" />
-        <div className="relative flex flex-col gap-sm md:flex-row md:items-center md:justify-between">
-          <p className="order-2 m-0 text-subhead opacity-80 md:order-1">
-            <Icon icon={CalendarDays} size={16} className="mr-xs inline-block align-[-3px]" />
-            {prettyDate(date)}, {greetingFor(hour).toLowerCase()}
-          </p>
-          {/* My page alone (2026-11-07, the founder): the Inbox bell lives in the phone's top bar and the sidebar, so Home no longer
-              carries a second one with the same count. */}
-          <div className="order-1 flex items-center gap-xs md:order-2 md:shrink-0 md:justify-end">
-            <Link to={myPage} className="toy inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center gap-xs rounded-pill bg-white/15 px-sm text-subhead font-medium text-on-fill">
-              <Icon icon={UserRound} size={18} />
-              My page
-            </Link>
-          </div>
-        </div>
-        <div className="relative mt-sm flex items-center gap-sm">
-          <Link to="/you" aria-label="Profile" className="relative shrink-0">
-            <span className="flex size-[64px] items-center justify-center overflow-hidden rounded-pill bg-paper">
-              {identity ? <Person stage={identity.stage.stage} size={52} decorative /> : <Avatar relationship="self" size={44} decorative still />}
+      {/* Home wears Profile's cover (2026-11-17, the founder: "move the profile pic in the right top and similar design like the profile page
+          hero, but for home page", then "only the hi brandingbum section nothing else"): the same parts as before, laid out like Profile's
+          cover over Home's own drawn art; then his order: My page at the top left and the profile picture at the top right, the day and the
+          greeting, the hello, the day at a glance as small buttons from the left (level, streak, mood), and the search inside the card. */}
+      <AppCover
+        className="app-cover-start span-all"
+        top="mt-md"
+        cover="home"
+        topStart={
+          // My page alone (2026-11-07, the founder): the Inbox bell lives in the phone's top bar and the sidebar, so Home carries no second one.
+          <Link to={myPage} className="toy toy-soft inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center gap-xs whitespace-nowrap rounded-pill bg-card px-sm text-subhead font-medium text-ink">
+            <Icon icon={UserRound} size={18} />
+            My page
+          </Link>
+        }
+        topEnd={
+          <Link to="/you" aria-label="Profile" className="toy relative block shrink-0 rounded-pill">
+            <span className="flex size-[56px] items-center justify-center overflow-hidden rounded-pill bg-card shadow-toy-soft">
+              {identity ? <Person stage={identity.stage.stage} size={46} decorative /> : <Avatar relationship="self" size={40} decorative still />}
             </span>
             {user && <RoleBadge role={badgeRoleOf(user)} className="absolute right-0 bottom-0" />}
           </Link>
-          <div className="min-w-0">
-            <h1 className="text-large-title [overflow-wrap:anywhere] text-on-fill">{firstName ? `Hi, ${firstName}!` : 'Hi there!'}</h1>
-            {d && (
-              <p className="fill-row m-0 flex flex-wrap items-center gap-x-xs text-subhead opacity-90" aria-label="At a glance">
-                <Link to="/tower" className="inline-flex min-h-[44px] items-center underline-offset-4 hover:underline">
-                  <Icon icon={Star} size={14} className="mr-xs inline-block align-[-2px]" />Level {d.xp.level}
+        }
+        title={firstName ? `Hi, ${firstName}!` : 'Hi there!'}
+        heading={
+          <>
+            <p className="m-0 text-subhead text-ink-soft">
+              <Icon icon={CalendarDays} size={16} className="mr-xs inline-block align-[-3px]" />
+              {prettyDate(date)}, {greetingFor(hour).toLowerCase()}
+            </p>
+            <h1 className="mt-xs min-w-0 text-balance text-large-title [overflow-wrap:anywhere]">{firstName ? `Hi, ${firstName}!` : 'Hi there!'}</h1>
+          </>
+        }
+        lede={
+          d ? (
+            <div className="fill-row flex flex-wrap items-center gap-xs" role="group" aria-label="At a glance">
+              <Link to="/tower" className="toy toy-soft inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center gap-xs whitespace-nowrap rounded-pill bg-card px-sm text-subhead font-medium text-ink">
+                <Icon icon={Star} size={16} />
+                Level {d.xp.level}
+              </Link>
+              <Link to="/today" className="toy toy-soft inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center gap-xs whitespace-nowrap rounded-pill bg-card px-sm text-subhead font-medium text-ink">
+                <Icon icon={Flame} size={16} />
+                {d.today.streak} {d.today.streak === 1 ? 'day' : 'days'}
+              </Link>
+              {isOn('mood') && (
+                <Link to="/mood" className="toy toy-soft inline-flex min-h-[36px] md:min-h-[44px] tap-pad items-center gap-xs whitespace-nowrap rounded-pill bg-card px-sm text-subhead font-medium text-ink">
+                  {moodToday ? <MoodFace value={moodToday.value} size={16} /> : <Icon icon={FaceSlightlySmiling} size={16} />}
+                  {moodToday ? moodToday.name : 'Log your mood'}
                 </Link>
-                <span aria-hidden="true" className="hidden sm:inline">·</span>
-                <Link to="/today" className="inline-flex min-h-[44px] items-center underline-offset-4 hover:underline">
-                  <Icon icon={Flame} size={14} className="mr-xs inline-block align-[-2px]" />
-                  {d.today.streak} {d.today.streak === 1 ? 'day' : 'days'}
-                </Link>
-                {isOn('mood') && (
-                  <>
-                    <span aria-hidden="true" className="hidden sm:inline">·</span>
-                    <Link to="/mood" className="inline-flex min-h-[44px] items-center underline-offset-4 hover:underline">
-                      {moodToday ? <MoodFace value={moodToday.value} size={16} className="mr-xs inline-block align-[-3px]" /> : <Icon icon={FaceSlightlySmiling} size={14} className="mr-xs inline-block align-[-2px]" />}
-                      {moodToday ? moodToday.name : 'Log your mood'}
-                    </Link>
-                  </>
-                )}
-              </p>
-            )}
-          </div>
-        </div>
-        <div className="relative mt-md">
-          <SearchBox placeholder="Search anything" onDark />
-        </div>
-      </header>
+              )}
+            </div>
+          ) : undefined
+        }
+        inside={<SearchBox placeholder="Search anything" />}
+      />
 
       {/* + Glass in the water green on Home too (the founder, 2026-11-06), beside Breathe and focus's own Start. */}
       <RemindersSection always />

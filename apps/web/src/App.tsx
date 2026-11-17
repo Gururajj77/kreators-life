@@ -11,6 +11,7 @@ import { TabBar } from './components/TabBar';
 import { Assistant } from './components/AssistantButton';
 import { ReminderBubble } from './components/Reminders';
 import { RouteFallback } from './components/RouteFallback';
+import { RouteCrash } from './components/CrashCatcher';
 import { lazyNamed } from './lib/lazy';
 import { coachJoinKept } from './lib/coachJoin';
 import { friendAddKept } from './lib/friendAdd';
@@ -356,6 +357,8 @@ function Standalone() {
 const router = createBrowserRouter([
   {
     element: <Root />,
+    // A page that throws while drawing shows a plain screen with Reload and Home, and is reported to Logs (components/CrashCatcher.tsx).
+    errorElement: <RouteCrash />,
     children: [
   // The public site: no account needed.
   { path: '/', element: <Home /> },

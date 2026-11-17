@@ -5,6 +5,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App, routePattern } from './App';
 import { CelebrationProvider } from './components/Celebration';
+import { CrashCatcher, reportUncaught } from './components/CrashCatcher';
 import { ApiError } from './lib/api';
 import { setDateDisplay } from './lib/date';
 import { useSession } from './lib/store';
@@ -50,8 +51,12 @@ import('./lib/vitals').then((v) => v.startVitals(routePattern), () => {});
 // Asked for here, before the first render, so it arrives while the first screen is drawn.
 const motionFeatures = import('./lib/motionFeatures').then((r) => r.default);
 
+// What breaks in the browser reaches Logs (components/CrashCatcher.tsx), and a screen that throws while drawing says so instead of going blank.
+reportUncaught();
+
 createRoot(document.getElementById('root') as HTMLElement).render(
   <StrictMode>
+    <CrashCatcher>
     <LazyMotion features={() => motionFeatures}>
       <QueryClientProvider client={queryClient}>
         <CelebrationProvider>
@@ -59,5 +64,6 @@ createRoot(document.getElementById('root') as HTMLElement).render(
         </CelebrationProvider>
       </QueryClientProvider>
     </LazyMotion>
+    </CrashCatcher>
   </StrictMode>,
 );

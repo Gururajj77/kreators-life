@@ -31,6 +31,10 @@ interface Props {
   actions?: ReactNode;
   /** Anything else the header carries (a row of jump links, filters): under the card, full width. */
   children?: ReactNode;
+  /** Something the card itself holds at its foot, full width, under the title and the helper line (Home's search). */
+  inside?: ReactNode;
+  /** The room above the card: a section's 32px by default; Home keeps the 16px its header always had under the line of the day. */
+  top?: 'mt-md' | 'mt-lg';
   /** Extra classes on the card (a document page's `no-print`). */
   className?: string;
 }
@@ -41,13 +45,13 @@ interface Props {
  * when they do not fit beside it, the actions take the bottom left and the helper wraps above them at the right). The cover (fx/CoverArt)
  * is anchored to the right behind the words and fades toward the left (app.css, "App covers").
  */
-export function AppCover({ back, topStart, topEnd, heading, cover, eyebrow, title, lede, actions, children, className = '' }: Props) {
+export function AppCover({ back, topStart, topEnd, heading, cover, eyebrow, title, lede, actions, children, inside, top = 'mt-lg', className = '' }: Props) {
   const inApp = useModuleKey();
   const key = cover ?? inApp;
   const text = typeof title === 'string' ? title : '';
   return (
     <>
-      <header data-cover="" className={`app-cover mt-lg rounded-card bg-card shadow-toy-soft ${className}`}>
+      <header data-cover="" className={`app-cover ${top} rounded-card bg-card shadow-toy-soft ${className}`}>
         {key && (
           <div className="app-cover-art" aria-hidden="true">
             <Suspense fallback={null}>
@@ -77,6 +81,7 @@ export function AppCover({ back, topStart, topEnd, heading, cover, eyebrow, titl
             </div>
           )}
         </div>
+        {inside && <div className="app-cover-inside relative mt-md">{inside}</div>}
       </header>
       {children && <div className={`mt-sm ${className}`}>{children}</div>}
     </>
