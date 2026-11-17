@@ -2,7 +2,7 @@ import { LIFE_AREA_ORDER, LIFE_AREAS, OPEN_KINDS, PRIORITIES, RELATIONSHIPS, TAS
 import { blockMismatch, blockMismatchLine, blockUsedMin } from '@kreators/shared/blockHints';
 import { OPEN_ENDINGS, OPEN_KIND_META } from '@kreators/shared/openBusiness';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Trash2 } from 'lucide-react';
 import { api, type TaskPlanBody } from '../lib/api';
@@ -364,6 +364,12 @@ export function StartFocus({ task, className = '' }: { task: Node; className?: s
 }
 
 /** The look of the panel's own actions (Start focus), so the three endings sit beside it as its equals. */
+/** Hide at the left and what `end` holds (Daily's Delete task) at the right of one line (2026-11-17, the founder); `ml-auto` on the end keeps it at
+ * the right should a narrow card ever wrap it. */
+const HIDE_ROW = '@container flex flex-wrap items-center justify-between gap-xs [&>:last-child:not(:first-child)]:ml-auto';
+/** The delete beside it: Delete's pale red outline at Hide's own height and type, so the two sit as one pair. Under 17rem of row (a 320px phone)
+ * it reads "Delete", and under 20rem its ask reads "Tap again"; the name and the live line keep the whole words. */
+const ROW_DELETE = DELETE_BTN.replace('px-md text-headline', 'px-sm text-subhead font-semibold');
 const ACTION = 'toy toy-soft inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center justify-center rounded-pill border-2 border-line bg-card px-md text-subhead font-medium';
 
 /**
@@ -485,7 +491,7 @@ export function TaskEndings({ task, today, onPlan, onGone }: { task: Node; today
  * above has changes not saved, since on Daily the row and its panel go. `pillar` (the pillar page's edit sheet, 2026-11-13) says it waits under
  * that page's Hidden fold too, and comes back to its Tasks to do as well as Daily.
  */
-export function HideTask({ task, today, afterChange, unsaved = false, pillar = false }: { task: Node; today: string; afterChange?: (done: Promise<unknown>, hidden: boolean) => void; unsaved?: boolean; pillar?: boolean }) {
+export function HideTask({ task, today, afterChange, unsaved = false, pillar = false, end }: { task: Node; today: string; afterChange?: (done: Promise<unknown>, hidden: boolean) => void; unsaved?: boolean; pillar?: boolean; end?: ReactNode }) {
   const refresh = useRefreshAll();
   const [choosing, setChoosing] = useState(false);
   const [said, setSaid] = useState<string | null>(null);
@@ -520,20 +526,26 @@ export function HideTask({ task, today, afterChange, unsaved = false, pillar = f
   return (
     <div>
       {hidden ? (
-        <div className="flex flex-wrap-reverse items-center justify-between gap-sm">
-          <p id={stateId} className="m-0 min-w-0 flex-1 basis-[60%] text-subhead text-ink-soft">
+        <>
+          <p id={stateId} className="m-0 text-subhead text-ink-soft">
             Hidden {taskHideState(hidden).toLowerCase()}. Ticking it still counts.
           </p>
-          <Button ref={unhideRef} variant="outline" size="sm" disabled={run.isPending || unsaved} onClick={() => run.mutate(null)} aria-label={`Unhide “${task.title}”`} aria-describedby={stateId}>
-            Unhide
-          </Button>
-        </div>
+          <div className={`mt-xs ${HIDE_ROW}`}>
+            <Button ref={unhideRef} variant="outline" size="sm" disabled={run.isPending || unsaved} onClick={() => run.mutate(null)} aria-label={`Unhide “${task.title}”`} aria-describedby={stateId}>
+              Unhide
+            </Button>
+            {end}
+          </div>
+        </>
       ) : (
         <>
-          <button ref={toggleRef} type="button" aria-expanded={choosing} aria-controls={choosing ? choicesId : undefined} disabled={run.isPending || unsaved} onClick={() => setChoosing((v) => !v)} className={`${ACTION} gap-xs disabled:opacity-60`}>
-            Hide this task
-            <ToggleChevron open={choosing} className="text-ink-soft" />
-          </button>
+          <div className={HIDE_ROW}>
+            <button ref={toggleRef} type="button" aria-expanded={choosing} aria-controls={choosing ? choicesId : undefined} disabled={run.isPending || unsaved} onClick={() => setChoosing((v) => !v)} className={`${ACTION.replace('px-md', 'px-sm')} gap-xs disabled:opacity-60`}>
+              Hide this task
+              <ToggleChevron open={choosing} className="text-ink-soft" />
+            </button>
+            {end}
+          </div>
           {choosing && !unsaved && (
             <div id={choicesId}>
               <p className="mt-xs m-0 text-caption text-ink-soft">{pillar ? 'It leaves your task lists here and on Daily, and sends no reminder.' : 'It leaves Daily\u2019s lists and sends no reminder.'} A tick still counts.</p>
@@ -739,9 +751,12 @@ export function TaskPanel({ task, today }: { task: Node; today: string }) {
       <StartFocus task={{ ...task, estimateMin: Number(plan.minutes) > 0 ? Number(plan.minutes) : task.estimateMin }} />
       <TaskEndings task={task} today={today} onPlan={(patch) => setPlan((p) => ({ ...p, ...patch }))} />
       {/* Hide it (2026-11-12): beside the endings. On Daily the row leaves its list, so the keyboard's place goes to Hidden tasks. */}
-      <HideTask task={task} today={today} afterChange={focusAfterHide} unsaved={unsaved} />
-      {task.status === 'active' && (
-        <div className="flex justify-end">
+      <HideTask
+        task={task}
+        today={today}
+        afterChange={focusAfterHide}
+        unsaved={unsaved}
+        end={
           <button
             type="button"
             disabled={remove.isPending}
@@ -750,13 +765,25 @@ export function TaskPanel({ task, today }: { task: Node; today: string }) {
               delAsk.tap(true, () => remove.mutate(undefined, { onSuccess: afterRemove('Task deleted.') }));
             }}
             aria-label={delAsk.isArmed(true) ? `Tap again to delete: ${task.title}` : `Delete task: ${task.title}`}
-            className={`${DELETE_BTN} ${delAsk.isArmed(true) ? 'red-armed' : ''}`}
+            className={`${ROW_DELETE} ${delAsk.isArmed(true) ? 'red-armed' : ''}`}
           >
-            <span aria-hidden={delAsk.isArmed(true) || undefined}>{delAsk.isArmed(true) ? 'Tap again to delete' : 'Delete task'}</span>
+            <span aria-hidden="true">
+              {delAsk.isArmed(true) ? (
+                <>
+                  <span className="@[20rem]:hidden">Tap again</span>
+                  <span className="hidden @[20rem]:inline">Tap again to delete</span>
+                </>
+              ) : (
+                <>
+                  <span className="@[17rem]:hidden">Delete</span>
+                  <span className="hidden @[17rem]:inline">Delete task</span>
+                </>
+              )}
+            </span>
 <span className="sr-only" aria-live="polite">{delAsk.isArmed(true) ? 'Tap again to delete' : ''}</span>
           </button>
-        </div>
-      )}
+        }
+      />
       {remove.isError && <ErrorLine e={remove.error} />}
     </div>
   );
