@@ -19,7 +19,7 @@ import { tick } from './fx/haptics';
 import { Pager, usePage } from './Pager';
 import { SkeletonList } from './Skeleton';
 import { StatusTag } from './StatusTag';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from './StickyClose';
+import { StickyClose, useTallOpen } from './StickyClose';
 import { ToggleChevron } from './ToggleMark';
 import { dayPlacement, placedRange, type DayPlacement } from './PlaceMyDay';
 import { minuteNowOn, useDailyAnswer } from './useDailyAnswer';
@@ -176,8 +176,9 @@ function countLine(g: Group): string {
  * One box. Open and taller than the room the window has (a block with many tasks, a task's plan open inside it), its close stays in view
  * beside it (`StickyClose`, 2026-11-14, the founder: "the close buttons that need one to scroll back top need the close button to be sticky
  * outside the toggle tab"): the rail sits in the box itself, right after the header, never inside the sliding body (whose clip would cut it
- * off while it slides), the chevron keeps its slot unseen, the body keeps a lane while the close runs down the box's edge, and Escape
- * anywhere in the box closes it. A task's plan close inside it (RowClose) sits one step lower, so the two never meet.
+ * off while it slides), standing out it takes the chevron's place, running in a slim bar with the block's name and the close sticks under the top
+ * bar (2026-11-17), and Escape anywhere in the box closes it. A task's plan close inside it (RowClose) sits one step lower, so the two never
+ * meet.
  */
 function Box({ g, open, onToggle, renderTask, by, extra }: { g: Group; open: boolean; onToggle: () => void; renderTask: (t: Node) => ReactNode; by: GroupBy; /** Under the tasks: a content day's steps for this block. */ extra?: ReactNode }) {
   const body = useRef<HTMLDivElement>(null);
@@ -263,15 +264,19 @@ function Box({ g, open, onToggle, renderTask, by, extra }: { g: Group; open: boo
             <span className={g.color ? `tb-dot ${tbClass(g.color)}` : 'tb-dot'} style={tbStyle(g.color)} />
           </span>
         )}
-        <span className="min-w-0 flex-1">
-          <span id={`${id}-h`} className="block text-title3">
-            {g.name}
+        {/* The name and the count share a line while the name's longest word fits beside the count; in a narrow box (320) the count
+            drops under the name, so neither the name nor its time ever runs under it (2026-11-17). */}
+        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-sm gap-y-xs">
+          <span className="min-w-min flex-[1_1_0%]">
+            <span id={`${id}-h`} className="block text-title3">
+              {g.name}
+            </span>
+            <span className="block text-footnote text-ink-soft">{note}</span>
           </span>
-          <span className="block text-footnote text-ink-soft">{note}</span>
+          <span className={`shrink-0 rounded-pill bg-card-strong px-sm text-caption font-medium leading-[26px] ${over ? 'text-ink' : 'text-ink-soft'}`}>{over ? `${countLine(g)}, over` : countLine(g)}</span>
         </span>
-        <span className={`shrink-0 rounded-pill bg-card-strong px-sm text-caption font-medium leading-[26px] ${over ? 'text-ink' : 'text-ink-soft'}`}>{over ? `${countLine(g)}, over` : countLine(g)}</span>
-        {/* While the sticky close shows, the chevron keeps its slot unseen, as a task card's edit button does. */}
-        <ToggleChevron open={open} size={20} className={`text-ink-soft ${railOn ? 'invisible' : ''}`} />
+        {/* While the sticky close stands out beside it, the chevron keeps its slot unseen (`sticky-close-mark`). */}
+        <ToggleChevron open={open} size={20} className="text-ink-soft sticky-close-mark" />
       </button>
       {railOn && (
         <StickyClose
@@ -285,7 +290,7 @@ function Box({ g, open, onToggle, renderTask, by, extra }: { g: Group; open: boo
       )}
       {/* The gap under the header sits on an inner wrapper, never on the element GSAP takes to height 0, so the header's hover tint
           never meets the first row (the same fix as AppGroups). */}
-      <div ref={body} id={`${id}-b`} className={`overflow-hidden ${STICKY_CLOSE_LANE}`}>
+      <div ref={body} id={`${id}-b`} className="overflow-hidden">
         <div className="pt-xs">
           {g.tasks.length === 0 ? (
             <p className={`m-0 px-md text-subhead text-ink-soft ${extra ? '' : 'pb-md'}`}>Nothing here yet.</p>

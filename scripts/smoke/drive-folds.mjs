@@ -15,24 +15,36 @@
 //   FOLDS_THEME=light|dark                   default light
 //   FOLDS_POPUPS=1                           also open the popups in popupCases.mjs and check the toggles inside each panel (the panel is the room)
 //   FOLDS_JOB_MS=300000                      the most one page may take; a page stopped by it is printed
-//   FOLDS_KINDS=shrunk,float-over            only these kinds are worked out and reported (the summary still names every kind it ran)
+//   FOLDS_KINDS=shifted,no-bar,float-over    only these kinds are worked out and reported (the summary still names every kind it ran)
 //   SMOKE_ORIGIN=http://127.0.0.1:8788       the server (it must serve the latest build)
 //   SHOOT_TOKEN=<token>                      the account, instead of scripts/smoke/state/shoot-token
 //
-// The contract the close follows: the element holding a toggle and its content carries `data-sticky-close-root` (while its rail shows,
-// also `data-sticky-close="in"` or `"out"`); the close carries `data-sticky-close-btn` and a name that starts with "Close". Daily's task
-// plan close (`data-row-close-btn`, its row `[data-row-close]`) counts as one. Tapping it folds the toggle (aria-expanded="false"), hands
-// focus to the toggle and leaves the toggle in view under any top bar.
+// The contract the close follows: the element holding a toggle and its content carries `data-sticky-close-root` (while it is tall, also
+// `data-sticky-close="in"` or `"out"`); the close carries `data-sticky-close-btn` and a name that starts with "Close". Daily's task plan
+// close (`data-row-close-btn`, its row `[data-row-close]`) counts as one. Tapping it folds the toggle (aria-expanded="false"), hands focus
+// to the toggle and leaves the toggle in view under any top bar.
+//   `out` (a laptop, 60px of margin at the root's right): the 44px close stands in that margin, sticky beside the content, as before.
+//   `in` (2026-11-17, the founder: "i did not want the text area in the apps or any toggle to get shifted to the right to make space for
+//     cross/close button, what i meant was u could have made the header with the cross entire line into a sticky on top"; a phone, a tablet,
+//     a narrow column, a popup with no margin): nothing in the content moves for the close. While the toggle's own line is on screen its own
+//     mark (chevron, plus, a task's pencil) is the close; once that line has gone up under the top line, a slim bar sticks there
+//     (`[data-sticky-close-bar]`, `data-shown="true"`), the toggle's name at its left and the close (`data-sticky-close-btn`) at its right,
+//     no taller than 44px, opaque, inside the root's width, laid over the content and stopping at the root's end; a nested root's bar stacks
+//     right under the bar of the root round it. Hidden it says `data-shown="false"`, is not drawn and cannot take focus.
 //
 // For every toggle: open it (a real click where the pointer reaches it, else the element's own click), wait until what it opened stops
 // growing (a lazy chunk), and measure from the toggle's top to the content's bottom (its root's bottom when it has one) against the room:
 // the window less the fixed and sticky bars over its top and bottom edges (the condensed title, the site's header from the tablet, the
 // phone's tab bar, a held StickyAction). TALL: scroll the content's middle to the window's middle, then its foot to 120px above the bottom
 // bar, then the toggle's own line to just above the bottom bar (`low`: the close at its resting place, in the band where Back to top and the
-// assistant's button sit), and at each a close must be on screen, under the bars, not covered (Back to top touching it counts; a phone's
-// close at rest under the assistant's floating button, as any control in that corner is until the page scrolls, is only noted), not
-// clipped, not over another close and not over a control or a
-// line of words; then a real click on it must fold the toggle, focus it and leave it in view. SHORT: a close showing anyway is `extra`
+// assistant's button sit). `out`: at each look a close must be on screen, under the bars, not covered (Back to top touching it counts; a
+// phone's close at rest under the assistant's floating button, as any control in that corner is until the page scrolls, is only noted), not
+// clipped, not over another close and not over a control or a line of words. `in`: where the toggle's line is on screen 24px or more under
+// the top line (the `low` look) the bar must be hidden and the toggle's own mark drawn; where the toggle's line has gone 24px or more above
+// the top line while 60px of the root is still under it (the `mid` and `foot` looks, as a rule) a shown bar is due, checked as below, and its
+// close as `out`'s is, except that content scrolled under a shown bar is meant (as under the condensed title) and is never `covers-control`;
+// within 24px of the line either is fine (the bar may hold back a little so it never flickers). Then a real click on the close (the bar's
+// one in `in`, at the foot) must fold the toggle, focus it and leave it in view. SHORT: a close showing anyway is `extra`
 // (information, not a failure). Toggles inside an opened region are tested too (one level), and one open at load is folded first and
 // opened again so its opening can be watched. Not inline toggles, so only noted: one that opens a popup (Escape closes it), one whose
 // content is laid over the page (a popover), and a one-way reveal (aria-expanded stays false, or the toggle goes; the page is loaded
@@ -44,27 +56,31 @@
 // run would never see Back to top at all. The terms notice is only hidden; while one is up, every look notes that Back to top could not
 // show, and the summary says how many `low` looks had Back to top drawn.
 //
-// The kinds: `no-close` (none on screen), `covered` (under a bar or something else, or touching Back to top), `clipped` (off the window or cut by a box),
-// `overlap` (two closes on each other), `covers-control` (over a field, a button, a link or a line of words in the content), `name` (its
-// name does not start with "Close"), `no-collapse`, `focus` and `off-view` (after tapping it), and `extra` (a close on a short one).
-// Two more (2026-11-16, the founder: "where ever you have made the cross button for close u ended up compromising the right space to
-// accomodate for that sticky close ... why dont u keep it similar to the way u did it in tasks?"), at every look of a tall toggle:
-//   `shrunk`: while the root's close runs down its edge (`data-sticky-close="in"`, or a task row's `data-row-close="in"`; never a nested
-//     root that keeps no lane of its own), a painted surface in what it opened (a fill, an edge, a shadow, or `.toy`, `.bg-card`,
-//     `.fx-inset`, `.rounded-card`, `.rounded-tile`) whose right edge the lane pulled in: it moved more than 8px left of where it stands with
-//     no close (the page measured again with the root's mode taken off for a moment, in the same task, so nothing is drawn or told) and now
-//     stops more than 8px short of the toggle's own painted right edge (else the nearest painted box round the toggle, else the root's).
-//     Only the outermost surface counts: what sits inside a surface that kept its width (a task's plan, a card that reaches back over the
-//     lane) may move in, as the lane in its own padding means. Left out as meant to be narrower: a button, a link, a chip or pill, a
-//     switch, a field narrower than three quarters of the content (one in a row), a field or a segmented control that a painted box holds
-//     (the root's own card, the toggle's or a list's round the root: it moves in with the lane, as a task plan's fields do), a box painted only down its left
-//     side, anything under half the root's width at rest, and anything off screen at that look. Reports the box, its right edge now
-//     and at rest, and the reference edge.
+// The kinds: `no-close` (none on screen; in `in`, also the toggle's own mark hidden while its line is on screen), `covered` (under a bar
+// or something else, or touching Back to top), `clipped` (off the window or cut by a box), `overlap` (two closes on each other),
+// `covers-control` (over a field, a button, a link or a line of words in the content; `out` only), `name` (its name does not start with
+// "Close"), `no-collapse`, `focus` and `off-view` (after tapping it), and `extra` (a close on a short one). In `in` (2026-11-17):
+//   `no-bar`: a shown bar was due and none is drawn (or the shown bar holds no `[data-sticky-close-btn]`).
+//   `bar-shown`: the bar is drawn while the toggle's line is on screen under the top line; or it says `data-shown="false"` and is drawn
+//     anyway; or, hidden, its close can still take focus (neither `visibility: hidden`, `display: none` nor `inert`).
+//   `bar-tall`: the shown bar is drawn taller than 44px.
+//   `bar-place`: the shown bar's top is more than 2px off the top line (the room's top less its top bars, or the bottom of a shown bar of a
+//     root round it), unless it is being pushed up by its own root's end; or it reaches past the root's left or right edge; or it lies
+//     over another shown bar.
+//   `bar-see-through`: at a grid of points inside the shown bar something else is drawn over it (Back to top, the assistant's button, On
+//     this page and a tip aside), or neither it nor a box covering nine tenths of it paints a fill at least 85% opaque (80% with a
+//     backdrop blur).
+//   `shifted`: the content moved for the close. With the root's rail there versus the same page with every open root's
+//     `data-sticky-close`/`data-row-close` and every rail and bar (`.sticky-close-rail`, `.row-close-rail`, `[data-sticky-close-bar]`) taken
+//     off for a moment (measured and put back in the same task, so nothing is drawn or told), every painted surface (a fill, an edge, a
+//     shadow, `.toy`, `.bg-card`, `.fx-inset`, `.rounded-card`, `.rounded-tile`), control and block of words in the root must keep its left
+//     and right edges within 1px. Reports how many moved and the worst three.
 //   `float-over`: Back to top's 44px (while `.back-to-top[data-show]` draws it) over an interactive control (a, button, input, select,
-//     textarea, [role=button], a [tabindex] that is not -1) or a line of words that is not its own, read from the top of the page as drawn
-//     (`elementsFromPoint` on a grid 3px inside its square, so an overlap of 2px or less never counts and nothing hidden under a card does);
-//     the sticky close's button drawn over a control or words outside its root (inside it, `covers-control` says it) or over the assistant's
-//     button or Back to top by more than 2px. The assistant's button drawn over the close (it sits higher) is the note it always was.
+//     textarea, [role=button], a [tabindex] that is not -1), a line of words that is not its own, or a shown sticky bar, read from the top
+//     of the page as drawn (`elementsFromPoint` on a grid 3px inside its square, so an overlap of 2px or less never counts and nothing
+//     hidden under a card does); the sticky close's button drawn over a control or words outside its root (inside it, `covers-control`
+//     says it) or over the assistant's button or Back to top by more than 2px. The assistant's button drawn over the close (it sits higher)
+//     is the note it always was.
 // Prints one line per hit and a summary by kind; exits 1 on any kind but `extra`, or when a page threw.
 import fs from 'node:fs';
 import puppeteer from 'puppeteer-core';
@@ -79,12 +95,12 @@ const ROWS = Number(process.env.FOLDS_ROWS ?? 3);
 const THEME = process.env.FOLDS_THEME === 'dark' ? 'dark' : 'light';
 const JOB_MS = Number(process.env.FOLDS_JOB_MS ?? 300000);
 const POPUPS = process.env.FOLDS_POPUPS === '1';
-const FAIL = ['no-close', 'covered', 'clipped', 'overlap', 'covers-control', 'name', 'no-collapse', 'focus', 'off-view', 'shrunk', 'float-over'];
+const FAIL = ['no-close', 'covered', 'clipped', 'overlap', 'covers-control', 'name', 'no-collapse', 'focus', 'off-view', 'no-bar', 'bar-shown', 'bar-tall', 'bar-place', 'bar-see-through', 'shifted', 'float-over'];
 const ALL_KINDS = [...FAIL, 'extra'];
 const KINDS = process.env.FOLDS_KINDS ? new Set(process.env.FOLDS_KINDS.split(',').map((k) => k.trim()).filter(Boolean)) : null;
 if (KINDS) for (const k of KINDS) if (!ALL_KINDS.includes(k)) throw new Error(`FOLDS_KINDS: no kind "${k}" (${ALL_KINDS.join(', ')})`);
 const wantKind = (k) => !KINDS || KINDS.has(k);
-const WANT = { shrunk: wantKind('shrunk'), float: wantKind('float-over') };
+const WANT = { shifted: wantKind('shifted'), float: wantKind('float-over') };
 // Whole-page chats, as drive-scroll.mjs leaves them; whole segments only, so /sessions (the Library's sessions) is still tested.
 const SKIP = /^\/(onboarding|session|vibe-check)(?=[/?#]|$)/;
 const token = (process.env.SHOOT_TOKEN ?? fs.readFileSync(new URL('./state/shoot-token', import.meta.url), 'utf8')).trim();
@@ -112,6 +128,8 @@ function pageLib(mode) {
   const TOGGLE = 'button[aria-expanded], [role="button"][aria-expanded]';
   const CLOSE = '[data-sticky-close-btn], [data-row-close-btn]';
   const ROOT = '[data-sticky-close-root], [data-row-close]';
+  // `in` mode's slim sticky bar (the toggle's name and its close), shown once the toggle's line has gone up under the top line.
+  const BAR = '[data-sticky-close-bar]';
   const CONTROL = 'input, select, textarea, button, a[href], [role="button"], [role="switch"], [role="checkbox"], [role="slider"], [contenteditable="true"], [contenteditable="plaintext-only"], [contenteditable=""], [tabindex]:not([tabindex="-1"])';
   const F = (window.__folds = { stack: [], mode });
   const norm = (s) => (s ?? '').replace(/\s+/g, ' ').trim();
@@ -187,7 +205,7 @@ function pageLib(mode) {
     else window.scrollTo({ top: Math.max(0, y), behavior: 'instant' });
   };
   // The bars over the room's top and bottom edges: fixed or sticky, at least 40% as wide as the room and under 40% as tall (so the
-  // laptop sidebar, the page's wash and a close's own narrow rail never count), drawn, and touching the edge or a bar that does.
+  // laptop sidebar and the page's wash never count), drawn, and touching the edge or a bar that does.
   F.chrome = (V = F.view()) => {
     const p = F.panel();
     const W = V.right - V.left;
@@ -197,6 +215,9 @@ function pageLib(mode) {
       const pos = getComputedStyle(el).position;
       if (pos !== 'sticky' && (p || pos !== 'fixed')) continue;
       if (!p && el.closest('[role="dialog"], .page-contents')) continue; // the privacy card (hidden anyway) and On this page are not bars
+      // A toggle's own sticky close and `in` mode's bar are what is checked, never a bar over the room (a nested bar's line is worked
+      // out from the bars round it, `lineFor`).
+      if (el.closest('.sticky-close-rail, .row-close-rail, [data-sticky-close-bar]')) continue;
       const r = el.getBoundingClientRect();
       if (r.width < 0.4 * W || r.height > 0.4 * H || r.height < 2 || !shown(el)) continue;
       // A held StickyAction draws its bar from one sm gap above the row (its ::before).
@@ -417,7 +438,7 @@ function pageLib(mode) {
     F.scrollTo(foot - (V.bottom - V.top - c.bottom - 120));
   };
   // The toggle's own line just above the bottom bar (8px clear, never under the top bar): its close at rest, low on the screen, where Back
-  // to top and the assistant's button sit.
+  // to top and the assistant's button sit (in `in` mode the toggle's own mark, the bar hidden).
   F.scrollLow = (d) => {
     const V = F.view();
     const c = F.chrome(V);
@@ -434,7 +455,7 @@ function pageLib(mode) {
     const gy = Math.max(0, (44 - r.height) / 2);
     return { left: r.left - gx, right: r.right + gx, top: r.top - gy, bottom: r.bottom + gy, x: r.left, y: r.top, w: r.width, h: r.height };
   };
-  // ------- `shrunk` and `float-over` (2026-11-16) -------
+  // ------- `in` mode's bar, `shifted` and `float-over` (2026-11-16, 2026-11-17) -------
   const alphaOf = (c) => {
     if (!c || c === 'transparent') return 0;
     const m = /rgba?\(([^)]*)\)/.exec(c);
@@ -461,97 +482,161 @@ function pageLib(mode) {
     cache.set(el, ok);
     return ok;
   };
-  // Paint that shows where the right edge is: a fill, a shadow, a surface class, or an edge on the right, top or bottom (a quote's rule down
-  // its left side alone does not show how wide it is).
-  const paintedRight = (el, cache) => {
-    const cs = getComputedStyle(el);
-    if (alphaOf(cs.backgroundColor) > 0.01 || cs.backgroundImage !== 'none' || cs.boxShadow !== 'none' || el.matches(PAINT_CLASS)) return painted(el, cache);
-    return ['Top', 'Right', 'Bottom'].some((side) => parseFloat(cs[`border${side}Width`]) > 0 && cs[`border${side}Style`] !== 'none' && alphaOf(cs[`border${side}Color`]) > 0.01);
+  const modeOf = (root) => root?.getAttribute('data-sticky-close') ?? root?.getAttribute('data-row-close') ?? null;
+  // A root's own bar (a nested root's bar sits inside it too, so it is told apart by the root it belongs to), and whether it is shown.
+  const barOf = (root) => (root ? ([...root.querySelectorAll(BAR)].find((b) => b.closest(ROOT) === root) ?? null) : null);
+  const barShown = (b) => Boolean(b) && b.getAttribute('data-shown') === 'true' && shown(b);
+  // The roots round this one, nearest first.
+  const rootsAround = (root) => {
+    const out = [];
+    for (let a = root.parentElement?.closest(ROOT); a; a = a.parentElement?.closest(ROOT)) out.push(a);
+    return out;
   };
-  // Meant to be narrower than the content anyway: a button, a link, a chip or pill, a switch or tick, svg or a picture.
-  const NARROW_KIND = 'button, a, [role="button"], [role="switch"], [role="checkbox"], [role="radio"], [role="tab"], [aria-pressed], .chip, .pri-chip, [class*="rounded-pill"], [class*="rounded-full"], svg, img, picture, video, canvas, hr, .close-btn';
-  const FIELD = 'input, select, textarea, [contenteditable="true"], [contenteditable="plaintext-only"]';
-  // The painted surfaces in what the root opened that the lane pulled in. `root` says `in` and keeps a lane of its own.
-  const shrunkIn = (s, root, V, c) => {
-    const attr = root.hasAttribute('data-sticky-close') ? 'data-sticky-close' : 'data-row-close';
-    const mode = root.getAttribute(attr);
-    if (mode !== 'in' || root.hasAttribute('data-sticky-close-nest')) return [];
-    const el = s.el;
-    const cache = new Map();
-    // The reference: the toggle's own painted edge, else the nearest painted box round it inside the root, else the root's.
-    let ref = null;
-    for (let a = el; a && a !== root; a = a.parentElement) {
-      if (painted(a, cache)) {
-        ref = a;
-        break;
-      }
+  // The line a shown bar sticks to: the room's top under its top bars, or the bottom of a shown bar of a root round it.
+  const lineFor = (root, V, c) => {
+    let line = V.top + c.top;
+    for (const a of rootsAround(root)) {
+      const b = barOf(a);
+      if (barShown(b)) line = Math.max(line, b.getBoundingClientRect().bottom);
     }
-    const refRight = (ref ?? root).getBoundingClientRect().right;
-    const rootR = root.getBoundingClientRect();
-    const vTop = V.top + c.top;
+    return line;
+  };
+  // Can it take focus: drawn for the visibility rule, not `inert`, not disabled, not taken out of the order.
+  const focusable = (el) => Boolean(el) && el.isConnected && (el.checkVisibility ? el.checkVisibility({ visibilityProperty: true }) : true) && !el.closest('[inert]') && !el.disabled && el.tabIndex >= 0;
+  // Its own fill, 0 to 1 (a pseudo-element's counts; a backdrop blur makes a fill a little thinner enough).
+  const fillOf = (el) => {
+    let best = 0;
+    for (const pseudo of [null, '::before', '::after']) {
+      const cs = getComputedStyle(el, pseudo);
+      if (pseudo && (cs.content === 'none' || cs.content === 'normal')) continue;
+      let a = alphaOf(cs.backgroundColor);
+      const blur = cs.backdropFilter && cs.backdropFilter !== 'none';
+      if (blur && a >= 0.8) a = Math.max(a, 0.85);
+      best = Math.max(best, a);
+    }
+    return best;
+  };
+  // Behind the floating chrome these are only ever under it: never a sign the bar is see-through.
+  const FLOATING = '.back-to-top, button[aria-label="Open the assistant"], .page-contents, [role="tooltip"], .smart-tip';
+  const HYST = 24;
+  // `in` mode's bar at one look: what is due (`shown`, `hidden` or `either`), what is drawn, and what is wrong with it.
+  const barLook = (s, root, V, c) => {
     const vBottom = V.bottom - c.bottom;
-    // Everything in the root but the toggle (and what holds it) and the closes' rails.
+    const line = lineFor(root, V, c);
+    const tr = s.el.getBoundingClientRect();
+    const rr = root.getBoundingClientRect();
+    const bar = barOf(root);
+    const on = barShown(bar);
+    let due = 'either';
+    if (tr.top >= line + HYST && tr.top < vBottom - 8) due = 'hidden';
+    else if (tr.bottom <= line - HYST && rr.bottom >= line + 60) due = 'shown';
+    const out = { line: Math.round(line - V.top), header: box(tr), due, shown: on, problems: [] };
+    const add = (kind, detail) => out.problems.push({ kind, detail });
+    if (!on && bar) {
+      if (bar.getAttribute('data-shown') !== 'true' && shown(bar)) add('bar-shown', `data-shown="${bar.getAttribute('data-shown')}" but drawn`);
+      const btn = bar.querySelector(CLOSE);
+      if (focusable(btn)) add('bar-shown', 'hidden, but its close can still take focus (no visibility: hidden, display: none or inert)');
+    }
+    if (due === 'shown' && !on) add('no-bar', bar ? `the toggle's line is ${Math.round(line - tr.bottom)}px above the top line; data-shown="${bar.getAttribute('data-shown')}"` : 'no [data-sticky-close-bar] in the root');
+    if (due === 'hidden' && on) add('bar-shown', `the toggle's line is on screen ${Math.round(tr.top - line)}px under the top line`);
+    if (due === 'hidden') {
+      // The toggle's own mark is the close here: a task row's pencil, else the svg in the toggle.
+      const marks = root.matches('[data-row-close]') && root.querySelector('[data-row-edit]') ? [root.querySelector('[data-row-edit]')] : [...s.el.querySelectorAll('svg')];
+      if (marks.length && !marks.some((m) => shown(m))) add('no-close', `the toggle's own mark (${shortSel(marks[0])}) is hidden while its line is on screen`);
+    }
+    if (on) {
+      const br = bar.getBoundingClientRect();
+      out.box = box(br);
+      if (br.height > 44.5) add('bar-tall', `${Math.round(br.height)}px drawn`);
+      // Sticky inside its rail, the bar is pushed up once the root's end comes up to it.
+      const atEnd = br.top < line - 2 && br.bottom <= rr.bottom + 1.5 && rr.bottom < line + br.height + 16;
+      if (Math.abs(br.top - line) > 2 && !atEnd) add('bar-place', `its top at ${Math.round(br.top - V.top)}px, the top line at ${Math.round(line - V.top)}px`);
+      if (br.left < rr.left - 1 || br.right > rr.right + 1) add('bar-place', `${Math.round(br.left)} to ${Math.round(br.right)} reaches past the root's ${Math.round(rr.left)} to ${Math.round(rr.right)}`);
+      for (const o of document.querySelectorAll(BAR)) {
+        if (o !== bar && barShown(o) && overlapBy(o.getBoundingClientRect(), br) > 1) add('bar-place', `over the bar of ${shortSel(o.closest(ROOT))} by ${Math.round(overlapBy(o.getBoundingClientRect(), br))}px`);
+      }
+      if (!bar.querySelector(CLOSE)) add('no-bar', 'shown with no [data-sticky-close-btn] in it');
+      // Opaque: nothing else drawn over it, and a fill of its own.
+      let over = null;
+      for (let i = 0; i < 5 && !over; i += 1) {
+        for (let j = 0; j < 2 && !over; j += 1) {
+          const x = br.left + 6 + ((br.width - 12) * i) / 4;
+          const y = br.top + 4 + (br.height - 8) * j;
+          if (x < 0 || y < 0 || x >= window.innerWidth || y >= window.innerHeight) continue;
+          const hit = document.elementFromPoint(x, y);
+          if (hit && hit !== bar && !bar.contains(hit) && !hit.closest(FLOATING)) over = hit;
+        }
+      }
+      if (over) add('bar-see-through', `${shortSel(over)} is drawn over it`);
+      const area = br.width * br.height;
+      const fill = Math.max(
+        fillOf(bar),
+        ...[...bar.querySelectorAll('*')].filter((x) => {
+          const r = x.getBoundingClientRect();
+          return r.width * r.height >= 0.9 * area;
+        }).map(fillOf),
+      );
+      if (fill < 0.85) add('bar-see-through', `its fill is ${Math.round(fill * 100)}% opaque`);
+    }
+    return out;
+  };
+  // Words straight inside an element (a block of words).
+  const hasWords = (x) => {
+    for (const n of x.childNodes) if (n.nodeType === 3 && n.nodeValue.trim()) return true;
+    return false;
+  };
+  const RAIL = '.sticky-close-rail, .row-close-rail, [data-sticky-close-bar]';
+  const SHIFT_MAX = 5000;
+  // `shifted`: in `in` mode nothing in the root moves for the close. Each painted surface, control and block of words is measured with
+  // the rail there and again with every open root's mode and every rail and bar taken off for a moment (put back in the same task, so
+  // nothing is drawn or told).
+  const shiftedIn = (root) => {
+    if (modeOf(root) !== 'in') return [];
+    const cache = new Map();
     const cands = [];
     for (const x of root.querySelectorAll('*')) {
-      if (x === el || el.contains(x) || x.contains(el)) continue;
-      if (x.closest('.sticky-close-rail')) continue;
-      if (x.matches(NARROW_KIND) || x.closest('svg')) continue;
+      if (cands.length >= SHIFT_MAX) break;
+      if (x.closest(RAIL)) continue;
+      if (x.tagName.toLowerCase() !== 'svg' && x.closest('svg')) continue;
+      if (!(x.matches(CONTROL) || hasWords(x) || painted(x, cache))) continue;
       const r = x.getBoundingClientRect();
-      if (r.width < 8 || r.height < 8 || r.bottom <= vTop || r.top >= vBottom) continue;
-      if (!paintedRight(x, cache) || !shown(x)) continue;
-      // A field or a segmented control is a control, not a surface: inside a painted box (the root's own card, the toggle's) it moves in
-      // with the lane in that box's padding, as a task's plan's fields do; it counts only when nothing painted holds it.
-      if (x.matches(`${FIELD}, .fx-seg, [role="radiogroup"], [role="tablist"]`)) {
-        let held = false;
-        for (let a = x.parentElement; a && a !== document.body; a = a.parentElement) {
-          if (painted(a, cache)) {
-            held = true;
-            break;
-          }
-        }
-        if (held) continue;
-      }
-      // Only the outermost surface: one inside a painted box that is itself in the content is that box's business.
-      let inner = false;
-      for (let a = x.parentElement; a && a !== root; a = a.parentElement) {
-        if (a.contains(el)) break;
-        if (painted(a, cache)) {
-          inner = true;
-          break;
-        }
-      }
-      if (!inner) cands.push({ x, now: r });
+      if (r.width < 2 || r.height < 2) continue;
+      cands.push({ x, now: r });
     }
     if (!cands.length) return [];
-    // Where each stands with no close: the root's mode off for a moment (read, then put back in the same task, so nothing is drawn), and
-    // with it the modes of the open roots round it and inside it, since a surface's reach and padding follow the outermost root's lane
-    // (`fitLane` in StickyCloseRail.tsx), so a nested root read alone would stand its surfaces past where they ever were.
+    let outer = root;
     const off = [];
     for (let a = root; a; a = a.parentElement) {
-      for (const k of ['data-sticky-close', 'data-row-close']) if (a.hasAttribute(k)) off.push([a, k, a.getAttribute(k)]);
+      for (const k of ['data-sticky-close', 'data-row-close']) {
+        if (a.hasAttribute(k)) {
+          off.push([a, k, a.getAttribute(k)]);
+          outer = a;
+        }
+      }
     }
     for (const d of root.querySelectorAll('[data-sticky-close], [data-row-close]')) {
       for (const k of ['data-sticky-close', 'data-row-close']) if (d.hasAttribute(k)) off.push([d, k, d.getAttribute(k)]);
     }
-    for (const [a, k] of off) a.removeAttribute(k);
+    const rails = [...outer.querySelectorAll(RAIL)].filter((r) => !r.parentElement?.closest(RAIL));
+    const styles = rails.map((r) => [r.style.getPropertyValue('display'), r.style.getPropertyPriority('display')]);
     let rest;
-    let contentW;
     try {
+      for (const [a, k] of off) a.removeAttribute(k);
+      for (const r of rails) r.style.setProperty('display', 'none', 'important');
       rest = cands.map(({ x }) => x.getBoundingClientRect());
-      contentW = root.getBoundingClientRect().width;
     } finally {
+      rails.forEach((r, i) => (styles[i][0] ? r.style.setProperty('display', styles[i][0], styles[i][1]) : r.style.removeProperty('display')));
       for (const [a, k, v] of off) a.setAttribute(k, v);
     }
     const out = [];
     cands.forEach(({ x, now }, i) => {
       const r0 = rest[i];
-      if (r0.width < contentW / 2) return; // narrower than half the root at rest: meant to be
-      if (x.matches(FIELD) && r0.width < 0.75 * contentW) return; // a field in a row
-      const moved = r0.right - now.right;
-      const short = refRight - now.right;
-      if (moved > 8 && short > 8) out.push({ box: shortSel(x), right: Math.round(now.right), rest: Math.round(r0.right), ref: Math.round(refRight), refIs: ref ? shortSel(ref) : 'the root', rootRight: Math.round(rootR.right) });
+      const dl = now.left - r0.left;
+      const dr = now.right - r0.right;
+      const by = Math.max(Math.abs(dl), Math.abs(dr));
+      if (by > 1) out.push({ by, box: shortSel(x), what: x.matches(CONTROL) ? 'control' : hasWords(x) ? `words "${norm(x.textContent).slice(0, 24)}"` : 'surface', left: Math.round(now.left), right: Math.round(now.right), restLeft: Math.round(r0.left), restRight: Math.round(r0.right) });
     });
-    return out;
+    return out.sort((p, q) => q.by - p.by);
   };
   const FLOAT_CONTROL = 'a, button, input:not([type="hidden"]), select, textarea, [role="button"], [tabindex]:not([tabindex="-1"])';
   // What a floating square (`self`) covers, read as drawn: on a grid 3px inside it, the topmost element below `self` in the page's stack
@@ -597,9 +682,11 @@ function pageLib(mode) {
     const tr = el.getBoundingClientRect();
     if (btt) {
       const sq = { left: btt.left, right: btt.right, top: btt.top, bottom: btt.bottom };
-      // Closes under it are `covered` already.
+      // Closes under it are `covered` already; a shown bar is said once, below.
       const self = document.querySelector('.back-to-top-btn');
-      for (const f of under(sq, self, (e) => Boolean(e.closest('.back-to-top, .sticky-close-rail, [data-sticky-close-btn], [data-row-close-btn]')))) out.push(`Back to top over ${f}`);
+      for (const f of under(sq, self, (e) => Boolean(e.closest(`.back-to-top, ${RAIL}, [data-sticky-close-btn], [data-row-close-btn]`)))) out.push(`Back to top over ${f}`);
+      // Back to top never over a shown sticky bar (any on the page: a nested one's or the one round it).
+      for (const o of document.querySelectorAll(BAR)) if (barShown(o) && meets(o.getBoundingClientRect(), sq)) out.push(`Back to top over the sticky bar of ${shortSel(o.closest(ROOT))}`);
     }
     const zones = root ? [root] : [s.G, ...F.regionNodes(F.stack.indexOf(s))].filter(Boolean);
     const assistant = document.querySelector('button[aria-label="Open the assistant"]');
@@ -607,7 +694,7 @@ function pageLib(mode) {
     for (const b of mine) {
       if (!shown(b)) continue;
       const cr = b.getBoundingClientRect();
-      const skip = (e) => Boolean(e.closest('.sticky-close-rail, [data-sticky-close-btn], [data-row-close-btn], .back-to-top')) || e === el || el.contains(e) || zones.some((z) => z.contains(e)) || within(e.getBoundingClientRect(), tr);
+      const skip = (e) => Boolean(e.closest(`${RAIL}, [data-sticky-close-btn], [data-row-close-btn], .back-to-top`)) || e === el || el.contains(e) || zones.some((z) => z.contains(e)) || within(e.getBoundingClientRect(), tr);
       for (const f of under(cr, b, skip)) out.push(`the close over ${f}`);
       if (ar && overlapBy(cr, ar) > 2) {
         const mx = (Math.max(cr.left, ar.left) + Math.min(cr.right, ar.right)) / 2;
@@ -659,6 +746,14 @@ function pageLib(mode) {
     };
     const mine = F.closesOf(d, root);
     res.closes = mine.map(stateOf);
+    // `in` mode: the bar is due only once the toggle's line has gone up under the top line; while the line is on screen the toggle's own
+    // mark is the close, so no `[data-sticky-close-btn]` need show (`skipCloses`). Read whenever the root says it runs in, not only when this
+    // look's own room says tall: the app counts the condensed title bar in the room whether it shows or not, so a root a few pixels taller
+    // than the window less the tab bar is tall to the app (and runs in) while this look, with the title still on screen, reads it short.
+    if (root && res.rail === 'in') {
+      res.bar = barLook(s, root, V, c);
+      res.skipCloses = !res.bar.shown;
+    }
     if (!/^Close/.test(res.closes.find((o) => o.state === 'ok')?.label ?? 'Close')) res.badName = res.closes.find((o) => o.state === 'ok').label;
     // Two closes on screen on top of each other (anywhere on the page: a nested one's and its parent's).
     const onScreen = [...document.querySelectorAll(CLOSE)].filter((b) => {
@@ -671,14 +766,16 @@ function pageLib(mode) {
         if (meets(onScreen[i].getBoundingClientRect(), onScreen[j].getBoundingClientRect()) && (mine.includes(onScreen[i]) || mine.includes(onScreen[j]))) res.overlap.push(`${norm(onScreen[i].getAttribute('aria-label')).slice(0, 40)} over ${norm(onScreen[j].getAttribute('aria-label')).slice(0, 40)}`);
       }
     }
-    // A close drawn over a control or a line of words in the content (the toggle's own card is its business: Daily's close sits where its
-    // edit button was).
+    // A close drawn over a control or a line of words in the content (the toggle's own card is its business: a task's close stands where
+    // its edit button is). In `in` mode the close rides in its bar, which is laid over the content on purpose, as the condensed title is:
+    // what scrolls under it is never counted.
     const zones = root ? [root] : [s.G, ...F.regionNodes(d)].filter(Boolean);
     const seen = new Map();
     mine.forEach((b, i) => {
       if (!['ok', 'covered'].includes(res.closes[i].state)) return;
+      if (b.closest(BAR)) return;
       const cr = b.getBoundingClientRect();
-      const skip = (x) => !x || x.closest(CLOSE) || x.contains(b) || x === s.el || s.el.contains(x);
+      const skip = (x) => !x || x.closest(CLOSE) || x.closest(RAIL) || x.contains(b) || x === s.el || s.el.contains(x);
       const found = new Set();
       for (const z of zones) {
         for (const x of z.querySelectorAll(CONTROL)) {
@@ -686,15 +783,6 @@ function pageLib(mode) {
           if (skip(x) || x.type === 'hidden' || !shown(x, seen)) continue;
           const xr = x.getBoundingClientRect();
           if (within(xr, tr) || !meets(xr, cr)) continue;
-          // A control that keeps the lane as its own padding (`data-sc-pad`, a link card or a badge tile laid back to its full width, as a
-          // task's card is round its plan's close): the close over that padding only, never its words or marks, is where it belongs. Past
-          // the control's right edge it may run on over the padding of the card round it (a card that holds cards keeps the close at its
-          // own edge, `through` in StickyCloseRail.tsx: How it works' inner folds, the month calendar's Sunday column).
-          if (x.hasAttribute('data-sc-pad')) {
-            const xs = getComputedStyle(x);
-            const inner = xr.right - (parseFloat(xs.paddingRight) || 0) - (parseFloat(xs.borderRightWidth) || 0);
-            if (cr.left >= inner - 0.5) continue;
-          }
           found.add(`${x.tagName.toLowerCase()}${x.type ? `[${x.type}]` : ''} "${labelOf(x).slice(0, 30)}"`);
         }
         const walker = document.createTreeWalker(z, NodeFilter.SHOW_TEXT, { acceptNode: (t) => (t.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT) });
@@ -712,7 +800,7 @@ function pageLib(mode) {
       }
       for (const f of found) res.covers.push(f);
     });
-    res.shrunk = want.shrunk && root && res.tall ? shrunkIn(s, root, V, c) : [];
+    res.shifted = want.shifted && root && res.tall ? shiftedIn(root) : [];
     res.float = want.float && res.tall ? floatOver(s, root, mine, btt) : [];
     return res;
   };
@@ -831,7 +919,7 @@ const kindsOf = (checks) => {
   };
   for (const ch of checks) {
     const states = ch.closes.map((c) => c.state);
-    if (!states.includes('ok')) {
+    if (!ch.skipCloses && !(ch.bar?.problems ?? []).some((p) => p.kind === 'no-bar') && !states.includes('ok')) {
       const cov = ch.closes.find((c) => c.state === 'covered');
       const clip = ch.closes.find((c) => c.state === 'clipped');
       if (cov) add('covered', ch.at, `by ${cov.by}`);
@@ -841,7 +929,8 @@ const kindsOf = (checks) => {
     if (ch.overlap.length) add('overlap', ch.at, ch.overlap[0]);
     if (ch.covers.length) add('covers-control', ch.at, ch.covers.join(', '));
     if (ch.badName) add('name', ch.at, `its name "${ch.badName}" does not start with Close`);
-    if (ch.shrunk?.length) add('shrunk', ch.at, ch.shrunk.slice(0, 3).map((b) => `${b.box} right ${b.right} (at rest ${b.rest}) vs ${b.ref} (${b.refIs})`).join('; ') + (ch.shrunk.length > 3 ? `; and ${ch.shrunk.length - 3} more` : ''));
+    for (const p of ch.bar?.problems ?? []) add(p.kind, ch.at, p.detail);
+    if (ch.shifted?.length) add('shifted', ch.at, `${ch.shifted.length} moved; ` + ch.shifted.slice(0, 3).map((b) => `${b.what} ${b.box} by ${Math.round(b.by)}px (${b.left} to ${b.right}, with no close ${b.restLeft} to ${b.restRight})`).join('; '));
     if (ch.float?.length) add('float-over', ch.at, ch.float.slice(0, 3).join('; ') + (ch.float.length > 3 ? `; and ${ch.float.length - 3} more` : ''));
   }
   return out.filter((k) => wantKind(k.kind));
@@ -1156,6 +1245,13 @@ for (const [w] of WIDTHS.map((x) => [x.join('x')])) {
 }
 // Proof the run saw Back to top at all: it shows only past a screen of scrolling, so a toggle near a page's top never meets it, and it
 // steps aside under every popup, so only the pages' looks count.
+// Proof `in` mode was seen at all: of the looks where a shown bar was due, how many had one, and of those where it had to be hidden, how
+// many hid it.
+const barLooks = tests.flatMap((t) => (t.checks ?? []).map((ch) => ch.bar).filter(Boolean));
+if (barLooks.length) {
+  const due = (k) => barLooks.filter((b) => b.due === k);
+  console.log(`in mode: ${tests.filter((t) => (t.checks ?? []).some((ch) => ch.bar)).length} tall toggles; a bar due in ${due('shown').length} looks and shown in ${due('shown').filter((b) => b.shown).length}; hidden due in ${due('hidden').length} and hidden in ${due('hidden').filter((b) => !b.shown).length}; ${due('either').length} looks within 24px of the line`);
+} else if (tests.some((t) => t.tall)) console.log('in mode: no tall toggle was in `in` mode (a laptop width only?)');
 const lows = tests.filter((t) => 'lowBtt' in t && !t.route.startsWith('popup:'));
 if (lows.length) console.log(`Back to top drawn in ${lows.filter((t) => t.lowBtt).length} of ${lows.length} low looks${lows.some((t) => t.lowBtt) ? '' : ' (none: is a privacy or terms dialog still up?)'}`);
 if (Object.values(dropped).some(Boolean)) console.log(`not tested: ${dropped.top} past the cap of ${CAP}, ${dropped.nested} inside others past the cap, ${dropped.rows} task cards past ${ROWS} a page, ${dropped.time} past the time limit`);

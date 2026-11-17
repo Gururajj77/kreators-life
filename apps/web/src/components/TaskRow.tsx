@@ -106,6 +106,8 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
     <motion.li
       data-pillar={rel.key}
       data-task-id={task.id}
+      // A root of its own while its plan is open, so a sticky close round it (a tall time block box) never takes its edit button for its own mark.
+      data-sticky-close-root={onEdit && editOpen ? '' : undefined}
       className="relative"
       // Escape closes a plan open in place and hands focus back to the card (2026-11-13), unless a popup opened from the plan, or a
       // control inside it that closes on Escape itself, took the key first.
@@ -183,7 +185,7 @@ export function TaskRow({ task, today, subtitle, busy = false, hint = null, onTo
       />
       {/* While the plan is open in place, its close stands outside the card and stays in view down the plan (RowClose, 2026-11-13); it
           comes right after the card in the page's order, so the keyboard meets it before the plan's fields. */}
-      {onEdit && editOpen && <RowClose onClose={onEdit} label={`Close the plan for ${task.title}`} />}
+      {onEdit && editOpen && <RowClose onClose={onEdit} label={`Close the plan for ${task.title}`} title={task.title} />}
       {panel}
     </motion.li>
   );

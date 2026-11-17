@@ -25,7 +25,7 @@ import { AnimatedIcon } from './AnimatedIcon';
 import { useInsights } from './EmergenceSlot';
 import { AreaTag } from './TaskPlan';
 import { ToggleChevron } from './ToggleMark';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from './StickyClose';
+import { StickyClose, useTallOpen } from './StickyClose';
 import { useHiddenInsightIds } from '../lib/insightsHidden';
 
 export { useInsights };
@@ -50,7 +50,7 @@ function useHidden(): [Set<string>, (id: string) => void, (id: string) => void] 
  * The cards set aside with Not now, listed in place (2026-11-06): each one's words on the left and an outline "Show again" at the right,
  * which puts the card back where it was. On this device only, like Not now.
  */
-export function SetAsideList({ id, list, onShow, className = '' }: { id?: string; list: readonly Insight[]; onShow: (id: string) => void; /** The sticky close's lane (`STICKY_CLOSE_LANE`) when the list is its toggle's open content. */ className?: string }) {
+export function SetAsideList({ id, list, onShow, className = '' }: { id?: string; list: readonly Insight[]; onShow: (id: string) => void; className?: string }) {
   return (
     <ul id={id} aria-label="Set aside" className={`m-0 flex list-none flex-col gap-xs p-0 ${className}`}>
       {list.map((i) => {
@@ -77,8 +77,8 @@ export { focusHeading };
  * One quiet line at the foot of a block whose place has cards set aside: "Show 2 set aside", an inline toggle that opens the list in
  * place. Draws nothing when none are set aside. Focus goes back to the toggle after "Show again", since that row leaves the list; after
  * the last one the fold closes (so the next Not now starts it closed) and focus moves to the block's heading (`heading`, its id).
- * Open and taller than the room the window has, its close stays in view beside the list (`StickyClose`, 2026-11-14): the chevron keeps
- * its slot unseen, and the list keeps a lane while the close runs down its own edge, so it never sits on a Show again.
+ * Open and taller than the room the window has, its close stays in view beside the list (`StickyClose`, 2026-11-14): standing out it
+ * takes the chevron's place, running in a slim bar with its name and the close sticks under the top bar (2026-11-17).
  */
 export function SetAsideFold({ list, onShow, heading }: { list: readonly Insight[]; onShow: (id: string) => void; heading?: string }) {
   const [open, setOpen] = useState(false);
@@ -100,15 +100,14 @@ export function SetAsideFold({ list, onShow, heading }: { list: readonly Insight
           className="toy toy-flat inline-flex min-h-[44px] items-center gap-xs rounded-pill px-sm text-subhead text-ink-soft"
         >
           {open ? `Hide ${n} set aside` : `Show ${n} set aside`}
-          {/* While the sticky close shows, the chevron keeps its slot unseen, as a task card's edit button does. */}
-          <ToggleChevron open={open} size={14} className={railOn ? 'invisible' : ''} />
+          {/* While the sticky close stands out beside it, the chevron keeps its slot unseen (`sticky-close-mark`). */}
+          <ToggleChevron open={open} size={14} className="sticky-close-mark" />
         </button>
       </div>
       {railOn && <StickyClose onClose={() => setOpen(false)} label="Close the cards set aside" opener={() => toggle.current} />}
       {open && (
         <SetAsideList
           id={id}
-          className={STICKY_CLOSE_LANE}
           list={list}
           onShow={(x) => {
             const last = list.length <= 1;

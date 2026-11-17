@@ -3,7 +3,7 @@ import { HOW_TO } from '@kreators/shared/help';
 import gsap from 'gsap';
 import { useLayoutEffect, useRef, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { Link } from 'react-router';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from './StickyClose';
+import { StickyClose, useTallOpen } from './StickyClose';
 import { ToggleChevron } from './ToggleMark';
 
 /**
@@ -67,12 +67,12 @@ function Fold({ id, title, hint, closeLabel, open, onToggle, onClose, children }
             <span className="text-headline">{title}</span>
             <span className="ml-xs text-subhead text-ink-soft">{hint}</span>
           </span>
-          <Chevron open={open} className={railOn ? 'invisible' : ''} />
+          <Chevron open={open} className="sticky-close-mark" />
         </button>
       </h3>
-      {railOn && <StickyClose onClose={onClose} label={closeLabel} opener={() => button.current} />}
+      {railOn && <StickyClose onClose={onClose} label={closeLabel} title={title} opener={() => button.current} />}
       {open && (
-        <Reveal className={STICKY_CLOSE_LANE}>
+        <Reveal>
           <div id={id} className="mt-xs">
             {children}
           </div>
@@ -88,8 +88,9 @@ function Fold({ id, title, hint, closeLabel, open, onToggle, onClose, children }
  * tap it again and everything folds away. Open and taller than the room the window has, its close stays
  * in view beside it (`StickyClose`, 2026-11-14, the founder: "the close buttons that need one to scroll
  * back top need the close button to be sticky outside the toggle tab"): the card's round chevron keeps its
- * slot unseen, the panel under it keeps its full width and a lane inside it while the close runs down the
- * section's edge (`fitLane` in StickyCloseRail.tsx; app.css, "A painted surface keeps its full width"), and Escape closes it.
+ * slot unseen while the close stands out beside it; with no margin the chevron stays, the panel keeps its
+ * full width and a slim bar with the name and the close sticks under the top bar once the card has gone up
+ * under it (2026-11-17), and Escape closes it.
  */
 export function HowItWorksPanel({ howKey, name, open, setOpen, steps, setSteps, words, setWords }: PanelProps) {
   const how = HOW_TO[howKey];
@@ -125,15 +126,15 @@ export function HowItWorksPanel({ howKey, name, open, setOpen, steps, setSteps, 
               <span className="inline-block">{`${count} for ${name}.`}</span> <span className="inline-block">{open ? 'Tap to fold them away.' : 'Tap to open them.'}</span>
             </span>
           </span>
-          {/* While the sticky close shows, the round chevron keeps its slot unseen, as a task card's edit button does. */}
-          <span className={`flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-ink text-on-ink ${railOn ? 'invisible' : ''}`} aria-hidden="true">
+          {/* While the sticky close stands out beside it, the round chevron keeps its slot unseen (`sticky-close-mark`). */}
+          <span className="flex size-[36px] shrink-0 items-center justify-center rounded-pill bg-ink text-on-ink sticky-close-mark" aria-hidden="true">
             <Chevron open={open} />
           </span>
         </button>
       </h2>
-      {railOn && <StickyClose onClose={() => setOpen(false)} label="Close How it works" opener={() => toggle.current} />}
+      {railOn && <StickyClose onClose={() => setOpen(false)} label="Close How it works" title="How it works" opener={() => toggle.current} />}
       {open && (
-        <Reveal className={STICKY_CLOSE_LANE}>
+        <Reveal>
           <div id="how-panel" className="mt-sm flex flex-col gap-sm rounded-card bg-card p-md shadow-toy-soft">
             <Fold id="how-steps" title="The steps" hint={`${how.steps.length}`} closeLabel="Close the steps" open={steps} onToggle={() => setSteps((v) => !v)} onClose={() => setSteps(false)}>
               <ol className="m-0 flex list-none flex-col gap-xs p-0">

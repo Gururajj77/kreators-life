@@ -7,7 +7,7 @@ import { api } from '../lib/api';
 import { Icon } from './Icon';
 import { Skeleton } from './Skeleton';
 import { useAuthed, useMe } from '../lib/queries';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from './StickyClose';
+import { StickyClose, useTallOpen } from './StickyClose';
 import { ToggleChevron } from './ToggleMark';
 
 const TONE: Record<BriefLine['tone'], string> = { good: 'var(--color-r4)', watch: 'var(--color-r1)', neutral: 'var(--color-line)' };
@@ -75,8 +75,8 @@ function writeFolded(userId: string | undefined, folded: boolean) {
  * person's own numbers (briefFor and gettingStarted in shared), so there is nothing to tick here: doing the thing
  * ticks it. Each is a toggle; open and taller than the room the window has (a long brief on a phone on its side), its
  * close stays in view beside it (`StickyClose`, 2026-11-14, the founder: "the close buttons that need one to scroll
- * back top need the close button to be sticky outside the toggle tab"): the chevron keeps its slot unseen, the card's
- * words keep a lane while the close runs down its edge, and Escape anywhere in the card folds it.
+ * back top need the close button to be sticky outside the toggle tab"): standing out it takes the chevron's place,
+ * running in a slim bar with its name and the close sticks under the top bar (2026-11-17), and Escape anywhere in the card folds it.
  */
 export function DailyBrief({ date, hour }: { date: string; hour: number }) {
   const q = useAuthed(['brief', date, hour], () => api.brief(date, hour));
@@ -132,15 +132,15 @@ export function DailyBrief({ date, hour }: { date: string; hour: number }) {
             <span id="brief-heading" className="text-headline">
               Your daily brief
             </span>
-            {/* While the sticky close shows, the chevron keeps its slot unseen, as a task card's edit button does. */}
-            <span className={`flex shrink-0 items-center text-ink-soft ${briefRail ? 'invisible' : ''}`}>
+            {/* While the sticky close stands out beside it, the chevron keeps its slot unseen (`sticky-close-mark`). */}
+            <span className="flex shrink-0 items-center text-ink-soft sticky-close-mark">
               <ToggleChevron open={!briefFolded} size={14} strokeWidth={3} />
             </span>
           </button>
         </h2>
         {briefRail && <StickyClose onClose={toggleBrief} label="Close Your daily brief" opener={() => briefToggle.current} />}
         {!briefFolded && (
-          <div id="brief-body" className={`px-sm pb-sm ${STICKY_CLOSE_LANE}`}>
+          <div id="brief-body" className="px-sm pb-sm">
             <p className="m-0 text-subhead text-ink-soft">Three things that changed, and three next steps, from your own numbers.</p>
             <Lines title="What changed" lines={d.brief.signals} label="What changed" />
             <Lines title="Next steps" lines={d.brief.actions} label="Next steps" />
@@ -158,7 +158,7 @@ export function DailyBrief({ date, hour }: { date: string; hour: number }) {
             </span>
             <span className="flex shrink-0 items-center gap-xs text-subhead text-ink-soft">
               {g.done} of {g.items.length}
-              <ToggleChevron open={!g.folded} size={14} strokeWidth={3} className={startRail ? 'invisible' : ''} />
+              <ToggleChevron open={!g.folded} size={14} strokeWidth={3} className="sticky-close-mark" />
             </span>
           </button>
           {startRail && (
@@ -171,7 +171,7 @@ export function DailyBrief({ date, hour }: { date: string; hour: number }) {
             />
           )}
           {!g.folded && (
-            <div id="start-list" className={`px-sm pb-sm ${STICKY_CLOSE_LANE}`}>
+            <div id="start-list" className="px-sm pb-sm">
               <p className="m-0 text-subhead text-ink-soft">Your first {GETTING_STARTED_DAYS} days. Each one ticks itself when you do it.</p>
               <ul className="mt-sm flex list-none flex-col gap-xs p-0 m-0">
                 {g.items.map((i) => (

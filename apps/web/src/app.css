@@ -897,17 +897,17 @@
 }
 /* Sticky closes (components/StickyClose.tsx; 2026-11-14, the founder: "the close buttons that need one to scroll back top need the close
    button to be sticky outside the toggle tab, follow it in the same way of tasks"). Every inline toggle whose open content is taller than the
-   window has (a task's plan on Daily, RowClose in CheckRow.tsx, 2026-11-13; a Fold, an app group, How it works, a hand-made panel) closes
-   from a rail inside its root (`data-sticky-close-root`, positioned while the rail shows): as tall as the root less 8px at its foot, its
-   slot sticking to the window's top inside it, so the button stays in view down the content and stops at its end. With a margin at the
-   root's right (`out`) the rail stands 8px past the root, or past the painted box round it (`--sticky-close-shift`, a time block's box),
-   with the 44px round close; without one (`in`, a phone or a tablet's column) it runs down the root's own right edge, the 32px close with
-   a 44px hit area where the toggle's own mark or a task card's small edit button sits (kept in its slot, unseen), and the content keeps a
-   lane for it (`.row-lane` in a task's plan, `.sticky-close-lane` for the rest), so no field is covered. The slot clears the condensed
-   title bar, a sticky top bar (`--sc-bar`, measured: the site's header from the tablet up, a whole-page chat's header, the coach's share
-   row), sticks to the top of a popup's scrolling panel instead (`data-panel`), and sits 52px lower per open root round it
-   (`--sticky-close-depth`), so two closes never meet. A rail inside another open root lines up with the outermost one's (`data-nest`,
-   `--sticky-close-x` measured from that rail as drawn): one column, one size, a step lower per level. */
+   window has (a task's plan on Daily, RowClose in CheckRow.tsx; a Fold, an app group, How it works, a hand-made panel) closes from a rail
+   inside its root (`data-sticky-close-root`, positioned while the rail shows), as tall as the root less 8px at its foot. With a margin at
+   the root's right (`out`) the rail stands 8px past the root, or past the painted box round it (`--sticky-close-shift`, a time block's
+   box), its slot sticking under the top bars with the 44px round close, 52px lower per open root round it (`--sticky-close-depth`), and the
+   toggle's own mark keeps its slot unseen (`data-sc-hide`). Without one (`in`: a phone, a tablet's column, a popup) nothing moves in for
+   it (2026-11-17, the founder: "what i meant was u could have made the header with the cross entire line into a sticky on top ... keep it
+   as minimal as possible so it occupies the least space"): the rail spans the root and holds a slim bar, the toggle's name and the 32px
+   close, that sticks under the top bars once the toggle's header has gone up under them and fades out once it is back, drawn over the
+   content so it moves nothing; a nested root's bar sits 40px under the bar round it. Both clear the condensed title bar and a sticky top
+   bar (`--sc-bar`, measured: the site's header from the tablet up, a whole-page chat's header, the coach's share row) and stick to the top
+   of a popup's scrolling panel instead (`data-panel`). */
 @layer components {
   :where([data-sticky-close]) {
     position: relative;
@@ -925,22 +925,16 @@
   width: 44px;
 }
 .sticky-close-rail[data-mode='in'] {
-  right: var(--spacing-xs);
-  width: 32px;
+  left: 0;
+  right: 0;
 }
-/* A toggle's close runs 4px from the root's edge (a task's row keeps its edit button's place, 8px in): where the toggle's mark was, it then
-   keeps the 8px the spacing allows from what ends the toggle's line (an app group's "12 of 12 shown", a lesson's tag), which at 8px in it
-   came within 4px of, its 44px hit area on them (2026-11-14). The lane under it keeps the same 8px (`.sticky-close-lane` below). Where the
-   open content's painted surface ends inside the root (an app group's list, a time block's tasks, 12px in), it runs 4px inside that
-   surface's edge instead (`--sticky-close-inset`, `fitLane`), wholly on it as a task's close is on its card, and the toggle's own line moves
-   in by as much (2026-11-16). */
-.sticky-close-rail[data-mode='in']:not(.row-close-rail, [data-nest]) {
-  right: calc(var(--spacing-xs) / 2 + var(--sticky-close-inset, 0px));
-}
-/* Nested: the outermost close's column, whichever side it stands (its width still follows `data-mode`, which is that close's). */
+/* Nested beside an outer close standing out: that close's column. */
 .sticky-close-rail[data-nest] {
   left: var(--sticky-close-x, 0px);
   right: auto;
+}
+.sticky-close-mark[data-sc-hide] {
+  visibility: hidden;
 }
 .sticky-close-slot {
   position: sticky;
@@ -952,16 +946,56 @@
 .sticky-close-slot > .close-btn {
   pointer-events: auto;
 }
-/* A nested close tucks away for the moment its own content's end pushes it onto the close round it (`data-tuck`), and a task's close
-   running down its row's edge while it would sit over the card's tags (the rail's row check), unless the keyboard is on it. */
+/* A nested close tucks away for the moment its own content's end pushes it onto the close round it (`data-tuck`), unless the keyboard is
+   on it. */
 .sticky-close-rail[data-tuck] > .sticky-close-slot:not(:has(:focus-visible)) {
   opacity: 0;
 }
 .sticky-close-rail[data-tuck] > .sticky-close-slot:not(:has(:focus-visible)) > .close-btn {
   pointer-events: none;
 }
+/* The slim bar running in: 40px, the name on one line at its left (cut short with an ellipsis, the whole name in its title) and the
+   32px close at its right (a 44px hit area), on the strong card with a hairline under it, so nothing reads through it in either theme. */
+.sticky-close-bar {
+  --sc-bar-h: calc(var(--spacing-lg) + var(--spacing-xs));
+  position: sticky;
+  top: calc(max(var(--sc-cond, env(safe-area-inset-top)), var(--sc-bar, 0px)) + var(--sticky-close-depth, 0) * var(--sc-bar-h));
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  height: var(--sc-bar-h);
+  padding: 0 calc(var(--spacing-xs) / 2) 0 var(--spacing-sm);
+  /* The strong card over the page's own base, so it is wholly opaque in both themes. */
+  background: linear-gradient(var(--card-strong), var(--card-strong)), var(--page-base-a);
+  border-bottom: 1px solid var(--color-line);
+  pointer-events: auto;
+  opacity: 1;
+  transition:
+    opacity 120ms ease,
+    visibility 0s;
+}
+.sticky-close-bar[data-shown='false'] {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 120ms ease,
+    visibility 0s linear 120ms;
+}
+.sticky-close-bar-name {
+  flex: 1;
+  min-width: 0;
+  min-height: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: start;
+  cursor: pointer;
+}
 @media (prefers-reduced-motion: reduce) {
-  .sticky-close-slot {
+  .sticky-close-slot,
+  .sticky-close-bar,
+  .sticky-close-bar[data-shown='false'] {
     transition: none;
   }
 }
@@ -971,91 +1005,27 @@ html:has([role='dialog'][aria-modal='true']) .sticky-close-rail:not([aria-modal=
   visibility: hidden;
 }
 /* Under the condensed title bar where a screen has one (Daily has none). */
-body:has(.fx-condensed[data-on]) .sticky-close-slot {
+body:has(.fx-condensed[data-on]) :is(.sticky-close-slot, .sticky-close-bar) {
   --sc-cond: calc(env(safe-area-inset-top) + 52px);
 }
-/* In a popup's panel the slot sticks to the panel's own top, which no bar covers. */
+/* In a popup's panel they stick to the panel's own top, which no bar covers. */
 .sticky-close-rail[data-panel] .sticky-close-slot {
   top: calc(var(--spacing-xs) + var(--sticky-close-depth, 0) * 52px);
 }
-/* A task's row: centred on the card's first 56px row standing out, where the small edit button was running down it. */
+.sticky-close-rail[data-panel] .sticky-close-bar {
+  top: calc(var(--sticky-close-depth, 0) * var(--sc-bar-h) - var(--sc-pad, 0px));
+}
+/* A task's row: centred on the card's first 56px row standing out. */
 .row-close-rail[data-mode='out'] .sticky-close-slot {
   height: 56px;
   align-items: center;
 }
-.row-close-rail[data-mode='in'] .sticky-close-slot {
-  padding-top: var(--spacing-xs);
-}
-/* Any other toggle: at rest centred on the toggle itself (`--sticky-close-head` its height, `--sticky-close-lead` how far under the root's
-   top it starts), where its chevron or plus was; the slot is only the button's height, so once it sticks the button sits just under the
-   bar, however tall the toggle (How it works' card, an app group's header). */
+/* Any other toggle standing out: at rest centred on the toggle itself (`--sticky-close-head` its height, `--sticky-close-lead` how far
+   under the root's top it starts), where its chevron or plus was; the slot is only the button's height, so once it sticks the button sits
+   just under the bar, however tall the toggle (How it works' card, an app group's header). */
 .sticky-close-rail:not(.row-close-rail)[data-mode='out'] .sticky-close-slot {
   margin-top: calc(var(--sticky-close-lead, 0px) + max(0px, (var(--sticky-close-head, 44px) - 44px) / 2));
 }
-.sticky-close-rail:not(.row-close-rail)[data-mode='in'] .sticky-close-slot {
-  margin-top: calc(var(--sticky-close-lead, 0px) + max(0px, (var(--sticky-close-head, 44px) - 32px) / 2));
-}
-/* The lane: the button's 32px and a gap either side, from the root's edge (a task's plan's own 16px padding grows to 48px; an open
-   content's wrapper, a direct child of the root, takes 44px: the close 4px in and its 32px, then the 8px the spacing allows). A nested root
-   whose close stands in the lane round it keeps none of its own (`data-sticky-close-nest`). */
-[data-row-close='in']:not([data-sticky-close-nest]) .row-lane {
-  padding-right: calc(var(--spacing-md) + var(--spacing-lg));
-}
-[data-sticky-close='in']:not([data-sticky-close-nest]) > .sticky-close-lane {
-  padding-right: calc(var(--spacing-lg) + var(--spacing-sm));
-}
-/* A painted surface keeps its full width (2026-11-16, the founder: "where ever you have made the cross button for close u ended up
-   compromising the right space ... why dont u keep it similar to the way u did it in tasks?"). Inside a root whose close runs down its edge,
-   every painted surface of the open content that filled its row at rest (a card, a list of cards, an inset list such as an app group's,
-   a form card such as Add a task's, a wide toggle) reaches back over the wrapper's lane to the edge it had at rest, so it still meets the
-   toggle above it, and keeps the room the close needs as its own right padding instead, as a task's plan does (`.row-lane`): its rows'
-   right-edge controls move in and the close runs down its right edge over that padding. The rail measures each (`fitLane` in
-   StickyCloseRail.tsx) and marks the box that reaches (`data-sc-reach`, its margin `--sc-mr`: the surface, or the box round it that holds it
-   whole when its width is its own) and the surface that keeps the lane (`data-sc-pad`, its padding `--sc-pr`), which apply only while the
-   root says `in`. Unpainted content (a line of words, a field, a bare list) keeps the wrapper's lane. */
-[data-sticky-close='in']:not([data-sticky-close-nest]) [data-sc-reach] {
-  margin-right: var(--sc-mr) !important;
-}
-[data-sticky-close='in']:not([data-sticky-close-nest]) [data-sc-pad] {
-  padding-right: var(--sc-pr) !important;
-}
-/* A badge tile in the close's column (2026-11-17, Profile's badge folds at 360): its name's last words, kept together at rest, wrap inside
-   the narrower content box instead of running out of it under the close. */
-[data-sticky-close='in']:not([data-sticky-close-nest]) .badge-tile[data-sc-pad] .whitespace-nowrap {
-  white-space: normal;
-}
-/* A task's card that keeps the lane as its own padding (a tall By time block or By area box whose close runs down its edge, 2026-11-17):
-   its small edit button gives up its slot to the lane, as on a task's open plan, so the close runs down the card's edge where the button
-   was and the title keeps its column instead of losing both (at 360 a long title took ten lines of 111px). The button is for a mouse or a
-   finger only (`aria-hidden`, no tab stop), and a tap on the card opens the plan as before. The padding is worked out from the card's edge
-   alone (`fitLane`), so it never waits on the button. */
-[data-sticky-close='in']:not([data-sticky-close-nest]) .check-row[data-sc-pad] [data-row-edit] {
-  display: none;
-}
-/* An app group that keeps the lane as its own padding (a group of Profile's "Tables AI chat can read" while that fold's close runs down its
-   edge, 2026-11-17; the group itself padded, or its header when the rail pads the toggle of a nested group): its header's count drops under its line, as it does in a narrow header (GroupAccordion), so the line keeps the header's
-   width instead of a word or two a line beside the pill. Only in a header under 26rem inside its padding (the button is the container), so
-   a wide one keeps its one row; the chevron's slot and the padding stay, so the close never meets the pill or the chevron. */
-@container (max-width: 26rem) {
-  [data-sticky-close='in']:not([data-sticky-close-nest]) [data-sticky-close-root][data-sc-pad] > :is(h2, h3) > button > .ga-meta,
-  [data-sticky-close='in']:not([data-sticky-close-nest]) [data-sticky-close-root][data-sc-pad] > button > .ga-meta,
-  [data-sticky-close='in']:not([data-sticky-close-nest]) [data-sticky-close-root] button[data-sc-pad] > .ga-meta {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--spacing-xs);
-  }
-  [data-sticky-close='in']:not([data-sticky-close-nest]) [data-sticky-close-root][data-sc-pad] > :is(h2, h3) > button > .ga-meta > .ga-words,
-  [data-sticky-close='in']:not([data-sticky-close-nest]) [data-sticky-close-root][data-sc-pad] > button > .ga-meta > .ga-words,
-  [data-sticky-close='in']:not([data-sticky-close-nest]) [data-sticky-close-root] button[data-sc-pad] > .ga-meta > .ga-words {
-    align-self: stretch;
-  }
-}
-/* A task's card while its plan's close runs down the row's edge (2026-11-16, the founder: "on mobile the toggle in tasks breaks in design
-   overalapping"): the card stays exactly as it was at rest, its width, its padding and its tags' lines (a wider padding made its marks wrap
-   onto one more line and the card jump as the plan opened). The close stands in the small edit button's slot on the card's first line,
-   which the button keeps unseen (CheckRow), and the plan under the card keeps its lane (`.row-lane` above); while the stuck close would sit
-   over the card's lines below that slot (its tags, as the card scrolls up under it) it tucks away (`data-tuck`, the rail's row check) and
-   comes back over the plan. */
 .check-preview {
   opacity: 0;
   transform: scale(0.6);
@@ -1165,6 +1135,21 @@ body:has(.fx-condensed[data-on]) .sticky-close-slot {
   .fill-row-all > * {
     flex: 1 1 auto;
     justify-content: center;
+  }
+  /* A task's five length chips (TaskPlan.tsx, "How long it should take"): on a phone they fill one line, each as wide as its words; where
+     the row is too narrow for that (a 320px phone's time-block box) they go two over three, never four with "1.5 h" alone (2026-11-17). */
+  @media (max-width: 639.98px) {
+    .est-chips {
+      container-type: inline-size;
+    }
+  }
+  @container (width < 16rem) {
+    .est-chips > * {
+      flex-basis: calc((100% - 2 * var(--spacing-xs)) / 3);
+    }
+    .est-chips > :nth-child(-n + 2) {
+      flex-basis: calc((100% - var(--spacing-xs)) / 2);
+    }
   }
 }
 
@@ -6549,7 +6534,7 @@ li.sort-lifted {
 }
 /* A template's slots (TemplateEditor in an open template card, `.tb-slots` its body) lay out by the room the list has, never the window's
    width (2026-11-14): beside the sidebar on a tablet the `sm:` row tried one line, then wrapped each slot unevenly onto three, and on a
-   phone beside the sticky close's lane two times shared 278px, which cut "07:00 AM" to "07:00 A". From 37rem a slot is one line as
+   narrow phone two times shared 278px, which cut "07:00 AM" to "07:00 A". From 37rem a slot is one line as
    before (a laptop); under it the block, its length and the remove on one line and the two times on the next, in every row alike; under
    21rem, where two times side by side would fall under about 145px each, the end time takes a line of its own under the start, "to"
    after the start, both one width. */

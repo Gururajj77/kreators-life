@@ -68,10 +68,7 @@ export function FriendQr({ renew = true }: { /** False where the card is a quick
   const half = Math.ceil(code.length / 2);
   const halves = [code.slice(0, half), code.slice(half)].filter(Boolean);
   return (
-    // A block that fills its row by its own auto width, never `w-full`: every place it sits is a plain block (Profile, Bond's fold, an
-    // event's fold), and inside an open fold whose close runs down its edge the card reaches back over the close's lane with a margin
-    // (`fitLane` in StickyCloseRail.tsx), which a width of 100% would hold short, 44px under the fold's own button (2026-11-16).
-    <div className="flex flex-col gap-md rounded-card bg-card p-md shadow-toy-soft">
+    <div className="flex w-full flex-col gap-md rounded-card bg-card p-md shadow-toy-soft">
       {/* The panel across the card's whole width (the founder, 2026-11-13: "full width on desktop too"), on a quiet wash with a hairline,
           the code raised on its white tile in the middle, then the friend code under it. */}
       <div className="flex flex-col items-center gap-md rounded-inner border border-line px-xs py-lg sm:px-md" style={{ background: 'var(--fill-2)' }}>

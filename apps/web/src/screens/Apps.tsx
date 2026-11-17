@@ -10,7 +10,7 @@ import { ToggleIcon } from '../components/ToggleMark';
 import { CondensedTitle } from '../components/fx/CondensedTitle';
 import { Screen } from '../components/Screen';
 import { SearchBox } from '../components/SearchBox';
-import { STICKY_CLOSE_CHANGED, STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
+import { STICKY_CLOSE_CHANGED, StickyClose, useTallOpen } from '../components/StickyClose';
 import { api } from '../lib/api';
 import { useGroupOrder, useModules, type ModuleView } from '../lib/modules';
 import { keys, useMe, useRefreshAll } from '../lib/queries';
@@ -159,9 +159,9 @@ export function Apps() {
   const panel = useId();
   const label = showHidden ? 'Close hidden apps' : `Hidden apps (${hidden})`;
   // The hidden apps panel can run past the window (a new account hides most apps): while it does, its close stays in view beside it as the
-  // page scrolls (StickyClose, 2026-11-14, the founder), and the round button keeps its slot unseen, as a task card's edit button does, so
-  // there is never a second close. It hides only once the rail is drawn (its root says `data-sticky-close`), so while the rail's chunk
-  // loads, or if it never comes, the round button is still there to close the panel; meanwhile it names no tip (its name stays), so a
+  // page scrolls (StickyClose, 2026-11-14, the founder), and the round button keeps its slot unseen while the close stands out beside it, so
+  // there is never a second close (running in, a slim bar sticks under the top bar and the round button stays; 2026-11-17). It hides only
+  // once the rail is drawn, so while the rail's chunk loads, or if it never comes, the round button is still there to close the panel; meanwhile it names no tip (its name stays), so a
   // still mouse never leaves "Close hidden apps" hanging over its empty slot. The root holds the row and the panel and nothing after them,
   // so the rail stops at the panel's end.
   const hiddenRoot = useRef<HTMLDivElement>(null);
@@ -231,13 +231,13 @@ export function Apps() {
             taken back by its padding, so the rail starts level with the round button (whose 44px reaches 12px past the row) and nothing
             moves. Its children take a lane only while the rail runs down its own edge (a phone, a tablet). */}
         <div ref={hiddenRoot} data-sticky-close-root="" className={selecting ? 'contents' : railOn ? '-mt-sm pt-sm' : undefined}>
-          <div ref={row} data-top-bar={selecting ? '' : undefined} className={selecting ? `${ROW_SELECTING} ${stuck ? 'apps-row-stuck' : ''}` : `${ROW_REST} ${STICKY_CLOSE_LANE}`}>
+          <div ref={row} data-top-bar={selecting ? '' : undefined} className={selecting ? `${ROW_SELECTING} ${stuck ? 'apps-row-stuck' : ''}` : `${ROW_REST}`}>
             <p role="status" aria-live="polite" className={`m-0 min-w-0 text-subhead ${selecting ? `${WORDS_SELECTING} ${sel.refused ? 'text-r1' : 'text-ink-soft'}` : WORDS_REST}`}>
               {selecting ? sel.line : `${on} shown${hidden > 0 ? `, ${hidden} hidden` : ''}. Open a group to see its apps, or hide one.`}
             </p>
             <div className={selecting ? BUTTONS_SELECTING : BUTTONS_REST}>
               {!selecting && roundShown && (
-                <button ref={eye} type="button" className="mf-round toy shrink-0 [[data-sticky-close]_&]:invisible" data-at="br" data-tip={railOn ? undefined : label} aria-label={label} aria-expanded={showHidden} aria-controls={panel} onClick={() => setShowHidden((v) => !v)}>
+                <button ref={eye} type="button" className="mf-round toy shrink-0 sticky-close-mark" data-at="br" data-tip={railOn ? undefined : label} aria-label={label} aria-expanded={showHidden} aria-controls={panel} onClick={() => setShowHidden((v) => !v)}>
                   <ToggleIcon open={showHidden} icon={EyeOff} />
                 </button>
               )}
@@ -278,7 +278,7 @@ export function Apps() {
           </div>
           {railOn && <StickyClose onClose={closeHidden} label="Close hidden apps" opener={() => eye.current} />}
           {showHidden && !selecting && (
-            <div className={`mt-sm ${STICKY_CLOSE_LANE}`}>
+            <div className="mt-sm">
               <HiddenAppsPanel groups={groupOrder} id={panel} fits={fits} />
             </div>
           )}

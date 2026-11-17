@@ -11,7 +11,7 @@ import { useCelebrate } from './Celebration';
 import { WeekDots } from './Charts';
 import { CheckRow } from './CheckRow';
 import { DELETE_BTN } from './ConfirmDelete';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from './StickyClose';
+import { StickyClose, useTallOpen } from './StickyClose';
 import { ToggleChevron, ToggleIcon } from './ToggleMark';
 import { Ellipsis } from 'lucide-react';
 import { FIELD } from '../lib/ui';
@@ -245,8 +245,8 @@ function localDayOf(iso: string): string {
  * Yesterday can still be marked (the server takes today or yesterday), and an unmarked yesterday ends a streak. So when
  * an item that existed yesterday has nothing for it, one quiet line says how many; it opens in place with Kept and Slipped
  * for each, marked for yesterday and counted as of the person's today. Only yesterday, never earlier. Open and taller than
- * the room the window has, its close stays in view beside the list (`StickyClose`, 2026-11-14): the chevron keeps its slot
- * unseen, and the list keeps a lane while the close runs down its own edge, so it never sits on a Kept or a Slipped.
+ * the room the window has, its close stays in view beside the list (`StickyClose`, 2026-11-14): standing out it takes the
+ * chevron's place, running in a slim bar with its name and the close sticks under the top bar (2026-11-17).
  */
 function YesterdayMarks({ items, date, queue }: { items: NotToDo[]; date: string; queue: Queue }) {
   const [open, setOpen] = useState(false);
@@ -274,11 +274,11 @@ function YesterdayMarks({ items, date, queue }: { items: NotToDo[]; date: string
         className="inline-flex min-h-[44px] items-center gap-xs text-caption text-ink-soft hover:text-ink"
       >
         Yesterday: {unmarked.length} not marked
-        <ToggleChevron open={open} size={14} className={railOn ? 'invisible' : ''} />
+        <ToggleChevron open={open} size={14} className="sticky-close-mark" />
       </button>
       {railOn && <StickyClose onClose={() => setOpen(false)} label="Close yesterday's marks" opener={() => toggle.current} />}
       {open && (
-        <ul id="ntd-yesterday" aria-label="Mark yesterday" className={`m-0 flex list-none flex-col gap-sm rounded-tile bg-card p-sm shadow-toy-soft ${STICKY_CLOSE_LANE}`}>
+        <ul id="ntd-yesterday" aria-label="Mark yesterday" className="m-0 flex list-none flex-col gap-sm rounded-tile bg-card p-sm shadow-toy-soft">
           {unmarked.map((item) => {
             const busy = queue.isPending(`ntd-y-${item.id}`);
             const hint = queue.hint(`ntd-y-${item.id}`);

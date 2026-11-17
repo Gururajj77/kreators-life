@@ -11,7 +11,7 @@ import { Fold } from './Fold';
 import { Inert } from './Inert';
 import { Ring } from './Ring';
 import { StatusTag } from './StatusTag';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from './StickyClose';
+import { StickyClose, useTallOpen } from './StickyClose';
 import { TaskPlanFields, planBody, planOf, planProblem, type Plan } from './TaskPlan';
 import { COPY } from './WeekPlan';
 import { ToggleChevron } from './ToggleMark';
@@ -255,17 +255,17 @@ function Fix({ a, plan, blocks, edits, stage, onFill }: { a: PlanAttention; plan
 /**
  * A "worth a look" line whose Fix opens what it is about in place. Open and taller than the sheet's panel, its close stays in view beside
  * the fix as the panel scrolls (`StickyClose`, 2026-11-14, the founder: "the close buttons that need one to scroll back top need the close
- * button to be sticky"): the line (its Fix at the right) and the fix each keep the lane the close runs down, and the chevron keeps its slot
- * unseen. The fix's own card sits inside the lane, so the close never lands on it.
+ * button to be sticky"): a slim bar with the line's words and the close sticks at the panel's top once the line has
+ * scrolled past it (2026-11-17), and nothing moves in for it.
  */
-function LookLine({ open, onClose, label, toggleId, head, children }: { open: boolean; onClose: () => void; label: string; toggleId: string; head: (railOn: boolean) => ReactNode; children: ReactNode }) {
+function LookLine({ open, onClose, label, title, toggleId, head, children }: { open: boolean; onClose: () => void; label: string; title: string; toggleId: string; head: ReactNode; children: ReactNode }) {
   const root = useRef<HTMLLIElement>(null);
   const railOn = useTallOpen(root, open);
   return (
     <li ref={root} data-sticky-close-root="" className="rounded-tile bg-paper p-sm">
-      {head(railOn)}
-      {railOn && <StickyClose onClose={onClose} label={label} opener={() => document.getElementById(toggleId)} />}
-      {open && <div className={`mt-sm ${STICKY_CLOSE_LANE}`}>{children}</div>}
+      {head}
+      {railOn && <StickyClose onClose={onClose} label={label} title={title} opener={() => document.getElementById(toggleId)} />}
+      {open && <div className="mt-sm">{children}</div>}
     </li>
   );
 }
@@ -445,9 +445,10 @@ export function PlanBody({ plan, blocks = [], onDone }: { plan: WeekPlanData; /*
                   open={openLine === i}
                   onClose={() => setOpenLine(null)}
                   label={`Close the fix: ${a.text.split('. ')[0]?.replace(/\.$/, '') ?? a.text}`}
+                  title={a.text.split('. ')[0]?.replace(/\.$/, '') ?? a.text}
                   toggleId={`plan-fix-toggle-${i}`}
-                  head={(railOn) => (
-                    <div className={`flex items-center gap-sm ${STICKY_CLOSE_LANE}`}>
+                  head={
+                    <div className="flex items-center gap-sm">
                       <label className="relative flex size-[24px] shrink-0 before:absolute before:-inset-[10px] before:content-['']">
                         <input type="checkbox" checked={done} onChange={(e) => setChecked((c) => ({ ...c, [i]: e.target.checked }))} aria-label={`${COPY.handled}: ${a.text}`} className="m-0 size-[24px] shrink-0" />
                       </label>
@@ -455,11 +456,11 @@ export function PlanBody({ plan, blocks = [], onDone }: { plan: WeekPlanData; /*
                       {fixable && (
                         <button type="button" id={`plan-fix-toggle-${i}`} aria-expanded={openLine === i} aria-controls={`plan-fix-${i}`} onClick={() => setOpenLine(openLine === i ? null : i)} className="toy toy-flat inline-flex min-h-[36px] md:min-h-[44px] tap-pad shrink-0 items-center gap-xs rounded-pill border border-line bg-card-strong px-sm text-subhead font-medium">
                           {openLine === i ? COPY.hide : COPY.fix}
-                          <ToggleChevron open={openLine === i} size={14} className={railOn ? 'invisible' : ''} />
+                          <ToggleChevron open={openLine === i} size={14} className="sticky-close-mark" />
                         </button>
                       )}
                     </div>
-                  )}
+                  }
                 >
                   <div id={`plan-fix-${i}`} className="rounded-tile bg-card p-sm">
                     <Fix

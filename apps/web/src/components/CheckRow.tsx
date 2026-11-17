@@ -3,7 +3,7 @@ import gsap from 'gsap';
 import { Check, Clock, Pencil } from 'lucide-react';
 import { Icon } from './Icon';
 import { ToggleIcon } from './ToggleMark';
-import { StickyClose } from './StickyClose';
+import { STICKY_CLOSE_MARK, StickyClose } from './StickyClose';
 
 /** What tapping a row's words opens, for a row that has something to open (a task's plan or its edit sheet). */
 export interface CheckRowOpen {
@@ -186,7 +186,7 @@ export function CheckRow({
           openRef.current?.focus({ preventScroll: true });
           open.onOpen();
         }}
-        className={`toy toy-flat tap-pad relative z-[1] -my-[4px] flex size-[32px] shrink-0 cursor-pointer items-center justify-center rounded-pill text-ink-soft hover:text-ink ${open.outside && open.expanded ? 'invisible' : ''}`}
+        className={`toy toy-flat tap-pad relative z-[1] -my-[4px] flex size-[32px] shrink-0 cursor-pointer items-center justify-center rounded-pill text-ink-soft hover:text-ink ${open.outside && open.expanded ? STICKY_CLOSE_MARK : ''}`}
       >
         {open.expanded === undefined ? <Icon icon={Pencil} size={16} strokeWidth={2.6} /> : <ToggleIcon open={open.expanded} icon={Pencil} size={16} strokeWidth={2.6} />}
       </button>
@@ -497,19 +497,21 @@ function useMarksUnder(hasMarks: boolean) {
  * the plan's end (and 52px lower while the row sits in a tall fold whose own close shows, so the two never meet). Where the page has a
  * margin at the row's right (60px or more past the row, or past the painted box round it such as a time block's, before the window's
  * edge or On this page when it shows) the rail stands in that margin and the button is the 44px round `CloseButton` with "Close the plan"
- * as a tip; where it has none (a phone, a tablet's column, a narrow laptop) the rail runs down the row's own right edge with the 32px one
- * where the small edit button was, named but with no tip (a tip there would sit on the card's words), and the open plan keeps a lane for
- * it (`.row-lane`, padded only while the row says `data-row-close="in"`), so it never covers a field. A tap or Enter hands focus to the
+ * as a tip, the small edit button keeping its slot unseen; where it has none (a phone, a tablet's column, a narrow laptop) nothing moves in
+ * for it (2026-11-17, the founder): the card keeps its look, its edit button shows the cross and closes the plan while the card is in
+ * sight, and once the card has gone up under the top bar a slim bar with the task's title and the 32px close sticks there over the plan
+ * (`title`). A tap or Enter hands focus to the
  * card's control and brings the card back into view when the plan was scrolled past it. Escape is the row's own (TaskRow), so the rail
  * leaves it alone. The row carries `data-sticky-close-root` and `data-sticky-close` while it shows, and the button `data-row-close-btn`
  * (scripts/smoke/drive-tips.mjs) beside `data-sticky-close-btn`.
  */
-export function RowClose({ onClose, label = 'Close the plan' }: { onClose: () => void; /** Its name, with the task's title ("Close the plan for Call the bank"); its tip says only "Close the plan", so it fits the margin. */ label?: string }) {
+export function RowClose({ onClose, label = 'Close the plan', title }: { onClose: () => void; /** Its name, with the task's title ("Close the plan for Call the bank"); its tip says only "Close the plan", so it fits the margin. */ label?: string; /** The task's title, which the slim bar shows. */ title?: string }) {
   return (
     <StickyClose
       variant="row"
       onClose={onClose}
       label={label}
+      title={title}
       tip="Close the plan"
       escape={false}
       opener={(row) => row.querySelector<HTMLElement>('[data-row-open]')}

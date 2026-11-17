@@ -29,7 +29,7 @@ import { DailyBrief } from '../components/DailyBrief';
 import { EmergenceSlot } from '../components/EmergenceSlot';
 import { Section, SeeAll } from '../components/Section';
 import { SectionHead } from '../components/SectionHead';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
+import { StickyClose, useTallOpen } from '../components/StickyClose';
 import { Segmented } from '../components/fx/Segmented';
 import { useParamState } from '../lib/useParamState';
 import { api } from '../lib/api';
@@ -89,11 +89,11 @@ function MoreOnHome({ children }: { children: ReactNode }) {
     <div ref={root} data-sticky-close-root="">
       <button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)} className="toy toy-flat col-span-full mt-lg flex min-h-[44px] w-full items-center justify-between gap-sm rounded-tile bg-paper px-sm text-left text-headline aria-expanded:bg-line">
         More on Home
-        <ToggleChevron open={open} className={`text-ink-soft ${railOn ? 'invisible' : ''}`} />
+        <ToggleChevron open={open} className="text-ink-soft sticky-close-mark" />
       </button>
       {railOn && <StickyClose onClose={() => setOpen(false)} label="Close More on Home" />}
       {open && (
-        <div id={id} className={STICKY_CLOSE_LANE}>
+        <div id={id}>
           {children}
         </div>
       )}
@@ -149,7 +149,7 @@ export function Home() {
   const fits = useFits();
   const hiddenLabel = showHidden ? 'Close hidden apps' : `Hidden apps (${hiddenApps})`;
   // While the hidden-apps panel runs past the window its close stays in view beside it (StickyClose, 2026-11-14, the founder), and the round
-  // button keeps its slot unseen once the rail is drawn (its root says `data-sticky-close`), so there is never a second close and, while the
+  // button keeps its slot unseen once the rail stands out beside it (running in it stays, under a slim bar; 2026-11-17), so there is never a second close and, while the
   // rail's chunk loads, still one (with no tip meanwhile, so none is left hanging over its empty slot). Unseen, it cannot take focus: a close
   // draws it again, then hands it the keyboard.
   const goRoot = useRef<HTMLDivElement>(null);
@@ -816,7 +816,7 @@ export function Home() {
               and nothing moves; the heading and the panel take a lane only while the rail runs down the root's own edge (a phone, a tablet). */}
           <section className="mt-lg span-all" aria-labelledby="home-go">
             <div ref={goRoot} data-sticky-close-root="" className={goRail ? '-mt-sm pt-sm' : undefined}>
-              <div className={STICKY_CLOSE_LANE}>
+              <div>
                 <SectionHead
                   id="home-go"
                   title="Go to"
@@ -824,7 +824,7 @@ export function Home() {
                   action={
                     <div className="flex items-center gap-xs">
                       {(hiddenApps > 0 || showHidden) && (
-                        <button ref={goEye} type="button" className="mf-round toy shrink-0 [[data-sticky-close]_&]:invisible" data-at="tr" data-tip={goRail ? undefined : hiddenLabel} aria-label={hiddenLabel} aria-expanded={showHidden} aria-controls={hiddenPanel} onClick={() => setShowHidden((v) => !v)}>
+                        <button ref={goEye} type="button" className="mf-round toy shrink-0 sticky-close-mark" data-at="tr" data-tip={goRail ? undefined : hiddenLabel} aria-label={hiddenLabel} aria-expanded={showHidden} aria-controls={hiddenPanel} onClick={() => setShowHidden((v) => !v)}>
                           <ToggleIcon open={showHidden} icon={EyeOff} />
                         </button>
                       )}
@@ -836,7 +836,7 @@ export function Home() {
               {goRail && <StickyClose onClose={closeHiddenApps} label="Close hidden apps" opener={() => goEye.current} />}
               {showHidden && (
                 <Suspense fallback={null}>
-                  <div className={`mt-sm mb-md ${STICKY_CLOSE_LANE}`}>
+                  <div className="mt-sm mb-md">
                     <HiddenAppsPanel groups={shortcutGroups} id={hiddenPanel} fits={fits} empty="No hidden apps. Hide one under Apps." />
                   </div>
                 </Suspense>

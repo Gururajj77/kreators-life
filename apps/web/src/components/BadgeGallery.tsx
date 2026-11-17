@@ -72,7 +72,7 @@ function Tile({ b, held, count, fresh, onOpen }: { b: Badge; held: HeldBadge | u
   // On a phone a locked tile keeps its name, tier and bar; how to earn it is one tap away in its sheet. Wider screens show it on the tile too.
   const wide = useWide();
   return (
-    <button type="button" onClick={onOpen} className="badge-tile toy toy-soft flex min-h-[44px] w-full flex-col items-center gap-xs rounded-tile bg-card p-sm text-center">
+    <button type="button" onClick={onOpen} className="toy toy-soft flex min-h-[44px] w-full flex-col items-center gap-xs rounded-tile bg-card p-sm text-center">
       <BadgeArt name={b.name} icon={b.icon} tier={b.tier} shape={BADGE_FAMILY_META[b.family].shape} earned={earned} size="md" shine={fresh} decorative />
       {/* The name keeps its last two words together, so a narrow phone tile reads "Ten / projects cleared", never a lone "cleared". */}
       <span className="text-subhead font-semibold">{nameTail(b.name)}</span>
@@ -207,9 +207,7 @@ export function BadgeGallery() {
               />
             </>
           );
-          // On a phone each family is a fold (ten families of medals are a long scroll); one you hold a badge in starts open. Open and taller
-          // than the window, its sticky close runs down the tiles' own right edge, as a task's does down its card (2026-11-17): the grid keeps
-          // the fold's full width and only the tiles in the close's column take the lane as their own padding (`fitLane`, StickyCloseRail.tsx).
+          // On a phone each family is a fold (ten families of medals are a long scroll); one you hold a badge in starts open.
           if (!wide)
             return (
               <Fold key={f} className="mt-xs" title={f} hint={`${got} of ${all}`} defaultOpen={got > 0}>

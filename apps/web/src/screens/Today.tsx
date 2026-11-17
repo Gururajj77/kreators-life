@@ -139,7 +139,7 @@ function BacklogTask({ t, date, queue }: { t: Node; date: string; queue: ReturnT
       editControls={`task-plan-${t.id}`}
       panel={
         <>
-          <div className="row-lane mt-xs flex flex-wrap items-center gap-xs" role="group" aria-label={`Pick a day for ${t.title}`}>
+          <div className="mt-xs flex flex-wrap items-center gap-xs" role="group" aria-label={`Pick a day for ${t.title}`}>
             <button type="button" onClick={() => pick.mutate(date)} className="toy toy-soft min-h-[36px] md:min-h-[44px] tap-pad rounded-pill border-2 border-line bg-card px-sm text-subhead font-medium">
               Today
             </button>

@@ -21,7 +21,7 @@ import type { TagTone } from '@kreators/shared';
 import { shortDate, dateTime } from '../lib/date';
 import { ErrorLine } from '../components/ErrorLine';
 import { ToggleChevron } from '../components/ToggleMark';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
+import { StickyClose, useTallOpen } from '../components/StickyClose';
 
 const fmtDate = (d: string | null) => (d ? shortDate(d) : 'no date');
 const fmtWhen = dateTime;
@@ -204,14 +204,14 @@ function OrgCard({ org }: { org: Organization }) {
           </span>
         </span>
         {/* While the sticky close shows, "Hide" and its chevron keep their slot unseen: the close stands where they were. */}
-        <span className={`flex shrink-0 items-center gap-xs text-subhead text-ink-soft ${railOn ? 'invisible' : ''}`}>
+        <span className="flex shrink-0 items-center gap-xs text-subhead text-ink-soft sticky-close-mark">
           {open ? 'Hide' : 'People'}
           <ToggleChevron open={open} />
         </span>
       </button>
-      {railOn && <StickyClose onClose={() => setOpen(false)} label={`Close the people in ${org.name}`} opener={() => toggle.current} />}
+      {railOn && <StickyClose onClose={() => setOpen(false)} label={`Close the people in ${org.name}`} title={`People in ${org.name}`} opener={() => toggle.current} />}
       {open && (
-        <div id={`org-people-${org.id}`} className={`mt-sm ${STICKY_CLOSE_LANE}`}>
+        <div id={`org-people-${org.id}`} className="mt-sm">
           <ul className="flex list-none flex-col gap-xs p-0 m-0">
             {members.data?.members.map((m) => (
               <li key={m.userId} className="flex items-center gap-sm rounded-tile bg-paper p-sm">

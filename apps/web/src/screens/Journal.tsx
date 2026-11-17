@@ -27,7 +27,7 @@ import { AppIcon } from '../components/AppIcon';
 import { EmergenceSlot } from '../components/EmergenceSlot';
 import { GratitudeCard, GratitudeLines } from '../components/GratitudeCard';
 import { StickyAction } from '../components/StickyAction';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
+import { StickyClose, useTallOpen } from '../components/StickyClose';
 
 // The prompt list is a large block of text, so it downloads only when the Journal opens.
 const JournalPrompt = lazyNamed(() => import('../components/JournalPrompt'), 'JournalPrompt');
@@ -153,7 +153,7 @@ export function Journal() {
             const m = e.emotion ? MOODS.find((x) => x.value === e.emotion) : null;
             return (
               <li key={e.id}>
-                <button type="button" onClick={() => setEditing(e)} className={`toy toy-soft flex w-full items-start gap-sm rounded-tile bg-card p-sm text-left`}>
+                <button type="button" onClick={() => setEditing(e)} className="toy toy-soft flex w-full items-start gap-sm rounded-tile bg-card p-sm text-left">
                   {m ? (
                     <MoodFace value={m.value} size={40} />
                   ) : (
@@ -266,7 +266,7 @@ function DayPanel({ date, calendar, onClose, onOpen, onNew, onGratitude }: { dat
           <h2 id="journal-day-heading" ref={head} tabIndex={-1} className="m-0 min-w-0 text-title3 outline-none">
             {pretty}
           </h2>
-          <CloseButton onClick={close} label="Close this day" className={railOn ? 'invisible' : ''} />
+          <CloseButton onClick={close} label="Close this day" className="sticky-close-mark" />
         </div>
         {railOn && (
           <StickyClose
@@ -275,10 +275,11 @@ function DayPanel({ date, calendar, onClose, onOpen, onNew, onGratitude }: { dat
               onClose();
             }}
             label="Close this day"
+            title={pretty}
             opener={opener}
           />
         )}
-        <div className={`mt-sm flex flex-col gap-sm ${STICKY_CLOSE_LANE}`}>
+        <div className="mt-sm flex flex-col gap-sm">
           {q.isPending && <SkeletonList count={1} lines={2} label="Opening" />}
           {q.data && entries.length === 0 && <p className="m-0 text-subhead text-ink-soft">Nothing written on this day yet.</p>}
           {entries.length > 0 && (

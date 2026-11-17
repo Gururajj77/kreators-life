@@ -1,5 +1,5 @@
 import { CloseButton } from '../components/CloseButton';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
+import { StickyClose, useTallOpen } from '../components/StickyClose';
 import { DEFAULT_PAGE_SIZE, formatCount, pageQuery, type Page, type PageSize, money } from '@kreators/shared';
 import { MAX_CREDIT_GRANT, PAID_PLANS, PLAN_DAYS, planName, type PlanKey, type TagTone } from '@kreators/shared';
 import { ATTENDEE_XP_MAX, codeProblem, normalizeCode, type AdminAttendeeCode } from '@kreators/shared';
@@ -654,10 +654,10 @@ export function Admin() {
                       the close stays in view beside the panel instead (StickyClose), and this one keeps its slot unseen, so there is one. */}
                   <div className="flex items-center justify-between gap-sm">
                     <h3 className="min-w-0 text-title2">{selected.displayName || 'Anonymous climber'}</h3>
-                    <CloseButton onClick={() => setSelected(null)} label="Close this person" className={personRail ? 'invisible' : ''} />
+                    <CloseButton onClick={() => setSelected(null)} label="Close this person" className="sticky-close-mark" />
                   </div>
-                  {personRail && <StickyClose onClose={() => setSelected(null)} label="Close this person" opener={() => rowOpener(peopleTable.current, personRow.current)} />}
-                  <div className={STICKY_CLOSE_LANE}>
+                  {personRail && <StickyClose onClose={() => setSelected(null)} label="Close this person" title={selected.displayName || 'Anonymous climber'} opener={() => rowOpener(peopleTable.current, personRow.current)} />}
+                  <div>
                     <p className="mt-xs m-0 text-caption text-ink-mute">{selected.id}</p>
 
                     <p className="mt-md m-0 text-subhead font-semibold">Permissions</p>
@@ -1358,10 +1358,10 @@ export function Admin() {
                     <h3 className="min-w-0 text-title2">
                       {orderDetail.order.productTitle} <span className="text-subhead text-ink-mute">#{orderDetail.order.id.slice(0, 8)}</span>
                     </h3>
-                    <CloseButton onClick={() => setOrderDetail(null)} label="Close this order" className={orderRail ? 'invisible' : ''} />
+                    <CloseButton onClick={() => setOrderDetail(null)} label="Close this order" className="sticky-close-mark" />
                   </div>
-                  {orderRail && <StickyClose onClose={() => setOrderDetail(null)} label="Close this order" opener={() => rowOpener(ordersTable.current, orderRow.current)} />}
-                  <div className={STICKY_CLOSE_LANE}>
+                  {orderRail && <StickyClose onClose={() => setOrderDetail(null)} label="Close this order" title={orderDetail.order.productTitle} opener={() => rowOpener(ordersTable.current, orderRow.current)} />}
+                  <div>
                     <p className="mt-xs m-0 text-subhead text-ink-soft">
                       <Pill tone={statusTone(orderDetail.order.status)}>{orderDetail.order.status}</Pill> {orderDetail.order.provider}
                       {orderDetail.order.providerOrderId ? `, ${orderDetail.order.providerOrderId}` : ''}

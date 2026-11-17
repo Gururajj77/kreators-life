@@ -18,7 +18,7 @@ import { RepeatPicker } from './RepeatPicker';
 import { SkeletonList } from './Skeleton';
 import { Sheet } from './Sheet';
 import { StatusTag } from './StatusTag';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from './StickyClose';
+import { StickyClose, useTallOpen } from './StickyClose';
 import { Toggle } from './Toggle';
 import { FIELD } from '../lib/ui';
 
@@ -259,7 +259,7 @@ function DayPanel({ day, calendar, data, loading, schedules, onClose, onAdd, onE
           <h3 id="rcal-day-heading" ref={head} tabIndex={-1} className="m-0 min-w-0 text-title3 outline-none">
             {prettyDate(day)}
           </h3>
-          <CloseButton onClick={close} label="Close this day" className={railOn ? 'invisible' : ''} />
+          <CloseButton onClick={close} label="Close this day" className="sticky-close-mark" />
         </div>
         {railOn && (
           <StickyClose
@@ -268,10 +268,11 @@ function DayPanel({ day, calendar, data, loading, schedules, onClose, onAdd, onE
               onClose();
             }}
             label="Close this day"
+            title={prettyDate(day)}
             opener={opener}
           />
         )}
-        <div className={`mt-sm flex flex-col gap-sm ${STICKY_CLOSE_LANE}`}>
+        <div className="mt-sm flex flex-col gap-sm">
           {loading && data === undefined ? (
             <SkeletonList count={1} label="Loading this day" />
           ) : (

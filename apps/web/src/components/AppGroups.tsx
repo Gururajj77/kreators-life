@@ -165,7 +165,19 @@ export function AppGroups({
             }
             controls={
               editing ? (
+                // The switch row sits under the group's header in the flow, never sticky and never in the close's bar. On a phone and a
+                // tablet the switch ends the row at its right, its words at the left, so Reset order (once the group has an order) comes
+                // first; from the laptop width it stays after the switch, as before (2026-11-17, the founder: "keep that switch right aligned").
                 <div className="mx-sm mb-sm flex items-center gap-xs">
+                  {prefs.order[g] && (
+                    <div className="shrink-0 lg:order-last">
+                      <IconButton
+                        icon={RotateCcw}
+                        label="Reset order"
+                        onClick={resetOrder}
+                      />
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1">
                     <Toggle
                       compact
@@ -179,13 +191,6 @@ export function AppGroups({
                       color={RELATIONSHIP_BY_KEY[MODULE_GROUP_ACCENT[g]].color}
                     />
                   </div>
-                  {prefs.order[g] && (
-                    <IconButton
-                      icon={RotateCcw}
-                      label="Reset order"
-                      onClick={resetOrder}
-                    />
-                  )}
                 </div>
               ) : null
             }

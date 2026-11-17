@@ -19,7 +19,7 @@ import { Hero, HeroNumber } from '../components/Hero';
 import { Pager, usePage } from '../components/Pager';
 import { Screen } from '../components/Screen';
 import { Section } from '../components/Section';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
+import { StickyClose, useTallOpen } from '../components/StickyClose';
 import { SkeletonList } from '../components/Skeleton';
 import { Toggle } from '../components/Toggle';
 import { api } from '../lib/api';
@@ -379,8 +379,7 @@ function FirstSteps({ steps, sections, onLine, onBox }: { steps: NonNullable<Coa
   return (
     <Section id="steps-heading" title="First steps" lede="Each one ticks itself when you do it.">
       <div ref={readRoot} data-sticky-close-root="">
-        {/* While the sticky close runs down the steps' edge they keep a lane for it, so it never sits on a step's button. */}
-        <ul className={`m-0 flex list-none flex-col gap-xs p-0 ${STICKY_CLOSE_LANE}`}>
+        <ul className="m-0 flex list-none flex-col gap-xs p-0">
           <StepRow
             done={steps.line}
             title="Fill your directory card"
@@ -425,7 +424,7 @@ function FirstSteps({ steps, sections, onLine, onBox }: { steps: NonNullable<Coa
         </ul>
         {railOn && <StickyClose onClose={() => setReadOpen(false)} label="Close how sharing works" opener={() => readToggle.current} />}
         {readOpen && (
-          <div className={`mt-xs ${STICKY_CLOSE_LANE}`}>
+          <div className="mt-xs">
             <div id="coach-sharing-read" className="rounded-tile bg-card p-sm shadow-toy-soft">
               <p className="m-0 text-subhead">Each student has six switches of their own. You see only what is on, read fresh every time, and it stops at once when they switch it off.</p>
               <ul className="mt-xs m-0 flex list-none flex-col gap-xs p-0 text-subhead text-ink-soft">

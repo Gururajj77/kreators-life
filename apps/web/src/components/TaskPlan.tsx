@@ -165,11 +165,12 @@ export function PriorityPicker({ value, onChange }: { value: Priority | null; on
   return (
     <div className="@container">
       <span className="block text-subhead font-semibold">Priority</span>
-      {/* Two columns of equal buttons (P0 and P1, then P2 and P3), four in a row once the picker itself is 27rem wide. Read from its own
+      {/* Two columns of equal buttons (P0 and P1, then P2 and P3), four in a row once the picker itself is 29rem wide. Read from its own
           width, never the window's: the pills keep their words on one line and "P3 Whenever" needs about 104px, so a form in a tablet's
-          column beside the sticky close's lane (392px), a task's open plan beside its close (400px) or a phone on its side (416 to 424px)
-          takes the two rows, where four pressed the words into or through the pill's edge (2026-11-14). A laptop and a sheet keep four. */}
-      <div className="mt-xs grid grid-cols-2 gap-xs @min-[27rem]:grid-cols-4" role="group" aria-label="Priority">
+          column (392px), a task's open plan (400px) or a phone on its side (416 to 424px)
+          takes the two rows, where four pressed the words into or through the pill's edge (2026-11-14); so does a tablet's open plan or Add a task
+          at 768 (432 to 440px) since the close no longer keeps a lane (2026-11-17), four first fitting whole at 464px. A laptop and a sheet keep four. */}
+      <div className="mt-xs grid grid-cols-2 gap-xs @min-[29rem]:grid-cols-4" role="group" aria-label="Priority">
         {PRIORITIES.map((p) => (
           <button key={p.value} type="button" aria-pressed={value === p.value} onClick={() => onChange(value === p.value ? null : p.value)} className={`pri-${p.value} pri-chip toy min-h-[36px] md:min-h-[44px] tap-pad w-full whitespace-nowrap rounded-pill px-xs text-subhead font-medium`}>
             {p.tag} {p.name}
@@ -247,7 +248,7 @@ export function TaskPlanFields({ plan, onChange, today, pillar, taskId }: { plan
         <div className="flex flex-wrap items-end gap-xs">
           <input type="date" aria-label="Do date" value={plan.doDate} onChange={(e) => set({ doDate: e.target.value })} className={`${FIELD} min-w-[200px] flex-1`} />
           {/* A phone: the three quick days fill one line across the full width under the date, each as wide as its words need and sharing what is
-              left, so "Next week" never runs into its pill's edge beside a 360px row's lane; where even that is too tight they take two lines, the
+              left, so "Next week" never runs into its pill's edge on a 320px phone; where even that is too tight they take two lines, the
               last one filling its line. Wider, beside the date at its right. */}
           <div className="fill-row-all flex w-full flex-wrap gap-xs sm:ml-auto sm:w-auto sm:justify-end" role="group" aria-label="Quick days">
           {[
@@ -303,8 +304,9 @@ export function TaskPlanFields({ plan, onChange, today, pillar, taskId }: { plan
       <Toggle on={plan.forReview} onChange={(forReview) => set({ forReview })} label="Bring it to my review" hint="The review for its week, month or quarter lists it, so you can put it into your answers." compact />
 
       <div className="flex flex-wrap items-end gap-xs">
-      {/* Time keeps room for a whole 12-hour value ("10:30 AM" and its clock) inside a phone plan's close lane; Minutes takes the rest, level at the foot. */}
-      <div className="grid min-w-[240px] flex-1 grid-cols-[minmax(9.25rem,1fr)_minmax(0,1fr)] items-end gap-xs">
+      {/* Time is never narrower than this browser's own time control needs for a whole 12-hour value ("10:30 AM" and its clock), so its hours,
+          minutes and AM never crowd or spill onto Minutes; the two share the width evenly where there is room, Minutes level at the foot. */}
+      <div className="grid min-w-[min(240px,100%)] flex-1 grid-cols-[minmax(max-content,1fr)_minmax(0,1fr)] items-end gap-xs">
         <label className="block">
           <span className="block text-subhead font-semibold">Time (optional)</span>
           <input type="time" value={plan.time} onChange={(e) => set({ time: e.target.value })} className={FIELD} />
@@ -316,8 +318,10 @@ export function TaskPlanFields({ plan, onChange, today, pillar, taskId }: { plan
       </div>
       {/* Right under the time and minutes on a phone; from the tablet width, under the whole row (the chips stay beside the fields). */}
       {pillar && !plan.timeBlockId && plan.time && <TimeFitHint plan={plan} pillar={pillar} taskId={taskId} day={plan.doDate || plan.dueDate || today} onUse={(time) => set({ time })} className="w-full sm:order-last" />}
-      {/* On a phone the five chips are one even row across the full width, like the quick days above; wider, at the right. */}
-      <div className="grid w-full grid-cols-5 gap-xs sm:ml-auto sm:flex sm:w-auto sm:flex-wrap sm:justify-end" role="group" aria-label="How long it should take">
+      {/* On a phone the five chips fill one line across the full width like the quick days above, each as wide as its words ("45 min", "1.5 h")
+          and sharing what is left, so no label ever runs into the next; where even that is too tight they go two over three (`.est-chips` in
+          app.css), never overlapping. Wider, at the right. */}
+      <div className="est-chips fill-row-all flex w-full flex-wrap gap-xs sm:ml-auto sm:w-auto sm:justify-end" role="group" aria-label="How long it should take">
         {ESTIMATES.map((m) => (
           <button key={m} type="button" aria-pressed={plan.minutes === String(m)} onClick={() => set({ minutes: plan.minutes === String(m) ? '' : String(m) })} className={`toy min-h-[36px] md:min-h-[44px] tap-pad whitespace-nowrap rounded-pill border-2 px-0 text-subhead font-medium sm:px-sm ${plan.minutes === String(m) ? 'border-ink bg-ink text-on-ink' : 'toy-soft border-line bg-card'}`}>
             {m >= 60 ? `${m / 60} h` : `${m} min`}
@@ -445,7 +449,7 @@ export function TaskEndings({ task, today, onPlan, onGone }: { task: Node; today
             <span className="block text-subhead font-semibold">Day</span>
             <input type="date" required min={today} value={day} onChange={(e) => setDay(e.target.value)} className={FIELD} />
           </label>
-          <label className="min-w-[120px] flex-1">
+          <label className="min-w-max flex-1">
             <span className="block text-subhead font-semibold">Time</span>
             <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={FIELD} />
           </label>
@@ -687,8 +691,7 @@ export function TaskPanel({ task, today }: { task: Node; today: string }) {
   const remove = useMutation({ mutationFn: () => api.deleteNode(task.id), onSuccess: () => refresh() });
   const projects = projectsQ.data?.projects ?? [];
   return (
-    // `row-lane`: where the row's close runs down its right edge (a phone), the plan keeps a lane for it (RowClose in CheckRow.tsx).
-    <div className="row-lane mt-xs flex flex-col gap-md rounded-card bg-card p-md shadow-toy-soft">
+    <div className="mt-xs flex flex-col gap-md rounded-card bg-card p-md shadow-toy-soft">
       {task.status === 'active' && (
         <FieldLabel label="Task">
           <input

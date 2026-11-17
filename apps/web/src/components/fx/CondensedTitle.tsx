@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { STICKY_CLOSE_CHANGED } from '../StickyClose';
 
 /**
  * The large title's small twin. Wrap the page's own <h1>; once it has scrolled up past the top, a small centred copy of the title fades in
@@ -17,6 +18,16 @@ export function CondensedTitle({ title, children, className = '' }: { title: str
     io.observe(el);
     return () => io.disconnect();
   }, []);
+  // The bar's coming and going moves the line a sticky close or its slim bar sticks under (`--sc-cond` in app.css). The observer says so
+  // after the scroll that caused it, so a single jump (a hash, On this page) would leave them read against the old line: say it.
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    window.dispatchEvent(new Event(STICKY_CLOSE_CHANGED));
+  }, [on]);
   return (
     <>
       <div ref={ref} className={className}>

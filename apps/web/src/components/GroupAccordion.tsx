@@ -3,7 +3,7 @@ import gsap from 'gsap';
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { Avatar } from './Avatar';
 import { tick } from './fx/haptics';
-import { STICKY_CLOSE_CHANGED, STICKY_CLOSE_LANE, StickyClose, useTallOpen } from './StickyClose';
+import { STICKY_CLOSE_CHANGED, StickyClose, useTallOpen } from './StickyClose';
 import { ToggleChevron } from './ToggleMark';
 
 /**
@@ -21,9 +21,9 @@ import { ToggleChevron } from './ToggleMark';
  *
  * An open group taller than the room the window has keeps its close in view beside it (`StickyClose`, 2026-11-14, the founder: "the close
  * buttons that need one to scroll back top need the close button to be sticky outside the toggle tab"): the rail sits in the group itself,
- * right after the header, never inside the sliding body (whose clip would cut it off), the chevron keeps its slot unseen, the controls and
- * the body keep a lane while it runs down the group's edge (the app or table lists in it keeping their full width with the lane as their
- * own padding, 2026-11-16, `fitLane` in StickyCloseRail.tsx), and Escape anywhere in the group closes it. The body clips only while it
+ * right after the header, never inside the sliding body (whose clip would cut it off), standing out it takes the chevron's place, the controls and
+ * the body keep their full width while it runs in (a slim bar with the group's name and the close sticks under the top bar once the
+ * header has gone up under it, 2026-11-17), and Escape anywhere in the group closes it. The body clips only while it
  * slides, so a tall fold or a task's plan inside it can keep its own close in view too.
  */
 export function GroupAccordion({
@@ -116,14 +116,11 @@ export function GroupAccordion({
       className="toy toy-flat @container flex min-h-[72px] w-full items-center gap-sm rounded-card p-sm text-left"
     >
       <Avatar relationship={rel.key} size={44} decorative still mood={mood} />
-      {/* The words and the count side by side, as they always were; in a narrow header (under 18.5rem inside its padding: a phone's group
-          standing in the lane a tall fold keeps for its close, Profile's "Tables AI chat can read" at 390, or a 320px phone) the count drops
+      {/* The words and the count side by side, as they always were; in a narrow header (under 18.5rem inside its padding: a 320px phone) the count drops
           under the line, so the words keep the column's width instead of a ribbon of one word a line (2026-11-14). 360 and up at rest keep
-          the one row (a 328px header there, 304px inside its padding). The same happens while the group is a surface that keeps a lane round
-          it as its own padding (`data-sc-pad`, inside a tall fold whose close runs down its edge, Profile's "Tables AI chat can read" at 414
-          and 430), so its line never shrinks to a word or two a line (2026-11-17; `.ga-meta` in app.css). */}
-      <span className="ga-meta flex min-w-0 flex-1 items-center gap-sm @max-[18.5rem]:flex-col @max-[18.5rem]:items-start @max-[18.5rem]:gap-xs">
-        <span className="ga-words min-w-0 flex-1 @max-[18.5rem]:self-stretch">
+          the one row (a 328px header there, 304px inside its padding). */}
+      <span className="flex min-w-0 flex-1 items-center gap-sm @max-[18.5rem]:flex-col @max-[18.5rem]:items-start @max-[18.5rem]:gap-xs">
+        <span className="min-w-0 flex-1 @max-[18.5rem]:self-stretch">
           <span id={`${id}-h`} className="block text-title3 type-figure">
             {MODULE_GROUPS[group]}
           </span>
@@ -135,8 +132,8 @@ export function GroupAccordion({
           {count}
         </span>
       </span>
-      {/* While the sticky close shows, the chevron keeps its slot unseen, as a task card's edit button does. */}
-      <ToggleChevron open={open} size={20} className={`text-ink-soft ${railOn ? 'invisible' : ''}`} />
+      {/* While the sticky close stands out beside it, the chevron keeps its slot unseen (`sticky-close-mark`). */}
+      <ToggleChevron open={open} size={20} className="text-ink-soft sticky-close-mark" />
     </button>
   );
   return (
@@ -169,10 +166,9 @@ export function GroupAccordion({
           opener={() => toggleRef.current}
         />
       )}
-      {/* The controls keep the lane too, so a close running down the group's edge never sits on their buttons. */}
-      {controls && <div className={STICKY_CLOSE_LANE}>{controls}</div>}
+      {controls}
       {/* One small gap under the group's toggle, so its hover tint never touches the list (the founder, 2026-11-06). */}
-      <div ref={body} id={`${id}-b`} hidden={!open} className={`overflow-hidden ${STICKY_CLOSE_LANE}`}>
+      <div ref={body} id={`${id}-b`} hidden={!open} className="overflow-hidden">
         <div className="pt-xs">{children}</div>
       </div>
     </Shell>

@@ -27,7 +27,7 @@ import { Fold } from '../components/Fold';
 import { AskSheet, type Ask } from '../components/Channels';
 import { ConfirmDelete } from '../components/ConfirmDelete';
 import { ToggleChevron } from '../components/ToggleMark';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
+import { StickyClose, useTallOpen } from '../components/StickyClose';
 import { shortDate } from '../lib/date';
 
 const FILTER_ITEMS = FEED_FILTERS.map((f) => ({ key: f, label: FEED_FILTER_META[f] }));
@@ -430,8 +430,8 @@ function threadsOf(replies: readonly CommunityReply[]): Thread[] {
 /**
  * One reply and the replies under it. Fold hides everything under it; open and taller than the sheet's panel, a close stays in view beside
  * the thread as the panel scrolls (`StickyClose`, 2026-11-14, the founder: "the close buttons that need one to scroll back top need the
- * close button to be sticky"), folding it and handing focus back to Fold: the reply's card and the replies under it keep the lane the close
- * runs down, and Fold's chevron keeps its slot unseen. At rest each reply is the card it always was, indented by its depth.
+ * close button to be sticky"), folding it and handing focus back to Fold: a slim bar names whose replies they are once the reply has scrolled
+ * past the panel's top (2026-11-17), and nothing moves in for it. At rest each reply is the card it always was, indented by its depth.
  */
 function ReplyThread({ t, folded, onFold, reacting, onReact, onReply, onBlock }: { t: Thread; folded: Set<string>; onFold: (id: string, shut: boolean) => void; reacting: boolean; onReact: (id: string, kind: ReactionKind) => void; onReply: (r: CommunityReply) => void; onBlock: (r: CommunityReply) => void }) {
   const { r, kids, count } = t;
@@ -441,7 +441,7 @@ function ReplyThread({ t, folded, onFold, reacting, onReact, onReply, onBlock }:
   const railOn = useTallOpen(root, open);
   return (
     <li ref={root} data-sticky-close-root="">
-      <div id={`reply-${r.id}`} style={{ marginLeft: `calc(var(--spacing-md) * ${r.depth})` }} className={`rounded-tile bg-card p-sm shadow-toy-soft ${r.depth > 0 ? 'border-l-4 border-line' : ''} ${STICKY_CLOSE_LANE}`}>
+      <div id={`reply-${r.id}`} style={{ marginLeft: `calc(var(--spacing-md) * ${r.depth})` }} className={`rounded-tile bg-card p-sm shadow-toy-soft ${r.depth > 0 ? 'border-l-4 border-line' : ''}`}>
         <p className="m-0 text-subhead font-semibold">
           {r.authorName}
           {r.anonymous && <IconTag className="ml-xs" tone="neutral" icon="UserRound">{r.mine ? 'Anonymous, you' : 'Anonymous'}</IconTag>}{' '}
@@ -456,7 +456,7 @@ function ReplyThread({ t, folded, onFold, reacting, onReact, onReply, onBlock }:
           {count > 0 && (
             <Button ref={toggle} variant="ghost" size="sm" aria-expanded={open} onClick={() => onFold(r.id, open)}>
               {open ? 'Fold' : `Show ${count} ${count === 1 ? 'reply' : 'replies'}`}
-              <ToggleChevron open={open} size={14} className={railOn ? 'invisible' : ''} />
+              <ToggleChevron open={open} size={14} className="sticky-close-mark" />
             </Button>
           )}
           {!r.mine && (
@@ -466,9 +466,9 @@ function ReplyThread({ t, folded, onFold, reacting, onReact, onReply, onBlock }:
           )}
         </div>
       </div>
-      {railOn && <StickyClose onClose={() => onFold(r.id, true)} label={`Close the replies to ${r.authorName}`} opener={() => toggle.current} />}
+      {railOn && <StickyClose onClose={() => onFold(r.id, true)} label={`Close the replies to ${r.authorName}`} title={`Replies to ${r.authorName}`} opener={() => toggle.current} />}
       {open && (
-        <ul className={`mt-xs flex list-none flex-col gap-xs p-0 m-0 ${STICKY_CLOSE_LANE}`}>
+        <ul className="mt-xs flex list-none flex-col gap-xs p-0 m-0">
           {kids.map((k) => (
             <ReplyThread key={k.r.id} t={k} folded={folded} onFold={onFold} reacting={reacting} onReact={onReact} onReply={onReply} onBlock={onBlock} />
           ))}

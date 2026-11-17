@@ -67,8 +67,8 @@ function Card({ card, color }: { card: BuildCard; color: string }) {
   const all = itemsOf(card);
   const pipe = card.visual === 'pipe';
   // `overflow-x-clip` draws nothing at rest (no content passes the card's padding); it tells the open "Files and checks" fold's sticky close
-  // that the card's right edge is where the page ends for it (`limitOf` in StickyCloseRail.tsx), so in the masonry the close runs down the
-  // fold's own edge instead of standing outside, where it sat on the next column's card and under it (2026-11-16).
+  // that the card's right edge is where the page ends for it (`limitOf` in StickyCloseRail.tsx), so in the masonry the close stays in the
+  // card (its slim bar over the fold) and never stands over the next column's card (2026-11-16).
   return (
     <article className={`mb-sm break-inside-avoid overflow-x-clip rounded-card bg-card p-md shadow-toy-soft ${card.wide ? 'lg:[column-span:all]' : ''}`}>
       <div className="flex items-center gap-sm">

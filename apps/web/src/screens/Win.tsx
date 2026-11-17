@@ -25,7 +25,7 @@ import { Reveal } from '../components/fx/Reveal';
 import { CardHead } from '../components/CardHead';
 import { ToggleChevron } from '../components/ToggleMark';
 import { StickyAction } from '../components/StickyAction';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
+import { StickyClose, useTallOpen } from '../components/StickyClose';
 
 type Rule = Pick<Bounty, 'ratePerThousand' | 'maxPayoutPoints' | 'minViews'>;
 
@@ -601,7 +601,7 @@ function MySubmission({ s, onDone }: { s: BountySubmission; onDone: () => void }
       {(s.status !== 'paid' || reporting) && (
         <div ref={reportRoot} data-sticky-close-root="">
           {s.status !== 'paid' && (
-            <div className={`mt-sm flex flex-wrap gap-xs ${STICKY_CLOSE_LANE}`}>
+            <div className="mt-sm flex flex-wrap gap-xs">
               {auto && (
                 <Button variant="outline" onClick={() => refresh.mutate()} disabled={refresh.isPending}>
                   Refresh numbers
@@ -609,14 +609,14 @@ function MySubmission({ s, onDone }: { s: BountySubmission; onDone: () => void }
               )}
               <Button ref={reportToggle} variant={auto ? 'ghost' : 'outline'} onClick={() => setReporting((v) => !v)} aria-expanded={reporting} aria-controls="win-report-numbers">
                 Report numbers
-                {/* While the sticky close shows, the chevron keeps its slot unseen. */}
-                <ToggleChevron open={reporting} className={railOn ? 'invisible' : ''} />
+                {/* While the sticky close stands out beside it, the chevron keeps its slot unseen (`sticky-close-mark`). */}
+                <ToggleChevron open={reporting} className="sticky-close-mark" />
               </Button>
             </div>
           )}
           {railOn && <StickyClose onClose={() => setReporting(false)} label="Close Report numbers" opener={() => reportToggle.current} />}
           {reporting && (
-            <div className={`mt-sm ${STICKY_CLOSE_LANE}`}>
+            <div className="mt-sm">
               <form
                 id="win-report-numbers"
                 className="flex flex-col gap-sm rounded-tile bg-paper p-sm"

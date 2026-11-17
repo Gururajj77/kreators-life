@@ -30,7 +30,7 @@ import { StatusTag } from '../components/StatusTag';
 import { CheckRow } from '../components/CheckRow';
 import { Segmented } from '../components/fx/Segmented';
 import { SortableList } from '../components/SortableList';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
+import { StickyClose, useTallOpen } from '../components/StickyClose';
 import { ToggleChevron } from '../components/ToggleMark';
 import { HowItWorks } from '../components/HowTo';
 import { Skeleton } from '../components/Skeleton';
@@ -560,10 +560,9 @@ function Loaded({
  * A day template's card: its name is the toggle, the pillars and the day's strip always sit under it, and the why, its book and the editor
  * (`children`) only once it is open. Open and taller than the room the window has, its close stays in view beside it (`StickyClose`,
  * 2026-11-14, the founder: "the close buttons that need one to scroll back top need the close button to be sticky outside the toggle
- * tab"): in the margin at the card's right where there is one, else down the card's own right edge, where the strip and the editor keep a
- * lane for it; the chevron keeps its slot unseen meanwhile, and Escape in the card closes it too, but never from the editor's form, whose
- * words a close would throw away. The slots lay out by the room the editor has (`tb-slots`), so the lane never cuts a time short. A
- * short card is as it was.
+ * tab"): in the margin at the card's right where there is one (the chevron keeping its slot unseen), else a slim bar with its name and
+ * the close sticks under the top bar (2026-11-17); Escape in the card closes it too, but never from the editor's form, whose words a close
+ * would throw away. The slots lay out by the room the editor has (`tb-slots`). A short card is as it was.
  */
 function TemplateCard({
   template: t,
@@ -595,12 +594,11 @@ function TemplateCard({
           {color && <span className="tb-dot shrink-0" aria-hidden="true" />}
           <span className="min-w-0">{t.name}</span>
         </span>
-        {/* While the sticky close shows, the chevron keeps its slot unseen, as a task card's edit button does. */}
-        <ToggleChevron open={open} className={`shrink-0 text-ink-soft ${railOn ? 'invisible' : ''}`} />
+        {/* While the sticky close stands out beside it, the chevron keeps its slot unseen (`sticky-close-mark`). */}
+        <ToggleChevron open={open} className="shrink-0 text-ink-soft sticky-close-mark" />
       </button>
       {railOn && <StickyClose onClose={onClose} label={`Close ${t.name}`} opener={() => toggle.current} />}
-      {/* The tags and the strip keep the lane too, so a close running down the card's edge never sits on a tag's words. */}
-      <div className={`flex flex-col gap-xs px-md pb-md ${STICKY_CLOSE_LANE}`}>
+      <div className="flex flex-col gap-xs px-md pb-md">
         <span className="fill-row flex flex-wrap items-center gap-xs">
           <PillarTag pillar={t.lead} lead="Leads with " />
           {t.second && <PillarTag pillar={t.second} lead="Then " />}
@@ -609,8 +607,8 @@ function TemplateCard({
         <DayStrip slots={t.slots} blocks={blocks} className="w-full" />
       </div>
       {open && (
-        // `tb-slots`: the slots inside lay out by the room this body has, so the lane a close keeps never cuts a time (app.css).
-        <div id={bodyId} className={`tb-slots border-t border-line p-md ${STICKY_CLOSE_LANE}`}>
+        // `tb-slots`: the slots inside lay out by the room this body has, never the window's (app.css).
+        <div id={bodyId} className="tb-slots border-t border-line p-md">
           {children}
         </div>
       )}
@@ -620,8 +618,8 @@ function TemplateCard({
 
 /**
  * A block's row in the list: its name, tag, area and pillar are the toggle, and the editor (`children`) opens under it. Open and taller
- * than the room the window has, its close stays in view down the row's right edge (`StickyClose`, 2026-11-14), the editor keeping a lane
- * for it and the chevron its slot unseen. The list (`.fx-inset`) clips its rows to its rounded corners with `overflow: hidden`, which also
+ * than the room the window has, its close stays in view (`StickyClose`, 2026-11-14; a slim bar over the row once its header has gone up
+ * under the top bar, 2026-11-17). The list (`.fx-inset`) clips its rows to its rounded corners with `overflow: hidden`, which also
  * makes it a scroll box, where a sticky close would never stick and a close in the margin would be cut off; while a row is open the list
  * clips with `overflow: clip` instead (the same corners, at rest and open alike, and no scroll box), so the close runs down the row's own
  * edge and sticks under the top bar.
@@ -655,12 +653,12 @@ function BlockRow({ block: b, open, onToggle, onClose, children }: { block: Time
             {b.pillar && <PillarTag pillar={b.pillar} />}
           </span>
         </span>
-        {/* While the sticky close shows, the chevron keeps its slot unseen, as a task card's edit button does. */}
-        <ToggleChevron open={open} className={`text-ink-soft ${railOn ? 'invisible' : ''}`} />
+        {/* While the sticky close stands out beside it, the chevron keeps its slot unseen (`sticky-close-mark`). */}
+        <ToggleChevron open={open} className="text-ink-soft sticky-close-mark" />
       </button>
       {railOn && <StickyClose onClose={onClose} label={`Close ${b.name}`} opener={() => toggle.current} />}
       {open && (
-        <div id={`blk-${b.id}`} className={`px-sm pb-md ${STICKY_CLOSE_LANE}`}>
+        <div id={`blk-${b.id}`} className="px-sm pb-md">
           {children}
         </div>
       )}

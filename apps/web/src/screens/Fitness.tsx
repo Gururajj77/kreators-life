@@ -24,7 +24,7 @@ import { Segmented } from '../components/fx/Segmented';
 import { Sheet } from '../components/Sheet';
 import { SkeletonList } from '../components/Skeleton';
 import { StatusTag } from '../components/StatusTag';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
+import { StickyClose, useTallOpen } from '../components/StickyClose';
 import { SupplementsSection } from '../components/Supplements';
 import { api } from '../lib/api';
 import { dayLabel, lastDays, shortDay, todayLocal, weekday } from '../lib/date';
@@ -339,8 +339,8 @@ function DaySheet({ date, loading, moves, eat, proteinGoal, near, onClose, onCha
 /**
  * A movement on the day's sheet, whose Change opens its form in place. Open and taller than the sheet's panel, its close stays in view
  * beside the form as the panel scrolls (`StickyClose`, 2026-11-14, the founder: "the close buttons that need one to scroll back top need
- * the close button to be sticky"): the row (Change and the trash at its right) and the form each keep the lane it runs down, and Change
- * keeps reading Close at the top, the toggle the close hands focus back to.
+ * the close button to be sticky"): a slim bar with the movement and the close sticks at the panel's top once the row has scrolled past it
+ * (2026-11-17), and Change keeps reading Close at the top, the toggle the close hands focus back to.
  */
 function MoveRow({ m, near, editing, onToggle, onFold, armed, busy, onRemove, onSaved }: { m: MoveLog; near: boolean; editing: boolean; onToggle: () => void; onFold: () => void; armed: boolean; busy: boolean; onRemove: () => void; onSaved: () => void }) {
   const root = useRef<HTMLLIElement>(null);
@@ -348,7 +348,7 @@ function MoveRow({ m, near, editing, onToggle, onFold, armed, busy, onRemove, on
   const changeId = `move-change-${m.id}`;
   return (
     <li ref={root} data-sticky-close-root="" className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <div className={`flex items-center gap-sm ${STICKY_CLOSE_LANE}`}>
+      <div className="flex items-center gap-sm">
         <KindBadge kind={m.kind} />
         <span className="min-w-0 flex-1">
           <span className="block text-card-title">{moveLine(m)}</span>
@@ -363,9 +363,9 @@ function MoveRow({ m, near, editing, onToggle, onFold, armed, busy, onRemove, on
           <AnimatedIcon name="trash" size={20} />
         </TapTwiceIcon>
       </div>
-      {railOn && <StickyClose onClose={onFold} label={`Close the change to ${moveLine(m)}`} opener={() => document.getElementById(changeId)} />}
+      {railOn && <StickyClose onClose={onFold} label={`Close the change to ${moveLine(m)}`} title={moveLine(m)} opener={() => document.getElementById(changeId)} />}
       {editing && (
-        <div className={`mt-md ${STICKY_CLOSE_LANE}`}>
+        <div className="mt-md">
           <MoveForm kinds={MOVE_KINDS} initial={m} saveLabel="Save the change" onSave={(body) => api.editMove(m.id, body)} onDone={onSaved} />
         </div>
       )}
@@ -380,7 +380,7 @@ function EatCard({ eat, date, near, open, onToggle, onFold, armed, busy, onRemov
   const railOn = useTallOpen(root, open && date !== null);
   return (
     <div ref={root} data-sticky-close-root="" className="rounded-tile bg-card p-sm shadow-toy-soft">
-      <div className={`flex items-center gap-sm ${STICKY_CLOSE_LANE}`}>
+      <div className="flex items-center gap-sm">
         <span className="min-w-0 flex-1">
           <span className="block text-card-title">{eat.fasting ? 'A fasting day' : eat.dayScore === null ? 'Eating check-in' : `Eating score ${eat.dayScore}`}</span>
           <span className="block text-card-note text-ink-soft">
@@ -401,9 +401,9 @@ function EatCard({ eat, date, near, open, onToggle, onFold, armed, busy, onRemov
           <AnimatedIcon name="trash" size={20} />
         </TapTwiceIcon>
       </div>
-      {railOn && <StickyClose onClose={onFold} label="Close the change to this day’s eating check-in" opener={() => document.getElementById('eat-change')} />}
+      {railOn && <StickyClose onClose={onFold} label="Close the change to this day’s eating check-in" title="Eating check-in" opener={() => document.getElementById('eat-change')} />}
       {open && date && (
-        <div className={`mt-md ${STICKY_CLOSE_LANE}`}>
+        <div className="mt-md">
           <EatForm day={date} existing={eat} proteinGoal={proteinGoal} lastScoop={eat.protein?.scoopG ?? null} onGoalSaved={onGoalSaved} onSaved={onSaved} />
         </div>
       )}

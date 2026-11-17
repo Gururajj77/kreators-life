@@ -18,7 +18,7 @@ import { STICKY_CLOSE_CHANGED } from './StickyClose';
  *
  * When it shows: once the page has scrolled more than a screen down on a page at least two screens tall, never while the site's footer
  * is in view (it would sit on the footer's links), on the whole-page chats, the vibe check, a card table or in focus mode, never while an
- * open toggle's sticky close (`[data-sticky-close-btn]`, StickyClose.tsx) is in view (that close is the way out then, and on a laptop about
+ * open toggle's sticky close (`[data-sticky-close-btn]`, StickyClose.tsx; running in, only while its slim bar shows) is in view (that close is the way out then, and on a laptop about
  * 1100 to 1350px wide it passes through this corner), and never over a control, a line of words or a picture to look at (2026-11-16, the founder: "on mobile the
  * toggle in tasks breaks in design overalapping, recheck entire app for such errors"): once a frame while the page scrolls it looks at
  * what lies under its 44px (`elementsFromPoint` on rows of points no more than 8px apart, then a look through what is topmost there for a
@@ -171,6 +171,10 @@ export function BackToTop() {
      *  never meets it either). */
     const closeInView = () => {
       for (const c of closes) {
+        // A slim bar that is not shown, or a close tucked away, is not the way out.
+        const bar = c.closest('[data-sticky-close-bar]');
+        if (bar && bar.getAttribute('data-shown') !== 'true') continue;
+        if (c.closest('.sticky-close-rail[data-tuck]')) continue;
         const q = c.getBoundingClientRect();
         if (q.width && q.bottom > 0 && q.top < window.innerHeight && q.right > 0 && q.left < window.innerWidth) return true;
       }

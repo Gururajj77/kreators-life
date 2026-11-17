@@ -18,7 +18,7 @@ import { Icon } from '../components/Icon';
 import { LifeDashboardBlock } from '../components/LifeDashboardBlock';
 import { focusHeading, InsightGrid, SetAsideFold, SetAsideList, useHiddenInsights, useInsights } from '../components/Emergence';
 import { ToggleChevron } from '../components/ToggleMark';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
+import { StickyClose, useTallOpen } from '../components/StickyClose';
 import { api } from '../lib/api';
 import { todayLocal } from '../lib/date';
 import { focusHeadingAfter } from '../lib/focusHeading';
@@ -153,8 +153,8 @@ export function Insights() {
   const reviewsOn = useModule('reviews')?.on ?? false;
   const [hidden, hide, show] = useHiddenInsights();
   // "N set aside" under the counts opens those cards in place, each with Show again (2026-11-06). Open and taller than the room the window
-  // has, its close stays in view beside the list (`StickyClose`, 2026-11-14): the counts and the list are its root, the chevron keeps its
-  // slot unseen, and both keep a lane while the close runs down the root's own edge, so it never sits on Still watching's words or a Show again.
+  // has, its close stays in view beside the list (`StickyClose`, 2026-11-14): the counts and the list are its root, standing out it
+  // takes the chevron's place, running in a slim bar with its name and the close sticks under the top bar (2026-11-17).
   const [asideOpen, setAsideOpen] = useState(false);
   const asideId = useId();
   const asideBtn = useRef<HTMLButtonElement>(null);
@@ -244,7 +244,7 @@ export function Insights() {
         <>
           {/* A plain block round the counts and the list they open (margins pass through it), so the sticky close has one root to run down. */}
           <div ref={asideRoot} data-sticky-close-root="">
-            <div className={`mt-lg grid grid-cols-2 gap-sm ${STICKY_CLOSE_LANE}`}>
+            <div className="mt-lg grid grid-cols-2 gap-sm">
               <StatTile label="Patterns found" value={formatCount(found.length)} hint={aside.length > 0 ? undefined : period ? 'In this period' : 'From your own logs'}>
                 {aside.length > 0 && (
                   <button
@@ -256,8 +256,8 @@ export function Insights() {
                     className="toy toy-flat -ml-sm mt-xs inline-flex min-h-[44px] items-center gap-xs rounded-pill px-sm text-caption text-ink-soft"
                   >
                     {formatCount(aside.length)} set aside
-                    {/* While the sticky close shows, the chevron keeps its slot unseen, as a task card's edit button does. */}
-                    <ToggleChevron open={asideOpen} size={14} className={asideRail ? 'invisible' : ''} />
+                    {/* While the sticky close stands out beside it, the chevron keeps its slot unseen (`sticky-close-mark`). */}
+                    <ToggleChevron open={asideOpen} size={14} className="sticky-close-mark" />
                   </button>
                 )}
               </StatTile>
@@ -265,7 +265,7 @@ export function Insights() {
             </div>
             {asideRail && <StickyClose onClose={() => setAsideOpen(false)} label="Close the cards set aside" opener={() => asideBtn.current} />}
             {asideOpen && aside.length > 0 && (
-              <div className={`mt-sm ${STICKY_CLOSE_LANE}`}>
+              <div className="mt-sm">
                 <SetAsideList
                   id={asideId}
                   list={aside}

@@ -8,19 +8,24 @@ import { isValidElement, lazy, Suspense, useEffect, useLayoutEffect, useRef, use
  * which have their own close in their rail).
  *
  * The rail is drawn inside the toggle's root (the element that holds the toggle and what it opened, `data-sticky-close-root`), right after
- * the toggle in the page's order, so the keyboard meets it before the content's fields. It is as tall as the root (less 8px at its foot)
- * and its button is sticky: level with the toggle at first, it stays in view while the content scrolls by and stops at the content's end.
+ * the toggle in the page's order, so the keyboard meets it before the content's fields. It is as tall as the root (less 8px at its foot).
  * Where the page has 60px of margin at the root's right (past the painted box round it, before the window's edge, On this page when it
- * shows, and the right of the nearest box that clips) it stands in that margin and is the 44px round `CloseButton` with its name as a tip
- * (`data-sticky-close="out"` on the root); where it has none it runs down the root's own right edge as the 32px one (a 44px hit area, no
- * tip, since a tip there would sit on words; `"in"`), and the content keeps a 44px lane for it (`.sticky-close-lane`, a direct child of the
- * root), so it never covers a field; every painted surface in it that filled its row (a card, an inset list, a form card) keeps its full
- * width and takes the lane as its own right padding instead, as a task's plan does (`fitLane` in StickyCloseRail.tsx, 2026-11-16). It clears the condensed title bar, the public site's sticky header and a whole-page chat's header, and
- * inside a popup's scrolling panel it sticks to the panel's top. A rail inside another root whose rail shows lines up with the outermost
- * one: the same column and size (inside an `in` root it stands in that root's lane, so its own content keeps no second lane; inside an
- * `out` one it stands out beside it), 52px lower per level once they stick, and it tucks away for the moment its own content's end would
- * push it onto the close above. A tap or Enter hands focus to the toggle and brings it back under the top bar when the content was scrolled
- * past it; Escape anywhere in the root does the same, unless a popup, a control or a drag took the key.
+ * shows, and the right of the nearest box that clips) it stands in that margin (`data-sticky-close="out"` on the root): the 44px round
+ * `CloseButton`, its name as a tip, sticky, level with the toggle at first and in view down the content, stopping at its end; the toggle's
+ * own mark (`STICKY_CLOSE_MARK`) keeps its slot unseen meanwhile.
+ *
+ * Where it has none (`"in"`: a phone, a tablet's column, a narrow laptop, a popup) nothing moves in for it (2026-11-17, the founder: "i did
+ * not want the text area in the apps or any toggle to get shifted to the right to make space for cross/close button, what i meant was u
+ * could have made the header with the cross entire line into a sticky on top ... keep it as minimal as possible so it occupies the least
+ * space"): the open content keeps every edge it has, the toggle keeps its own mark (its chevron, plus or pencil, which closes it while the
+ * header is in sight), and once the toggle's header has gone up under the top bar a slim bar sticks there across the root's width
+ * (`data-sticky-close-bar`, 40px, opaque): the toggle's name on one line and the 32px close (a 44px hit area). It is drawn over the content,
+ * never in the flow, so showing it moves nothing; it fades out again once the header is back in sight or the root's end comes up under it.
+ * It clears the condensed title bar, the public site's sticky header and a whole-page chat's header, and inside a popup's scrolling panel
+ * it sticks to the panel's top. A rail inside another open root lines up with the outermost one: beside it, 52px lower per level, when that
+ * one stands out; its own bar 40px under the bar round it when it runs in. A tap or Enter hands focus to the toggle and brings it back under
+ * the top bar when the content was scrolled past it; Escape anywhere in the root does the same, unless a popup, a control or a drag took
+ * the key.
  *
  * Only the cheap part lives here, in the first download: `useTallOpen`, the constants and the few readings the hook shares with the rail.
  * The rail itself (its measuring, Escape, the button) is its own chunk, `StickyCloseRail.tsx`, fetched once the first screen with a toggle
@@ -29,7 +34,8 @@ import { isValidElement, lazy, Suspense, useEffect, useLayoutEffect, useRef, use
  * rail ships in the entry (`groupRight` and the room it stands out in moved there the same day, the entry at 480.3 kB).
  *
  * The contract a checker reads: the root carries `data-sticky-close-root`, and `data-sticky-close="in"` or `"out"` while the rail shows;
- * the button carries `data-sticky-close-btn` and a name that starts with "Close".
+ * running in, the bar carries `data-sticky-close-bar` and `data-shown="true"` or `"false"`; the button carries `data-sticky-close-btn` and
+ * a name that starts with "Close".
  */
 
 /** A tall root stops counting as tall only this far under the room the window has, so the rail never flickers on the edge. */
@@ -38,8 +44,9 @@ const TALL_SLACK = 24;
  *  moves a root without resizing it (an app group's body that stops clipping once its slide ends) or changes a top bar (Apps' row while
  *  selecting, which comes, goes and grows) says it too. */
 export const STICKY_CLOSE_CHANGED = 'kreators:sticky-close';
-/** The class of the open content's wrapper, a direct child of the root: it keeps a lane for a close that runs down the root's edge. */
-export const STICKY_CLOSE_LANE = 'sticky-close-lane';
+/** The class of a toggle's own mark (its chevron, plus, pencil, eye or close): unseen while its close stands out beside the root, shown
+ *  while it runs in, where the mark closes the toggle itself until the header goes up under the top bar. */
+export const STICKY_CLOSE_MARK = 'sticky-close-mark';
 
 /** The boxes round `el`, nearest first, up to (not including) the page's body. (Shared with the rail.) */
 export function* boxesAbove(el: Element): Generator<HTMLElement> {
@@ -184,6 +191,9 @@ export interface StickyCloseProps {
   onClose: () => void;
   /** The button's name, starting with "Close": "Close Add a task", "Close the plan for Call the bank". */
   label: string;
+  /** The toggle's name as the slim bar shows it while it runs in, one line, no counts or hints ("Add a task", a task's title); worked out
+   *  from `label` when left out. */
+  title?: string;
   /** The tip it shows while it stands outside the root (shorter words beside a long name); the name by default. */
   tip?: string;
   /** The toggle that opened it, which takes focus back on a close; the root's first `[aria-expanded]` element by default. */
@@ -192,13 +202,14 @@ export interface StickyCloseProps {
   anchor?: (opener: HTMLElement | null, root: HTMLElement) => Element | null;
   /** Escape anywhere in the root closes it too (default). Off where the root already closes on Escape itself (a task's row). */
   escape?: boolean;
-  /** `row`: a task's open plan (RowClose), centred on the card's first 56px row standing out, where the edit button was running down it. */
+  /** `row`: a task's open plan (RowClose), centred on the card's first 56px row standing out; running in, its bar shows once the card has
+   *  gone up under the top bar. */
   variant?: 'fold' | 'row';
 }
 
 /**
  * The sticky close itself. Draw it as a direct child of the toggle's root, right after the toggle, only while the root needs it (a task's
- * plan whenever it is open; anything else while `useTallOpen` says so), and give the open content's wrapper `STICKY_CLOSE_LANE`. The root
+ * plan whenever it is open; anything else while `useTallOpen` says so), and give the toggle's own mark `STICKY_CLOSE_MARK`. The root
  * becomes `position: relative` while it shows (unless a class already positions it). It draws nothing until its chunk is in (fetched
  * ahead, see `preloadRail`), and has its own Suspense, so it never holds up the screen round it.
  */

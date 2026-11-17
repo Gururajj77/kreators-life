@@ -14,7 +14,7 @@ import { MoreMenu } from '../components/MoreMenu';
 import { FIELD, RED_YES_LG } from '../lib/ui';
 import { ErrorLine } from '../components/ErrorLine';
 import { ToggleChevron } from '../components/ToggleMark';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
+import { StickyClose, useTallOpen } from '../components/StickyClose';
 
 /** A budget as typed ("1,50,000", "₹ 2500.50"), read from its digits with `typedCents` and kept in whole units the way the column stores it; anything unreadable is 0. */
 const budgetUnits = (typed: string): number => {
@@ -89,9 +89,8 @@ function ProposalCard({ p, reviewer, mine, onChange, onEdit, onWithdraw }: { p: 
   });
   return (
     <li ref={root} data-sticky-close-root="" className="rounded-tile bg-card p-sm shadow-toy-soft">
-      {/* The title at the top left and the stage in the same top right place on every pitch, never wrapping under a long title. While
-          the sticky close runs down the card's edge the row keeps a lane for it, so it never sits on the More menu or the stage. */}
-      <div className={`flex items-start gap-xs ${STICKY_CLOSE_LANE}`}>
+      {/* The title at the top left and the stage in the same top right place on every pitch, never wrapping under a long title. */}
+      <div className="flex items-start gap-xs">
       <button ref={toggle} type="button" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((v) => !v)} className="toy-flat flex min-h-[44px] min-w-0 flex-1 items-start gap-sm text-left">
         <span className="min-w-0 flex-1">
           <span className="block text-balance text-card-title">{p.title}</span>
@@ -104,8 +103,8 @@ function ProposalCard({ p, reviewer, mine, onChange, onEdit, onWithdraw }: { p: 
         </span>
         <span className="flex shrink-0 items-center gap-xs">
           <StagePill stage={p.stage} />
-          {/* While the sticky close shows, the chevron keeps its slot unseen. */}
-          <ToggleChevron open={open} size={20} strokeWidth={3} className={railOn ? 'invisible' : ''} />
+          {/* While the sticky close stands out beside it, the chevron keeps its slot unseen (`sticky-close-mark`). */}
+          <ToggleChevron open={open} size={20} strokeWidth={3} className="sticky-close-mark" />
         </span>
       </button>
       {mine && p.stage === 'submitted' && (
@@ -121,7 +120,7 @@ function ProposalCard({ p, reviewer, mine, onChange, onEdit, onWithdraw }: { p: 
       </div>
       {railOn && <StickyClose onClose={() => setOpen(false)} label={`Close ${p.title}`} opener={() => toggle.current} />}
       {open && (
-        <div id={panelId} className={`mt-sm ${STICKY_CLOSE_LANE}`}>
+        <div id={panelId} className="mt-sm">
           <p className="m-0 whitespace-pre-wrap text-prose">{p.pitch}</p>
           {p.log.length > 0 && (
             <ol className="mt-sm flex list-none flex-col gap-xs border-l-2 border-line p-0 pl-sm m-0">

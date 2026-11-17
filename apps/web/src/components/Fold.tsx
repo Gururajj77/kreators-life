@@ -1,6 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatedIcon } from './AnimatedIcon';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from './StickyClose';
+import { StickyClose, useTallOpen } from './StickyClose';
 import { ToggleChevron } from './ToggleMark';
 
 /**
@@ -13,10 +13,10 @@ import { ToggleChevron } from './ToggleMark';
  * focused element with it, so focus goes back to the fold's own button instead of falling to the page (2026-11-06).
  * While it is open and taller than the room the window has (Daily's Add a task form, a long list), its close stays in view beside what it
  * holds (`StickyClose`, 2026-11-14, the founder: "the close buttons that need one to scroll back top need the close button to be sticky
- * outside the toggle tab"): the plus or chevron keeps its slot unseen, the close stands in the margin at its right or runs down its own
- * right edge with a lane kept for it (inside every painted surface it holds, such as Add a task's form card, so the card's edge
- * still meets the fold's own; `fitLane` in StickyCloseRail.tsx), and Escape anywhere inside closes it too, except from typed words (a half-written task is never thrown
- * away by a key). A short fold is as it always was; the laptop sidebar's `plain` folds never take one.
+ * outside the toggle tab"): standing out in the margin at its right, the close takes the plus or chevron's place; with no margin (a phone,
+ * a narrow column) nothing moves in for it, the plus or chevron stays, and a slim bar with the fold's name and the close sticks under the
+ * top bar once the fold's own row has gone up under it (2026-11-17). Escape anywhere inside closes it too, except from typed words (a
+ * half-written task is never thrown away by a key). A short fold is as it always was; the laptop sidebar's `plain` folds never take one.
  */
 export function Fold({
   id: landId,
@@ -100,16 +100,16 @@ export function Fold({
           </span>
           {hint !== undefined && hint !== '' && <span className="ml-xs inline-block max-w-[calc(100%-var(--spacing-xs))] text-callout text-ink-soft">{hint}</span>}
         </span>
-        {/* While the sticky close shows, the mark keeps its slot unseen, as a task card's edit button does. */}
+        {/* While the sticky close stands out beside it, the mark keeps its slot unseen (`sticky-close-mark`). */}
         {adds ? (
-          <AnimatedIcon name="plusToX" size={16} active={open} className={`text-ink-soft ${railOn ? 'invisible' : ''}`} />
+          <AnimatedIcon name="plusToX" size={16} active={open} className="text-ink-soft sticky-close-mark" />
         ) : (
-          <ToggleChevron open={open} size={tone === 'plain' ? 14 : 16} className={`text-ink-soft ${railOn ? 'invisible' : ''}`} />
+          <ToggleChevron open={open} size={tone === 'plain' ? 14 : 16} className="text-ink-soft sticky-close-mark" />
         )}
       </button>
-      {railOn && <StickyClose onClose={() => setOpen(() => false)} label={closeLabel ?? `Close ${shownTitle}`.trim()} opener={() => button.current} />}
+      {railOn && <StickyClose onClose={() => setOpen(() => false)} label={closeLabel ?? `Close ${shownTitle}`.trim()} title={shownTitle.trim() || undefined} opener={() => button.current} />}
       {open && (
-        <div id={id} className={`mt-xs ${STICKY_CLOSE_LANE}`}>
+        <div id={id} className="mt-xs">
           {children}
         </div>
       )}

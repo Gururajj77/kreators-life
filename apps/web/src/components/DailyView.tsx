@@ -8,7 +8,7 @@ import { errorText } from '../lib/errors';
 import { focusHeadingAfter } from '../lib/focusHeading';
 import { keys, useMe } from '../lib/queries';
 import { Button } from './Button';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from './StickyClose';
+import { StickyClose, useTallOpen } from './StickyClose';
 import { Toggle } from './Toggle';
 import { ToggleIcon } from './ToggleMark';
 
@@ -118,7 +118,7 @@ export function DailyHiddenLine({ state }: { state: DailyViewState }) {
  * folds it and hands the keyboard back to the View button. Taller than the room the window has (a phone on its side), its close stays in
  * view beside it (`StickyClose`, 2026-11-14, the founder: "the close buttons that need one to scroll back top need the close button to be
  * sticky outside the toggle tab"): the panel is its own root, since the View button sits in the Tasks heading's row above it (`opener`
- * hands focus back there), the close starts at the panel's top right and the switches keep a lane while it runs down the panel's edge.
+ * hands focus back there), and running in, a slim bar with the close sticks under the top bar once the panel's top has gone up under it.
  */
 export function DailyViewPanel({ id, state, onClose, button }: { id: string; state: DailyViewState; onClose: () => void; button: RefObject<HTMLButtonElement | null> }) {
   // Show all goes once nothing is hidden, so the keyboard's place moves to the status line that says what it did.
@@ -135,8 +135,7 @@ export function DailyViewPanel({ id, state, onClose, button }: { id: string; sta
     <div ref={root} id={id} role="group" aria-label="Sections Daily shows" onKeyDown={onKey} data-sticky-close-root="" className="@container mt-sm rounded-tile bg-card p-md shadow-toy-soft">
       {/* The panel closes on Escape itself (above), so the rail leaves the key to it. */}
       {railOn && <StickyClose onClose={onClose} label="Close the view" opener={() => button.current} escape={false} />}
-      {/* One plain wrapper, so the words and switches keep a lane while the close runs down the panel's edge; at rest it draws nothing. */}
-      <div className={STICKY_CLOSE_LANE}>
+      <div>
         <p className="m-0 text-subhead text-ink-soft">Pick what Daily shows. It stays this way on every device.</p>
         <ul className="mt-xs grid list-none gap-x-md p-0 m-0 @min-[34rem]:grid-cols-2">
           {DAILY_SECTIONS.map((s) => (

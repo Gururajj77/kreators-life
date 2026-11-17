@@ -93,7 +93,7 @@ export const BUILD_SECTIONS: readonly BuildSection[] = [
           ['Room at every screen\'s foot for the assistant\'s button', 'test', 'Measured by hand at the last gate'],
           ['Titles step down under 360px', 'test', 'Measured by hand at 320'],
           ['Helper names in empty room, outside a popup\'s panel, never over words', 'test', 'scripts/smoke/drive-tips.mjs, to run once the build is in'],
-          ['A tall open toggle keeps its close in view beside it, as a task\'s plan does, every card keeping its full width with the close\'s lane inside it', 'ok', 'scripts/smoke/drive-folds.mjs: 0 failures, shrunk and float-over among them, at 360, 390, 768 and 1280 and in popups'],
+          ['A tall open toggle keeps its close in view: beside it on a laptop, and on a phone in a slim sticky bar with its name that moves nothing in', 'ok', 'scripts/smoke/drive-folds.mjs: 0 failures, shrunk and float-over among them, at 360, 390, 768 and 1280 and in popups'],
           ['Back to top: a small round button left of the assistant\'s, once a long page scrolled a screen, never over a close, a control or words', 'ok', 'scripts/smoke/drive-folds.mjs: 0 float-over and 0 covered at 360, 390, 768 and 1280'],
           ['Back to top steps aside for the footer, a sheet, the privacy card, the attendee bar and a phone\'s keyboard', 'test', 'A position check by hand after a build; no drive kept'],
         ],

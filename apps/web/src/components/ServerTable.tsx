@@ -8,7 +8,7 @@ import { FIELD_CELL } from '../lib/ui';
 import { Button } from './Button';
 import { showFocused, Switch } from './DataTable';
 import { StickyAction } from './StickyAction';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from './StickyClose';
+import { StickyClose, useTallOpen } from './StickyClose';
 import { ErrorLine } from './ErrorLine';
 import { Icon } from './Icon';
 import { Inert } from './Inert';
@@ -681,7 +681,7 @@ export function ServerTable({ label, columns, rows, options, currency, sort, onS
         <div ref={formRoot} data-sticky-close-root="" className="mt-sm rounded-card bg-card p-md shadow-toy-soft">
           {/* Escape is RowForm's own (it closes only while no field has changed), so the rail's would only close over changed fields. */}
           {formTall && <StickyClose onClose={() => form.onDone('cancel')} label={`Close the form for ${rowName(formRow, columns, ctx)}`} opener={form.opener} escape={false} />}
-          <div className={STICKY_CLOSE_LANE}>
+          <div>
             {/* Keyed by the row the form opened on, never its id now, so a save that gives the row a new id (a day's log) keeps the form as it is. */}
             <RowForm key={form.key} formKey={form.key} row={formRow} columns={columns} options={options} editor={editor} onDone={form.onDone} name={rowName(formRow, columns, ctx)} />
           </div>

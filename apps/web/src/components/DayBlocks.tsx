@@ -11,7 +11,7 @@ import { SELECT_SM } from '../lib/ui';
 import { Fold } from './Fold';
 import { Inert } from './Inert';
 import { StatusTag } from './StatusTag';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from './StickyClose';
+import { StickyClose, useTallOpen } from './StickyClose';
 import { ToggleChevron } from './ToggleMark';
 import { minuteNowOn, useDailyAnswer } from './useDailyAnswer';
 import { useNow } from '../lib/useNow';
@@ -121,11 +121,11 @@ function LooseTasks({ tasks, total, choices, noteOf }: { tasks: readonly Node[];
     <div ref={root} data-sticky-close-root="" className="mt-xs @container">
       <button ref={toggle} type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)} className="flex min-h-[44px] items-center gap-xs rounded-tile text-left text-caption text-ink-soft hover:text-ink">
         <span>{n === 1 ? '1 task has no time or block yet.' : `${n} tasks have no time or block yet.`}</span>
-        <ToggleChevron open={open} size={14} className={railOn ? 'invisible' : ''} />
+        <ToggleChevron open={open} size={14} className="sticky-close-mark" />
       </button>
       {railOn && <StickyClose onClose={() => setOpen(false)} label="Close the tasks with no time or block" opener={() => toggle.current} />}
       {open && (
-        <ul id={id} className={`mt-xs m-0 flex flex-col gap-sm p-0 ${STICKY_CLOSE_LANE}`}>
+        <ul id={id} className="mt-xs m-0 flex flex-col gap-sm p-0">
           {tasks.map((t) => (
             <LooseTask key={t.id} t={t} choices={choices} note={noteOf?.(t)} />
           ))}

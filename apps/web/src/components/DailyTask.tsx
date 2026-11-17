@@ -35,8 +35,7 @@ export function DailyTask({ t, date, queue, onToggle, subtitle, focus = false, b
       panel={
         below || open ? (
           <>
-            {/* A lane for the plan's close while it runs down the row's edge (RowClose), so it never sits on a hint's buttons. */}
-            {belowWhileClosed && open ? null : below ? <div className="row-lane">{below}</div> : null}
+            {belowWhileClosed && open ? null : below ? <div>{below}</div> : null}
             {open && (
               <div id={`task-plan-${t.id}`}>
                 <Suspense fallback={<Skeleton className="mt-xs h-[240px]" />}>

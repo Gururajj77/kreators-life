@@ -32,7 +32,7 @@ import { Reveal } from '../components/fx/Reveal';
 import { ToggleChevron } from '../components/ToggleMark';
 import { RunMoveTool } from '../components/RunMoveTool';
 import { StickyAction } from '../components/StickyAction';
-import { STICKY_CLOSE_LANE, StickyClose, useTallOpen } from '../components/StickyClose';
+import { StickyClose, useTallOpen } from '../components/StickyClose';
 
 const day = shortDate;
 const REL = RELATIONSHIP_BY_KEY.friendship;
@@ -717,12 +717,12 @@ function RunTalk({ runId }: { runId: string }) {
         </Link>
         <button ref={toggle} type="button" aria-expanded={open} aria-controls={`run-people-${runId}`} data-land-open="" onClick={() => setOpen((v) => !v)} className="toy toy-flat inline-flex min-h-[44px] items-center gap-xs rounded-pill px-md text-subhead font-medium underline underline-offset-4">
           {open ? 'Hide photos and people' : 'Photos and people'}
-          <ToggleChevron open={open} className={railOn ? 'invisible' : ''} />
+          <ToggleChevron open={open} className="sticky-close-mark" />
         </button>
       </span>
       {railOn && <StickyClose onClose={() => setOpen(false)} label="Close photos and people" opener={() => toggle.current} />}
       {open && (
-        <div id={`run-people-${runId}`} className={STICKY_CLOSE_LANE}>
+        <div id={`run-people-${runId}`}>
           <EventPanel app="run" id={runId} talk={false} />
         </div>
       )}
