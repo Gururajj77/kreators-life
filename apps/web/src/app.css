@@ -1860,7 +1860,7 @@ nav .bg-card {
   .assistant-frame :is(.overflow-y-auto, textarea) {
     overscroll-behavior: contain;
   }
-  body:has([data-assistant-panel]) nav[data-tabbar] {
+  :root[data-assistant-open] nav[data-tabbar] {
     z-index: 45;
   }
 }

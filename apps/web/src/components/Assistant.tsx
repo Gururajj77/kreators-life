@@ -726,15 +726,21 @@ function useCloseOnTab(onClose: () => void) {
   }, []);
 }
 
-/** On a phone the panel covers the page (app.css, `.assistant-frame`), so the page under it is held where it was until the panel closes. */
+/**
+ * On a phone the panel covers the page (app.css, `.assistant-frame`), so the page under it is held where it was until the panel closes, and
+ * the root says the panel is open (`data-assistant-open`), which lifts the tab bar above it. An attribute rather than `body:has()`, since
+ * Safari on iOS does not always restyle a `:has()` rule when the panel is added (2026-11-17, the founder's phone: no tab bar).
+ */
 function useHoldPageOnPhone() {
   useEffect(() => {
     if (isWide()) return;
     const root = document.documentElement;
     const was = root.style.overflow;
     root.style.overflow = 'hidden';
+    root.setAttribute('data-assistant-open', '');
     return () => {
       root.style.overflow = was;
+      root.removeAttribute('data-assistant-open');
     };
   }, []);
 }
@@ -747,7 +753,17 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
   useCloseOnTab(onClose);
   const keyboard = useKeyboardArea();
   // Keyboard: focus goes to the typing box when the person opens it, Tab wraps at its ends, Escape folds it away. The page beside it stays usable.
-  useDialogFocus(panel, true, { modal: false, focusIn, onEscape: onClose });
+  // On a phone the typing box is not focused when the panel opens: the tap that opened it would raise the keyboard at once, which covers
+  // the tab bar and half the conversation. The panel itself takes focus instead, so the keyboard's and a screen reader's place is inside it.
+  const phone = useRef(!isWide()).current;
+  useDialogFocus(panel, true, { modal: false, focusIn: focusIn && !phone, onEscape: onClose });
+  useEffect(() => {
+    if (!focusIn || !phone) return;
+    const el = panel.current;
+    if (!el || el.contains(document.activeElement)) return;
+    el.setAttribute('tabindex', '-1');
+    el.focus({ preventScroll: true });
+  }, []);
   const box = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
   const refresh = useRefreshAll();
