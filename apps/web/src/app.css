@@ -484,6 +484,25 @@
 }
 
 @layer base {
+  /* iPhone and iPad (2026-11-17, the founder's phone: a task plan's empty Time field ran under Minutes and stood taller than it).
+     Safari on iOS draws date and time fields with its own native control, which ignores width: 100% and adds height of its own,
+     so they spill out of their column. Taking the native look off makes them size like every other field; the picker still opens
+     on a tap. `-webkit-touch-callout` exists only on iOS, so no other browser changes. */
+  @supports (-webkit-touch-callout: none) {
+    input:is([type='time'], [type='date'], [type='datetime-local'], [type='month'], [type='week']) {
+      -webkit-appearance: none;
+      appearance: none;
+      display: block;
+      min-width: 0;
+      max-width: 100%;
+      text-align: start;
+    }
+    input:is([type='time'], [type='date'], [type='datetime-local'], [type='month'], [type='week'])::-webkit-date-and-time-value {
+      min-height: 1lh;
+      margin: 0;
+      text-align: start;
+    }
+  }
   /* Every select draws its own chevron, 12px in from the edge, with 32px kept clear so the text never runs under it.
      The space is !important: a padding utility on the select (px-sm) sits in a later layer and would otherwise let long text
      run under the chevron. */
