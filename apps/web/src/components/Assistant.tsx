@@ -710,13 +710,24 @@ function useKeyboardArea(): { top: number; height: number } | null {
   return area;
 }
 
-/** The room the Close above the card takes while a phone's keyboard holds the panel to the visible area: the button and a gap each side. */
-const RAIL_ROOM = 60;
+/** On a phone the panel covers the page (app.css, `.assistant-frame`), so the page under it is held where it was until the panel closes. */
+function useHoldPageOnPhone() {
+  useEffect(() => {
+    if (isWide()) return;
+    const root = document.documentElement;
+    const was = root.style.overflow;
+    root.style.overflow = 'hidden';
+    return () => {
+      root.style.overflow = was;
+    };
+  }, []);
+}
 
 export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focusIn: boolean }) {
   const nav = useNavigate();
   const loc = useLocation();
   const panel = useRef<HTMLElement>(null);
+  useHoldPageOnPhone();
   const keyboard = useKeyboardArea();
   // Keyboard: focus goes to the typing box when the person opens it, Tab wraps at its ends, Escape folds it away. The page beside it stays usable.
   useDialogFocus(panel, true, { modal: false, focusIn, onEscape: onClose });
@@ -1486,23 +1497,27 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
     const el = panel.current;
     if (!el) return;
     if (keyboard) {
-      // The round Close sits above the card, so the card starts a button and two small gaps down.
-      el.style.top = `${keyboard.top + RAIL_ROOM}px`;
-      el.style.height = `${keyboard.height - RAIL_ROOM}px`;
+      // The frame's own top padding holds the round Close's row, so the frame takes exactly the visible area, over the tab bar.
+      el.style.top = `${keyboard.top}px`;
+      el.style.height = `${keyboard.height}px`;
       el.style.bottom = 'auto';
       el.style.zIndex = '50';
+      el.style.setProperty('--assistant-floor', '0px');
       return () => {
         el.style.top = '';
         el.style.height = '';
         el.style.bottom = '';
         el.style.zIndex = '';
+        el.style.removeProperty('--assistant-floor');
       };
     }
-    const bar = document.querySelector<HTMLElement>('nav.fx-bar[aria-label="Main"]');
+    // The tab bar and the frame both sit on the window's bottom edge, so the card keeps the bar's own height clear (app.css,
+    // `--assistant-floor`); while the bar is still settling it covers the frame's solid fill, never the page.
+    const bar = document.querySelector<HTMLElement>('nav[data-tabbar]');
     if (!bar) return;
     const place = () => {
-      const shown = getComputedStyle(bar).display !== 'none';
-      el.style.bottom = shown ? `${Math.max(0, window.innerHeight - bar.getBoundingClientRect().top)}px` : '';
+      const h = getComputedStyle(bar).display !== 'none' ? bar.offsetHeight : 0;
+      el.style.setProperty('--assistant-floor', `${h}px`);
     };
     place();
     const ro = new ResizeObserver(place);
@@ -1511,7 +1526,7 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
     return () => {
       ro.disconnect();
       window.removeEventListener('resize', place);
-      el.style.bottom = '';
+      el.style.removeProperty('--assistant-floor');
     };
   }, [keyboard]);
 
@@ -1581,7 +1596,7 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
       data-assistant-panel=""
       // On a phone the panel fills the page from just under the logo row to the tab bar; on a laptop it is the 400px card in the corner.
       // This frame is where it sits and what moves; the round Close is outside the card (its rail: above it on a phone, on its left on a laptop).
-      className="assistant-frame dialog-frame fixed inset-x-0 top-[calc(var(--spacing-xl)+env(safe-area-inset-top))] bottom-[calc(var(--spacing-xl)+1px+env(safe-area-inset-bottom))] z-40 h-auto md:inset-x-auto md:top-auto md:right-md md:bottom-md md:h-[min(640px,calc(100dvh-32px))] md:w-[400px]"
+      className="assistant-frame dialog-frame fixed z-40 h-auto md:inset-x-auto md:top-auto md:right-md md:bottom-md md:h-[min(640px,calc(100dvh-32px))] md:w-[400px]"
     >
       <div className="dialog-rail">
         <CloseButton onClose={onClose} />
