@@ -710,6 +710,22 @@ function useKeyboardArea(): { top: number; height: number } | null {
   return area;
 }
 
+/**
+ * A tap on a phone's tab bar closes the panel and lets the tab go on to its page (2026-11-17, the founder), the tab you are on too. Only the
+ * bar's own links: the assistant's own flows that open a page keep it open, so the page under it refreshes as things land.
+ */
+function useCloseOnTab(onClose: () => void) {
+  const close = useRef(onClose);
+  close.current = onClose;
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (e.target instanceof Element && e.target.closest('nav[data-tabbar] a')) close.current();
+    };
+    document.addEventListener('click', onClick, true);
+    return () => document.removeEventListener('click', onClick, true);
+  }, []);
+}
+
 /** On a phone the panel covers the page (app.css, `.assistant-frame`), so the page under it is held where it was until the panel closes. */
 function useHoldPageOnPhone() {
   useEffect(() => {
@@ -728,6 +744,7 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
   const loc = useLocation();
   const panel = useRef<HTMLElement>(null);
   useHoldPageOnPhone();
+  useCloseOnTab(onClose);
   const keyboard = useKeyboardArea();
   // Keyboard: focus goes to the typing box when the person opens it, Tab wraps at its ends, Escape folds it away. The page beside it stays usable.
   useDialogFocus(panel, true, { modal: false, focusIn, onEscape: onClose });
@@ -1509,6 +1526,22 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
         el.style.paddingBottom = '';
       };
     }
+    // Otherwise the card keeps the tab bar's own height clear at the foot (app.css, `--assistant-floor`), whatever height the bar has.
+    const bar = document.querySelector<HTMLElement>('nav[data-tabbar]');
+    if (!bar) return;
+    const place = () => {
+      const h = getComputedStyle(bar).display !== 'none' ? bar.offsetHeight : 0;
+      el.style.setProperty('--assistant-floor', `${h}px`);
+    };
+    place();
+    const ro = new ResizeObserver(place);
+    ro.observe(bar);
+    window.addEventListener('resize', place);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', place);
+      el.style.removeProperty('--assistant-floor');
+    };
   }, [keyboard]);
 
   // The small link is only for asks that do not already offer the list as a choice.
@@ -1569,6 +1602,10 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
   })();
 
   const credits = !status.data ? '' : !status.data.connected ? 'Tap a flow to log something' : !account || account.plan === 'none' ? 'Typing needs a plan' : `${account.planName} · ${formatCount(account.total)} credits left`;
+  // The header's one line (2026-11-17, the founder: the name and the credits on the Close's line): the whole words where the row has room,
+  // the credits alone where it is tighter, and cut with an ellipsis only past that, the whole words kept in its title.
+  const line = flow ? FLOWS[flow].label : credits;
+  const lineShort = !flow && account && account.plan !== 'none' && status.data?.connected ? `${formatCount(account.total)} credits` : line;
 
   return (
     <section
@@ -1585,10 +1622,23 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
       {/* The card, on a fill with nothing showing through (the card colour laid over the page's own base). */}
       <div className="flex h-full flex-col overflow-hidden rounded-none border-0 border-line shadow-none [background:linear-gradient(var(--card-strong),var(--card-strong)),var(--page-base-a)] md:rounded-card md:border-2 md:bg-card-strong md:shadow-toy-soft">
       <header className="flex shrink-0 items-center gap-xs border-b-2 border-line py-xs pr-sm pl-md">
-        {/* The name and the line under it wrap on a narrow phone rather than being cut short. */}
-        <div className="min-w-0 flex-1 break-words">
-          <p className="m-0 text-subhead font-semibold">Bumling AI assistant</p>
-          <p className="m-0 text-caption text-ink-soft">{flow ? FLOWS[flow].label : credits}</p>
+        {/* The name and its line share the Close's line: the name whole, the line after it as long as the row allows. */}
+        <div className="@container flex min-h-[44px] min-w-0 flex-1 items-center">
+          <p className="m-0 flex min-w-0 items-baseline gap-xs" title={line || undefined}>
+            <span className="shrink-0 whitespace-nowrap text-subhead font-semibold">Bumling AI assistant</span>
+            {line && (
+              <span className="min-w-0 truncate text-caption text-ink-soft">
+                {lineShort === line ? (
+                  line
+                ) : (
+                  <>
+                    <span className="@[23rem]:hidden">{lineShort}</span>
+                    <span className="hidden @[23rem]:inline">{line}</span>
+                  </>
+                )}
+              </span>
+            )}
+          </p>
         </div>
         {log.length > 2 && <StartOver onConfirm={startOver} />}
         {/* A phone's Close is in the header, since the panel fills the window; a laptop's is in the rail beside the card. */}
