@@ -440,9 +440,6 @@ export function Today() {
         )}
       </header>
 
-      {/* Daily lists the remembered tasks once, under To remember; the section here leaves its copy out. */}
-      <RemindersSection tasks={false} />
-
       {isPending && (
         <SkeletonList className="mt-md" count={3} lines={3} label="Loading your day" />
       )}
@@ -489,7 +486,16 @@ export function Today() {
               />
             </div>
           </section>
+        </>
+      )}
 
+      {/* Water and reminders comes after Show up (2026-11-17, the founder: "on mobile move show up above water reminder"), so the day's
+          check-in is the first thing under the header. A phone and a tablet only: from lg the section is the bubble at the page's left.
+          Daily lists the remembered tasks once, under To remember; the section here leaves its copy out. */}
+      <RemindersSection tasks={false} top="mt-lg" />
+
+      {data && rel && (
+        <>
           <Suspense
             fallback={
               <div className="mt-lg" aria-hidden="true">
