@@ -1837,29 +1837,25 @@ nav .bg-card {
     width: 44px;
   }
 }
-/* On a phone (2026-11-17, the founder: "the ai assistant chat box is still getting cut on top and bottom when scrolling on mobile phones"): the
-   frame is one solid sheet from the top of the window to its bottom, the card in it from under the Close's row to the tab bar, which stays above it.
-   Before, the frame stopped 64px short of each edge and let touches through, so on an iPhone the page went on scrolling behind it and showed in
-   those two bands, as if the card were cut. Now nothing of the page shows, a drag outside the conversation moves nothing, and the conversation's own
-   scroll never hands on to the page. `--assistant-floor` is the tab bar's height, measured by the panel. */
+/* On a phone (2026-11-17, the founder: "the ai assistant chat box is still getting cut on top and bottom when scrolling on mobile phones", then
+   "make it cover full screen including the top sticky bar with page name, include the close button inside the card"): the panel is the whole
+   window, over the page's title bar and the tab bar, and its Close sits in its own header (the rail is a laptop's). Before, it stopped 64px short
+   of each edge and let touches through, so on an iPhone the page went on scrolling behind it and showed in those two bands, as if the card were
+   cut. Now nothing of the page shows, a drag outside the conversation moves nothing, and the conversation's own scroll never hands on to the page. */
 @media not all and (width >= 48rem) and (height >= 30rem) {
   .assistant-frame {
     inset: 0;
-    padding-top: calc(env(safe-area-inset-top) + 44px + 2 * var(--spacing-xs));
-    padding-bottom: var(--assistant-floor, 0px);
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
     background: linear-gradient(var(--card-strong), var(--card-strong)), var(--page-base-a);
     pointer-events: auto;
     touch-action: none;
   }
   .assistant-frame > .dialog-rail {
-    top: calc(env(safe-area-inset-top) + var(--spacing-xs));
-    bottom: auto;
+    display: none;
   }
   .assistant-frame :is(.overflow-y-auto, textarea) {
     overscroll-behavior: contain;
-  }
-  body:has([data-assistant-panel]) nav[data-tabbar] {
-    z-index: 45;
   }
 }
 /* The water card's round buttons in a popup's rail: one column, each on the card's own slate since the card is no longer behind it, the open one

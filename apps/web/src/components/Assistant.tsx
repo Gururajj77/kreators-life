@@ -1489,45 +1489,26 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
     else gsap.fromTo(el, { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.25, ease: 'power2.out' });
   }, [reduce]);
 
-  // On a phone the panel ends at the top of the tab bar, whatever height the bar has (its labels can make it taller
-  // than the class above assumes); on a laptop the bar is hidden and the md: classes place the card.
-  // While a phone's keyboard is up the same effect owns the panel's place instead: exactly the visible area, over the tab bar
-  // (useKeyboardArea). One owner for top, height and bottom, so neither placement wipes the other's.
+  // On a phone the panel fills the window (app.css, `.assistant-frame`); on a laptop the md: classes place the card. While a phone's
+  // keyboard is up this effect holds it to exactly the visible area instead (useKeyboardArea).
   useLayoutEffect(() => {
     const el = panel.current;
     if (!el) return;
     if (keyboard) {
-      // The frame's own top padding holds the round Close's row, so the frame takes exactly the visible area, over the tab bar.
+      // The frame takes exactly the visible area; the keyboard covers the home indicator, so no room is kept for it.
       el.style.top = `${keyboard.top}px`;
       el.style.height = `${keyboard.height}px`;
       el.style.bottom = 'auto';
       el.style.zIndex = '50';
-      el.style.setProperty('--assistant-floor', '0px');
+      el.style.paddingBottom = '0px';
       return () => {
         el.style.top = '';
         el.style.height = '';
         el.style.bottom = '';
         el.style.zIndex = '';
-        el.style.removeProperty('--assistant-floor');
+        el.style.paddingBottom = '';
       };
     }
-    // The tab bar and the frame both sit on the window's bottom edge, so the card keeps the bar's own height clear (app.css,
-    // `--assistant-floor`); while the bar is still settling it covers the frame's solid fill, never the page.
-    const bar = document.querySelector<HTMLElement>('nav[data-tabbar]');
-    if (!bar) return;
-    const place = () => {
-      const h = getComputedStyle(bar).display !== 'none' ? bar.offsetHeight : 0;
-      el.style.setProperty('--assistant-floor', `${h}px`);
-    };
-    place();
-    const ro = new ResizeObserver(place);
-    ro.observe(bar);
-    window.addEventListener('resize', place);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener('resize', place);
-      el.style.removeProperty('--assistant-floor');
-    };
   }, [keyboard]);
 
   // The small link is only for asks that do not already offer the list as a choice.
@@ -1594,15 +1575,15 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
       ref={panel}
       aria-label={`Bumling AI assistant, with ${who(host)}`}
       data-assistant-panel=""
-      // On a phone the panel fills the page from just under the logo row to the tab bar; on a laptop it is the 400px card in the corner.
-      // This frame is where it sits and what moves; the round Close is outside the card (its rail: above it on a phone, on its left on a laptop).
+      // On a phone the panel fills the window, its Close in its header; on a laptop it is the 400px card in the corner, its Close in the
+      // rail on its left. This frame is where it sits and what moves.
       className="assistant-frame dialog-frame fixed z-40 h-auto md:inset-x-auto md:top-auto md:right-md md:bottom-md md:h-[min(640px,calc(100dvh-32px))] md:w-[400px]"
     >
       <div className="dialog-rail">
         <CloseButton onClose={onClose} />
       </div>
       {/* The card, on a fill with nothing showing through (the card colour laid over the page's own base). */}
-      <div className="flex h-full flex-col overflow-hidden rounded-none border-x-0 border-t-2 border-b-0 border-line shadow-none [background:linear-gradient(var(--card-strong),var(--card-strong)),var(--page-base-a)] md:rounded-card md:border-2 md:bg-card-strong md:shadow-toy-soft">
+      <div className="flex h-full flex-col overflow-hidden rounded-none border-0 border-line shadow-none [background:linear-gradient(var(--card-strong),var(--card-strong)),var(--page-base-a)] md:rounded-card md:border-2 md:bg-card-strong md:shadow-toy-soft">
       <header className="flex shrink-0 items-center gap-xs border-b-2 border-line py-xs pr-sm pl-md">
         {/* The name and the line under it wrap on a narrow phone rather than being cut short. */}
         <div className="min-w-0 flex-1 break-words">
@@ -1610,6 +1591,10 @@ export function AssistantPanel({ onClose, focusIn }: { onClose: () => void; focu
           <p className="m-0 text-caption text-ink-soft">{flow ? FLOWS[flow].label : credits}</p>
         </div>
         {log.length > 2 && <StartOver onConfirm={startOver} />}
+        {/* A phone's Close is in the header, since the panel fills the window; a laptop's is in the rail beside the card. */}
+        <span className="md:hidden">
+          <CloseButton onClose={onClose} />
+        </span>
       </header>
       {/* With a phone's keyboard up on a short screen, the model picker steps aside so the conversation keeps its room. */}
       {status.data?.connected && models.length > 1 && model && !(keyboard && keyboard.height < 420) && (
