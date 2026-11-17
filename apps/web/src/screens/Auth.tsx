@@ -1,4 +1,4 @@
-import { attendeeMayOpen, birthDateProblem, MAX_DEVICES, MIN_AGE, passwordProblem, PHONE_HINT, phoneProblem } from '@kreators/shared';
+import { attendeeMayOpen, birthDateProblem, MAX_DEVICES, MIN_AGE, passwordProblem, PHONE_PICK_HINT, phoneProblem } from '@kreators/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Suspense, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
@@ -10,6 +10,7 @@ import { todayLocal } from '../lib/date';
 import { useRefreshAll } from '../lib/queries';
 import { useSession } from '../lib/store';
 import { TermsBox } from '../components/TermsBox';
+import { PhoneField } from '../components/PhoneField';
 import { AnimatedIcon } from '../components/AnimatedIcon';
 import { FIELD_CARD } from '../lib/ui';
 import { InviteDoor, inviteRefusal, keepInvite, keptInvite } from '../lib/invite';
@@ -151,11 +152,7 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
         <PasswordField label="Password" value={password} onChange={setPassword} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} hint={mode === 'signup' ? (weak ?? 'Eight characters or more. Not your email, not one from the usual guess lists.') : undefined} />
         {mode === 'signup' && <PasswordField label="Password, once more" value={confirm} onChange={setConfirm} autoComplete="new-password" hint={mismatch ? 'The two do not match yet.' : undefined} />}
         {mode === 'signup' && (
-          <label className="block">
-            <span className="block text-subhead font-semibold">Phone</span>
-            <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" maxLength={24} placeholder="+91 98765 43210" className={FIELD_CARD} />
-            <span className="mt-xs block text-caption text-ink-soft">{phoneBad ?? `${PHONE_HINT} We ask so everyone here is real. Never shown to anyone.`}</span>
-          </label>
+          <PhoneField required surface="card" value={phone} onChange={setPhone} hint={phoneBad ?? `${PHONE_PICK_HINT} We ask so everyone here is real. Never shown to anyone.`} />
         )}
         {mode === 'signup' && (
           <label className="block">

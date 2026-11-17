@@ -40,7 +40,7 @@ Next she names fears and insecurities. A fear shows up when she is about to act.
 ## Step four: focus, routine and practices
 
 1. Bumling shows her map and suggests where to start. Riya keeps the picks or chooses her own, up to two, and taps **Work on these**.
-2. Her routine appears. It has six blocks, built from her real day. Only the morning has steps to tick. She taps **Looks right**.
+2. Her routine appears. It has six blocks, built from her real day. She ticks each block on Daily as she does it, and the morning has its own short steps too. She taps **Looks right**.
 3. Lumen, guide to faith, asks for her morning practices: a mantra, a breathing exercise, a line to say and something to read. **Those are my practices**.
 
 For every week she keeps the routine on five days, her wake-up time moves thirty minutes earlier, until half past six.

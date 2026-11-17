@@ -188,7 +188,7 @@ export function LifeMapPanel() {
             {d.routine.practices.reading && <li>One page a morning from {d.routine.practices.reading}.</li>}
           </ul>
           <p className="mt-sm m-0 text-caption text-ink-soft">
-            The morning steps are on <Link to="/today" className="underline underline-offset-4">Daily</Link> as tick rows. Wake-up moves thirty minutes earlier for every week you keep the deal.
+            Every block is on <Link to="/today" className="underline underline-offset-4">Daily</Link> as a tick row, and the morning's steps too. Wake-up moves thirty minutes earlier for every week you keep the deal.
           </p>
         </Section>
       )}

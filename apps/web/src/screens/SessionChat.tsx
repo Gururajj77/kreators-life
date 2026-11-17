@@ -60,6 +60,7 @@ import {
   PAYMENTS_LIVE,
   PLAN_CURRENCY,
 } from '@kreators/shared';
+import { levelLineFor } from '@kreators/shared/levelLines';
 import { ladderOptions, projectTasks, type LadderChoice } from '@kreators/shared/ladderChoices';
 import { Check } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
@@ -401,7 +402,7 @@ function MapForm({ initial, initialAway, onSend }: { initial: Partial<Record<Rel
                                   top right corner, level with the name (the founder, 2026-11-06); from `md` they sit side by side, centred on the row. */}
                               <span className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-sm">
                                 <span className="col-start-1 row-start-1 block text-row-title">{l.name}</span>
-                                <span className="col-start-1 row-start-2 block text-card-note text-ink-soft">“{l.sounds}”</span>
+                                <span className="col-start-1 row-start-2 block text-card-note text-ink-soft">“{levelLineFor(r.key, l.value) ?? l.sounds}”</span>
                                 <LevelTags value={l.value} on={on} stack className="col-start-2 row-span-2 row-start-1 md:self-center" />
                               </span>
                             </button>
@@ -1072,7 +1073,7 @@ export function SessionChat() {
   };
 
   const goRoutine = (data: Data) =>
-    say('bumling', ['Here is your routine. It is built from the day you described, not from a template.', { node: <RoutineCard data={data} /> }, 'The day has six blocks. Only the morning has steps to tick, and a day counts only when every morning step is ticked.', 'For every week you keep it on five days, your wake-up time moves thirty minutes earlier, until it reaches half past six.'], { stage: { part: 'plan', sub: 'routine' }, ask: { kind: 'chips', chips: [{ label: 'Looks right', value: 'ok' }], more: 'An exceptional day is a day you do not control, like travel, a crisis or a late night. Its morning is only twenty minutes, so one bad day does not break your week.' } });
+    say('bumling', ['Here is your routine. It is built from the day you described, not from a template.', { node: <RoutineCard data={data} /> }, 'The day has six blocks, and on Daily you tick each one as you do it. The morning also has its own short steps. A day counts toward your deal once every morning step is ticked.', 'For every week you keep it on five days, your wake-up time moves thirty minutes earlier, until it reaches half past six.'], { stage: { part: 'plan', sub: 'routine' }, ask: { kind: 'chips', chips: [{ label: 'Looks right', value: 'ok' }], more: 'An exceptional day is a day you do not control, like travel, a crisis or a late night. Its morning is only twenty minutes, so one bad day does not break your week.' } });
 
   const goPractices = (data: Data) =>
     say('divine', [`${hello('divine')} Now your morning practices: a mantra to repeat, a breathing exercise, a line to say, and something to read.`, 'Pick one of each on the card below. You can also use a mantra of your own, or none for now.'], { stage: { part: 'plan', sub: 'practices' }, ask: { kind: 'form', render: (send) => <PracticesForm focus={data.focus} onSend={send} />, more: 'Om Namah Shivaya suits the material path: work, money and the body. Hare Krishna suits the spiritual path: practice, surrender and meaning. Neither one is a test of belief, and words of your own work just as well.' } });

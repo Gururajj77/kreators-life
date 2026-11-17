@@ -19,7 +19,6 @@ import { NotToDoBlock } from '../components/NotToDoList';
 import { EmergenceSlot, HabitsSlot, KindsSlot } from '../components/EmergenceSlot';
 import { Nudge } from '../components/Nudge';
 import { Person } from '../components/Person';
-import { RoutineSection } from '../components/RoutineSection';
 import { Screen } from '../components/Screen';
 import { Skeleton, SkeletonList } from '../components/Skeleton';
 import { RemindersSection, useUndatedRemember } from '../components/Reminders';
@@ -61,6 +60,8 @@ const outline = 'toy toy-ink btn-outline inline-flex min-h-[36px] md:min-h-[44px
 
 // The month calendar downloads only when its toggle is opened.
 const TaskMonth = lazyNamed(() => import('../components/TaskMonth'), 'TaskMonth');
+// Your routine's card (2026-11-17) took the entry past its 480 kB line, so it loads in its own chunk as Daily opens, behind a placeholder of its size.
+const RoutineSection = lazyNamed(() => import('../components/RoutineSection'), 'RoutineSection');
 const AddTaskForm = lazyNamed(() => import('../components/TaskMonth'), 'AddTaskForm');
 // A task's plan form downloads the first time a plan is opened, so the whole form stays out of the first download (BacklogTask's; DailyTask
 // keeps its own in components/DailyTask.tsx).
@@ -489,7 +490,15 @@ export function Today() {
             </div>
           </section>
 
-          <RoutineSection date={date} />
+          <Suspense
+            fallback={
+              <div className="mt-lg" aria-hidden="true">
+                <Skeleton className="h-[156px] w-full rounded-tile" />
+              </div>
+            }
+          >
+            <RoutineSection date={date} />
+          </Suspense>
 
           <section data-pillar={rel.key} className="mt-lg" aria-labelledby="spark-heading">
             <div className="flex items-center gap-sm">

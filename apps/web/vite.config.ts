@@ -110,6 +110,8 @@ export default defineConfig({
           // Where a helper tooltip goes (2026-11-12; a subpath export and a leaf: it imports nothing), read only by lib/tipGeometry.ts, which the smart
           // tips, a glossary word's card and the assistant's bubble load after the first paint.
           if (id.includes('/packages/shared/src/tipPlace.ts')) return 'tip-place';
+          // What each map level sounds like in each relationship (2026-11-17; a leaf, a type import only), read by the session's map card.
+          if (id.includes('/packages/shared/src/levelLines.ts')) return 'shared-level-lines';
           // eventJoin (an event attendee's paths and the public event's type, importing only a type) joined on 2026-11-07, since Shell reads it.
           if (/\/packages\/shared\/src\/(core|dates|books|store|activity|circles|dayKinds|dayTypes|money|eventJoin)\.ts$/.test(id)) return 'shared-base';
           if (id.includes('/packages/shared/src/')) return 'shared';

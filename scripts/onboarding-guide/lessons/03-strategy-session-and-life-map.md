@@ -55,7 +55,7 @@ Bumling shows your map and suggests up to two relationships to work on first. Fl
 
 ## Part five: routine, practices and the contract
 
-- **Your routine:** six blocks for the day. They are the morning routine, food and water, work, people, learning and reflection, and lights out. Only the morning has steps to tick. Each block fits your real day: if work runs late, people and learning move to the time that is left, and nothing runs past lights out. Each week you keep your deal, wake-up moves thirty minutes earlier, toward 6:30.
+- **Your routine:** six blocks for the day. They are the morning routine, food and water, work, people, learning and reflection, and lights out. You tick each block on Daily as you do it, and the morning has its own short steps too. Each block fits your real day: if work runs late, people and learning move to the time that is left, and nothing runs past lights out. Each week you keep your deal, wake-up moves thirty minutes earlier, toward 6:30.
 - **Practices:** Lumen offers a mantra, a breathing exercise, a line to say and something to read. You can use your own words, or none for now.
 - **The contract:** how many days a week you will keep the routine (five to start), a check-in time, and what a short week costs. You pick from three: the streak breaks, unlocks wait, or the coach sees it. You sign by typing your name, then tap **Sign it**.
 - **The live call:** a switch on the same card, **I would like a live call with a coach**. A person goes through your answers with you, for ₹10,000. Say yes and your ask goes to the team, who write to you to set a time. Nothing is charged yet, and saying no changes nothing. You can also ask later from the contract on your life map.

@@ -1,0 +1,147 @@
+import type { RelationshipKey } from './core.ts';
+
+/**
+ * What each level of the map sounds like in each of the seven relationships (2026-11-17, the founder: the options under each
+ * relationship "need to be clear ... clear context for each level ... for that specific relationship", since one line per level read
+ * the same for all seven). One first-person line of everyday life per level and relationship, our own words, shown under the level's
+ * name on the strategy session's map card in place of its general line (`MapLevel.sounds`, which stays for the map ladder, the
+ * glossary and the feelings reader).
+ *
+ * A leaf: it imports nothing at run time (only a type), so it is its own chunk (`shared-level-lines`) and never part of the shared
+ * chunk in the first download. Keyed by the level's value on the map (`MAP_LEVELS`); a shared test checks every relationship has every
+ * level, each line is short and plain, and none promises, diagnoses or blames.
+ */
+export const LEVEL_LINES: Readonly<Record<RelationshipKey, Readonly<Record<number, string>>>> = {
+  servant_leader: {
+    20: 'I’m bad at my work, and everyone can tell.',
+    30: 'I let people down again, so I go quiet and hide.',
+    50: 'I do the least I can and wait for the weekend.',
+    75: 'I keep missing the job, client or money I lost.',
+    100: 'I say yes to everything, scared of losing money.',
+    125: 'I need the next raise or big number to feel enough.',
+    150: 'My boss, my clients or the market keep me stuck.',
+    175: 'I’m too good for this work, so I coast.',
+    200: 'I’m nervous, and I still pitch, ask or raise my price.',
+    250: 'A lost client is part of work. I find the next one.',
+    310: 'I deliver on time and learn the skills I lack.',
+    350: 'My results and my money are mine to own.',
+    400: 'I can see how my work makes money and where it leaks.',
+    440: 'I pick work for why it matters, not only for the pay.',
+    500: 'I serve my clients and my team because I care.',
+    540: 'When my team and my clients win, I win.',
+  },
+  friendship: {
+    20: 'I’m boring. Why would anyone want to hang out with me?',
+    30: 'I left their messages so long that it feels awkward now.',
+    50: 'I don’t reach out. If they call, fine.',
+    75: 'I miss the friends who drifted off, and I don’t make new ones.',
+    100: 'I don’t text first in case they don’t reply.',
+    125: 'I need to be invited to feel I matter.',
+    150: 'They never check on me, so why should I check on them?',
+    175: 'I don’t need people. I’m fine on my own.',
+    200: 'I feel awkward, and I still send the first message.',
+    250: 'Some friends stay and some drift. Both are okay.',
+    310: 'I make the plan and turn up when I said I would.',
+    350: 'Staying in touch is my job too, not only theirs.',
+    400: 'I can see which friends lift me, and what I bring them.',
+    440: 'I tell a friend the hard truth, kindly, because I care.',
+    500: 'I’m truly glad when a friend wins, even ahead of me.',
+    540: 'A friend’s good day feels like my good day.',
+  },
+  parent_child: {
+    20: 'I feel like the letdown of the family.',
+    30: 'I call home only because I would feel bad if I didn’t.',
+    50: 'We talk about food and the weather. I’ve stopped trying for more.',
+    75: 'I keep missing how home used to be, or someone who is gone.',
+    100: 'I hide big choices from my family to dodge a fight.',
+    125: 'I need their approval before I can feel okay.',
+    150: 'They got things wrong for me, and I still blame them.',
+    175: 'They don’t get my life, so I don’t listen.',
+    200: 'I’m scared of the fight, and I still tell them my choice.',
+    250: 'We see some things differently, and that’s okay.',
+    310: 'I call, visit and help at home without being asked.',
+    350: 'How I treat them is mine, whatever they did.',
+    400: 'I can see where my habits came from, and I choose which to keep.',
+    440: 'I set kind limits with my family and keep them calmly.',
+    500: 'I’m grateful for my family, and I’ve let the past go.',
+    540: 'Caring for them feels like caring for myself.',
+  },
+  lover_partner: {
+    20: 'I don’t feel worth loving, so I hide who I am.',
+    30: 'Every fight feels like my fault. I always ruin it.',
+    50: 'We live like flatmates, and I’ve stopped trying.',
+    75: 'I’m still stuck on an ex, or on how we used to be.',
+    100: 'I don’t say what I need in case they leave.',
+    125: 'I need their texts and attention to feel okay.',
+    150: 'I keep score and blame them when things go wrong.',
+    175: 'I won’t say sorry first. They should come to me.',
+    200: 'I’m nervous, and I still ask for what I need.',
+    250: 'If it works, great. If it doesn’t, I’ll be okay.',
+    310: 'I plan time for us and listen with my phone away.',
+    350: 'My part in every fight is mine to own.',
+    400: 'I can see the patterns we fall into, and I can name them.',
+    440: 'I know what we both need, and I act on it calmly.',
+    500: 'I give freely, and I don’t keep score.',
+    540: 'Their happiness feels like my own.',
+  },
+  self: {
+    20: 'I hate how I look, so I avoid mirrors and photos.',
+    30: 'I broke a promise to myself again. Why even try?',
+    50: 'I scroll, skip meals and sleep late. Nothing feels worth it.',
+    75: 'I miss the person I used to be, and I stay stuck there.',
+    100: 'I skip the check-up or the gym in case it goes badly.',
+    125: 'I need a like, a snack or a buy to feel okay today.',
+    150: 'I snap at myself for every small slip.',
+    175: 'I don’t need rest or help. I can push through.',
+    200: 'I’m tired, and I still go for the walk.',
+    250: 'I missed a workout. That’s fine, I start again tomorrow.',
+    310: 'I keep my sleep and meals on track, even on busy days.',
+    350: 'My body and my habits are mine to look after.',
+    400: 'I can see which habits lift my day and which pull it down.',
+    440: 'I rest because I know it makes the rest of my life better.',
+    500: 'I look after my body like someone I love.',
+    540: 'When I’m well, the people around me feel it too.',
+  },
+  guru: {
+    20: 'I’m too slow to learn. Asking makes me look stupid.',
+    30: 'I bought the course and didn’t finish it, again.',
+    50: 'Advice goes in one ear and out the other. Nothing changes.',
+    75: 'I lost a mentor I trusted, and I won’t let anyone in now.',
+    100: 'I don’t show my work, so nobody can point out my mistakes.',
+    125: 'I need my teacher’s praise to feel I’m any good.',
+    150: 'Feedback feels like an attack, so I argue back.',
+    175: 'I already know this. I don’t need a teacher.',
+    200: 'Feedback stings, and I still ask for it.',
+    250: 'I take what helps from advice and leave the rest.',
+    310: 'I do the homework and try what my coach suggests.',
+    350: 'My growth is my job. A teacher only shows the way.',
+    400: 'I can see why the advice works, not only what to do.',
+    440: 'I learn from many people and test it on my own life.',
+    500: 'I’m grateful to my teachers, and I pass on what I learned.',
+    540: 'I learn as I teach, and I teach as I learn.',
+  },
+  divine: {
+    20: 'I feel too far gone for God or any higher purpose.',
+    30: 'I skip my practice and feel I’ll be punished for it.',
+    50: 'Prayer, meaning, purpose? I don’t think about it.',
+    75: 'I lost my faith after something painful happened.',
+    100: 'I pray only when I’m scared, to keep bad things away.',
+    125: 'I pray or meditate to get what I want.',
+    150: 'Why did this happen to me? I’m angry at God or at life.',
+    175: 'I’m more spiritual than the people around me.',
+    200: 'I have doubts, and I still sit down for my practice.',
+    250: 'Some days my practice feels deep, and some days it doesn’t.',
+    310: 'I pray, chant or read a little every day.',
+    350: 'Not everything is mine to control. I do my part.',
+    400: 'I notice the quiet moments that make life feel full.',
+    440: 'I act from my values, even when nobody is watching.',
+    500: 'My practice makes me kinder to everyone I meet.',
+    540: 'I feel part of something much bigger than me.',
+  },
+};
+
+/** The line for one level in one relationship, or null for a value the map does not offer. */
+export function levelLineFor(relationship: RelationshipKey, value: number): string | null {
+  const lines = LEVEL_LINES[relationship];
+  return lines && Object.hasOwn(lines, value) ? lines[value]! : null;
+}

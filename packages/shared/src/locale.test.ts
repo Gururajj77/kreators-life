@@ -6,6 +6,9 @@ import {
   kpiShown,
   LOCALE,
   normalizePhone,
+  PHONE_COUNTRIES,
+  phoneFrom,
+  splitPhone,
   phoneProblem,
   pinCodeProblem,
   seasonLabel,
@@ -69,3 +72,33 @@ describe('Indian addresses', () => {
     expect(pinCodeProblem('56O038')).toBeTruthy();
   });
 });
+
+describe('the phone field\'s country picker', () => {
+  it('lists each country once with digits for its code', () => {
+    const isos = PHONE_COUNTRIES.map((c) => c.iso);
+    expect(new Set(isos).size).toBe(isos.length);
+    expect(PHONE_COUNTRIES.every((c) => /^[A-Z]{2}$/.test(c.iso) && /^[1-9]\d{0,3}$/.test(c.dial))).toBe(true);
+    expect(PHONE_COUNTRIES.find((c) => c.iso === 'IN')?.dial).toBe('91');
+  });
+  it('puts the picked code in front and passes the server rule', () => {
+    expect(phoneFrom('IN', '98765 43210')).toBe('+91 9876543210');
+    expect(phoneFrom('IN', '098765 43210')).toBe('+91 9876543210');
+    expect(phoneFrom('IN', '91 98765 43210')).toBe('+91 9876543210');
+    expect(phoneFrom('GB', '07700 900123')).toBe('+44 7700900123');
+    expect(phoneFrom('IT', '06 1234 5678')).toBe('+39 0612345678');
+    expect(phoneFrom('IN', '+44 7700 900123')).toBe('+44 7700 900123');
+    expect(phoneFrom('IN', '0044 7700 900123')).toBe('+447700900123');
+    expect(phoneFrom('IN', '')).toBe('');
+    expect(normalizePhone(phoneFrom('US', '(415) 555-0100'))).toBe('+14155550100');
+    expect(phoneProblem(phoneFrom('GB', '07700 900123'))).toBeNull();
+    expect(phoneProblem(phoneFrom('IN', '98765 4321'))).toBeTruthy();
+  });
+  it('takes a full number apart by its longest code', () => {
+    expect(splitPhone('+44 7700 900123')).toEqual({ iso: 'GB', number: '7700900123' });
+    expect(splitPhone('+1 416 555 0100')).toEqual({ iso: 'US', number: '4165550100' });
+    expect(splitPhone('+1 416 555 0100', 'CA')).toEqual({ iso: 'CA', number: '4165550100' });
+    expect(splitPhone('+1876 555 1234')).toEqual({ iso: 'JM', number: '5551234' });
+    expect(splitPhone('98765 43210')).toEqual({ iso: 'IN', number: '98765 43210' });
+  });
+});
+

@@ -75,8 +75,9 @@ If you did the strategy session, **Your routine** sits right under Show up. It s
 
 - The dots show this week, and the line says how many days you kept against your deal.
 - Pick **Normal day** or **Exceptional day**, for days that do not follow the usual shape.
-- Tick each morning step as you do it. Each one shows its minutes. The day counts only when every morning step is ticked.
-- The rest of the day is shown as a timeline of blocks, like work, people and lights out.
+- Tick each morning step as you do it. Each one shows its minutes.
+- Every other block, like work, people and lights out, is a tick row too, with its times. Tick it when you have done it.
+- The day counts toward your deal once every morning step is ticked. The other blocks pay nothing and never change that count.
 
 If you have not done the session yet, this spot offers **Run the strategy session** instead.
 

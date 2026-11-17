@@ -1,4 +1,4 @@
-import { birthDateProblem, EVENT_TYPE_META, fact, MIN_AGE, passwordProblem, PHONE_HINT, phoneProblem, type EventType, type Listing, type PublicEvent } from '@kreators/shared';
+import { birthDateProblem, EVENT_TYPE_META, fact, MIN_AGE, passwordProblem, PHONE_PICK_HINT, phoneProblem, type EventType, type Listing, type PublicEvent } from '@kreators/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -8,6 +8,7 @@ import { MediaCover } from '../components/Media';
 import { Pager, usePage } from '../components/Pager';
 import { SkeletonList } from '../components/Skeleton';
 import { TermsBox } from '../components/TermsBox';
+import { PhoneField } from '../components/PhoneField';
 import { api, ApiError, publicApi } from '../lib/api';
 import { evenGrid, evenTile } from '../lib/bento';
 import { displayZone, eventTime, todayLocal, zoneName } from '../lib/date';
@@ -279,11 +280,7 @@ export function EventLanding() {
                 </label>
                 <PasswordField label="Password" value={v.password} onChange={set('password')} autoComplete="new-password" hint={weak ?? 'Eight characters or more. Not your email, not one from the usual guess lists.'} />
                 <PasswordField label="Password, once more" value={v.confirm} onChange={set('confirm')} autoComplete="new-password" hint={mismatch ? 'The two do not match yet.' : undefined} />
-                <label className="block">
-                  <span className="block text-subhead font-semibold">Phone</span>
-                  <input type="tel" required value={v.phone} onChange={(x) => set('phone')(x.target.value)} autoComplete="tel" maxLength={24} placeholder="+91 98765 43210" className={FIELD_CARD} />
-                  <span className="mt-xs block text-caption text-ink-soft">{phoneBad ?? `${PHONE_HINT} Never shown to anyone.`}</span>
-                </label>
+                <PhoneField required surface="card" value={v.phone} onChange={set('phone')} hint={phoneBad ?? `${PHONE_PICK_HINT} Never shown to anyone.`} />
                 <label className="block">
                   <span className="block text-subhead font-semibold">Date of birth</span>
                   <input type="date" required value={v.birthDate} onChange={(x) => set('birthDate')(x.target.value)} autoComplete="bday" max={todayLocal()} className={FIELD_CARD} />

@@ -1,16 +1,47 @@
 import { minutesLabel, stepsMinutes, type BlockKey, type DayType, type SessionResponse } from '@kreators/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRef } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { api } from '../lib/api';
 import { useAuthed } from '../lib/queries';
 import { chip } from './Chat';
 import { CheckRow } from './CheckRow';
-import { Fold } from './Fold';
 import { Icon } from './Icon';
 import { Skeleton } from './Skeleton';
-import { Compass } from 'lucide-react';
+import { StatusTag } from './StatusTag';
+import { StickyClose, useTallOpen } from './StickyClose';
+import { ToggleChevron } from './ToggleMark';
+import { Sunrise } from 'lucide-react';
 import { clockOf } from '../lib/date';
+
+/** Before noon an open morning is still the thing to do; after it the card speaks of the block you are in. */
+const NOON = 12 * 60;
+const minutesOf = (hhmm: string) => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+};
+/** Whether a block holds this minute of the day; lights out runs past midnight. */
+const holds = (b: { start: string; end: string }, now: number) => {
+  const s = minutesOf(b.start);
+  const e = minutesOf(b.end);
+  return s <= e ? now >= s && now < e : now >= s || now < e;
+};
+/** The minute of the day on the device, moved on once a minute, so the card's Next or Now line keeps up while Daily stays open. */
+function useMinuteOfDay(): number {
+  const read = () => {
+    const d = new Date();
+    return d.getHours() * 60 + d.getMinutes();
+  };
+  const [now, setNow] = useState(read);
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(read()), 60_000);
+    return () => window.clearInterval(t);
+  }, []);
+  return now;
+}
+/** The card's own look (2026-11-17, the founder: "the your routine needs to be highlighted in daily"): a sunrise in the family pillar's soft colour. */
+const SUN = { background: 'var(--soft-parent_child)', color: 'var(--deep-parent_child)' };
+const OUTLINE_LINK = 'toy toy-ink btn-outline inline-flex min-h-[40px] md:min-h-[48px] tap-pad items-center justify-center gap-xs rounded-pill border border-ink/30 bg-card-strong px-md text-headline text-ink';
 
 
 /**
@@ -21,6 +52,11 @@ import { clockOf } from '../lib/date';
  * daily and keep it in non open state"), so Daily opens short; `/today#routine` (Emerging's card, Life's and Reviews' Routine tiles, the
  * brief's routine line) lands on it and opens it. Without a session it is the same closed row, "Not set up yet", holding the way to the
  * session, so the row is one height in every state and the loading row below never makes the page jump.
+ * Since 2026-11-17 (the founder: "the your routine needs to be highlighted in daily", picking three of the suggestions and the set-up card)
+ * it is a card of its own, still closed by default: a sunrise, the title and a state tag (Morning open before noon, Done today once every
+ * morning step is ticked, else the count), one line saying what is next (before noon the next morning step; later the block the day is in,
+ * or the next one), a bar of the morning's steps, and the week's dots with the deal. The whole card is the toggle, so a tap opens the steps
+ * and the blocks under it as before. With no session the card says so and carries Run the strategy session itself, with nothing to open.
  */
 export function RoutineSection({ date }: { date: string }) {
   const qc = useQueryClient();
@@ -31,6 +67,24 @@ export function RoutineSection({ date }: { date: string }) {
   // one after another so the server ends on the last one, and only the answer to the newest save is written back.
   const chain = useRef<Promise<unknown>>(Promise.resolve());
   const latest = useRef(0);
+  // The card is the toggle (closed by default, 2026-11-14), with what a Fold does: `/today#routine` lands on it and opens it, its close
+  // stays in view while the open routine is taller than the window, and focus goes back to the card when it closes from inside.
+  const [open, setOwnOpen] = useState(false);
+  const setOpen = (f: (o: boolean) => boolean) => setOwnOpen(f);
+  const root = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  const panelId = useId();
+  const railOn = useTallOpen(root, open);
+  const now = useMinuteOfDay();
+  const focusInside = useRef(false);
+  const wasOpen = useRef(open);
+  useLayoutEffect(() => {
+    const closed = wasOpen.current && !open;
+    wasOpen.current = open;
+    if (!closed || !focusInside.current) return;
+    const el = document.activeElement;
+    if (!el || el === document.body) button.current?.focus();
+  }, [open]);
   const mark = useMutation({
     mutationFn: (body: { dayType: DayType; steps: string[]; blocks: BlockKey[]; n: number }) => {
       const send = chain.current.catch(() => undefined).then(() => api.markRoutineDay({ date, dayType: body.dayType, steps: body.steps, blocks: body.blocks }));
@@ -67,27 +121,29 @@ export function RoutineSection({ date }: { date: string }) {
   if (q.isPending) {
     return (
       <div className="mt-lg" aria-hidden="true">
-        <Skeleton className="h-[44px] w-full rounded-tile" />
+        <Skeleton className="h-[156px] w-full rounded-tile" />
       </div>
     );
   }
   if (!d) return null;
   if (!d.routine) {
     return (
-      <section className="mt-lg" aria-label="Your routine">
-        <Fold id="routine" title="Your routine" hint="Not set up yet">
-          <div className="pt-sm">
-            <Link to="/session" className="toy toy-soft flex items-center gap-sm rounded-tile bg-card p-sm text-ink">
-              <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill bg-paper text-ink-soft" aria-hidden="true">
-                <Icon icon={Compass} size={20} />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-card-title">Run the strategy session</span>
-                <span className="block text-card-note text-ink-soft">A few minutes: the map, your day, a routine and a contract.</span>
-              </span>
-            </Link>
+      <section id="routine" className="mt-lg" aria-labelledby="routine-title">
+        <div className="rounded-tile bg-card p-sm shadow-toy-soft">
+          <div className="flex items-center gap-sm">
+            <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill" style={SUN} aria-hidden="true">
+              <Icon icon={Sunrise} size={20} />
+            </span>
+            <h2 id="routine-title" className="m-0 min-w-0 flex-1 text-card-title">
+              Your routine
+            </h2>
+            <StatusTag tone="neutral">Not set up yet</StatusTag>
           </div>
-        </Fold>
+          <p className="mt-xs m-0 text-card-note text-ink-soft">The strategy session builds it from your real day, in a few minutes, with your map and a contract.</p>
+          <Link to="/session" className={`mt-sm w-full ${OUTLINE_LINK}`}>
+            Run the strategy session
+          </Link>
+        </div>
       </section>
     );
   }
@@ -111,20 +167,81 @@ export function RoutineSection({ date }: { date: string }) {
   const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   const steps = morning?.steps ?? [];
   const stepsDone = steps.filter((s) => ticked.has(s)).length;
+  const done = Boolean(d.today?.done);
+  const nextStep = steps.find((s) => !ticked.has(s));
+  const current = blocks.find((b) => holds(b, now));
+  const upcoming = blocks.filter((b) => minutesOf(b.start) > now).sort((a, b) => minutesOf(a.start) - minutesOf(b.start))[0];
+  const nextLine =
+    nextStep && (now < NOON || current?.key === 'morning')
+      ? `Next: ${nextStep}`
+      : current
+        ? `Now: ${current.name}, ${clockOf(current.start)} to ${clockOf(current.end)}`
+        : upcoming
+          ? `Next: ${upcoming.name} at ${clockOf(upcoming.start)}`
+          : nextStep
+            ? `Next: ${nextStep}`
+            : 'All done for today.';
+  const tag = done ? <StatusTag tone="good">Done today</StatusTag> : now < NOON ? <StatusTag tone="warm">Morning open</StatusTag> : <StatusTag tone="neutral">{`${stepsDone} of ${steps.length}`}</StatusTag>;
+  const weekLine = `${d.week.done} of 7 this week${d.contract ? `, ${d.contract.minDays} is the deal` : ''}`;
   return (
     <section className="mt-lg" aria-label="Your routine">
-      <Fold id="routine" title="Your routine" hint={d.today?.done ? 'Done today' : `${stepsDone} of ${steps.length} today`}>
+      <div
+        ref={root}
+        id="routine"
+        data-sticky-close-root=""
+        onFocus={() => {
+          focusInside.current = true;
+        }}
+        onBlur={(e) => {
+          const to = e.relatedTarget as Node | null;
+          if (to && !e.currentTarget.contains(to)) focusInside.current = false;
+        }}
+      >
+        <button
+          ref={button}
+          type="button"
+          aria-expanded={open}
+          aria-controls={panelId}
+          data-land-open=""
+          onClick={() => setOpen((o) => !o)}
+          className="toy toy-soft block w-full rounded-tile bg-card p-sm text-left shadow-toy-soft aria-expanded:bg-line"
+        >
+          <span className="flex items-center gap-sm">
+            <span className="flex size-[40px] shrink-0 items-center justify-center rounded-pill" style={SUN} aria-hidden="true">
+              <Icon icon={Sunrise} size={20} />
+            </span>
+            <span className="min-w-0 flex-1 text-card-title">
+              Your routine
+            </span>
+            {tag}
+            <ToggleChevron open={open} size={16} className="text-ink-soft sticky-close-mark" />
+          </span>
+          <span className="mt-xs block text-card-note text-ink-soft">{nextLine}</span>
+          {steps.length > 0 && (
+            <>
+              <span className="mt-sm flex gap-xs" aria-hidden="true">
+                {steps.map((step) => (
+                  <span key={step} className={`h-[8px] flex-1 rounded-pill ${ticked.has(step) ? 'bg-r4' : 'bg-line'}`} />
+                ))}
+              </span>
+              <span className="sr-only">{`${stepsDone} of ${steps.length} morning steps ticked.`}</span>
+            </>
+          )}
+          <span className="mt-sm flex flex-col gap-xs md:flex-row md:items-center md:justify-between">
+            <span className="block text-caption text-ink-soft">{weekLine}</span>
+            <span className="flex gap-xs" aria-hidden="true">
+              {d.week.days.map((v, i) => (
+                <span key={i} className={`flex size-[28px] items-center justify-center rounded-pill text-caption2 font-semibold ${v === true ? 'bg-r4 text-on-fill' : v === false ? 'bg-line text-ink-soft' : 'bg-paper text-ink-mute'}`}>
+                  {labels[(new Date(`${date}T00:00:00`).getDay() + 6 + i - 6 + 7) % 7]}
+                </span>
+              ))}
+            </span>
+          </span>
+        </button>
+        {railOn && <StickyClose onClose={() => setOpen(() => false)} label="Close Your routine" title="Your routine" opener={() => button.current} />}
+        {open && (
+        <div id={panelId} className="mt-xs">
         <div className="pt-sm">
-          <p className="m-0 text-caption text-ink-soft">
-            {d.week.done} of 7 this week{d.contract ? `, ${d.contract.minDays} is the deal` : ''}
-          </p>
-          <ul className="mt-xs flex list-none gap-xs p-0 m-0" aria-label="This week">
-            {d.week.days.map((v, i) => (
-              <li key={i} className={`flex size-[28px] items-center justify-center rounded-pill text-caption2 font-semibold ${v === true ? 'bg-r4 text-on-fill' : v === false ? 'bg-line text-ink-soft' : 'bg-paper text-ink-mute'}`} title={v === true ? 'done' : v === false ? 'not all steps' : 'nothing yet'}>
-                {labels[(new Date(`${date}T00:00:00`).getDay() + 6 + i - 6 + 7) % 7]}
-              </li>
-            ))}
-          </ul>
           {d.routine.practices.affirmation && <p className="mt-sm m-0 rounded-tile bg-paper p-sm text-subhead font-semibold">“{d.routine.practices.affirmation}”</p>}
           <div className="mt-sm flex gap-xs">
             {(['general', 'exceptional'] as const).map((t) => (
@@ -170,7 +287,9 @@ export function RoutineSection({ date }: { date: string }) {
               ))}
           </ol>
         </div>
-      </Fold>
+        </div>
+        )}
+      </div>
     </section>
   );
 }

@@ -1,9 +1,10 @@
-import { birthDateProblem, passwordProblem, PHONE_HINT, phoneProblem } from '@kreators/shared';
+import { birthDateProblem, passwordProblem, PHONE_PICK_HINT, phoneProblem } from '@kreators/shared';
 import { useState } from 'react';
 import { todayLocal } from '../lib/date';
 import { FIELD, FIELD_LINE } from '../lib/ui';
 import { AnimatedIcon } from './AnimatedIcon';
 import { ChatActions } from './Chat';
+import { PhoneField } from './PhoneField';
 import { TermsBox } from './TermsBox';
 
 /**
@@ -63,11 +64,7 @@ export function AccountForm({ initialName, onSend }: { initialName: string; onSe
           <PasswordField value={v.confirm} onChange={set('confirm')} what="password" />
           {hint(mismatch ? 'The two do not match yet.' : null)}
         </label>
-        <label className="block">
-          <span className="block text-subhead font-semibold">Phone</span>
-          <input type="tel" value={v.phone} onChange={set('phone')} autoComplete="tel" maxLength={24} placeholder="+91 98765 43210" className={FIELD} />
-          {hint(badPhone ?? PHONE_HINT)}
-        </label>
+        <PhoneField value={v.phone} onChange={(phone) => setV((x) => ({ ...x, phone }))} hint={badPhone ?? PHONE_PICK_HINT} />
         <label className="block">
           <span className="block text-subhead font-semibold">Date of birth</span>
           <input type="date" value={v.birthDate} onChange={set('birthDate')} autoComplete="bday" max={todayLocal()} className={FIELD} />
@@ -141,11 +138,7 @@ export function PrivateCard({ onSend }: { onSend: (value: Record<string, string>
       }}
     >
       <div className="grid gap-xs md:grid-cols-2">
-        <label className="block">
-          <span className="block text-subhead font-semibold">Phone</span>
-          <input type="tel" value={v.phone} onChange={set('phone')} autoComplete="tel" maxLength={24} placeholder="+91 98765 43210" className={FIELD} />
-          {hint(badPhone ?? PHONE_HINT)}
-        </label>
+        <PhoneField value={v.phone} onChange={(phone) => setV((x) => ({ ...x, phone }))} hint={badPhone ?? PHONE_PICK_HINT} />
         <label className="block">
           <span className="block text-subhead font-semibold">Date of birth</span>
           <input type="date" value={v.birthDate} onChange={set('birthDate')} autoComplete="bday" max={todayLocal()} className={FIELD} />

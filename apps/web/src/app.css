@@ -636,6 +636,12 @@
   :focus:not(:focus-visible) {
     outline: none;
   }
+  /* The phone field's country picker (components/PhoneField.tsx) is a real select laid unseen over its code, so the box it sits in
+     wears the keyboard's ring for it. */
+  .phone-country:has(select:focus-visible) {
+    outline: 3px solid var(--deep-self);
+    outline-offset: 3px;
+  }
   /* A page opened straight on a section (lib/landOnHash.ts): focus is there with no key pressed yet, so no ring until the keyboard moves it. */
   [data-land-quiet]:focus-visible {
     outline: none;

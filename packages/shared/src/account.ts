@@ -62,6 +62,8 @@ export function birthDateProblem(birthDate: string, today = new Date().toISOStri
 
 /** The line under a phone field. */
 export const PHONE_HINT = 'Without a country code we read it as Indian (+91).';
+/** The line under a phone field that has its country picker beside it (components/PhoneField.tsx). */
+export const PHONE_PICK_HINT = 'Pick your country, then type your number.';
 
 /**
  * Digits only, with a leading plus kept: "+91 98765-43210" becomes "+919876543210". India first: a bare Indian mobile (ten digits
@@ -76,11 +78,82 @@ export function normalizePhone(raw: string): string {
   return digits;
 }
 
-/** Why a phone number will not do, or null when it is fine: 8 to 15 digits; without a country code it is read as Indian. */
+/** Why a phone number will not do, or null when it is fine: 8 to 15 digits; without a country code it is read as Indian, and an Indian number has ten digits after +91. */
 export function phoneProblem(raw: string): string | null {
   const p = normalizePhone(raw);
   if (!/^\+?\d{8,15}$/.test(p)) return 'Enter your mobile number, like 98765 43210, or with its country code, like +44 7700 900123.';
+  if (p.startsWith('+91') && !/^\+91\d{10}$/.test(p)) return 'An Indian number has ten digits, like 98765 43210.';
   return null;
+}
+
+/**
+ * Every country's calling code, for the country picker beside a phone field (2026-11-17): its two-letter ISO code, then the code
+ * without the plus. The names come from the browser (Intl.DisplayNames), so this stays a short line of text. Places that share a
+ * code each keep it (+1 for the US, Canada and the Caribbean's own three-digit areas; +44 for the UK, Jersey, Guernsey, Man).
+ */
+const DIAL_CODES =
+  'AD376 AE971 AF93 AG1268 AI1264 AL355 AM374 AO244 AR54 AS1684 AT43 AU61 AW297 AX358 AZ994 BA387 BB1246 BD880 BE32 BF226 BG359 ' +
+  'BH973 BI257 BJ229 BL590 BM1441 BN673 BO591 BQ599 BR55 BS1242 BT975 BW267 BY375 BZ501 CA1 CC61 CD243 CF236 CG242 CH41 CI225 ' +
+  'CK682 CL56 CM237 CN86 CO57 CR506 CU53 CV238 CW599 CX61 CY357 CZ420 DE49 DJ253 DK45 DM1767 DO1809 DZ213 EC593 EE372 EG20 EH212 ' +
+  'ER291 ES34 ET251 FI358 FJ679 FK500 FM691 FO298 FR33 GA241 GB44 GD1473 GE995 GF594 GG44 GH233 GI350 GL299 GM220 GN224 GP590 ' +
+  'GQ240 GR30 GT502 GU1671 GW245 GY592 HK852 HN504 HR385 HT509 HU36 ID62 IE353 IL972 IM44 IN91 IO246 IQ964 IR98 IS354 IT39 JE44 ' +
+  'JM1876 JO962 JP81 KE254 KG996 KH855 KI686 KM269 KN1869 KP850 KR82 KW965 KY1345 KZ7 LA856 LB961 LC1758 LI423 LK94 LR231 LS266 ' +
+  'LT370 LU352 LV371 LY218 MA212 MC377 MD373 ME382 MF590 MG261 MH692 MK389 ML223 MM95 MN976 MO853 MP1670 MQ596 MR222 MS1664 MT356 ' +
+  'MU230 MV960 MW265 MX52 MY60 MZ258 NA264 NC687 NE227 NF672 NG234 NI505 NL31 NO47 NP977 NR674 NU683 NZ64 OM968 PA507 PE51 PF689 ' +
+  'PG675 PH63 PK92 PL48 PM508 PR1787 PS970 PT351 PW680 PY595 QA974 RE262 RO40 RS381 RU7 RW250 SA966 SB677 SC248 SD249 SE46 SG65 ' +
+  'SH290 SI386 SJ47 SK421 SL232 SM378 SN221 SO252 SR597 SS211 ST239 SV503 SX1721 SY963 SZ268 TC1649 TD235 TG228 TH66 TJ992 TK690 ' +
+  'TL670 TM993 TN216 TO676 TR90 TT1868 TV688 TW886 TZ255 UA380 UG256 US1 UY598 UZ998 VA39 VC1784 VE58 VG1284 VI1340 VN84 VU678 ' +
+  'WF681 WS685 XK383 YE967 YT262 ZA27 ZM260 ZW263';
+
+/** The countries a phone can be picked from, in ISO order; India is the one picked until someone changes it. */
+export const PHONE_COUNTRIES: readonly { iso: string; dial: string }[] = DIAL_CODES.split(' ').map((x) => ({ iso: x.slice(0, 2), dial: x.slice(2) }));
+export const DEFAULT_PHONE_COUNTRY = 'IN';
+const DIAL_BY_ISO: Record<string, string> = Object.assign(Object.create(null), Object.fromEntries(PHONE_COUNTRIES.map((c) => [c.iso, c.dial])));
+/** Which country a shared code reads as when nothing else says (a number typed with +1 is the US until Canada is picked). */
+const DIAL_MAIN: Record<string, string> = Object.assign(Object.create(null), { '1': 'US', '7': 'RU', '39': 'IT', '44': 'GB', '47': 'NO', '61': 'AU', '212': 'MA', '262': 'RE', '358': 'FI', '590': 'GP', '599': 'CW' });
+/** Where the 0 in front is part of the number abroad too (Italy's landlines, Côte d'Ivoire's ten digits), so it is never taken off. */
+const KEEPS_ZERO = new Set(['IT', 'SM', 'VA', 'CI']);
+
+/** A country's calling code, or India's for one not on the list. */
+export function dialOf(iso: string): string {
+  return DIAL_BY_ISO[iso] ?? DIAL_BY_ISO[DEFAULT_PHONE_COUNTRY]!;
+}
+
+/**
+ * The number a phone field sends: the picked country's code in front of what was typed. What is typed with its own plus (or 00) wins,
+ * a 0 typed in front for calls at home is taken off, and an Indian number typed with its 91 again is not doubled. Empty stays empty.
+ */
+export function phoneFrom(iso: string, typed: string): string {
+  const t = typed.trim();
+  if (!t) return '';
+  if (t.startsWith('+')) return t;
+  let digits = t.replace(/\D/g, '');
+  if (!digits) return t;
+  if (digits.startsWith('00')) return `+${digits.slice(2)}`;
+  const dial = dialOf(iso);
+  if (!KEEPS_ZERO.has(iso)) digits = digits.replace(/^0/, '');
+  if (dial === '91' && /^91[6-9]\d{9}$/.test(digits)) digits = digits.slice(2);
+  return `+${dial} ${digits}`;
+}
+
+/**
+ * A full number taken apart for the field: the country whose code it starts with (the longest that fits; for a code shared by
+ * several, `prefer` when it is one of them, else the main one) and the rest as typed digits. A number with no plus stays as it is
+ * under India, the app's own reading of it.
+ */
+export function splitPhone(full: string, prefer = DEFAULT_PHONE_COUNTRY): { iso: string; number: string } {
+  const t = full.trim();
+  const plus = t.startsWith('+') || /^00/.test(t.replace(/[\s().-]/g, ''));
+  if (!plus) return { iso: prefer, number: t };
+  const digits = t.startsWith('+') ? t.replace(/\D/g, '') : t.replace(/\D/g, '').replace(/^00/, '');
+  for (let n = Math.min(4, digits.length); n >= 1; n--) {
+    const code = digits.slice(0, n);
+    const matches = PHONE_COUNTRIES.filter((c) => c.dial === code);
+    if (matches.length === 0) continue;
+    const iso = matches.some((c) => c.iso === prefer) ? prefer : (DIAL_MAIN[code] ?? matches[0]!.iso);
+    return { iso, number: digits.slice(n) };
+  }
+  return { iso: prefer, number: t };
 }
 
 /**
